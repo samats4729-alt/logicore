@@ -13,12 +13,13 @@ datasource db {
 // ==================== ENUMS ====================
 
 enum UserRole {
-  ADMIN           // Основная компания / Администратор
-  CUSTOMER        // Заказчик (Грузоотправитель)
-  WAREHOUSE       // Завсклад
-  DRIVER          // Водитель
-  RECIPIENT       // Грузополучатель
-  PARTNER         // Иная ТК (субподрядчик)
+  ADMIN             // Наша компания (LogComp)
+  COMPANY_ADMIN     // Админ компании-клиента
+  LOGISTICIAN       // Логист (создаёт заявки)
+  WAREHOUSE_MANAGER // Завсклад (управляет очередью)
+  DRIVER            // Водитель
+  RECIPIENT         // Грузополучатель
+  PARTNER           // Иная ТК (субподрядчик)
 }
 
 enum OrderStatus {
@@ -80,16 +81,20 @@ model User {
 }
 
 model Company {
-  id          String    @id @default(cuid())
-  name        String
-  bin         String?   // БИН/ИИН
-  address     String?
-  phone       String?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  id             String    @id @default(cuid())
+  name           String
+  bin            String?   // БИН/ИИН
+  address        String?
+  phone          String?
+  email          String?   // Email компании
+  isOurCompany   Boolean   @default(false)  // true = LogComp
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   
-  users       User[]
-  orders      Order[]   @relation("PartnerOrders")
+  users          User[]
+  ordersAsPartner   Order[]   @relation("PartnerOrders")
+  ordersAsCustomer  Order[]   @relation("CustomerCompanyOrders")
 }
 
 model Session {
@@ -160,9 +165,43 @@ model Order {
   partnerId       String?
   partner         Company?    @relation("PartnerOrders", fields: [partnerId], references: [id])
   
+  // Компания-заказчик
+  customerCompanyId String?
+  customerCompany   Company?  @relation("CustomerCompanyOrders", fields: [customerCompanyId], references: [id])
+  
   // Финансы
-  price           Float?
+  customerPrice   Float?      // Цена для клиента (видит клиент)
+  driverCost      Float?      // Оплата водителю/перевозчику (скрыто от клиента)
   currency        String      @default("KZT")
+  
+  // Подтверждение нами
+  isConfirmed     Boolean     @default(false)
+  confirmedAt     DateTime?
+  confirmedById   String?
+  
+  // --- Данные из Excel (Full List) ---
+  
+  // Финансы: Заказчик
+  customerPaymentCondition String? // Условие оплаты (По факту, Отсрочка...)
+  customerPaymentForm      String? // Форма оплаты (НДС, без НДС...)
+  customerPaymentDate      DateTime? // Плановая дата оплаты
+  
+  // Финансы: Перевозчик
+  driverPaymentCondition   String?
+  driverPaymentForm        String?
+  driverPaymentDate        DateTime?
+  
+  // Документы и коды
+  ttnNumber                String? // Номер ТТН
+  atiCodeCustomer          String? // Код АТИ заказчика
+  atiCodeCarrier           String? // Код АТИ перевозчика
+  
+  // Транспорт (уточнения для рейса)
+  trailerNumber            String? // Номер прицепа
+  
+  // Фактические данные
+  actualWeight             Float?  // Вес факт
+  actualVolume             Float?  // Объем факт
   
   // Timestamps
   createdAt       DateTime    @default(now())

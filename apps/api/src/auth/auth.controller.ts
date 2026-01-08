@@ -1,7 +1,7 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { RequestSmsCodeDto, VerifySmsCodeDto, LoginEmailDto } from './dto/auth.dto';
+import { RequestSmsCodeDto, VerifySmsCodeDto, LoginEmailDto, RegisterCompanyDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('auth')
@@ -51,6 +51,17 @@ export class AuthController {
     async logout(@Request() req: any) {
         await this.authService.logout(req.user.id);
         return { message: 'Успешный выход' };
+    }
+
+    // ==================== Регистрация компании ====================
+
+    @Post('register-company')
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({ summary: 'Регистрация новой компании-клиента' })
+    @ApiResponse({ status: 201, description: 'Компания зарегистрирована' })
+    @ApiResponse({ status: 400, description: 'Email или телефон уже зарегистрирован' })
+    async registerCompany(@Body() dto: RegisterCompanyDto) {
+        return this.authService.registerCompany(dto);
     }
 
     @Post('me')

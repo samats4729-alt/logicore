@@ -20,10 +20,27 @@ export class OrdersService {
         pickupDate?: Date;
         pickupNotes?: string;
         deliveryPoints?: { locationId: string; notes?: string }[];
-        price?: number;
+        customerPrice?: number;
+        driverId?: string;
+        // New fields
+        customerPaymentCondition?: string;
+        customerPaymentForm?: string;
+        customerPaymentDate?: Date;
+        driverPaymentCondition?: string;
+        driverPaymentForm?: string;
+        driverPaymentDate?: Date;
+        ttnNumber?: string;
+        atiCodeCustomer?: string;
+        atiCodeCarrier?: string;
+        trailerNumber?: string;
+        actualWeight?: number;
+        actualVolume?: number;
     }) {
         // Генерация номера заявки
         const orderNumber = await this.generateOrderNumber();
+
+        // Если водитель назначен сразу - статус ASSIGNED
+        const status = data.driverId ? OrderStatus.ASSIGNED : OrderStatus.PENDING;
 
         const order = await this.prisma.order.create({
             data: {
@@ -37,8 +54,22 @@ export class OrdersService {
                 requirements: data.requirements,
                 pickupDate: data.pickupDate,
                 pickupNotes: data.pickupNotes,
-                price: data.price,
-                status: OrderStatus.PENDING,
+                customerPrice: data.customerPrice,
+                driverId: data.driverId,
+                status,
+                // New fields
+                customerPaymentCondition: data.customerPaymentCondition,
+                customerPaymentForm: data.customerPaymentForm,
+                customerPaymentDate: data.customerPaymentDate,
+                driverPaymentCondition: data.driverPaymentCondition,
+                driverPaymentForm: data.driverPaymentForm,
+                driverPaymentDate: data.driverPaymentDate,
+                ttnNumber: data.ttnNumber,
+                atiCodeCustomer: data.atiCodeCustomer,
+                atiCodeCarrier: data.atiCodeCarrier,
+                trailerNumber: data.trailerNumber,
+                actualWeight: data.actualWeight,
+                actualVolume: data.actualVolume,
                 deliveryPoints: data.deliveryPoints ? {
                     create: data.deliveryPoints.map((point, index) => ({
                         locationId: point.locationId,
@@ -48,13 +79,14 @@ export class OrdersService {
                 } : undefined,
                 statusHistory: {
                     create: {
-                        status: OrderStatus.PENDING,
-                        comment: 'Заявка создана',
+                        status,
+                        comment: data.driverId ? 'Заявка создана с назначенным водителем' : 'Заявка создана',
                     },
                 },
             },
             include: {
                 customer: true,
+                driver: true,
                 pickupLocation: true,
                 deliveryPoints: { include: { location: true } },
             },
@@ -162,6 +194,39 @@ export class OrdersService {
                         changedById,
                     },
                 },
+            },
+        });
+    }
+
+    /**
+     * Обновление данных заявки
+     */
+    async update(orderId: string, data: {
+        cargoDescription?: string;
+        cargoWeight?: number;
+        cargoVolume?: number;
+        requirements?: string;
+        customerPrice?: number;
+        driverCost?: number;
+        pickupLocationId?: string;
+        driverId?: string;
+    }) {
+        // Если назначается водитель - меняем статус на ASSIGNED
+        const updateData: any = { ...data };
+        if (data.driverId) {
+            const order = await this.findById(orderId);
+            if (order.status === 'PENDING' || order.status === 'DRAFT') {
+                updateData.status = OrderStatus.ASSIGNED;
+            }
+        }
+
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: updateData,
+            include: {
+                customer: true,
+                driver: true,
+                pickupLocation: true,
             },
         });
     }

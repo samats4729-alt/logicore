@@ -30,6 +30,30 @@ export class WarehouseService {
     }
 
     /**
+     * Получение очереди для компании (все склады)
+     */
+    async getCompanyQueue(companyId: string) {
+        return this.prisma.warehouseQueueItem.findMany({
+            where: {
+                order: {
+                    customerCompanyId: companyId,
+                },
+                completedAt: null,
+            },
+            include: {
+                order: {
+                    include: {
+                        driver: true,
+                        pickupLocation: true,
+                    },
+                },
+                gate: true,
+            },
+            orderBy: [{ order: { pickupLocationId: 'asc' } }, { arrivedAt: 'asc' }],
+        });
+    }
+
+    /**
      * Водитель прибыл на склад
      */
     async driverArrived(orderId: string) {

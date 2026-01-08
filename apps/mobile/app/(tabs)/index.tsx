@@ -10,6 +10,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '@/store';
+import { showNavigationOptions } from '@/lib/navigation';
+import { startBackgroundTracking, stopBackgroundTracking, getCurrentLocation } from '@/lib/location';
+import { api } from '@/lib/api';
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
     ASSIGNED: {
@@ -66,6 +69,43 @@ export default function TripScreen() {
     useEffect(() => {
         fetchCurrentOrder();
     }, []);
+
+    // Автозапуск GPS при наличии активного рейса
+    useEffect(() => {
+        const manageTracking = async () => {
+            if (currentOrder && !['COMPLETED', 'CANCELLED'].includes(currentOrder.status)) {
+                // Есть активный рейс - запускаем трекинг
+                const started = await startBackgroundTracking();
+                if (started) {
+                    console.log('GPS tracking started for order:', currentOrder.orderNumber);
+                }
+
+                // Сразу отправляем текущую позицию
+                const location = await getCurrentLocation();
+                if (location) {
+                    try {
+                        await api.post('/tracking/gps', {
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude,
+                            accuracy: location.coords.accuracy,
+                            speed: location.coords.speed,
+                            heading: location.coords.heading,
+                            orderId: currentOrder.id,
+                            recordedAt: new Date().toISOString(),
+                        });
+                        console.log('Initial GPS sent');
+                    } catch (error) {
+                        console.error('Failed to send GPS:', error);
+                    }
+                }
+            } else {
+                // Нет рейса - останавливаем
+                await stopBackgroundTracking();
+            }
+        };
+
+        manageTracking();
+    }, [currentOrder]);
 
     const handleUpdateStatus = async () => {
         if (!currentOrder) return;
@@ -148,6 +188,17 @@ export default function TripScreen() {
                 </View>
                 <Text style={styles.locationName}>{currentOrder.pickupLocation.name}</Text>
                 <Text style={styles.locationAddress}>{currentOrder.pickupLocation.address}</Text>
+                <TouchableOpacity
+                    style={styles.navButton}
+                    onPress={() => showNavigationOptions(
+                        currentOrder.pickupLocation.latitude,
+                        currentOrder.pickupLocation.longitude,
+                        currentOrder.pickupLocation.address
+                    )}
+                >
+                    <Ionicons name="navigate" size={18} color="#1677ff" />
+                    <Text style={styles.navButtonText}>Открыть в навигаторе</Text>
+                </TouchableOpacity>
             </View>
 
             {/* Delivery Points */}
@@ -159,6 +210,17 @@ export default function TripScreen() {
                     </View>
                     <Text style={styles.locationName}>{point.location.name}</Text>
                     <Text style={styles.locationAddress}>{point.location.address}</Text>
+                    <TouchableOpacity
+                        style={styles.navButton}
+                        onPress={() => showNavigationOptions(
+                            point.location.latitude,
+                            point.location.longitude,
+                            point.location.address
+                        )}
+                    >
+                        <Ionicons name="navigate" size={18} color="#1677ff" />
+                        <Text style={styles.navButtonText}>Открыть в навигаторе</Text>
+                    </TouchableOpacity>
                 </View>
             ))}
 
@@ -268,6 +330,22 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         marginTop: 4,
+    },
+    navButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        backgroundColor: '#e6f4ff',
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+    },
+    navButtonText: {
+        color: '#1677ff',
+        fontSize: 14,
+        fontWeight: '500',
     },
     actionButton: {
         flexDirection: 'row',

@@ -14,18 +14,20 @@ export class OrdersController {
     constructor(private ordersService: OrdersService) { }
 
     @Post()
-    @Roles(UserRole.ADMIN, UserRole.CUSTOMER)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Создать заявку на перевозку' })
     async create(@Body() dto: CreateOrderDto, @Request() req: any) {
         return this.ordersService.create({
             ...dto,
             customerId: dto.customerId || req.user.sub,
             pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : undefined,
+            customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
+            driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
         });
     }
 
     @Get()
-    @Roles(UserRole.ADMIN, UserRole.CUSTOMER)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Получить список заявок' })
     @ApiQuery({ name: 'status', required: false, enum: OrderStatus })
     @ApiQuery({ name: 'customerId', required: false })
@@ -58,6 +60,13 @@ export class OrdersController {
         return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId);
     }
 
+    @Put(':id')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Обновить заявку' })
+    async update(@Param('id') id: string, @Body() dto: Partial<CreateOrderDto>) {
+        return this.ordersService.update(id, dto);
+    }
+
     @Put(':id/status')
     @ApiOperation({ summary: 'Обновить статус заявки' })
     async updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Request() req: any) {
@@ -75,7 +84,7 @@ export class OrdersController {
     }
 
     @Post(':id/delivery-point')
-    @Roles(UserRole.ADMIN, UserRole.CUSTOMER)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Добавить точку выгрузки' })
     async addDeliveryPoint(
         @Param('id') id: string,

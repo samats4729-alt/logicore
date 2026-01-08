@@ -42,11 +42,28 @@ export interface Order {
     cargoDescription: string;
     cargoWeight?: number;
     cargoVolume?: number;
+    requirements?: string;
     pickupLocation: Location;
     customer: { firstName: string; lastName: string };
-    driver?: { firstName: string; lastName: string; phone: string };
+    driver?: { id: string; firstName: string; lastName: string; phone: string; vehiclePlate?: string };
     createdAt: string;
-    price?: number;
+    // Old price field might be used, but we switched to distinct prices
+    customerPrice?: number;
+    driverCost?: number;
+
+    // New Fields
+    customerPaymentCondition?: string;
+    customerPaymentForm?: string;
+    customerPaymentDate?: string;
+    driverPaymentCondition?: string;
+    driverPaymentForm?: string;
+    driverPaymentDate?: string;
+    ttnNumber?: string;
+    atiCodeCustomer?: string;
+    atiCodeCarrier?: string;
+    trailerNumber?: string;
+    actualWeight?: number;
+    actualVolume?: number;
 }
 
 export interface User {

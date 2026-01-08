@@ -36,10 +36,11 @@ export class TrackingController {
     }
 
     @Get('drivers')
-    @Roles(UserRole.ADMIN, UserRole.CUSTOMER, UserRole.RECIPIENT)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
     @ApiOperation({ summary: 'Получить позиции всех активных водителей' })
-    async getAllDriversPositions() {
-        return this.trackingService.getAllActiveDriversPositions();
+    async getAllDriversPositions(@Request() req: any) {
+        const companyId = req.user.companyId;
+        return this.trackingService.getAllActiveDriversPositions(companyId);
     }
 
     @Get('driver/:id')

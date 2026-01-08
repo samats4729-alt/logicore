@@ -3,7 +3,7 @@ import { AntdProvider } from './providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-    title: 'LogComp - Система управления логистикой',
+    title: 'LogiCore - Система управления логистикой',
     description: 'Управление перевозками, отслеживание грузов, документооборот',
 };
 

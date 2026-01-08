@@ -29,7 +29,7 @@ export class UsersController {
     }
 
     @Get('drivers')
-    @Roles(UserRole.ADMIN, UserRole.CUSTOMER)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Получить список водителей' })
     async findDrivers() {
         return this.usersService.findDrivers();

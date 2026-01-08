@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '@/lib/api';
 
-export type UserRole = 'ADMIN' | 'CUSTOMER' | 'WAREHOUSE' | 'DRIVER' | 'RECIPIENT' | 'PARTNER';
+export type UserRole = 'ADMIN' | 'COMPANY_ADMIN' | 'LOGISTICIAN' | 'WAREHOUSE_MANAGER' | 'DRIVER' | 'RECIPIENT' | 'PARTNER';
 
 interface User {
     id: string;
@@ -11,6 +11,11 @@ interface User {
     firstName: string;
     lastName: string;
     role: UserRole;
+    companyId?: string;
+    company?: {
+        id: string;
+        name: string;
+    };
 }
 
 interface AuthState {

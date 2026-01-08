@@ -12,6 +12,7 @@
             "infoPlist": {
                 "NSLocationWhenInUseUsageDescription": "Приложение использует геолокацию для отслеживания рейса",
                 "NSLocationAlwaysAndWhenInUseUsageDescription": "Геолокация нужна для отслеживания вашего маршрута в фоновом режиме",
+                "NSLocationAlwaysUsageDescription": "Геолокация нужна для отслеживания вашего маршрута в фоновом режиме",
                 "UIBackgroundModes": [
                     "location",
                     "fetch"

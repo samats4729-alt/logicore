@@ -21,6 +21,7 @@ import {
     UserOutlined,
     MenuFoldOutlined,
     MenuUnfoldOutlined,
+    AimOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -30,6 +31,7 @@ const { Text } = Typography;
 const menuItems = [
     { key: '/admin', icon: <DashboardOutlined />, label: 'Дашборд' },
     { key: '/admin/orders', icon: <CarOutlined />, label: 'Заявки' },
+    { key: '/admin/tracking', icon: <AimOutlined />, label: 'Отслеживание' },
     { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
     { key: '/admin/locations', icon: <EnvironmentOutlined />, label: 'Адреса' },
     { key: '/admin/documents', icon: <FileTextOutlined />, label: 'Документы' },
@@ -109,7 +111,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     borderBottom: '1px solid #f0f0f0',
                 }}>
                     <Text strong style={{ fontSize: collapsed ? 20 : 24, color: '#1677ff' }}>
-                        {collapsed ? '🚛' : '🚛 LogComp'}
+                        {collapsed ? 'LC' : 'LogiCore'}
                     </Text>
                 </div>
                 <Menu

@@ -60,13 +60,14 @@ export class TrackingService {
     /**
      * Получение позиций всех активных водителей
      */
-    async getAllActiveDriversPositions() {
+    async getAllActiveDriversPositions(companyId?: string) {
         // Получаем последнюю точку для каждого водителя за последний час
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
         const points = await this.prisma.gpsPoint.findMany({
             where: {
                 recordedAt: { gte: oneHourAgo },
+                order: companyId ? { customerCompanyId: companyId } : undefined,
             },
             orderBy: { recordedAt: 'desc' },
             distinct: ['driverId'],
@@ -80,6 +81,18 @@ export class TrackingService {
             },
         });
 
-        return points;
+        // Форматируем для карты
+        return points.map(point => ({
+            driverId: point.driverId,
+            driverName: `${point.driver.lastName} ${point.driver.firstName}`,
+            vehiclePlate: point.driver.vehiclePlate || '',
+            latitude: point.latitude,
+            longitude: point.longitude,
+            speed: point.speed,
+            heading: point.heading,
+            updatedAt: point.recordedAt.toISOString(),
+            orderId: point.order?.id,
+            orderNumber: point.order?.orderNumber,
+        }));
     }
 }

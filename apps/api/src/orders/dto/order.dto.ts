@@ -56,7 +56,73 @@ export class CreateOrderDto {
     @ApiProperty({ required: false, example: 150000 })
     @IsNumber()
     @IsOptional()
-    price?: number;
+    customerPrice?: number;
+
+    @ApiProperty({ required: false, description: 'ID водителя для назначения' })
+    @IsString()
+    @IsOptional()
+    driverId?: string;
+
+    // --- New Fields ---
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    customerPaymentCondition?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    customerPaymentForm?: string;
+
+    @ApiProperty({ required: false })
+    @IsDateString()
+    @IsOptional()
+    customerPaymentDate?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    driverPaymentCondition?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    driverPaymentForm?: string;
+
+    @ApiProperty({ required: false })
+    @IsDateString()
+    @IsOptional()
+    driverPaymentDate?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    ttnNumber?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    atiCodeCustomer?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    atiCodeCarrier?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    trailerNumber?: string;
+
+    @ApiProperty({ required: false })
+    @IsNumber()
+    @IsOptional()
+    actualWeight?: number;
+
+    @ApiProperty({ required: false })
+    @IsNumber()
+    @IsOptional()
+    actualVolume?: number;
 }
 
 export class UpdateStatusDto {

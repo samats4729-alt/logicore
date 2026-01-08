@@ -13,10 +13,17 @@ export class WarehouseController {
     constructor(private warehouseService: WarehouseService) { }
 
     @Get('queue/:locationId')
-    @Roles(UserRole.ADMIN, UserRole.WAREHOUSE)
+    @Roles(UserRole.ADMIN, UserRole.WAREHOUSE_MANAGER)
     @ApiOperation({ summary: 'Получить очередь машин на складе' })
     async getQueue(@Param('locationId') locationId: string) {
         return this.warehouseService.getQueue(locationId);
+    }
+
+    @Get('queue/my')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.WAREHOUSE_MANAGER)
+    @ApiOperation({ summary: 'Получить очередь для своей компании' })
+    async getMyQueue(@Request() req: any) {
+        return this.warehouseService.getCompanyQueue(req.user.companyId);
     }
 
     @Post('arrived/:orderId')
@@ -27,7 +34,7 @@ export class WarehouseController {
     }
 
     @Put('assign-gate/:queueItemId')
-    @Roles(UserRole.WAREHOUSE)
+    @Roles(UserRole.WAREHOUSE_MANAGER)
     @ApiOperation({ summary: 'Назначить ворота' })
     async assignGate(
         @Param('queueItemId') queueItemId: string,
@@ -37,21 +44,21 @@ export class WarehouseController {
     }
 
     @Put('start-loading/:queueItemId')
-    @Roles(UserRole.WAREHOUSE)
+    @Roles(UserRole.WAREHOUSE_MANAGER)
     @ApiOperation({ summary: 'Начать погрузку' })
     async startLoading(@Param('queueItemId') queueItemId: string) {
         return this.warehouseService.startLoading(queueItemId);
     }
 
     @Put('complete-loading/:queueItemId')
-    @Roles(UserRole.WAREHOUSE, UserRole.DRIVER)
+    @Roles(UserRole.WAREHOUSE_MANAGER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Завершить погрузку' })
     async completeLoading(@Param('queueItemId') queueItemId: string) {
         return this.warehouseService.completeLoading(queueItemId);
     }
 
     @Get('gates/:locationId')
-    @Roles(UserRole.ADMIN, UserRole.WAREHOUSE)
+    @Roles(UserRole.ADMIN, UserRole.WAREHOUSE_MANAGER)
     @ApiOperation({ summary: 'Получить ворота склада' })
     async getGates(@Param('locationId') locationId: string) {
         return this.warehouseService.getGates(locationId);

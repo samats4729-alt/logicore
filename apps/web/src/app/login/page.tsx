@@ -6,6 +6,7 @@ import { Form, Input, Button, Card, Typography, App, Tabs } from 'antd';
 import { UserOutlined, LockOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
+import InteractiveBackground from '@/components/ui/InteractiveBackground';
 import { v4 as uuidv4 } from 'uuid';
 
 const { Title, Text } = Typography;
@@ -34,7 +35,19 @@ export default function LoginPage() {
         try {
             await login(values.email, values.password, getDeviceId());
             message.success('Вход выполнен успешно');
-            router.push('/');
+
+            // Получаем данные пользователя для редиректа
+            const meResponse = await api.post('/auth/me');
+            const userRole = meResponse.data.role;
+
+            // Редирект по роли
+            if (userRole === 'ADMIN') {
+                router.push('/admin');
+            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER'].includes(userRole)) {
+                router.push('/company');
+            } else {
+                router.push('/');
+            }
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка входа');
         } finally {
@@ -77,25 +90,21 @@ export default function LoginPage() {
     };
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            padding: 20,
-        }}>
+        <InteractiveBackground>
             <Card
                 style={{
                     width: '100%',
                     maxWidth: 420,
                     borderRadius: 16,
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
                 }}
             >
                 <div style={{ textAlign: 'center', marginBottom: 32 }}>
                     <Title level={2} style={{ margin: 0, color: '#1677ff' }}>
-                        🚛 LogComp
+                        LogiCore
                     </Title>
                     <Text type="secondary">Система управления логистикой</Text>
                 </div>
@@ -208,7 +217,14 @@ export default function LoginPage() {
                         },
                     ]}
                 />
+
+                <div style={{ textAlign: 'center', marginTop: 16 }}>
+                    <Text type="secondary">
+                        Нет аккаунта?{' '}
+                        <a onClick={() => router.push('/register')}>Зарегистрировать компанию</a>
+                    </Text>
+                </div>
             </Card>
-        </div>
+        </InteractiveBackground>
     );
 }

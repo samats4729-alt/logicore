@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react';
 import { Row, Col, Card, Statistic, Table, Tag, Typography } from 'antd';
 import {
-    CarOutlined,
-    TeamOutlined,
+    FileTextOutlined,
     CheckCircleOutlined,
     ClockCircleOutlined,
-    ExclamationCircleOutlined,
+    TruckOutlined,
 } from '@ant-design/icons';
-import { api, Order } from '@/lib/api';
+import { api } from '@/lib/api';
 
 const { Title } = Typography;
 
@@ -30,8 +29,8 @@ const statusColors: Record<string, string> = {
 
 const statusLabels: Record<string, string> = {
     DRAFT: 'Черновик',
-    PENDING: 'Ожидает',
-    ASSIGNED: 'Назначен',
+    PENDING: 'Ожидает подтверждения',
+    ASSIGNED: 'Машина назначена',
     EN_ROUTE_PICKUP: 'Едет на погрузку',
     AT_PICKUP: 'На погрузке',
     LOADING: 'Загружается',
@@ -43,30 +42,40 @@ const statusLabels: Record<string, string> = {
     PROBLEM: 'Проблема',
 };
 
-export default function AdminDashboard() {
+interface Order {
+    id: string;
+    orderNumber: string;
+    status: string;
+    cargoDescription: string;
+    customerPrice?: number;
+    createdAt: string;
+    pickupLocation?: { name: string };
+    driver?: { firstName: string; lastName: string; vehiclePlate?: string };
+}
+
+export default function CompanyDashboard() {
     const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         total: 0,
         pending: 0,
-        inTransit: 0,
+        inProgress: 0,
         completed: 0,
-        problems: 0,
     });
-    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchOrders = async () => {
             try {
-                const response = await api.get('/orders');
+                const response = await api.get('/company/orders');
                 const data = response.data;
                 setOrders(data);
-
                 setStats({
                     total: data.length,
                     pending: data.filter((o: Order) => o.status === 'PENDING').length,
-                    inTransit: data.filter((o: Order) => o.status === 'IN_TRANSIT').length,
+                    inProgress: data.filter((o: Order) =>
+                        ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)
+                    ).length,
                     completed: data.filter((o: Order) => o.status === 'COMPLETED').length,
-                    problems: data.filter((o: Order) => o.status === 'PROBLEM').length,
                 });
             } catch (error) {
                 console.error('Failed to fetch orders:', error);
@@ -74,8 +83,7 @@ export default function AdminDashboard() {
                 setLoading(false);
             }
         };
-
-        fetchData();
+        fetchOrders();
     }, []);
 
     const columns = [
@@ -107,17 +115,17 @@ export default function AdminDashboard() {
             ),
         },
         {
-            title: 'Водитель',
+            title: 'Водитель/Машина',
             dataIndex: 'driver',
             key: 'driver',
             render: (driver: any) =>
-                driver ? `${driver.firstName} ${driver.lastName}` : '—',
+                driver ? `${driver.firstName} ${driver.lastName} (${driver.vehiclePlate || '—'})` : '—',
         },
         {
-            title: 'Создана',
-            dataIndex: 'createdAt',
-            key: 'createdAt',
-            render: (date: string) => new Date(date).toLocaleDateString('ru-RU'),
+            title: 'Сумма',
+            dataIndex: 'customerPrice',
+            key: 'customerPrice',
+            render: (price: number) => price ? `${price.toLocaleString()} ₸` : '—',
         },
     ];
 
@@ -131,14 +139,14 @@ export default function AdminDashboard() {
                         <Statistic
                             title="Всего заявок"
                             value={stats.total}
-                            prefix={<CarOutlined />}
+                            prefix={<FileTextOutlined />}
                         />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                     <Card>
                         <Statistic
-                            title="Ожидают назначения"
+                            title="Ожидают подтверждения"
                             value={stats.pending}
                             prefix={<ClockCircleOutlined />}
                             valueStyle={{ color: '#faad14' }}
@@ -148,9 +156,9 @@ export default function AdminDashboard() {
                 <Col xs={24} sm={12} lg={6}>
                     <Card>
                         <Statistic
-                            title="В пути"
-                            value={stats.inTransit}
-                            prefix={<CarOutlined />}
+                            title="В процессе"
+                            value={stats.inProgress}
+                            prefix={<TruckOutlined />}
                             valueStyle={{ color: '#1677ff' }}
                         />
                     </Card>

@@ -70,12 +70,59 @@ async function main() {
     });
     console.log(`✅ Location created: ${warehouse.name}`);
 
+    // Вторая локация (точка доставки)
+    const deliveryPoint = await prisma.location.upsert({
+        where: { id: 'delivery-1' },
+        update: {},
+        create: {
+            id: 'delivery-1',
+            name: 'ТРЦ Мега Алматы',
+            address: 'г. Алматы, ул. Розыбакиева, 247',
+            latitude: 43.201920,
+            longitude: 76.893550,
+            contactName: 'Приёмка товара',
+            contactPhone: '+77019876543',
+        },
+    });
+    console.log(`✅ Delivery location created: ${deliveryPoint.name}`);
+
+    // Тестовый заказ с назначенным водителем
+    const testOrder = await prisma.order.upsert({
+        where: { orderNumber: 'TEST-001' },
+        update: { driverId: driver.id },
+        create: {
+            orderNumber: 'TEST-001',
+            customerId: customer.id,
+            driverId: driver.id,
+            status: 'ASSIGNED',
+            cargoDescription: 'Тестовый груз - электроника',
+            cargoWeight: 500,
+            pickupLocationId: warehouse.id,
+        },
+    });
+    console.log(`✅ Test order created: ${testOrder.orderNumber} (assigned to driver)`);
+
+    // Добавляем точку доставки
+    await prisma.orderDeliveryPoint.upsert({
+        where: { id: 'dp-1' },
+        update: {},
+        create: {
+            id: 'dp-1',
+            orderId: testOrder.id,
+            locationId: deliveryPoint.id,
+            sequence: 1,
+        },
+    });
+    console.log(`✅ Delivery point added to order`);
+
     console.log('🎉 Seeding completed!');
     console.log('');
     console.log('📋 Test credentials:');
     console.log('   Admin: admin@logcomp.kz / admin123');
     console.log('   Customer: customer@test.kz / customer123');
-    console.log('   Driver: +77771234567 (SMS auth)');
+    console.log('   Driver: +77771234567 (SMS auth, code: 1234)');
+    console.log('');
+    console.log('📦 Test order TEST-001 assigned to test driver');
 }
 
 main()

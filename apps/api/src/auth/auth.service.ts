@@ -134,6 +134,7 @@ export class AuthService {
     ): Promise<{ accessToken: string; user: any }> {
         const user = await this.prisma.user.findUnique({
             where: { email },
+            include: { company: true },
         });
 
         if (!user || !user.passwordHash) {
@@ -179,9 +180,9 @@ export class AuthService {
             user: {
                 id: user.id,
                 email: user.email,
-                firstName: user.firstName,
                 lastName: user.lastName,
                 role: user.role,
+                company: (user as any).company,
             },
         };
     }
@@ -218,5 +219,89 @@ export class AuthService {
     async validateSession(userId: string, token: string): Promise<boolean> {
         const session = await this.redisService.getSession(userId);
         return session?.token === token;
+    }
+
+    // ==================== РЕГИСТРАЦИЯ КОМПАНИИ ====================
+
+    /**
+     * Регистрация новой компании-клиента
+     */
+    async registerCompany(data: {
+        companyName: string;
+        bin?: string;
+        adminEmail: string;
+        adminPassword: string;
+        firstName: string;
+        lastName: string;
+        phone: string;
+    }): Promise<{ company: any; admin: any; accessToken: string }> {
+        // Проверяем что email не занят
+        const existingUser = await this.prisma.user.findUnique({
+            where: { email: data.adminEmail },
+        });
+        if (existingUser) {
+            throw new BadRequestException('Email уже зарегистрирован');
+        }
+
+        // Проверяем телефон
+        const existingPhone = await this.prisma.user.findUnique({
+            where: { phone: data.phone },
+        });
+        if (existingPhone) {
+            throw new BadRequestException('Телефон уже зарегистрирован');
+        }
+
+        // Создаём компанию и админа в транзакции
+        const result = await this.prisma.$transaction(async (tx) => {
+            // Создаём компанию
+            const company = await tx.company.create({
+                data: {
+                    name: data.companyName,
+                    bin: data.bin,
+                    email: data.adminEmail,
+                    phone: data.phone,
+                    isOurCompany: false,
+                },
+            });
+
+            // Хешируем пароль
+            const passwordHash = await bcrypt.hash(data.adminPassword, 10);
+
+            // Создаём админа компании
+            const admin = await tx.user.create({
+                data: {
+                    email: data.adminEmail,
+                    phone: data.phone,
+                    passwordHash,
+                    firstName: data.firstName,
+                    lastName: data.lastName,
+                    role: UserRole.COMPANY_ADMIN,
+                    companyId: company.id,
+                },
+            });
+
+            return { company, admin };
+        });
+
+        // Генерируем токен
+        const payload = {
+            sub: result.admin.id,
+            role: result.admin.role,
+            companyId: result.company.id,
+        };
+        const accessToken = this.jwtService.sign(payload);
+
+        return {
+            company: result.company,
+            admin: {
+                id: result.admin.id,
+                email: result.admin.email,
+                firstName: result.admin.firstName,
+                lastName: result.admin.lastName,
+                role: result.admin.role,
+                company: result.company,
+            },
+            accessToken,
+        };
     }
 }

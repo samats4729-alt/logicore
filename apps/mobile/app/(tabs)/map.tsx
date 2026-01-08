@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useStore } from '@/store';
 
 export default function MapScreen() {
     const { currentOrder } = useStore();
+    const mapRef = useRef<MapView>(null);
+    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [region, setRegion] = useState({
         latitude: 43.238949,
         longitude: 76.945780,
@@ -13,7 +17,32 @@ export default function MapScreen() {
     });
 
     useEffect(() => {
-        if (currentOrder?.pickupLocation) {
+        // Получаем текущее местоположение при загрузке
+        (async () => {
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status === 'granted') {
+                    const location = await Location.getCurrentPositionAsync({});
+                    setUserLocation({
+                        latitude: location.coords.latitude,
+                        longitude: location.coords.longitude,
+                    });
+                    // Центрируем на пользователе при первой загрузке
+                    setRegion({
+                        latitude: location.coords.latitude,
+                        longitude: location.coords.longitude,
+                        latitudeDelta: 0.05,
+                        longitudeDelta: 0.05,
+                    });
+                }
+            } catch (error) {
+                console.error('Location error:', error);
+            }
+        })();
+    }, []);
+
+    useEffect(() => {
+        if (currentOrder?.pickupLocation && !userLocation) {
             setRegion({
                 latitude: currentOrder.pickupLocation.latitude,
                 longitude: currentOrder.pickupLocation.longitude,
@@ -21,11 +50,68 @@ export default function MapScreen() {
                 longitudeDelta: 0.1,
             });
         }
-    }, [currentOrder]);
+    }, [currentOrder, userLocation]);
+
+    // Центрировать на своём местоположении
+    const centerOnMyLocation = async () => {
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Геолокация', 'Разрешите доступ к местоположению');
+                return;
+            }
+
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+            });
+
+            const newRegion = {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+            };
+
+            setUserLocation({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+            });
+
+            mapRef.current?.animateToRegion(newRegion, 500);
+        } catch (error) {
+            Alert.alert('Ошибка', 'Не удалось определить местоположение');
+        }
+    };
+
+    // Показать весь маршрут
+    const fitToRoute = () => {
+        if (currentOrder && mapRef.current) {
+            const points = [
+                {
+                    latitude: currentOrder.pickupLocation.latitude,
+                    longitude: currentOrder.pickupLocation.longitude,
+                },
+                ...(currentOrder.deliveryPoints?.map(p => ({
+                    latitude: p.location.latitude,
+                    longitude: p.location.longitude,
+                })) || []),
+            ];
+
+            if (userLocation) {
+                points.push(userLocation);
+            }
+
+            mapRef.current.fitToCoordinates(points, {
+                edgePadding: { top: 50, right: 50, bottom: 150, left: 50 },
+                animated: true,
+            });
+        }
+    };
 
     if (!currentOrder) {
         return (
             <View style={styles.emptyContainer}>
+                <Ionicons name="map-outline" size={60} color="#ccc" />
                 <Text style={styles.emptyText}>Нет активного рейса</Text>
             </View>
         );
@@ -44,11 +130,13 @@ export default function MapScreen() {
     return (
         <View style={styles.container}>
             <MapView
+                ref={mapRef}
                 style={styles.map}
                 provider={Platform.OS === 'android' ? PROVIDER_DEFAULT : undefined}
-                region={region}
+                initialRegion={region}
                 showsUserLocation
-                showsMyLocationButton
+                showsMyLocationButton={false}
+                showsCompass
             >
                 {/* Pickup marker */}
                 <Marker
@@ -85,6 +173,16 @@ export default function MapScreen() {
                 )}
             </MapView>
 
+            {/* Кнопки управления */}
+            <View style={styles.controls}>
+                <TouchableOpacity style={styles.controlButton} onPress={centerOnMyLocation}>
+                    <Ionicons name="locate" size={24} color="#1677ff" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.controlButton} onPress={fitToRoute}>
+                    <Ionicons name="expand" size={24} color="#1677ff" />
+                </TouchableOpacity>
+            </View>
+
             {/* Bottom info card */}
             <View style={styles.infoCard}>
                 <Text style={styles.infoTitle}>{currentOrder.orderNumber}</Text>
@@ -112,6 +210,26 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 16,
         color: '#666',
+        marginTop: 12,
+    },
+    controls: {
+        position: 'absolute',
+        right: 16,
+        top: 60,
+        gap: 8,
+    },
+    controlButton: {
+        width: 48,
+        height: 48,
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
     },
     infoCard: {
         position: 'absolute',
