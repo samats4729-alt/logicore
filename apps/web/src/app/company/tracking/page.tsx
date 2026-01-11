@@ -6,7 +6,6 @@ import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'a
 import { CarOutlined, ReloadOutlined, AimOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
-import L from 'leaflet';
 
 const { Text } = Typography;
 
@@ -44,6 +43,8 @@ const ORDER_COLORS = [
 
 // Создаём SVG иконку машины с заданным цветом
 const createCarIcon = (color: string, isSelected: boolean = false) => {
+    if (typeof window === 'undefined') return null;
+    const L = require('leaflet');
     const size = isSelected ? 40 : 32;
     const svg = `
         <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="${isSelected ? '#000' : '#fff'}" stroke-width="1">
@@ -62,6 +63,8 @@ const createCarIcon = (color: string, isSelected: boolean = false) => {
 
 // Иконка для моего местоположения
 const createMyLocationIcon = () => {
+    if (typeof window === 'undefined') return null;
+    const L = require('leaflet');
     const svg = `
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#1677ff" stroke="#fff" stroke-width="2">
             <circle cx="12" cy="12" r="8"/>

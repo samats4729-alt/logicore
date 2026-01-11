@@ -1,21 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import 'leaflet/dist/leaflet.css';
-
-// Fix for Leaflet icons
-import L from 'leaflet';
-
-const icon = L.icon({
-    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
 
 // Component that handles map clicks
 const MapEvents = ({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) => {
@@ -39,9 +25,23 @@ const MapComponent = ({
     onLocationSelect: (lat: number, lng: number) => void
 }) => {
     const { MapContainer, TileLayer, Marker, Popup } = require('react-leaflet');
+    const L = require('leaflet');
+    require('leaflet/dist/leaflet.css');
+
     const [position, setPosition] = useState<[number, number] | null>(
         initialLat && initialLng ? [initialLat, initialLng] : null
     );
+
+    // Create icon inside component to avoid SSR issues
+    const icon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+    });
 
     const handleSelect = (lat: number, lng: number) => {
         setPosition([lat, lng]);
