@@ -35,3 +35,130 @@ body {
   height: 100%;
   width: 100%;
 }
+
+/* ==========================================
+   RESPONSIVE STYLES
+   ========================================== */
+
+/* Mobile table wrapper - horizontal scroll */
+@media (max-width: 767px) {
+
+  /* Tables need horizontal scroll on mobile */
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .ant-table {
+    min-width: 600px;
+  }
+
+  /* Make modals full width on mobile */
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px !important;
+    top: 8px !important;
+  }
+
+  .ant-modal-content {
+    border-radius: 12px;
+  }
+
+  /* Drawer full width on mobile */
+  .ant-drawer-content-wrapper {
+    max-width: 100vw !important;
+  }
+
+  /* Form items stack vertically */
+  .ant-form-item {
+    margin-bottom: 12px;
+  }
+
+  /* Smaller buttons on mobile */
+  .ant-btn {
+    padding: 4px 12px;
+    font-size: 14px;
+  }
+
+  /* Cards with less padding */
+  .ant-card-body {
+    padding: 12px;
+  }
+
+  /* Statistics cards */
+  .ant-statistic-title {
+    font-size: 12px;
+  }
+
+  .ant-statistic-content-value {
+    font-size: 20px;
+  }
+
+  /* Descriptions compact */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    padding: 8px 12px !important;
+  }
+
+  /* Tags smaller */
+  .ant-tag {
+    font-size: 11px;
+    padding: 0 6px;
+  }
+
+  /* Page headers */
+  .ant-page-header {
+    padding: 12px;
+  }
+
+  /* List items compact */
+  .ant-list-item {
+    padding: 8px 0;
+  }
+
+  /* Tabs */
+  .ant-tabs-nav {
+    margin-bottom: 12px;
+  }
+
+  /* Select full width */
+  .ant-select {
+    width: 100% !important;
+  }
+
+  /* Date picker full width */
+  .ant-picker {
+    width: 100% !important;
+  }
+
+  /* Input number full width */
+  .ant-input-number {
+    width: 100% !important;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ant-table {
+    font-size: 13px;
+  }
+
+  .ant-modal {
+    max-width: 90vw !important;
+  }
+}
+
+/* Touch-friendly tap targets */
+@media (hover: none) and (pointer: coarse) {
+  .ant-btn {
+    min-height: 44px;
+  }
+
+  .ant-menu-item {
+    min-height: 48px;
+    line-height: 48px;
+  }
+
+  .ant-list-item {
+    min-height: 48px;
+  }
+}

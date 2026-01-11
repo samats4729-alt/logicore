@@ -9,6 +9,8 @@ import {
     Dropdown,
     Typography,
     Spin,
+    Button,
+    Drawer,
 } from 'antd';
 import {
     DashboardOutlined,
@@ -22,6 +24,7 @@ import {
     MenuFoldOutlined,
     MenuUnfoldOutlined,
     AimOutlined,
+    MenuOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -44,6 +47,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const { user, isAuthenticated, logout, checkAuth } = useAuthStore();
     const [collapsed, setCollapsed] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Определяем мобильное устройство
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     useEffect(() => {
         const init = async () => {
@@ -64,6 +79,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.push('/login');
     };
 
+    const handleMenuClick = (key: string) => {
+        router.push(key);
+        setMobileMenuOpen(false);
+    };
+
     if (loading) {
         return (
             <div style={{
@@ -77,55 +97,91 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         );
     }
 
-    const userMenu = (
-        <Menu
-            items={[
-                { key: 'profile', icon: <UserOutlined />, label: 'Профиль' },
-                { type: 'divider' },
-                { key: 'logout', icon: <LogoutOutlined />, label: 'Выйти', onClick: handleLogout },
-            ]}
-        />
+    const userMenuItems = [
+        { key: 'profile', icon: <UserOutlined />, label: 'Профиль' },
+        { type: 'divider' as const },
+        { key: 'logout', icon: <LogoutOutlined />, label: 'Выйти', onClick: handleLogout },
+    ];
+
+    // Мобильное меню через Drawer
+    const MobileMenu = () => (
+        <Drawer
+            title="LogiCore Admin"
+            placement="left"
+            onClose={() => setMobileMenuOpen(false)}
+            open={mobileMenuOpen}
+            width={280}
+            styles={{ body: { padding: 0 } }}
+        >
+            <Menu
+                mode="inline"
+                selectedKeys={[pathname]}
+                items={menuItems}
+                onClick={({ key }) => handleMenuClick(key)}
+                style={{ border: 'none' }}
+            />
+            <div style={{ padding: 16, borderTop: '1px solid #f0f0f0', marginTop: 16 }}>
+                <Button
+                    type="text"
+                    danger
+                    icon={<LogoutOutlined />}
+                    onClick={handleLogout}
+                    block
+                >
+                    Выйти
+                </Button>
+            </div>
+        </Drawer>
     );
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
-            <Sider
-                trigger={null}
-                collapsible
-                collapsed={collapsed}
-                theme="light"
-                style={{
-                    boxShadow: '2px 0 8px rgba(0,0,0,0.05)',
-                    position: 'fixed',
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    zIndex: 100,
-                }}
-            >
-                <div style={{
-                    height: 64,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderBottom: '1px solid #f0f0f0',
-                }}>
-                    <Text strong style={{ fontSize: collapsed ? 20 : 24, color: '#1677ff' }}>
-                        {collapsed ? 'LC' : 'LogiCore'}
-                    </Text>
-                </div>
-                <Menu
-                    mode="inline"
-                    selectedKeys={[pathname]}
-                    items={menuItems}
-                    onClick={({ key }) => router.push(key)}
-                    style={{ borderRight: 0 }}
-                />
-            </Sider>
+            {/* Desktop Sidebar */}
+            {!isMobile && (
+                <Sider
+                    trigger={null}
+                    collapsible
+                    collapsed={collapsed}
+                    theme="light"
+                    style={{
+                        boxShadow: '2px 0 8px rgba(0,0,0,0.05)',
+                        position: 'fixed',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        zIndex: 100,
+                    }}
+                >
+                    <div style={{
+                        height: 64,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderBottom: '1px solid #f0f0f0',
+                    }}>
+                        <Text strong style={{ fontSize: collapsed ? 20 : 24, color: '#1677ff' }}>
+                            {collapsed ? 'LC' : 'LogiCore'}
+                        </Text>
+                    </div>
+                    <Menu
+                        mode="inline"
+                        selectedKeys={[pathname]}
+                        items={menuItems}
+                        onClick={({ key }) => router.push(key)}
+                        style={{ borderRight: 0 }}
+                    />
+                </Sider>
+            )}
 
-            <Layout style={{ marginLeft: collapsed ? 80 : 200, transition: 'all 0.2s' }}>
+            {/* Mobile Drawer */}
+            {isMobile && <MobileMenu />}
+
+            <Layout style={{
+                marginLeft: isMobile ? 0 : (collapsed ? 80 : 200),
+                transition: 'all 0.2s'
+            }}>
                 <Header style={{
-                    padding: '0 24px',
+                    padding: isMobile ? '0 12px' : '0 24px',
                     background: '#fff',
                     display: 'flex',
                     alignItems: 'center',
@@ -135,27 +191,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     top: 0,
                     zIndex: 99,
                 }}>
-                    <div
-                        onClick={() => setCollapsed(!collapsed)}
-                        style={{ fontSize: 18, cursor: 'pointer' }}
-                    >
-                        {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {isMobile ? (
+                            <Button
+                                type="text"
+                                icon={<MenuOutlined />}
+                                onClick={() => setMobileMenuOpen(true)}
+                            />
+                        ) : (
+                            <div
+                                onClick={() => setCollapsed(!collapsed)}
+                                style={{ fontSize: 18, cursor: 'pointer' }}
+                            >
+                                {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                            </div>
+                        )}
+                        {isMobile && (
+                            <Text strong style={{ color: '#1677ff' }}>LogiCore</Text>
+                        )}
                     </div>
 
-                    <Dropdown overlay={userMenu} placement="bottomRight">
+                    <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
                         <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Avatar icon={<UserOutlined />} />
-                            <Text>{user?.firstName} {user?.lastName}</Text>
+                            <Avatar icon={<UserOutlined />} size={isMobile ? 'small' : 'default'} />
+                            {!isMobile && <Text>{user?.firstName} {user?.lastName}</Text>}
                         </div>
                     </Dropdown>
                 </Header>
 
                 <Content style={{
-                    margin: 24,
-                    padding: 24,
+                    margin: isMobile ? 8 : 24,
+                    padding: isMobile ? 12 : 24,
                     background: '#fff',
                     borderRadius: 8,
                     minHeight: 'calc(100vh - 64px - 48px)',
+                    overflow: 'auto',
                 }}>
                     {children}
                 </Content>
