@@ -16,17 +16,21 @@ export default function HomePage() {
                 case 'ADMIN':
                     router.push('/admin');
                     break;
-                case 'CUSTOMER':
-                    router.push('/customer');
+                case 'COMPANY_ADMIN':
+                case 'LOGISTICIAN':
+                    router.push('/company');
                     break;
-                case 'WAREHOUSE':
-                    router.push('/warehouse');
+                case 'WAREHOUSE_MANAGER':
+                    router.push('/company/warehouse');
+                    break;
+                case 'DRIVER':
+                    router.push('/driver');
                     break;
                 case 'RECIPIENT':
                     router.push('/recipient');
                     break;
                 default:
-                    router.push('/admin');
+                    router.push('/company');
             }
         } else {
             router.push('/login');
