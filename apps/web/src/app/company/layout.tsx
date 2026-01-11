@@ -11,6 +11,7 @@ import {
     LogoutOutlined,
     UserOutlined,
     InboxOutlined,
+    PushpinOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -63,6 +64,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 key: '/company/orders',
                 icon: <FileTextOutlined />,
                 label: 'Заявки',
+            },
+            {
+                key: '/company/locations',
+                icon: <PushpinOutlined />,
+                label: 'Адреса',
             },
         ];
 

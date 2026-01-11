@@ -119,7 +119,7 @@ export default function CompanyTrackingPage() {
             setDrivers(response.data);
         } catch (error) {
             console.error('Failed to fetch drivers:', error);
-            message.error('Не удалось загрузить данные о водителях');
+            // message.error('Не удалось загрузить данные о водителях'); // Suppress error
         } finally {
             setLoading(false);
         }

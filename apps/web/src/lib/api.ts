@@ -44,6 +44,7 @@ export interface Order {
     cargoVolume?: number;
     requirements?: string;
     pickupLocation: Location;
+    deliveryPoints: { location: Location; sequence: number }[];
     customer: { firstName: string; lastName: string };
     driver?: { id: string; firstName: string; lastName: string; phone: string; vehiclePlate?: string };
     createdAt: string;

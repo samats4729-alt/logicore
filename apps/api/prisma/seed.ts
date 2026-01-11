@@ -49,7 +49,7 @@ async function main() {
             passwordHash: customerPassword,
             firstName: 'Тест',
             lastName: 'Заказчик',
-            role: UserRole.CUSTOMER,
+            role: UserRole.LOGISTICIAN,
         },
     });
     console.log(`✅ Customer created: ${customer.email}`);

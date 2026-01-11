@@ -54,6 +54,24 @@ export default function OrdersPage() {
     const [form] = Form.useForm();
     const [editForm] = Form.useForm();
 
+    // Quick Location Create
+    const [locationModalOpen, setLocationModalOpen] = useState(false);
+    const [locationForm] = Form.useForm();
+
+    const handleCreateLocation = async (values: any) => {
+        try {
+            const res = await api.post('/locations', values);
+            message.success('Адрес добавлен');
+            setLocationModalOpen(false);
+            locationForm.resetFields();
+            // Refresh locations
+            const newLocationsRes = await api.get('/locations');
+            setLocations(newLocationsRes.data);
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка создания адреса');
+        }
+    };
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -124,6 +142,7 @@ export default function OrdersPage() {
             cargoVolume: order.cargoVolume,
             requirements: order.requirements,
             pickupLocationId: order.pickupLocation?.id,
+            deliveryLocationId: order.deliveryPoints?.[0]?.location?.id,
             driverId: order.driver?.id,
             // New fields
             customerPrice: order.customerPrice,
@@ -165,6 +184,11 @@ export default function OrdersPage() {
             title: 'Откуда',
             dataIndex: ['pickupLocation', 'name'],
             key: 'pickupLocation',
+        },
+        {
+            title: 'Куда',
+            key: 'deliveryLocation',
+            render: (_: any, r: Order) => r.deliveryPoints?.[0]?.location?.name || '—',
         },
         {
             title: 'Статус',
@@ -261,19 +285,52 @@ export default function OrdersPage() {
                 width={600}
             >
                 <Form form={form} layout="vertical" onFinish={handleCreate}>
-                    <Form.Item
-                        name="pickupLocationId"
-                        label="Точка погрузки"
-                        rules={[{ required: true, message: 'Выберите точку' }]}
-                    >
-                        <Select placeholder="Выберите точку погрузки" showSearch optionFilterProp="children">
-                            {locations.map((loc) => (
-                                <Option key={loc.id} value={loc.id}>
-                                    {loc.name} — {loc.address}
-                                </Option>
-                            ))}
-                        </Select>
-                    </Form.Item>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <Form.Item
+                            name="pickupLocationId"
+                            label="Точка погрузки"
+                            rules={[{ required: true, message: 'Выберите точку' }]}
+                            style={{ flex: 1, marginBottom: 0 }}
+                        >
+                            <Select placeholder="Выберите точку погрузки" showSearch optionFilterProp="children">
+                                {locations.map((loc) => (
+                                    <Option key={loc.id} value={loc.id}>
+                                        {loc.name} — {loc.address}
+                                    </Option>
+                                ))}
+                            </Select>
+                        </Form.Item>
+                        <Button
+                            icon={<PlusOutlined />}
+                            onClick={() => setLocationModalOpen(true)}
+                            style={{ marginTop: 29 }}
+                        />
+                    </div>
+                    {/* Spacer for proper margin after flex container */}
+                    <div style={{ marginBottom: 24 }} />
+
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <Form.Item
+                            name="deliveryLocationId"
+                            label="Точка выгрузки"
+                            rules={[{ required: true, message: 'Выберите точку' }]}
+                            style={{ flex: 1, marginBottom: 0 }}
+                        >
+                            <Select placeholder="Выберите точку выгрузки" showSearch optionFilterProp="children">
+                                {locations.map((loc) => (
+                                    <Option key={loc.id} value={loc.id}>
+                                        {loc.name} — {loc.address}
+                                    </Option>
+                                ))}
+                            </Select>
+                        </Form.Item>
+                        <Button
+                            icon={<PlusOutlined />}
+                            onClick={() => setLocationModalOpen(true)}
+                            style={{ marginTop: 29 }}
+                        />
+                    </div>
+                    <div style={{ marginBottom: 24 }} />
                     <Form.Item
                         name="cargoDescription"
                         label="Описание груза"
@@ -377,6 +434,18 @@ export default function OrdersPage() {
                         label="Точка погрузки"
                     >
                         <Select placeholder="Выберите точку погрузки" showSearch optionFilterProp="children">
+                            {locations.map((loc) => (
+                                <Option key={loc.id} value={loc.id}>
+                                    {loc.name} — {loc.address}
+                                </Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
+                    <Form.Item
+                        name="deliveryLocationId"
+                        label="Точка выгрузки"
+                    >
+                        <Select placeholder="Выберите точку выгрузки" showSearch optionFilterProp="children">
                             {locations.map((loc) => (
                                 <Option key={loc.id} value={loc.id}>
                                     {loc.name} — {loc.address}
@@ -495,6 +564,11 @@ export default function OrdersPage() {
                                 <br />
                                 <Text type="secondary">{selectedOrder.pickupLocation?.address}</Text>
                             </Descriptions.Item>
+                            <Descriptions.Item label="Куда">
+                                {selectedOrder.deliveryPoints?.[0]?.location?.name || '—'}
+                                <br />
+                                <Text type="secondary">{selectedOrder.deliveryPoints?.[0]?.location?.address}</Text>
+                            </Descriptions.Item>
                             <Descriptions.Item label="Цена">
                                 {selectedOrder.customerPrice ? `${selectedOrder.customerPrice.toLocaleString()} ₸` : '—'}
                             </Descriptions.Item>
@@ -571,6 +645,53 @@ export default function OrdersPage() {
                     </>
                 )}
             </Drawer>
+            {/* Modal Quick Location */}
+            <Modal
+                title="Новый адрес"
+                open={locationModalOpen}
+                onCancel={() => setLocationModalOpen(false)}
+                onOk={() => locationForm.submit()}
+                width={500}
+            >
+                <Form form={locationForm} layout="vertical" onFinish={handleCreateLocation}>
+                    <Form.Item
+                        name="name"
+                        label="Название"
+                        rules={[{ required: true, message: 'Введите название' }]}
+                    >
+                        <Input placeholder="Склад №1" />
+                    </Form.Item>
+                    <Form.Item
+                        name="address"
+                        label="Адрес"
+                        rules={[{ required: true, message: 'Введите адрес' }]}
+                    >
+                        <Input placeholder="г. Алматы, ул. Примерная, 123" />
+                    </Form.Item>
+                    <Space style={{ width: '100%' }}>
+                        <Form.Item
+                            name="latitude"
+                            label="Широта"
+                            rules={[{ required: true }]}
+                        >
+                            <InputNumber style={{ width: 150 }} step={0.0001} placeholder="43.2389" />
+                        </Form.Item>
+                        <Form.Item
+                            name="longitude"
+                            label="Долгота"
+                            rules={[{ required: true }]}
+                        >
+                            <InputNumber style={{ width: 150 }} step={0.0001} placeholder="76.9457" />
+                        </Form.Item>
+                    </Space>
+                    <Form.Item name="contactName" label="Контактное лицо">
+                        <Input placeholder="Иван Иванов" />
+                    </Form.Item>
+                    <Form.Item name="contactPhone" label="Телефон контакта">
+                        <Input placeholder="+7..." />
+                    </Form.Item>
+                </Form>
+            </Modal>
         </div>
     );
 }

@@ -19,7 +19,7 @@ export class OrdersService {
         requirements?: string;
         pickupDate?: Date;
         pickupNotes?: string;
-        deliveryPoints?: { locationId: string; notes?: string }[];
+        deliveryLocationId?: string;
         customerPrice?: number;
         driverId?: string;
         // New fields
@@ -70,12 +70,11 @@ export class OrdersService {
                 trailerNumber: data.trailerNumber,
                 actualWeight: data.actualWeight,
                 actualVolume: data.actualVolume,
-                deliveryPoints: data.deliveryPoints ? {
-                    create: data.deliveryPoints.map((point, index) => ({
-                        locationId: point.locationId,
-                        sequence: index + 1,
-                        notes: point.notes,
-                    })),
+                deliveryPoints: data.deliveryLocationId ? {
+                    create: [{
+                        locationId: data.deliveryLocationId,
+                        sequence: 1,
+                    }]
                 } : undefined,
                 statusHistory: {
                     create: {

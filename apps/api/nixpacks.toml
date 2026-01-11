@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "pnpm"]
+
+[phases.install]
+cmds = ["pnpm install"]
+
+[phases.build]
+cmds = [
+  "npx prisma generate",
+  "pnpm build"
+]
+
+[start]
+cmd = "npx prisma db push && pnpm start:prod"

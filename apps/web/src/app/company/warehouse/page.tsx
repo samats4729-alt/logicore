@@ -46,9 +46,16 @@ export default function CompanyWarehousePage() {
         try {
             const response = await api.get('/warehouse/queue/my');
             setQueueItems(response.data);
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            message.error('Не удалось загрузить очередь');
+            // Если 404 или 400 - считаем что просто нет данных
+            if (error.response && (error.response.status === 404 || error.response.status === 400)) {
+                setQueueItems([]);
+            } else {
+                // Для других ошибок (500, сеть) оставляем сообщение, но можно сделать менее навязчивым
+                // message.error('Не удалось загрузить очередь'); 
+                // Пользователь просил убрать, так что пока уберем совсем для интервального опроса
+            }
         } finally {
             setLoading(false);
         }

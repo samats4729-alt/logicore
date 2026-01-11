@@ -6,6 +6,7 @@ import { Card, Form, Input, Button, Typography, message, Steps, Result } from 'a
 import { UserOutlined, BankOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import InteractiveBackground from '@/components/ui/InteractiveBackground';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -39,15 +40,17 @@ export default function RegisterCompanyPage() {
     };
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            padding: 24,
-        }}>
-            <Card style={{ width: 500, borderRadius: 12 }}>
+        <InteractiveBackground>
+            <Card
+                style={{
+                    width: 500,
+                    borderRadius: 12,
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                }}
+            >
                 <div style={{ textAlign: 'center', marginBottom: 24 }}>
                     <Title level={3}>Регистрация компании</Title>
                     <Text type="secondary">Создайте аккаунт для вашей компании</Text>
@@ -149,6 +152,6 @@ export default function RegisterCompanyPage() {
                     </div>
                 )}
             </Card>
-        </div>
+        </InteractiveBackground>
     );
 }

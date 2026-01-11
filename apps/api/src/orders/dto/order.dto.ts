@@ -13,6 +13,10 @@ export class CreateOrderDto {
     @IsNotEmpty()
     pickupLocationId: string;
 
+    @ApiProperty()
+    @IsString()
+    deliveryLocationId: string;
+
     @ApiProperty({ example: 'Строительные материалы - кирпич' })
     @IsString()
     @IsNotEmpty()
