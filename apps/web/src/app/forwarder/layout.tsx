@@ -12,6 +12,8 @@ import {
     TruckOutlined,
     TeamOutlined,
     EnvironmentOutlined,
+    FileOutlined,
+    SettingOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -92,6 +94,16 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
             key: '/forwarder/tracking',
             icon: <EnvironmentOutlined />,
             label: 'Карта',
+        },
+        {
+            key: '/forwarder/documents',
+            icon: <FileOutlined />,
+            label: 'Документы',
+        },
+        {
+            key: '/forwarder/settings',
+            icon: <SettingOutlined />,
+            label: 'Настройки',
         },
     ];
 
