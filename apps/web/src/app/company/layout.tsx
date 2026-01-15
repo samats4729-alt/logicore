@@ -13,6 +13,8 @@ import {
     InboxOutlined,
     PushpinOutlined,
     MenuOutlined,
+    FileOutlined,
+    SettingOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -116,6 +118,20 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Пользователи',
             });
         }
+
+        // Документы и Настройки для всех
+        items.push(
+            {
+                key: '/company/documents',
+                icon: <FileOutlined />,
+                label: 'Документы',
+            },
+            {
+                key: '/company/settings',
+                icon: <SettingOutlined />,
+                label: 'Настройки',
+            }
+        );
 
         return items;
     };
