@@ -14,12 +14,13 @@ datasource db {
 
 enum UserRole {
   ADMIN             // Наша компания (LogComp)
-  COMPANY_ADMIN     // Админ компании-клиента
+  COMPANY_ADMIN     // Админ компании-клиента (Заказчик)
   LOGISTICIAN       // Логист (создаёт заявки)
   WAREHOUSE_MANAGER // Завсклад (управляет очередью)
   DRIVER            // Водитель
   RECIPIENT         // Грузополучатель
   PARTNER           // Иная ТК (субподрядчик)
+  FORWARDER         // Экспедитор
 }
 
 enum OrderStatus {
@@ -43,6 +44,11 @@ enum DocumentType {
   ACT             // Акт
   INVOICE         // Счет
   OTHER           // Прочее
+}
+
+enum CompanyType {
+  CUSTOMER    // Заказчик
+  FORWARDER   // Экспедитор
 }
 
 // ==================== MODELS ====================
@@ -75,26 +81,29 @@ model User {
   // Водитель: данные транспорта
   vehiclePlate  String?   // Госномер
   vehicleModel  String?   // Модель авто
+  trailerNumber String?   // Номер прицепа
   
   @@index([phone])
   @@index([role])
 }
 
 model Company {
-  id             String    @id @default(cuid())
+  id             String      @id @default(cuid())
   name           String
-  bin            String?   // БИН/ИИН
+  bin            String?     // БИН/ИИН
   address        String?
   phone          String?
-  email          String?   // Email компании
-  isOurCompany   Boolean   @default(false)  // true = LogComp
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  email          String?     // Email компании
+  type           CompanyType @default(CUSTOMER)
+  isOurCompany   Boolean     @default(false)  // true = LogComp
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
   
-  users          User[]
+  users             User[]
   ordersAsPartner   Order[]   @relation("PartnerOrders")
   ordersAsCustomer  Order[]   @relation("CustomerCompanyOrders")
+  ordersAsForwarder Order[]   @relation("ForwarderOrders")
 }
 
 model Session {
@@ -168,6 +177,17 @@ model Order {
   // Компания-заказчик
   customerCompanyId String?
   customerCompany   Company?  @relation("CustomerCompanyOrders", fields: [customerCompanyId], references: [id])
+  
+  // Экспедитор (назначается заказчиком)
+  forwarderId       String?
+  forwarder         Company?  @relation("ForwarderOrders", fields: [forwarderId], references: [id])
+  
+  // Данные водителя от экспедитора (заполняет экспедитор)
+  assignedDriverName    String?   // ФИО водителя
+  assignedDriverPhone   String?   // Телефон водителя
+  assignedDriverPlate   String?   // Госномер авто
+  assignedDriverTrailer String?   // Номер прицепа
+  assignedAt            DateTime? // Когда назначен водитель
   
   // Финансы
   customerPrice   Float?      // Цена для клиента (видит клиент)

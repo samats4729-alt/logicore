@@ -11,6 +11,7 @@ import { WarehouseModule } from './warehouse/warehouse.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RedisModule } from './redis/redis.module';
 import { CompanyModule } from './company/company.module';
+import { ForwarderModule } from './forwarder/forwarder.module';
 
 @Module({
     imports: [
@@ -29,6 +30,7 @@ import { CompanyModule } from './company/company.module';
         WarehouseModule,
         NotificationsModule,
         CompanyModule,
+        ForwarderModule,
     ],
 })
 export class AppModule { }

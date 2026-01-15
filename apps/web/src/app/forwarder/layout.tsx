@@ -6,20 +6,19 @@ import { Layout, Menu, Button, Avatar, Dropdown, Typography, Spin, Drawer } from
 import {
     DashboardOutlined,
     FileTextOutlined,
-    TeamOutlined,
-    EnvironmentOutlined,
     LogoutOutlined,
     UserOutlined,
-    InboxOutlined,
-    PushpinOutlined,
     MenuOutlined,
+    TruckOutlined,
+    TeamOutlined,
+    EnvironmentOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
-export default function CompanyLayout({ children }: { children: React.ReactNode }) {
+export default function ForwarderLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const { user, logout, checkAuth, isLoading } = useAuthStore();
@@ -42,11 +41,12 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             const currentUser = useAuthStore.getState().user;
             if (!currentUser) {
                 router.replace('/login');
-            } else if (!['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER'].includes(currentUser.role)) {
+            } else if (currentUser.role !== 'FORWARDER') {
+                // Редирект на соответствующий кабинет
                 if (currentUser.role === 'ADMIN') {
                     router.replace('/admin');
-                } else if (currentUser.role === 'FORWARDER') {
-                    router.replace('/forwarder');
+                } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER'].includes(currentUser.role)) {
+                    router.replace('/company');
                 } else {
                     router.replace('/login');
                 }
@@ -72,53 +72,28 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         setMobileMenuOpen(false);
     };
 
-    // Меню в зависимости от роли
-    const getMenuItems = () => {
-        const items = [
-            {
-                key: '/company',
-                icon: <DashboardOutlined />,
-                label: 'Дашборд',
-            },
-            {
-                key: '/company/orders',
-                icon: <FileTextOutlined />,
-                label: 'Заявки',
-            },
-            {
-                key: '/company/locations',
-                icon: <PushpinOutlined />,
-                label: 'Адреса',
-            },
-        ];
-
-        // Для завсклада — очередь на погрузку
-        if (user.role === 'WAREHOUSE_MANAGER' || user.role === 'COMPANY_ADMIN') {
-            items.push({
-                key: '/company/warehouse',
-                icon: <InboxOutlined />,
-                label: 'Очередь погрузки',
-            });
-        }
-
-        // Карта для всех
-        items.push({
-            key: '/company/tracking',
+    const menuItems = [
+        {
+            key: '/forwarder',
+            icon: <DashboardOutlined />,
+            label: 'Дашборд',
+        },
+        {
+            key: '/forwarder/orders',
+            icon: <FileTextOutlined />,
+            label: 'Входящие заявки',
+        },
+        {
+            key: '/forwarder/drivers',
+            icon: <TeamOutlined />,
+            label: 'Водители',
+        },
+        {
+            key: '/forwarder/tracking',
             icon: <EnvironmentOutlined />,
             label: 'Карта',
-        });
-
-        // Управление пользователями — только для админа компании
-        if (user.role === 'COMPANY_ADMIN') {
-            items.push({
-                key: '/company/users',
-                icon: <TeamOutlined />,
-                label: 'Пользователи',
-            });
-        }
-
-        return items;
-    };
+        },
+    ];
 
     const userMenu = {
         items: [
@@ -152,7 +127,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Menu
                 mode="inline"
                 selectedKeys={[pathname]}
-                items={getMenuItems()}
+                items={menuItems}
                 onClick={({ key }) => handleMenuClick(key)}
                 style={{ border: 'none' }}
             />
@@ -182,16 +157,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     style={{ borderRight: '1px solid #f0f0f0' }}
                 >
                     <div style={{ padding: 16, textAlign: 'center' }}>
-                        {!collapsed && (
+                        {!collapsed ? (
                             <Text strong style={{ fontSize: 16 }}>
-                                {user.company?.name || 'Компания'}
+                                {user.company?.name || 'Экспедитор'}
                             </Text>
+                        ) : (
+                            <TruckOutlined style={{ fontSize: 20 }} />
                         )}
                     </div>
                     <Menu
                         mode="inline"
                         selectedKeys={[pathname]}
-                        items={getMenuItems()}
+                        items={menuItems}
                         onClick={({ key }) => router.push(key)}
                     />
                 </Sider>
@@ -219,13 +196,13 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 onClick={() => setMobileMenuOpen(true)}
                             />
                         )}
-                        <Text strong style={{ fontSize: isMobile ? 14 : 16 }}>
-                            {isMobile ? (user.company?.name || 'LogiCore') : 'Кабинет клиента'}
+                        <Text strong style={{ fontSize: isMobile ? 14 : 16, color: '#52c41a' }}>
+                            {isMobile ? (user.company?.name || 'Экспедитор') : 'Кабинет экспедитора'}
                         </Text>
                     </div>
                     <Dropdown menu={userMenu} placement="bottomRight">
                         <Button type="text" style={{ height: 'auto', padding: isMobile ? '4px 8px' : '4px 12px' }}>
-                            <Avatar icon={<UserOutlined />} size={isMobile ? 'small' : 'default'} style={{ marginRight: 8 }} />
+                            <Avatar icon={<UserOutlined />} size={isMobile ? 'small' : 'default'} style={{ marginRight: 8, background: '#52c41a' }} />
                             {!isMobile && `${user.firstName} ${user.lastName}`}
                         </Button>
                     </Dropdown>

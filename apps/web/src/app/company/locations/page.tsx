@@ -7,7 +7,8 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
-import MapPicker from '@/components/ui/MapPicker'; // Dynamic import
+import MapPicker from '@/components/ui/MapPicker';
+import AddressAutocomplete from '@/components/ui/AddressAutocomplete';
 
 const { Title, Text } = Typography;
 
@@ -21,6 +22,7 @@ export default function CompanyLocationsPage() {
     // Coordinates managed manually to sync with Map
     const [lat, setLat] = useState<number | undefined>();
     const [lng, setLng] = useState<number | undefined>();
+    const [addressValue, setAddressValue] = useState('');
 
     useEffect(() => {
         fetchLocations();
@@ -41,6 +43,7 @@ export default function CompanyLocationsPage() {
         try {
             await api.post('/locations', {
                 ...values,
+                address: addressValue,
                 latitude: lat,
                 longitude: lng
             });
@@ -49,6 +52,7 @@ export default function CompanyLocationsPage() {
             form.resetFields();
             setLat(undefined);
             setLng(undefined);
+            setAddressValue('');
             fetchLocations();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка создания');
@@ -74,6 +78,15 @@ export default function CompanyLocationsPage() {
         });
     };
 
+    // Когда выбирают адрес из автодополнения
+    const handleAddressSelect = (address: string, latitude: number, longitude: number) => {
+        setAddressValue(address);
+        setLat(latitude);
+        setLng(longitude);
+        form.setFieldsValue({ latitude, longitude });
+    };
+
+    // Когда кликают на карту
     const handleMapSelect = (latitude: number, longitude: number) => {
         setLat(latitude);
         setLng(longitude);
@@ -155,9 +168,14 @@ export default function CompanyLocationsPage() {
             <Modal
                 title="Добавление нового адреса"
                 open={modalOpen}
-                onCancel={() => setModalOpen(false)}
+                onCancel={() => {
+                    setModalOpen(false);
+                    setAddressValue('');
+                    setLat(undefined);
+                    setLng(undefined);
+                }}
                 onOk={() => form.submit()}
-                width={800} // Шире для карты
+                width={800}
                 centered
             >
                 <Row gutter={24}>
@@ -170,23 +188,29 @@ export default function CompanyLocationsPage() {
                             >
                                 <Input placeholder="Склад №1" size="large" />
                             </Form.Item>
+
                             <Form.Item
-                                name="address"
-                                label="Текстовый адрес"
-                                rules={[{ required: true, message: 'Введите адрес' }]}
+                                label="Адрес"
+                                required
+                                help="Начните вводить адрес — он найдётся автоматически"
                             >
-                                <Input.TextArea rows={2} placeholder="г. Алматы, ул. Гоголя 1" />
+                                <AddressAutocomplete
+                                    value={addressValue}
+                                    onChange={setAddressValue}
+                                    onSelect={handleAddressSelect}
+                                    placeholder="г. Алматы, ул. Гоголя 1"
+                                />
                             </Form.Item>
 
                             <Row gutter={12}>
                                 <Col span={12}>
-                                    <Form.Item name="latitude" label="Широта" rules={[{ required: true, message: 'Укажите на карте' }]}>
-                                        <InputNumber style={{ width: '100%' }} value={lat} readOnly />
+                                    <Form.Item name="latitude" label="Широта" rules={[{ required: true, message: 'Выберите адрес или укажите на карте' }]}>
+                                        <InputNumber style={{ width: '100%' }} value={lat} readOnly placeholder="—" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={12}>
-                                    <Form.Item name="longitude" label="Долгота" rules={[{ required: true, message: 'Укажите на карте' }]}>
-                                        <InputNumber style={{ width: '100%' }} value={lng} readOnly />
+                                    <Form.Item name="longitude" label="Долгота" rules={[{ required: true, message: '' }]}>
+                                        <InputNumber style={{ width: '100%' }} value={lng} readOnly placeholder="—" />
                                     </Form.Item>
                                 </Col>
                             </Row>
@@ -200,13 +224,19 @@ export default function CompanyLocationsPage() {
                         </Form>
                     </Col>
                     <Col span={14}>
-                        <div style={{ marginBottom: 8 }}><Text strong>Укажите точку на карте:</Text></div>
+                        <div style={{ marginBottom: 8 }}>
+                            <Text strong>Или укажите точку на карте:</Text>
+                        </div>
                         <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden' }}>
-                            <MapPicker onLocationSelect={handleMapSelect} />
+                            <MapPicker
+                                onLocationSelect={handleMapSelect}
+                                initialLat={lat}
+                                initialLng={lng}
+                            />
                         </div>
                         <div style={{ marginTop: 8 }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>
-                                Нажмите на карту, чтобы установить маркер. Координаты заполнятся автоматически.
+                                При выборе адреса карта автоматически переместится к нужной точке
                             </Text>
                         </div>
                     </Col>
@@ -215,3 +245,4 @@ export default function CompanyLocationsPage() {
         </div>
     );
 }
+

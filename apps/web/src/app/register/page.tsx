@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, Form, Input, Button, Typography, message, Steps, Result } from 'antd';
-import { UserOutlined, BankOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, Typography, message, Steps, Result, Radio, Space } from 'antd';
+import { UserOutlined, BankOutlined, CheckCircleOutlined, ShopOutlined, TruckOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import InteractiveBackground from '@/components/ui/InteractiveBackground';
@@ -15,22 +15,30 @@ export default function RegisterCompanyPage() {
     const { setUser } = useAuthStore();
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState(0);
+    const [companyType, setCompanyType] = useState<'CUSTOMER' | 'FORWARDER' | null>(null);
     const [form] = Form.useForm();
 
     const handleRegister = async (values: any) => {
         setLoading(true);
         try {
-            const response = await api.post('/auth/register-company', values);
+            const response = await api.post('/auth/register-company', {
+                ...values,
+                companyType,
+            });
 
             // Сохраняем токен
             localStorage.setItem('token', response.data.accessToken);
             setUser(response.data.admin, response.data.accessToken);
 
-            setStep(2);
+            setStep(3);
 
             // Через 2 секунды редирект
             setTimeout(() => {
-                router.push('/company');
+                if (companyType === 'FORWARDER') {
+                    router.push('/forwarder');
+                } else {
+                    router.push('/company');
+                }
             }, 2000);
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка регистрации');
@@ -43,7 +51,7 @@ export default function RegisterCompanyPage() {
         <InteractiveBackground>
             <Card
                 style={{
-                    width: 500,
+                    width: 520,
                     borderRadius: 12,
                     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
                     background: 'rgba(255, 255, 255, 0.95)',
@@ -59,14 +67,16 @@ export default function RegisterCompanyPage() {
                 <Steps
                     current={step}
                     style={{ marginBottom: 32 }}
+                    size="small"
                     items={[
                         { title: 'Компания', icon: <BankOutlined /> },
-                        { title: 'Администратор', icon: <UserOutlined /> },
+                        { title: 'Тип', icon: <TruckOutlined /> },
+                        { title: 'Админ', icon: <UserOutlined /> },
                         { title: 'Готово', icon: <CheckCircleOutlined /> },
                     ]}
                 />
 
-                {step === 2 ? (
+                {step === 3 ? (
                     <Result
                         status="success"
                         title="Компания зарегистрирована!"
@@ -74,6 +84,7 @@ export default function RegisterCompanyPage() {
                     />
                 ) : (
                     <Form form={form} layout="vertical" onFinish={handleRegister} preserve={true}>
+                        {/* Шаг 0: Данные компании */}
                         <div style={{ display: step === 0 ? 'block' : 'none' }}>
                             <Form.Item
                                 name="companyName"
@@ -92,7 +103,79 @@ export default function RegisterCompanyPage() {
                             </Button>
                         </div>
 
+                        {/* Шаг 1: Выбор типа аккаунта */}
                         <div style={{ display: step === 1 ? 'block' : 'none' }}>
+                            <Paragraph type="secondary" style={{ marginBottom: 16, textAlign: 'center' }}>
+                                Выберите тип вашей компании
+                            </Paragraph>
+                            <Radio.Group
+                                value={companyType}
+                                onChange={(e) => setCompanyType(e.target.value)}
+                                style={{ width: '100%' }}
+                            >
+                                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                                    <Radio.Button
+                                        value="CUSTOMER"
+                                        style={{
+                                            width: '100%',
+                                            height: 'auto',
+                                            padding: '16px 20px',
+                                            borderRadius: 8,
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <ShopOutlined style={{ fontSize: 28, color: '#1677ff' }} />
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: 16 }}>Я Заказчик</div>
+                                                <div style={{ fontSize: 13, color: '#666', fontWeight: 400 }}>
+                                                    Создаю заявки на перевозку грузов
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Radio.Button>
+                                    <Radio.Button
+                                        value="FORWARDER"
+                                        style={{
+                                            width: '100%',
+                                            height: 'auto',
+                                            padding: '16px 20px',
+                                            borderRadius: 8,
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <TruckOutlined style={{ fontSize: 28, color: '#52c41a' }} />
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: 16 }}>Я Экспедитор</div>
+                                                <div style={{ fontSize: 13, color: '#666', fontWeight: 400 }}>
+                                                    Выполняю перевозки, назначаю водителей
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Radio.Button>
+                                </Space>
+                            </Radio.Group>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
+                                <Button size="large" onClick={() => setStep(0)} style={{ flex: 1 }}>
+                                    Назад
+                                </Button>
+                                <Button
+                                    type="primary"
+                                    size="large"
+                                    style={{ flex: 2 }}
+                                    disabled={!companyType}
+                                    onClick={() => setStep(2)}
+                                >
+                                    Далее
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Шаг 2: Данные администратора */}
+                        <div style={{ display: step === 2 ? 'block' : 'none' }}>
                             <Paragraph type="secondary" style={{ marginBottom: 16 }}>
                                 Данные администратора компании
                             </Paragraph>
@@ -132,7 +215,7 @@ export default function RegisterCompanyPage() {
                                 <Input.Password size="large" />
                             </Form.Item>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <Button size="large" onClick={() => setStep(0)} style={{ flex: 1 }}>
+                                <Button size="large" onClick={() => setStep(1)} style={{ flex: 1 }}>
                                     Назад
                                 </Button>
                                 <Button type="primary" htmlType="submit" loading={loading} size="large" style={{ flex: 2 }}>
@@ -143,7 +226,7 @@ export default function RegisterCompanyPage() {
                     </Form>
                 )}
 
-                {step < 2 && (
+                {step < 3 && (
                     <div style={{ textAlign: 'center', marginTop: 24 }}>
                         <Text type="secondary">
                             Уже есть аккаунт?{' '}

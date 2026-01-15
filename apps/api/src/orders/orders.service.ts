@@ -22,6 +22,7 @@ export class OrdersService {
         deliveryLocationId?: string;
         customerPrice?: number;
         driverId?: string;
+        forwarderId?: string; // Экспедитор
         // New fields
         customerPaymentCondition?: string;
         customerPaymentForm?: string;
@@ -42,10 +43,17 @@ export class OrdersService {
         // Если водитель назначен сразу - статус ASSIGNED
         const status = data.driverId ? OrderStatus.ASSIGNED : OrderStatus.PENDING;
 
+        // Получаем companyId заказчика
+        const customer = await this.prisma.user.findUnique({
+            where: { id: data.customerId },
+            select: { companyId: true },
+        });
+
         const order = await this.prisma.order.create({
             data: {
                 orderNumber,
                 customerId: data.customerId,
+                customerCompanyId: customer?.companyId, // Устанавливаем компанию заказчика
                 pickupLocationId: data.pickupLocationId,
                 cargoDescription: data.cargoDescription,
                 cargoWeight: data.cargoWeight,
@@ -56,6 +64,7 @@ export class OrdersService {
                 pickupNotes: data.pickupNotes,
                 customerPrice: data.customerPrice,
                 driverId: data.driverId,
+                forwarderId: data.forwarderId, // Связь с экспедитором
                 status,
                 // New fields
                 customerPaymentCondition: data.customerPaymentCondition,
@@ -85,9 +94,11 @@ export class OrdersService {
             },
             include: {
                 customer: true,
+                customerCompany: true, // Включаем компанию заказчика
                 driver: true,
                 pickupLocation: true,
                 deliveryPoints: { include: { location: true } },
+                forwarder: true, // Включаем экспедитора в ответ
             },
         });
 

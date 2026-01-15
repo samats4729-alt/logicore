@@ -49,8 +49,12 @@ interface Order {
     cargoDescription: string;
     customerPrice?: number;
     createdAt: string;
-    pickupLocation?: { name: string };
+    pickupLocation: { name: string };
     driver?: { firstName: string; lastName: string; vehiclePlate?: string };
+    assignedDriverName?: string;
+    assignedDriverPhone?: string;
+    assignedDriverPlate?: string;
+    assignedDriverTrailer?: string;
 }
 
 export default function CompanyDashboard() {
@@ -116,10 +120,19 @@ export default function CompanyDashboard() {
         },
         {
             title: 'Водитель/Машина',
-            dataIndex: 'driver',
             key: 'driver',
-            render: (driver: any) =>
-                driver ? `${driver.firstName} ${driver.lastName} (${driver.vehiclePlate || '—'})` : '—',
+            render: (_: any, record: Order) => {
+                // Приоритет: назначенный водитель от экспедитора
+                if (record.assignedDriverName) {
+                    const vehicle = record.assignedDriverPlate || '—';
+                    const trailer = record.assignedDriverTrailer ? ` + ${record.assignedDriverTrailer}` : '';
+                    return `${record.assignedDriverName} (${vehicle}${trailer})`;
+                }
+                if (record.driver) {
+                    return `${record.driver.firstName} ${record.driver.lastName} (${record.driver.vehiclePlate || '—'})`;
+                }
+                return '—';
+            },
         },
         {
             title: 'Сумма',

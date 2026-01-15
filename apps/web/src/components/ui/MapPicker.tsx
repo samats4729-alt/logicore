@@ -1,18 +1,71 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
-// Component that handles map clicks
-const MapEvents = ({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) => {
-    const { useMapEvents } = require('react-leaflet');
-    const map = useMapEvents({
+// Component that handles map clicks and updates center when position changes
+const MapEvents = ({
+    onLocationSelect,
+    externalPosition
+}: {
+    onLocationSelect: (lat: number, lng: number) => void;
+    externalPosition?: [number, number] | null;
+}) => {
+    const { useMapEvents, useMap } = require('react-leaflet');
+    const map = useMap();
+
+    // Fly to new position when address is selected
+    useEffect(() => {
+        if (externalPosition) {
+            map.flyTo(externalPosition, 15);
+        }
+    }, [externalPosition, map]);
+
+    useMapEvents({
         click(e: any) {
             onLocationSelect(e.latlng.lat, e.latlng.lng);
             map.flyTo(e.latlng, map.getZoom());
         },
     });
     return null;
+};
+
+// Draggable marker component
+const DraggableMarker = ({
+    position,
+    icon,
+    onDragEnd
+}: {
+    position: [number, number];
+    icon: any;
+    onDragEnd: (lat: number, lng: number) => void;
+}) => {
+    const { Marker, Popup } = require('react-leaflet');
+
+    return (
+        <Marker
+            position={position}
+            icon={icon}
+            draggable={true}
+            eventHandlers={{
+                dragend: (e: any) => {
+                    const marker = e.target;
+                    const pos = marker.getLatLng();
+                    onDragEnd(pos.lat, pos.lng);
+                },
+            }}
+        >
+            <Popup>
+                <div style={{ textAlign: 'center' }}>
+                    <strong>Выбранная точка</strong>
+                    <br />
+                    <span style={{ fontSize: 11, color: '#666' }}>
+                        Перетащите маркер для уточнения
+                    </span>
+                </div>
+            </Popup>
+        </Marker>
+    );
 };
 
 const MapComponent = ({
@@ -24,13 +77,20 @@ const MapComponent = ({
     initialLng?: number,
     onLocationSelect: (lat: number, lng: number) => void
 }) => {
-    const { MapContainer, TileLayer, Marker, Popup } = require('react-leaflet');
+    const { MapContainer, TileLayer } = require('react-leaflet');
     const L = require('leaflet');
     require('leaflet/dist/leaflet.css');
 
     const [position, setPosition] = useState<[number, number] | null>(
         initialLat && initialLng ? [initialLat, initialLng] : null
     );
+
+    // Update internal position when external props change (address autocomplete)
+    useEffect(() => {
+        if (initialLat && initialLng) {
+            setPosition([initialLat, initialLng]);
+        }
+    }, [initialLat, initialLng]);
 
     // Create icon inside component to avoid SSR issues
     const icon = L.icon({
@@ -48,6 +108,11 @@ const MapComponent = ({
         onLocationSelect(lat, lng);
     };
 
+    const handleDragEnd = (lat: number, lng: number) => {
+        setPosition([lat, lng]);
+        onLocationSelect(lat, lng);
+    };
+
     // Almaty center default
     const center: [number, number] = initialLat && initialLng ? [initialLat, initialLng] : [43.2389, 76.8897];
 
@@ -61,11 +126,16 @@ const MapComponent = ({
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <MapEvents onLocationSelect={handleSelect} />
+            <MapEvents
+                onLocationSelect={handleSelect}
+                externalPosition={position}
+            />
             {position && (
-                <Marker position={position} icon={icon}>
-                    <Popup>Выбрана точка</Popup>
-                </Marker>
+                <DraggableMarker
+                    position={position}
+                    icon={icon}
+                    onDragEnd={handleDragEnd}
+                />
             )}
         </MapContainer>
     );

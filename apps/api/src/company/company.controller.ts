@@ -64,4 +64,13 @@ export class CompanyController {
     async getCompanyProfile(@Request() req: any) {
         return this.companyService.getCompanyProfile(req.user.companyId);
     }
+
+    // ==================== Экспедиторы ====================
+
+    @Get('forwarders')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Получить список экспедиторов для выбора' })
+    async getForwarders() {
+        return this.companyService.getForwarders();
+    }
 }

@@ -93,7 +93,7 @@ export class CompanyService {
         data: Partial<{
             firstName: string;
             lastName: string;
-            role: 'LOGISTICIAN' | 'WAREHOUSE_MANAGER';
+            role: 'COMPANY_ADMIN' | 'LOGISTICIAN' | 'WAREHOUSE_MANAGER';
             password: string;
         }>,
     ) {
@@ -103,6 +103,25 @@ export class CompanyService {
         });
         if (!user) {
             throw new NotFoundException('Пользователь не найден');
+        }
+
+        // ЗАЩИТА: Запрещаем изменять роль последнего администратора компании
+        if (data.role && user.role === 'COMPANY_ADMIN' && data.role !== 'COMPANY_ADMIN') {
+            // Проверяем сколько администраторов в компании
+            const adminCount = await this.prisma.user.count({
+                where: {
+                    companyId,
+                    role: 'COMPANY_ADMIN',
+                    isActive: true,
+                },
+            });
+
+            if (adminCount <= 1) {
+                throw new BadRequestException(
+                    'Нельзя изменить роль единственного администратора компании. ' +
+                    'Сначала добавьте другого администратора.'
+                );
+            }
         }
 
         const updateData: any = { ...data };
@@ -165,6 +184,12 @@ export class CompanyService {
                         vehiclePlate: true,
                     },
                 },
+                forwarder: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -181,5 +206,24 @@ export class CompanyService {
             throw new NotFoundException('Компания не найдена');
         }
         return company;
+    }
+
+    /**
+     * Получить список экспедиторов для выбора при создании заявки
+     */
+    async getForwarders() {
+        return this.prisma.company.findMany({
+            where: {
+                type: 'FORWARDER',
+                isActive: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+            },
+            orderBy: { name: 'asc' },
+        });
     }
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Tag, Space, Modal, Form, Input, InputNumber, Select, message, Typography, Drawer } from 'antd';
-import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Card, Button, Tag, Space, Modal, Form, Input, InputNumber, Select, DatePicker, message, Typography, Drawer } from 'antd';
+import { PlusOutlined, EyeOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
@@ -51,17 +51,26 @@ interface Order {
     pickupLocation?: { name: string; address: string };
     deliveryPoints?: { location: { name: string; address: string } }[];
     driver?: { firstName: string; lastName: string; phone: string; vehiclePlate?: string };
+    forwarder?: { name: string };
+    assignedDriverName?: string;
+    assignedDriverPhone?: string;
+    assignedDriverPlate?: string;
+    assignedDriverTrailer?: string;
 }
 
 export default function CompanyOrdersPage() {
     const { user } = useAuthStore();
     const [orders, setOrders] = useState<Order[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
+    const [forwarders, setForwarders] = useState<{ id: string; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [createModalOpen, setCreateModalOpen] = useState(false);
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [statusModalOpen, setStatusModalOpen] = useState(false);
+    const [statusLoading, setStatusLoading] = useState(false);
     const [form] = Form.useForm();
+    const [statusForm] = Form.useForm();
 
     const fetchOrders = async () => {
         try {
@@ -83,9 +92,19 @@ export default function CompanyOrdersPage() {
         }
     };
 
+    const fetchForwarders = async () => {
+        try {
+            const response = await api.get('/company/forwarders');
+            setForwarders(response.data);
+        } catch (error) {
+            console.error('Failed to fetch forwarders:', error);
+        }
+    };
+
     useEffect(() => {
         fetchOrders();
         fetchLocations();
+        fetchForwarders();
     }, []);
 
     const handleCreateOrder = async (values: any) => {
@@ -100,6 +119,66 @@ export default function CompanyOrdersPage() {
             fetchOrders();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка создания заявки');
+        }
+    };
+
+    const handleCancelOrder = (order: Order) => {
+        Modal.confirm({
+            title: 'Отменить заявку?',
+            content: `Вы уверены что хотите отменить заявку ${order.orderNumber}?`,
+            okText: 'Да, отменить',
+            cancelText: 'Нет',
+            okButtonProps: { danger: true },
+            onOk: async () => {
+                try {
+                    await api.put(`/orders/${order.id}/status`, {
+                        status: 'CANCELLED',
+                        comment: 'Отменено заказчиком',
+                    });
+                    message.success('Заявка отменена');
+                    fetchOrders();
+                } catch (error: any) {
+                    message.error(error.response?.data?.message || 'Ошибка отмены заявки');
+                }
+            },
+        });
+    };
+
+    const getNextStatuses = (currentStatus: string): { value: string; label: string }[] => {
+        const transitions: Record<string, { value: string; label: string }[]> = {
+            ASSIGNED: [
+                { value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' },
+                { value: 'AT_PICKUP', label: 'На погрузке' },
+            ],
+            EN_ROUTE_PICKUP: [{ value: 'AT_PICKUP', label: 'На погрузке' }],
+            AT_PICKUP: [{ value: 'LOADING', label: 'Загружается' }],
+            LOADING: [{ value: 'IN_TRANSIT', label: 'В пути' }],
+            IN_TRANSIT: [{ value: 'AT_DELIVERY', label: 'На выгрузке' }],
+            AT_DELIVERY: [{ value: 'UNLOADING', label: 'Разгружается' }],
+            UNLOADING: [{ value: 'COMPLETED', label: 'Завершён' }],
+        };
+        return transitions[currentStatus] || [];
+    };
+
+    const openStatusModal = () => {
+        if (!selectedOrder) return;
+        statusForm.resetFields();
+        setStatusModalOpen(true);
+    };
+
+    const handleStatusChange = async (values: { status: string; comment?: string }) => {
+        if (!selectedOrder) return;
+        setStatusLoading(true);
+        try {
+            await api.put(`/orders/${selectedOrder.id}/status`, values);
+            message.success('Статус обновлён');
+            setStatusModalOpen(false);
+            setDetailDrawerOpen(false);
+            fetchOrders();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка обновления статуса');
+        } finally {
+            setStatusLoading(false);
         }
     };
 
@@ -143,10 +222,25 @@ export default function CompanyOrdersPage() {
         },
         {
             title: 'Машина',
-            dataIndex: 'driver',
-            key: 'driver',
-            render: (driver: any) =>
-                driver ? driver.vehiclePlate || '—' : '—',
+            key: 'vehicle',
+            render: (_: any, record: Order) => {
+                // Приоритет: назначенный водитель от экспедитора, потом собственный водитель
+                if (record.assignedDriverName) {
+                    return (
+                        <Space direction="vertical" size={0}>
+                            <Text style={{ fontSize: 12 }}>{record.assignedDriverName}</Text>
+                            <Text type="secondary" style={{ fontSize: 11 }}>
+                                {record.assignedDriverPlate || '—'}
+                                {record.assignedDriverTrailer && ` + ${record.assignedDriverTrailer}`}
+                            </Text>
+                        </Space>
+                    );
+                }
+                if (record.driver) {
+                    return record.driver.vehiclePlate || '—';
+                }
+                return '—';
+            },
         },
         {
             title: 'Сумма',
@@ -158,7 +252,19 @@ export default function CompanyOrdersPage() {
             title: 'Действия',
             key: 'actions',
             render: (_: any, record: Order) => (
-                <Button icon={<EyeOutlined />} onClick={() => showOrderDetail(record)} />
+                <Space>
+                    <Button icon={<EyeOutlined />} onClick={() => showOrderDetail(record)} />
+                    {/* Можно отменить только заявки в статусах PENDING или ASSIGNED */}
+                    {(record.status === 'PENDING' || record.status === 'ASSIGNED' || record.status === 'DRAFT') && (
+                        <Button
+                            danger
+                            icon={<CloseCircleOutlined />}
+                            onClick={() => handleCancelOrder(record)}
+                        >
+                            Отменить
+                        </Button>
+                    )}
+                </Space>
             ),
         },
     ];
@@ -207,6 +313,14 @@ export default function CompanyOrdersPage() {
                             ))}
                         </Select>
                     </Form.Item>
+                    <Form.Item name="pickupDate" label="Дата погрузки">
+                        <DatePicker
+                            style={{ width: '100%' }}
+                            format="DD.MM.YYYY HH:mm"
+                            showTime={{ format: 'HH:mm' }}
+                            placeholder="Выберите дату и время"
+                        />
+                    </Form.Item>
                     <Form.Item name="deliveryLocationId" label="Точка выгрузки">
                         <Select placeholder="Выберите локацию" showSearch optionFilterProp="children" allowClear>
                             {locations.map((loc) => (
@@ -229,6 +343,19 @@ export default function CompanyOrdersPage() {
                     </Space>
                     <Form.Item name="requirements" label="Особые требования">
                         <TextArea rows={2} placeholder="Тент, аккуратная погрузка и т.д." />
+                    </Form.Item>
+                    <Form.Item
+                        name="forwarderId"
+                        label="Экспедитор"
+                        rules={[{ required: true, message: 'Выберите экспедитора' }]}
+                    >
+                        <Select placeholder="Выберите экспедитора для выполнения перевозки">
+                            {forwarders.map((f) => (
+                                <Select.Option key={f.id} value={f.id}>
+                                    {f.name}
+                                </Select.Option>
+                            ))}
+                        </Select>
                     </Form.Item>
                 </Form>
             </Modal>
@@ -276,13 +403,81 @@ export default function CompanyOrdersPage() {
                             </>
                         )}
 
+                        {selectedOrder.assignedDriverName && (
+                            <>
+                                <Title level={5} style={{ marginTop: 16 }}>Назначенный водитель (от экспедитора)</Title>
+                                <div><strong>ФИО:</strong> {selectedOrder.assignedDriverName}</div>
+                                <div><strong>Телефон:</strong> {selectedOrder.assignedDriverPhone}</div>
+                                <div><strong>Госномер:</strong> {selectedOrder.assignedDriverPlate}</div>
+                                {selectedOrder.assignedDriverTrailer && (
+                                    <div><strong>Номер прицепа:</strong> {selectedOrder.assignedDriverTrailer}</div>
+                                )}
+                            </>
+                        )}
+
+                        {selectedOrder.forwarder && (
+                            <>
+                                <Title level={5} style={{ marginTop: 16 }}>Экспедитор</Title>
+                                <div>{selectedOrder.forwarder.name}</div>
+                            </>
+                        )}
+
                         <Title level={5} style={{ marginTop: 16 }}>Стоимость</Title>
                         <div style={{ fontSize: 18, fontWeight: 'bold' }}>
                             {selectedOrder.customerPrice ? `${selectedOrder.customerPrice.toLocaleString()} ₸` : 'Не указана'}
                         </div>
+
+                        {/* Кнопка изменения статуса */}
+                        {getNextStatuses(selectedOrder.status).length > 0 && (
+                            <Button
+                                type="primary"
+                                style={{ marginTop: 16, width: '100%' }}
+                                onClick={openStatusModal}
+                            >
+                                Изменить статус заявки
+                            </Button>
+                        )}
                     </div>
                 )}
             </Drawer>
+
+            {/* Модал изменения статуса */}
+            <Modal
+                title="Изменить статус заявки"
+                open={statusModalOpen}
+                onCancel={() => setStatusModalOpen(false)}
+                onOk={() => statusForm.submit()}
+                okText="Обновить"
+                cancelText="Отмена"
+                confirmLoading={statusLoading}
+            >
+                {selectedOrder && (
+                    <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
+                        <div style={{ marginBottom: 16 }}>
+                            Текущий статус: <Tag color={statusColors[selectedOrder.status]}>
+                                {statusLabels[selectedOrder.status]}
+                            </Tag>
+                        </div>
+                        <Form.Item
+                            name="status"
+                            label="Новый статус"
+                            rules={[{ required: true, message: 'Выберите статус' }]}
+                        >
+                            <Select placeholder="Выберите статус" size="large">
+                                {getNextStatuses(selectedOrder.status).map(s => (
+                                    <Select.Option key={s.value} value={s.value}>{s.label}</Select.Option>
+                                ))}
+                            </Select>
+                        </Form.Item>
+                        <Form.Item
+                            name="comment"
+                            label="Комментарий (необязательно)"
+                        >
+                            <Input.TextArea rows={3} placeholder="Причина изменения статуса..." />
+                        </Form.Item>
+                    </Form>
+                )}
+            </Modal>
         </div>
     );
 }

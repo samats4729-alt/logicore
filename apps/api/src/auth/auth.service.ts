@@ -93,7 +93,7 @@ export class AuthService {
         }
 
         // Создаем токен
-        const payload = { sub: user.id, phone: user.phone, role: user.role };
+        const payload = { sub: user.id, phone: user.phone, role: user.role, companyId: user.companyId };
         const accessToken = this.jwtService.sign(payload);
 
         // Сохраняем сессию
@@ -159,7 +159,7 @@ export class AuthService {
         }
 
         // Создаем токен
-        const payload = { sub: user.id, email: user.email, role: user.role };
+        const payload = { sub: user.id, email: user.email, role: user.role, companyId: user.companyId };
         const accessToken = this.jwtService.sign(payload);
 
         // Сохраняем сессию
@@ -224,10 +224,11 @@ export class AuthService {
     // ==================== РЕГИСТРАЦИЯ КОМПАНИИ ====================
 
     /**
-     * Регистрация новой компании-клиента
+     * Регистрация новой компании-клиента или экспедитора
      */
     async registerCompany(data: {
         companyName: string;
+        companyType: 'CUSTOMER' | 'FORWARDER';
         bin?: string;
         adminEmail: string;
         adminPassword: string;
@@ -251,6 +252,11 @@ export class AuthService {
             throw new BadRequestException('Телефон уже зарегистрирован');
         }
 
+        // Определяем роль на основе типа компании
+        const userRole = data.companyType === 'FORWARDER'
+            ? UserRole.FORWARDER
+            : UserRole.COMPANY_ADMIN;
+
         // Создаём компанию и админа в транзакции
         const result = await this.prisma.$transaction(async (tx) => {
             // Создаём компанию
@@ -260,6 +266,7 @@ export class AuthService {
                     bin: data.bin,
                     email: data.adminEmail,
                     phone: data.phone,
+                    type: data.companyType,
                     isOurCompany: false,
                 },
             });
@@ -275,7 +282,7 @@ export class AuthService {
                     passwordHash,
                     firstName: data.firstName,
                     lastName: data.lastName,
-                    role: UserRole.COMPANY_ADMIN,
+                    role: userRole,
                     companyId: company.id,
                 },
             });

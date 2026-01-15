@@ -54,6 +54,11 @@ export class RegisterCompanyDto {
     @IsNotEmpty()
     companyName: string;
 
+    @ApiProperty({ description: 'Тип компании', enum: ['CUSTOMER', 'FORWARDER'], example: 'CUSTOMER' })
+    @IsString()
+    @IsNotEmpty()
+    companyType: 'CUSTOMER' | 'FORWARDER';
+
     @ApiProperty({ description: 'БИН компании', example: '123456789012', required: false })
     @IsString()
     bin?: string;

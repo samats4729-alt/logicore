@@ -67,6 +67,11 @@ export class CreateOrderDto {
     @IsOptional()
     driverId?: string;
 
+    @ApiProperty({ required: false, description: 'ID экспедитора (компании-перевозчика)' })
+    @IsString()
+    @IsOptional()
+    forwarderId?: string;
+
     // --- New Fields ---
     @ApiProperty({ required: false })
     @IsString()
