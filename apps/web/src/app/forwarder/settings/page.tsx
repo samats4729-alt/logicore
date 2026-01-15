@@ -120,32 +120,30 @@ export default function SettingsPage() {
                 </Form>
             </Card>
 
-            {/* Данные компании - только для COMPANY_ADMIN */}
-            {user?.role === 'COMPANY_ADMIN' && (
-                <Card title="Данные компании" style={{ marginBottom: 24 }}>
-                    <Form
-                        form={companyForm}
-                        layout="vertical"
-                        onFinish={handleCompanyUpdate}
-                    >
-                        <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 600 }}>
-                            <Form.Item
-                                name="companyName"
-                                label="Название компании"
-                                rules={[{ required: true, message: 'Введите название компании' }]}
-                            >
-                                <Input size="large" placeholder="ООО 'Моя компания'" />
-                            </Form.Item>
+            {/* Данные компании */}
+            <Card title="Данные компании" style={{ marginBottom: 24 }}>
+                <Form
+                    form={companyForm}
+                    layout="vertical"
+                    onFinish={handleCompanyUpdate}
+                >
+                    <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 600 }}>
+                        <Form.Item
+                            name="companyName"
+                            label="Название компании"
+                            rules={[{ required: true, message: 'Введите название компании' }]}
+                        >
+                            <Input size="large" placeholder="ООО 'Моя компания'" />
+                        </Form.Item>
 
-                            <Form.Item>
-                                <Button type="primary" htmlType="submit" loading={companyLoading} size="large">
-                                    Сохранить
-                                </Button>
-                            </Form.Item>
-                        </Space>
-                    </Form>
-                </Card>
-            )}
+                        <Form.Item>
+                            <Button type="primary" htmlType="submit" loading={companyLoading} size="large">
+                                Сохранить
+                            </Button>
+                        </Form.Item>
+                    </Space>
+                </Form>
+            </Card>
 
             {/* Смена пароля */}
             <Card title="Изменить пароль">
