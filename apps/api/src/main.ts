@@ -5,6 +5,8 @@ import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
+// Force rebuild 2026-02-02
+
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
 
