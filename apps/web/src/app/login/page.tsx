@@ -225,8 +225,8 @@ export default function LoginPage() {
                     </Text>
                 </div>
             </Card>
-            <div style={{ position: 'fixed', bottom: 10, right: 10, color: 'rgba(0,0,0,0.3)', fontSize: 10 }}>
-                v0.2.0 (Marketplace + SubForwarding)
+            <div style={{ position: 'fixed', bottom: 10, right: 10, color: 'rgba(0,0,0,0.5)', fontSize: 12, background: 'yellow', padding: '4px 8px' }}>
+                v0.2.1 BUILD: 2026-02-02 16:22
             </div>
         </InteractiveBackground>
     );
