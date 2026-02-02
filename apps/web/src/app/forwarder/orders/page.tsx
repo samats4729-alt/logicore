@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Tag, Space, Modal, Form, Input, message, Typography, Drawer, Descriptions, Select } from 'antd';
+import { Table, Card, Button, Tag, Space, Modal, Form, Input, message, Typography, Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber } from 'antd';
 import { EyeOutlined, UserAddOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 
@@ -46,6 +46,11 @@ interface Driver {
     trailerNumber?: string;
 }
 
+interface Partner {
+    id: string;
+    name: string;
+}
+
 interface Order {
     id: string;
     orderNumber: string;
@@ -53,17 +58,20 @@ interface Order {
     cargoDescription: string;
     cargoWeight?: number;
     cargoVolume?: number;
+    cargoType?: string;
+    natureOfCargo?: string;
     requirements?: string;
     customerPrice?: number;
     createdAt: string;
-    pickupLocation?: { name: string; address: string };
-    deliveryPoints?: { location: { name: string; address: string } }[];
+    pickupLocation?: { name: string; address: string; city?: string };
+    deliveryPoints?: { location: { name: string; address: string; city?: string } }[];
     customer?: { firstName: string; lastName: string; phone: string; email?: string };
     customerCompany?: { name: string; phone?: string };
     assignedDriverName?: string;
     assignedDriverPhone?: string;
     assignedDriverPlate?: string;
     assignedAt?: string;
+    subForwarder?: { name: string };
 }
 
 export default function ForwarderOrdersPage() {
@@ -76,6 +84,9 @@ export default function ForwarderOrdersPage() {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const [assignLoading, setAssignLoading] = useState(false);
+    const [assignType, setAssignType] = useState<'driver' | 'partner'>('driver');
+    const [partners, setPartners] = useState<Partner[]>([]);
+    const [partnersLoading, setPartnersLoading] = useState(false);
     const [statusModalOpen, setStatusModalOpen] = useState(false);
     const [statusLoading, setStatusLoading] = useState(false);
     const [form] = Form.useForm();
@@ -105,6 +116,19 @@ export default function ForwarderOrdersPage() {
         }
     };
 
+    const fetchPartners = async () => {
+        setPartnersLoading(true);
+        try {
+            const response = await api.get('/partners');
+            setPartners(response.data);
+        } catch (error) {
+            console.error('Failed to fetch partners:', error);
+            message.error('Ошибка загрузки списка партнеров');
+        } finally {
+            setPartnersLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchOrders();
     }, []);
@@ -119,7 +143,9 @@ export default function ForwarderOrdersPage() {
         setSelectedDriverId(null);
         form.resetFields();
         setAssignModalOpen(true);
-        fetchDrivers(); // Загружаем список водителей при открытии формы
+        setAssignType('driver');
+        fetchDrivers();
+        fetchPartners();
     };
 
     const handleDriverSelect = (driverId: string) => {
@@ -137,12 +163,23 @@ export default function ForwarderOrdersPage() {
         }
     };
 
-    const handleAssignDriver = async (values: any) => {
+    const handleAssign = async (values: any) => {
         if (!selectedOrder) return;
         setAssignLoading(true);
         try {
-            await api.put(`/forwarder/orders/${selectedOrder.id}/assign-driver`, values);
-            message.success('Водитель назначен');
+            if (assignType === 'driver') {
+                await api.put(`/forwarder/orders/${selectedOrder.id}/assign-driver`, {
+                    ...values,
+                    driverId: selectedDriverId
+                });
+                message.success('Водитель назначен');
+            } else {
+                await api.put(`/forwarder/orders/${selectedOrder.id}/assign-forwarder`, {
+                    partnerId: values.partnerId,
+                    price: values.price
+                });
+                message.success('Заявка передана партнеру');
+            }
             setAssignModalOpen(false);
             form.resetFields();
             setSelectedDriverId(null);
@@ -194,9 +231,10 @@ export default function ForwarderOrdersPage() {
 
     const columns = [
         {
-            title: '№ Заявки',
+            title: '№',
             dataIndex: 'orderNumber',
             key: 'orderNumber',
+            width: 70,
             render: (text: string) => <strong>{text}</strong>,
         },
         {
@@ -212,9 +250,43 @@ export default function ForwarderOrdersPage() {
             ellipsis: true,
         },
         {
+            title: 'Откуда',
+            key: 'pickupLocation',
+            render: (_: any, record: Order) => {
+                const loc = record.pickupLocation;
+                if (loc?.city) return <Text strong>{loc.city} (KZ)</Text>;
+                // Fallback from address
+                if (loc?.address) {
+                    const match = loc.address.match(/г\.\s*([^,]+)/);
+                    if (match && match[1]) return <Text strong>{match[1]} (KZ)</Text>;
+                }
+                return <Text>{loc?.name || '—'}</Text>;
+            }
+        },
+        {
+            title: 'Куда',
+            key: 'deliveryLocation',
+            render: (_: any, record: Order) => {
+                // Try to find the last delivery point or use destination
+                const deliveryPoint = record.deliveryPoints && record.deliveryPoints.length > 0
+                    ? record.deliveryPoints[record.deliveryPoints.length - 1]
+                    : null;
+                const loc = deliveryPoint?.location;
+
+                if (loc?.city) return <Text strong>{loc.city} (KZ)</Text>;
+                // Fallback from address
+                if (loc?.address) {
+                    const match = loc.address.match(/г\.\s*([^,]+)/);
+                    if (match && match[1]) return <Text strong>{match[1]} (KZ)</Text>;
+                }
+                return <Text>{loc?.name || '—'}</Text>;
+            }
+        },
+        {
             title: 'Статус',
             dataIndex: 'status',
             key: 'status',
+            width: 160,
             render: (status: string) => (
                 <Tag color={statusColors[status] || 'default'}>
                     {statusLabels[status] || status}
@@ -222,8 +294,15 @@ export default function ForwarderOrdersPage() {
             ),
         },
         {
+            title: 'Исполнитель',
+            key: 'subForwarder',
+            ellipsis: true,
+            render: (_: any, record: Order) => record.subForwarder ? <Text strong>{record.subForwarder.name}</Text> : '—',
+        },
+        {
             title: 'Водитель',
             key: 'driver',
+            width: 140,
             render: (_: any, record: Order) =>
                 record.assignedDriverName ? (
                     <Space direction="vertical" size={0}>
@@ -235,18 +314,27 @@ export default function ForwarderOrdersPage() {
                 ),
         },
         {
+            title: 'Сумма',
+            dataIndex: 'customerPrice',
+            key: 'customerPrice',
+            render: (price: number) => price ? <Text strong>{price.toLocaleString('ru-RU')} ₸</Text> : '—',
+        },
+        {
             title: 'Действия',
             key: 'actions',
+            width: 120,
             render: (_: any, record: Order) => (
                 <Space>
-                    <Button icon={<EyeOutlined />} onClick={() => showOrderDetail(record)} />
-                    <Button
-                        type={record.assignedDriverName ? 'default' : 'primary'}
-                        icon={record.assignedDriverName ? <CheckCircleOutlined /> : <UserAddOutlined />}
-                        onClick={() => openAssignModal(record)}
-                    >
-                        {record.assignedDriverName ? 'Изменить' : 'Назначить'}
-                    </Button>
+                    <Tooltip title="Подробнее">
+                        <Button icon={<EyeOutlined />} onClick={() => showOrderDetail(record)} />
+                    </Tooltip>
+                    <Tooltip title={record.assignedDriverName ? 'Изменить водителя' : 'Назначить водителя'}>
+                        <Button
+                            type={record.assignedDriverName ? 'default' : 'primary'}
+                            icon={record.assignedDriverName ? <CheckCircleOutlined /> : <UserAddOutlined />}
+                            onClick={() => openAssignModal(record)}
+                        />
+                    </Tooltip>
                 </Space>
             ),
         },
@@ -280,59 +368,106 @@ export default function ForwarderOrdersPage() {
                 cancelText="Отмена"
                 confirmLoading={assignLoading}
             >
-                <Form form={form} layout="vertical" onFinish={handleAssignDriver}>
-                    <Form.Item
-                        label="Выберите водителя"
-                        required
-                    >
-                        <Select
-                            placeholder="Выберите водителя из списка"
-                            size="large"
-                            loading={driversLoading}
-                            onChange={handleDriverSelect}
-                            value={selectedDriverId}
-                            notFoundContent={drivers.length === 0 ? "Нет добавленных водителей" : "Водитель не найден"}
-                            showSearch
-                            filterOption={(input, option) =>
-                                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                            }
-                            options={drivers.map(driver => ({
-                                value: driver.id,
-                                label: `${driver.lastName} ${driver.firstName} ${driver.middleName || ''}`.trim(),
-                            }))}
-                        />
-                    </Form.Item>
+                <Form form={form} layout="vertical" onFinish={handleAssign}>
+                    <Tabs
+                        activeKey={assignType}
+                        onChange={(key) => setAssignType(key as 'driver' | 'partner')}
+                        items={[
+                            {
+                                key: 'driver',
+                                label: 'Назначить своего водителя',
+                                children: (
+                                    <>
+                                        <Form.Item
+                                            name="driverId" // Added name for validation if needed, handled by selectedDriverId state mostly
+                                            label="Выберите водителя"
+                                            rules={[{ required: assignType === 'driver', message: 'Выберите водителя' }]}
+                                        >
+                                            <Select
+                                                placeholder="Выберите водителя из списка"
+                                                size="large"
+                                                loading={driversLoading}
+                                                onChange={handleDriverSelect}
+                                                value={selectedDriverId}
+                                                notFoundContent={drivers.length === 0 ? "Нет добавленных водителей" : "Водитель не найден"}
+                                                showSearch
+                                                filterOption={(input, option) =>
+                                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                                }
+                                                options={drivers.map(driver => ({
+                                                    value: driver.id,
+                                                    label: `${driver.lastName} ${driver.firstName} ${driver.middleName || ''}`.trim(),
+                                                }))}
+                                            />
+                                        </Form.Item>
 
-                    {selectedDriverId && (
-                        <>
-                            <Form.Item
-                                name="driverName"
-                                label="ФИО водителя"
-                                rules={[{ required: true }]}
-                                hidden
-                            >
-                                <Input />
-                            </Form.Item>
-                            <Form.Item
-                                name="driverPhone"
-                                label="Телефон"
-                            >
-                                <Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} />
-                            </Form.Item>
-                            <Form.Item
-                                name="driverPlate"
-                                label="Госномер"
-                            >
-                                <Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} />
-                            </Form.Item>
-                            <Form.Item
-                                name="trailerNumber"
-                                label="Номер прицепа"
-                            >
-                                <Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} placeholder="Нет прицепа" />
-                            </Form.Item>
-                        </>
-                    )}
+                                        {selectedDriverId && (
+                                            <>
+                                                <Form.Item
+                                                    name="driverName"
+                                                    label="ФИО водителя"
+                                                    rules={[{ required: true }]}
+                                                    hidden
+                                                >
+                                                    <Input />
+                                                </Form.Item>
+                                                <Form.Item
+                                                    name="driverPhone"
+                                                    label="Телефон"
+                                                >
+                                                    <Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} />
+                                                </Form.Item>
+                                                <Form.Item
+                                                    name="driverPlate"
+                                                    label="Госномер"
+                                                >
+                                                    <Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} />
+                                                </Form.Item>
+                                                <Form.Item
+                                                    name="trailerNumber"
+                                                    label="Номер прицепа"
+                                                >
+                                                    <Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} placeholder="Нет прицепа" />
+                                                </Form.Item>
+                                            </>
+                                        )}
+                                    </>
+                                )
+                            },
+                            {
+                                key: 'partner',
+                                label: 'Передать партнеру',
+                                children: (
+                                    <>
+                                        <Form.Item
+                                            name="partnerId"
+                                            label="Выберите партнера (экспедитора)"
+                                            rules={[{ required: assignType === 'partner', message: 'Выберите партнера' }]}
+                                        >
+                                            <Select
+                                                placeholder="Выберите компанию-партнера"
+                                                size="large"
+                                                loading={partnersLoading}
+                                                options={partners.map(p => ({ label: p.name, value: p.id }))}
+                                            />
+                                        </Form.Item>
+                                        <Form.Item
+                                            name="price"
+                                            label="Стоимость для партнера (в тенге)"
+                                            rules={[{ required: assignType === 'partner', message: 'Укажите стоимость' }]}
+                                        >
+                                            <InputNumber
+                                                style={{ width: '100%' }}
+                                                size="large"
+                                                formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
+                                                parser={value => value!.replace(/\s?|(,*)/g, '')}
+                                            />
+                                        </Form.Item>
+                                    </>
+                                )
+                            }
+                        ]}
+                    />
                 </Form>
             </Modal>
 
@@ -366,9 +501,16 @@ export default function ForwarderOrdersPage() {
 
                         <Title level={5} style={{ marginTop: 16 }}>Груз</Title>
                         <Text>{selectedOrder.cargoDescription}</Text>
+                        {selectedOrder.natureOfCargo && <div style={{ marginTop: 4 }}>Характер: <strong>{selectedOrder.natureOfCargo}</strong></div>}
                         {selectedOrder.cargoWeight && <div>Вес: {selectedOrder.cargoWeight} кг</div>}
                         {selectedOrder.cargoVolume && <div>Объём: {selectedOrder.cargoVolume} м³</div>}
+                        {selectedOrder.cargoType && <div>Тип транспорта: <strong>{selectedOrder.cargoType}</strong></div>}
                         {selectedOrder.requirements && <div>Требования: {selectedOrder.requirements}</div>}
+                        {selectedOrder.customerPrice && (
+                            <div style={{ marginTop: 8, fontSize: 16 }}>
+                                Стоимость: <Text type="success" strong>{selectedOrder.customerPrice.toLocaleString('ru-RU')} ₸</Text>
+                            </div>
+                        )}
 
                         <Title level={5} style={{ marginTop: 16 }}>Маршрут</Title>
                         <div><strong>Погрузка:</strong> {selectedOrder.pickupLocation?.name}</div>

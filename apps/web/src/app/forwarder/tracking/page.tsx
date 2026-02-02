@@ -3,27 +3,28 @@
 import { useEffect, useState } from 'react';
 import { Card, Typography, Spin, App, Empty, Space } from 'antd';
 import { EnvironmentOutlined, CarOutlined } from '@ant-design/icons';
-import dynamic from 'next/dynamic';
 import { api } from '@/lib/api';
+import ReactMap, { Marker, Popup, NavigationControl, ViewStateChangeEvent, MapMouseEvent } from 'react-map-gl/mapbox';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 const { Title, Text } = Typography;
 
-// Dynamic import для карты
-const MapContainer = dynamic(
-    () => import('react-leaflet').then(mod => mod.MapContainer),
-    { ssr: false }
-);
-const TileLayer = dynamic(
-    () => import('react-leaflet').then(mod => mod.TileLayer),
-    { ssr: false }
-);
-const Marker = dynamic(
-    () => import('react-leaflet').then(mod => mod.Marker),
-    { ssr: false }
-);
-const Popup = dynamic(
-    () => import('react-leaflet').then(mod => mod.Popup),
-    { ssr: false }
+const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
+
+// Компонент маркера машины
+const CarMarkerIcon = ({ isSelected = false }: { isSelected?: boolean }) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={isSelected ? "40" : "32"}
+        height={isSelected ? "40" : "32"}
+        viewBox="0 0 24 24"
+        fill="#52c41a"
+        stroke="#fff"
+        strokeWidth="1"
+        style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' }}
+    >
+        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
+    </svg>
 );
 
 interface DriverLocation {
@@ -42,62 +43,68 @@ interface DriverLocation {
 }
 
 const TrackingMap = ({ drivers }: { drivers: DriverLocation[] }) => {
-    const L = require('leaflet');
-    require('leaflet/dist/leaflet.css');
-
-    const icon = L.icon({
-        iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    });
-
     const driversWithLocation = drivers.filter(d => d.lastLocation);
+    const [popupInfo, setPopupInfo] = useState<DriverLocation | null>(null);
 
-    // Алматы center
-    const center: [number, number] = driversWithLocation.length > 0
-        ? [driversWithLocation[0].lastLocation!.latitude, driversWithLocation[0].lastLocation!.longitude]
-        : [43.2389, 76.8897];
+    // Initial center (Almaty by default or first driver)
+    const initialViewState = {
+        latitude: driversWithLocation.length > 0 ? driversWithLocation[0].lastLocation!.latitude : 43.2389,
+        longitude: driversWithLocation.length > 0 ? driversWithLocation[0].lastLocation!.longitude : 76.8897,
+        zoom: 11
+    };
 
     return (
-        <MapContainer
-            center={center}
-            zoom={11}
-            style={{ height: 'calc(100vh - 200px)', width: '100%', borderRadius: 8 }}
-        >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            {driversWithLocation.map(driver => (
-                <Marker
-                    key={driver.id}
-                    position={[driver.lastLocation!.latitude, driver.lastLocation!.longitude]}
-                    icon={icon}
-                >
-                    <Popup>
-                        <div style={{ padding: 8 }}>
+        <div style={{ height: 'calc(100vh - 200px)', width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+            <ReactMap
+                initialViewState={initialViewState}
+                mapStyle="mapbox://styles/mapbox/streets-v12"
+                mapboxAccessToken={MAPBOX_TOKEN}
+            >
+                <NavigationControl position="top-right" />
+
+                {driversWithLocation.map(driver => (
+                    <Marker
+                        key={driver.id}
+                        latitude={driver.lastLocation!.latitude}
+                        longitude={driver.lastLocation!.longitude}
+                        anchor="center"
+                        onClick={(e: any) => {
+                            e.originalEvent.stopPropagation();
+                            setPopupInfo(driver);
+                        }}
+                    >
+                        <div style={{ cursor: 'pointer' }}>
+                            <CarMarkerIcon />
+                        </div>
+                    </Marker>
+                ))}
+
+                {popupInfo && (
+                    <Popup
+                        anchor="top"
+                        longitude={popupInfo.lastLocation!.longitude}
+                        latitude={popupInfo.lastLocation!.latitude}
+                        onClose={() => setPopupInfo(null)}
+                    >
+                        <div style={{ padding: 4, minWidth: 150 }}>
                             <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                                {driver.lastName} {driver.firstName}
+                                {popupInfo.lastName} {popupInfo.firstName}
                             </div>
                             <div style={{ fontSize: 12, color: '#666' }}>
-                                {driver.vehicleModel && <div>🚛 {driver.vehicleModel}</div>}
-                                {driver.vehiclePlate && <div>🔢 {driver.vehiclePlate}</div>}
-                                {driver.lastLocation?.speed != null && (
-                                    <div>💨 {Math.round(driver.lastLocation?.speed || 0)} км/ч</div>
+                                {popupInfo.vehicleModel && <div>🚛 {popupInfo.vehicleModel}</div>}
+                                {popupInfo.vehiclePlate && <div>🔢 {popupInfo.vehiclePlate}</div>}
+                                {popupInfo.lastLocation?.speed != null && (
+                                    <div>💨 {Math.round(popupInfo.lastLocation?.speed || 0)} км/ч</div>
                                 )}
                                 <div style={{ marginTop: 4, fontSize: 11 }}>
-                                    {new Date(driver.lastLocation!.timestamp).toLocaleString('ru-RU')}
+                                    {new Date(popupInfo.lastLocation!.timestamp).toLocaleString('ru-RU')}
                                 </div>
                             </div>
                         </div>
                     </Popup>
-                </Marker>
-            ))}
-        </MapContainer>
+                )}
+            </ReactMap>
+        </div>
     );
 };
 

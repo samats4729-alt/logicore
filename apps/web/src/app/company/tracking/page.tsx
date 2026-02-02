@@ -3,29 +3,17 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'antd';
-import { CarOutlined, ReloadOutlined, AimOutlined } from '@ant-design/icons';
+import { CarOutlined, ReloadOutlined, AimOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
+import ReactMap, { Marker, Popup, NavigationControl, ViewStateChangeEvent, MapMouseEvent, MapRef } from 'react-map-gl/mapbox';
+import 'mapbox-gl/dist/mapbox-gl.css';
+
+const Truck3DLayer = dynamic(() => import('@/components/ui/Truck3DLayer'), { ssr: false });
 
 const { Text } = Typography;
 
-// Динамический импорт карты (Leaflet не работает с SSR)
-const MapContainer = dynamic(
-    () => import('react-leaflet').then((mod) => mod.MapContainer),
-    { ssr: false }
-);
-const TileLayer = dynamic(
-    () => import('react-leaflet').then((mod) => mod.TileLayer),
-    { ssr: false }
-);
-const Marker = dynamic(
-    () => import('react-leaflet').then((mod) => mod.Marker),
-    { ssr: false }
-);
-const Popup = dynamic(
-    () => import('react-leaflet').then((mod) => mod.Popup),
-    { ssr: false }
-);
+const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
 
 // Цвета для разных рейсов
 const ORDER_COLORS = [
@@ -41,44 +29,29 @@ const ORDER_COLORS = [
     '#f5222d', // red
 ];
 
-// Создаём SVG иконку машины с заданным цветом
-const createCarIcon = (color: string, isSelected: boolean = false) => {
-    if (typeof window === 'undefined') return null;
-    const L = require('leaflet');
-    const size = isSelected ? 40 : 32;
-    const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="${isSelected ? '#000' : '#fff'}" stroke-width="1">
-            <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-        </svg>
-    `;
-
-    return L.divIcon({
-        html: svg,
-        className: 'car-marker',
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2],
-        popupAnchor: [0, -size / 2],
-    });
-};
+// Компонент маркера машины
+const CarMarkerIcon = ({ color, isSelected }: { color: string, isSelected: boolean }) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={isSelected ? "40" : "32"}
+        height={isSelected ? "40" : "32"}
+        viewBox="0 0 24 24"
+        fill={color}
+        stroke={isSelected ? '#000' : '#fff'}
+        strokeWidth="1"
+        style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' }}
+    >
+        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
+    </svg>
+);
 
 // Иконка для моего местоположения
-const createMyLocationIcon = () => {
-    if (typeof window === 'undefined') return null;
-    const L = require('leaflet');
-    const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#1677ff" stroke="#fff" stroke-width="2">
-            <circle cx="12" cy="12" r="8"/>
-        </svg>
-    `;
-
-    return L.divIcon({
-        html: svg,
-        className: 'my-location-marker',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-        popupAnchor: [0, -12],
-    });
-};
+const MyLocationIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#1677ff" stroke="#fff" strokeWidth="2" style={{ filter: 'drop-shadow(0px 0px 8px rgba(22, 119, 255, 0.5))' }}>
+        <circle cx="12" cy="12" r="8" />
+        <circle cx="12" cy="12" r="12" fill="none" stroke="#1677ff" strokeOpacity="0.3" strokeWidth="4" />
+    </svg>
+);
 
 interface DriverPosition {
     driverId: string;
@@ -98,11 +71,30 @@ export default function CompanyTrackingPage() {
     const [drivers, setDrivers] = useState<DriverPosition[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [socket, setSocket] = useState<Socket | null>(null);
-    const [mapReady, setMapReady] = useState(false);
-    const [mapCenter, setMapCenter] = useState<[number, number]>([43.238949, 76.945780]);
-    const [mapKey, setMapKey] = useState(0);
-    const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
+    const [mapStyle, setMapStyle] = useState('mapbox://styles/pontipilat/cmkrnybo6006c01qxdlo18v6e');
+    const [viewState, setViewState] = useState({
+        latitude: 43.238949,
+        longitude: 76.945780,
+        zoom: 14,
+        pitch: 50,
+        bearing: -17
+    });
+    const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+    const [popupInfo, setPopupInfo] = useState<DriverPosition | null>(null);
+
+    const [mapMode, setMapMode] = useState<'day' | 'night'>('night');
+
+    const toggleMapTheme = () => {
+        const newMode = mapMode === 'night' ? 'day' : 'night';
+        setMapMode(newMode);
+        // Use user's custom styles
+        setMapStyle(newMode === 'night'
+            ? 'mapbox://styles/pontipilat/cmkrnybo6006c01qxdlo18v6e'
+            : 'mapbox://styles/pontipilat/cmkro81vk005m01s55aem6mcy'
+        );
+        // Always 3d
+        setViewState(prev => ({ ...prev, pitch: 50, bearing: -17, zoom: 16 }));
+    };
 
     // Сопоставление рейсов и цветов
     const orderColorMap = useMemo(() => {
@@ -122,17 +114,15 @@ export default function CompanyTrackingPage() {
             setDrivers(response.data);
         } catch (error) {
             console.error('Failed to fetch drivers:', error);
-            // message.error('Не удалось загрузить данные о водителях'); // Suppress error
         } finally {
             setLoading(false);
         }
-    }, [message]);
+    }, []);
 
     useEffect(() => {
-        setMapReady(true);
         fetchDrivers();
 
-        // WebSocket подключение для real-time обновлений
+        // WebSocket подключение
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
         const newSocket = io(API_URL, {
             transports: ['websocket'],
@@ -143,15 +133,6 @@ export default function CompanyTrackingPage() {
         });
 
         newSocket.on('position:update', (data: DriverPosition) => {
-            // Если водителя нет в моем списке (например, чужая компания), он не появится?
-            // API возвращает filtered list, но sockets?
-            // Socket broadcasting currently sends to everyone.
-            // TODO: Implement room-based socket broadcasting for companies.
-            // While messy, frontend can verify if they care about this update.
-            // But we don't have companyId on frontend easy access in this component without store.
-            // Let's just refetch on update or accept it. 
-            // Better: update valid drivers if they exist in list, or refetch full list to check permissions.
-
             setDrivers((prev) => {
                 const index = prev.findIndex((d) => d.driverId === data.driverId);
                 if (index >= 0) {
@@ -159,16 +140,10 @@ export default function CompanyTrackingPage() {
                     updated[index] = data;
                     return updated;
                 }
-                // If it's a new driver potentially for my company, we might want to refetch or assume it's valid if backend broadcast logic changes.
-                // For now, simpler to reload list occasionally or trust socket (but socket sends all).
-                // Let's stick to updating existing only to avoid showing other company drivers.
                 return prev;
             });
         });
 
-        setSocket(newSocket);
-
-        // Периодическое обновление каждые 30 секунд
         const interval = setInterval(fetchDrivers, 30000);
 
         return () => {
@@ -182,10 +157,9 @@ export default function CompanyTrackingPage() {
         if ('geolocation' in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    const loc: [number, number] = [position.coords.latitude, position.coords.longitude];
-                    setMyLocation(loc);
-                    setMapCenter(loc);
-                    setMapKey(prev => prev + 1);
+                    const { latitude, longitude } = position.coords;
+                    setMyLocation({ latitude, longitude });
+                    setViewState(prev => ({ ...prev, latitude, longitude, zoom: 14 }));
                     message.success('Карта центрирована на вашем местоположении');
                 },
                 (error) => {
@@ -202,8 +176,13 @@ export default function CompanyTrackingPage() {
     // Центрировать на выбранном водителе
     const centerOnDriver = (driver: DriverPosition) => {
         setSelectedDriver(driver.driverId);
-        setMapCenter([driver.latitude, driver.longitude]);
-        setMapKey(prev => prev + 1);
+        setViewState(prev => ({
+            ...prev,
+            latitude: driver.latitude,
+            longitude: driver.longitude,
+            zoom: 15
+        }));
+        setPopupInfo(driver);
     };
 
     // Получить цвет для водителя
@@ -220,14 +199,6 @@ export default function CompanyTrackingPage() {
         if (diff < 300000) return 'orange'; // < 5 мин
         return 'red'; // > 5 мин
     };
-
-    if (!mapReady) {
-        return (
-            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Spin size="large" />
-            </div>
-        );
-    }
 
     return (
         <div style={{ display: 'flex', height: 'calc(100vh - 180px)', gap: 16 }}>
@@ -302,7 +273,7 @@ export default function CompanyTrackingPage() {
                     <div style={{ marginTop: 16, padding: '8px 0', borderTop: '1px solid #f0f0f0' }}>
                         <Text type="secondary" style={{ fontSize: 12 }}>Рейсы:</Text>
                         <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {Array.from(orderColorMap.entries()).map(([order, color]) => (
+                            {(Array.from(orderColorMap.entries()) as any[]).map(([order, color]) => (
                                 <Tag key={order} color={color}>{order}</Tag>
                             ))}
                         </div>
@@ -311,78 +282,82 @@ export default function CompanyTrackingPage() {
             </Card>
 
             {/* Карта */}
-            <Card style={{ flex: 1, padding: 0, position: 'relative' }} bodyStyle={{ padding: 0, height: '100%' }}>
-                <link
-                    rel="stylesheet"
-                    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-                />
-                <style>{`
-                    .car-marker, .my-location-marker {
-                        background: transparent !important;
-                        border: none !important;
-                    }
-                `}</style>
+            <Card style={{ flex: 1, padding: 0, position: 'relative', overflow: 'hidden' }} bodyStyle={{ padding: 0, height: '100%' }}>
+                <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 1, display: 'flex', gap: 8 }}>
+                    <Button
+                        onClick={toggleMapTheme}
+                        style={{
+                            background: mapMode === 'night' ? '#333' : '#fff',
+                            color: mapMode === 'night' ? '#fff' : '#000',
+                            border: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        icon={mapMode === 'night' ? '🌙' : '☀️'}
+                    >
+                        {mapMode === 'night' ? 'Ночь' : 'День'}
+                    </Button>
+                    <Button
+                        type="primary"
+                        icon={<AimOutlined />}
+                        onClick={centerOnMyLocation}
+                    >
+                        Моё место
+                    </Button>
+                </div>
 
-                <Button
-                    type="primary"
-                    icon={<AimOutlined />}
-                    onClick={centerOnMyLocation}
-                    style={{
-                        position: 'absolute',
-                        top: 16,
-                        right: 16,
-                        zIndex: 1000,
-                    }}
+                <ReactMap
+                    {...viewState}
+                    onMove={(evt: any) => setViewState(evt.viewState)}
+                    mapStyle={mapStyle}
+                    mapboxAccessToken={MAPBOX_TOKEN}
+                    style={{ width: '100%', height: '100%' }}
+                    terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
                 >
-                    Моё место
-                </Button>
+                    <NavigationControl position="bottom-right" />
 
-                <MapContainer
-                    key={mapKey}
-                    center={mapCenter}
-                    zoom={12}
-                    style={{ height: '100%', width: '100%', borderRadius: 8 }}
-                >
-                    <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    {drivers.map((driver) => (
-                        <Marker
-                            key={driver.driverId}
-                            position={[driver.latitude, driver.longitude]}
-                            icon={createCarIcon(getDriverColor(driver), selectedDriver === driver.driverId)}
+                    {/* 3D Truck Layer */}
+                    <Truck3DLayer drivers={drivers} />
+
+                    {/* Old 2D Markers (Removed) */}
+                    {/* {drivers.map((driver) => ( ... ))} */}
+
+                    {popupInfo && (
+                        <Popup
+                            anchor="top"
+                            longitude={popupInfo.longitude}
+                            latitude={popupInfo.latitude}
+                            onClose={() => setPopupInfo(null)}
                         >
-                            <Popup>
-                                <div style={{ minWidth: 150 }}>
-                                    <strong>{driver.driverName}</strong>
-                                    <br />
-                                    <Tag>{driver.vehiclePlate}</Tag>
-                                    <br />
-                                    {driver.orderNumber && (
-                                        <>
-                                            <Tag color={getDriverColor(driver)}>{driver.orderNumber}</Tag>
-                                            <br />
-                                        </>
-                                    )}
-                                    <small>
-                                        Скорость: {driver.speed ? `${Math.round(driver.speed * 3.6)} км/ч` : 'Стоит'}
+                            <div style={{ minWidth: 150, padding: 4 }}>
+                                <strong>{popupInfo.driverName}</strong>
+                                <br />
+                                <Tag style={{ marginTop: 4 }}>{popupInfo.vehiclePlate}</Tag>
+                                <br />
+                                {popupInfo.orderNumber && (
+                                    <>
+                                        <Tag color={getDriverColor(popupInfo)} style={{ marginTop: 4 }}>
+                                            {popupInfo.orderNumber}
+                                        </Tag>
                                         <br />
-                                        Обновлено: {new Date(driver.updatedAt).toLocaleTimeString('ru-RU')}
-                                    </small>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
-                    {/* Моя позиция */}
+                                    </>
+                                )}
+                                <small style={{ display: 'block', marginTop: 4, color: '#666' }}>
+                                    Скорость: {popupInfo.speed ? `${Math.round(popupInfo.speed * 3.6)} км/ч` : 'Стоит'}
+                                    <br />
+                                    Обновлено: {new Date(popupInfo.updatedAt).toLocaleTimeString('ru-RU')}
+                                </small>
+                            </div>
+                        </Popup>
+                    )}
+
                     {myLocation && (
-                        <Marker position={myLocation} icon={createMyLocationIcon()}>
-                            <Popup>
-                                <strong>📍 Вы здесь</strong>
-                            </Popup>
+                        <Marker longitude={myLocation.longitude} latitude={myLocation.latitude} anchor="center">
+                            <MyLocationIcon />
                         </Marker>
                     )}
-                </MapContainer>
+                </ReactMap>
             </Card>
         </div>
     );

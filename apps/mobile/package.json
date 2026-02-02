@@ -1,46 +1,49 @@
 {
-    "name": "mobile",
-    "version": "1.0.0",
-    "main": "expo-router/entry",
-    "scripts": {
-        "start": "expo start",
-        "android": "expo start --android",
-        "ios": "expo start --ios",
-        "web": "expo start --web"
-    },
-    "dependencies": {
-        "@expo/metro-runtime": "~6.1.2",
-        "@expo/vector-icons": "^15.0.3",
-        "@react-navigation/native": "^7.0.0",
-        "axios": "^1.6.5",
-        "expo": "~54.0.0",
-        "expo-constants": "~18.0.12",
-        "expo-device": "~8.0.10",
-        "expo-image-picker": "~17.0.10",
-        "expo-linking": "~8.0.11",
-        "expo-location": "~19.0.8",
-        "expo-notifications": "~0.32.15",
-        "expo-router": "~6.0.21",
-        "expo-secure-store": "~15.0.8",
-        "expo-status-bar": "~3.0.9",
-        "expo-task-manager": "~14.0.9",
-        "react": "19.1.0",
-        "react-native": "0.81.5",
-        "react-native-maps": "1.20.1",
-        "react-native-safe-area-context": "5.6.2",
-        "react-native-screens": "~4.16.0",
-        "socket.io-client": "^4.6.1",
-        "zustand": "^4.5.0"
-    },
-    "devDependencies": {
-        "@babel/core": "^7.24.0",
-        "@types/react": "~19.1.17",
-        "typescript": "~5.9.3"
-    },
-    "pnpm": {
-        "overrides": {
-            "@expo/metro-runtime": "~6.1.2"
-        }
-    },
-    "private": true
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "../../node_modules/.bin/expo start",
+    "android": "../../node_modules/.bin/expo run:android",
+    "ios": "../../node_modules/.bin/expo run:ios",
+    "web": "../../node_modules/.bin/expo start --web"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~6.1.2",
+    "@expo/vector-icons": "^15.0.3",
+    "@react-navigation/native": "^7.0.0",
+    "@rnmapbox/maps": "^10.2.10",
+    "@turf/helpers": "^7.3.2",
+    "axios": "^1.6.5",
+    "expo": "~54.0.0",
+    "expo-constants": "~18.0.12",
+    "expo-dev-client": "~6.0.20",
+    "expo-device": "~8.0.10",
+    "expo-image-picker": "~17.0.10",
+    "expo-linking": "~8.0.11",
+    "expo-location": "~19.0.8",
+    "expo-notifications": "~0.32.15",
+    "expo-router": "~6.0.21",
+    "expo-secure-store": "~15.0.8",
+    "expo-status-bar": "~3.0.9",
+    "expo-system-ui": "~6.0.9",
+    "expo-task-manager": "~14.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "5.6.2",
+    "react-native-screens": "~4.16.0",
+    "socket.io-client": "^4.6.1",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@types/react": "~19.1.17",
+    "typescript": "~5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@expo/metro-runtime": "~6.1.2"
+    }
+  },
+  "private": true
 }

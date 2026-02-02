@@ -54,6 +54,10 @@ interface AppState {
     // Order actions
     fetchCurrentOrder: () => Promise<void>;
     updateOrderStatus: (orderId: string, status: string) => Promise<void>;
+
+    // Settings
+    mapTheme: 'auto' | 'light' | 'dark';
+    setMapTheme: (theme: 'auto' | 'light' | 'dark') => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -90,11 +94,14 @@ export const useStore = create<AppState>((set, get) => ({
         try {
             const token = await SecureStore.getItemAsync('token');
             const userJson = await SecureStore.getItemAsync('user');
+            const mapTheme = (await SecureStore.getItemAsync('mapTheme')) as 'auto' | 'light' | 'dark' | null;
 
             if (token && userJson) {
                 api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 const user = JSON.parse(userJson);
-                set({ user, isAuthenticated: true });
+                set({ user, isAuthenticated: true, mapTheme: mapTheme || 'auto' });
+            } else {
+                set({ mapTheme: mapTheme || 'auto' });
             }
         } catch {
             await clearAuthToken();
@@ -106,13 +113,24 @@ export const useStore = create<AppState>((set, get) => ({
     fetchCurrentOrder: async () => {
         try {
             const response = await api.get('/orders/my');
+            console.log('API RESPONSE:', JSON.stringify(response.data, null, 2)); // DEBUG LOG
+
             const orders = response.data;
+
+            if (!Array.isArray(orders)) {
+                throw new Error(`Invalid server response: Expected array, got ${typeof orders}. Content: ${JSON.stringify(orders).substring(0, 100)}`);
+            }
+
             // Берём первый активный заказ
             const activeOrder = orders.find((o: Order) =>
                 !['COMPLETED', 'CANCELLED'].includes(o.status)
             );
             set({ currentOrder: activeOrder || null });
-        } catch {
+        } catch (error: any) {
+            console.error('Fetch Order Error:', error);
+            // Show error to user to debug connectivity
+            const { Alert } = require('react-native');
+            Alert.alert('Ошибка связи', error.message + '\n' + (error.response?.data?.message || ''));
             set({ currentOrder: null });
         }
     },
@@ -120,5 +138,11 @@ export const useStore = create<AppState>((set, get) => ({
     updateOrderStatus: async (orderId: string, status: string) => {
         await api.put(`/orders/${orderId}/status`, { status });
         await get().fetchCurrentOrder();
+    },
+
+    mapTheme: 'auto',
+    setMapTheme: async (theme: 'auto' | 'light' | 'dark') => {
+        await SecureStore.setItemAsync('mapTheme', theme);
+        set({ mapTheme: theme });
     },
 }));

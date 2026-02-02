@@ -27,10 +27,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             throw new UnauthorizedException('Токен не предоставлен');
         }
 
-        const isValidSession = await this.authService.validateSession(payload.sub, token);
-        if (!isValidSession) {
-            throw new UnauthorizedException('Сессия недействительна. Возможно вы вошли с другого устройства.');
-        }
+        // TODO: Временно отключена проверка сессии (Redis)
+        // const isValidSession = await this.authService.validateSession(payload.sub, token);
+        // if (!isValidSession) {
+        //     throw new UnauthorizedException('Сессия недействительна. Возможно вы вошли с другого устройства.');
+        // }
 
         return payload;
     }

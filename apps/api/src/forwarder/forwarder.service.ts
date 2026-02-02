@@ -11,7 +11,10 @@ export class ForwarderService {
     async getForwarderOrders(companyId: string) {
         return this.prisma.order.findMany({
             where: {
-                forwarderId: companyId,
+                OR: [
+                    { forwarderId: companyId },
+                    { subForwarderId: companyId }
+                ]
             },
             include: {
                 pickupLocation: true,
@@ -34,6 +37,13 @@ export class ForwarderService {
                         name: true,
                         phone: true,
                     },
+                },
+                subForwarder: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phone: true,
+                    }
                 },
             },
             orderBy: { createdAt: 'desc' },
@@ -89,6 +99,7 @@ export class ForwarderService {
         orderId: string,
         companyId: string,
         data: {
+            driverId?: string; // ID пользователя-водителя
             driverName: string;
             driverPhone: string;
             driverPlate: string;
@@ -122,6 +133,7 @@ export class ForwarderService {
             where: { id: orderId },
             data: {
                 forwarderId: companyId, // Устанавливаем экспедитора если ещё не установлен
+                driverId: data.driverId, // Привязываем к аккаунту водителя
                 assignedDriverName: data.driverName,
                 assignedDriverPhone: data.driverPhone,
                 assignedDriverPlate: data.driverPlate,
@@ -134,6 +146,107 @@ export class ForwarderService {
                 deliveryPoints: {
                     include: { location: true },
                 },
+            },
+        });
+    }
+
+    /**
+     * Переназначить заявку на партнера-экспедитора
+     */
+    async assignForwarder(orderId: string, companyId: string, partnerId: string, price: number) {
+        // 1. Проверяем заявку (должна быть назначена на текущего экспедитора)
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+        });
+
+        if (!order) throw new NotFoundException('Заявка не найдена');
+        if (order.forwarderId !== companyId) throw new ForbiddenException('Нет доступа к этой заявке');
+
+        // 2. Проверяем партнера (должен быть в статусе ACCEPTED)
+        const partnership = await this.prisma.partnership.findFirst({
+            where: {
+                OR: [
+                    { requesterId: companyId, recipientId: partnerId },
+                    { requesterId: partnerId, recipientId: companyId }
+                ],
+                status: 'ACCEPTED'
+            }
+        });
+
+        if (!partnership) {
+            throw new ForbiddenException('Выбранная компания не является вашим подтвержденным партнером');
+        }
+
+        // 3. Обновляем заявку
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                subForwarderId: partnerId,
+                subForwarderPrice: price,
+                // Если мы передаем заявку, мы убираем своего водителя
+                driverId: null,
+                assignedDriverName: null,
+                assignedDriverPhone: null,
+                assignedDriverPlate: null,
+                assignedDriverTrailer: null,
+                assignedAt: null,
+                // Статус можно оставить ASSIGNED или перевести в PENDING для суб-экспедитора?
+                // Пока оставим текущий статус, логика статусов может быть сложнее
+                // Но логично, что для суб-экспедитора это "новая" заявка.
+                // В текущей системе, subForwarder увидит эту заявку через какой endpoint?
+                // Нужно будет обновить getForwarderOrders чтобы видеть и subForwardingOrders
+            }
+        });
+    }
+
+
+
+    /**
+     * Получить список свободных заявок (Биржа)
+     */
+    async getMarketplaceOrders() {
+        return this.prisma.order.findMany({
+            where: {
+                forwarderId: null,
+                status: 'PENDING',
+            },
+            include: {
+                pickupLocation: true,
+                deliveryPoints: {
+                    include: { location: true },
+                    orderBy: { sequence: 'asc' },
+                },
+                customerCompany: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phone: true,
+                    },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+
+    /**
+     * Взять заявку в работу (назначить на себя)
+     */
+    async takeOrder(orderId: string, companyId: string) {
+        // Проверяем что заявка свободна
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+        });
+
+        if (!order) throw new NotFoundException('Заявка не найдена');
+        if (order.forwarderId) throw new ForbiddenException('Заявка уже занята другим экспедитором');
+        if (order.status !== 'PENDING') throw new ForbiddenException('Заявка не доступна для взятия');
+
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                forwarderId: companyId,
+                status: 'PENDING', // Остается PENDING, пока экспедитор не назначит водителя
+                // Можно добавить логику уведомления заказчика
             },
         });
     }

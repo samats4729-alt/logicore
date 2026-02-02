@@ -1,148 +1,108 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import { useState, useCallback, useEffect } from 'react';
+import ReactMap, { Marker, NavigationControl, ViewStateChangeEvent, MapMouseEvent, MarkerDragEvent } from 'react-map-gl/mapbox';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { EnvironmentOutlined } from '@ant-design/icons';
+import { App } from 'antd';
 
-// Component that handles map clicks and updates center when position changes
-const MapEvents = ({
-    onLocationSelect,
-    externalPosition
-}: {
-    onLocationSelect: (lat: number, lng: number) => void;
-    externalPosition?: [number, number] | null;
-}) => {
-    const { useMapEvents, useMap } = require('react-leaflet');
-    const map = useMap();
+const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
 
-    // Fly to new position when address is selected
-    useEffect(() => {
-        if (externalPosition) {
-            map.flyTo(externalPosition, 15);
-        }
-    }, [externalPosition, map]);
-
-    useMapEvents({
-        click(e: any) {
-            onLocationSelect(e.latlng.lat, e.latlng.lng);
-            map.flyTo(e.latlng, map.getZoom());
-        },
-    });
-    return null;
-};
-
-// Draggable marker component
-const DraggableMarker = ({
-    position,
-    icon,
-    onDragEnd
-}: {
-    position: [number, number];
-    icon: any;
-    onDragEnd: (lat: number, lng: number) => void;
-}) => {
-    const { Marker, Popup } = require('react-leaflet');
-
-    return (
-        <Marker
-            position={position}
-            icon={icon}
-            draggable={true}
-            eventHandlers={{
-                dragend: (e: any) => {
-                    const marker = e.target;
-                    const pos = marker.getLatLng();
-                    onDragEnd(pos.lat, pos.lng);
-                },
-            }}
-        >
-            <Popup>
-                <div style={{ textAlign: 'center' }}>
-                    <strong>Выбранная точка</strong>
-                    <br />
-                    <span style={{ fontSize: 11, color: '#666' }}>
-                        Перетащите маркер для уточнения
-                    </span>
-                </div>
-            </Popup>
-        </Marker>
-    );
-};
-
-const MapComponent = ({
+const MapPicker = ({
     initialLat,
     initialLng,
     onLocationSelect
 }: {
     initialLat?: number,
     initialLng?: number,
-    onLocationSelect: (lat: number, lng: number) => void
+    onLocationSelect: (lat: number, lng: number, pickedName?: string) => void
 }) => {
-    const { MapContainer, TileLayer } = require('react-leaflet');
-    const L = require('leaflet');
-    require('leaflet/dist/leaflet.css');
-
-    const [position, setPosition] = useState<[number, number] | null>(
-        initialLat && initialLng ? [initialLat, initialLng] : null
+    const { message } = App.useApp();
+    const [viewState, setViewState] = useState({
+        latitude: initialLat || 43.2389,
+        longitude: initialLng || 76.8897,
+        zoom: 13
+    });
+    const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
+        initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null
     );
 
-    // Update internal position when external props change (address autocomplete)
+    // Update view and marker when initial props change (e.g. from address search)
     useEffect(() => {
         if (initialLat && initialLng) {
-            setPosition([initialLat, initialLng]);
+            setViewState(prev => ({
+                ...prev,
+                latitude: initialLat,
+                longitude: initialLng
+            }));
+            setMarker({ lat: initialLat, lng: initialLng });
         }
     }, [initialLat, initialLng]);
 
-    // Create icon inside component to avoid SSR issues
-    const icon = L.icon({
-        iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    });
+    const handleMapClick = useCallback((event: MapMouseEvent) => {
+        const { lat, lng } = event.lngLat;
+        setMarker({ lat, lng });
 
-    const handleSelect = (lat: number, lng: number) => {
-        setPosition([lat, lng]);
+        // Try to get what the user *actually* clicked on (rendered on the map)
+        // This is much more reliable than reverse geocoding for specific POIs
+        const features = event.target.queryRenderedFeatures(event.point);
+        const poiFeature = features.find(f => f.properties?.name);
+
+        onLocationSelect(lat, lng, poiFeature?.properties?.name);
+    }, [onLocationSelect]);
+
+    const handleMarkerDragEnd = useCallback((event: MarkerDragEvent) => {
+        const { lat, lng } = event.lngLat;
+        setMarker({ lat, lng });
         onLocationSelect(lat, lng);
-    };
-
-    const handleDragEnd = (lat: number, lng: number) => {
-        setPosition([lat, lng]);
-        onLocationSelect(lat, lng);
-    };
-
-    // Almaty center default
-    const center: [number, number] = initialLat && initialLng ? [initialLat, initialLng] : [43.2389, 76.8897];
+    }, [onLocationSelect]);
 
     return (
-        <MapContainer
-            center={center}
-            zoom={13}
-            style={{ height: '400px', width: '100%', borderRadius: 8 }}
-        >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <MapEvents
-                onLocationSelect={handleSelect}
-                externalPosition={position}
-            />
-            {position && (
-                <DraggableMarker
-                    position={position}
-                    icon={icon}
-                    onDragEnd={handleDragEnd}
-                />
-            )}
-        </MapContainer>
+        <div style={{ height: '400px', width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+            <ReactMap
+                {...viewState}
+                onMove={(evt: any) => setViewState(evt.viewState)}
+                onLoad={(event) => {
+                    const map = event.target;
+                    const style = map.getStyle();
+                    if (style && style.layers) {
+                        for (const layer of style.layers) {
+                            // Skip house numbers and other non-name labels
+                            if (layer.id.includes('housenum') || layer.id.includes('number')) {
+                                continue;
+                            }
+
+                            if (layer.layout && (layer.layout as any)['text-field']) {
+                                map.setLayoutProperty(layer.id, 'text-field', [
+                                    'coalesce',
+                                    ['get', 'name_ru'],
+                                    ['get', 'name']
+                                ]);
+                            }
+                        }
+                    }
+                }}
+                mapStyle="mapbox://styles/mapbox/streets-v12"
+                mapboxAccessToken={MAPBOX_TOKEN}
+                onClick={handleMapClick}
+                cursor="crosshair"
+            >
+                <NavigationControl position="top-right" />
+
+                {marker && (
+                    <Marker
+                        latitude={marker.lat}
+                        longitude={marker.lng}
+                        draggable
+                        onDragEnd={handleMarkerDragEnd}
+                        anchor="bottom"
+                    >
+                        <EnvironmentOutlined style={{ fontSize: '32px', color: '#1890ff', filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))' }} />
+                    </Marker>
+                )}
+            </ReactMap>
+        </div>
     );
 };
 
-// Export dynamic component to avoid SSR issues
-export default dynamic(() => Promise.resolve(MapComponent), {
-    ssr: false,
-    loading: () => <p>Загрузка карты...</p>
-});
+export default MapPicker;

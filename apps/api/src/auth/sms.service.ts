@@ -17,7 +17,7 @@ export class SmsService {
      * Генерация 4-значного кода подтверждения
      */
     generateCode(): string {
-        return Math.floor(1000 + Math.random() * 9000).toString();
+        return '1234'; // Math.floor(1000 + Math.random() * 9000).toString();
     }
 
     /**

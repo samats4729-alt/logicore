@@ -90,114 +90,162 @@ export default function CompanyDashboard() {
         fetchOrders();
     }, []);
 
+    const getStatusTag = (status: string) => {
+        const color = statusColors[status] || 'default';
+        const label = statusLabels[status] || status;
+
+        // Custom simple badges instead of AntD tags for cleaner look
+        const badgeStyle: React.CSSProperties = {
+            padding: '4px 10px',
+            borderRadius: '9999px',
+            fontSize: '12px',
+            fontWeight: 500,
+            display: 'inline-block',
+        };
+
+        const colors: Record<string, { bg: string, text: string, border: string }> = {
+            default: { bg: '#f4f4f5', text: '#71717a', border: '#e4e4e7' }, // Zinc
+            orange: { bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' }, // Orange
+            blue: { bg: '#eff6ff', text: '#1d4ed8', border: '#dbeafe' }, // Blue
+            gold: { bg: '#fefce8', text: '#a16207', border: '#fef9c3' }, // Yellow
+            lime: { bg: '#f7fee7', text: '#4d7c0f', border: '#d9f99d' }, // Lime
+            purple: { bg: '#faf5ff', text: '#7e22ce', border: '#f3e8ff' }, // Purple
+            cyan: { bg: '#ecfeff', text: '#0e7490', border: '#cffafe' }, // Cyan
+            green: { bg: '#f0fdf4', text: '#15803d', border: '#dcfce7' }, // Green
+            red: { bg: '#fef2f2', text: '#b91c1c', border: '#fee2e2' }, // Red
+        };
+
+        const style = colors[color === 'default' ? 'default' : color] || colors.default;
+
+        return (
+            <span style={{
+                ...badgeStyle,
+                backgroundColor: style.bg,
+                color: style.text,
+                border: `1px solid ${style.border}`
+            }}>
+                {label}
+            </span>
+        );
+    };
+
     const columns = [
         {
-            title: '№ Заявки',
+            title: <span style={{ color: '#71717a', fontWeight: 500 }}>№ ЗАЯВКИ</span>,
             dataIndex: 'orderNumber',
             key: 'orderNumber',
-            render: (text: string) => <strong>{text}</strong>,
+            render: (text: string) => <span style={{ fontWeight: 600, color: '#09090b' }}>{text}</span>,
         },
         {
-            title: 'Груз',
+            title: <span style={{ color: '#71717a', fontWeight: 500 }}>ГРУЗ</span>,
             dataIndex: 'cargoDescription',
             key: 'cargoDescription',
             ellipsis: true,
+            render: (text: string) => <span style={{ color: '#09090b', fontWeight: 500 }}>{text}</span>,
         },
         {
-            title: 'Откуда',
+            title: <span style={{ color: '#71717a', fontWeight: 500 }}>ОТКУДА</span>,
             dataIndex: ['pickupLocation', 'name'],
             key: 'pickupLocation',
+            render: (text: string) => <span style={{ color: '#52525b' }}>{text}</span>,
         },
         {
-            title: 'Статус',
+            title: <span style={{ color: '#71717a', fontWeight: 500 }}>СТАТУС</span>,
             dataIndex: 'status',
             key: 'status',
-            render: (status: string) => (
-                <Tag color={statusColors[status] || 'default'}>
-                    {statusLabels[status] || status}
-                </Tag>
-            ),
+            render: (status: string) => getStatusTag(status),
         },
         {
-            title: 'Водитель/Машина',
+            title: <span style={{ color: '#71717a', fontWeight: 500 }}>ВОДИТЕЛЬ</span>,
             key: 'driver',
             render: (_: any, record: Order) => {
-                // Приоритет: назначенный водитель от экспедитора
+                let text = '—';
                 if (record.assignedDriverName) {
-                    const vehicle = record.assignedDriverPlate || '—';
-                    const trailer = record.assignedDriverTrailer ? ` + ${record.assignedDriverTrailer}` : '';
-                    return `${record.assignedDriverName} (${vehicle}${trailer})`;
+                    const vehicle = record.assignedDriverPlate || '';
+                    text = `${record.assignedDriverName} ${vehicle}`;
+                } else if (record.driver) {
+                    text = `${record.driver.firstName} ${record.driver.lastName}`;
                 }
-                if (record.driver) {
-                    return `${record.driver.firstName} ${record.driver.lastName} (${record.driver.vehiclePlate || '—'})`;
-                }
-                return '—';
+                return <span style={{ color: '#52525b' }}>{text}</span>;
             },
         },
         {
-            title: 'Сумма',
+            title: <span style={{ color: '#71717a', fontWeight: 500 }}>СУММА</span>,
             dataIndex: 'customerPrice',
             key: 'customerPrice',
-            render: (price: number) => price ? `${price.toLocaleString()} ₸` : '—',
+            render: (price: number) => price ? <span style={{ fontWeight: 600 }}>{price.toLocaleString()} ₸</span> : '—',
         },
     ];
 
     return (
-        <div>
-            <Title level={3}>Дашборд</Title>
+        <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto' }}>
+            <div style={{ marginBottom: '32px' }}>
+                <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '8px', color: '#09090b' }}>
+                    Обзор компании
+                </h1>
+                <p style={{ color: '#71717a', fontSize: '16px' }}>
+                    Сводка по вашим текущим заказам и активности
+                </p>
+            </div>
 
-            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Row gutter={[24, 24]} style={{ marginBottom: 40 }}>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic
-                            title="Всего заявок"
-                            value={stats.total}
-                            prefix={<FileTextOutlined />}
-                        />
-                    </Card>
+                    <div className="premium-card" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="premium-stat-label">Всего заявок</div>
+                            <FileTextOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+                        </div>
+                        <div className="premium-stat-value">{stats.total}</div>
+                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>за все время</div>
+                    </div>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic
-                            title="Ожидают подтверждения"
-                            value={stats.pending}
-                            prefix={<ClockCircleOutlined />}
-                            valueStyle={{ color: '#faad14' }}
-                        />
-                    </Card>
+                    <div className="premium-card" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="premium-stat-label">Ожидают</div>
+                            <ClockCircleOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+                        </div>
+                        <div className="premium-stat-value">{stats.pending}</div>
+                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>требуют внимания</div>
+                    </div>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic
-                            title="В процессе"
-                            value={stats.inProgress}
-                            prefix={<TruckOutlined />}
-                            valueStyle={{ color: '#1677ff' }}
-                        />
-                    </Card>
+                    <div className="premium-card" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="premium-stat-label">В пути</div>
+                            <TruckOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+                        </div>
+                        <div className="premium-stat-value">{stats.inProgress}</div>
+                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>активные перевозки</div>
+                    </div>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic
-                            title="Завершено"
-                            value={stats.completed}
-                            prefix={<CheckCircleOutlined />}
-                            valueStyle={{ color: '#52c41a' }}
-                        />
-                    </Card>
+                    <div className="premium-card" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="premium-stat-label">Завершено</div>
+                            <CheckCircleOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+                        </div>
+                        <div className="premium-stat-value">{stats.completed}</div>
+                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>успешные доставки</div>
+                    </div>
                 </Col>
             </Row>
 
-            <Card title="Последние заявки">
+            <div className="premium-card" style={{ overflow: 'hidden' }}>
+                <div style={{ padding: '24px 24px 0', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#09090b', margin: 0 }}>Последние заявки</h2>
+                    <p style={{ color: '#71717a', fontSize: '14px', margin: '4px 0 0' }}>Список 10 последних созданных заявок</p>
+                </div>
                 <Table
                     columns={columns}
                     dataSource={orders.slice(0, 10)}
                     rowKey="id"
                     loading={loading}
                     pagination={false}
-                    size="small"
+                    size="middle"
+                    rowClassName={() => 'premium-table-row'}
                 />
-            </Card>
+            </div>
         </div>
     );
 }

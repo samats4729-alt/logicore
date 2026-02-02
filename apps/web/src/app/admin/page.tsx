@@ -165,9 +165,10 @@ export default function AdminDashboard() {
                         />
                     </Card>
                 </Col>
+
             </Row>
 
-            <Card title="Последние заявки">
+            {/* <Card title="Последние заявки">
                 <Table
                     columns={columns}
                     dataSource={orders.slice(0, 10)}
@@ -176,7 +177,15 @@ export default function AdminDashboard() {
                     pagination={false}
                     size="small"
                 />
-            </Card>
-        </div>
+            </Card> */}
+
+            <div style={{ textAlign: 'center', marginTop: 40, color: '#999' }}>
+                <Typography.Text type="secondary">
+                    Детальная информация по заявкам доступна только участникам процесса.
+                    <br />
+                    Здесь отображается только общая статистика платформы.
+                </Typography.Text>
+            </div>
+        </div >
     );
 }

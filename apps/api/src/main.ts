@@ -73,8 +73,9 @@ async function bootstrap() {
     }
 
     const port = process.env.PORT || 3001;
-    await app.listen(port);
+    await app.listen(port, '0.0.0.0');
     console.log(`🚀 LogiCore API running on http://localhost:${port}`);
+    console.log(`🚀 LogiCore API accessible on LAN: http://192.168.2.103:${port}`);
     console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
 }
 bootstrap();

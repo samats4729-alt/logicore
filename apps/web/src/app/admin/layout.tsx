@@ -11,6 +11,7 @@ import {
     Spin,
     Button,
     Drawer,
+    message,
 } from 'antd';
 import {
     DashboardOutlined,
@@ -25,6 +26,7 @@ import {
     MenuUnfoldOutlined,
     AimOutlined,
     MenuOutlined,
+    GlobalOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -33,11 +35,8 @@ const { Text } = Typography;
 
 const menuItems = [
     { key: '/admin', icon: <DashboardOutlined />, label: 'Дашборд' },
-    { key: '/admin/orders', icon: <CarOutlined />, label: 'Заявки' },
-    { key: '/admin/tracking', icon: <AimOutlined />, label: 'Отслеживание' },
     { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
-    { key: '/admin/locations', icon: <EnvironmentOutlined />, label: 'Адреса' },
-    { key: '/admin/documents', icon: <FileTextOutlined />, label: 'Документы' },
+    { key: '/admin/locations', icon: <GlobalOutlined />, label: 'География' },
     { key: '/admin/settings', icon: <SettingOutlined />, label: 'Настройки' },
 ];
 
@@ -69,10 +68,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }, [checkAuth]);
 
     useEffect(() => {
-        if (!loading && !isAuthenticated) {
-            router.push('/login');
+        if (!loading) {
+            if (!isAuthenticated) {
+                // Not logged in -> Go to Admin Login
+                router.push('/admin/login');
+            } else if (user?.role !== 'ADMIN') {
+                // Logged in but not Admin -> Kick out
+                // Optionally verify if it's COMPANY_ADMIN etc, but user asked for strict separation.
+                message.error('У вас нет прав администратора');
+                router.push('/'); // Or access-denied
+            }
         }
-    }, [loading, isAuthenticated, router]);
+    }, [loading, isAuthenticated, user, router]);
 
     const handleLogout = () => {
         logout();

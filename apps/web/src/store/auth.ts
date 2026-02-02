@@ -15,6 +15,7 @@ interface User {
     company?: {
         id: string;
         name: string;
+        type: string;
     };
 }
 

@@ -25,6 +25,20 @@ export class ForwarderController {
         return this.forwarderService.getForwarderOrders(req.user.companyId);
     }
 
+    @Get('marketplace')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Получить список свободных заявок (Биржа)' })
+    async getMarketplace(@Request() req: any) {
+        return this.forwarderService.getMarketplaceOrders();
+    }
+
+    @Put('orders/:id/take')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Взять заявку в работу' })
+    async takeOrder(@Param('id') id: string, @Request() req: any) {
+        return this.forwarderService.takeOrder(id, req.user.companyId);
+    }
+
     @Get('orders/:id')
     @Roles(UserRole.FORWARDER)
     @ApiOperation({ summary: 'Получить одну заявку' })
@@ -37,10 +51,21 @@ export class ForwarderController {
     @ApiOperation({ summary: 'Назначить водителя на заявку' })
     async assignDriver(
         @Param('id') id: string,
-        @Body() dto: { driverName: string; driverPhone: string; driverPlate: string },
+        @Body() dto: { driverId?: string; driverName: string; driverPhone: string; driverPlate: string; trailerNumber?: string },
         @Request() req: any
     ) {
         return this.forwarderService.assignDriver(id, req.user.companyId, dto);
+    }
+
+    @Put('orders/:id/assign-forwarder')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Переназначить заявку на другого экспедитора (партнера)' })
+    async assignForwarder(
+        @Param('id') id: string,
+        @Body() dto: { partnerId: string; price: number },
+        @Request() req: any
+    ) {
+        return this.forwarderService.assignForwarder(id, req.user.companyId, dto.partnerId, dto.price);
     }
 
     @Get('stats')

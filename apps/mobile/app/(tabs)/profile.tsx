@@ -2,9 +2,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useStore } from '@/store';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 export default function ProfileScreen() {
     const { user, logout } = useStore();
+    const { colors, isDark } = useAppTheme();
 
     const handleLogout = () => {
         Alert.alert(
@@ -25,26 +27,26 @@ export default function ProfileScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Avatar */}
-            <View style={styles.avatarContainer}>
-                <View style={styles.avatar}>
-                    <Ionicons name="person" size={48} color="#1677ff" />
+            <View style={[styles.avatarContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                <View style={[styles.avatar, { backgroundColor: isDark ? '#333' : '#e6f4ff' }]}>
+                    <Ionicons name="person" size={48} color={colors.primary} />
                 </View>
-                <Text style={styles.name}>
+                <Text style={[styles.name, { color: colors.text }]}>
                     {user?.lastName} {user?.firstName}
                 </Text>
-                <Text style={styles.phone}>{user?.phone}</Text>
+                <Text style={[styles.phone, { color: colors.textSecondary }]}>{user?.phone}</Text>
             </View>
 
             {/* Vehicle Info */}
             {user?.vehiclePlate && (
-                <View style={styles.card}>
+                <View style={[styles.card, { backgroundColor: colors.card }]}>
                     <View style={styles.cardRow}>
-                        <Ionicons name="car" size={24} color="#1677ff" />
+                        <Ionicons name="car" size={24} color={colors.primary} />
                         <View style={styles.cardContent}>
-                            <Text style={styles.cardLabel}>Транспорт</Text>
-                            <Text style={styles.cardValue}>
+                            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>Транспорт</Text>
+                            <Text style={[styles.cardValue, { color: colors.text }]}>
                                 {user.vehicleModel} • {user.vehiclePlate}
                             </Text>
                         </View>
@@ -53,34 +55,40 @@ export default function ProfileScreen() {
             )}
 
             {/* Menu Items */}
-            <View style={styles.menu}>
-                <TouchableOpacity style={styles.menuItem}>
-                    <Ionicons name="document-text-outline" size={24} color="#333" />
-                    <Text style={styles.menuText}>История рейсов</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            <View style={[styles.menu, { backgroundColor: colors.card }]}>
+                <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]}>
+                    <Ionicons name="document-text-outline" size={24} color={colors.text} />
+                    <Text style={[styles.menuText, { color: colors.text }]}>История рейсов</Text>
+                    <Ionicons name="chevron-forward" size={20} color={colors.icon} />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.menuItem}>
-                    <Ionicons name="notifications-outline" size={24} color="#333" />
-                    <Text style={styles.menuText}>Уведомления</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]}>
+                    <Ionicons name="notifications-outline" size={24} color={colors.text} />
+                    <Text style={[styles.menuText, { color: colors.text }]}>Уведомления</Text>
+                    <Ionicons name="chevron-forward" size={20} color={colors.icon} />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.menuItem}>
-                    <Ionicons name="help-circle-outline" size={24} color="#333" />
-                    <Text style={styles.menuText}>Помощь</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => router.push('/settings')}>
+                    <Ionicons name="settings-outline" size={24} color={colors.text} />
+                    <Text style={[styles.menuText, { color: colors.text }]}>Настройки</Text>
+                    <Ionicons name="chevron-forward" size={20} color={colors.icon} />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.menuItem, { borderBottomColor: 'transparent' }]}>
+                    <Ionicons name="help-circle-outline" size={24} color={colors.text} />
+                    <Text style={[styles.menuText, { color: colors.text }]}>Помощь</Text>
+                    <Ionicons name="chevron-forward" size={20} color={colors.icon} />
                 </TouchableOpacity>
             </View>
 
             {/* Logout Button */}
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Ionicons name="log-out-outline" size={24} color="#f5222d" />
-                <Text style={styles.logoutText}>Выйти</Text>
+            <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.card, borderColor: colors.danger }]} onPress={handleLogout}>
+                <Ionicons name="log-out-outline" size={24} color={colors.danger} />
+                <Text style={[styles.logoutText, { color: colors.danger }]}>Выйти</Text>
             </TouchableOpacity>
 
             {/* Version */}
-            <Text style={styles.version}>Версия 1.0.0</Text>
+            <Text style={[styles.version, { color: colors.textSecondary }]}>Версия 1.0.0</Text>
         </View>
     );
 }
@@ -88,20 +96,16 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
     },
     avatarContainer: {
         alignItems: 'center',
         paddingVertical: 32,
-        backgroundColor: '#fff',
         borderBottomWidth: 1,
-        borderBottomColor: '#e8e8e8',
     },
     avatar: {
         width: 96,
         height: 96,
         borderRadius: 48,
-        backgroundColor: '#e6f4ff',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 12,
@@ -109,15 +113,12 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#333',
     },
     phone: {
         fontSize: 14,
-        color: '#666',
         marginTop: 4,
     },
     card: {
-        backgroundColor: '#fff',
         margin: 16,
         padding: 16,
         borderRadius: 12,
@@ -132,16 +133,13 @@ const styles = StyleSheet.create({
     },
     cardLabel: {
         fontSize: 12,
-        color: '#666',
     },
     cardValue: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#333',
         marginTop: 2,
     },
     menu: {
-        backgroundColor: '#fff',
         marginHorizontal: 16,
         borderRadius: 12,
         overflow: 'hidden',
@@ -152,12 +150,10 @@ const styles = StyleSheet.create({
         padding: 16,
         gap: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
     },
     menuText: {
         flex: 1,
         fontSize: 16,
-        color: '#333',
     },
     logoutButton: {
         flexDirection: 'row',
@@ -166,19 +162,15 @@ const styles = StyleSheet.create({
         gap: 8,
         margin: 16,
         padding: 16,
-        backgroundColor: '#fff',
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#f5222d',
     },
     logoutText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#f5222d',
     },
     version: {
         textAlign: 'center',
-        color: '#999',
         fontSize: 12,
         marginTop: 8,
     },

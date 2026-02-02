@@ -2,7 +2,10 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 
-const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:3001';
+import { Platform } from 'react-native';
+
+// Revert to localhost for USB debugging via adb reverse (Firewall safe)
+const API_URL = 'http://localhost:3001';
 
 export const api = axios.create({
     baseURL: API_URL,

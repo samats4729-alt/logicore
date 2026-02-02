@@ -43,57 +43,81 @@ export default function ForwarderDashboard() {
     }, []);
 
     return (
-        <div>
-            <Title level={3}>Дашборд экспедитора</Title>
+        <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto' }}>
+            <div style={{ marginBottom: '32px' }}>
+                <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '8px', color: '#09090b' }}>
+                    Дашборд экспедитора
+                </h1>
+                <p style={{ color: '#71717a', fontSize: '16px' }}>
+                    Обзор текущих задач и статистика
+                </p>
+            </div>
 
-            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Row gutter={[24, 24]} style={{ marginBottom: 40 }}>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card loading={loading}>
-                        <Statistic
-                            title="Всего заявок"
-                            value={stats.total}
-                            prefix={<FileTextOutlined />}
-                        />
-                    </Card>
+                    <div className="premium-card" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="premium-stat-label">Всего заявок</div>
+                            <FileTextOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+                        </div>
+                        <div className="premium-stat-value">{stats.total}</div>
+                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>доступные к работе</div>
+                    </div>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card loading={loading}>
-                        <Statistic
-                            title="Ожидают назначения"
-                            value={stats.pending}
-                            prefix={<ClockCircleOutlined />}
-                            valueStyle={{ color: '#faad14' }}
-                        />
-                    </Card>
+                    <div className="premium-card" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="premium-stat-label">Ожидают назначения</div>
+                            <ClockCircleOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+                        </div>
+                        <div className="premium-stat-value">{stats.pending}</div>
+                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>требуют водителя</div>
+                    </div>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card loading={loading}>
-                        <Statistic
-                            title="В работе"
-                            value={stats.assigned}
-                            prefix={<TruckOutlined />}
-                            valueStyle={{ color: '#1677ff' }}
-                        />
-                    </Card>
+                    <div className="premium-card" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="premium-stat-label">В работе</div>
+                            <TruckOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+                        </div>
+                        <div className="premium-stat-value">{stats.assigned}</div>
+                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>активные рейсы</div>
+                    </div>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card loading={loading}>
-                        <Statistic
-                            title="Завершено"
-                            value={stats.completed}
-                            prefix={<CheckCircleOutlined />}
-                            valueStyle={{ color: '#52c41a' }}
-                        />
-                    </Card>
+                    <div className="premium-card" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="premium-stat-label">Завершено</div>
+                            <CheckCircleOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+                        </div>
+                        <div className="premium-stat-value">{stats.completed}</div>
+                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>выполненные заказы</div>
+                    </div>
                 </Col>
             </Row>
 
-            <Card>
-                <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                    <TruckOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-                    <div>Перейдите в раздел "Входящие заявки" для просмотра назначенных перевозок</div>
+            <div className="premium-card" style={{ padding: '60px 24px', textAlign: 'center' }}>
+                <div style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    background: '#f4f4f5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 24px'
+                }}>
+                    <TruckOutlined style={{ fontSize: 24, color: '#09090b' }} />
                 </div>
-            </Card>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#09090b', marginBottom: '8px' }}>
+                    Управление перевозками
+                </h3>
+                <p style={{ color: '#71717a', fontSize: '14px', maxWidth: '400px', margin: '0 auto' }}>
+                    Перейдите в раздел "Входящие заявки" для просмотра списка доступных грузов и назначения водителей.
+                </p>
+                {/* Could add a button/link here if navigation was easier to infer, 
+                    but sticking to visual redesign only for now as per instructions */}
+            </div>
         </div>
     );
 }

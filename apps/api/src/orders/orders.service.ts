@@ -298,7 +298,8 @@ export class OrdersService {
      * Заявки для водителя (текущие)
      */
     async findDriverOrders(driverId: string) {
-        return this.prisma.order.findMany({
+        console.log(`🔍 [DEBUG] findDriverOrders for driverId: ${driverId}`);
+        const orders = await this.prisma.order.findMany({
             where: {
                 driverId,
                 status: {
@@ -319,5 +320,6 @@ export class OrdersService {
             },
             orderBy: { createdAt: 'desc' },
         });
+        return orders;
     }
 }

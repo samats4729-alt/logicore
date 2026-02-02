@@ -64,10 +64,16 @@ export class AuthService {
         code: string,
         deviceId: string,
     ): Promise<{ accessToken: string; user: any }> {
+        console.log(`🔍 Verifying SMS: Phone=${phone}, Code=${code}, Device=${deviceId}`);
+
+        // Проверяем код
         // Проверяем код
         const savedCode = await this.redisService.getSmsCode(phone);
 
+        console.log(`🔍 Retrieved from Redis: ${savedCode}`);
+
         if (!savedCode || savedCode !== code) {
+            console.warn(`❌ Verification failed: Expected '${savedCode}', got '${code}'`);
             throw new UnauthorizedException('Неверный код подтверждения');
         }
 
@@ -151,11 +157,15 @@ export class AuthService {
         }
 
         // Single Session Policy
-        const existingSession = await this.redisService.getSession(user.id);
-        if (existingSession && existingSession.deviceId !== deviceId) {
-            await this.prisma.session.deleteMany({
-                where: { userId: user.id },
-            });
+        try {
+            const existingSession = await this.redisService.getSession(user.id);
+            if (existingSession && existingSession.deviceId !== deviceId) {
+                await this.prisma.session.deleteMany({
+                    where: { userId: user.id },
+                });
+            }
+        } catch (e) {
+            console.warn('Redis getSession failed (ignoring):', e);
         }
 
         // Создаем токен
@@ -164,7 +174,12 @@ export class AuthService {
 
         // Сохраняем сессию
         const expiresIn = 60 * 60 * 24 * 7;
-        await this.redisService.setSession(user.id, deviceId, accessToken, expiresIn);
+
+        try {
+            await this.redisService.setSession(user.id, deviceId, accessToken, expiresIn);
+        } catch (e) {
+            console.warn('Redis setSession failed (ignoring):', e);
+        }
 
         await this.prisma.session.create({
             data: {
@@ -217,8 +232,21 @@ export class AuthService {
      * Проверка активной сессии (Single Session Policy)
      */
     async validateSession(userId: string, token: string): Promise<boolean> {
-        const session = await this.redisService.getSession(userId);
-        return session?.token === token;
+        try {
+            const session = await this.redisService.getSession(userId);
+            if (session) return session.token === token;
+        } catch (e) {
+            console.warn('Redis validateSession failed, checking DB');
+        }
+
+        // Fallback to DB
+        const dbSession = await this.prisma.session.findFirst({
+            where: { userId, token }
+        });
+
+        // If DB session exists and is valid (expiry check could be added here if needed)
+        // For now just existence + token match (which findFirst ensures)
+        return !!dbSession;
     }
 
     // ==================== РЕГИСТРАЦИЯ КОМПАНИИ ====================

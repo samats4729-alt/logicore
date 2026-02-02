@@ -42,6 +42,11 @@ export class CreateOrderDto {
     @IsOptional()
     requirements?: string;
 
+    @ApiProperty({ required: false, example: 'Сыпучие' })
+    @IsString()
+    @IsOptional()
+    natureOfCargo?: string;
+
     @ApiProperty({ required: false })
     @IsDateString()
     @IsOptional()
@@ -61,6 +66,12 @@ export class CreateOrderDto {
     @IsNumber()
     @IsOptional()
     customerPrice?: number;
+
+    @ApiProperty({ required: false, enum: ['FIXED', 'PER_KM', 'PER_TON'], example: 'FIXED' })
+    @IsString()
+    @IsOptional()
+    @IsEnum(['FIXED', 'PER_KM', 'PER_TON'])
+    customerPriceType?: 'FIXED' | 'PER_KM' | 'PER_TON';
 
     @ApiProperty({ required: false, description: 'ID водителя для назначения' })
     @IsString()

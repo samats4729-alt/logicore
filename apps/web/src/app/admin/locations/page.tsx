@@ -1,65 +1,99 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Table, Card, Button, Input, Space, Typography, Tag, Tabs, message, Modal, Form, Select } from 'antd';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-    Table, Card, Button, Space, Modal, Form,
-    Input, Typography, App, InputNumber
-} from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
-import { api, Location } from '@/lib/api';
+    PlusOutlined, SearchOutlined, EnvironmentOutlined,
+    GlobalOutlined, AppstoreOutlined, EditOutlined, DeleteOutlined
+} from '@ant-design/icons';
+import { api, City, Country, Region } from '@/lib/api';
 
 const { Title } = Typography;
+const { Option } = Select;
 
-export default function LocationsPage() {
-    const { message } = App.useApp();
-    const [locations, setLocations] = useState<Location[]>([]);
-    const [loading, setLoading] = useState(true);
+export default function AdminLocationsPage() {
+    const router = useRouter();
+    const pathname = usePathname();
+
+    // Cities State
+    const [cities, setCities] = useState<City[]>([]);
+    const [loading, setLoading] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [form] = Form.useForm();
 
+    // Dropdown Data
+    const [countries, setCountries] = useState<Country[]>([]);
+    const [regions, setRegions] = useState<Region[]>([]);
+    const [selectedCountryId, setSelectedCountryId] = useState<string | undefined>(undefined);
+
     useEffect(() => {
-        fetchLocations();
+        fetchCities();
+        fetchCountries();
     }, []);
 
-    const fetchLocations = async () => {
+    const fetchCities = async () => {
+        setLoading(true);
         try {
-            const response = await api.get('/locations');
-            setLocations(response.data);
+            const res = await api.get('/cities');
+            setCities(res.data);
         } catch (error) {
-            message.error('Ошибка загрузки адресов');
+            message.error('Ошибка загрузки городов');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleCreate = async (values: any) => {
+    const fetchCountries = async () => {
         try {
-            await api.post('/locations', values);
-            message.success('Адрес добавлен');
+            const res = await api.get('/cities/countries');
+            setCountries(res.data);
+        } catch (error) { message.error('Ошибка загрузки стран'); }
+    };
+
+    const fetchRegions = async (countryId: string) => {
+        try {
+            const res = await api.get(`/cities/regions?countryId=${countryId}`);
+            setRegions(res.data);
+        } catch (error) { message.error('Ошибка загрузки регионов'); }
+    };
+
+    const handleCountryChange = (val: string) => {
+        setSelectedCountryId(val);
+        form.setFieldValue('regionId', undefined);
+        fetchRegions(val);
+    };
+
+    const handleSave = async (values: any) => {
+        try {
+            // Check if API supports creating cities. For now mockup or basic endpoint
+            if (editingId) {
+                // await api.patch(`/cities/${editingId}`, values);
+                message.info('Редактирование пока не реализовано на API');
+            } else {
+                await api.post('/cities', values);
+                message.success('Город создан');
+            }
             setModalOpen(false);
             form.resetFields();
-            fetchLocations();
-        } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания');
+            fetchCities();
+        } catch (error) {
+            message.error('Ошибка сохранения');
         }
     };
 
-    const handleDelete = async (id: string) => {
-        Modal.confirm({
-            title: 'Удалить адрес?',
-            okText: 'Удалить',
-            cancelText: 'Отмена',
-            okButtonProps: { danger: true },
-            onOk: async () => {
-                try {
-                    await api.delete(`/locations/${id}`);
-                    message.success('Адрес удалён');
-                    fetchLocations();
-                } catch {
-                    message.error('Ошибка удаления');
-                }
-            },
-        });
+    const tabsItems = [
+        { key: '/admin/locations', label: 'Города', icon: <EnvironmentOutlined /> },
+        { key: '/admin/locations/regions', label: 'Регионы', icon: <AppstoreOutlined /> },
+        { key: '/admin/locations/countries', label: 'Страны', icon: <GlobalOutlined /> },
+    ];
+
+    // Handle tab change
+    const onTabChange = (key: string) => {
+        if (key !== pathname) {
+            router.push(key);
+        }
     };
 
     const columns = [
@@ -67,118 +101,106 @@ export default function LocationsPage() {
             title: 'Название',
             dataIndex: 'name',
             key: 'name',
-            render: (text: string) => (
+            fontWeight: 'bold',
+            render: (text: string, record: City) => (
                 <Space>
-                    <EnvironmentOutlined style={{ color: '#1677ff' }} />
                     <strong>{text}</strong>
+                    {record.country && <Tag>{record.country.code}</Tag>}
                 </Space>
-            ),
-        },
-        {
-            title: 'Адрес',
-            dataIndex: 'address',
-            key: 'address',
-            ellipsis: true,
-        },
-        {
-            title: 'Контакт',
-            dataIndex: 'contactName',
-            key: 'contactName',
-            render: (name: string, record: Location) =>
-                name ? `${name} (${record.contactPhone})` : '—',
+            )
         },
         {
             title: 'Координаты',
             key: 'coords',
-            render: (_: any, record: Location) => (
-                <span style={{ fontFamily: 'monospace', fontSize: 12 }}>
+            render: (_: any, record: City) => (
+                <span style={{ fontSize: 12, color: '#888' }}>
                     {record.latitude.toFixed(4)}, {record.longitude.toFixed(4)}
                 </span>
-            ),
+            )
         },
-        {
-            title: 'Действия',
-            key: 'actions',
-            render: (_: any, record: Location) => (
-                <Space>
-                    <Button type="text" icon={<EditOutlined />} />
-                    <Button
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleDelete(record.id)}
-                    />
-                </Space>
-            ),
-        },
+        // {
+        //     title: 'Действия',
+        //     key: 'actions',
+        //     render: (_: any, record: City) => (
+        //         <Space>
+        //             <Button icon={<EditOutlined />} onClick={() => { 
+        //                 setEditingId(record.id); 
+        //                 form.setFieldsValue(record); 
+        //                 if(record.countryId) {
+        //                     setSelectedCountryId(record.countryId);
+        //                     fetchRegions(record.countryId); 
+        //                 }
+        //                 setModalOpen(true); 
+        //             }} />
+        //             <Button danger icon={<DeleteOutlined />} onClick={() => {
+        //                 // api.delete...
+        //                 message.info('Удаление пока не реализовано');
+        //             }} />
+        //         </Space>
+        //     )
+        // }
     ];
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                <Title level={3} style={{ margin: 0 }}>Адресная книга</Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-                    Добавить адрес
-                </Button>
+            <div style={{ marginBottom: 24 }}>
+                <Title level={2} style={{ marginTop: 0 }}>Управление географией</Title>
+                <Tabs
+                    activeKey="/admin/locations"
+                    onChange={onTabChange}
+                    items={tabsItems}
+                />
             </div>
 
-            <Card>
+            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+                    <Input prefix={<SearchOutlined />} placeholder="Поиск города..." style={{ width: 300 }} />
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+                        setEditingId(null);
+                        form.resetFields();
+                        setModalOpen(true);
+                    }}>
+                        Добавить город
+                    </Button>
+                </div>
+
                 <Table
+                    dataSource={cities}
                     columns={columns}
-                    dataSource={locations}
                     rowKey="id"
                     loading={loading}
-                    pagination={{ pageSize: 15 }}
+                    pagination={{ pageSize: 20 }}
                 />
             </Card>
 
             <Modal
-                title="Новый адрес"
+                title={editingId ? "Редактировать город" : "Новый город"}
                 open={modalOpen}
                 onCancel={() => setModalOpen(false)}
                 onOk={() => form.submit()}
-                width={500}
             >
-                <Form form={form} layout="vertical" onFinish={handleCreate}>
-                    <Form.Item
-                        name="name"
-                        label="Название"
-                        rules={[{ required: true, message: 'Введите название' }]}
-                    >
-                        <Input placeholder="Склад №1" />
+                <Form form={form} layout="vertical" onFinish={handleSave}>
+                    <Form.Item name="countryId" label="Страна" rules={[{ required: true }]}>
+                        <Select onChange={handleCountryChange} placeholder="Выберите страну">
+                            {countries.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
+                        </Select>
                     </Form.Item>
-                    <Form.Item
-                        name="address"
-                        label="Адрес"
-                        rules={[{ required: true, message: 'Введите адрес' }]}
-                    >
-                        <Input placeholder="г. Алматы, ул. Примерная, 123" />
+                    <Form.Item name="regionId" label="Регион">
+                        <Select placeholder="Выберите регион" disabled={!selectedCountryId}>
+                            {regions.map(r => <Option key={r.id} value={r.id}>{r.name}</Option>)}
+                        </Select>
                     </Form.Item>
-                    <Space style={{ width: '100%' }}>
-                        <Form.Item
-                            name="latitude"
-                            label="Широта"
-                            rules={[{ required: true }]}
-                        >
-                            <InputNumber style={{ width: 150 }} step={0.0001} placeholder="43.2389" />
+                    <Form.Item name="name" label="Название" rules={[{ required: true }]}>
+                        <Input placeholder="Алматы" />
+                    </Form.Item>
+                    <Space>
+                        <Form.Item name="latitude" label="Широта" rules={[{ required: true }]}>
+                            <Input />
                         </Form.Item>
-                        <Form.Item
-                            name="longitude"
-                            label="Долгота"
-                            rules={[{ required: true }]}
-                        >
-                            <InputNumber style={{ width: 150 }} step={0.0001} placeholder="76.9457" />
+                        <Form.Item name="longitude" label="Долгота" rules={[{ required: true }]}>
+                            <Input />
                         </Form.Item>
                     </Space>
-                    <Form.Item name="contactName" label="Контактное лицо">
-                        <Input placeholder="Иван Иванов" />
-                    </Form.Item>
-                    <Form.Item name="contactPhone" label="Телефон контакта">
-                        <Input placeholder="+7..." />
-                    </Form.Item>
-                    <Form.Item name="notes" label="Примечания">
-                        <Input.TextArea rows={2} placeholder="Заезд со двора" />
-                    </Form.Item>
                 </Form>
             </Modal>
         </div>

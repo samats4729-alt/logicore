@@ -16,6 +16,7 @@ export class TrackingController {
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Отправить GPS точку' })
     async sendGpsPoint(@Body() dto: any, @Request() req: any) {
+        console.log('📡 [GPS] Received point from driver:', req.user.sub, dto.latitude, dto.longitude);
         return this.trackingService.saveGpsPoint({
             driverId: req.user.sub,
             ...dto,

@@ -4,18 +4,15 @@ import { useState, useRef, useEffect } from 'react';
 import { AutoComplete, Input, Spin } from 'antd';
 import { EnvironmentOutlined, SearchOutlined } from '@ant-design/icons';
 
-interface NominatimResult {
-    place_id: number;
-    display_name: string;
-    lat: string;
-    lon: string;
-    type: string;
-    address?: {
-        road?: string;
-        city?: string;
-        state?: string;
-        country?: string;
-    };
+const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
+
+interface MapboxFeature {
+    id: string;
+    place_name: string;
+    center: [number, number];
+    context?: { text: string }[];
+    text?: string;
+    address?: string;
 }
 
 interface AddressAutocompleteProps {
@@ -24,6 +21,9 @@ interface AddressAutocompleteProps {
     onSelect?: (address: string, lat: number, lng: number) => void;
     placeholder?: string;
     size?: 'small' | 'middle' | 'large';
+    proximity?: { lat: number; lng: number };
+    city?: string;
+    disabled?: boolean;
 }
 
 export default function AddressAutocomplete({
@@ -32,8 +32,11 @@ export default function AddressAutocomplete({
     onSelect,
     placeholder = 'Введите адрес...',
     size = 'large',
+    proximity,
+    city,
+    disabled,
 }: AddressAutocompleteProps) {
-    const [options, setOptions] = useState<{ value: string; label: React.ReactNode; data: NominatimResult }[]>([]);
+    const [options, setOptions] = useState<{ value: string; label: React.ReactNode; data: MapboxFeature }[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -44,7 +47,7 @@ export default function AddressAutocomplete({
             clearTimeout(debounceRef.current);
         }
 
-        if (!searchQuery || searchQuery.length < 3) {
+        if (!searchQuery || searchQuery.length < 2) {
             setOptions([]);
             return;
         }
@@ -52,88 +55,104 @@ export default function AddressAutocomplete({
         debounceRef.current = setTimeout(async () => {
             setLoading(true);
             try {
-                // Нормализуем запрос — убираем префиксы и улучшаем поиск
-                let cleanQuery = searchQuery
-                    .replace(/^г\.|^г\s|город\s/gi, '')  // убираем "г." "г " "город"
-                    .replace(/ул\.|ул\s|улица\s/gi, '')  // убираем "ул." "ул " "улица"
-                    .replace(/пр\.|пр\s|проспект\s/gi, '') // убираем "пр." проспект
-                    .replace(/д\.|д\s|дом\s/gi, ' ')      // убираем "д." дом
-                    .replace(/\s+/g, ' ')                 // убираем двойные пробелы
-                    .trim();
+                // 2GIS Geocoder API Implementation
+                // Key verified: b018aa68-a110-494a-aa01-26991bd6b4a3
 
-                // Исправляем распространённые опечатки улиц Алматы
-                cleanQuery = cleanQuery
-                    .replace(/альфараби/gi, 'Аль-Фараби')
-                    .replace(/абылайхан/gi, 'Абылай хана')
-                    .replace(/достык/gi, 'Достық')
-                    .replace(/толебаев/gi, 'Толе би');
+                let q = searchQuery;
+                // 2GIS handles city context well, but appending prevents global search
+                if (city && !searchQuery.toLowerCase().includes(city.toLowerCase())) {
+                    q = `${city}, ${searchQuery}`;
+                }
 
-                // Добавляем "Алматы" если не указан город
-                const hasCity = /алмат|астан|караганд|шымкент|актоб|нурсултан/i.test(cleanQuery);
-                let enhancedQuery = hasCity ? cleanQuery : `${cleanQuery}, Алматы, Казахстан`;
+                // 2GIS Params
+                const params = new URLSearchParams({
+                    q: q,
+                    key: 'b018aa68-a110-494a-aa01-26991bd6b4a3',
+                    fields: 'items.point,items.address_name,items.building_name,items.full_name',
+                    page_size: '10',
+                    // Bound search to KZ or Almaty? 2GIS is usually local.
+                    // We can use 'region_id' if we know it, or view_point, but 'q' with city is usually enough.
+                });
 
-                // Nominatim API - бесплатный геокодер на основе OpenStreetMap
                 const response = await fetch(
-                    `https://nominatim.openstreetmap.org/search?` +
-                    new URLSearchParams({
-                        q: enhancedQuery,
-                        format: 'json',
-                        addressdetails: '1',
-                        limit: '8',
-                    }),
-                    {
-                        headers: {
-                            'Accept-Language': 'ru',
-                        },
-                    }
+                    `https://catalog.api.2gis.com/3.0/items/geocode?` + params
                 );
 
-                const results: NominatimResult[] = await response.json();
+                const data = await response.json();
+
+                // 2GIS Response Structure:
+                // { meta: { code: 200 }, result: { items: [...] } }
+                const items = data.result?.items || [];
 
                 setOptions(
-                    results.map((result) => ({
-                        value: result.display_name,
-                        data: result,
-                        label: (
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                <EnvironmentOutlined style={{ color: '#1677ff', marginTop: 4 }} />
-                                <div>
-                                    <div style={{ fontWeight: 500 }}>{result.display_name.split(',')[0]}</div>
-                                    <div style={{ fontSize: 12, color: '#888' }}>
-                                        {result.display_name.split(',').slice(1, 3).join(',')}
+                    items.map((item: any) => {
+                        // 2GIS Mapping
+                        // full_name: "Алматы, Сатпаева, 90/1" (Often cleanest)
+                        // address_name: "Сатпаева, 90/1"
+                        // building_name: "ЖК Симфония" 
+                        // name: "Симфония" (POI name)
+
+                        const val = item.full_name || item.address_name || item.name;
+                        const subVal = item.building_name || item.purpose_name || '';
+
+                        return {
+                            value: val,
+                            data: {
+                                id: item.id,
+                                place_name: val,
+                                center: [item.point.lon, item.point.lat], // Lon, Lat
+                                text: item.address_name || item.name,
+                                address: { // Mocking the OSM structure for compatibility if needed
+                                    house_number: item.building_name,
+                                    road: item.address_name
+                                }
+                            },
+                            label: (
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0' }}>
+                                    <EnvironmentOutlined style={{ color: '#10c611', marginTop: 4 }} /> {/* 2GIS Greenish color */}
+                                    <div>
+                                        <div style={{ fontWeight: 500, fontSize: 15 }}>
+                                            {item.address_name || item.name}
+                                        </div>
+                                        <div style={{ fontSize: 12, color: '#888' }}>
+                                            {item.full_name}
+                                            {subVal && ` • ${subVal}`}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ),
-                    }))
+                            ),
+                        };
+                    })
                 );
             } catch (error) {
-                console.error('Geocoding error:', error);
+                console.error('2GIS error:', error);
                 setOptions([]);
             } finally {
                 setLoading(false);
             }
-        }, 400);
+        }, 500);
 
         return () => {
-            if (debounceRef.current) {
-                clearTimeout(debounceRef.current);
-            }
+            if (debounceRef.current) clearTimeout(debounceRef.current);
         };
-    }, [searchQuery]);
+    }, [searchQuery, city]);
 
     const handleSearch = (searchText: string) => {
+        // Do not call onChange immediately if we want to wait for selection, 
+        // but typically autocomplete updates value as you type.
         onChange?.(searchText);
         setSearchQuery(searchText);
     };
 
     const handleSelect = (selectedValue: string, option: any) => {
-        const result = option.data as NominatimResult;
-        const lat = parseFloat(result.lat);
-        const lng = parseFloat(result.lon);
+        const feature = option.data;
+        const [lng, lat] = feature.center;
 
-        onChange?.(selectedValue);
-        onSelect?.(selectedValue, lat, lng);
+        // Pass the formatting we created in map() directly
+        const formattedAddress = feature.place_name;
+
+        onChange?.(formattedAddress);
+        onSelect?.(formattedAddress, lat, lng);
     };
 
     return (
@@ -144,10 +163,12 @@ export default function AddressAutocomplete({
             onSelect={handleSelect}
             style={{ width: '100%' }}
             notFoundContent={loading ? <Spin size="small" /> : null}
+            disabled={disabled}
         >
             <Input
                 placeholder={placeholder}
                 size={size}
+                disabled={disabled}
                 suffix={loading ? <Spin size="small" /> : <SearchOutlined style={{ color: '#bbb' }} />}
             />
         </AutoComplete>

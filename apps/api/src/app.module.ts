@@ -12,6 +12,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { RedisModule } from './redis/redis.module';
 import { CompanyModule } from './company/company.module';
 import { ForwarderModule } from './forwarder/forwarder.module';
+import { CitiesModule } from './cities/cities.module';
+import { PartnersModule } from './partners/partners.module';
+import { CargoTypesModule } from './cargo-types/cargo-types.module';
 
 @Module({
     imports: [
@@ -31,6 +34,9 @@ import { ForwarderModule } from './forwarder/forwarder.module';
         NotificationsModule,
         CompanyModule,
         ForwarderModule,
+        CitiesModule,
+        PartnersModule,
+        CargoTypesModule,
     ],
 })
 export class AppModule { }

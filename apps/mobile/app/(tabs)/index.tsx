@@ -13,6 +13,7 @@ import { useStore } from '@/store';
 import { showNavigationOptions } from '@/lib/navigation';
 import { startBackgroundTracking, stopBackgroundTracking, getCurrentLocation } from '@/lib/location';
 import { api } from '@/lib/api';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
     ASSIGNED: {
@@ -65,6 +66,7 @@ const statusConfig: Record<string, { label: string; color: string; next?: string
 
 export default function TripScreen() {
     const { currentOrder, fetchCurrentOrder, updateOrderStatus, user } = useStore();
+    const { colors, isDark } = useAppTheme();
 
     useEffect(() => {
         fetchCurrentOrder();
@@ -139,15 +141,15 @@ export default function TripScreen() {
     if (!currentOrder) {
         return (
             <ScrollView
-                style={styles.container}
+                style={[styles.container, { backgroundColor: colors.background }]}
                 contentContainerStyle={styles.emptyContainer}
                 refreshControl={
-                    <RefreshControl refreshing={false} onRefresh={handleRefresh} />
+                    <RefreshControl refreshing={false} onRefresh={handleRefresh} tintColor={colors.text} />
                 }
             >
-                <Ionicons name="car-outline" size={80} color="#ccc" />
-                <Text style={styles.emptyTitle}>Нет активных рейсов</Text>
-                <Text style={styles.emptyText}>
+                <Ionicons name="car-outline" size={80} color={colors.textSecondary} />
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>Нет активных рейсов</Text>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                     Ожидайте назначения нового рейса от диспетчера
                 </Text>
             </ScrollView>
@@ -158,38 +160,38 @@ export default function TripScreen() {
 
     return (
         <ScrollView
-            style={styles.container}
+            style={[styles.container, { backgroundColor: colors.background }]}
             refreshControl={
-                <RefreshControl refreshing={false} onRefresh={handleRefresh} />
+                <RefreshControl refreshing={false} onRefresh={handleRefresh} tintColor={colors.text} />
             }
         >
             {/* Order Header */}
-            <View style={styles.header}>
-                <Text style={styles.orderNumber}>Рейс {currentOrder.orderNumber}</Text>
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                <Text style={[styles.orderNumber, { color: colors.text }]}>Рейс {currentOrder.orderNumber}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusInfo.color }]}>
                     <Text style={styles.statusText}>{statusInfo.label}</Text>
                 </View>
             </View>
 
             {/* Cargo Info */}
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>Груз</Text>
-                <Text style={styles.cargoDescription}>{currentOrder.cargoDescription}</Text>
+            <View style={[styles.card, { backgroundColor: colors.card }]}>
+                <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>Груз</Text>
+                <Text style={[styles.cargoDescription, { color: colors.text }]}>{currentOrder.cargoDescription}</Text>
                 {currentOrder.cargoWeight && (
-                    <Text style={styles.cargoDetail}>Вес: {currentOrder.cargoWeight} кг</Text>
+                    <Text style={[styles.cargoDetail, { color: colors.textSecondary }]}>Вес: {currentOrder.cargoWeight} кг</Text>
                 )}
             </View>
 
             {/* Pickup Location */}
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: colors.card }]}>
                 <View style={styles.locationHeader}>
                     <Ionicons name="location" size={20} color="#52c41a" />
-                    <Text style={styles.cardTitle}>Погрузка</Text>
+                    <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>Погрузка</Text>
                 </View>
-                <Text style={styles.locationName}>{currentOrder.pickupLocation.name}</Text>
-                <Text style={styles.locationAddress}>{currentOrder.pickupLocation.address}</Text>
+                <Text style={[styles.locationName, { color: colors.text }]}>{currentOrder.pickupLocation.name}</Text>
+                <Text style={[styles.locationAddress, { color: colors.textSecondary }]}>{currentOrder.pickupLocation.address}</Text>
                 <TouchableOpacity
-                    style={styles.navButton}
+                    style={[styles.navButton, { backgroundColor: isDark ? '#333' : '#e6f4ff' }]}
                     onPress={() => showNavigationOptions(
                         currentOrder.pickupLocation.latitude,
                         currentOrder.pickupLocation.longitude,
@@ -203,15 +205,15 @@ export default function TripScreen() {
 
             {/* Delivery Points */}
             {currentOrder.deliveryPoints?.map((point, index) => (
-                <View key={point.id} style={styles.card}>
+                <View key={point.id} style={[styles.card, { backgroundColor: colors.card }]}>
                     <View style={styles.locationHeader}>
                         <Ionicons name="flag" size={20} color="#f5222d" />
-                        <Text style={styles.cardTitle}>Выгрузка {index + 1}</Text>
+                        <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>Выгрузка {index + 1}</Text>
                     </View>
-                    <Text style={styles.locationName}>{point.location.name}</Text>
-                    <Text style={styles.locationAddress}>{point.location.address}</Text>
+                    <Text style={[styles.locationName, { color: colors.text }]}>{point.location.name}</Text>
+                    <Text style={[styles.locationAddress, { color: colors.textSecondary }]}>{point.location.address}</Text>
                     <TouchableOpacity
-                        style={styles.navButton}
+                        style={[styles.navButton, { backgroundColor: isDark ? '#333' : '#e6f4ff' }]}
                         onPress={() => showNavigationOptions(
                             point.location.latitude,
                             point.location.longitude,
@@ -235,6 +237,54 @@ export default function TripScreen() {
                 </TouchableOpacity>
             )}
 
+            {/* DEBUG GPS BUTTON */}
+            <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#333', marginTop: 8 }]}
+                onPress={async () => {
+                    const { Alert } = require('react-native');
+                    const Location = require('expo-location');
+
+                    try {
+                        Alert.alert('GPS Diagnostic', 'Проверка прав...');
+
+                        // Check Permissions
+                        const { status } = await Location.requestForegroundPermissionsAsync();
+                        if (status !== 'granted') {
+                            Alert.alert('Permission Error', `Статус прав: ${status}. Зайдите в настройки телефона -> Приложения -> LogComp Driver -> Разрешения и включите "Местоположение".`);
+                            return;
+                        }
+
+                        // Check Services
+                        const enabled = await Location.hasServicesEnabledAsync();
+                        if (!enabled) {
+                            Alert.alert('GPS Disabled', 'GPS выключен на телефоне. Включите геолокацию в шторке.');
+                            return;
+                        }
+
+                        Alert.alert('GPS Test', 'Права есть. Получаем координаты...');
+                        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+
+                        Alert.alert('GPS Data', `Lat: ${loc.coords.latitude}\nLng: ${loc.coords.longitude}\nОтправка на сервер...`);
+
+                        await api.post('/tracking/gps', {
+                            latitude: loc.coords.latitude,
+                            longitude: loc.coords.longitude,
+                            accuracy: loc.coords.accuracy,
+                            speed: loc.coords.speed,
+                            heading: loc.coords.heading,
+                            orderId: currentOrder?.id,
+                            recordedAt: new Date().toISOString(),
+                        });
+                        Alert.alert('Success', 'Координаты отправлены успешно! Проверьте карту через минуту.');
+                    } catch (e: any) {
+                        Alert.alert('Error', e.message + '\n' + JSON.stringify(e.response?.data || ''));
+                    }
+                }}
+            >
+                <Text style={styles.actionButtonText}>Проверить GPS (Тест)</Text>
+                <Ionicons name="navigate-circle" size={20} color="#fff" />
+            </TouchableOpacity>
+
             <View style={styles.spacer} />
         </ScrollView>
     );
@@ -243,7 +293,6 @@ export default function TripScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
     },
     emptyContainer: {
         flex: 1,
@@ -254,12 +303,10 @@ const styles = StyleSheet.create({
     emptyTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#333',
         marginTop: 16,
     },
     emptyText: {
         fontSize: 14,
-        color: '#666',
         textAlign: 'center',
         marginTop: 8,
     },
@@ -268,14 +315,11 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 16,
-        backgroundColor: '#fff',
         borderBottomWidth: 1,
-        borderBottomColor: '#e8e8e8',
     },
     orderNumber: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#333',
     },
     statusBadge: {
         paddingHorizontal: 12,
@@ -288,11 +332,11 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     card: {
-        backgroundColor: '#fff',
         margin: 12,
         marginBottom: 0,
         padding: 16,
         borderRadius: 12,
+        // Shadow will be subtle on dark mode or visible on light
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
@@ -302,17 +346,14 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#666',
         marginBottom: 8,
     },
     cargoDescription: {
         fontSize: 16,
-        color: '#333',
         lineHeight: 22,
     },
     cargoDetail: {
         fontSize: 14,
-        color: '#666',
         marginTop: 8,
     },
     locationHeader: {
@@ -324,11 +365,9 @@ const styles = StyleSheet.create({
     locationName: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#333',
     },
     locationAddress: {
         fontSize: 14,
-        color: '#666',
         marginTop: 4,
     },
     navButton: {
@@ -338,7 +377,6 @@ const styles = StyleSheet.create({
         marginTop: 12,
         paddingVertical: 10,
         paddingHorizontal: 14,
-        backgroundColor: '#e6f4ff',
         borderRadius: 8,
         alignSelf: 'flex-start',
     },

@@ -15,6 +15,8 @@ import {
     MenuOutlined,
     FileOutlined,
     SettingOutlined,
+    MenuFoldOutlined,
+    MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -52,6 +54,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 } else {
                     router.replace('/login');
                 }
+            } else if (currentUser.role === 'LOGISTICIAN' && currentUser.company?.type === 'FORWARDER') {
+                // Если это логист экспедитора - редирект на /forwarder
+                router.replace('/forwarder');
             }
         });
     }, [checkAuth, router]);
@@ -86,6 +91,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 key: '/company/orders',
                 icon: <FileTextOutlined />,
                 label: 'Заявки',
+            },
+            {
+                key: '/company/partners',
+                icon: <TeamOutlined />,
+                label: 'Партнеры',
             },
             {
                 key: '/company/locations',
@@ -187,77 +197,151 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     );
 
     return (
-        <Layout style={{ minHeight: '100vh' }}>
+        <Layout style={{ minHeight: '100vh', background: '#f8f8f8' }}> {/* Subtle gray background for the whole app base */}
             {/* Desktop Sidebar */}
             {!isMobile && (
                 <Sider
                     collapsible
                     collapsed={collapsed}
                     onCollapse={setCollapsed}
+                    trigger={null}
                     theme="light"
-                    style={{ borderRight: '1px solid #f0f0f0' }}
+                    width={260}
+                    style={{
+                        borderRight: 'none',
+                        background: '#f8f8f8', /* Match app base */
+                        position: 'sticky',
+                        top: 0,
+                        height: '100vh',
+                        left: 0,
+                        zIndex: 10,
+                    }}
                 >
-                    <div style={{ padding: 16, textAlign: 'center' }}>
-                        {!collapsed && (
-                            <Text strong style={{ fontSize: 16 }}>
-                                {user.company?.name || 'Компания'}
-                            </Text>
-                        )}
+                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden' }}>
+                            <div style={{ padding: '24px 20px', marginBottom: 8 }}>
+                                {!collapsed ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div style={{ width: 32, height: 32, background: '#09090b', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                                            <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>L</span>
+                                        </div>
+                                        <Text strong style={{ fontSize: 18, color: '#09090b', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                                            {user.company?.name || 'LogiCore'}
+                                        </Text>
+                                    </div>
+                                ) : (
+                                    <div style={{ width: 32, height: 32, background: '#09090b', borderRadius: 8, margin: '0 auto', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                                )}
+                            </div>
+                            <Menu
+                                mode="inline"
+                                selectedKeys={[pathname]}
+                                items={getMenuItems()}
+                                onClick={({ key }) => router.push(key)}
+                                style={{ borderRight: 'none', background: 'transparent', padding: '0 12px' }}
+                                className="premium-menu"
+                            />
+                        </div>
+
+                        {/* User Profile */}
+                        <div style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
+                            <Dropdown menu={userMenu} placement="topLeft" trigger={['click']}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 12,
+                                    cursor: 'pointer',
+                                    padding: '8px',
+                                    borderRadius: '8px',
+                                    transition: 'background 0.2s',
+                                    marginTop: 16
+                                }}
+                                    className="user-profile-trigger"
+                                >
+                                    <Avatar
+                                        icon={<UserOutlined />}
+                                        size="default"
+                                        style={{ background: '#ffffff', color: '#09090b', border: '1px solid #e4e4e7', flexShrink: 0 }}
+                                    />
+                                    {!collapsed && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                            <Text strong style={{ fontSize: 14, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>
+                                                {user.firstName} {user.lastName}
+                                            </Text>
+                                            <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.2 }}>Клиент</Text>
+                                        </div>
+                                    )}
+                                </div>
+                            </Dropdown>
+                        </div>
+
+                        {/* Custom Collapse Toggle at Footer */}
+                        <div
+                            onClick={() => setCollapsed(!collapsed)}
+                            className="sidebar-toggle-btn"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: collapsed ? 'center' : 'flex-start',
+                                padding: '16px',
+                                cursor: 'pointer',
+                                color: '#71717a',
+                                fontSize: 16,
+                                transition: 'all 0.2s',
+                                borderTop: '1px solid #f4f4f5',
+                                height: 48,
+                            }}
+                        >
+                            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                            {!collapsed && <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 500 }}>Свернуть меню</span>}
+                        </div>
                     </div>
-                    <Menu
-                        mode="inline"
-                        selectedKeys={[pathname]}
-                        items={getMenuItems()}
-                        onClick={({ key }) => router.push(key)}
-                    />
                 </Sider>
-            )}
+            )
+            }
 
             {/* Mobile Drawer */}
             {isMobile && <MobileMenu />}
 
-            <Layout>
-                <Header
-                    style={{
-                        background: '#fff',
-                        padding: isMobile ? '0 12px' : '0 24px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        borderBottom: '1px solid #f0f0f0',
-                    }}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {isMobile && (
-                            <Button
-                                type="text"
-                                icon={<MenuOutlined />}
-                                onClick={() => setMobileMenuOpen(true)}
-                            />
-                        )}
-                        <Text strong style={{ fontSize: isMobile ? 14 : 16 }}>
-                            {isMobile ? (user.company?.name || 'LogiCore') : 'Кабинет клиента'}
-                        </Text>
-                    </div>
-                    <Dropdown menu={userMenu} placement="bottomRight">
-                        <Button type="text" style={{ height: 'auto', padding: isMobile ? '4px 8px' : '4px 12px' }}>
-                            <Avatar icon={<UserOutlined />} size={isMobile ? 'small' : 'default'} style={{ marginRight: 8 }} />
-                            {!isMobile && `${user.firstName} ${user.lastName}`}
-                        </Button>
-                    </Dropdown>
-                </Header>
+            <Layout style={{ background: '#f8f8f8', padding: isMobile ? 0 : '24px 24px 24px 0' }}>
+                {/* Mobile Header */}
+                {isMobile && (
+                    <Header
+                        style={{
+                            background: '#f8f8f8',
+                            padding: '0 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            height: 64,
+                            border: 'none'
+                        }}
+                    >
+                        <Button
+                            type="text"
+                            icon={<MenuOutlined />}
+                            onClick={() => setMobileMenuOpen(true)}
+                        />
+                        <span style={{ fontWeight: 600, marginLeft: 12 }}>{user.company?.name}</span>
+                    </Header>
+                )}
+
                 <Content
                     style={{
-                        margin: isMobile ? 8 : 24,
-                        padding: isMobile ? 12 : 24,
-                        background: '#fff',
-                        borderRadius: 8,
-                        overflow: 'auto'
+                        margin: isMobile ? '16px' : 0,
+                        padding: isMobile ? 16 : 32,
+                        background: '#ffffff',
+                        borderRadius: 24,
+                        border: '1px solid #e4e4e7',
+                        minHeight: 280,
+                        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
+                        overflow: 'auto',
+                        height: '100%',
+                        marginLeft: 0,
                     }}
                 >
                     {children}
                 </Content>
             </Layout>
-        </Layout>
+        </Layout >
     );
 }

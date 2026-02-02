@@ -3,7 +3,7 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "dev": "next dev -p 3000",
+        "dev": "node ../../node_modules/next/dist/bin/next dev -p 3000",
         "build": "next build",
         "start": "next start -p 3000",
         "lint": "next lint"
@@ -15,18 +15,23 @@
         "axios": "^1.6.5",
         "dayjs": "^1.11.19",
         "leaflet": "^1.9.4",
+        "mapbox-gl": "^3.18.1",
         "next": "^14.1.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-leaflet": "^4.2.1",
+        "react-map-gl": "^8.1.0",
         "socket.io-client": "^4.6.1",
+        "three": "^0.160.1",
         "uuid": "^9.0.0",
         "zustand": "^4.5.0"
     },
     "devDependencies": {
+        "@types/mapbox-gl": "^3.4.1",
         "@types/node": "^20.10.0",
         "@types/react": "^18.2.0",
         "@types/react-dom": "^18.2.0",
+        "@types/three": "^0.160.0",
         "@types/uuid": "^9.0.0",
         "eslint": "^8.56.0",
         "eslint-config-next": "^14.1.0",

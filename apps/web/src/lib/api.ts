@@ -33,6 +33,32 @@ export interface Location {
     longitude: number;
     contactName?: string;
     contactPhone?: string;
+    city?: string;
+}
+
+export interface Country {
+    id: string;
+    name: string;
+    code: string;
+}
+
+export interface Region {
+    id: string;
+    name: string;
+    countryId: string;
+}
+
+export interface City {
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    countryId?: string;
+    regionId?: string;
+    country?: {
+        code: string;
+        name: string;
+    };
 }
 
 export interface Order {

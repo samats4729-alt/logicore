@@ -44,7 +44,18 @@ export class OrdersController {
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Мои заявки (для водителя)' })
     async myOrders(@Request() req: any) {
-        return this.ordersService.findDriverOrders(req.user.sub);
+        console.log(`🔍 [DEBUG] GET /orders/my called by user:`, req.user);
+        try {
+            const result = await this.ordersService.findDriverOrders(req.user.sub);
+            console.log(`🔍 [DEBUG] Sending response to client. Items count: ${result.length}`);
+            if (result.length > 0) {
+                console.log(`🔍 [DEBUG] First item sample:`, JSON.stringify(result[0]).substring(0, 100));
+            }
+            return result;
+        } catch (e) {
+            console.error(`❌ [DEBUG] Error in myOrders:`, e);
+            throw e;
+        }
     }
 
     @Get(':id')

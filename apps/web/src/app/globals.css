@@ -8,7 +8,37 @@ html,
 body {
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: #f5f5f5;
+  background: #ffffff;
+  color: #09090b;
+}
+
+/* Premium Card Style - Shadcn-like */
+.premium-card {
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.premium-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.premium-stat-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #71717a;
+  /* Zinc 500 */
+}
+
+.premium-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #09090b;
+  /* Zinc 950 */
+  margin-top: 4px;
 }
 
 /* Custom scrollbar */
@@ -161,4 +191,52 @@ body {
   .ant-list-item {
     min-height: 48px;
   }
+}
+
+/* Premium Menu Overrides */
+.ant-menu-light {
+  background: transparent !important;
+}
+
+.ant-menu-item {
+  border-radius: 6px !important;
+  margin: 4px 0 !important;
+  font-weight: 500 !important;
+  color: #71717a !important;
+  /* Zinc-500 */
+}
+
+.ant-menu-item:hover {
+  color: #18181b !important;
+  /* Zinc-900 */
+  background-color: #f4f4f5 !important;
+  /* Zinc-100 */
+}
+
+.ant-menu-item-selected {
+  background-color: #1677ff !important;
+  /* Primary Blue */
+  color: #ffffff !important;
+}
+
+.ant-menu-item-selected:hover {
+  background-color: #0958d9 !important;
+  /* Blue-700 */
+  color: #ffffff !important;
+}
+
+/* Fix ant-menu icon color in selected state */
+.ant-menu-item-selected .anticon {
+  color: #ffffff !important;
+}
+
+.user-profile-trigger:hover {
+  background-color: #f4f4f5;
+  /* Zinc-100 */
+}
+
+.sidebar-toggle-btn:hover {
+  background-color: #f4f4f5;
+  /* Zinc-100 */
+  color: #09090b;
 }

@@ -20,7 +20,8 @@
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    "declarations.d.ts"
   ],
   "exclude": [
     "node_modules"
