@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { PrismaClient, UserRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 const connectionString = process.env.DATABASE_URL;
 console.log('DEBUG: DATABASE_URL is', connectionString ? 'DEFINED' : 'UNDEFINED');
