@@ -15,7 +15,7 @@
         "prisma:migrate": "../../node_modules/.bin/prisma migrate dev",
         "prisma:studio": "../../node_modules/.bin/prisma studio",
         "prisma:push": "../../node_modules/.bin/prisma db push",
-        "prisma:seed": "node ../../node_modules/ts-node/dist/bin.js prisma/seed.ts"
+        "prisma:seed": "npx ts-node prisma/seed.ts"
     },
     "dependencies": {
         "@nestjs/common": "^10.3.0",
