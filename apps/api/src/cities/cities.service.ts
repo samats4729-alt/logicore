@@ -43,6 +43,7 @@ export class CitiesService {
             take: 20,
             include: {
                 country: true,
+                region: true,
             },
         });
     }

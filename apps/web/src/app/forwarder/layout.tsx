@@ -112,6 +112,11 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
             label: 'Партнеры',
         },
         {
+            key: '/forwarder/contracts',
+            icon: <FileTextOutlined />,
+            label: 'Договоры',
+        },
+        {
             key: '/forwarder/tracking',
             icon: <EnvironmentOutlined />,
             label: 'Карта',

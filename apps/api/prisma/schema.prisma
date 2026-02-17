@@ -58,6 +58,22 @@ enum CompanyType {
   FORWARDER   // Экспедитор
 }
 
+enum ContractStatus {
+  DRAFT       // Черновик
+  PENDING     // На согласовании
+  ACTIVE      // Активен
+  EXPIRED     // Истёк
+  TERMINATED  // Расторгнут
+}
+
+enum AgreementStatus {
+  DRAFT       // Черновик
+  PENDING     // На согласовании у заказчика
+  APPROVED    // Утверждено обеими сторонами
+  REJECTED    // Отклонено
+  EXPIRED     // Истекло
+}
+
 // ==================== MODELS ====================
 
 model User {
@@ -116,6 +132,10 @@ model Company {
   // Partnerships
   sentRequests      Partnership[] @relation("PartnershipRequester")
   receivedRequests  Partnership[] @relation("PartnershipRecipient")
+
+  // Contracts
+  contractsAsCustomer  Contract[] @relation("ContractCustomer")
+  contractsAsForwarder Contract[] @relation("ContractForwarder")
 }
 
 // ... existing models ...
@@ -217,6 +237,9 @@ model City {
   countryId String
   country   Country  @relation(fields: [countryId], references: [id])
 
+  originTariffs      RouteTariff[] @relation("OriginTariffs")
+  destinationTariffs RouteTariff[] @relation("DestinationTariffs")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -280,6 +303,10 @@ model Order {
   customerPrice   Float?      // Цена для клиента (видит клиент)
   customerPriceType PriceType @default(FIXED) // Тип цены (Всего, за км, за тонну)
   driverCost      Float?      // Оплата водителю/перевозчику (скрыто от клиента)
+
+  // Тариф по доп. соглашению (автоподстановка)
+  appliedTariffId String?
+  appliedTariff   RouteTariff? @relation(fields: [appliedTariffId], references: [id])
   currency        String      @default("KZT")
   
   // Подтверждение нами
@@ -484,4 +511,89 @@ model CargoType {
   updatedAt   DateTime      @updatedAt
 
   @@index([categoryId])
+}
+
+// ==================== CONTRACTS & TARIFFS ====================
+
+model Contract {
+  id              String         @id @default(cuid())
+  contractNumber  String         // Номер договора
+  
+  // Стороны
+  customerCompanyId String
+  customerCompany   Company      @relation("ContractCustomer", fields: [customerCompanyId], references: [id])
+  
+  forwarderCompanyId String
+  forwarderCompany   Company    @relation("ContractForwarder", fields: [forwarderCompanyId], references: [id])
+  
+  status          ContractStatus @default(DRAFT)
+  startDate       DateTime?
+  endDate         DateTime?
+  notes           String?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  agreements      SupplementaryAgreement[]
+  
+  @@unique([customerCompanyId, forwarderCompanyId, contractNumber])
+  @@index([customerCompanyId])
+  @@index([forwarderCompanyId])
+  @@index([status])
+}
+
+model SupplementaryAgreement {
+  id              String          @id @default(cuid())
+  agreementNumber String          // Номер доп. соглашения
+  
+  contractId      String
+  contract        Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  status          AgreementStatus @default(DRAFT)
+  proposedBy      String          @default("FORWARDER") // "FORWARDER" или "CUSTOMER"
+  validFrom       DateTime?
+  validTo         DateTime?
+  notes           String?
+  
+  // Кто создал
+  createdById     String?
+  // Кто утвердил/отклонил
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  tariffs         RouteTariff[]
+  
+  @@index([contractId])
+  @@index([status])
+}
+
+model RouteTariff {
+  id              String     @id @default(cuid())
+  
+  agreementId     String
+  agreement       SupplementaryAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  
+  originCityId      String
+  originCity        City       @relation("OriginTariffs", fields: [originCityId], references: [id])
+  destinationCityId String
+  destinationCity   City       @relation("DestinationTariffs", fields: [destinationCityId], references: [id])
+  
+  price           Float      // Стоимость
+  priceType       PriceType  @default(FIXED)
+  vehicleType     String?    // Тип кузова (опционально)
+  
+  isActive        Boolean    @default(true)
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  orders          Order[]    // Заявки по этому тарифу
+  
+  @@index([agreementId])
+  @@index([originCityId, destinationCityId])
 }

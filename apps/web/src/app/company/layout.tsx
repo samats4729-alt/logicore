@@ -98,6 +98,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Партнеры',
             },
             {
+                key: '/company/contracts',
+                icon: <FileTextOutlined />,
+                label: 'Договоры',
+            },
+            {
                 key: '/company/locations',
                 icon: <PushpinOutlined />,
                 label: 'Адреса',

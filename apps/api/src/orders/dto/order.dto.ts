@@ -143,6 +143,11 @@ export class CreateOrderDto {
     @IsNumber()
     @IsOptional()
     actualVolume?: number;
+
+    @ApiProperty({ required: false, description: 'ID применённого тарифа из доп. соглашения' })
+    @IsString()
+    @IsOptional()
+    appliedTariffId?: string;
 }
 
 export class UpdateStatusDto {

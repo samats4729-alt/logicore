@@ -47,6 +47,11 @@ export default function ForwarderDriversPage() {
 
     const handleCreate = async (values: any) => {
         try {
+            // Normalize phone: replace leading 8 with +7
+            if (values.phone && values.phone.startsWith('8')) {
+                values.phone = '+7' + values.phone.slice(1);
+            }
+
             if (editingDriver) {
                 await api.put(`/forwarder/drivers/${editingDriver.id}`, values);
                 message.success('Водитель обновлён');
@@ -220,7 +225,7 @@ export default function ForwarderDriversPage() {
                         label="Телефон"
                         rules={[
                             { required: true, message: 'Обязательное поле' },
-                            { pattern: /^\+7\d{10}$/, message: 'Формат: +7XXXXXXXXXX' }
+                            { pattern: /^(\+7|8)\d{10}$/, message: 'Формат: +7XXXXXXXXXX или 8XXXXXXXXXX' }
                         ]}
                     >
                         <Input placeholder="+77001234567" disabled={!!editingDriver} />

@@ -99,6 +99,8 @@ export default function CompanyOrdersPage() {
     const [deliveryLocation, setDeliveryLocation] = useState<LocationState>({ city: '', address: '' });
     const [intermediatePoints, setIntermediatePoints] = useState<LocationState[]>([]);
     const [isMarketplace, setIsMarketplace] = useState(false);
+    const [appliedTariff, setAppliedTariff] = useState<any>(null);
+    const [tariffLoading, setTariffLoading] = useState(false);
 
     // Reset location state when modal closes
     useEffect(() => {
@@ -107,8 +109,39 @@ export default function CompanyOrdersPage() {
             setDeliveryLocation({ city: '', address: '' });
             setIntermediatePoints([]);
             setIsMarketplace(false);
+            setAppliedTariff(null);
         }
     }, [createModalOpen]);
+
+    // Tariff lookup when both cities are selected
+    const lookupTariff = async (originCity: string, destCity: string) => {
+        if (!originCity || !destCity) {
+            setAppliedTariff(null);
+            return;
+        }
+        setTariffLoading(true);
+        try {
+            const forwarderId = form.getFieldValue('forwarderId');
+            const vehicleType = form.getFieldValue('cargoType');
+            const params: any = { originCity, destinationCity: destCity };
+            if (forwarderId) params.forwarderCompanyId = forwarderId;
+            if (vehicleType) params.vehicleType = vehicleType;
+            const response = await api.get('/contracts/tariff-lookup', { params });
+            if (response.data && response.data.price) {
+                setAppliedTariff(response.data);
+                form.setFieldsValue({ customerPrice: response.data.price });
+                message.success(
+                    `Тариф найден: ${response.data.price.toLocaleString('ru-RU')} ₸ (ДС №${response.data.agreement?.agreementNumber || '—'})`
+                );
+            } else {
+                setAppliedTariff(null);
+            }
+        } catch (error) {
+            setAppliedTariff(null);
+        } finally {
+            setTariffLoading(false);
+        }
+    };
 
     const fetchOrders = async () => {
         try {
@@ -219,6 +252,7 @@ export default function CompanyOrdersPage() {
                 deliveryLocationId: deliveryId,
                 deliveryPoints: deliveryPoints,
                 customerId: user?.id,
+                appliedTariffId: appliedTariff?.id || undefined,
             });
             message.success('Заявка создана');
             setCreateModalOpen(false);
@@ -486,14 +520,20 @@ export default function CompanyOrdersPage() {
                                         onChange={(val) => {
                                             if (!val) {
                                                 setPickupLocation({ city: '', address: '' });
+                                                setAppliedTariff(null);
                                             } else {
                                                 const loc = locations.find(l => l.id === val);
                                                 if (loc) {
-                                                    setPickupLocation({
+                                                    const newPickup = {
                                                         city: loc.city || '',
                                                         address: loc.address,
                                                         id: loc.id
-                                                    });
+                                                    };
+                                                    setPickupLocation(newPickup);
+                                                    // Auto-lookup tariff
+                                                    if (newPickup.city && deliveryLocation.city) {
+                                                        lookupTariff(newPickup.city, deliveryLocation.city);
+                                                    }
                                                 }
                                             }
                                         }}
@@ -539,14 +579,20 @@ export default function CompanyOrdersPage() {
                                         onChange={(val) => {
                                             if (!val) {
                                                 setDeliveryLocation({ city: '', address: '' });
+                                                setAppliedTariff(null);
                                             } else {
                                                 const loc = locations.find(l => l.id === val);
                                                 if (loc) {
-                                                    setDeliveryLocation({
+                                                    const newDelivery = {
                                                         city: loc.city || '',
                                                         address: loc.address,
                                                         id: loc.id
-                                                    });
+                                                    };
+                                                    setDeliveryLocation(newDelivery);
+                                                    // Auto-lookup tariff
+                                                    if (pickupLocation.city && newDelivery.city) {
+                                                        lookupTariff(pickupLocation.city, newDelivery.city);
+                                                    }
                                                 }
                                             }
                                         }}
@@ -633,7 +679,15 @@ export default function CompanyOrdersPage() {
                                 </Col>
                                 <Col span={12}>
                                     <Form.Item name="cargoType" label="Тип кузова">
-                                        <Select placeholder="Тент, Реф..." allowClear>
+                                        <Select
+                                            placeholder="Тент, Реф..."
+                                            allowClear
+                                            showSearch
+                                            optionFilterProp="children"
+                                            filterOption={(input, option) =>
+                                                (option?.children as unknown as string).toLowerCase().includes(input.toLowerCase())
+                                            }
+                                        >
                                             {VEHICLE_TYPES.map(type => (
                                                 <Select.Option key={type} value={type}>{type}</Select.Option>
                                             ))}
@@ -659,8 +713,26 @@ export default function CompanyOrdersPage() {
                                 </Col>
                                 <Col span={8}>
                                     <Form.Item name="customerPrice" label="Сумма">
-                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                                        <InputNumber
+                                            min={0}
+                                            style={{ width: '100%' }}
+                                            placeholder="0"
+                                            status={appliedTariff ? undefined : undefined}
+                                        />
                                     </Form.Item>
+                                    {appliedTariff && (
+                                        <div style={{
+                                            marginTop: -12,
+                                            marginBottom: 8,
+                                            padding: '4px 8px',
+                                            background: '#f6ffed',
+                                            border: '1px solid #b7eb8f',
+                                            borderRadius: 6,
+                                            fontSize: 12
+                                        }}>
+                                            ✅ По тарифу ДС №{appliedTariff.agreement?.agreementNumber || '—'}
+                                        </div>
+                                    )}
                                 </Col>
                             </Row>
 
@@ -788,6 +860,18 @@ export default function CompanyOrdersPage() {
                                 </>
                             ) : 'Не указана'}
                         </div>
+                        {(selectedOrder as any)?.appliedTariff && (
+                            <div style={{
+                                marginTop: 8,
+                                padding: '6px 12px',
+                                background: '#f6ffed',
+                                border: '1px solid #b7eb8f',
+                                borderRadius: 8,
+                                fontSize: 13,
+                            }}>
+                                ✅ Цена по тарифу: {(selectedOrder as any).appliedTariff.originCity?.name || (selectedOrder as any).appliedTariff.originCity} → {(selectedOrder as any).appliedTariff.destinationCity?.name || (selectedOrder as any).appliedTariff.destinationCity}
+                            </div>
+                        )}
 
                         {/* Кнопка изменения статуса */}
                         {selectedOrder?.status && getNextStatuses(selectedOrder.status).length > 0 && (
