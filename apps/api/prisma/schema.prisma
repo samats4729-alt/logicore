@@ -106,6 +106,13 @@ model User {
   vehicleModel  String?   // Модель авто
   trailerNumber String?   // Номер прицепа
   
+  // Водитель: документы (удостоверение/паспорт)
+  docType       String?   // Тип документа: "ID_CARD" или "PASSPORT"
+  docNumber     String?   // Номер документа
+  docIssuedAt   DateTime? // Дата выдачи
+  docExpiresAt  DateTime? // Срок действия
+  docIssuedBy   String?   // Кем выдан
+  
   @@index([phone])
   @@index([role])
 }
@@ -117,6 +124,12 @@ model Company {
   address        String?
   phone          String?
   email          String?     // Email компании
+  directorName   String?     // ФИО директора
+  bankAccount    String?     // ИИК (номер счёта)
+  bankName       String?     // Название банка
+  bankBic        String?     // БИК банка
+  kbe            String?     // КБЕ
+  stampImage     String?     // Путь к PNG печати
   type           CompanyType @default(CUSTOMER)
   isOurCompany   Boolean     @default(false)  // true = LogComp
   isActive       Boolean     @default(true)
@@ -530,6 +543,7 @@ model Contract {
   startDate       DateTime?
   endDate         DateTime?
   notes           String?
+  content         Json?       // Содержимое: массив статей [{title, paragraphs: [{number, text}]}]
   
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt

@@ -99,7 +99,7 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
         {
             key: '/forwarder/orders',
             icon: <FileTextOutlined />,
-            label: 'Входящие заявки',
+            label: 'Заявки',
         },
         {
             key: '/forwarder/drivers',

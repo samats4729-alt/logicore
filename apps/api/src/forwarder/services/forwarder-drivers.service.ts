@@ -7,6 +7,23 @@ import * as bcrypt from 'bcryptjs';
 export class ForwarderDriversService {
     constructor(private prisma: PrismaService) { }
 
+    private readonly driverSelect = {
+        id: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        phone: true,
+        vehiclePlate: true,
+        vehicleModel: true,
+        trailerNumber: true,
+        docType: true,
+        docNumber: true,
+        docIssuedAt: true,
+        docExpiresAt: true,
+        docIssuedBy: true,
+        createdAt: true,
+    };
+
     /**
      * Получить список водителей компании-экспедитора
      */
@@ -17,17 +34,7 @@ export class ForwarderDriversService {
                 role: UserRole.DRIVER,
                 isActive: true,
             },
-            select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                phone: true,
-                vehiclePlate: true,
-                vehicleModel: true,
-                trailerNumber: true,
-                createdAt: true,
-            },
+            select: this.driverSelect,
             orderBy: { createdAt: 'desc' },
         });
     }
@@ -43,6 +50,11 @@ export class ForwarderDriversService {
         vehiclePlate?: string;
         vehicleModel?: string;
         trailerNumber?: string;
+        docType?: string;
+        docNumber?: string;
+        docIssuedAt?: Date;
+        docExpiresAt?: Date;
+        docIssuedBy?: string;
     }) {
         // Проверяем что телефон уникален
         const existing = await this.prisma.user.findUnique({
@@ -61,16 +73,7 @@ export class ForwarderDriversService {
                 companyId,
                 isActive: true,
             },
-            select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                phone: true,
-                vehiclePlate: true,
-                vehicleModel: true,
-                trailerNumber: true,
-            },
+            select: this.driverSelect,
         });
     }
 
@@ -87,6 +90,11 @@ export class ForwarderDriversService {
             vehiclePlate?: string;
             vehicleModel?: string;
             trailerNumber?: string;
+            docType?: string;
+            docNumber?: string;
+            docIssuedAt?: Date;
+            docExpiresAt?: Date;
+            docIssuedBy?: string;
         }
     ) {
         // Проверяем что водитель принадлежит компании
@@ -105,16 +113,7 @@ export class ForwarderDriversService {
         return this.prisma.user.update({
             where: { id: driverId },
             data,
-            select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                phone: true,
-                vehiclePlate: true,
-                vehicleModel: true,
-                trailerNumber: true,
-            },
+            select: this.driverSelect,
         });
     }
 

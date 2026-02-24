@@ -60,3 +60,55 @@ export class UpdateCompanyUserDto {
     @MinLength(6)
     password?: string;
 }
+
+export class UpdateCompanyProfileDto {
+    @ApiProperty({ description: 'Название компании', required: false })
+    @IsString()
+    @IsOptional()
+    name?: string;
+
+    @ApiProperty({ description: 'БИН (12 цифр)', required: false })
+    @IsString()
+    @IsOptional()
+    bin?: string;
+
+    @ApiProperty({ description: 'Адрес', required: false })
+    @IsString()
+    @IsOptional()
+    address?: string;
+
+    @ApiProperty({ description: 'Телефон', required: false })
+    @IsString()
+    @IsOptional()
+    phone?: string;
+
+    @ApiProperty({ description: 'Email', required: false })
+    @IsString()
+    @IsOptional()
+    email?: string;
+
+    @ApiProperty({ description: 'ФИО директора', required: false })
+    @IsString()
+    @IsOptional()
+    directorName?: string;
+
+    @ApiProperty({ description: 'ИИК (номер счёта)', required: false })
+    @IsString()
+    @IsOptional()
+    bankAccount?: string;
+
+    @ApiProperty({ description: 'Название банка', required: false })
+    @IsString()
+    @IsOptional()
+    bankName?: string;
+
+    @ApiProperty({ description: 'БИК банка', required: false })
+    @IsString()
+    @IsOptional()
+    bankBic?: string;
+
+    @ApiProperty({ description: 'КБЕ', required: false })
+    @IsString()
+    @IsOptional()
+    kbe?: string;
+}

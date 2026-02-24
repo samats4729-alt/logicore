@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class CompanyService {
@@ -40,12 +42,10 @@ export class CompanyService {
             role: 'LOGISTICIAN' | 'WAREHOUSE_MANAGER';
         },
     ) {
-        // Проверяем что роль допустима
         if (!['LOGISTICIAN', 'WAREHOUSE_MANAGER'].includes(data.role)) {
             throw new BadRequestException('Недопустимая роль');
         }
 
-        // Проверяем уникальность email
         const existingEmail = await this.prisma.user.findUnique({
             where: { email: data.email },
         });
@@ -53,7 +53,6 @@ export class CompanyService {
             throw new BadRequestException('Email уже занят');
         }
 
-        // Проверяем уникальность телефона
         const existingPhone = await this.prisma.user.findUnique({
             where: { phone: data.phone },
         });
@@ -97,7 +96,6 @@ export class CompanyService {
             password: string;
         }>,
     ) {
-        // Проверяем что пользователь принадлежит компании
         const user = await this.prisma.user.findFirst({
             where: { id: userId, companyId },
         });
@@ -105,9 +103,7 @@ export class CompanyService {
             throw new NotFoundException('Пользователь не найден');
         }
 
-        // ЗАЩИТА: Запрещаем изменять роль последнего администратора компании
         if (data.role && user.role === 'COMPANY_ADMIN' && data.role !== 'COMPANY_ADMIN') {
-            // Проверяем сколько администраторов в компании
             const adminCount = await this.prisma.user.count({
                 where: {
                     companyId,
@@ -155,7 +151,6 @@ export class CompanyService {
             throw new NotFoundException('Пользователь не найден');
         }
 
-        // Нельзя деактивировать COMPANY_ADMIN
         if (user.role === 'COMPANY_ADMIN') {
             throw new ForbiddenException('Нельзя деактивировать админа компании');
         }
@@ -209,7 +204,86 @@ export class CompanyService {
     }
 
     /**
-     * Получить список экспедиторов для выбора при создании заявки
+     * Обновить профиль компании
+     */
+    async updateCompanyProfile(companyId: string, data: {
+        name?: string;
+        bin?: string;
+        address?: string;
+        phone?: string;
+        email?: string;
+        directorName?: string;
+        bankAccount?: string;
+        bankName?: string;
+        bankBic?: string;
+        kbe?: string;
+    }) {
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+        });
+        if (!company) {
+            throw new NotFoundException('Компания не найдена');
+        }
+
+        return this.prisma.company.update({
+            where: { id: companyId },
+            data,
+        });
+    }
+
+    /**
+     * Загрузить печать компании (PNG)
+     */
+    async uploadStamp(companyId: string, file: Express.Multer.File) {
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+        });
+        if (!company) {
+            throw new NotFoundException('Компания не найдена');
+        }
+
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'stamps');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+
+        const filename = `stamp_${companyId}_${Date.now()}.png`;
+        const filepath = path.join(uploadsDir, filename);
+        fs.writeFileSync(filepath, file.buffer);
+
+        // Удаляем старый файл
+        if (company.stampImage) {
+            const oldPath = path.join(process.cwd(), company.stampImage);
+            if (fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
+            }
+        }
+
+        const relativePath = `uploads/stamps/${filename}`;
+        await this.prisma.company.update({
+            where: { id: companyId },
+            data: { stampImage: relativePath },
+        });
+
+        return { stampImage: relativePath };
+    }
+
+    /**
+     * Получить путь к печати компании
+     */
+    async getStampPath(companyId: string): Promise<string | null> {
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { stampImage: true },
+        });
+        if (!company) {
+            throw new NotFoundException('Компания не найдена');
+        }
+        return company.stampImage;
+    }
+
+    /**
+     * Получить список экспедиторов
      */
     async getForwarders() {
         return this.prisma.company.findMany({

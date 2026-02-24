@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, Form, Input, Button, message, Typography, Divider, Space } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined } from '@ant-design/icons';
+import { useState, useEffect } from 'react';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col } from 'antd';
+import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
+import type { UploadFile } from 'antd/es/upload/interface';
 
 const { Title, Text } = Typography;
 
@@ -13,9 +14,48 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(false);
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [companyLoading, setCompanyLoading] = useState(false);
+    const [stampLoading, setStampLoading] = useState(false);
+    const [stampUrl, setStampUrl] = useState<string | null>(null);
     const [profileForm] = Form.useForm();
     const [passwordForm] = Form.useForm();
     const [companyForm] = Form.useForm();
+
+    // Загрузка данных компании при монтировании
+    useEffect(() => {
+        loadCompanyProfile();
+        loadStamp();
+    }, []);
+
+    const loadCompanyProfile = async () => {
+        try {
+            const response = await api.get('/company/profile');
+            const company = response.data;
+            companyForm.setFieldsValue({
+                name: company.name,
+                bin: company.bin,
+                address: company.address,
+                phone: company.phone,
+                email: company.email,
+                directorName: company.directorName,
+                bankAccount: company.bankAccount,
+                bankName: company.bankName,
+                bankBic: company.bankBic,
+                kbe: company.kbe,
+            });
+        } catch (error) {
+            console.error('Ошибка загрузки профиля компании:', error);
+        }
+    };
+
+    const loadStamp = async () => {
+        try {
+            const response = await api.get('/company/stamp', { responseType: 'blob' });
+            const url = URL.createObjectURL(response.data);
+            setStampUrl(url);
+        } catch (error) {
+            // Печать не загружена — нормально
+        }
+    };
 
     const handleProfileUpdate = async (values: any) => {
         setLoading(true);
@@ -39,6 +79,24 @@ export default function SettingsPage() {
         } finally {
             setCompanyLoading(false);
         }
+    };
+
+    const handleStampUpload = async (file: File) => {
+        setStampLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('stamp', file);
+            await api.post('/company/stamp', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            message.success('Печать загружена');
+            loadStamp();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка загрузки печати');
+        } finally {
+            setStampLoading(false);
+        }
+        return false; // prevent default upload
     };
 
     const handlePasswordChange = async (values: any) => {
@@ -79,48 +137,49 @@ export default function SettingsPage() {
                         phone: user?.phone,
                     }}
                 >
-                    <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 600 }}>
-                        <Form.Item
-                            name="firstName"
-                            label="Имя"
-                            rules={[{ required: true, message: 'Введите имя' }]}
-                        >
-                            <Input prefix={<UserOutlined />} size="large" />
-                        </Form.Item>
-
-                        <Form.Item
-                            name="lastName"
-                            label="Фамилия"
-                            rules={[{ required: true, message: 'Введите фамилию' }]}
-                        >
-                            <Input prefix={<UserOutlined />} size="large" />
-                        </Form.Item>
-
-                        <Form.Item
-                            name="email"
-                            label="Email"
-                            rules={[{ type: 'email', message: 'Неверный формат email' }]}
-                        >
-                            <Input prefix={<MailOutlined />} size="large" />
-                        </Form.Item>
-
-                        <Form.Item
-                            name="phone"
-                            label="Телефон"
-                        >
-                            <Input prefix={<PhoneOutlined />} size="large" disabled />
-                        </Form.Item>
-
-                        <Form.Item>
-                            <Button type="primary" htmlType="submit" loading={loading} size="large">
-                                Сохранить изменения
-                            </Button>
-                        </Form.Item>
-                    </Space>
+                    <Row gutter={24}>
+                        <Col xs={24} md={12}>
+                            <Form.Item
+                                name="firstName"
+                                label="Имя"
+                                rules={[{ required: true, message: 'Введите имя' }]}
+                            >
+                                <Input prefix={<UserOutlined />} size="large" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                            <Form.Item
+                                name="lastName"
+                                label="Фамилия"
+                                rules={[{ required: true, message: 'Введите фамилию' }]}
+                            >
+                                <Input prefix={<UserOutlined />} size="large" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                            <Form.Item
+                                name="email"
+                                label="Email"
+                                rules={[{ type: 'email', message: 'Неверный формат email' }]}
+                            >
+                                <Input prefix={<MailOutlined />} size="large" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                            <Form.Item name="phone" label="Телефон">
+                                <Input prefix={<PhoneOutlined />} size="large" disabled />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item>
+                        <Button type="primary" htmlType="submit" loading={loading} size="large">
+                            Сохранить изменения
+                        </Button>
+                    </Form.Item>
                 </Form>
             </Card>
 
-            {/* Данные компании - только для COMPANY_ADMIN */}
+            {/* Данные компании */}
             {user?.role === 'COMPANY_ADMIN' && (
                 <Card title="Данные компании" style={{ marginBottom: 24 }}>
                     <Form
@@ -128,22 +187,102 @@ export default function SettingsPage() {
                         layout="vertical"
                         onFinish={handleCompanyUpdate}
                     >
-                        <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 600 }}>
-                            <Form.Item
-                                name="companyName"
-                                label="Название компании"
-                                rules={[{ required: true, message: 'Введите название компании' }]}
-                            >
-                                <Input size="large" placeholder="ООО 'Моя компания'" />
-                            </Form.Item>
+                        <Title level={5} style={{ marginBottom: 16 }}>Основная информация</Title>
+                        <Row gutter={24}>
+                            <Col xs={24} md={12}>
+                                <Form.Item
+                                    name="name"
+                                    label="Название компании"
+                                    rules={[{ required: true, message: 'Введите название' }]}
+                                >
+                                    <Input size="large" placeholder="ТОО КазЛогистик" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item
+                                    name="bin"
+                                    label="БИН"
+                                    rules={[{ required: true, message: 'Введите БИН' }]}
+                                >
+                                    <Input size="large" placeholder="123456789012" maxLength={12} />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="address" label="Юридический адрес">
+                                    <Input size="large" placeholder="г. Алматы, ул. ..." />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="phone" label="Телефон компании">
+                                    <Input size="large" placeholder="+77001234567" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="email" label="Email компании">
+                                    <Input size="large" placeholder="info@company.kz" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="directorName" label="ФИО директора">
+                                    <Input size="large" placeholder="Иванов И.И." />
+                                </Form.Item>
+                            </Col>
+                        </Row>
 
-                            <Form.Item>
-                                <Button type="primary" htmlType="submit" loading={companyLoading} size="large">
-                                    Сохранить
-                                </Button>
-                            </Form.Item>
-                        </Space>
+                        <Divider />
+                        <Title level={5} style={{ marginBottom: 16 }}>
+                            <BankOutlined style={{ marginRight: 8 }} />
+                            Банковские реквизиты
+                        </Title>
+                        <Row gutter={24}>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="bankAccount" label="ИИК (номер счёта)">
+                                    <Input size="large" placeholder="KZ12345678901234567" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="bankName" label="Название банка">
+                                    <Input size="large" placeholder="АО «Каспи Банк»" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="bankBic" label="БИК">
+                                    <Input size="large" placeholder="CASPKZKA" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="kbe" label="КБЕ">
+                                    <Input size="large" placeholder="17" maxLength={2} />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+
+                        <Form.Item>
+                            <Button type="primary" htmlType="submit" loading={companyLoading} size="large">
+                                Сохранить данные компании
+                            </Button>
+                        </Form.Item>
                     </Form>
+
+                    <Divider />
+                    <Title level={5} style={{ marginBottom: 16 }}>Печать компании</Title>
+                    <Space direction="vertical" size="middle">
+                        {stampUrl && (
+                            <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, display: 'inline-block' }}>
+                                <Image src={stampUrl} alt="Печать" width={150} />
+                            </div>
+                        )}
+                        <Upload
+                            accept=".png,.jpg,.jpeg"
+                            showUploadList={false}
+                            beforeUpload={handleStampUpload}
+                        >
+                            <Button icon={<UploadOutlined />} loading={stampLoading} size="large">
+                                {stampUrl ? 'Заменить печать' : 'Загрузить печать (PNG)'}
+                            </Button>
+                        </Upload>
+                        <Text type="secondary">Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
+                    </Space>
                 </Card>
             )}
 

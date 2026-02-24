@@ -8,7 +8,7 @@ import {
 } from 'antd';
 import {
     CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined,
-    ExclamationCircleOutlined, PlusOutlined, SendOutlined, DeleteOutlined
+    ExclamationCircleOutlined, PlusOutlined, SendOutlined, DeleteOutlined, DownloadOutlined, EditOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -157,6 +157,22 @@ export default function CompanyContractsPage() {
         fetchPendingAgreements();
         fetchCountries();
     }, []);
+
+    // === PDF ===
+    const handleDownloadPdf = async (contractId: string, contractNumber: string) => {
+        try {
+            const res = await api.get(`/contracts/${contractId}/pdf`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Договор_${contractNumber}.pdf`;
+            link.click();
+            window.URL.revokeObjectURL(url);
+            message.success('PDF скачан');
+        } catch (error) {
+            message.error('Ошибка скачивания PDF');
+        }
+    };
 
     // === Утверждение / Отклонение ===
     const handleApprove = async (agreementId: string) => {
@@ -441,6 +457,20 @@ export default function CompanyContractsPage() {
                                                         <Text type="secondary">
                                                             Экспедитор: <Text strong>{contract.forwarderCompany.name}</Text>
                                                         </Text>
+                                                        <Button
+                                                            size="small"
+                                                            icon={<EditOutlined />}
+                                                            onClick={() => window.location.href = `/company/contracts/${contract.id}/edit`}
+                                                        >
+                                                            Редактировать текст
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            icon={<DownloadOutlined />}
+                                                            onClick={() => handleDownloadPdf(contract.id, contract.contractNumber)}
+                                                        >
+                                                            Скачать PDF
+                                                        </Button>
                                                         <Button
                                                             size="small"
                                                             icon={<PlusOutlined />}

@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import {
     Table, Card, Button, Space, Modal, Form,
-    Input, Typography, App, Row, Col
+    Input, Typography, App, Row, Col, Select, DatePicker, Divider, Tag
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, IdcardOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 interface Driver {
     id: string;
@@ -19,75 +21,90 @@ interface Driver {
     vehiclePlate?: string;
     vehicleModel?: string;
     trailerNumber?: string;
+    docType?: string;
+    docNumber?: string;
+    docIssuedAt?: string;
+    docExpiresAt?: string;
+    docIssuedBy?: string;
     createdAt: string;
 }
 
+const docTypeLabels: Record<string, string> = {
+    ID_CARD: 'Удостоверение личности',
+    PASSPORT: 'Паспорт',
+};
+
 export default function ForwarderDriversPage() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [drivers, setDrivers] = useState<Driver[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
     const [form] = Form.useForm();
 
-    useEffect(() => {
-        fetchDrivers();
-    }, []);
-
     const fetchDrivers = async () => {
         try {
-            const response = await api.get('/forwarder/drivers');
-            setDrivers(response.data);
-        } catch (error) {
+            setLoading(true);
+            const res = await api.get('/forwarder/drivers');
+            setDrivers(res.data);
+        } catch {
             message.error('Ошибка загрузки водителей');
         } finally {
             setLoading(false);
         }
     };
 
+    useEffect(() => { fetchDrivers(); }, []);
+
     const handleCreate = async (values: any) => {
         try {
-            // Normalize phone: replace leading 8 with +7
-            if (values.phone && values.phone.startsWith('8')) {
-                values.phone = '+7' + values.phone.slice(1);
-            }
+            // Convert dayjs dates to ISO strings
+            const payload = {
+                ...values,
+                docIssuedAt: values.docIssuedAt ? values.docIssuedAt.toISOString() : undefined,
+                docExpiresAt: values.docExpiresAt ? values.docExpiresAt.toISOString() : undefined,
+            };
 
             if (editingDriver) {
-                await api.put(`/forwarder/drivers/${editingDriver.id}`, values);
-                message.success('Водитель обновлён');
+                await api.put(`/forwarder/drivers/${editingDriver.id}`, payload);
+                message.success('Данные водителя обновлены');
             } else {
-                await api.post('/forwarder/drivers', values);
+                await api.post('/forwarder/drivers', payload);
                 message.success('Водитель добавлен');
             }
             setModalOpen(false);
             setEditingDriver(null);
             form.resetFields();
             fetchDrivers();
-        } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сохранения');
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка');
         }
     };
 
     const handleEdit = (driver: Driver) => {
         setEditingDriver(driver);
-        form.setFieldsValue(driver);
+        form.setFieldsValue({
+            ...driver,
+            docIssuedAt: driver.docIssuedAt ? dayjs(driver.docIssuedAt) : undefined,
+            docExpiresAt: driver.docExpiresAt ? dayjs(driver.docExpiresAt) : undefined,
+        });
         setModalOpen(true);
     };
 
-    const handleDelete = async (id: string) => {
-        Modal.confirm({
-            title: 'Деактивировать водителя?',
-            content: 'Водитель будет деактивирован и не сможет войти в систему',
-            okText: 'Деактивировать',
-            cancelText: 'Отмена',
-            okButtonProps: { danger: true },
+    const handleDelete = (id: string) => {
+        modal.confirm({
+            title: 'Удалить водителя?',
+            content: 'Водитель будет деактивирован',
+            okText: 'Да',
+            cancelText: 'Нет',
+            okType: 'danger',
             onOk: async () => {
                 try {
                     await api.delete(`/forwarder/drivers/${id}`);
-                    message.success('Водитель деактивирован');
+                    message.success('Водитель удалён');
                     fetchDrivers();
                 } catch {
-                    message.error('Ошибка деактивации');
+                    message.error('Ошибка удаления');
                 }
             },
         });
@@ -99,35 +116,53 @@ export default function ForwarderDriversPage() {
             key: 'name',
             render: (_: any, record: Driver) => (
                 <Space>
-                    <UserOutlined style={{ color: '#52c41a' }} />
-                    <strong>
-                        {record.lastName} {record.firstName} {record.middleName}
-                    </strong>
+                    <UserOutlined />
+                    <div>
+                        <div style={{ fontWeight: 600 }}>{record.lastName} {record.firstName} {record.middleName || ''}</div>
+                        <div style={{ fontSize: 12, color: '#888' }}>{record.phone}</div>
+                    </div>
                 </Space>
             ),
         },
         {
-            title: 'Телефон',
-            dataIndex: 'phone',
-            key: 'phone',
-        },
-        {
-            title: 'Автомобиль',
+            title: 'Транспорт',
             key: 'vehicle',
             render: (_: any, record: Driver) => (
-                record.vehicleModel ? (
-                    <div>
-                        <div><strong>{record.vehicleModel}</strong></div>
-                        <div style={{ fontSize: 12, color: '#888' }}>{record.vehiclePlate || '—'}</div>
-                    </div>
-                ) : '—'
+                <div>
+                    <div>{record.vehicleModel || '—'}</div>
+                    <div style={{ fontSize: 12, color: '#888' }}>{record.vehiclePlate || '—'}</div>
+                </div>
             ),
         },
         {
-            title: 'Прицеп',
-            dataIndex: 'trailerNumber',
-            key: 'trailerNumber',
-            render: (text: string) => text || '—',
+            title: 'Документ',
+            key: 'document',
+            render: (_: any, record: Driver) => {
+                if (!record.docType && !record.docNumber) return <Text type="secondary">—</Text>;
+                const isExpired = record.docExpiresAt && dayjs(record.docExpiresAt).isBefore(dayjs());
+                return (
+                    <div>
+                        <div>
+                            <Tag color={isExpired ? 'red' : 'blue'}>
+                                {record.docType ? docTypeLabels[record.docType] || record.docType : ''}
+                            </Tag>
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>№ {record.docNumber || '—'}</div>
+                        {record.docExpiresAt && (
+                            <div style={{ fontSize: 11, color: isExpired ? '#ff4d4f' : '#888' }}>
+                                до {dayjs(record.docExpiresAt).format('DD.MM.YYYY')}
+                                {isExpired && ' (истёк)'}
+                            </div>
+                        )}
+                    </div>
+                );
+            },
+        },
+        {
+            title: 'Дата регистрации',
+            dataIndex: 'createdAt',
+            key: 'createdAt',
+            render: (text: string) => new Date(text).toLocaleDateString('ru-RU'),
         },
         {
             title: 'Действия',
@@ -190,7 +225,7 @@ export default function ForwarderDriversPage() {
                     form.resetFields();
                 }}
                 onOk={() => form.submit()}
-                width={600}
+                width={650}
                 centered
             >
                 <Form form={form} layout="vertical" onFinish={handleCreate}>
@@ -254,6 +289,54 @@ export default function ForwarderDriversPage() {
                             </Form.Item>
                         </Col>
                     </Row>
+
+                    <Divider><IdcardOutlined /> Документ, удостоверяющий личность</Divider>
+
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="docType"
+                                label="Вид документа"
+                            >
+                                <Select placeholder="Выберите тип" allowClear>
+                                    <Option value="ID_CARD">Удостоверение личности</Option>
+                                    <Option value="PASSPORT">Паспорт</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="docNumber"
+                                label="Номер документа"
+                            >
+                                <Input placeholder="012345678" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="docIssuedAt"
+                                label="Дата выдачи"
+                            >
+                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2020" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="docExpiresAt"
+                                label="Действителен до"
+                            >
+                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2030" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item
+                        name="docIssuedBy"
+                        label="Кем выдан"
+                    >
+                        <Input placeholder="МВД РК / РОВД г. Алматы" />
+                    </Form.Item>
                 </Form>
             </Modal>
         </div>

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { getDefaultContractTemplate } from './contract-template';
 
 @Injectable()
 export class ContractsService {
@@ -45,6 +46,7 @@ export class ContractsService {
                 startDate: data.startDate,
                 endDate: data.endDate,
                 notes: data.notes,
+                content: getDefaultContractTemplate() as any,
                 status: 'ACTIVE',
             },
             include: {
@@ -582,6 +584,65 @@ export class ContractsService {
             where: { ...where, vehicleType: null },
             include: tariffIncludeWithAgreement,
             orderBy: { createdAt: 'desc' },
+        });
+    }
+
+    // ==================== CONTRACT CONTENT ====================
+
+    /**
+     * Получить содержимое договора (статьи)
+     */
+    async getContractContent(contractId: string, companyId: string) {
+        const contract = await this.prisma.contract.findUnique({
+            where: { id: contractId },
+            select: { id: true, customerCompanyId: true, forwarderCompanyId: true, content: true },
+        });
+        if (!contract) throw new NotFoundException('Договор не найден');
+        if (contract.customerCompanyId !== companyId && contract.forwarderCompanyId !== companyId) {
+            throw new ForbiddenException('Нет доступа к этому договору');
+        }
+
+        // Если content пустой — вернуть шаблон по умолчанию
+        return contract.content || getDefaultContractTemplate();
+    }
+
+    /**
+     * Обновить содержимое договора (сохранить отредактированные статьи)
+     */
+    async updateContractContent(contractId: string, companyId: string, content: any) {
+        const contract = await this.prisma.contract.findUnique({
+            where: { id: contractId },
+            select: { id: true, forwarderCompanyId: true },
+        });
+        if (!contract) throw new NotFoundException('Договор не найден');
+        if (contract.forwarderCompanyId !== companyId) {
+            throw new ForbiddenException('Только экспедитор может редактировать текст договора');
+        }
+
+        return this.prisma.contract.update({
+            where: { id: contractId },
+            data: { content: content as any },
+            select: { id: true, contractNumber: true },
+        });
+    }
+
+    /**
+     * Сбросить содержимое договора к шаблону по умолчанию
+     */
+    async resetContractContent(contractId: string, companyId: string) {
+        const contract = await this.prisma.contract.findUnique({
+            where: { id: contractId },
+            select: { id: true, forwarderCompanyId: true },
+        });
+        if (!contract) throw new NotFoundException('Договор не найден');
+        if (contract.forwarderCompanyId !== companyId) {
+            throw new ForbiddenException('Только экспедитор может редактировать текст договора');
+        }
+
+        return this.prisma.contract.update({
+            where: { id: contractId },
+            data: { content: getDefaultContractTemplate() as any },
+            select: { id: true, contractNumber: true },
         });
     }
 }

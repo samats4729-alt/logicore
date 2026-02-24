@@ -1,10 +1,14 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Res, UseGuards, UseInterceptors, UploadedFile, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { CompanyService } from './company.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
-import { CreateCompanyUserDto } from './dto/company.dto';
+import { CreateCompanyUserDto, UpdateCompanyProfileDto } from './dto/company.dto';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @ApiTags('company')
 @Controller('company')
@@ -59,10 +63,57 @@ export class CompanyController {
     // ==================== Профиль компании ====================
 
     @Get('profile')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Получить профиль компании' })
     async getCompanyProfile(@Request() req: any) {
         return this.companyService.getCompanyProfile(req.user.companyId);
+    }
+
+    @Put('profile')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Обновить профиль компании' })
+    async updateCompanyProfile(@Request() req: any, @Body() dto: UpdateCompanyProfileDto) {
+        return this.companyService.updateCompanyProfile(req.user.companyId, dto);
+    }
+
+    // ==================== Печать компании ====================
+
+    @Post('stamp')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @UseInterceptors(FileInterceptor('stamp', {
+        limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+        fileFilter: (req, file, cb) => {
+            if (!file.mimetype.match(/^image\/(png|jpeg|jpg)$/)) {
+                cb(new Error('Только PNG/JPG файлы'), false);
+            } else {
+                cb(null, true);
+            }
+        },
+    }))
+    @ApiOperation({ summary: 'Загрузить печать компании (PNG)' })
+    @ApiConsumes('multipart/form-data')
+    async uploadStamp(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
+        if (!file) {
+            throw new Error('Файл не загружен');
+        }
+        return this.companyService.uploadStamp(req.user.companyId, file);
+    }
+
+    @Get('stamp')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER)
+    @ApiOperation({ summary: 'Получить печать компании' })
+    async getStamp(@Request() req: any, @Res() res: Response) {
+        const stampPath = await this.companyService.getStampPath(req.user.companyId);
+        if (!stampPath) {
+            return res.status(404).json({ message: 'Печать не загружена' });
+        }
+
+        const absolutePath = path.join(process.cwd(), stampPath);
+        if (!fs.existsSync(absolutePath)) {
+            return res.status(404).json({ message: 'Файл не найден' });
+        }
+
+        return res.sendFile(absolutePath);
     }
 
     // ==================== Экспедиторы ====================

@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, Res, Header } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ContractsService } from './contracts.service';
+import { ContractPdfService } from './contract-pdf.service';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
@@ -10,7 +12,10 @@ import { UserRole } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class ContractsController {
-    constructor(private contractsService: ContractsService) { }
+    constructor(
+        private contractsService: ContractsService,
+        private contractPdfService: ContractPdfService,
+    ) { }
 
     // ==================== CONTRACTS ====================
 
@@ -72,6 +77,48 @@ export class ContractsController {
             destinationCity,
             vehicleType,
         );
+    }
+
+    @Get(':id/content')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Получить содержимое (статьи) договора' })
+    async getContractContent(@Param('id') id: string, @Request() req: any) {
+        return this.contractsService.getContractContent(id, req.user.companyId);
+    }
+
+    @Put(':id/content')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Сохранить отредактированный текст договора' })
+    async updateContractContent(
+        @Param('id') id: string,
+        @Body() dto: { content: any },
+        @Request() req: any,
+    ) {
+        return this.contractsService.updateContractContent(id, req.user.companyId, dto.content);
+    }
+
+    @Post(':id/reset-content')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Сбросить текст договора к шаблону по умолчанию' })
+    async resetContractContent(@Param('id') id: string, @Request() req: any) {
+        return this.contractsService.resetContractContent(id, req.user.companyId);
+    }
+
+    @Get(':id/pdf')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Скачать PDF договора' })
+    async downloadContractPdf(
+        @Param('id') id: string,
+        @Res() res: Response,
+    ) {
+        const pdfBuffer = await this.contractPdfService.generateContractPdf(id);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="Contract_${id}.pdf"`,
+            'Content-Length': pdfBuffer.length,
+        });
+        res.end(pdfBuffer);
     }
 
     @Get(':id')
@@ -164,3 +211,4 @@ export class ContractsController {
         return this.contractsService.removeTariff(req.user.companyId, id);
     }
 }
+

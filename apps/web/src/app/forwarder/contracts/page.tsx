@@ -8,7 +8,7 @@ import {
 } from 'antd';
 import {
     PlusOutlined, DeleteOutlined, SendOutlined, EditOutlined,
-    FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined
+    FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, DownloadOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -247,6 +247,22 @@ export default function ForwarderContractsPage() {
         fetchCities();
         fetchPendingAgreements();
     }, []);
+
+    // ==================== PDF ====================
+    const handleDownloadPdf = async (contractId: string, contractNumber: string) => {
+        try {
+            const res = await api.get(`/contracts/${contractId}/pdf`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Договор_${contractNumber}.pdf`;
+            link.click();
+            window.URL.revokeObjectURL(url);
+            message.success('PDF скачан');
+        } catch (error) {
+            message.error('Ошибка скачивания PDF');
+        }
+    };
 
     // ==================== CONTRACTS ====================
     const handleCreateContract = async (values: any) => {
@@ -509,9 +525,25 @@ export default function ForwarderContractsPage() {
                                                     </Space>
                                                 }
                                                 extra={
-                                                    <Text type="secondary">
-                                                        Заказчик: <Text strong>{contract.customerCompany.name}</Text>
-                                                    </Text>
+                                                    <Space>
+                                                        <Text type="secondary">
+                                                            Заказчик: <Text strong>{contract.customerCompany.name}</Text>
+                                                        </Text>
+                                                        <Button
+                                                            size="small"
+                                                            icon={<EditOutlined />}
+                                                            onClick={() => window.location.href = `/forwarder/contracts/${contract.id}/edit`}
+                                                        >
+                                                            Редактировать текст
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            icon={<DownloadOutlined />}
+                                                            onClick={() => handleDownloadPdf(contract.id, contract.contractNumber)}
+                                                        >
+                                                            Скачать PDF
+                                                        </Button>
+                                                    </Space>
                                                 }
                                             >
                                                 {contract.startDate && (

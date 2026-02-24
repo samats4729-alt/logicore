@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Row, Col, Card, Statistic, Table, Tag, Typography } from 'antd';
+import { Row, Col, Table, Tag, Space, Typography } from 'antd';
 import {
     FileTextOutlined,
     CheckCircleOutlined,
@@ -13,33 +13,15 @@ import { api } from '@/lib/api';
 const { Title } = Typography;
 
 const statusColors: Record<string, string> = {
-    DRAFT: 'default',
-    PENDING: 'orange',
-    ASSIGNED: 'blue',
-    EN_ROUTE_PICKUP: 'gold',
-    AT_PICKUP: 'lime',
-    LOADING: 'purple',
-    IN_TRANSIT: 'cyan',
-    AT_DELIVERY: 'lime',
-    UNLOADING: 'purple',
-    COMPLETED: 'green',
-    CANCELLED: 'default',
-    PROBLEM: 'red',
+    DRAFT: 'default', PENDING: 'orange', ASSIGNED: 'blue', EN_ROUTE_PICKUP: 'gold',
+    AT_PICKUP: 'lime', LOADING: 'purple', IN_TRANSIT: 'cyan', AT_DELIVERY: 'lime',
+    UNLOADING: 'purple', COMPLETED: 'green', CANCELLED: 'default', PROBLEM: 'red',
 };
 
 const statusLabels: Record<string, string> = {
-    DRAFT: 'Черновик',
-    PENDING: 'Ожидает подтверждения',
-    ASSIGNED: 'Машина назначена',
-    EN_ROUTE_PICKUP: 'Едет на погрузку',
-    AT_PICKUP: 'На погрузке',
-    LOADING: 'Загружается',
-    IN_TRANSIT: 'В пути',
-    AT_DELIVERY: 'На выгрузке',
-    UNLOADING: 'Разгружается',
-    COMPLETED: 'Завершён',
-    CANCELLED: 'Отменён',
-    PROBLEM: 'Проблема',
+    DRAFT: 'Черновик', PENDING: 'Ожидает', ASSIGNED: 'Назначен', EN_ROUTE_PICKUP: 'Едет на погр.',
+    AT_PICKUP: 'На погр.', LOADING: 'Загрузка', IN_TRANSIT: 'В пути', AT_DELIVERY: 'На выгр.',
+    UNLOADING: 'Разгрузка', COMPLETED: 'Завершён', CANCELLED: 'Отменён', PROBLEM: 'Проблема',
 };
 
 interface Order {
@@ -49,23 +31,26 @@ interface Order {
     cargoDescription: string;
     customerPrice?: number;
     createdAt: string;
-    pickupLocation: { name: string };
+    pickupLocation?: { name: string; address: string; city?: string };
+    deliveryPoints?: { location: { name: string; address: string; city?: string } }[];
     driver?: { firstName: string; lastName: string; vehiclePlate?: string };
+    forwarder?: { name: string };
     assignedDriverName?: string;
-    assignedDriverPhone?: string;
     assignedDriverPlate?: string;
     assignedDriverTrailer?: string;
+}
+
+function extractCity(loc: { name?: string; address?: string; city?: string } | undefined): string {
+    if (!loc) return '—';
+    if (loc.city) return loc.city;
+    if (loc.address) { const m = loc.address.match(/г\.\s*([^,]+)/); if (m?.[1]) return m[1].trim(); }
+    return loc.name || '—';
 }
 
 export default function CompanyDashboard() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({
-        total: 0,
-        pending: 0,
-        inProgress: 0,
-        completed: 0,
-    });
+    const [stats, setStats] = useState({ total: 0, pending: 0, inProgress: 0, completed: 0 });
 
     useEffect(() => {
         const fetchOrders = async () => {
@@ -76,104 +61,56 @@ export default function CompanyDashboard() {
                 setStats({
                     total: data.length,
                     pending: data.filter((o: Order) => o.status === 'PENDING').length,
-                    inProgress: data.filter((o: Order) =>
-                        ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)
-                    ).length,
+                    inProgress: data.filter((o: Order) => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length,
                     completed: data.filter((o: Order) => o.status === 'COMPLETED').length,
                 });
-            } catch (error) {
-                console.error('Failed to fetch orders:', error);
-            } finally {
-                setLoading(false);
-            }
+            } catch (error) { console.error('Failed to fetch orders:', error); }
+            finally { setLoading(false); }
         };
         fetchOrders();
     }, []);
 
-    const getStatusTag = (status: string) => {
-        const color = statusColors[status] || 'default';
-        const label = statusLabels[status] || status;
-
-        // Custom simple badges instead of AntD tags for cleaner look
-        const badgeStyle: React.CSSProperties = {
-            padding: '4px 10px',
-            borderRadius: '9999px',
-            fontSize: '12px',
-            fontWeight: 500,
-            display: 'inline-block',
-        };
-
-        const colors: Record<string, { bg: string, text: string, border: string }> = {
-            default: { bg: '#f4f4f5', text: '#71717a', border: '#e4e4e7' }, // Zinc
-            orange: { bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' }, // Orange
-            blue: { bg: '#eff6ff', text: '#1d4ed8', border: '#dbeafe' }, // Blue
-            gold: { bg: '#fefce8', text: '#a16207', border: '#fef9c3' }, // Yellow
-            lime: { bg: '#f7fee7', text: '#4d7c0f', border: '#d9f99d' }, // Lime
-            purple: { bg: '#faf5ff', text: '#7e22ce', border: '#f3e8ff' }, // Purple
-            cyan: { bg: '#ecfeff', text: '#0e7490', border: '#cffafe' }, // Cyan
-            green: { bg: '#f0fdf4', text: '#15803d', border: '#dcfce7' }, // Green
-            red: { bg: '#fef2f2', text: '#b91c1c', border: '#fee2e2' }, // Red
-        };
-
-        const style = colors[color === 'default' ? 'default' : color] || colors.default;
-
-        return (
-            <span style={{
-                ...badgeStyle,
-                backgroundColor: style.bg,
-                color: style.text,
-                border: `1px solid ${style.border}`
-            }}>
-                {label}
-            </span>
-        );
-    };
-
     const columns = [
         {
-            title: <span style={{ color: '#71717a', fontWeight: 500 }}>№ ЗАЯВКИ</span>,
-            dataIndex: 'orderNumber',
-            key: 'orderNumber',
-            render: (text: string) => <span style={{ fontWeight: 600, color: '#09090b' }}>{text}</span>,
+            title: '№', dataIndex: 'orderNumber', key: 'num', width: 130,
+            render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span>,
         },
         {
-            title: <span style={{ color: '#71717a', fontWeight: 500 }}>ГРУЗ</span>,
-            dataIndex: 'cargoDescription',
-            key: 'cargoDescription',
-            ellipsis: true,
-            render: (text: string) => <span style={{ color: '#09090b', fontWeight: 500 }}>{text}</span>,
+            title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 60,
+            render: (d: string) => <span style={{ fontSize: 11, color: '#888' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
-            title: <span style={{ color: '#71717a', fontWeight: 500 }}>ОТКУДА</span>,
-            dataIndex: ['pickupLocation', 'name'],
-            key: 'pickupLocation',
-            render: (text: string) => <span style={{ color: '#52525b' }}>{text}</span>,
+            title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', ellipsis: true, width: 120,
+            render: (t: string) => <span style={{ fontSize: 12 }}>{t}</span>,
         },
         {
-            title: <span style={{ color: '#71717a', fontWeight: 500 }}>СТАТУС</span>,
-            dataIndex: 'status',
-            key: 'status',
-            render: (status: string) => getStatusTag(status),
+            title: 'Откуда', key: 'from', width: 100, ellipsis: true,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(r.pickupLocation)}</span>,
         },
         {
-            title: <span style={{ color: '#71717a', fontWeight: 500 }}>ВОДИТЕЛЬ</span>,
-            key: 'driver',
-            render: (_: any, record: Order) => {
-                let text = '—';
-                if (record.assignedDriverName) {
-                    const vehicle = record.assignedDriverPlate || '';
-                    text = `${record.assignedDriverName} ${vehicle}`;
-                } else if (record.driver) {
-                    text = `${record.driver.firstName} ${record.driver.lastName}`;
-                }
-                return <span style={{ color: '#52525b' }}>{text}</span>;
+            title: 'Куда', key: 'to', width: 100, ellipsis: true,
+            render: (_: any, r: Order) => {
+                const dp = r.deliveryPoints?.length ? r.deliveryPoints[r.deliveryPoints.length - 1] : null;
+                return <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(dp?.location)}</span>;
             },
         },
         {
-            title: <span style={{ color: '#71717a', fontWeight: 500 }}>СУММА</span>,
-            dataIndex: 'customerPrice',
-            key: 'customerPrice',
-            render: (price: number) => price ? <span style={{ fontWeight: 600 }}>{price.toLocaleString()} ₸</span> : '—',
+            title: 'Статус', dataIndex: 'status', key: 'status', width: 100,
+            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
+        },
+        {
+            title: 'Водитель', key: 'driver', width: 120, ellipsis: true,
+            render: (_: any, r: Order) => {
+                if (r.assignedDriverName) return (
+                    <span style={{ fontSize: 12 }}>{r.assignedDriverName} <span style={{ color: '#999', fontFamily: 'monospace', fontSize: 11 }}>{r.assignedDriverPlate || ''}</span></span>
+                );
+                if (r.driver) return <span style={{ fontSize: 12 }}>{r.driver.firstName} {r.driver.lastName}</span>;
+                return <span style={{ color: '#ccc' }}>—</span>;
+            },
+        },
+        {
+            title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const,
+            render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc' }}>—</span>,
         },
     ];
 
@@ -188,7 +125,7 @@ export default function CompanyDashboard() {
                 </p>
             </div>
 
-            <Row gutter={[24, 24]} style={{ marginBottom: 40 }}>
+            <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
                 <Col xs={24} sm={12} lg={6}>
                     <div className="premium-card" style={{ padding: '24px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -231,10 +168,14 @@ export default function CompanyDashboard() {
                 </Col>
             </Row>
 
+            {/* COMPACT LAST 10 ORDERS TABLE */}
             <div className="premium-card" style={{ overflow: 'hidden' }}>
-                <div style={{ padding: '24px 24px 0', marginBottom: '16px' }}>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#09090b', margin: 0 }}>Последние заявки</h2>
-                    <p style={{ color: '#71717a', fontSize: '14px', margin: '4px 0 0' }}>Список 10 последних созданных заявок</p>
+                <div style={{ padding: '16px 16px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#09090b', margin: 0 }}>Последние заявки</h2>
+                        <p style={{ color: '#71717a', fontSize: '12px', margin: '2px 0 0' }}>10 последних заявок</p>
+                    </div>
+                    <span style={{ fontSize: 11, color: '#999' }}>Всего: {orders.length}</span>
                 </div>
                 <Table
                     columns={columns}
@@ -242,10 +183,48 @@ export default function CompanyDashboard() {
                     rowKey="id"
                     loading={loading}
                     pagination={false}
-                    size="middle"
-                    rowClassName={() => 'premium-table-row'}
+                    size="small"
+                    scroll={{ x: 900 }}
+                    rowClassName={(record) => {
+                        if (record.status === 'COMPLETED') return 'row-completed';
+                        if (record.status === 'PROBLEM') return 'row-problem';
+                        if (record.status === 'CANCELLED') return 'row-cancelled';
+                        return '';
+                    }}
                 />
             </div>
+
+            <style jsx global>{`
+                .premium-card .ant-table-small .ant-table-thead > tr > th {
+                    padding: 6px 8px !important;
+                    font-size: 11px !important;
+                    font-weight: 600 !important;
+                    background: #fafafa !important;
+                    text-transform: uppercase;
+                    letter-spacing: 0.3px;
+                    color: #666 !important;
+                    white-space: nowrap;
+                }
+                .premium-card .ant-table-small .ant-table-tbody > tr > td {
+                    padding: 4px 8px !important;
+                    font-size: 12px !important;
+                    border-bottom: 1px solid #f5f5f5 !important;
+                }
+                .premium-card .ant-table-small .ant-table-tbody > tr:hover > td {
+                    background: #e6f7ff !important;
+                }
+                .premium-card .ant-table-small .ant-table-tbody > tr.row-completed > td {
+                    background: #f6ffed !important;
+                }
+                .premium-card .ant-table-small .ant-table-tbody > tr.row-problem > td {
+                    background: #fff2f0 !important;
+                }
+                .premium-card .ant-table-small .ant-table-tbody > tr.row-cancelled > td {
+                    background: #fafafa !important;
+                    color: #bbb;
+                    text-decoration: line-through;
+                }
+            `}</style>
         </div>
     );
 }

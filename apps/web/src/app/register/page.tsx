@@ -93,11 +93,19 @@ export default function RegisterCompanyPage() {
                             >
                                 <Input placeholder="ТОО КазЛогистик" size="large" />
                             </Form.Item>
-                            <Form.Item name="bin" label="БИН (необязательно)">
-                                <Input placeholder="123456789012" size="large" />
+                            <Form.Item
+                                name="bin"
+                                label="БИН компании"
+                                rules={[
+                                    { required: true, message: 'Введите БИН' },
+                                    { len: 12, message: 'БИН должен содержать 12 цифр' },
+                                    { pattern: /^\d{12}$/, message: 'БИН должен состоять только из цифр' },
+                                ]}
+                            >
+                                <Input placeholder="123456789012" size="large" maxLength={12} />
                             </Form.Item>
                             <Button type="primary" block size="large" onClick={() => {
-                                form.validateFields(['companyName']).then(() => setStep(1));
+                                form.validateFields(['companyName', 'bin']).then(() => setStep(1));
                             }}>
                                 Далее
                             </Button>

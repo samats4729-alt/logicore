@@ -257,7 +257,7 @@ export class AuthService {
     async registerCompany(data: {
         companyName: string;
         companyType: 'CUSTOMER' | 'FORWARDER';
-        bin?: string;
+        bin: string;
         adminEmail: string;
         adminPassword: string;
         firstName: string;

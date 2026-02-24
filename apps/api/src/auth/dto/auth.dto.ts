@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsNotEmpty, MinLength, Matches } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, MinLength, Matches, Length } from 'class-validator';
 
 export class RequestSmsCodeDto {
     @ApiProperty({
@@ -59,9 +59,11 @@ export class RegisterCompanyDto {
     @IsNotEmpty()
     companyType: 'CUSTOMER' | 'FORWARDER';
 
-    @ApiProperty({ description: 'БИН компании', example: '123456789012', required: false })
+    @ApiProperty({ description: 'БИН компании (12 цифр)', example: '123456789012' })
     @IsString()
-    bin?: string;
+    @IsNotEmpty({ message: 'БИН обязателен' })
+    @Length(12, 12, { message: 'БИН должен содержать 12 цифр' })
+    bin: string;
 
     @ApiProperty({ description: 'Email админа компании', example: 'admin@kazlogistic.kz' })
     @IsEmail()
