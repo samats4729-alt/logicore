@@ -2,7 +2,7 @@
 NODE_VERSION = "22.13.0"
 
 [phases.setup]
-nixPkgs = ["nodejs-22_x", "pnpm-9_x", "openssl"]
+nixPkgs = ["nodejs_22", "pnpm-9_x", "openssl"]
 
 [phases.install]
 cmds = ["pnpm install", "pnpm rebuild bcrypt"]
