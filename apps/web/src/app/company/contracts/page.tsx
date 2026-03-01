@@ -88,6 +88,11 @@ export default function CompanyContractsPage() {
     const [rejectingId, setRejectingId] = useState<string | null>(null);
     const [rejectReason, setRejectReason] = useState('');
 
+    // Создание договора
+    const [contractModalOpen, setContractModalOpen] = useState(false);
+    const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
+    const [contractForm] = Form.useForm();
+
     // ДС и тарифы — создание
     const [agreementModalOpen, setAgreementModalOpen] = useState(false);
     const [tariffModalOpen, setTariffModalOpen] = useState(false);
@@ -128,6 +133,15 @@ export default function CompanyContractsPage() {
         }
     };
 
+    const fetchPartners = async () => {
+        try {
+            const response = await api.get('/partners');
+            setPartners(response.data);
+        } catch (error) {
+            console.error('Failed to fetch partners:', error);
+        }
+    };
+
     const fetchCountries = async () => {
         try {
             const res = await api.get('/cities/countries');
@@ -156,7 +170,27 @@ export default function CompanyContractsPage() {
         fetchContracts();
         fetchPendingAgreements();
         fetchCountries();
+        fetchPartners();
     }, []);
+
+    // === Создание договора ===
+    const handleCreateContract = async (values: any) => {
+        try {
+            await api.post('/contracts', {
+                forwarderCompanyId: values.forwarderCompanyId,
+                contractNumber: values.contractNumber,
+                startDate: values.startDate?.toISOString(),
+                endDate: values.endDate?.toISOString(),
+                notes: values.notes,
+            });
+            message.success('Договор создан');
+            setContractModalOpen(false);
+            contractForm.resetFields();
+            fetchContracts();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка создания договора');
+        }
+    };
 
     // === PDF ===
     const handleDownloadPdf = async (contractId: string, contractNumber: string) => {
@@ -345,7 +379,19 @@ export default function CompanyContractsPage() {
 
     return (
         <div>
-            <Title level={3}>Договоры и тарифы</Title>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <Title level={3} style={{ margin: 0 }}>Договоры и тарифы</Title>
+                <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                        contractForm.resetFields();
+                        setContractModalOpen(true);
+                    }}
+                >
+                    Новый договор
+                </Button>
+            </div>
 
             <Tabs
                 defaultActiveKey={pendingCount > 0 ? 'pending' : 'contracts'}
@@ -600,6 +646,55 @@ export default function CompanyContractsPage() {
                     onChange={e => setRejectReason(e.target.value)}
                     placeholder="Причина отклонения..."
                 />
+            </Modal>
+
+            {/* Модал создания договора */}
+            <Modal
+                title="Новый договор"
+                open={contractModalOpen}
+                onCancel={() => setContractModalOpen(false)}
+                onOk={() => contractForm.submit()}
+                okText="Создать"
+                cancelText="Отмена"
+            >
+                <Form form={contractForm} layout="vertical" onFinish={handleCreateContract}>
+                    <Form.Item
+                        name="forwarderCompanyId"
+                        label="Компания-экспедитор"
+                        rules={[{ required: true, message: 'Выберите экспедитора' }]}
+                    >
+                        <Select
+                            placeholder="Выберите компанию"
+                            showSearch
+                            filterOption={(input, option) =>
+                                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                            }
+                            options={partners.map(p => ({ label: p.name, value: p.id }))}
+                        />
+                    </Form.Item>
+                    <Form.Item
+                        name="contractNumber"
+                        label="Номер договора"
+                        rules={[{ required: true, message: 'Введите номер' }]}
+                    >
+                        <Input placeholder="ДГ-001/2026" />
+                    </Form.Item>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="startDate" label="Дата начала">
+                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="endDate" label="Дата окончания">
+                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item name="notes" label="Примечания">
+                        <Input.TextArea rows={2} placeholder="Дополнительная информация..." />
+                    </Form.Item>
+                </Form>
             </Modal>
 
             {/* Модал создания ДС */}

@@ -20,11 +20,12 @@ export class ContractsController {
     // ==================== CONTRACTS ====================
 
     @Post()
-    @Roles(UserRole.FORWARDER)
-    @ApiOperation({ summary: 'Создать договор (экспедитор)' })
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Создать договор (экспедитор или заказчик)' })
     async createContract(
         @Body() dto: {
-            customerCompanyId: string;
+            customerCompanyId?: string;
+            forwarderCompanyId?: string;
             contractNumber: string;
             startDate?: Date;
             endDate?: Date;
@@ -32,7 +33,7 @@ export class ContractsController {
         },
         @Request() req: any,
     ) {
-        return this.contractsService.createContract(req.user.companyId, dto);
+        return this.contractsService.createContract(req.user.companyId, req.user.role, dto);
     }
 
     @Get()

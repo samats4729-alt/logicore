@@ -9,27 +9,51 @@ export class ContractsService {
     // ==================== CONTRACTS ====================
 
     /**
-     * Создать договор (экспедитор создаёт)
+     * Создать договор (экспедитор или заказчик)
      */
-    async createContract(forwarderCompanyId: string, data: {
-        customerCompanyId: string;
+    async createContract(companyId: string, callerRole: string, data: {
+        customerCompanyId?: string;
+        forwarderCompanyId?: string;
         contractNumber: string;
         startDate?: Date;
         endDate?: Date;
         notes?: string;
     }) {
-        // Проверяем что компания-заказчик существует
-        const customer = await this.prisma.company.findUnique({
-            where: { id: data.customerCompanyId },
+        // Определяем кто заказчик, а кто экспедитор
+        let forwarderCompanyId: string;
+        let customerCompanyId: string;
+        let partnerCompanyId: string;
+
+        if (callerRole === 'FORWARDER') {
+            // Экспедитор создаёт — он сам экспедитор, партнёр = заказчик
+            if (!data.customerCompanyId) {
+                throw new BadRequestException('Укажите компанию-заказчика');
+            }
+            forwarderCompanyId = companyId;
+            customerCompanyId = data.customerCompanyId;
+            partnerCompanyId = data.customerCompanyId;
+        } else {
+            // Заказчик создаёт — он сам заказчик, партнёр = экспедитор
+            if (!data.forwarderCompanyId) {
+                throw new BadRequestException('Укажите компанию-экспедитора');
+            }
+            customerCompanyId = companyId;
+            forwarderCompanyId = data.forwarderCompanyId;
+            partnerCompanyId = data.forwarderCompanyId;
+        }
+
+        // Проверяем что компания-партнёр существует
+        const partner = await this.prisma.company.findUnique({
+            where: { id: partnerCompanyId },
         });
-        if (!customer) throw new NotFoundException('Компания-заказчик не найдена');
+        if (!partner) throw new NotFoundException('Компания-партнёр не найдена');
 
         // Проверяем что есть партнёрство
         const partnership = await this.prisma.partnership.findFirst({
             where: {
                 OR: [
-                    { requesterId: forwarderCompanyId, recipientId: data.customerCompanyId },
-                    { requesterId: data.customerCompanyId, recipientId: forwarderCompanyId },
+                    { requesterId: forwarderCompanyId, recipientId: customerCompanyId },
+                    { requesterId: customerCompanyId, recipientId: forwarderCompanyId },
                 ],
                 status: 'ACCEPTED',
             },
@@ -41,7 +65,7 @@ export class ContractsService {
         return this.prisma.contract.create({
             data: {
                 contractNumber: data.contractNumber,
-                customerCompanyId: data.customerCompanyId,
+                customerCompanyId,
                 forwarderCompanyId,
                 startDate: data.startDate,
                 endDate: data.endDate,
