@@ -387,7 +387,15 @@ export class AuthService {
         });
 
         if (!user) {
-            throw new UnauthorizedException('Аккаунт не найден. Пожалуйста, зарегистрируйтесь.');
+            // Возвращаем данные Google профиля для автоматической регистрации
+            return {
+                needsRegistration: true,
+                googleData: {
+                    email: googleData.email,
+                    firstName: googleData.firstName,
+                    lastName: googleData.lastName,
+                },
+            } as any;
         }
 
         if (!user.isActive) {

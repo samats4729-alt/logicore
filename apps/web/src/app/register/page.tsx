@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, Form, Input, Button, Typography, message, Steps, Result, Radio, Space, Divider } from 'antd';
 import { UserOutlined, BankOutlined, CheckCircleOutlined, ShopOutlined, TruckOutlined, GoogleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
@@ -12,12 +12,31 @@ const { Title, Text, Paragraph } = Typography;
 
 export default function RegisterCompanyPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { setUser } = useAuthStore();
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState(0);
     const [companyType, setCompanyType] = useState<'CUSTOMER' | 'FORWARDER' | null>(null);
     const [form] = Form.useForm();
     const [googleToken, setGoogleToken] = useState<string | null>(null);
+
+    // Если пришли с /login?google=1 — подхватываем данные Google
+    useEffect(() => {
+        if (searchParams.get('google') === '1') {
+            const token = sessionStorage.getItem('googleToken');
+            const dataStr = sessionStorage.getItem('googleData');
+            if (token && dataStr) {
+                setGoogleToken(token);
+                const data = JSON.parse(dataStr);
+                form.setFieldsValue({
+                    adminEmail: data.email,
+                    firstName: data.firstName,
+                    lastName: data.lastName,
+                });
+                message.info('Заполните данные компании и телефон для завершения регистрации через Google');
+            }
+        }
+    }, [searchParams]);
 
     const handleGoogleRegisterClick = () => {
         // Проверяем что телефон заполнен

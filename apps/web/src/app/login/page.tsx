@@ -64,6 +64,16 @@ export default function LoginPage() {
                 token: credentialResponse.credential,
                 deviceId: getDeviceId(),
             });
+
+            // Если пользователь не найден — перекидываем на регистрацию
+            if (response.data.needsRegistration) {
+                sessionStorage.setItem('googleToken', credentialResponse.credential);
+                sessionStorage.setItem('googleData', JSON.stringify(response.data.googleData));
+                message.info('Аккаунт не найден. Завершите регистрацию.');
+                router.push('/register?google=1');
+                return;
+            }
+
             const { accessToken, user } = response.data;
             setUser(user, accessToken);
             message.success('Вход через Google выполнен успешно');
