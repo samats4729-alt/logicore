@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, message, List } from 'antd';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
-    CheckCircleOutlined, CloseCircleOutlined, ShopOutlined
+    CheckCircleOutlined, CloseCircleOutlined, ShopOutlined, GlobalOutlined
 } from '@ant-design/icons';
+import ExternalCompaniesSection from '@/components/ExternalCompaniesSection';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
@@ -320,6 +321,16 @@ export default function ForwarderPartnersPage() {
                             </Space>
                         ),
                         children: <SearchContent />
+                    },
+                    {
+                        key: 'external',
+                        label: (
+                            <Space>
+                                <GlobalOutlined />
+                                Внешние компании
+                            </Space>
+                        ),
+                        children: <ExternalCompaniesSection />
                     }
                 ]}
             />

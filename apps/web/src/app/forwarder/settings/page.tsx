@@ -5,7 +5,6 @@ import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, D
 import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
-import ExternalCompaniesSection from '@/components/ExternalCompaniesSection';
 
 const { Title, Text } = Typography;
 
@@ -325,11 +324,6 @@ export default function SettingsPage() {
                         </Form.Item>
                     </Space>
                 </Form>
-            </Card>
-
-            {/* Внешние компании */}
-            <Card style={{ marginTop: 24 }}>
-                <ExternalCompaniesSection />
             </Card>
         </div>
     );
