@@ -133,10 +133,16 @@ model Company {
   stampImage     String?     // Путь к PNG печати
   type           CompanyType @default(CUSTOMER)
   isOurCompany   Boolean     @default(false)  // true = LogComp
+  isExternal     Boolean     @default(false)  // Внешняя компания (справочник)
   isActive       Boolean     @default(true)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   
+  // Кто создал внешнюю компанию
+  createdByCompanyId String?
+  createdByCompany   Company?  @relation("ExternalCompanies", fields: [createdByCompanyId], references: [id])
+  externalCompanies  Company[] @relation("ExternalCompanies")
+
   users             User[]
   ordersAsPartner   Order[]   @relation("PartnerOrders")
   ordersAsCustomer  Order[]   @relation("CustomerCompanyOrders")

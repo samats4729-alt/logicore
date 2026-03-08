@@ -48,18 +48,20 @@ export class ContractsService {
         });
         if (!partner) throw new NotFoundException('Компания-партнёр не найдена');
 
-        // Проверяем что есть партнёрство
-        const partnership = await this.prisma.partnership.findFirst({
-            where: {
-                OR: [
-                    { requesterId: forwarderCompanyId, recipientId: customerCompanyId },
-                    { requesterId: customerCompanyId, recipientId: forwarderCompanyId },
-                ],
-                status: 'ACCEPTED',
-            },
-        });
-        if (!partnership) {
-            throw new ForbiddenException('Нет партнёрства с этой компанией. Сначала установите партнёрские отношения.');
+        // Пропускаем проверку партнёрства для внешних компаний
+        if (!partner.isExternal) {
+            const partnership = await this.prisma.partnership.findFirst({
+                where: {
+                    OR: [
+                        { requesterId: forwarderCompanyId, recipientId: customerCompanyId },
+                        { requesterId: customerCompanyId, recipientId: forwarderCompanyId },
+                    ],
+                    status: 'ACCEPTED',
+                },
+            });
+            if (!partnership) {
+                throw new ForbiddenException('Нет партнёрства с этой компанией. Сначала установите партнёрские отношения.');
+            }
         }
 
         return this.prisma.contract.create({

@@ -135,8 +135,17 @@ export default function CompanyContractsPage() {
 
     const fetchPartners = async () => {
         try {
-            const response = await api.get('/partners');
-            setPartners(response.data);
+            const [partnersRes, externalRes] = await Promise.all([
+                api.get('/partners'),
+                api.get('/external-companies'),
+            ]);
+            const partnersList = partnersRes.data;
+            const externalList = externalRes.data.map((e: any) => ({
+                id: e.id,
+                name: `${e.name} (внешняя)`,
+                isExternal: true,
+            }));
+            setPartners([...partnersList, ...externalList]);
         } catch (error) {
             console.error('Failed to fetch partners:', error);
         }

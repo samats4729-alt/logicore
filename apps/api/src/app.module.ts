@@ -16,6 +16,7 @@ import { CitiesModule } from './cities/cities.module';
 import { PartnersModule } from './partners/partners.module';
 import { CargoTypesModule } from './cargo-types/cargo-types.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { ExternalCompaniesModule } from './external-companies/external-companies.module';
 
 @Module({
     imports: [
@@ -39,6 +40,7 @@ import { ContractsModule } from './contracts/contracts.module';
         PartnersModule,
         CargoTypesModule,
         ContractsModule,
+        ExternalCompaniesModule,
     ],
 })
 export class AppModule { }
