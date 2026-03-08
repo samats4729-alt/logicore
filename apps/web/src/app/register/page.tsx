@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, Form, Input, Button, Typography, message, Steps, Result, Radio, Space, Divider } from 'antd';
+import { Card, Form, Input, Button, Typography, message, Steps, Result, Radio, Space, Divider, Spin } from 'antd';
 import { UserOutlined, BankOutlined, CheckCircleOutlined, ShopOutlined, TruckOutlined, GoogleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -10,7 +10,7 @@ import InteractiveBackground from '@/components/ui/InteractiveBackground';
 
 const { Title, Text, Paragraph } = Typography;
 
-export default function RegisterCompanyPage() {
+function RegisterContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { setUser } = useAuthStore();
@@ -333,5 +333,13 @@ export default function RegisterCompanyPage() {
                 )}
             </Card>
         </InteractiveBackground>
+    );
+}
+
+export default function RegisterCompanyPage() {
+    return (
+        <Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+            <RegisterContent />
+        </Suspense>
     );
 }
