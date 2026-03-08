@@ -79,6 +79,7 @@ enum AgreementStatus {
 model User {
   id            String    @id @default(cuid())
   email         String?   @unique
+  googleId      String?   @unique  // Google OAuth ID
   phone         String    @unique
   passwordHash  String?   // null для водителей (SMS auth)
   firstName     String

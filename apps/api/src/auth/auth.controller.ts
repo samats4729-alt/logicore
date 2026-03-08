@@ -64,6 +64,33 @@ export class AuthController {
         return this.authService.registerCompany(dto);
     }
 
+    // ==================== Google Auth ====================
+
+    @Post('google')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Вход через Google' })
+    async googleLogin(@Body() dto: { token: string; deviceId: string }) {
+        return this.authService.loginWithGoogle(dto.token, dto.deviceId);
+    }
+
+    @Post('google/register')
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({ summary: 'Регистрация через Google' })
+    async googleRegister(@Body() dto: {
+        token: string;
+        companyName: string;
+        companyType: 'CUSTOMER' | 'FORWARDER';
+        bin: string;
+        phone: string;
+    }) {
+        return this.authService.registerWithGoogle(dto.token, {
+            companyName: dto.companyName,
+            companyType: dto.companyType,
+            bin: dto.bin,
+            phone: dto.phone,
+        });
+    }
+
     @Post('me')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()

@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { SmsService } from './sms.service';
@@ -319,6 +320,202 @@ export class AuthService {
         });
 
         // Генерируем токен
+        const payload = {
+            sub: result.admin.id,
+            role: result.admin.role,
+            companyId: result.company.id,
+        };
+        const accessToken = this.jwtService.sign(payload);
+
+        return {
+            company: result.company,
+            admin: {
+                id: result.admin.id,
+                email: result.admin.email,
+                firstName: result.admin.firstName,
+                lastName: result.admin.lastName,
+                role: result.admin.role,
+                company: result.company,
+            },
+            accessToken,
+        };
+    }
+
+    // ==================== GOOGLE AUTH ====================
+
+    /**
+     * Верификация Google ID Token
+     */
+    private async verifyGoogleToken(token: string): Promise<{ googleId: string; email: string; firstName: string; lastName: string }> {
+        const clientId = this.configService.get('GOOGLE_CLIENT_ID') || '5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com';
+        const client = new OAuth2Client(clientId);
+
+        try {
+            const ticket = await client.verifyIdToken({
+                idToken: token,
+                audience: clientId,
+            });
+            const payload = ticket.getPayload();
+            if (!payload) throw new Error('Empty payload');
+
+            return {
+                googleId: payload.sub,
+                email: payload.email || '',
+                firstName: payload.given_name || payload.name?.split(' ')[0] || 'User',
+                lastName: payload.family_name || payload.name?.split(' ').slice(1).join(' ') || '',
+            };
+        } catch (error) {
+            throw new UnauthorizedException('Неверный Google токен');
+        }
+    }
+
+    /**
+     * Вход через Google
+     */
+    async loginWithGoogle(googleToken: string, deviceId: string): Promise<{ accessToken: string; user: any }> {
+        const googleData = await this.verifyGoogleToken(googleToken);
+
+        // Ищем пользователя по googleId или email
+        let user = await this.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { googleId: googleData.googleId },
+                    ...(googleData.email ? [{ email: googleData.email }] : []),
+                ],
+            },
+            include: { company: true },
+        });
+
+        if (!user) {
+            throw new UnauthorizedException('Аккаунт не найден. Пожалуйста, зарегистрируйтесь.');
+        }
+
+        if (!user.isActive) {
+            throw new UnauthorizedException('Аккаунт деактивирован');
+        }
+
+        // Привязываем googleId если его не было
+        if (!user.googleId) {
+            await this.prisma.user.update({
+                where: { id: user.id },
+                data: { googleId: googleData.googleId },
+            });
+        }
+
+        // Single Session Policy
+        try {
+            const existingSession = await this.redisService.getSession(user.id);
+            if (existingSession && existingSession.deviceId !== deviceId) {
+                await this.prisma.session.deleteMany({
+                    where: { userId: user.id },
+                });
+            }
+        } catch (e) {
+            console.warn('Redis getSession failed (ignoring):', e);
+        }
+
+        // Создаем токен
+        const payload = { sub: user.id, email: user.email, role: user.role, companyId: user.companyId };
+        const accessToken = this.jwtService.sign(payload);
+
+        // Сохраняем сессию
+        const expiresIn = 60 * 60 * 24 * 7;
+        try {
+            await this.redisService.setSession(user.id, deviceId, accessToken, expiresIn);
+        } catch (e) {
+            console.warn('Redis setSession failed (ignoring):', e);
+        }
+
+        await this.prisma.session.create({
+            data: {
+                userId: user.id,
+                deviceId,
+                token: accessToken,
+                expiresAt: new Date(Date.now() + expiresIn * 1000),
+            },
+        });
+
+        return {
+            accessToken,
+            user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                company: (user as any).company,
+            },
+        };
+    }
+
+    /**
+     * Регистрация через Google
+     */
+    async registerWithGoogle(googleToken: string, data: {
+        companyName: string;
+        companyType: 'CUSTOMER' | 'FORWARDER';
+        bin: string;
+        phone: string;
+    }): Promise<{ company: any; admin: any; accessToken: string }> {
+        const googleData = await this.verifyGoogleToken(googleToken);
+
+        // Проверяем что googleId не занят
+        const existingGoogle = await this.prisma.user.findUnique({
+            where: { googleId: googleData.googleId },
+        });
+        if (existingGoogle) {
+            throw new BadRequestException('Этот Google аккаунт уже зарегистрирован');
+        }
+
+        // Проверяем email
+        if (googleData.email) {
+            const existingEmail = await this.prisma.user.findUnique({
+                where: { email: googleData.email },
+            });
+            if (existingEmail) {
+                throw new BadRequestException('Email уже зарегистрирован. Используйте вход через Google.');
+            }
+        }
+
+        // Проверяем телефон
+        const existingPhone = await this.prisma.user.findUnique({
+            where: { phone: data.phone },
+        });
+        if (existingPhone) {
+            throw new BadRequestException('Телефон уже зарегистрирован');
+        }
+
+        const userRole = data.companyType === 'FORWARDER'
+            ? UserRole.FORWARDER
+            : UserRole.COMPANY_ADMIN;
+
+        const result = await this.prisma.$transaction(async (tx) => {
+            const company = await tx.company.create({
+                data: {
+                    name: data.companyName,
+                    bin: data.bin,
+                    email: googleData.email || undefined,
+                    phone: data.phone,
+                    type: data.companyType,
+                    isOurCompany: false,
+                },
+            });
+
+            const admin = await tx.user.create({
+                data: {
+                    email: googleData.email || undefined,
+                    googleId: googleData.googleId,
+                    phone: data.phone,
+                    firstName: googleData.firstName,
+                    lastName: googleData.lastName,
+                    role: userRole,
+                    companyId: company.id,
+                },
+            });
+
+            return { company, admin };
+        });
+
         const payload = {
             sub: result.admin.id,
             role: result.admin.role,
