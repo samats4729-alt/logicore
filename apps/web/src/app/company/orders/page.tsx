@@ -215,7 +215,17 @@ export default function CompanyOrdersPage() {
     };
     const fetchLocations = async () => { try { const r = await api.get('/locations'); setLocations(r.data); } catch { } };
     const fetchForwarders = async () => {
-        try { const r = await api.get('/partners'); setForwarders(r.data.filter((p: any) => p.type === 'FORWARDER')); } catch { }
+        try {
+            const [partnersRes, externalRes] = await Promise.all([
+                api.get('/partners'),
+                api.get('/external-companies'),
+            ]);
+            const partnerForwarders = partnersRes.data.filter((p: any) => p.type === 'FORWARDER');
+            const externalForwarders = externalRes.data
+                .filter((e: any) => e.type === 'FORWARDER')
+                .map((e: any) => ({ id: e.id, name: `${e.name} (внешняя)` }));
+            setForwarders([...partnerForwarders, ...externalForwarders]);
+        } catch { }
     };
     const fetchDrivers = async () => { try { const r = await api.get('/users?role=DRIVER'); setDrivers(r.data); } catch { } };
     const fetchCargoTypes = async () => { try { const r = await api.get('/cargo-types'); setCargoCategories(r.data); } catch { } };
