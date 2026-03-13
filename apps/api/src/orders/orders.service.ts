@@ -41,8 +41,22 @@ export class OrdersService {
         // Генерация номера заявки
         const orderNumber = await this.generateOrderNumber();
 
-        // Если водитель назначен сразу - статус ASSIGNED
-        const status = data.driverId ? OrderStatus.ASSIGNED : OrderStatus.PENDING;
+        // Проверяем: если экспедитор — внешняя компания, пропускаем PENDING
+        let isForwarderExternal = false;
+        if (data.forwarderId) {
+            const forwarderCompany = await this.prisma.company.findUnique({
+                where: { id: data.forwarderId },
+                select: { isExternal: true },
+            });
+            isForwarderExternal = forwarderCompany?.isExternal ?? false;
+        }
+
+        // Если водитель назначен → ASSIGNED
+        // Если экспедитор внешний → ASSIGNED (подтверждать некому)
+        // Иначе → PENDING
+        const status = (data.driverId || isForwarderExternal)
+            ? OrderStatus.ASSIGNED
+            : OrderStatus.PENDING;
 
         // Получаем companyId заказчика
         const customer = await this.prisma.user.findUnique({
@@ -90,7 +104,11 @@ export class OrdersService {
                 statusHistory: {
                     create: {
                         status,
-                        comment: data.driverId ? 'Заявка создана с назначенным водителем' : 'Заявка создана',
+                        comment: data.driverId
+                            ? 'Заявка создана с назначенным водителем'
+                            : isForwarderExternal
+                                ? 'Заявка создана (внешняя компания, подтверждение не требуется)'
+                                : 'Заявка создана',
                     },
                 },
             },
