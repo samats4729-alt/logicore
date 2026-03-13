@@ -552,9 +552,11 @@ export default function ForwarderOrdersPage() {
 
     return (
         <div style={{ height: '100%' }}>
-            {/* Compact header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Title level={4} style={{ margin: 0 }}>Заявки</Title>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+                    Новая заявка
+                </Button>
             </div>
 
             <Tabs
@@ -655,11 +657,6 @@ export default function ForwarderOrdersPage() {
                         label: <span>Исходящие <Tag style={{ marginLeft: 4, fontSize: 11 }}>{outgoingOrders.length}</Tag></span>,
                         children: (
                             <div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                                    <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-                                        Новая заявка
-                                    </Button>
-                                </div>
                                 <Table
                                     columns={outgoingColumns}
                                     dataSource={outgoingOrders}
