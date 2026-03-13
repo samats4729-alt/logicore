@@ -13,6 +13,7 @@ export class ForwarderDriversService {
         lastName: true,
         middleName: true,
         phone: true,
+        iin: true,
         vehiclePlate: true,
         vehicleModel: true,
         trailerNumber: true,
@@ -47,6 +48,7 @@ export class ForwarderDriversService {
         lastName: string;
         middleName?: string;
         phone: string;
+        iin?: string;
         vehiclePlate?: string;
         vehicleModel?: string;
         trailerNumber?: string;
@@ -87,6 +89,7 @@ export class ForwarderDriversService {
             firstName?: string;
             lastName?: string;
             middleName?: string;
+            iin?: string;
             vehiclePlate?: string;
             vehicleModel?: string;
             trailerNumber?: string;

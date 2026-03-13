@@ -18,6 +18,7 @@ interface Driver {
     lastName: string;
     middleName?: string;
     phone: string;
+    iin?: string;
     vehiclePlate?: string;
     vehicleModel?: string;
     trailerNumber?: string;
@@ -266,6 +267,16 @@ export default function ForwarderDriversPage() {
                         <Input placeholder="+77001234567" disabled={!!editingDriver} />
                     </Form.Item>
                     <Form.Item
+                        name="iin"
+                        label="ИИН"
+                        rules={[
+                            { required: true, message: 'Введите ИИН' },
+                            { pattern: /^\d{12}$/, message: 'ИИН должен содержать 12 цифр' }
+                        ]}
+                    >
+                        <Input placeholder="123456789012" maxLength={12} />
+                    </Form.Item>
+                    <Form.Item
                         name="vehicleModel"
                         label="Модель автомобиля"
                     >
@@ -276,6 +287,7 @@ export default function ForwarderDriversPage() {
                             <Form.Item
                                 name="vehiclePlate"
                                 label="Гос. номер авто"
+                                rules={[{ required: true, message: 'Введите гос. номер' }]}
                             >
                                 <Input placeholder="A123BC01" />
                             </Form.Item>
@@ -297,6 +309,7 @@ export default function ForwarderDriversPage() {
                             <Form.Item
                                 name="docType"
                                 label="Вид документа"
+                                rules={[{ required: true, message: 'Выберите тип документа' }]}
                             >
                                 <Select placeholder="Выберите тип" allowClear>
                                     <Option value="ID_CARD">Удостоверение личности</Option>
@@ -308,6 +321,7 @@ export default function ForwarderDriversPage() {
                             <Form.Item
                                 name="docNumber"
                                 label="Номер документа"
+                                rules={[{ required: true, message: 'Введите номер' }]}
                             >
                                 <Input placeholder="012345678" />
                             </Form.Item>

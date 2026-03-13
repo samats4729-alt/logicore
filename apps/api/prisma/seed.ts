@@ -217,6 +217,9 @@ async function main() {
             }
         });
 
+        // Удаляем старые типы чтобы не было дублей при повторном seed
+        await prisma.cargoType.deleteMany({ where: { categoryId: cat.id } });
+
         for (const [tIndex, typeName] of category.types.entries()) {
             await prisma.cargoType.create({
                 data: {

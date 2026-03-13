@@ -103,6 +103,7 @@ model User {
   company       Company?   @relation(fields: [companyId], references: [id])
   
   // Водитель: данные транспорта
+  iin           String?   // ИИН
   vehiclePlate  String?   // Госномер
   vehicleModel  String?   // Модель авто
   trailerNumber String?   // Номер прицепа
