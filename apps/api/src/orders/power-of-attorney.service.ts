@@ -120,16 +120,17 @@ export class PowerOfAttorneyService {
                 phone: driverPhone,
             });
             doc.moveDown(0.5);
+            doc.x = leftM; // Reset x position after table
 
             // ============ ТЕКСТ ДОВЕРЕННОСТИ ============
             doc.fontSize(10).font('Roboto');
-            doc.text('действовать от своего имени и совершать все необходимые действия, связанные с транспортно-экспедиционным обслуживанием грузов, в рамках заявки ', { continued: true, align: 'justify', lineGap: 2 });
+            doc.text('действовать от своего имени и совершать все необходимые действия, связанные с транспортно-экспедиционным обслуживанием грузов, в рамках заявки ', { continued: true, align: 'justify', lineGap: 2, width: pageWidth });
             doc.font('Roboto-Bold').text(`№ ${order.orderNumber}`, { continued: true });
             doc.font('Roboto').text(` между `, { continued: true });
             doc.font('Roboto-Bold').text(`ТОО "${this.stripCompanyPrefix(customerName)}"`, { continued: true });
             doc.font('Roboto').text(` (БИН ${customerBin}) и `, { continued: true });
             doc.font('Roboto-Bold').text(`ТОО ${fwClean}`, { continued: true });
-            doc.font('Roboto').text(` (БИН ${forwarderCompany.bin || '—'}).`, { align: 'justify', lineGap: 2 });
+            doc.font('Roboto').text(` (БИН ${forwarderCompany.bin || '—'}).`, { align: 'justify', lineGap: 2, width: pageWidth });
             doc.moveDown(0.5);
 
             // Полномочия
@@ -145,12 +146,12 @@ export class PowerOfAttorneyService {
             ];
 
             for (let i = 0; i < powers.length; i++) {
-                doc.text(`${i + 1}. ${powers[i]}`, { indent: 10, lineGap: 1 });
+                doc.text(`${i + 1}. ${powers[i]}`, leftM, doc.y, { indent: 10, lineGap: 1, width: pageWidth });
             }
             doc.moveDown(0.5);
 
             // ============ ИНФОРМАЦИЯ О ГРУЗЕ ============
-            doc.font('Roboto-Bold').text('Информация о вверенном грузе:', { align: 'left' });
+            doc.font('Roboto-Bold').text('Информация о вверенном грузе:', leftM, doc.y, { align: 'left', width: pageWidth });
             doc.moveDown(0.3);
 
             this.drawCargoTable(doc, {
@@ -168,11 +169,11 @@ export class PowerOfAttorneyService {
             this.ensureSpace(doc, 200);
 
             doc.font('Roboto').fontSize(10);
-            doc.text('Настоящая доверенность выдана без права передоверия, сроком на один месяц.', { align: 'left', lineGap: 2 });
+            doc.text('Настоящая доверенность выдана без права передоверия, сроком на один месяц.', leftM, doc.y, { align: 'left', lineGap: 2, width: pageWidth });
             doc.moveDown(0.3);
-            doc.text('Подпись лица, получившего доверенность ________________________________.', { lineGap: 2 });
+            doc.text('Подпись лица, получившего доверенность ________________________________.', leftM, doc.y, { lineGap: 2, width: pageWidth });
             doc.moveDown(0.3);
-            doc.text(`Я, __________________________________, доверенное лицо в рамках настоящей доверенности беру на себя ответственность за обеспечение сохранности груза в пути следования.`, { align: 'justify', lineGap: 2 });
+            doc.text(`Я, __________________________________, доверенное лицо в рамках настоящей доверенности беру на себя ответственность за обеспечение сохранности груза в пути следования.`, leftM, doc.y, { align: 'justify', lineGap: 2, width: pageWidth });
             doc.moveDown(1.5);
 
             // ============ ПОДПИСЬ ДИРЕКТОРА ============
@@ -240,6 +241,7 @@ export class PowerOfAttorneyService {
         }
 
         doc.y = y + rowH;
+        doc.x = doc.page.margins.left;
     }
 
     // ============ ТАБЛИЦА ГРУЗА ============
@@ -300,6 +302,7 @@ export class PowerOfAttorneyService {
         y += subRowH;
 
         doc.y = y;
+        doc.x = doc.page.margins.left;
     }
 
     private ensureSpace(doc: PDFKit.PDFDocument, needed: number) {
