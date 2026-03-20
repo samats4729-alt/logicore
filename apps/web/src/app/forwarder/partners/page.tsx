@@ -173,7 +173,7 @@ export default function ForwarderPartnersPage() {
         }
     ];
 
-    const MyPartnersContent = () => (
+    const myPartnersContent = (
         <Space direction="vertical" style={{ width: '100%' }} size="large">
             {/* Incoming Requests Section - Only show if there are requests */}
             {requests.length > 0 && (
@@ -218,7 +218,7 @@ export default function ForwarderPartnersPage() {
         </Space>
     );
 
-    const SearchContent = () => (
+    const searchContent = (
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
             <div style={{ marginBottom: 32, textAlign: 'center' }}>
                 <Title level={3}>Поиск партнеров</Title>
@@ -310,7 +310,7 @@ export default function ForwarderPartnersPage() {
                                 {requests.length > 0 && <Badge count={requests.length} size="small" />}
                             </Space>
                         ),
-                        children: <MyPartnersContent />
+                        children: myPartnersContent
                     },
                     {
                         key: 'search',
@@ -320,7 +320,7 @@ export default function ForwarderPartnersPage() {
                                 Поиск
                             </Space>
                         ),
-                        children: <SearchContent />
+                        children: searchContent
                     },
                     {
                         key: 'external',
