@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
+import { PowerOfAttorneyService } from './power-of-attorney.service';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { CreateOrderDto, UpdateStatusDto, AssignDriverDto } from './dto/order.dto';
@@ -11,7 +13,10 @@ import { UserRole, OrderStatus } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class OrdersController {
-    constructor(private ordersService: OrdersService) { }
+    constructor(
+        private ordersService: OrdersService,
+        private poaService: PowerOfAttorneyService,
+    ) { }
 
     @Post()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
@@ -56,6 +61,22 @@ export class OrdersController {
             console.error(`❌ [DEBUG] Error in myOrders:`, e);
             throw e;
         }
+    }
+
+    @Get(':id/power-of-attorney')
+    @ApiOperation({ summary: 'Скачать доверенность на водителя (PDF)' })
+    async downloadPowerOfAttorney(
+        @Param('id') id: string,
+        @Request() req: any,
+        @Res() res: Response,
+    ) {
+        const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId);
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="POA_${id}.pdf"`,
+            'Content-Length': pdfBuffer.length,
+        });
+        res.end(pdfBuffer);
     }
 
     @Get(':id')

@@ -9,7 +9,7 @@ import {
 import {
     EyeOutlined, UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
-    FilterOutlined, ClearOutlined
+    FilterOutlined, ClearOutlined, FileTextOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -95,6 +95,7 @@ interface Order {
     subForwarder?: { name: string };
     forwarder?: { name: string };
     isConfirmed?: boolean;
+    driverId?: string;
 }
 
 // ============================================================
@@ -929,6 +930,29 @@ export default function ForwarderOrdersPage() {
                             <Button type="primary" icon={<UserAddOutlined />} onClick={() => { setDetailDrawerOpen(false); openAssignModal(selectedOrder); }} block>
                                 {selectedOrder.assignedDriverName ? 'Изменить водителя' : 'Назначить водителя'}
                             </Button>
+                            {(selectedOrder.assignedDriverName || selectedOrder.driverId) && (
+                                <Button
+                                    icon={<FileTextOutlined />}
+                                    style={{ marginTop: 8 }}
+                                    onClick={async () => {
+                                        try {
+                                            const res = await api.get(`/orders/${selectedOrder.id}/power-of-attorney`, { responseType: 'blob' });
+                                            const blob = new Blob([res.data], { type: 'application/pdf' });
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `Доверенность_${selectedOrder.orderNumber}.pdf`;
+                                            a.click();
+                                            URL.revokeObjectURL(url);
+                                        } catch {
+                                            message.error('Ошибка скачивания доверенности');
+                                        }
+                                    }}
+                                    block
+                                >
+                                    Скачать доверенность
+                                </Button>
+                            )}
                             {getNextStatuses(selectedOrder.status).length > 0 && (
                                 <Button type="primary" style={{ marginTop: 8 }} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }} block>
                                     Изменить статус
