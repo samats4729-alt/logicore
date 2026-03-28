@@ -17,6 +17,7 @@ import {
     SettingOutlined,
     MenuFoldOutlined,
     MenuUnfoldOutlined,
+    DollarOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -81,7 +82,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
     // Меню в зависимости от роли
     const getMenuItems = () => {
-        const items = [
+        const items: any[] = [
             {
                 key: '/company',
                 icon: <DashboardOutlined />,
@@ -140,6 +141,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 key: '/company/documents',
                 icon: <FileOutlined />,
                 label: 'Документы',
+            },
+            {
+                key: '/company/accounting',
+                icon: <DollarOutlined />,
+                label: 'Бухгалтерия',
             },
             {
                 key: '/company/settings',

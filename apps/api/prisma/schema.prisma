@@ -335,6 +335,12 @@ model Order {
   confirmedAt     DateTime?
   confirmedById   String?
   
+  // Статус оплаты
+  isCustomerPaid    Boolean   @default(false)  // Заказчик оплатил нам
+  customerPaidAt    DateTime?                   // Когда оплатил
+  isDriverPaid      Boolean   @default(false)  // Мы оплатили перевозчику
+  driverPaidAt      DateTime?                   // Когда оплатили
+  
   // --- Данные из Excel (Full List) ---
   
   // Финансы: Заказчик
@@ -371,6 +377,7 @@ model Order {
   gpsPoints       GpsPoint[]
   problems        OrderProblem[]
   warehouseQueue  WarehouseQueueItem?
+  incomes         Income[]
   
   @@index([status])
   @@index([customerId])
@@ -618,4 +625,51 @@ model RouteTariff {
   
   @@index([agreementId])
   @@index([originCityId, destinationCityId])
+}
+
+// ==================== ACCOUNTING ====================
+
+model Expense {
+  id          String   @id @default(cuid())
+  
+  companyId   String
+  date        DateTime
+  category    String   // fuel, repair, salary, insurance, tax, rent, communication, office, penalties, other
+  description String
+  amount      Float    // Сумма в тенге
+  note        String?
+  
+  createdById String?  // Кто создал
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, date])
+  @@index([category])
+}
+
+model Income {
+  id          String   @id @default(cuid())
+  
+  companyId   String
+  date        DateTime
+  category    String   // order_payment, prepayment, refund, other
+  description String
+  amount      Float    // Сумма в тенге
+  note        String?
+  
+  // Привязка к заявке (опционально)
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id])
+  
+  createdById String?  // Кто создал
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, date])
+  @@index([category])
+  @@index([orderId])
 }

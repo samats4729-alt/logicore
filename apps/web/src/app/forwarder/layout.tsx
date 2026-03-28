@@ -17,6 +17,7 @@ import {
     MenuFoldOutlined,
     MenuUnfoldOutlined,
     SearchOutlined,
+    DollarOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -125,6 +126,11 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
             key: '/forwarder/documents',
             icon: <FileOutlined />,
             label: 'Документы',
+        },
+        {
+            key: '/forwarder/accounting',
+            icon: <DollarOutlined />,
+            label: 'Бухгалтерия',
         },
         {
             key: '/forwarder/settings',

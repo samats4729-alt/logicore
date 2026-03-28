@@ -46,6 +46,20 @@ export class ForwarderController {
         return this.forwarderService.getForwarderOrder(id, req.user.companyId);
     }
 
+    @Put('orders/:id/accept')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Принять заявку в работу' })
+    async acceptOrder(@Param('id') id: string, @Request() req: any) {
+        return this.forwarderService.acceptOrder(id, req.user.companyId);
+    }
+
+    @Put('orders/:id/reject')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Отклонить заявку' })
+    async rejectOrder(@Param('id') id: string, @Request() req: any) {
+        return this.forwarderService.rejectOrder(id, req.user.companyId);
+    }
+
     @Put('orders/:id/assign-driver')
     @Roles(UserRole.FORWARDER)
     @ApiOperation({ summary: 'Назначить водителя на заявку' })

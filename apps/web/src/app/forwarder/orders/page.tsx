@@ -9,7 +9,7 @@ import {
 import {
     EyeOutlined, UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
-    FilterOutlined, ClearOutlined, FileTextOutlined
+    FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -431,6 +431,35 @@ export default function ForwarderOrdersPage() {
         } finally { setStatusLoading(false); }
     };
 
+    const handleAccept = async (orderId: string) => {
+        try {
+            await api.put(`/forwarder/orders/${orderId}/accept`);
+            message.success('Заявка принята в работу');
+            fetchOrders();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка принятия заявки');
+        }
+    };
+
+    const handleReject = async (orderId: string) => {
+        Modal.confirm({
+            title: 'Отклонить заявку?',
+            content: 'Вы уверены, что хотите отклонить эту заявку? Она будет возвращена заказчику.',
+            okText: 'Да, отклонить',
+            cancelText: 'Нет',
+            okButtonProps: { danger: true },
+            onOk: async () => {
+                try {
+                    await api.put(`/forwarder/orders/${orderId}/reject`);
+                    message.success('Заявка отклонена');
+                    fetchOrders();
+                } catch (error: any) {
+                    message.error(error.response?.data?.message || 'Ошибка отклонения заявки');
+                }
+            }
+        });
+    };
+
     // =================== CREATE ORDER ===================
 
     const handleCreateOrder = async (values: any) => {
@@ -518,13 +547,20 @@ export default function ForwarderOrdersPage() {
             render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>,
         },
         {
-            title: '', key: 'actions', width: 80, fixed: 'right' as const,
+            title: '', key: 'actions', width: 90, fixed: 'right' as const,
             render: (_: any, r: Order) => (
                 <Space size={4}>
                     <Tooltip title="Подробнее"><Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} style={{ fontSize: 12 }} /></Tooltip>
-                    <Tooltip title={r.assignedDriverName ? 'Изменить' : 'Назначить'}>
-                        <Button size="small" type={r.assignedDriverName ? 'default' : 'primary'} icon={r.assignedDriverName ? <CheckCircleOutlined /> : <UserAddOutlined />} onClick={() => openAssignModal(r)} />
-                    </Tooltip>
+                    {!r.isConfirmed ? (
+                        <>
+                            <Tooltip title="Принять"><Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleAccept(r.id)} /></Tooltip>
+                            <Tooltip title="Отклонить"><Button size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleReject(r.id)} /></Tooltip>
+                        </>
+                    ) : (
+                        <Tooltip title={r.assignedDriverName ? 'Изменить' : 'Назначить'}>
+                            <Button size="small" type={r.assignedDriverName ? 'default' : 'primary'} icon={r.assignedDriverName ? <CheckCircleOutlined /> : <UserAddOutlined />} onClick={() => openAssignModal(r)} />
+                        </Tooltip>
+                    )}
                 </Space>
             ),
         },

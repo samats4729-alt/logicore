@@ -246,7 +246,48 @@ export class ForwarderService {
             data: {
                 forwarderId: companyId,
                 status: 'PENDING', // Остается PENDING, пока экспедитор не назначит водителя
-                // Можно добавить логику уведомления заказчика
+                isConfirmed: true, // Сразу подтверждаем, так как берем с биржи добровольно
+            },
+        });
+    }
+
+    /**
+     * Принять заявку от заказчика
+     */
+    async acceptOrder(orderId: string, companyId: string) {
+        const order = await this.getForwarderOrder(orderId, companyId);
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                isConfirmed: true,
+                statusHistory: {
+                    create: {
+                        status: order.status,
+                        comment: 'Заявка принята экспедитором',
+                    },
+                },
+            },
+        });
+    }
+
+    /**
+     * Отклонить заявку от заказчика
+     */
+    async rejectOrder(orderId: string, companyId: string) {
+        const order = await this.getForwarderOrder(orderId, companyId);
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                forwarderId: null,      // Снимаем с себя
+                subForwarderId: null,   // На всякий случай
+                isConfirmed: false,
+                status: 'DRAFT',        // Возвращаем заказчику в черновики/отклоненные
+                statusHistory: {
+                    create: {
+                        status: 'DRAFT',
+                        comment: 'Заявка отклонена экспедитором',
+                    },
+                },
             },
         });
     }
