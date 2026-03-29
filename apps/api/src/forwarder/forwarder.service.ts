@@ -162,18 +162,31 @@ export class ForwarderService {
         if (!order) throw new NotFoundException('Заявка не найдена');
         if (order.forwarderId !== companyId) throw new ForbiddenException('Нет доступа к этой заявке');
 
-        // 2. Проверяем партнера (должен быть в статусе ACCEPTED)
-        const partnership = await this.prisma.partnership.findFirst({
-            where: {
-                OR: [
-                    { requesterId: companyId, recipientId: partnerId },
-                    { requesterId: partnerId, recipientId: companyId }
-                ],
-                status: 'ACCEPTED'
-            }
+        // 2. Проверяем партнера (должен быть в статусе ACCEPTED или это внешняя компания)
+        const partnerCompany = await this.prisma.company.findUnique({
+            where: { id: partnerId }
         });
 
-        if (!partnership) {
+        if (!partnerCompany) throw new NotFoundException('Компания не найдена');
+
+        let isAllowed = false;
+
+        if (partnerCompany.isExternal && partnerCompany.createdByCompanyId === companyId) {
+            isAllowed = true;
+        } else {
+            const partnership = await this.prisma.partnership.findFirst({
+                where: {
+                    OR: [
+                        { requesterId: companyId, recipientId: partnerId },
+                        { requesterId: partnerId, recipientId: companyId }
+                    ],
+                    status: 'ACCEPTED'
+                }
+            });
+            if (partnership) isAllowed = true;
+        }
+
+        if (!isAllowed) {
             throw new ForbiddenException('Выбранная компания не является вашим подтвержденным партнером');
         }
 
