@@ -12,6 +12,10 @@ import dayjs from 'dayjs';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
+const VEHICLE_TYPES = [
+    'Тент', 'Рефрижератор', 'Изотерм', 'Борт', 'Цельнометаллический', 'Самомосвал', 'Трал', 'Контейнеровоз', 'Цистерна', 'Микроавтобус', 'Лесовоз', 'Автовоз'
+];
+
 interface Driver {
     id: string;
     firstName: string;
@@ -19,6 +23,7 @@ interface Driver {
     middleName?: string;
     phone: string;
     iin?: string;
+    vehicleType?: string;
     vehiclePlate?: string;
     vehicleModel?: string;
     trailerNumber?: string;
@@ -130,6 +135,7 @@ export default function ForwarderDriversPage() {
             key: 'vehicle',
             render: (_: any, record: Driver) => (
                 <div>
+                    <div style={{ fontWeight: 600 }}>{record.vehicleType || '—'}</div>
                     <div>{record.vehicleModel || '—'}</div>
                     <div style={{ fontSize: 12, color: '#888' }}>{record.vehiclePlate || '—'}</div>
                 </div>
@@ -276,12 +282,20 @@ export default function ForwarderDriversPage() {
                     >
                         <Input placeholder="123456789012" maxLength={12} />
                     </Form.Item>
-                    <Form.Item
-                        name="vehicleModel"
-                        label="Модель автомобиля"
-                    >
-                        <Input placeholder="КАМАЗ 65115" />
-                    </Form.Item>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="vehicleType" label="Тип транспорта">
+                                <Select placeholder="Тент, Реф..." allowClear>
+                                    {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="vehicleModel" label="Модель автомобиля">
+                                <Input placeholder="КАМАЗ 65115" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
                     <Row gutter={12}>
                         <Col span={12}>
                             <Form.Item

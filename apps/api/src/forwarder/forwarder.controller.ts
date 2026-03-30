@@ -108,6 +108,7 @@ export class ForwarderController {
             middleName?: string;
             phone: string;
             iin?: string;
+            vehicleType?: string;
             vehiclePlate?: string;
             vehicleModel?: string;
             trailerNumber?: string;
@@ -127,6 +128,7 @@ export class ForwarderController {
             lastName?: string;
             middleName?: string;
             iin?: string;
+            vehicleType?: string;
             vehiclePlate?: string;
             vehicleModel?: string;
             trailerNumber?: string;

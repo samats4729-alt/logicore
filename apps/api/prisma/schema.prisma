@@ -104,6 +104,7 @@ model User {
   
   // Водитель: данные транспорта
   iin           String?   // ИИН
+  vehicleType   String?   // Тип транспорта (Тент, Реф и т.д.)
   vehiclePlate  String?   // Госномер
   vehicleModel  String?   // Модель авто
   trailerNumber String?   // Номер прицепа
@@ -273,7 +274,7 @@ model Order {
   status          OrderStatus @default(DRAFT)
   
   // Груз
-  cargoDescription String
+  cargoDescription String?
   cargoWeight     Float?      // кг
   cargoVolume     Float?      // м³
   cargoType       String?     // Тип транспорта (Тент, Реф и т.д.)

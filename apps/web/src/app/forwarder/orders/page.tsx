@@ -831,7 +831,7 @@ export default function ForwarderOrdersPage() {
                                     </Form.Item>
                                 </Col>
                             </Row>
-                            <Form.Item name="cargoDescription" label="Описание груза" rules={[{ required: true }]} style={{ marginBottom: 12 }}>
+                            <Form.Item name="cargoDescription" label="Описание груза" style={{ marginBottom: 12 }}>
                                 <TextArea rows={2} placeholder="Мебель, 20 коробок..." />
                             </Form.Item>
                             <Row gutter={12}>

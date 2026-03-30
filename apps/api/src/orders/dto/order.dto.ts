@@ -17,10 +17,10 @@ export class CreateOrderDto {
     @IsString()
     deliveryLocationId: string;
 
-    @ApiProperty({ example: 'Строительные материалы - кирпич' })
+    @ApiProperty({ required: false, example: 'Строительные материалы - кирпич' })
     @IsString()
-    @IsNotEmpty()
-    cargoDescription: string;
+    @IsOptional()
+    cargoDescription?: string;
 
     @ApiProperty({ required: false, example: 15000 })
     @IsNumber()
