@@ -12,7 +12,7 @@ export class OrdersService {
     async create(data: {
         customerId: string;
         pickupLocationId: string;
-        cargoDescription: string;
+        cargoDescription?: string;
         cargoWeight?: number;
         cargoVolume?: number;
         cargoType?: string;
@@ -70,7 +70,7 @@ export class OrdersService {
                 customerId: data.customerId,
                 customerCompanyId: customer?.companyId, // Устанавливаем компанию заказчика
                 pickupLocationId: data.pickupLocationId,
-                cargoDescription: data.cargoDescription,
+                cargoDescription: data.cargoDescription || '',
                 cargoWeight: data.cargoWeight,
                 cargoVolume: data.cargoVolume,
                 cargoType: data.cargoType,
