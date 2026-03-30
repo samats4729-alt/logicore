@@ -8,13 +8,10 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, IdcardOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { VEHICLE_TYPES } from '@/lib/constants';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
-
-const VEHICLE_TYPES = [
-    'Тент', 'Рефрижератор', 'Изотерм', 'Борт', 'Цельнометаллический', 'Самомосвал', 'Трал', 'Контейнеровоз', 'Цистерна', 'Микроавтобус', 'Лесовоз', 'Автовоз'
-];
 
 interface Driver {
     id: string;
