@@ -6,6 +6,7 @@ import {
     DollarOutlined,
     WalletOutlined,
     RightOutlined,
+    BookOutlined,
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -40,6 +41,18 @@ const sections: MenuSection[] = [
                 icon: <DollarOutlined />,
                 color: '#cf1322',
                 href: '/forwarder/accounting/expenses',
+            },
+        ],
+    },
+    {
+        title: 'Аналитика',
+        items: [
+            {
+                key: 'registry',
+                label: 'Реестр заявок — Дебиторка / Кредиторка / Маржа',
+                icon: <BookOutlined />,
+                color: '#1677ff',
+                href: '/forwarder/accounting/registry',
             },
         ],
     },

@@ -5,6 +5,47 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AccountingService {
     constructor(private prisma: PrismaService) { }
 
+    // ==================== FINANCIAL REGISTRY (Реестр) ====================
+
+    async getFinancialRegistry(companyId: string) {
+        return this.prisma.order.findMany({
+            where: {
+                forwarderId: companyId,
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+                isConfirmed: true,
+            },
+            select: {
+                id: true,
+                orderNumber: true,
+                createdAt: true,
+                status: true,
+                cargoDescription: true,
+                pickupDate: true,
+                completedAt: true,
+                // Доходная часть
+                customerPrice: true,
+                customerPriceType: true,
+                isCustomerPaid: true,
+                customerPaidAt: true,
+                // Расходная часть
+                driverCost: true,
+                subForwarderPrice: true,
+                subForwarderId: true,
+                isDriverPaid: true,
+                driverPaidAt: true,
+                // Связи
+                customerCompany: { select: { id: true, name: true } },
+                assignedDriverName: true,
+                driver: { select: { id: true, firstName: true, lastName: true } },
+                partner: { select: { id: true, name: true } },
+                subForwarder: { select: { id: true, name: true } },
+                pickupLocation: { select: { address: true, city: true } },
+                deliveryPoints: { select: { location: { select: { address: true, city: true } } }, orderBy: { sequence: 'desc' as const }, take: 1 },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+
     // ==================== PAYMENT JOURNAL ====================
 
     async getIncomesJournal(companyId: string) {
