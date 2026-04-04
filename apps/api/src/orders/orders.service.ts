@@ -37,6 +37,7 @@ export class OrdersService {
         actualWeight?: number;
         actualVolume?: number;
         appliedTariffId?: string;
+        responsibleManagerId?: string;
     }) {
         // Генерация номера заявки
         const orderNumber = await this.generateOrderNumber();
@@ -95,6 +96,7 @@ export class OrdersService {
                 actualWeight: data.actualWeight,
                 actualVolume: data.actualVolume,
                 appliedTariffId: data.appliedTariffId,
+                responsibleManagerId: data.responsibleManagerId,
                 deliveryPoints: data.deliveryLocationId ? {
                     create: [{
                         locationId: data.deliveryLocationId,
@@ -120,6 +122,7 @@ export class OrdersService {
                 deliveryPoints: { include: { location: true } },
                 forwarder: true, // Включаем экспедитора в ответ
                 appliedTariff: { include: { originCity: true, destinationCity: true } }, // Включаем тариф с городами
+                responsibleManager: { select: { id: true, firstName: true, lastName: true } },
             },
         });
 

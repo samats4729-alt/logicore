@@ -95,6 +95,8 @@ model User {
   ordersAsCustomer   Order[]    @relation("CustomerOrders")
   ordersAsDriver     Order[]    @relation("DriverOrders")
   ordersAsRecipient  Order[]    @relation("RecipientOrders")
+  ordersAsManager    Order[]    @relation("ManagerOrders")
+  bonuses       Bonus[]
   gpsPoints     GpsPoint[]
   documents     Document[]
   
@@ -309,6 +311,10 @@ model Order {
   forwarderId       String?
   forwarder         Company?  @relation("ForwarderOrders", fields: [forwarderId], references: [id])
 
+  // Ответственный менеджер (кто создал/ведет)
+  responsibleManagerId  String?
+  responsibleManager    User?  @relation("ManagerOrders", fields: [responsibleManagerId], references: [id])
+
   // Суб-экспедитор (назначенный основным экспедитором)
   subForwarderId    String?
   subForwarder      Company?    @relation("SubForwarderOrders", fields: [subForwarderId], references: [id])
@@ -379,6 +385,7 @@ model Order {
   problems        OrderProblem[]
   warehouseQueue  WarehouseQueueItem?
   incomes         Income[]
+  bonuses         Bonus[]
   
   @@index([status])
   @@index([customerId])
@@ -672,5 +679,26 @@ model Income {
   @@index([companyId])
   @@index([companyId, date])
   @@index([category])
+  @@index([orderId])
+}
+
+// ==================== BONUSES ====================
+
+model Bonus {
+  id         String   @id @default(cuid())
+  userId     String   // Менеджер
+  user       User     @relation(fields: [userId], references: [id])
+  orderId    String   // Заявка-источник
+  order      Order    @relation(fields: [orderId], references: [id])
+  
+  amount     Float    // Сумма бонуса
+  type       String   @default("MARGIN_PERCENT") // MARGIN_PERCENT | FIXED
+  percentage Float?   // Процент от маржи
+  status     String   @default("PENDING") // PENDING | APPROVED | PAID
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@index([userId])
   @@index([orderId])
 }

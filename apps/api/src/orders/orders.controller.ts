@@ -25,6 +25,7 @@ export class OrdersController {
         return this.ordersService.create({
             ...dto,
             customerId: dto.customerId || req.user.sub,
+            responsibleManagerId: req.user.sub,
             pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : undefined,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
