@@ -22,6 +22,7 @@ export class CompanyService {
                 firstName: true,
                 lastName: true,
                 role: true,
+                permissions: true,
                 createdAt: true,
             },
             orderBy: { createdAt: 'desc' },
@@ -31,7 +32,7 @@ export class CompanyService {
     /**
      * Создать приглашение для сотрудника
      */
-    async createInvitation(companyId: string, email: string, role: UserRole) {
+    async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = []) {
         // Создаем случайный токен, например, 32 символа
         const crypto = require('crypto');
         const token = crypto.randomBytes(16).toString('hex');
@@ -46,6 +47,7 @@ export class CompanyService {
                 role,
                 companyId,
                 token,
+                permissions,
                 expiresAt,
             },
         });
@@ -127,6 +129,22 @@ export class CompanyService {
                 lastName: true,
                 role: true,
             },
+        });
+    }
+
+    /**
+     * Изменить права доступа пользователя
+     */
+    async updateUserPermissions(companyId: string, userId: string, permissions: string[]) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user || user.companyId !== companyId) {
+            throw new NotFoundException('Пользователь не найден');
+        }
+
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: { permissions },
+            select: { id: true, permissions: true }
         });
     }
 

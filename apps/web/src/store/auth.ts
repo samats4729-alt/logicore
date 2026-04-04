@@ -11,6 +11,7 @@ interface User {
     firstName: string;
     lastName: string;
     role: UserRole;
+    permissions?: string[];
     companyId?: string;
     company?: {
         id: string;

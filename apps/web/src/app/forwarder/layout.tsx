@@ -107,63 +107,94 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
         setMobileMenuOpen(false);
     };
 
-    const menuItems = [
-        {
-            key: '/forwarder',
-            icon: <DashboardOutlined />,
-            label: 'Дашборд',
-        },
-        {
-            key: '/forwarder/search',
-            icon: <SearchOutlined />,
-            label: 'Поиск грузов',
-        },
-        {
-            key: '/forwarder/orders',
-            icon: <FileTextOutlined />,
-            label: badgeLabel('Заявки', notifications.pendingOrders),
-        },
-        {
-            key: '/forwarder/drivers',
-            icon: <TeamOutlined />,
-            label: 'Водители',
-        },
-        {
-            key: '/forwarder/users',
-            icon: <UserOutlined />,
-            label: 'Сотрудники',
-        },
-        {
-            key: '/forwarder/partners',
-            icon: <TeamOutlined />,
-            label: badgeLabel('Партнеры', notifications.pendingPartners),
-        },
-        {
-            key: '/forwarder/contracts',
-            icon: <FileTextOutlined />,
-            label: 'Договоры',
-        },
-        {
-            key: '/forwarder/tracking',
-            icon: <EnvironmentOutlined />,
-            label: 'Карта',
-        },
-        {
-            key: '/forwarder/documents',
-            icon: <FileOutlined />,
-            label: 'Документы',
-        },
-        {
-            key: '/forwarder/accounting',
-            icon: <DollarOutlined />,
-            label: 'Бухгалтерия',
-        },
-        {
+    const getMenuItems = () => {
+        const hasPerm = (perm: string) => user.role === 'FORWARDER' || user.permissions?.includes(perm);
+
+        const items: any[] = [
+            {
+                key: '/forwarder',
+                icon: <DashboardOutlined />,
+                label: 'Дашборд',
+            },
+            {
+                key: '/forwarder/search',
+                icon: <SearchOutlined />,
+                label: 'Поиск грузов',
+            },
+        ];
+
+        if (hasPerm('orders')) {
+            items.push({
+                key: '/forwarder/orders',
+                icon: <FileTextOutlined />,
+                label: badgeLabel('Заявки', notifications.pendingOrders),
+            });
+        }
+
+        if (hasPerm('drivers')) {
+            items.push({
+                key: '/forwarder/drivers',
+                icon: <TeamOutlined />,
+                label: 'Водители',
+            });
+        }
+
+        if (user.role === 'FORWARDER') {
+            items.push({
+                key: '/forwarder/users',
+                icon: <UserOutlined />,
+                label: 'Сотрудники',
+            });
+        }
+
+        if (hasPerm('partners')) {
+            // Партнеры и договоры часто вместе
+            items.push({
+                key: '/forwarder/partners',
+                icon: <TeamOutlined />,
+                label: badgeLabel('Партнеры', notifications.pendingPartners),
+            });
+            items.push({
+                key: '/forwarder/contracts',
+                icon: <FileTextOutlined />,
+                label: 'Договоры',
+            });
+        }
+
+        if (hasPerm('tracking')) {
+            items.push({
+                key: '/forwarder/tracking',
+                icon: <EnvironmentOutlined />,
+                label: 'Карта',
+            });
+        }
+
+        if (hasPerm('documents')) {
+            items.push({
+                key: '/forwarder/documents',
+                icon: <FileOutlined />,
+                label: 'Документы',
+            });
+        }
+
+        if (hasPerm('accounting')) {
+            items.push({
+                key: '/forwarder/accounting',
+                icon: <DollarOutlined />,
+                label: 'Бухгалтерия',
+            });
+        }
+
+        items.push({
             key: '/forwarder/settings',
             icon: <SettingOutlined />,
             label: badgeLabel('Настройки', notifications.settingsCount),
-        },
-    ];
+        });
+
+        return items;
+    };
+
+    const menuItems = getMenuItems();
 
     const userMenu = {
         items: [

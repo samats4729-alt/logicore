@@ -86,6 +86,7 @@ model User {
   lastName      String
   middleName    String?
   role          UserRole
+  permissions   String[]  @default([])
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -713,6 +714,7 @@ model Invitation {
   role      UserRole
   companyId String
   token     String   @unique
+  permissions String[] @default([])
   isUsed    Boolean  @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())

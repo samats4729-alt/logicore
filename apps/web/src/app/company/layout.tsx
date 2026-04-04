@@ -82,33 +82,43 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
     // Меню в зависимости от роли
     const getMenuItems = () => {
+        const hasPerm = (perm: string) => user.role === 'COMPANY_ADMIN' || user.permissions?.includes(perm);
+
         const items: any[] = [
             {
                 key: '/company',
                 icon: <DashboardOutlined />,
                 label: 'Дашборд',
             },
-            {
+        ];
+
+        if (hasPerm('orders')) {
+            items.push({
                 key: '/company/orders',
                 icon: <FileTextOutlined />,
                 label: 'Заявки',
-            },
-            {
+            });
+        }
+
+        if (hasPerm('partners')) {
+            items.push({
                 key: '/company/partners',
                 icon: <TeamOutlined />,
                 label: 'Партнеры',
-            },
-            {
+            });
+            // Договоры обычно идут с партнерами или заявками
+            items.push({
                 key: '/company/contracts',
                 icon: <FileTextOutlined />,
                 label: 'Договоры',
-            },
-            {
-                key: '/company/locations',
-                icon: <PushpinOutlined />,
-                label: 'Адреса',
-            },
-        ];
+            });
+        }
+
+        items.push({
+            key: '/company/locations',
+            icon: <PushpinOutlined />,
+            label: 'Адреса',
+        });
 
         // Для завсклада — очередь на погрузку
         if (user.role === 'WAREHOUSE_MANAGER' || user.role === 'COMPANY_ADMIN') {
@@ -119,40 +129,44 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // Карта для всех
-        items.push({
-            key: '/company/tracking',
-            icon: <EnvironmentOutlined />,
-            label: 'Карта',
-        });
+        if (hasPerm('tracking')) {
+            items.push({
+                key: '/company/tracking',
+                icon: <EnvironmentOutlined />,
+                label: 'Карта',
+            });
+        }
 
         // Управление пользователями — только для админа компании
         if (user.role === 'COMPANY_ADMIN') {
             items.push({
                 key: '/company/users',
                 icon: <TeamOutlined />,
-                label: 'Пользователи',
+                label: 'Сотрудники',
             });
         }
 
-        // Документы и Настройки для всех
-        items.push(
-            {
+        if (hasPerm('documents')) {
+            items.push({
                 key: '/company/documents',
                 icon: <FileOutlined />,
                 label: 'Документы',
-            },
-            {
+            });
+        }
+
+        if (hasPerm('accounting')) {
+            items.push({
                 key: '/company/accounting',
                 icon: <DollarOutlined />,
                 label: 'Бухгалтерия',
-            },
-            {
-                key: '/company/settings',
-                icon: <SettingOutlined />,
-                label: 'Настройки',
-            }
-        );
+            });
+        }
+
+        items.push({
+            key: '/company/settings',
+            icon: <SettingOutlined />,
+            label: 'Настройки',
+        });
 
         return items;
     };

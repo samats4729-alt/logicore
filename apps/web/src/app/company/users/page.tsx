@@ -1,9 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert } from 'antd';
-import { MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons';
+import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox } from 'antd';
+import { MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+
+export const MODULE_PERMISSIONS = [
+    { label: 'Заявки', value: 'orders' },
+    { label: 'Документы', value: 'documents' },
+    { label: 'Бухгалтерия', value: 'accounting' },
+    { label: 'Партнеры', value: 'partners' },
+    { label: 'Карта / Трекинг', value: 'tracking' },
+    { label: 'Водители', value: 'drivers' },
+];
 
 const { Title, Text } = Typography;
 
@@ -14,6 +23,7 @@ interface CompanyUser {
     firstName: string;
     lastName: string;
     role: string;
+    permissions: string[];
     createdAt: string;
 }
 
@@ -22,6 +32,7 @@ interface Invitation {
     email: string;
     role: string;
     token: string;
+    permissions: string[];
     createdAt: string;
 }
 
@@ -44,8 +55,11 @@ export default function CompanyUsersPage() {
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<CompanyUser | null>(null);
     const [generatedLink, setGeneratedLink] = useState<string | null>(null);
     const [form] = Form.useForm();
+    const [editForm] = Form.useForm();
 
     const fetchData = async () => {
         setLoading(true);
@@ -90,6 +104,20 @@ export default function CompanyUsersPage() {
             fetchData();
         } catch (error) {
             message.error('Ошибка');
+        }
+    };
+
+    const handleEditPermissions = async (values: any) => {
+        try {
+            if (!editingUser) return;
+            await api.put(`/company/users/${editingUser.id}/permissions`, {
+                permissions: values.permissions || [],
+            });
+            message.success('Права доступа обновлены');
+            setEditModalOpen(false);
+            fetchData();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка');
         }
     };
 
@@ -147,6 +175,16 @@ export default function CompanyUsersPage() {
             key: 'actions',
             render: (_: any, record: CompanyUser) => (
                 <Space>
+                    {record.role !== 'COMPANY_ADMIN' && (
+                        <Button 
+                            icon={<SettingOutlined />} 
+                            onClick={() => {
+                                setEditingUser(record);
+                                editForm.setFieldsValue({ permissions: record.permissions || [] });
+                                setEditModalOpen(true);
+                            }}
+                        />
+                    )}
                     {record.role !== 'COMPANY_ADMIN' && (
                         <Popconfirm
                             title="Удалить пользователя?"
@@ -273,6 +311,9 @@ export default function CompanyUsersPage() {
                                 <Select.Option value="WAREHOUSE_MANAGER">Завсклад</Select.Option>
                             </Select>
                         </Form.Item>
+                        <Form.Item name="permissions" label="Права доступа (для левого меню)">
+                            <Checkbox.Group options={MODULE_PERMISSIONS} />
+                        </Form.Item>
                         <Alert 
                             message="Сотрудник сам введёт свои данные" 
                             description="По этой ссылке сотрудник сможет сам задать себе ФИО, телефон и пароль для входа." 
@@ -282,6 +323,21 @@ export default function CompanyUsersPage() {
                         />
                     </Form>
                 )}
+            </Modal>
+
+            <Modal
+                title={`Права доступа: ${editingUser?.firstName} ${editingUser?.lastName}`}
+                open={editModalOpen}
+                onCancel={() => setEditModalOpen(false)}
+                onOk={() => editForm.submit()}
+                okText="Сохранить"
+                cancelText="Отмена"
+            >
+                <Form form={editForm} layout="vertical" onFinish={handleEditPermissions}>
+                    <Form.Item name="permissions" label="Доступ к разделам">
+                        <Checkbox.Group options={MODULE_PERMISSIONS} />
+                    </Form.Item>
+                </Form>
             </Modal>
         </div>
     );

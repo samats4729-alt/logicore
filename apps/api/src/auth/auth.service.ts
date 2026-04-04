@@ -595,6 +595,7 @@ export class AuthService {
                     lastName,
                     passwordHash,
                     role: invitation.role,
+                    permissions: invitation.permissions,
                     companyId: invitation.companyId,
                 },
             });

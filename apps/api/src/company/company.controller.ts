@@ -53,6 +53,17 @@ export class CompanyController {
         return this.companyService.updateCompanyUser(req.user.companyId, userId, dto);
     }
 
+    @Put('users/:id/permissions')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Обновить права пользователя' })
+    async updateUserPermissions(
+        @Request() req: any,
+        @Param('id') userId: string,
+        @Body() dto: { permissions: string[] },
+    ) {
+        return this.companyService.updateUserPermissions(req.user.companyId, userId, dto.permissions);
+    }
+
     @Delete('users/:id')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Деактивировать пользователя компании' })
@@ -74,9 +85,9 @@ export class CompanyController {
     @ApiOperation({ summary: 'Создать приглашение для нового сотрудника' })
     async createInvitation(
         @Request() req: any,
-        @Body() dto: { email: string; role: UserRole },
+        @Body() dto: { email: string; role: UserRole; permissions: string[] },
     ) {
-        return this.companyService.createInvitation(req.user.companyId, dto.email, dto.role);
+        return this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions);
     }
 
     @Delete('invitations/:id')
