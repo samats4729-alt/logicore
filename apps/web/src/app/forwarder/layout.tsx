@@ -129,6 +129,11 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
             label: 'Водители',
         },
         {
+            key: '/forwarder/users',
+            icon: <UserOutlined />,
+            label: 'Сотрудники',
+        },
+        {
             key: '/forwarder/partners',
             icon: <TeamOutlined />,
             label: badgeLabel('Партнеры', notifications.pendingPartners),

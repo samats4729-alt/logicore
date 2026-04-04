@@ -160,6 +160,8 @@ model Company {
   // Contracts
   contractsAsCustomer  Contract[] @relation("ContractCustomer")
   contractsAsForwarder Contract[] @relation("ContractForwarder")
+  
+  invitations       Invitation[]
 }
 
 // ... existing models ...
@@ -701,4 +703,22 @@ model Bonus {
   
   @@index([userId])
   @@index([orderId])
+}
+
+// ==================== INVITATIONS ====================
+
+model Invitation {
+  id        String   @id @default(cuid())
+  email     String
+  role      UserRole
+  companyId String
+  token     String   @unique
+  isUsed    Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  company   Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([token])
 }

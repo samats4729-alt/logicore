@@ -29,21 +29,21 @@ export class CompanyController {
     // ==================== Пользователи компании ====================
 
     @Get('users')
-    @Roles(UserRole.COMPANY_ADMIN)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Получить пользователей своей компании' })
     async getCompanyUsers(@Request() req: any) {
         return this.companyService.getCompanyUsers(req.user.companyId);
     }
 
     @Post('users')
-    @Roles(UserRole.COMPANY_ADMIN)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Создать пользователя в своей компании' })
     async createCompanyUser(@Request() req: any, @Body() dto: CreateCompanyUserDto) {
         return this.companyService.createCompanyUser(req.user.companyId, dto);
     }
 
     @Put('users/:id')
-    @Roles(UserRole.COMPANY_ADMIN)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Обновить пользователя компании' })
     async updateCompanyUser(
         @Request() req: any,
@@ -54,10 +54,36 @@ export class CompanyController {
     }
 
     @Delete('users/:id')
-    @Roles(UserRole.COMPANY_ADMIN)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Деактивировать пользователя компании' })
     async deleteCompanyUser(@Request() req: any, @Param('id') userId: string) {
         return this.companyService.deactivateCompanyUser(req.user.companyId, userId);
+    }
+
+    // ==================== Приглашения ====================
+
+    @Get('invitations')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Получить список активных приглашений' })
+    async getInvitations(@Request() req: any) {
+        return this.companyService.getInvitations(req.user.companyId);
+    }
+
+    @Post('invitations')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Создать приглашение для нового сотрудника' })
+    async createInvitation(
+        @Request() req: any,
+        @Body() dto: { email: string; role: UserRole },
+    ) {
+        return this.companyService.createInvitation(req.user.companyId, dto.email, dto.role);
+    }
+
+    @Delete('invitations/:id')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Отменить приглашение' })
+    async cancelInvitation(@Request() req: any, @Param('id') invitationId: string) {
+        return this.companyService.cancelInvitation(req.user.companyId, invitationId);
     }
 
     // ==================== Заявки компании ====================

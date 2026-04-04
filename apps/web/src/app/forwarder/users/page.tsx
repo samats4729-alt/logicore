@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 
 const { Title, Text } = Typography;
 
-interface CompanyUser {
+interface ForwarderUser {
     id: string;
     email: string;
     phone: string;
@@ -26,21 +26,19 @@ interface Invitation {
 }
 
 const roleLabels: Record<string, string> = {
-    COMPANY_ADMIN: 'Админ',
+    FORWARDER: 'Экспедитор',
     LOGISTICIAN: 'Логист',
     WAREHOUSE_MANAGER: 'Завсклад',
-    FORWARDER: 'Экспедитор',
 };
 
 const roleColors: Record<string, string> = {
-    COMPANY_ADMIN: 'purple',
+    FORWARDER: 'purple',
     LOGISTICIAN: 'blue',
     WAREHOUSE_MANAGER: 'green',
-    FORWARDER: 'orange',
 };
 
-export default function CompanyUsersPage() {
-    const [users, setUsers] = useState<CompanyUser[]>([]);
+export default function ForwarderUsersPage() {
+    const [users, setUsers] = useState<ForwarderUser[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
@@ -120,7 +118,7 @@ export default function CompanyUsersPage() {
         {
             title: 'Имя',
             key: 'name',
-            render: (_: any, record: CompanyUser) => `${record.firstName} ${record.lastName}`,
+            render: (_: any, record: ForwarderUser) => `${record.firstName} ${record.lastName}`,
         },
         {
             title: 'Email',
@@ -145,9 +143,9 @@ export default function CompanyUsersPage() {
         {
             title: 'Действия',
             key: 'actions',
-            render: (_: any, record: CompanyUser) => (
+            render: (_: any, record: ForwarderUser) => (
                 <Space>
-                    {record.role !== 'COMPANY_ADMIN' && (
+                    {record.role !== 'FORWARDER' && (
                         <Popconfirm
                             title="Удалить пользователя?"
                             onConfirm={() => handleDeleteUser(record.id)}
@@ -269,6 +267,7 @@ export default function CompanyUsersPage() {
                         </Form.Item>
                         <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
                             <Select placeholder="Выберите роль">
+                                <Select.Option value="FORWARDER">Экспедитор (Менеджер)</Select.Option>
                                 <Select.Option value="LOGISTICIAN">Логист</Select.Option>
                                 <Select.Option value="WAREHOUSE_MANAGER">Завсклад</Select.Option>
                             </Select>

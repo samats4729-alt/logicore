@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RequestSmsCodeDto, VerifySmsCodeDto, LoginEmailDto, RegisterCompanyDto } from './dto/auth.dto';
@@ -98,5 +98,21 @@ export class AuthController {
     @ApiOperation({ summary: 'Получить данные текущего пользователя' })
     async getMe(@Request() req: any) {
         return this.authService.validateUser(req.user.sub);
+    }
+
+    // ==================== Регистрация по приглашению ====================
+
+    @Get('invitation/:token')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Получить информацию о приглашении' })
+    async getInvitation(@Param('token') token: string) {
+        return this.authService.getInvitationDetails(token);
+    }
+
+    @Post('register/invited')
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({ summary: 'Зарегистрироваться по приглашению' })
+    async registerInvitedUser(@Body() dto: any) {
+        return this.authService.registerInvitedUser(dto);
     }
 }

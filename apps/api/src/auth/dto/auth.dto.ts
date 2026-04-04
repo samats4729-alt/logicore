@@ -92,3 +92,32 @@ export class RegisterCompanyDto {
     @Matches(/^\+?[0-9]{10,15}$/, { message: 'Некорректный формат номера телефона' })
     phone: string;
 }
+
+export class RegisterInvitedUserDto {
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    token: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    firstName: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    lastName: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    @Matches(/^\+?[0-9]{10,15}$/, { message: 'Некорректный формат номера телефона' })
+    phone: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(6)
+    password: string;
+}

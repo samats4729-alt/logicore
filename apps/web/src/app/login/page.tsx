@@ -39,13 +39,18 @@ export default function LoginPage() {
 
             // Получаем данные пользователя для редиректа
             const meResponse = await api.post('/auth/me');
-            const userRole = meResponse.data.role;
+            const user = meResponse.data;
+            const userRole = user.role;
 
             // Редирект по роли
             if (userRole === 'ADMIN') {
                 router.push('/admin');
-            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER'].includes(userRole)) {
-                router.push('/company');
+            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(userRole)) {
+                if (user.company?.type === 'FORWARDER') {
+                    router.push('/forwarder');
+                } else {
+                    router.push('/company');
+                }
             } else {
                 router.push('/');
             }
@@ -82,10 +87,12 @@ export default function LoginPage() {
             const userRole = user.role;
             if (userRole === 'ADMIN') {
                 router.push('/admin');
-            } else if (userRole === 'FORWARDER') {
-                router.push('/forwarder');
-            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER'].includes(userRole)) {
-                router.push('/company');
+            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(userRole)) {
+                if (user.company?.type === 'FORWARDER') {
+                    router.push('/forwarder');
+                } else {
+                    router.push('/company');
+                }
             } else {
                 router.push('/');
             }

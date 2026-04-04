@@ -29,6 +29,53 @@ export class CompanyService {
     }
 
     /**
+     * Создать приглашение для сотрудника
+     */
+    async createInvitation(companyId: string, email: string, role: UserRole) {
+        // Создаем случайный токен, например, 32 символа
+        const crypto = require('crypto');
+        const token = crypto.randomBytes(16).toString('hex');
+        
+        // Срок годности - 3 дня
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 3);
+
+        const invitation = await this.prisma.invitation.create({
+            data: {
+                email,
+                role,
+                companyId,
+                token,
+                expiresAt,
+            },
+        });
+        
+        // Возвращаем токен (в реальной жизни здесь был бы вызов MailService)
+        return invitation;
+    }
+
+    /**
+     * Получить список активных приглашений компании
+     */
+    async getInvitations(companyId: string) {
+        return this.prisma.invitation.findMany({
+            where: { companyId, isUsed: false },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+
+    /**
+     * Отменить приглашение
+     */
+    async cancelInvitation(companyId: string, invitationId: string) {
+        const inv = await this.prisma.invitation.findUnique({ where: { id: invitationId } });
+        if (!inv || inv.companyId !== companyId) {
+            throw new NotFoundException('Приглашение не найдено');
+        }
+        return this.prisma.invitation.delete({ where: { id: invitationId } });
+    }
+
+    /**
      * Создать пользователя в компании
      */
     async createCompanyUser(

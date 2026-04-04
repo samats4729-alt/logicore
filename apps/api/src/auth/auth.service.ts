@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -540,6 +540,87 @@ export class AuthService {
                 lastName: result.admin.lastName,
                 role: result.admin.role,
                 company: result.company,
+            },
+            accessToken,
+        };
+    }
+
+    // ==================== INVITATIONS ====================
+
+    async getInvitationDetails(token: string) {
+        const invitation = await this.prisma.invitation.findUnique({
+            where: { token },
+            include: { company: true },
+        });
+
+        if (!invitation) {
+            throw new NotFoundException('Приглашение не найдено');
+        }
+
+        if (invitation.isUsed || invitation.expiresAt < new Date()) {
+            throw new BadRequestException('Приглашение недействительно или просрочено');
+        }
+
+        return {
+            email: invitation.email,
+            role: invitation.role,
+            companyName: invitation.company.name,
+        };
+    }
+
+    async registerInvitedUser(dto: any) {
+        const { token, firstName, lastName, phone, password } = dto;
+        
+        const invitation = await this.prisma.invitation.findUnique({
+            where: { token },
+        });
+
+        if (!invitation || invitation.isUsed || invitation.expiresAt < new Date()) {
+            throw new BadRequestException('Приглашение недействительно или просрочено');
+        }
+
+        const existingPhone = await this.prisma.user.findUnique({ where: { phone } });
+        if (existingPhone) {
+            throw new BadRequestException('Пользователь с таким телефоном уже существует');
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const result = await this.prisma.$transaction(async (tx) => {
+            const user = await tx.user.create({
+                data: {
+                    email: invitation.email,
+                    phone,
+                    firstName,
+                    lastName,
+                    passwordHash,
+                    role: invitation.role,
+                    companyId: invitation.companyId,
+                },
+            });
+
+            await tx.invitation.update({
+                where: { id: invitation.id },
+                data: { isUsed: true },
+            });
+
+            return user;
+        });
+
+        const payload = {
+            sub: result.id,
+            role: result.role,
+            companyId: result.companyId,
+        };
+        const accessToken = this.jwtService.sign(payload);
+
+        return {
+            user: {
+                id: result.id,
+                email: result.email,
+                firstName: result.firstName,
+                lastName: result.lastName,
+                role: result.role,
             },
             accessToken,
         };

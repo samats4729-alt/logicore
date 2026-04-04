@@ -75,6 +75,7 @@ export class UsersService {
         lastName: string;
         middleName: string;
         email: string;
+        phone: string;
         vehiclePlate: string;
         vehicleModel: string;
         isActive: boolean;
@@ -82,6 +83,14 @@ export class UsersService {
         return this.prisma.user.update({
             where: { id },
             data,
+        });
+    }
+
+    async updatePassword(id: string, newPassword: string) {
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        return this.prisma.user.update({
+            where: { id },
+            data: { passwordHash },
         });
     }
 
