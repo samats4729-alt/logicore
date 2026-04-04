@@ -26,7 +26,7 @@ interface Invitation {
 }
 
 const roleLabels: Record<string, string> = {
-    FORWARDER: 'Экспедитор',
+    FORWARDER: 'Менеджер',
     LOGISTICIAN: 'Логист',
     WAREHOUSE_MANAGER: 'Завсклад',
 };
@@ -267,7 +267,7 @@ export default function ForwarderUsersPage() {
                         </Form.Item>
                         <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
                             <Select placeholder="Выберите роль">
-                                <Select.Option value="FORWARDER">Экспедитор (Менеджер)</Select.Option>
+                                <Select.Option value="FORWARDER">Менеджер</Select.Option>
                                 <Select.Option value="LOGISTICIAN">Логист</Select.Option>
                                 <Select.Option value="WAREHOUSE_MANAGER">Завсклад</Select.Option>
                             </Select>
