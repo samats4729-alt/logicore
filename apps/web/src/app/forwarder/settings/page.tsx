@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs } from 'antd';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Alert, Badge } from 'antd';
 import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SettingOutlined, SafetyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -18,10 +18,20 @@ export default function SettingsPage() {
     const [profileForm] = Form.useForm();
     const [passwordForm] = Form.useForm();
     const [companyForm] = Form.useForm();
+    const [profileComplete, setProfileComplete] = useState(true);
+
+    // Check profile completeness
+    const checkProfileStatus = async () => {
+        try {
+            const res = await api.get('/company/profile-status');
+            setProfileComplete(res.data.isComplete);
+        } catch {}
+    };
 
     useEffect(() => {
         loadCompanyProfile();
         loadStamp();
+        checkProfileStatus();
     }, []);
 
     const loadCompanyProfile = async () => {
@@ -72,6 +82,7 @@ export default function SettingsPage() {
         try {
             await api.put('/company/profile', values);
             message.success('Данные компании обновлены');
+            checkProfileStatus(); // Re-check after saving
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка обновления данных компании');
         } finally {
@@ -183,10 +194,24 @@ export default function SettingsPage() {
         {
             key: 'company',
             label: (
-                <span><BankOutlined style={{ marginRight: 6 }} />Данные компании</span>
+                <span>
+                    <BankOutlined style={{ marginRight: 6 }} />
+                    {!profileComplete ? (
+                        <Badge dot offset={[6, 0]}><span style={{ color: 'inherit' }}>Данные компании</span></Badge>
+                    ) : 'Данные компании'}
+                </span>
             ),
             children: (
                 <Card bordered={false}>
+                    {!profileComplete && (
+                        <Alert
+                            message="Необходимо заполнить данные компании"
+                            description="Заполните Название компании, БИН, Юридический адрес и ФИО директора для возможности создавать заявки."
+                            type="warning"
+                            showIcon
+                            style={{ marginBottom: 16 }}
+                        />
+                    )}
                     <Form
                         form={companyForm}
                         layout="vertical"

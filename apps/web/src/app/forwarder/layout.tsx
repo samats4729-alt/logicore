@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Layout, Menu, Button, Avatar, Dropdown, Typography, Spin, Drawer } from 'antd';
+import { Layout, Menu, Button, Avatar, Dropdown, Typography, Spin, Drawer, Badge } from 'antd';
 import {
     DashboardOutlined,
     FileTextOutlined,
@@ -20,6 +20,7 @@ import {
     DollarOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
+import { api } from '@/lib/api';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -31,6 +32,7 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
     const [collapsed, setCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [profileComplete, setProfileComplete] = useState(true);
 
     // Определяем мобильное устройство
     useEffect(() => {
@@ -67,6 +69,15 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
             }
         });
     }, [checkAuth, router]);
+
+    // Check profile completeness
+    useEffect(() => {
+        if (user) {
+            api.get('/company/profile-status').then(res => {
+                setProfileComplete(res.data.isComplete);
+            }).catch(() => {});
+        }
+    }, [user]);
 
     if (isLoading || !user) {
         return (
@@ -135,7 +146,11 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
         {
             key: '/forwarder/settings',
             icon: <SettingOutlined />,
-            label: 'Настройки',
+            label: profileComplete ? 'Настройки' : (
+                <Badge count={1} size="small" offset={[8, 0]}>
+                    <span style={{ color: 'inherit' }}>Настройки</span>
+                </Badge>
+            ),
         },
     ];
 

@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import {
     Table, Button, Tag, Space, Modal, Form, Input, message, Typography,
     Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col,
-    DatePicker, Checkbox, Slider
+    DatePicker, Checkbox, Slider, Alert
 } from 'antd';
 import {
     EyeOutlined, UserAddOutlined, CheckCircleOutlined, PlusOutlined,
@@ -142,6 +142,14 @@ export default function ForwarderOrdersPage() {
     const [isMarketplace, setIsMarketplace] = useState(false);
     const [appliedTariff, setAppliedTariff] = useState<any>(null);
     const [tariffLoading, setTariffLoading] = useState(false);
+    const [profileComplete, setProfileComplete] = useState(true);
+
+    // Check profile completeness
+    useEffect(() => {
+        api.get('/company/profile-status').then(res => {
+            setProfileComplete(res.data.isComplete);
+        }).catch(() => {});
+    }, []);
 
     // =================== FILTERS ===================
     const [filterCompany, setFilterCompany] = useState<string | undefined>(undefined);
@@ -591,10 +599,28 @@ export default function ForwarderOrdersPage() {
         <div style={{ height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Title level={4} style={{ margin: 0 }}>Заявки</Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-                    Новая заявка
-                </Button>
+                <Tooltip title={!profileComplete ? 'Заполните данные компании в Настройках' : undefined}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)} disabled={!profileComplete}>
+                        Новая заявка
+                    </Button>
+                </Tooltip>
             </div>
+
+            {!profileComplete && (
+                <Alert
+                    message="Заполните данные компании"
+                    description="Для создания заявок необходимо заполнить: Название компании, БИН, Юридический адрес и ФИО директора в разделе Настройки → Данные компании."
+                    type="warning"
+                    showIcon
+                    closable={false}
+                    style={{ marginBottom: 12 }}
+                    action={
+                        <Button size="small" type="primary" onClick={() => window.location.href = '/forwarder/settings'}>
+                            Перейти в настройки
+                        </Button>
+                    }
+                />
+            )}
 
             <Tabs
                 activeKey={activeTab}

@@ -69,6 +69,19 @@ export class CompanyController {
         return this.companyService.getCompanyProfile(req.user.companyId);
     }
 
+    @Get('profile-status')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Проверить заполненность профиля компании' })
+    async getProfileStatus(@Request() req: any) {
+        const company = await this.companyService.getCompanyProfile(req.user.companyId);
+        const requiredFields = ['name', 'bin', 'address', 'directorName'];
+        const missing = requiredFields.filter(f => !(company as Record<string, any>)[f]);
+        return {
+            isComplete: missing.length === 0,
+            missingFields: missing,
+        };
+    }
+
     @Put('profile')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Обновить профиль компании' })
