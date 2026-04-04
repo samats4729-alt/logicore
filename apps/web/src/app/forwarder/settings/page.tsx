@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs } from 'antd';
+import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SettingOutlined, SafetyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 
@@ -118,213 +118,241 @@ export default function SettingsPage() {
         }
     };
 
-    return (
-        <div>
-            <Title level={3}>Настройки</Title>
-
-            {/* Профиль */}
-            <Card title="Профиль" style={{ marginBottom: 24 }}>
-                <Form
-                    form={profileForm}
-                    layout="vertical"
-                    onFinish={handleProfileUpdate}
-                    initialValues={{
-                        firstName: user?.firstName,
-                        lastName: user?.lastName,
-                        email: user?.email,
-                        phone: user?.phone,
-                    }}
-                >
-                    <Row gutter={24}>
-                        <Col xs={24} md={12}>
-                            <Form.Item
-                                name="firstName"
-                                label="Имя"
-                                rules={[{ required: true, message: 'Введите имя' }]}
-                            >
-                                <Input prefix={<UserOutlined />} size="large" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item
-                                name="lastName"
-                                label="Фамилия"
-                                rules={[{ required: true, message: 'Введите фамилию' }]}
-                            >
-                                <Input prefix={<UserOutlined />} size="large" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item
-                                name="email"
-                                label="Email"
-                                rules={[{ type: 'email', message: 'Неверный формат email' }]}
-                            >
-                                <Input prefix={<MailOutlined />} size="large" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="phone" label="Телефон">
-                                <Input prefix={<PhoneOutlined />} size="large" disabled />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    <Form.Item>
-                        <Button type="primary" htmlType="submit" loading={loading} size="large">
-                            Сохранить изменения
-                        </Button>
-                    </Form.Item>
-                </Form>
-            </Card>
-
-            {/* Данные компании */}
-            <Card title="Данные компании" style={{ marginBottom: 24 }}>
-                <Form
-                    form={companyForm}
-                    layout="vertical"
-                    onFinish={handleCompanyUpdate}
-                >
-                    <Title level={5} style={{ marginBottom: 16 }}>Основная информация</Title>
-                    <Row gutter={24}>
-                        <Col xs={24} md={12}>
-                            <Form.Item
-                                name="name"
-                                label="Название компании"
-                                rules={[{ required: true, message: 'Введите название' }]}
-                            >
-                                <Input size="large" placeholder="ТОО КазЛогистик" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item
-                                name="bin"
-                                label="БИН"
-                                rules={[{ required: true, message: 'Введите БИН' }]}
-                            >
-                                <Input size="large" placeholder="123456789012" maxLength={12} />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="address" label="Юридический адрес">
-                                <Input size="large" placeholder="г. Алматы, ул. ..." />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="phone" label="Телефон компании">
-                                <Input size="large" placeholder="+77001234567" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="email" label="Email компании">
-                                <Input size="large" placeholder="info@company.kz" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="directorName" label="ФИО директора">
-                                <Input size="large" placeholder="Иванов И.И." />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Divider />
-                    <Title level={5} style={{ marginBottom: 16 }}>
-                        <BankOutlined style={{ marginRight: 8 }} />
-                        Банковские реквизиты
-                    </Title>
-                    <Row gutter={24}>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="bankAccount" label="ИИК (номер счёта)">
-                                <Input size="large" placeholder="KZ12345678901234567" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="bankName" label="Название банка">
-                                <Input size="large" placeholder="АО «Каспи Банк»" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="bankBic" label="БИК">
-                                <Input size="large" placeholder="CASPKZKA" />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                            <Form.Item name="kbe" label="КБЕ">
-                                <Input size="large" placeholder="17" maxLength={2} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Form.Item>
-                        <Button type="primary" htmlType="submit" loading={companyLoading} size="large">
-                            Сохранить данные компании
-                        </Button>
-                    </Form.Item>
-                </Form>
-
-                <Divider />
-                <Title level={5} style={{ marginBottom: 16 }}>Печать компании</Title>
-                <Space direction="vertical" size="middle">
-                    {stampUrl && (
-                        <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, display: 'inline-block' }}>
-                            <Image src={stampUrl} alt="Печать" width={150} />
-                        </div>
-                    )}
-                    <Upload
-                        accept=".png,.jpg,.jpeg"
-                        showUploadList={false}
-                        beforeUpload={handleStampUpload}
+    const tabItems = [
+        {
+            key: 'profile',
+            label: (
+                <span><UserOutlined style={{ marginRight: 6 }} />Настройки профиля</span>
+            ),
+            children: (
+                <Card bordered={false}>
+                    <Form
+                        form={profileForm}
+                        layout="vertical"
+                        onFinish={handleProfileUpdate}
+                        initialValues={{
+                            firstName: user?.firstName,
+                            lastName: user?.lastName,
+                            email: user?.email,
+                            phone: user?.phone,
+                        }}
                     >
-                        <Button icon={<UploadOutlined />} loading={stampLoading} size="large">
-                            {stampUrl ? 'Заменить печать' : 'Загрузить печать (PNG)'}
-                        </Button>
-                    </Upload>
-                    <Text type="secondary">Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
-                </Space>
-            </Card>
-
-            {/* Смена пароля */}
-            <Card title="Изменить пароль">
-                <Form
-                    form={passwordForm}
-                    layout="vertical"
-                    onFinish={handlePasswordChange}
-                >
-                    <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 600 }}>
-                        <Form.Item
-                            name="currentPassword"
-                            label="Текущий пароль"
-                            rules={[{ required: true, message: 'Введите текущий пароль' }]}
-                        >
-                            <Input.Password prefix={<LockOutlined />} size="large" />
-                        </Form.Item>
-
-                        <Form.Item
-                            name="newPassword"
-                            label="Новый пароль"
-                            rules={[
-                                { required: true, message: 'Введите новый пароль' },
-                                { min: 6, message: 'Минимум 6 символов' },
-                            ]}
-                        >
-                            <Input.Password prefix={<LockOutlined />} size="large" />
-                        </Form.Item>
-
-                        <Form.Item
-                            name="confirmPassword"
-                            label="Подтвердите новый пароль"
-                            rules={[{ required: true, message: 'Подтвердите пароль' }]}
-                        >
-                            <Input.Password prefix={<LockOutlined />} size="large" />
-                        </Form.Item>
-
+                        <Row gutter={24}>
+                            <Col xs={24} md={12}>
+                                <Form.Item
+                                    name="firstName"
+                                    label="Имя"
+                                    rules={[{ required: true, message: 'Введите имя' }]}
+                                >
+                                    <Input prefix={<UserOutlined />} size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item
+                                    name="lastName"
+                                    label="Фамилия"
+                                    rules={[{ required: true, message: 'Введите фамилию' }]}
+                                >
+                                    <Input prefix={<UserOutlined />} size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item
+                                    name="email"
+                                    label="Email"
+                                    rules={[{ type: 'email', message: 'Неверный формат email' }]}
+                                >
+                                    <Input prefix={<MailOutlined />} size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="phone" label="Телефон">
+                                    <Input prefix={<PhoneOutlined />} size="large" disabled />
+                                </Form.Item>
+                            </Col>
+                        </Row>
                         <Form.Item>
-                            <Button type="primary" htmlType="submit" loading={passwordLoading} size="large">
-                                Изменить пароль
+                            <Button type="primary" htmlType="submit" loading={loading} size="large">
+                                Сохранить изменения
                             </Button>
                         </Form.Item>
+                    </Form>
+                </Card>
+            ),
+        },
+        {
+            key: 'company',
+            label: (
+                <span><BankOutlined style={{ marginRight: 6 }} />Данные компании</span>
+            ),
+            children: (
+                <Card bordered={false}>
+                    <Form
+                        form={companyForm}
+                        layout="vertical"
+                        onFinish={handleCompanyUpdate}
+                    >
+                        <Title level={5} style={{ marginBottom: 16 }}>Основная информация</Title>
+                        <Row gutter={24}>
+                            <Col xs={24} md={12}>
+                                <Form.Item
+                                    name="name"
+                                    label="Название компании"
+                                    rules={[{ required: true, message: 'Введите название' }]}
+                                >
+                                    <Input size="large" placeholder="ТОО КазЛогистик" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item
+                                    name="bin"
+                                    label="БИН"
+                                    rules={[{ required: true, message: 'Введите БИН' }]}
+                                >
+                                    <Input size="large" placeholder="123456789012" maxLength={12} />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="address" label="Юридический адрес">
+                                    <Input size="large" placeholder="г. Алматы, ул. ..." />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="phone" label="Телефон компании">
+                                    <Input size="large" placeholder="+77001234567" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="email" label="Email компании">
+                                    <Input size="large" placeholder="info@company.kz" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="directorName" label="ФИО директора">
+                                    <Input size="large" placeholder="Иванов И.И." />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+
+                        <Divider />
+                        <Title level={5} style={{ marginBottom: 16 }}>
+                            <BankOutlined style={{ marginRight: 8 }} />
+                            Банковские реквизиты
+                        </Title>
+                        <Row gutter={24}>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="bankAccount" label="ИИК (номер счёта)">
+                                    <Input size="large" placeholder="KZ12345678901234567" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="bankName" label="Название банка">
+                                    <Input size="large" placeholder="АО «Каспи Банк»" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="bankBic" label="БИК">
+                                    <Input size="large" placeholder="CASPKZKA" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="kbe" label="КБЕ">
+                                    <Input size="large" placeholder="17" maxLength={2} />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+
+                        <Form.Item>
+                            <Button type="primary" htmlType="submit" loading={companyLoading} size="large">
+                                Сохранить данные компании
+                            </Button>
+                        </Form.Item>
+                    </Form>
+
+                    <Divider />
+                    <Title level={5} style={{ marginBottom: 16 }}>Печать компании</Title>
+                    <Space direction="vertical" size="middle">
+                        {stampUrl && (
+                            <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, display: 'inline-block' }}>
+                                <Image src={stampUrl} alt="Печать" width={150} />
+                            </div>
+                        )}
+                        <Upload
+                            accept=".png,.jpg,.jpeg"
+                            showUploadList={false}
+                            beforeUpload={handleStampUpload}
+                        >
+                            <Button icon={<UploadOutlined />} loading={stampLoading} size="large">
+                                {stampUrl ? 'Заменить печать' : 'Загрузить печать (PNG)'}
+                            </Button>
+                        </Upload>
+                        <Text type="secondary">Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
                     </Space>
-                </Form>
-            </Card>
+                </Card>
+            ),
+        },
+        {
+            key: 'password',
+            label: (
+                <span><SafetyOutlined style={{ marginRight: 6 }} />Изменить пароль</span>
+            ),
+            children: (
+                <Card bordered={false}>
+                    <Form
+                        form={passwordForm}
+                        layout="vertical"
+                        onFinish={handlePasswordChange}
+                    >
+                        <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 600 }}>
+                            <Form.Item
+                                name="currentPassword"
+                                label="Текущий пароль"
+                                rules={[{ required: true, message: 'Введите текущий пароль' }]}
+                            >
+                                <Input.Password prefix={<LockOutlined />} size="large" />
+                            </Form.Item>
+
+                            <Form.Item
+                                name="newPassword"
+                                label="Новый пароль"
+                                rules={[
+                                    { required: true, message: 'Введите новый пароль' },
+                                    { min: 6, message: 'Минимум 6 символов' },
+                                ]}
+                            >
+                                <Input.Password prefix={<LockOutlined />} size="large" />
+                            </Form.Item>
+
+                            <Form.Item
+                                name="confirmPassword"
+                                label="Подтвердите новый пароль"
+                                rules={[{ required: true, message: 'Подтвердите пароль' }]}
+                            >
+                                <Input.Password prefix={<LockOutlined />} size="large" />
+                            </Form.Item>
+
+                            <Form.Item>
+                                <Button type="primary" htmlType="submit" loading={passwordLoading} size="large">
+                                    Изменить пароль
+                                </Button>
+                            </Form.Item>
+                        </Space>
+                    </Form>
+                </Card>
+            ),
+        },
+    ];
+
+    return (
+        <div>
+            <Title level={3} style={{ marginBottom: 20 }}>Настройки</Title>
+            <Tabs
+                defaultActiveKey="profile"
+                items={tabItems}
+                tabPosition="top"
+                size="large"
+                style={{ minHeight: 400 }}
+            />
         </div>
     );
 }
