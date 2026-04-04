@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox } from 'antd';
 import { MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 
 export const MODULE_PERMISSIONS = [
     { label: 'Заявки', value: 'orders' },
@@ -49,6 +50,7 @@ const roleColors: Record<string, string> = {
 };
 
 export default function ForwarderUsersPage() {
+    const { user: currentUser } = useAuthStore();
     const [users, setUsers] = useState<ForwarderUser[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -173,7 +175,7 @@ export default function ForwarderUsersPage() {
             key: 'actions',
             render: (_: any, record: ForwarderUser) => (
                 <Space>
-                    {record.role !== 'FORWARDER' && (
+                    {record.id !== currentUser?.id && (
                         <Button 
                             icon={<SettingOutlined />} 
                             onClick={() => {
@@ -183,7 +185,7 @@ export default function ForwarderUsersPage() {
                             }}
                         />
                     )}
-                    {record.role !== 'FORWARDER' && (
+                    {record.id !== currentUser?.id && (
                         <Popconfirm
                             title="Удалить пользователя?"
                             onConfirm={() => handleDeleteUser(record.id)}

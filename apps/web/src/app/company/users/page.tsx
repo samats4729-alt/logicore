@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox } from 'antd';
 import { MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 
 export const MODULE_PERMISSIONS = [
     { label: 'Заявки', value: 'orders' },
@@ -51,6 +52,7 @@ const roleColors: Record<string, string> = {
 };
 
 export default function CompanyUsersPage() {
+    const { user: currentUser } = useAuthStore();
     const [users, setUsers] = useState<CompanyUser[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -175,7 +177,7 @@ export default function CompanyUsersPage() {
             key: 'actions',
             render: (_: any, record: CompanyUser) => (
                 <Space>
-                    {record.role !== 'COMPANY_ADMIN' && (
+                    {record.id !== currentUser?.id && (
                         <Button 
                             icon={<SettingOutlined />} 
                             onClick={() => {
@@ -185,7 +187,7 @@ export default function CompanyUsersPage() {
                             }}
                         />
                     )}
-                    {record.role !== 'COMPANY_ADMIN' && (
+                    {record.id !== currentUser?.id && (
                         <Popconfirm
                             title="Удалить пользователя?"
                             onConfirm={() => handleDeleteUser(record.id)}
