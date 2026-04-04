@@ -70,6 +70,7 @@ interface Order {
     assignedDriverPhone?: string;
     assignedDriverPlate?: string;
     assignedDriverTrailer?: string;
+    responsibleManager?: { firstName: string; lastName: string; };
 }
 
 // =================== HELPERS ===================
@@ -340,6 +341,12 @@ export default function CompanyOrdersPage() {
                 if (r.driver) return <span style={{ fontSize: 11, fontFamily: 'monospace' }}>{r.driver.vehiclePlate || '—'}</span>;
                 return <span style={{ color: '#ccc' }}>—</span>;
             },
+        },
+        {
+            title: 'Ответств.', key: 'manager', width: 110, ellipsis: true,
+            render: (_: any, r: Order) => r.responsibleManager 
+                ? <span style={{ fontSize: 12 }}>{r.responsibleManager.firstName} {r.responsibleManager.lastName}</span> 
+                : <span style={{ fontSize: 12, color: '#999' }}>—</span>,
         },
         {
             title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const,
@@ -614,6 +621,13 @@ export default function CompanyOrdersPage() {
                             <Tag color={statusColors[selectedOrder.status]} style={{ fontSize: 13 }}>{statusLabels[selectedOrder.status]}</Tag>
                             {selectedOrder.isConfirmed && <Tag color="green">Подтверждена LogiCore</Tag>}
                         </div>
+
+                        {selectedOrder.responsibleManager && (
+                            <div style={{ marginBottom: 16 }}>
+                                <Text type="secondary">Ответственный менеджер:</Text>
+                                <div><strong>{selectedOrder.responsibleManager.firstName} {selectedOrder.responsibleManager.lastName}</strong></div>
+                            </div>
+                        )}
 
                         <Title level={5}>Груз</Title>
                         <Text>{selectedOrder.cargoDescription}</Text>

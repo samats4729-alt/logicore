@@ -213,7 +213,11 @@ export default function SettingsPage() {
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item name="address" label="Юридический адрес">
+                                <Form.Item 
+                                    name="address" 
+                                    label="Юридический адрес"
+                                    rules={[{ required: true, message: 'Введите юридический адрес' }]}
+                                >
                                     <Input size="large" placeholder="г. Алматы, ул. ..." />
                                 </Form.Item>
                             </Col>
@@ -228,7 +232,11 @@ export default function SettingsPage() {
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item name="directorName" label="ФИО директора">
+                                <Form.Item 
+                                    name="directorName" 
+                                    label="ФИО директора"
+                                    rules={[{ required: true, message: 'Введите ФИО директора' }]}
+                                >
                                     <Input size="large" placeholder="Иванов И.И." />
                                 </Form.Item>
                             </Col>
@@ -241,22 +249,38 @@ export default function SettingsPage() {
                         </Title>
                         <Row gutter={24}>
                             <Col xs={24} md={12}>
-                                <Form.Item name="bankAccount" label="ИИК (номер счёта)">
+                                <Form.Item 
+                                    name="bankAccount" 
+                                    label="ИИК (номер счёта)"
+                                    rules={[{ required: true, message: 'Введите ИИК' }]}
+                                >
                                     <Input size="large" placeholder="KZ12345678901234567" />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item name="bankName" label="Название банка">
+                                <Form.Item 
+                                    name="bankName" 
+                                    label="Название банка"
+                                    rules={[{ required: true, message: 'Введите название банка' }]}
+                                >
                                     <Input size="large" placeholder="АО «Каспи Банк»" />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item name="bankBic" label="БИК">
+                                <Form.Item 
+                                    name="bankBic" 
+                                    label="БИК"
+                                    rules={[{ required: true, message: 'Введите БИК' }]}
+                                >
                                     <Input size="large" placeholder="CASPKZKA" />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item name="kbe" label="КБЕ">
+                                <Form.Item 
+                                    name="kbe" 
+                                    label="КБЕ"
+                                    rules={[{ required: true, message: 'Введите КБЕ' }]}
+                                >
                                     <Input size="large" placeholder="17" maxLength={2} />
                                 </Form.Item>
                             </Col>

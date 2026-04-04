@@ -83,7 +83,7 @@ export class CompanyController {
     @ApiOperation({ summary: 'Проверить заполненность профиля компании' })
     async getProfileStatus(@Request() req: any) {
         const company = await this.companyService.getCompanyProfile(req.user.companyId);
-        const requiredFields = ['name', 'bin', 'address', 'directorName'];
+        const requiredFields = ['name', 'bin', 'address', 'directorName', 'bankAccount', 'bankName', 'bankBic', 'kbe'];
         const missing = requiredFields.filter(f => !(company as Record<string, any>)[f]);
         return {
             isComplete: missing.length === 0,

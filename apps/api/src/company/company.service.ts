@@ -324,11 +324,11 @@ export class CompanyService {
             // Проверка заполненности профиля
             this.prisma.company.findUnique({
                 where: { id: companyId },
-                select: { name: true, bin: true, address: true, directorName: true },
+                select: { name: true, bin: true, address: true, directorName: true, bankAccount: true, bankName: true, bankBic: true, kbe: true },
             }),
         ]);
 
-        const requiredFields = ['name', 'bin', 'address', 'directorName'];
+        const requiredFields = ['name', 'bin', 'address', 'directorName', 'bankAccount', 'bankName', 'bankBic', 'kbe'];
         const profileIncomplete = requiredFields.some(f => !(company as Record<string, any>)?.[f]);
 
         return {

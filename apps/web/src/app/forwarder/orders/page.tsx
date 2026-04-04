@@ -96,6 +96,7 @@ interface Order {
     forwarder?: { name: string };
     isConfirmed?: boolean;
     driverId?: string;
+    responsibleManager?: { firstName: string; lastName: string; };
 }
 
 // ============================================================
@@ -536,6 +537,12 @@ export default function ForwarderOrdersPage() {
             render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
         },
         {
+            title: 'Ответств.', key: 'manager', width: 110, ellipsis: true,
+            render: (_: any, r: Order) => r.responsibleManager 
+                ? <span style={{ fontSize: 12 }}>{r.responsibleManager.firstName} {r.responsibleManager.lastName}</span> 
+                : <span style={{ fontSize: 12, color: '#999' }}>—</span>,
+        },
+        {
             title: 'Исп-ль', key: 'sub', width: 100, ellipsis: true,
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.subForwarder?.name || '—'}</span>,
         },
@@ -587,6 +594,12 @@ export default function ForwarderOrdersPage() {
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'delivery') || '—'}</span>,
         },
         { title: 'Статус', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag> },
+        {
+            title: 'Ответств.', key: 'manager', width: 110, ellipsis: true,
+            render: (_: any, r: Order) => r.responsibleManager 
+                ? <span style={{ fontSize: 12 }}>{r.responsibleManager.firstName} {r.responsibleManager.lastName}</span> 
+                : <span style={{ fontSize: 12, color: '#999' }}>—</span>,
+        },
         { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || '—'}</span> },
         { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || '—'}</span> },
         { title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const, render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : '—' },
@@ -949,11 +962,14 @@ export default function ForwarderOrdersPage() {
                             <Tag color={statusColors[selectedOrder.status]} style={{ fontSize: 13 }}>{statusLabels[selectedOrder.status]}</Tag>
                         </div>
 
-                        <Title level={5}>Заказчик</Title>
+                        <Title level={5}>Заказчик и Ответственный</Title>
                         <Descriptions size="small" column={1}>
                             <Descriptions.Item label="Компания">{selectedOrder.customerCompany?.name || '—'}</Descriptions.Item>
                             <Descriptions.Item label="Контакт">{selectedOrder.customer?.firstName} {selectedOrder.customer?.lastName}</Descriptions.Item>
                             <Descriptions.Item label="Телефон">{selectedOrder.customer?.phone}</Descriptions.Item>
+                            {selectedOrder.responsibleManager && (
+                                <Descriptions.Item label="Ответственный">{selectedOrder.responsibleManager.firstName} {selectedOrder.responsibleManager.lastName}</Descriptions.Item>
+                            )}
                         </Descriptions>
 
                         <Title level={5} style={{ marginTop: 16 }}>Груз</Title>
