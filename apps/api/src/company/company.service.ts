@@ -300,4 +300,42 @@ export class CompanyService {
             orderBy: { name: 'asc' },
         });
     }
+
+    /**
+     * Получить уведомления (счётчики)
+     */
+    async getNotifications(companyId: string) {
+        const [pendingOrders, pendingPartners, company] = await Promise.all([
+            // Заявки, назначенные нам, но ещё не подтверждённые
+            this.prisma.order.count({
+                where: {
+                    forwarderId: companyId,
+                    isConfirmed: false,
+                    status: { notIn: ['DRAFT', 'CANCELLED'] },
+                },
+            }),
+            // Входящие запросы на партнёрство
+            this.prisma.partnership.count({
+                where: {
+                    recipientId: companyId,
+                    status: 'PENDING',
+                },
+            }),
+            // Проверка заполненности профиля
+            this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: { name: true, bin: true, address: true, directorName: true },
+            }),
+        ]);
+
+        const requiredFields = ['name', 'bin', 'address', 'directorName'];
+        const profileIncomplete = requiredFields.some(f => !(company as Record<string, any>)?.[f]);
+
+        return {
+            pendingOrders,
+            pendingPartners,
+            profileIncomplete,
+            settingsCount: profileIncomplete ? 1 : 0,
+        };
+    }
 }

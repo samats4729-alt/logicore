@@ -17,6 +17,15 @@ import * as fs from 'fs';
 export class CompanyController {
     constructor(private companyService: CompanyService) { }
 
+    // ==================== Уведомления ====================
+
+    @Get('notifications')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Получить счётчики уведомлений' })
+    async getNotifications(@Request() req: any) {
+        return this.companyService.getNotifications(req.user.companyId);
+    }
+
     // ==================== Пользователи компании ====================
 
     @Get('users')

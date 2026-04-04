@@ -32,7 +32,7 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
     const [collapsed, setCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const [profileComplete, setProfileComplete] = useState(true);
+    const [notifications, setNotifications] = useState({ pendingOrders: 0, pendingPartners: 0, settingsCount: 0, profileIncomplete: false });
 
     // Определяем мобильное устройство
     useEffect(() => {
@@ -70,14 +70,24 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
         });
     }, [checkAuth, router]);
 
-    // Check profile completeness
+    // Fetch notification counts
     useEffect(() => {
         if (user) {
-            api.get('/company/profile-status').then(res => {
-                setProfileComplete(res.data.isComplete);
+            api.get('/company/notifications').then(res => {
+                setNotifications(res.data);
             }).catch(() => {});
         }
     }, [user]);
+
+    const badgeLabel = (text: string, count: number) => {
+        if (!count) return text;
+        return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {text}
+                <Badge count={count} size="small" style={{ boxShadow: 'none' }} />
+            </span>
+        );
+    };
 
     if (isLoading || !user) {
         return (
@@ -111,7 +121,7 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
         {
             key: '/forwarder/orders',
             icon: <FileTextOutlined />,
-            label: 'Заявки',
+            label: badgeLabel('Заявки', notifications.pendingOrders),
         },
         {
             key: '/forwarder/drivers',
@@ -121,7 +131,7 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
         {
             key: '/forwarder/partners',
             icon: <TeamOutlined />,
-            label: 'Партнеры',
+            label: badgeLabel('Партнеры', notifications.pendingPartners),
         },
         {
             key: '/forwarder/contracts',
@@ -146,11 +156,7 @@ export default function ForwarderLayout({ children }: { children: React.ReactNod
         {
             key: '/forwarder/settings',
             icon: <SettingOutlined />,
-            label: profileComplete ? 'Настройки' : (
-                <Badge count={1} size="small" offset={[8, 0]}>
-                    <span style={{ color: 'inherit' }}>Настройки</span>
-                </Badge>
-            ),
+            label: badgeLabel('Настройки', notifications.settingsCount),
         },
     ];
 
