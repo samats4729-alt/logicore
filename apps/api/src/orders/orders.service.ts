@@ -233,24 +233,65 @@ export class OrdersService {
     }
 
     /**
-     * Обновление данных заявки
+     * Обновление данных заявки (на любом этапе)
      */
     async update(orderId: string, data: {
         cargoDescription?: string;
         cargoWeight?: number;
         cargoVolume?: number;
+        cargoType?: string;
         requirements?: string;
         customerPrice?: number;
         driverCost?: number;
         pickupLocationId?: string;
+        deliveryLocationId?: string;
         driverId?: string;
+        forwarderId?: string;
+        pickupDate?: Date;
+        pickupNotes?: string;
+        customerPaymentCondition?: string;
+        customerPaymentForm?: string;
+        customerPaymentDate?: Date;
+        driverPaymentCondition?: string;
+        driverPaymentForm?: string;
+        driverPaymentDate?: Date;
+        ttnNumber?: string;
+        atiCodeCustomer?: string;
+        atiCodeCarrier?: string;
+        trailerNumber?: string;
+        actualWeight?: number;
+        actualVolume?: number;
+        appliedTariffId?: string;
+        natureOfCargo?: string;
+        customerPriceType?: string;
     }) {
+        const order = await this.findById(orderId);
+
+        // Собираем данные для обновления, убирая deliveryLocationId (это для точек)
+        const { deliveryLocationId, ...updateFields } = data;
+        const updateData: any = { ...updateFields };
+
         // Если назначается водитель - меняем статус на ASSIGNED
-        const updateData: any = { ...data };
-        if (data.driverId) {
-            const order = await this.findById(orderId);
-            if (order.status === 'PENDING' || order.status === 'DRAFT') {
-                updateData.status = OrderStatus.ASSIGNED;
+        if (data.driverId && (order.status === 'PENDING' || order.status === 'DRAFT')) {
+            updateData.status = OrderStatus.ASSIGNED;
+        }
+
+        // Обновляем точку выгрузки, если передана
+        if (deliveryLocationId) {
+            // Заменяем первую точку выгрузки
+            const existingPoints = await this.prisma.orderDeliveryPoint.findMany({
+                where: { orderId },
+                orderBy: { sequence: 'asc' },
+            });
+            if (existingPoints.length > 0) {
+                await this.prisma.orderDeliveryPoint.update({
+                    where: { id: existingPoints[0].id },
+                    data: { locationId: deliveryLocationId },
+                });
+            } else {
+                await this.prisma.orderDeliveryPoint.create({
+                    data: { orderId, locationId: deliveryLocationId, sequence: 1 },
+                });
             }
         }
 
@@ -261,6 +302,10 @@ export class OrdersService {
                 customer: true,
                 driver: true,
                 pickupLocation: true,
+                deliveryPoints: { include: { location: true } },
+                forwarder: true,
+                appliedTariff: { include: { originCity: true, destinationCity: true } },
+                responsibleManager: { select: { id: true, firstName: true, lastName: true } },
             },
         });
     }

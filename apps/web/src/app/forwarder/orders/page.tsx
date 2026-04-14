@@ -9,7 +9,7 @@ import {
 import {
     EyeOutlined, UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
-    FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined
+    FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined, EditOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -129,10 +129,12 @@ export default function ForwarderOrdersPage() {
     const [statusModalOpen, setStatusModalOpen] = useState(false);
     const [statusLoading, setStatusLoading] = useState(false);
     const [form] = Form.useForm();
+    const [editForm] = Form.useForm();
     const [statusForm] = Form.useForm();
 
-    // Create order
+    // Create / Edit order
     const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [editModalOpen, setEditModalOpen] = useState(false);
     const [createForm] = Form.useForm();
     const [locations, setLocations] = useState<Location[]>([]);
     const [cargoCategories, setCargoCategories] = useState<any[]>([]);
@@ -375,6 +377,34 @@ export default function ForwarderOrdersPage() {
 
     const showOrderDetail = (order: Order) => { setSelectedOrder(order); setDetailDrawerOpen(true); };
 
+    const openEditModal = (order: Order) => {
+        setSelectedOrder(order);
+        editForm.setFieldsValue({
+            cargoDescription: order.cargoDescription,
+            cargoWeight: order.cargoWeight,
+            cargoVolume: order.cargoVolume,
+            cargoType: order.cargoType,
+            natureOfCargo: order.natureOfCargo,
+            requirements: order.requirements,
+            customerPrice: order.customerPrice,
+            customerPriceType: order.customerPriceType || 'FIXED',
+        });
+        setEditModalOpen(true);
+    };
+
+    const handleEditOrder = async (values: any) => {
+        if (!selectedOrder) return;
+        try {
+            await api.put(`/orders/${selectedOrder.id}`, values);
+            message.success('Заявка обновлена');
+            setEditModalOpen(false);
+            setDetailDrawerOpen(false);
+            fetchIncoming(); fetchOutgoing();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка обновления');
+        }
+    };
+
     const openAssignModal = (order: Order) => {
         setSelectedOrder(order);
         setSelectedDriverId(null);
@@ -562,10 +592,11 @@ export default function ForwarderOrdersPage() {
             render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>,
         },
         {
-            title: '', key: 'actions', width: 90, fixed: 'right' as const,
+            title: '', key: 'actions', width: 120, fixed: 'right' as const,
             render: (_: any, r: Order) => (
                 <Space size={4}>
                     <Tooltip title="Подробнее"><Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} style={{ fontSize: 12 }} /></Tooltip>
+                    <Tooltip title="Редактировать"><Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} /></Tooltip>
                     {!r.isConfirmed ? (
                         <>
                             <Tooltip title="Принять"><Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleAccept(r.id)} /></Tooltip>
@@ -603,7 +634,12 @@ export default function ForwarderOrdersPage() {
         { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || '—'}</span> },
         { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || '—'}</span> },
         { title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const, render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : '—' },
-        { title: '', key: 'actions', width: 50, render: (_: any, r: Order) => <Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} /> },
+        { title: '', key: 'actions', width: 80, render: (_: any, r: Order) => (
+            <Space size={4}>
+                <Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} />
+                <Tooltip title="Редактировать"><Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} /></Tooltip>
+            </Space>
+        ) },
     ];
 
     // =================== RENDER ===================
@@ -1031,6 +1067,9 @@ export default function ForwarderOrdersPage() {
                                     Скачать доверенность
                                 </Button>
                             )}
+                            <Button icon={<EditOutlined />} style={{ marginTop: 8 }} onClick={() => openEditModal(selectedOrder)} block>
+                                Редактировать заявку
+                            </Button>
                             {getNextStatuses(selectedOrder.status).length > 0 && (
                                 <Button type="primary" style={{ marginTop: 8 }} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }} block>
                                     Изменить статус
@@ -1056,6 +1095,64 @@ export default function ForwarderOrdersPage() {
                         </Form.Item>
                     </Form>
                 )}
+            </Modal>
+
+            {/* ========== EDIT ORDER MODAL ========== */}
+            <Modal
+                title={`Редактировать заявку ${selectedOrder?.orderNumber || ''}`}
+                open={editModalOpen}
+                onCancel={() => setEditModalOpen(false)}
+                onOk={() => editForm.submit()}
+                okText="Сохранить"
+                cancelText="Отмена"
+                width={700}
+                style={{ top: 20 }}
+            >
+                <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
+                    <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Груз</Title>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="natureOfCargo" label="Характер груза">
+                                <Select placeholder="Выберите..." showSearch optionFilterProp="children" allowClear>
+                                    {cargoCategories.map(cat => (
+                                        <Select.OptGroup key={cat.id} label={cat.name}>
+                                            {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
+                                        </Select.OptGroup>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="cargoType" label="Тип кузова">
+                                <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children">
+                                    {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item name="cargoDescription" label="Описание груза">
+                        <Input.TextArea rows={2} />
+                    </Form.Item>
+                    <Row gutter={12}>
+                        <Col span={8}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                    </Row>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="customerPriceType" label="Тип оплаты">
+                                <Select>
+                                    <Select.Option value="FIXED">За рейс (всего)</Select.Option>
+                                    <Select.Option value="PER_KM">За км</Select.Option>
+                                    <Select.Option value="PER_TON">За тонну</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item name="requirements" label="Доп. требования">
+                        <Input.TextArea rows={2} />
+                    </Form.Item>
+                </Form>
             </Modal>
         </div>
     );

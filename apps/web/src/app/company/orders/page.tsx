@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Table, Button, Tag, Space, Modal, Form, Input, InputNumber, Select, DatePicker, message, Typography, Drawer, Row, Col, Tooltip, Checkbox, Card } from 'antd';
-import { PlusOutlined, EyeOutlined, CloseCircleOutlined, EnvironmentOutlined, FlagOutlined, DeleteOutlined, FilterOutlined, ClearOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CloseCircleOutlined, EnvironmentOutlined, FlagOutlined, DeleteOutlined, FilterOutlined, ClearOutlined, EditOutlined } from '@ant-design/icons';
 import { api, Location, City } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
@@ -62,15 +62,27 @@ interface Order {
     customerPriceType?: 'FIXED' | 'PER_KM' | 'PER_TON';
     isConfirmed: boolean;
     createdAt: string;
-    pickupLocation?: { name: string; address: string; city?: string };
-    deliveryPoints?: { location: { name: string; address: string; city?: string } }[];
+    pickupDate?: string;
+    pickupNotes?: string;
+    pickupLocation?: { id?: string; name: string; address: string; city?: string };
+    deliveryPoints?: { location: { id?: string; name: string; address: string; city?: string } }[];
     driver?: { firstName: string; lastName: string; phone: string; vehiclePlate?: string };
-    forwarder?: { name: string };
+    forwarder?: { id?: string; name: string };
     assignedDriverName?: string;
     assignedDriverPhone?: string;
     assignedDriverPlate?: string;
     assignedDriverTrailer?: string;
     responsibleManager?: { firstName: string; lastName: string; };
+    customerPaymentCondition?: string;
+    customerPaymentForm?: string;
+    driverPaymentCondition?: string;
+    driverPaymentForm?: string;
+    ttnNumber?: string;
+    atiCodeCustomer?: string;
+    atiCodeCarrier?: string;
+    trailerNumber?: string;
+    actualWeight?: number;
+    actualVolume?: number;
 }
 
 // =================== HELPERS ===================
@@ -97,11 +109,13 @@ export default function CompanyOrdersPage() {
     const [drivers, setDrivers] = useState<{ id: string; firstName: string; lastName: string; phone: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [editModalOpen, setEditModalOpen] = useState(false);
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [statusModalOpen, setStatusModalOpen] = useState(false);
     const [statusLoading, setStatusLoading] = useState(false);
     const [form] = Form.useForm();
+    const [editForm] = Form.useForm();
     const [statusForm] = Form.useForm();
     const [cargoCategories, setCargoCategories] = useState<any[]>([]);
     const [pickupLocation, setPickupLocation] = useState<LocationState>({ city: '', address: '' });
@@ -289,6 +303,41 @@ export default function CompanyOrdersPage() {
     const showOrderDetail = (order: Order) => { setSelectedOrder(order); setDetailDrawerOpen(true); };
     const canCreateOrder = user?.role === 'LOGISTICIAN' || user?.role === 'COMPANY_ADMIN';
 
+    const openEditModal = (order: Order) => {
+        setSelectedOrder(order);
+        editForm.setFieldsValue({
+            cargoDescription: order.cargoDescription,
+            cargoWeight: order.cargoWeight,
+            cargoVolume: order.cargoVolume,
+            cargoType: order.cargoType,
+            natureOfCargo: order.natureOfCargo,
+            requirements: order.requirements,
+            customerPrice: order.customerPrice,
+            customerPriceType: order.customerPriceType || 'FIXED',
+            forwarderId: order.forwarder?.id,
+            customerPaymentCondition: order.customerPaymentCondition,
+            customerPaymentForm: order.customerPaymentForm,
+            driverPaymentCondition: order.driverPaymentCondition,
+            driverPaymentForm: order.driverPaymentForm,
+            ttnNumber: order.ttnNumber,
+            pickupNotes: order.pickupNotes,
+        });
+        setEditModalOpen(true);
+    };
+
+    const handleEditOrder = async (values: any) => {
+        if (!selectedOrder) return;
+        try {
+            await api.put(`/orders/${selectedOrder.id}`, values);
+            message.success('Заявка обновлена');
+            setEditModalOpen(false);
+            setDetailDrawerOpen(false);
+            fetchOrders();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка обновления');
+        }
+    };
+
     // =================== COLUMNS ===================
     const columns = [
         {
@@ -354,10 +403,11 @@ export default function CompanyOrdersPage() {
             render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc' }}>—</span>,
         },
         {
-            title: '', key: 'actions', width: 80, fixed: 'right' as const,
+            title: '', key: 'actions', width: 110, fixed: 'right' as const,
             render: (_: any, record: Order) => (
                 <Space size={4}>
                     <Tooltip title="Подробнее"><Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(record)} /></Tooltip>
+                    <Tooltip title="Редактировать"><Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)} /></Tooltip>
                     {(record.status === 'PENDING' || record.status === 'ASSIGNED' || record.status === 'DRAFT') && (
                         <Tooltip title="Отменить"><Button size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleCancelOrder(record)} /></Tooltip>
                     )}
@@ -689,11 +739,16 @@ export default function CompanyOrdersPage() {
                             </div>
                         )}
 
-                        {selectedOrder.status && getNextStatuses(selectedOrder.status).length > 0 && (
-                            <Button type="primary" style={{ marginTop: 16, width: '100%' }} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
-                                Изменить статус заявки
+                        <Space direction="vertical" style={{ width: '100%', marginTop: 16 }}>
+                            <Button icon={<EditOutlined />} style={{ width: '100%' }} onClick={() => openEditModal(selectedOrder)}>
+                                Редактировать заявку
                             </Button>
-                        )}
+                            {getNextStatuses(selectedOrder.status).length > 0 && (
+                                <Button type="primary" style={{ width: '100%' }} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
+                                    Изменить статус заявки
+                                </Button>
+                            )}
+                        </Space>
                     </div>
                 )}
             </Drawer>
@@ -713,6 +768,97 @@ export default function CompanyOrdersPage() {
                         </Form.Item>
                     </Form>
                 )}
+            </Modal>
+
+            {/* ========== EDIT ORDER MODAL ========== */}
+            <Modal
+                title={`Редактировать заявку ${selectedOrder?.orderNumber || ''}`}
+                open={editModalOpen}
+                onCancel={() => setEditModalOpen(false)}
+                onOk={() => editForm.submit()}
+                okText="Сохранить"
+                cancelText="Отмена"
+                width={700}
+                style={{ top: 20 }}
+            >
+                <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
+                    <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Груз</Title>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="natureOfCargo" label="Характер груза">
+                                <Select placeholder="Выберите..." showSearch optionFilterProp="children" allowClear>
+                                    {cargoCategories.map(cat => (
+                                        <Select.OptGroup key={cat.id} label={cat.name}>
+                                            {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
+                                        </Select.OptGroup>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="cargoType" label="Тип кузова">
+                                <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children">
+                                    {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item name="cargoDescription" label="Описание груза">
+                        <TextArea rows={2} />
+                    </Form.Item>
+                    <Row gutter={12}>
+                        <Col span={8}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                    </Row>
+
+                    <Title level={5} style={{ marginTop: 8, marginBottom: 12 }}>Условия</Title>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="customerPriceType" label="Тип оплаты">
+                                <Select>
+                                    <Select.Option value="FIXED">За рейс (всего)</Select.Option>
+                                    <Select.Option value="PER_KM">За км</Select.Option>
+                                    <Select.Option value="PER_TON">За тонну</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="forwarderId" label="Экспедитор">
+                                <Select placeholder="Экспедитор" allowClear showSearch optionFilterProp="children">
+                                    {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="customerPaymentCondition" label="Условие оплаты (заказчик)">
+                                <Input />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="driverPaymentCondition" label="Условие оплаты (водитель)">
+                                <Input />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="ttnNumber" label="Номер ТТН">
+                                <Input />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="pickupNotes" label="Примечания к погрузке">
+                                <Input />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item name="requirements" label="Доп. требования">
+                        <TextArea rows={2} />
+                    </Form.Item>
+                </Form>
             </Modal>
         </div>
     );
