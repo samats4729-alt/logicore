@@ -32,6 +32,7 @@ export default function SettingsPage() {
                 name: company.name,
                 bin: company.bin,
                 address: company.address,
+                actualAddress: company.actualAddress,
                 phone: company.phone,
                 email: company.email,
                 directorName: company.directorName,
@@ -207,9 +208,14 @@ export default function SettingsPage() {
                                 <Form.Item
                                     name="bin"
                                     label="БИН"
-                                    rules={[{ required: true, message: 'Введите БИН' }]}
+                                    rules={[
+                                        { required: true, message: 'Введите БИН' },
+                                        { pattern: /^\d+$/, message: 'Только цифры' },
+                                    ]}
                                 >
-                                    <Input size="large" placeholder="123456789012" maxLength={12} />
+                                    <Input size="large" placeholder="123456789012" maxLength={12} 
+                                        onKeyPress={(e) => { if (!/\d/.test(e.key)) e.preventDefault(); }} 
+                                    />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
@@ -217,6 +223,15 @@ export default function SettingsPage() {
                                     name="address" 
                                     label="Юридический адрес"
                                     rules={[{ required: true, message: 'Введите юридический адрес' }]}
+                                >
+                                    <Input size="large" placeholder="г. Алматы, ул. ..." />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item 
+                                    name="actualAddress" 
+                                    label="Фактический адрес"
+                                    rules={[{ required: true, message: 'Введите фактический адрес' }]}
                                 >
                                     <Input size="large" placeholder="г. Алматы, ул. ..." />
                                 </Form.Item>

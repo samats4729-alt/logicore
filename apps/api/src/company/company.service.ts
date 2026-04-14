@@ -275,6 +275,7 @@ export class CompanyService {
         name?: string;
         bin?: string;
         address?: string;
+        actualAddress?: string;
         phone?: string;
         email?: string;
         directorName?: string;

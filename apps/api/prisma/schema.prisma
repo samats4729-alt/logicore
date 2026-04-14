@@ -127,7 +127,8 @@ model Company {
   id             String      @id @default(cuid())
   name           String
   bin            String?     // БИН/ИИН
-  address        String?
+  address        String?     // Юридический адрес
+  actualAddress  String?     // Фактический адрес
   phone          String?
   email          String?     // Email компании
   directorName   String?     // ФИО директора

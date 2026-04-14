@@ -72,10 +72,15 @@ export class UpdateCompanyProfileDto {
     @IsOptional()
     bin?: string;
 
-    @ApiProperty({ description: 'Адрес', required: false })
+    @ApiProperty({ description: 'Юридический адрес', required: false })
     @IsString()
     @IsOptional()
     address?: string;
+
+    @ApiProperty({ description: 'Фактический адрес', required: false })
+    @IsString()
+    @IsOptional()
+    actualAddress?: string;
 
     @ApiProperty({ description: 'Телефон', required: false })
     @IsString()
