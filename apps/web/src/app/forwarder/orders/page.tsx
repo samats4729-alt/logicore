@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     Table, Button, Tag, Space, Modal, Form, Input, message, Typography,
     Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col,
     DatePicker, Checkbox, Slider, Alert
 } from 'antd';
+import dayjs from 'dayjs';
 import {
     EyeOutlined, UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
@@ -84,8 +86,8 @@ interface Order {
     customerPriceType?: string;
     createdAt: string;
     pickupDate?: string;
-    pickupLocation?: { name: string; address: string; city?: string };
-    deliveryPoints?: { location: { name: string; address: string; city?: string } }[];
+    pickupLocation?: { id?: string; name: string; address: string; city?: string };
+    deliveryPoints?: { location: { id?: string; name: string; address: string; city?: string } }[];
     customer?: { firstName: string; lastName: string; phone: string; email?: string };
     customerCompany?: { name: string; phone?: string };
     assignedDriverName?: string;
@@ -93,7 +95,8 @@ interface Order {
     assignedDriverPlate?: string;
     assignedAt?: string;
     subForwarder?: { name: string };
-    forwarder?: { name: string };
+    forwarder?: { id?: string; name: string };
+    forwarderId?: string;
     isConfirmed?: boolean;
     driverId?: string;
     responsibleManager?: { firstName: string; lastName: string; };
@@ -105,6 +108,7 @@ interface Order {
 
 export default function ForwarderOrdersPage() {
     const { user } = useAuthStore();
+    const router = useRouter();
     const [activeTab, setActiveTab] = useState('incoming');
 
     // Incoming orders
@@ -388,18 +392,57 @@ export default function ForwarderOrdersPage() {
             requirements: order.requirements,
             customerPrice: order.customerPrice,
             customerPriceType: order.customerPriceType || 'FIXED',
+            pickupDate: order.pickupDate ? dayjs(order.pickupDate) : undefined,
+            forwarderId: order.forwarderId || order.forwarder?.id || undefined,
         });
+        // Populate location state for edit
+        if (order.pickupLocation) {
+            setPickupLocation({ city: order.pickupLocation.city || '', address: order.pickupLocation.address, id: order.pickupLocation.id });
+        } else {
+            setPickupLocation({ city: '', address: '' });
+        }
+        if (order.deliveryPoints?.[0]?.location) {
+            const loc = order.deliveryPoints[0].location;
+            setDeliveryLocation({ city: loc.city || '', address: loc.address, id: loc.id });
+        } else {
+            setDeliveryLocation({ city: '', address: '' });
+        }
+        // Load intermediate delivery points (skip the first one, it's the main delivery)
+        if (order.deliveryPoints && order.deliveryPoints.length > 1) {
+            setIntermediatePoints(order.deliveryPoints.slice(1).map(dp => ({
+                city: dp.location.city || '', address: dp.location.address, id: dp.location.id,
+            })));
+        } else {
+            setIntermediatePoints([]);
+        }
+        // Ensure current forwarder is in the list so Select shows the name
+        const fwdId = order.forwarderId || order.forwarder?.id;
+        if (fwdId && order.forwarder?.name && !forwarders.some(f => f.id === fwdId)) {
+            setForwarders(prev => [...prev, { id: fwdId, name: order.forwarder!.name }]);
+        }
         setEditModalOpen(true);
     };
 
     const handleEditOrder = async (values: any) => {
         if (!selectedOrder) return;
         try {
-            await api.put(`/orders/${selectedOrder.id}`, values);
+            const getLocId = async (loc: LocationState) => {
+                if (loc.id) return loc.id;
+                const res = await api.post('/locations', { name: `${loc.city}, ${loc.address}`, address: `${loc.city}, ${loc.address}`, latitude: 0, longitude: 0, city: loc.city || '' });
+                return res.data.id;
+            };
+            const updateData: any = { ...values };
+            if (pickupLocation.id || (pickupLocation.city && pickupLocation.address)) {
+                updateData.pickupLocationId = await getLocId(pickupLocation);
+            }
+            if (deliveryLocation.id || (deliveryLocation.city && deliveryLocation.address)) {
+                updateData.deliveryLocationId = await getLocId(deliveryLocation);
+            }
+            await api.put(`/orders/${selectedOrder.id}`, updateData);
             message.success('Заявка обновлена');
             setEditModalOpen(false);
             setDetailDrawerOpen(false);
-            fetchIncoming(); fetchOutgoing();
+            fetchOrders(); fetchOutgoingOrders();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка обновления');
         }
@@ -753,7 +796,7 @@ export default function ForwarderOrdersPage() {
                                     style={{ fontSize: 12 }}
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
-                                        onDoubleClick: () => showOrderDetail(record),
+                                        onDoubleClick: () => router.push(`/forwarder/orders/${record.id}`),
                                     })}
                                     rowClassName={(record) => {
                                         if (record.status === 'COMPLETED') return 'row-completed';
@@ -779,7 +822,7 @@ export default function ForwarderOrdersPage() {
                                     pagination={{ pageSize: 50, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100', '200'], showTotal: (t) => `Всего: ${t}` }}
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
-                                        onDoubleClick: () => showOrderDetail(record),
+                                        onDoubleClick: () => router.push(`/forwarder/orders/${record.id}`),
                                     })}
                                 />
                             </div>
@@ -830,7 +873,7 @@ export default function ForwarderOrdersPage() {
                                 <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
                             </Form.Item>
                             <div style={{ padding: '8px 12px', background: '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#1890ff' }}>📍 Погрузка</div>
+                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#1890ff' }}><EnvironmentOutlined /> Погрузка</div>
                                 <Select
                                     placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
                                     onChange={(val) => {
@@ -848,7 +891,7 @@ export default function ForwarderOrdersPage() {
                                 </Select>
                             </div>
                             <div style={{ padding: '8px 12px', background: '#f6ffed', borderRadius: 8, marginBottom: 12 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#52c41a' }}>🏁 Выгрузка</div>
+                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#52c41a' }}><FlagOutlined /> Выгрузка</div>
                                 <Select
                                     placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
                                     onChange={(val) => {
@@ -1105,53 +1148,121 @@ export default function ForwarderOrdersPage() {
                 onOk={() => editForm.submit()}
                 okText="Сохранить"
                 cancelText="Отмена"
-                width={700}
+                width={900}
                 style={{ top: 20 }}
             >
                 <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
-                    <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Груз</Title>
-                    <Row gutter={12}>
+                    <Row gutter={24}>
                         <Col span={12}>
-                            <Form.Item name="natureOfCargo" label="Характер груза">
-                                <Select placeholder="Выберите..." showSearch optionFilterProp="children" allowClear>
-                                    {cargoCategories.map(cat => (
-                                        <Select.OptGroup key={cat.id} label={cat.name}>
-                                            {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
-                                        </Select.OptGroup>
-                                    ))}
-                                </Select>
+                            <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Маршрут</Title>
+                            <Form.Item name="pickupDate" label="Дата погрузки">
+                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
                             </Form.Item>
+                            <div style={{ padding: '8px 12px', background: '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#1890ff' }}><EnvironmentOutlined /> Погрузка</div>
+                                <Select
+                                    placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
+                                    value={pickupLocation.id || undefined}
+                                    onChange={(val) => {
+                                        if (!val) { setPickupLocation({ city: '', address: '' }); }
+                                        else {
+                                            const loc = locations.find(l => l.id === val);
+                                            if (loc) setPickupLocation({ city: loc.city || '', address: loc.address, id: loc.id });
+                                        }
+                                    }}
+                                >
+                                    {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
+                                </Select>
+                            </div>
+                            <div style={{ padding: '8px 12px', background: '#f6ffed', borderRadius: 8, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#52c41a' }}><FlagOutlined /> Выгрузка</div>
+                                <Select
+                                    placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
+                                    value={deliveryLocation.id || undefined}
+                                    onChange={(val) => {
+                                        if (!val) { setDeliveryLocation({ city: '', address: '' }); }
+                                        else {
+                                            const loc = locations.find(l => l.id === val);
+                                            if (loc) setDeliveryLocation({ city: loc.city || '', address: loc.address, id: loc.id });
+                                        }
+                                    }}
+                                >
+                                    {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
+                                </Select>
+                            </div>
+                            {intermediatePoints.map((pt, i) => (
+                                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                                    <Select placeholder={`Доп. ${i + 1}`} allowClear showSearch optionFilterProp="children" style={{ flex: 1 }}
+                                        value={pt.id || undefined}
+                                        onChange={(val) => {
+                                            const loc = locations.find(l => l.id === val);
+                                            const np = [...intermediatePoints];
+                                            np[i] = loc ? { city: loc.city || '', address: loc.address, id: loc.id } : { city: '', address: '' };
+                                            setIntermediatePoints(np);
+                                        }}
+                                    >
+                                        {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name}</Select.Option>)}
+                                    </Select>
+                                    <Button danger icon={<DeleteOutlined />} onClick={() => { const np = [...intermediatePoints]; np.splice(i, 1); setIntermediatePoints(np); }} />
+                                </div>
+                            ))}
+                            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setIntermediatePoints([...intermediatePoints, { city: '', address: '' }])} style={{ width: '100%' }}>
+                                Доп. адрес
+                            </Button>
                         </Col>
                         <Col span={12}>
-                            <Form.Item name="cargoType" label="Тип кузова">
-                                <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children">
-                                    {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
-                                </Select>
+                            <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Груз</Title>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="natureOfCargo" label="Характер груза">
+                                        <Select placeholder="Выберите..." showSearch optionFilterProp="children" allowClear>
+                                            {cargoCategories.map(cat => (
+                                                <Select.OptGroup key={cat.id} label={cat.name}>
+                                                    {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
+                                                </Select.OptGroup>
+                                            ))}
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="cargoType" label="Тип кузова">
+                                        <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children">
+                                            {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Form.Item name="cargoDescription" label="Описание груза">
+                                <Input.TextArea rows={2} />
+                            </Form.Item>
+                            <Row gutter={12}>
+                                <Col span={8}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={8}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={8}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                            </Row>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="customerPriceType" label="Тип оплаты">
+                                        <Select>
+                                            <Select.Option value="FIXED">За рейс (всего)</Select.Option>
+                                            <Select.Option value="PER_KM">За км</Select.Option>
+                                            <Select.Option value="PER_TON">За тонну</Select.Option>
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="forwarderId" label="Экспедитор">
+                                        <Select placeholder="Экспедитор" allowClear showSearch optionFilterProp="children">
+                                            {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Form.Item name="requirements" label="Доп. требования">
+                                <Input.TextArea rows={2} />
                             </Form.Item>
                         </Col>
                     </Row>
-                    <Form.Item name="cargoDescription" label="Описание груза">
-                        <Input.TextArea rows={2} />
-                    </Form.Item>
-                    <Row gutter={12}>
-                        <Col span={8}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                        <Col span={8}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                        <Col span={8}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                    </Row>
-                    <Row gutter={12}>
-                        <Col span={12}>
-                            <Form.Item name="customerPriceType" label="Тип оплаты">
-                                <Select>
-                                    <Select.Option value="FIXED">За рейс (всего)</Select.Option>
-                                    <Select.Option value="PER_KM">За км</Select.Option>
-                                    <Select.Option value="PER_TON">За тонну</Select.Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    <Form.Item name="requirements" label="Доп. требования">
-                        <Input.TextArea rows={2} />
-                    </Form.Item>
                 </Form>
             </Modal>
         </div>

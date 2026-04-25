@@ -45,6 +45,15 @@ export class ForwarderService {
                         phone: true,
                     }
                 },
+                forwarder: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                },
+                responsibleManager: {
+                    select: { id: true, firstName: true, lastName: true }
+                },
             },
             orderBy: { createdAt: 'desc' },
         });

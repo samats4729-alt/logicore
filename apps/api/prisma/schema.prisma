@@ -388,6 +388,7 @@ model Order {
   gpsPoints       GpsPoint[]
   problems        OrderProblem[]
   warehouseQueue  WarehouseQueueItem?
+  expenses        Expense[]
   incomes         Income[]
   bonuses         Bonus[]
   
@@ -651,6 +652,10 @@ model Expense {
   amount      Float    // Сумма в тенге
   note        String?
   
+  // Привязка к заявке (опционально)
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id])
+  
   createdById String?  // Кто создал
   
   createdAt   DateTime @default(now())
@@ -659,6 +664,7 @@ model Expense {
   @@index([companyId])
   @@index([companyId, date])
   @@index([category])
+  @@index([orderId])
 }
 
 model Income {

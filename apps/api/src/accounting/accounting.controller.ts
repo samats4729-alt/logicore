@@ -7,6 +7,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class AccountingController {
     constructor(private readonly accountingService: AccountingService) { }
 
+    // ==================== ORDER FINANCIALS ====================
+
+    @Get('orders/:id/financials')
+    async getOrderFinancials(@Request() req: any, @Param('id') id: string) {
+        return this.accountingService.getOrderFinancials(req.user.companyId, id);
+    }
+
     // ==================== FINANCIAL REGISTRY ====================
 
     @Get('financial-registry')

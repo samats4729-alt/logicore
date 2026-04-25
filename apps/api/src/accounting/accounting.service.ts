@@ -5,6 +5,64 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AccountingService {
     constructor(private prisma: PrismaService) { }
 
+    // ==================== ORDER FINANCIALS ====================
+
+    async getOrderFinancials(companyId: string, orderId: string) {
+        const order = await this.prisma.order.findFirst({
+            where: {
+                id: orderId,
+                OR: [
+                    { forwarderId: companyId },
+                    { customerCompanyId: companyId },
+                ],
+            },
+            include: {
+                customerCompany: { select: { id: true, name: true } },
+                customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
+                pickupLocation: true,
+                deliveryPoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                forwarder: { select: { id: true, name: true } },
+                subForwarder: { select: { id: true, name: true } },
+                responsibleManager: { select: { id: true, firstName: true, lastName: true } },
+                statusHistory: { orderBy: { changedAt: 'desc' } },
+            },
+        });
+        if (!order) throw new NotFoundException('Заявка не найдена');
+
+        const [incomes, expenses] = await Promise.all([
+            this.prisma.income.findMany({
+                where: { orderId, companyId },
+                orderBy: { date: 'desc' },
+            }),
+            this.prisma.expense.findMany({
+                where: { orderId, companyId },
+                orderBy: { date: 'desc' },
+            }),
+        ]);
+
+        const totalIncomes = incomes.reduce((s, i) => s + i.amount, 0);
+        const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+
+        return {
+            order,
+            incomes,
+            expenses,
+            summary: {
+                customerPrice: order.customerPrice || 0,
+                driverCost: order.driverCost || 0,
+                subForwarderPrice: order.subForwarderPrice || 0,
+                margin: (order.customerPrice || 0) - (order.driverCost || 0) - (order.subForwarderPrice || 0),
+                totalIncomes,
+                totalExpenses,
+                balance: totalIncomes - totalExpenses,
+                isCustomerPaid: order.isCustomerPaid,
+                isDriverPaid: order.isDriverPaid,
+                customerDebt: order.isCustomerPaid ? 0 : (order.customerPrice || 0) - totalIncomes,
+                driverDebt: order.isDriverPaid ? 0 : (order.driverCost || 0) - totalExpenses,
+            },
+        };
+    }
+
     // ==================== FINANCIAL REGISTRY (Реестр) ====================
 
     async getFinancialRegistry(companyId: string) {
@@ -198,6 +256,7 @@ export class AccountingService {
         description: string;
         amount: number;
         note?: string;
+        orderId?: string;
     }) {
         return this.prisma.expense.create({
             data: {
@@ -208,6 +267,7 @@ export class AccountingService {
                 description: data.description,
                 amount: data.amount,
                 note: data.note || null,
+                orderId: data.orderId || null,
             },
         });
     }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Table, Button, Tag, Space, Modal, Form, Input, InputNumber, Select, DatePicker, message, Typography, Drawer, Row, Col, Tooltip, Checkbox, Card } from 'antd';
 import { PlusOutlined, EyeOutlined, CloseCircleOutlined, EnvironmentOutlined, FlagOutlined, DeleteOutlined, FilterOutlined, ClearOutlined, EditOutlined } from '@ant-design/icons';
 import { api, Location, City } from '@/lib/api';
@@ -103,6 +104,7 @@ function extractCity(order: Order, type: 'pickup' | 'delivery'): string {
 
 export default function CompanyOrdersPage() {
     const { user } = useAuthStore();
+    const router = useRouter();
     const [orders, setOrders] = useState<Order[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
     const [forwarders, setForwarders] = useState<{ id: string; name: string }[]>([]);
@@ -471,7 +473,7 @@ export default function CompanyOrdersPage() {
                 pagination={{ pageSize: 50, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100', '200'], showTotal: (t) => `Всего: ${t}` }}
                 onRow={(record) => ({
                     style: { cursor: 'pointer' },
-                    onDoubleClick: () => showOrderDetail(record),
+                    onDoubleClick: () => router.push(`/company/orders/${record.id}`),
                 })}
                 rowClassName={(record) => {
                     if (record.status === 'COMPLETED') return 'row-completed';
