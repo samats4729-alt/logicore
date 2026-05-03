@@ -1,0 +1,22 @@
+{
+  "name": "logcomp",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter api --filter web dev",
+    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm --filter './apps/*' build",
+    "lint": "pnpm --filter './apps/*' lint",
+    "test": "pnpm --filter './apps/*' test",
+    "db:generate": "pnpm --filter api prisma:generate",
+    "db:migrate": "pnpm --filter api prisma:migrate",
+    "db:studio": "pnpm --filter api prisma:studio"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,735 @@
+// Prisma Schema for LogComp
+// Logistics Management System
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum PriceType {
+  FIXED     // Всего
+  PER_KM    // За км
+  PER_TON   // За тонну
+}
+
+enum UserRole {
+  ADMIN             // Наша компания (LogComp)
+  COMPANY_ADMIN     // Админ компании-клиента (Заказчик)
+  LOGISTICIAN       // Логист (создаёт заявки)
+  WAREHOUSE_MANAGER // Завсклад (управляет очередью)
+  DRIVER            // Водитель
+  RECIPIENT         // Грузополучатель
+  PARTNER           // Иная ТК (субподрядчик)
+  FORWARDER         // Экспедитор
+}
+
+enum OrderStatus {
+  DRAFT           // Черновик
+  PENDING         // Ожидает назначения
+  ASSIGNED        // Назначен водитель
+  EN_ROUTE_PICKUP // Водитель едет на погрузку
+  AT_PICKUP       // Водитель на месте погрузки
+  LOADING         // Идет погрузка
+  IN_TRANSIT      // В пути
+  AT_DELIVERY     // Прибыл на выгрузку
+  UNLOADING       // Идет разгрузка
+  COMPLETED       // Завершен
+  CANCELLED       // Отменен
+  PROBLEM         // Проблема
+}
+
+enum DocumentType {
+  TTN             // Товарно-транспортная накладная
+  POWER_OF_ATTORNEY // Доверенность
+  ACT             // Акт
+  INVOICE         // Счет
+  OTHER           // Прочее
+}
+
+enum CompanyType {
+  CUSTOMER    // Заказчик
+  FORWARDER   // Экспедитор
+}
+
+enum ContractStatus {
+  DRAFT       // Черновик
+  PENDING     // На согласовании
+  ACTIVE      // Активен
+  EXPIRED     // Истёк
+  TERMINATED  // Расторгнут
+}
+
+enum AgreementStatus {
+  DRAFT       // Черновик
+  PENDING     // На согласовании у заказчика
+  APPROVED    // Утверждено обеими сторонами
+  REJECTED    // Отклонено
+  EXPIRED     // Истекло
+}
+
+// ==================== MODELS ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  googleId      String?   @unique  // Google OAuth ID
+  phone         String    @unique
+  passwordHash  String?   // null для водителей (SMS auth)
+  firstName     String
+  lastName      String
+  middleName    String?
+  role          UserRole
+  permissions   String[]  @default([])
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  sessions      Session[]
+  ordersAsCustomer   Order[]    @relation("CustomerOrders")
+  ordersAsDriver     Order[]    @relation("DriverOrders")
+  ordersAsRecipient  Order[]    @relation("RecipientOrders")
+  ordersAsManager    Order[]    @relation("ManagerOrders")
+  bonuses       Bonus[]
+  gpsPoints     GpsPoint[]
+  documents     Document[]
+  
+  // Компания (для PARTNER и WAREHOUSE)
+  companyId     String?
+  company       Company?   @relation(fields: [companyId], references: [id])
+  
+  // Водитель: данные транспорта
+  iin           String?   // ИИН
+  vehicleType   String?   // Тип транспорта (Тент, Реф и т.д.)
+  vehiclePlate  String?   // Госномер
+  vehicleModel  String?   // Модель авто
+  trailerNumber String?   // Номер прицепа
+  
+  // Водитель: документы (удостоверение/паспорт)
+  docType       String?   // Тип документа: "ID_CARD" или "PASSPORT"
+  docNumber     String?   // Номер документа
+  docIssuedAt   DateTime? // Дата выдачи
+  docExpiresAt  DateTime? // Срок действия
+  docIssuedBy   String?   // Кем выдан
+  
+  @@index([phone])
+  @@index([role])
+}
+
+model Company {
+  id             String      @id @default(cuid())
+  name           String
+  bin            String?     // БИН/ИИН
+  address        String?     // Юридический адрес
+  actualAddress  String?     // Фактический адрес
+  phone          String?
+  email          String?     // Email компании
+  directorName   String?     // ФИО директора
+  bankAccount    String?     // ИИК (номер счёта)
+  bankName       String?     // Название банка
+  bankBic        String?     // БИК банка
+  kbe            String?     // КБЕ
+  stampImage     String?     // Путь к PNG печати
+  type           CompanyType @default(CUSTOMER)
+  isOurCompany   Boolean     @default(false)  // true = LogComp
+  isExternal     Boolean     @default(false)  // Внешняя компания (справочник)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  
+  // Кто создал внешнюю компанию
+  createdByCompanyId String?
+  createdByCompany   Company?  @relation("ExternalCompanies", fields: [createdByCompanyId], references: [id])
+  externalCompanies  Company[] @relation("ExternalCompanies")
+
+  users             User[]
+  ordersAsPartner   Order[]   @relation("PartnerOrders")
+  ordersAsCustomer  Order[]   @relation("CustomerCompanyOrders")
+  ordersAsForwarder Order[]   @relation("ForwarderOrders")
+  ordersAsSubForwarder Order[] @relation("SubForwarderOrders")
+
+  // Partnerships
+  sentRequests      Partnership[] @relation("PartnershipRequester")
+  receivedRequests  Partnership[] @relation("PartnershipRecipient")
+
+  // Contracts
+  contractsAsCustomer  Contract[] @relation("ContractCustomer")
+  contractsAsForwarder Contract[] @relation("ContractForwarder")
+  
+  invitations       Invitation[]
+}
+
+// ... existing models ...
+
+// ==================== PARTNERSHIPS ====================
+
+enum PartnershipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model Partnership {
+  id          String            @id @default(cuid())
+  
+  requesterId String
+  requester   Company           @relation("PartnershipRequester", fields: [requesterId], references: [id])
+  
+  recipientId String
+  recipient   Company           @relation("PartnershipRecipient", fields: [recipientId], references: [id])
+  
+  status      PartnershipStatus @default(PENDING)
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([requesterId, recipientId])
+  @@index([status])
+}
+
+model Session {
+  id          String    @id @default(cuid())
+  userId      String
+  deviceId    String    // Для Single Session Policy
+  token       String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([deviceId])
+}
+
+model Location {
+  id          String    @id @default(cuid())
+  name        String    // Название точки
+  address     String
+  latitude    Float
+  longitude   Float
+  contactName String?
+  contactPhone String?
+  city        String?   // <-- Added city field
+  notes       String?
+  createdAt   DateTime  @default(now())
+  
+  // Кто создал
+  createdById String?
+  
+  // Relations
+  ordersAsPickup    Order[] @relation("PickupLocation")
+  ordersAsDelivery  OrderDeliveryPoint[]
+  warehouseGates    WarehouseGate[]
+  
+  @@index([latitude, longitude])
+}
+
+model Country {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g., "Kazakhstan"
+  code      String   @unique // e.g., "KZ"
+  regions   Region[]
+  cities    City[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Region {
+  id        String   @id @default(cuid())
+  name      String   // e.g., "Almaty Region"
+  countryId String
+  country   Country  @relation(fields: [countryId], references: [id])
+  cities    City[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([countryId, name])
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  latitude  Float
+  longitude Float
+  
+  regionId  String?
+  region    Region?  @relation(fields: [regionId], references: [id])
+  
+  countryId String
+  country   Country  @relation(fields: [countryId], references: [id])
+
+  originTariffs      RouteTariff[] @relation("OriginTariffs")
+  destinationTariffs RouteTariff[] @relation("DestinationTariffs")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([countryId, regionId, name]) // Unique name per region/country
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique // Номер заявки
+  status          OrderStatus @default(DRAFT)
+  
+  // Груз
+  cargoDescription String?
+  cargoWeight     Float?      // кг
+  cargoVolume     Float?      // м³
+  cargoType       String?     // Тип транспорта (Тент, Реф и т.д.)
+  natureOfCargo   String?     // Характер груза (Сыпучие, Твердые и т.д.)
+  requirements    String?     // Особые требования
+  
+  // Точка погрузки
+  pickupLocationId String
+  pickupLocation  Location    @relation("PickupLocation", fields: [pickupLocationId], references: [id])
+  pickupDate      DateTime?
+  pickupNotes     String?
+  
+  // Участники
+  customerId      String
+  customer        User        @relation("CustomerOrders", fields: [customerId], references: [id])
+  
+  driverId        String?
+  driver          User?       @relation("DriverOrders", fields: [driverId], references: [id])
+  
+  recipientId     String?
+  recipient       User?       @relation("RecipientOrders", fields: [recipientId], references: [id])
+  
+  // Если субподрядчик
+  partnerId       String?
+  partner         Company?    @relation("PartnerOrders", fields: [partnerId], references: [id])
+  
+  // Компания-заказчик
+  customerCompanyId String?
+  customerCompany   Company?  @relation("CustomerCompanyOrders", fields: [customerCompanyId], references: [id])
+  
+  // Экспедитор (назначается заказчиком)
+  forwarderId       String?
+  forwarder         Company?  @relation("ForwarderOrders", fields: [forwarderId], references: [id])
+
+  // Ответственный менеджер (кто создал/ведет)
+  responsibleManagerId  String?
+  responsibleManager    User?  @relation("ManagerOrders", fields: [responsibleManagerId], references: [id])
+
+  // Суб-экспедитор (назначенный основным экспедитором)
+  subForwarderId    String?
+  subForwarder      Company?    @relation("SubForwarderOrders", fields: [subForwarderId], references: [id])
+  subForwarderPrice Float?      // Цена для суб-экспедитора
+  
+  // Данные водителя от экспедитора (заполняет экспедитор)
+  assignedDriverName    String?   // ФИО водителя
+  assignedDriverPhone   String?   // Телефон водителя
+  assignedDriverPlate   String?   // Госномер авто
+  assignedDriverTrailer String?   // Номер прицепа
+  assignedAt            DateTime? // Когда назначен водитель
+  
+  // Финансы
+  customerPrice   Float?      // Цена для клиента (видит клиент)
+  customerPriceType PriceType @default(FIXED) // Тип цены (Всего, за км, за тонну)
+  driverCost      Float?      // Оплата водителю/перевозчику (скрыто от клиента)
+
+  // Тариф по доп. соглашению (автоподстановка)
+  appliedTariffId String?
+  appliedTariff   RouteTariff? @relation(fields: [appliedTariffId], references: [id])
+  currency        String      @default("KZT")
+  
+  // Подтверждение нами
+  isConfirmed     Boolean     @default(false)
+  confirmedAt     DateTime?
+  confirmedById   String?
+  
+  // Статус оплаты
+  isCustomerPaid    Boolean   @default(false)  // Заказчик оплатил нам
+  customerPaidAt    DateTime?                   // Когда оплатил
+  isDriverPaid      Boolean   @default(false)  // Мы оплатили перевозчику
+  driverPaidAt      DateTime?                   // Когда оплатили
+  
+  // --- Данные из Excel (Full List) ---
+  
+  // Финансы: Заказчик
+  customerPaymentCondition String? // Условие оплаты (По факту, Отсрочка...)
+  customerPaymentForm      String? // Форма оплаты (НДС, без НДС...)
+  customerPaymentDate      DateTime? // Плановая дата оплаты
+  
+  // Финансы: Перевозчик
+  driverPaymentCondition   String?
+  driverPaymentForm        String?
+  driverPaymentDate        DateTime?
+  
+  // Документы и коды
+  ttnNumber                String? // Номер ТТН
+  atiCodeCustomer          String? // Код АТИ заказчика
+  atiCodeCarrier           String? // Код АТИ перевозчика
+  
+  // Транспорт (уточнения для рейса)
+  trailerNumber            String? // Номер прицепа
+  
+  // Фактические данные
+  actualWeight             Float?  // Вес факт
+  actualVolume             Float?  // Объем факт
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  completedAt     DateTime?
+  
+  // Relations
+  deliveryPoints  OrderDeliveryPoint[]
+  documents       Document[]
+  statusHistory   OrderStatusHistory[]
+  gpsPoints       GpsPoint[]
+  problems        OrderProblem[]
+  warehouseQueue  WarehouseQueueItem?
+  expenses        Expense[]
+  incomes         Income[]
+  bonuses         Bonus[]
+  
+  @@index([status])
+  @@index([customerId])
+  @@index([driverId])
+  @@index([createdAt])
+}
+
+model OrderDeliveryPoint {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  locationId  String
+  location    Location  @relation(fields: [locationId], references: [id])
+  
+  sequence    Int       // Порядок выгрузки
+  deliveredAt DateTime?
+  notes       String?
+  
+  @@index([orderId])
+}
+
+model OrderStatusHistory {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  status      OrderStatus
+  comment     String?
+  changedById String?
+  changedAt   DateTime    @default(now())
+  
+  @@index([orderId])
+}
+
+model OrderProblem {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  description String
+  reportedById String
+  resolvedAt  DateTime?
+  resolution  String?
+  createdAt   DateTime  @default(now())
+  
+  @@index([orderId])
+}
+
+model Document {
+  id          String       @id @default(cuid())
+  type        DocumentType
+  fileName    String
+  fileUrl     String       // S3 URL
+  fileSize    Int
+  mimeType    String
+  
+  orderId     String?
+  order       Order?       @relation(fields: [orderId], references: [id])
+  
+  uploadedById String
+  uploadedBy  User         @relation(fields: [uploadedById], references: [id])
+  
+  isVerified  Boolean      @default(false)
+  verifiedAt  DateTime?
+  
+  createdAt   DateTime     @default(now())
+  
+  @@index([orderId])
+  @@index([type])
+}
+
+model GpsPoint {
+  id          String    @id @default(cuid())
+  driverId    String
+  driver      User      @relation(fields: [driverId], references: [id])
+  
+  orderId     String?
+  order       Order?    @relation(fields: [orderId], references: [id])
+  
+  latitude    Float
+  longitude   Float
+  accuracy    Float?
+  speed       Float?    // км/ч
+  heading     Float?    // направление
+  
+  recordedAt  DateTime
+  receivedAt  DateTime  @default(now())
+  
+  @@index([driverId, recordedAt])
+  @@index([orderId])
+}
+
+// ==================== WAREHOUSE ====================
+
+model WarehouseGate {
+  id          String    @id @default(cuid())
+  locationId  String
+  location    Location  @relation(fields: [locationId], references: [id])
+  
+  gateNumber  String    // Номер ворот/рампы
+  isAvailable Boolean   @default(true)
+  
+  queueItems  WarehouseQueueItem[]
+  
+  @@unique([locationId, gateNumber])
+}
+
+model WarehouseQueueItem {
+  id          String    @id @default(cuid())
+  orderId     String    @unique
+  order       Order     @relation(fields: [orderId], references: [id])
+  
+  gateId      String?
+  gate        WarehouseGate? @relation(fields: [gateId], references: [id])
+  
+  arrivedAt   DateTime  @default(now())
+  assignedAt  DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  
+  instructions String?   // "Заезжайте на ворота 3"
+  
+  @@index([gateId])
+}
+
+// ==================== SMS VERIFICATION ====================
+
+model SmsCode {
+  id          String    @id @default(cuid())
+  phone       String
+  code        String
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  verified    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  
+  @@index([phone, code])
+}
+
+// ==================== CARGO TYPES ====================
+
+model CargoCategory {
+  id        String      @id @default(cuid())
+  name      String      @unique // Название категории
+  sortOrder Int         @default(0)
+  types     CargoType[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model CargoType {
+  id          String        @id @default(cuid())
+  name        String        // Название типа
+  categoryId  String
+  category    CargoCategory @relation(fields: [categoryId], references: [id])
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([categoryId])
+}
+
+// ==================== CONTRACTS & TARIFFS ====================
+
+model Contract {
+  id              String         @id @default(cuid())
+  contractNumber  String         // Номер договора
+  
+  // Стороны
+  customerCompanyId String
+  customerCompany   Company      @relation("ContractCustomer", fields: [customerCompanyId], references: [id])
+  
+  forwarderCompanyId String
+  forwarderCompany   Company    @relation("ContractForwarder", fields: [forwarderCompanyId], references: [id])
+  
+  status          ContractStatus @default(DRAFT)
+  startDate       DateTime?
+  endDate         DateTime?
+  notes           String?
+  content         Json?       // Содержимое: массив статей [{title, paragraphs: [{number, text}]}]
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  agreements      SupplementaryAgreement[]
+  
+  @@unique([customerCompanyId, forwarderCompanyId, contractNumber])
+  @@index([customerCompanyId])
+  @@index([forwarderCompanyId])
+  @@index([status])
+}
+
+model SupplementaryAgreement {
+  id              String          @id @default(cuid())
+  agreementNumber String          // Номер доп. соглашения
+  
+  contractId      String
+  contract        Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  status          AgreementStatus @default(DRAFT)
+  proposedBy      String          @default("FORWARDER") // "FORWARDER" или "CUSTOMER"
+  validFrom       DateTime?
+  validTo         DateTime?
+  notes           String?
+  
+  // Кто создал
+  createdById     String?
+  // Кто утвердил/отклонил
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  tariffs         RouteTariff[]
+  
+  @@index([contractId])
+  @@index([status])
+}
+
+model RouteTariff {
+  id              String     @id @default(cuid())
+  
+  agreementId     String
+  agreement       SupplementaryAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  
+  originCityId      String
+  originCity        City       @relation("OriginTariffs", fields: [originCityId], references: [id])
+  destinationCityId String
+  destinationCity   City       @relation("DestinationTariffs", fields: [destinationCityId], references: [id])
+  
+  price           Float      // Стоимость
+  priceType       PriceType  @default(FIXED)
+  vehicleType     String?    // Тип кузова (опционально)
+  
+  isActive        Boolean    @default(true)
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  orders          Order[]    // Заявки по этому тарифу
+  
+  @@index([agreementId])
+  @@index([originCityId, destinationCityId])
+}
+
+// ==================== ACCOUNTING ====================
+
+model Expense {
+  id          String   @id @default(cuid())
+  
+  companyId   String
+  date        DateTime
+  category    String   // fuel, repair, salary, insurance, tax, rent, communication, office, penalties, other
+  description String
+  amount      Float    // Сумма в тенге
+  note        String?
+  
+  // Привязка к заявке (опционально)
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id])
+  
+  createdById String?  // Кто создал
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+
+  @@index([companyId])
+  @@index([companyId, date])
+  @@index([category])
+  @@index([orderId])
+}
+
+model Income {
+  id          String   @id @default(cuid())
+  
+  companyId   String
+  date        DateTime
+  category    String   // order_payment, prepayment, refund, other
+  description String
+  amount      Float    // Сумма в тенге
+  note        String?
+  
+  // Привязка к заявке (опционально)
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id])
+  
+  createdById String?  // Кто создал
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+
+  @@index([companyId])
+  @@index([companyId, date])
+  @@index([category])
+  @@index([orderId])
+}
+
+// ==================== BONUSES ====================
+
+model Bonus {
+  id         String   @id @default(cuid())
+  userId     String   // Менеджер
+  user       User     @relation(fields: [userId], references: [id])
+  orderId    String   // Заявка-источник
+  order      Order    @relation(fields: [orderId], references: [id])
+  
+  amount     Float    // Сумма бонуса
+  type       String   @default("MARGIN_PERCENT") // MARGIN_PERCENT | FIXED
+  percentage Float?   // Процент от маржи
+  status     String   @default("PENDING") // PENDING | APPROVED | PAID
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([orderId])
+}
+
+// ==================== INVITATIONS ====================
+
+model Invitation {
+  id        String   @id @default(cuid())
+  email     String
+  role      UserRole
+  companyId String
+  token     String   @unique
+  permissions String[] @default([])
+  isUsed    Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  company   Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([token])
+}

@@ -1,0 +1,242 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #ffffff;
+  color: #09090b;
+}
+
+/* Premium Card Style - Shadcn-like */
+.premium-card {
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.premium-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.premium-stat-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #71717a;
+  /* Zinc 500 */
+}
+
+.premium-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #09090b;
+  /* Zinc 950 */
+  margin-top: 4px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Leaflet fix */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
+/* ==========================================
+   RESPONSIVE STYLES
+   ========================================== */
+
+/* Mobile table wrapper - horizontal scroll */
+@media (max-width: 767px) {
+
+  /* Tables need horizontal scroll on mobile */
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .ant-table {
+    min-width: 600px;
+  }
+
+  /* Make modals full width on mobile */
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px !important;
+    top: 8px !important;
+  }
+
+  .ant-modal-content {
+    border-radius: 12px;
+  }
+
+  /* Drawer full width on mobile */
+  .ant-drawer-content-wrapper {
+    max-width: 100vw !important;
+  }
+
+  /* Form items stack vertically */
+  .ant-form-item {
+    margin-bottom: 12px;
+  }
+
+  /* Smaller buttons on mobile */
+  .ant-btn {
+    padding: 4px 12px;
+    font-size: 14px;
+  }
+
+  /* Cards with less padding */
+  .ant-card-body {
+    padding: 12px;
+  }
+
+  /* Statistics cards */
+  .ant-statistic-title {
+    font-size: 12px;
+  }
+
+  .ant-statistic-content-value {
+    font-size: 20px;
+  }
+
+  /* Descriptions compact */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    padding: 8px 12px !important;
+  }
+
+  /* Tags smaller */
+  .ant-tag {
+    font-size: 11px;
+    padding: 0 6px;
+  }
+
+  /* Page headers */
+  .ant-page-header {
+    padding: 12px;
+  }
+
+  /* List items compact */
+  .ant-list-item {
+    padding: 8px 0;
+  }
+
+  /* Tabs */
+  .ant-tabs-nav {
+    margin-bottom: 12px;
+  }
+
+  /* Select full width */
+  .ant-select {
+    width: 100% !important;
+  }
+
+  /* Date picker full width */
+  .ant-picker {
+    width: 100% !important;
+  }
+
+  /* Input number full width */
+  .ant-input-number {
+    width: 100% !important;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ant-table {
+    font-size: 13px;
+  }
+
+  .ant-modal {
+    max-width: 90vw !important;
+  }
+}
+
+/* Touch-friendly tap targets */
+@media (hover: none) and (pointer: coarse) {
+  .ant-btn {
+    min-height: 44px;
+  }
+
+  .ant-menu-item {
+    min-height: 48px;
+    line-height: 48px;
+  }
+
+  .ant-list-item {
+    min-height: 48px;
+  }
+}
+
+/* Premium Menu Overrides */
+.ant-menu-light {
+  background: transparent !important;
+}
+
+.ant-menu-item {
+  border-radius: 6px !important;
+  margin: 4px 0 !important;
+  font-weight: 500 !important;
+  color: #71717a !important;
+  /* Zinc-500 */
+}
+
+.ant-menu-item:hover {
+  color: #18181b !important;
+  /* Zinc-900 */
+  background-color: #f4f4f5 !important;
+  /* Zinc-100 */
+}
+
+.ant-menu-item-selected {
+  background-color: #1677ff !important;
+  /* Primary Blue */
+  color: #ffffff !important;
+}
+
+.ant-menu-item-selected:hover {
+  background-color: #0958d9 !important;
+  /* Blue-700 */
+  color: #ffffff !important;
+}
+
+/* Fix ant-menu icon color in selected state */
+.ant-menu-item-selected .anticon {
+  color: #ffffff !important;
+}
+
+.user-profile-trigger:hover {
+  background-color: #f4f4f5;
+  /* Zinc-100 */
+}
+
+.sidebar-toggle-btn:hover {
+  background-color: #f4f4f5;
+  /* Zinc-100 */
+  color: #09090b;
+}
