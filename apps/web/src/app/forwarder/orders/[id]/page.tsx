@@ -332,7 +332,7 @@ export default function OrderDetailPage() {
             {/* FINANCIAL SUMMARY */}
             <Card size="small" style={{ marginTop: 16 }}>
                 <Row gutter={16}>
-                    <Col span={4}>
+                    <Col span={5}>
                         <Statistic
                             title="Цена заказчика"
                             value={summary.customerPrice}
@@ -343,15 +343,16 @@ export default function OrderDetailPage() {
                             {summary.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}
                         </Tag>
                     </Col>
-                    <Col span={4}>
+                    <Col span={5}>
                         <Statistic
-                            title="Расходы по исполнителю"
-                            value={summary.executorCost}
+                            title="Расходы"
+                            value={summary.totalExpenses}
                             suffix="₸"
-                            valueStyle={{ fontSize: 18, fontWeight: 600, color: '#cf1322' }}
+                            valueStyle={{ fontSize: 18, color: '#cf1322' }}
+                            prefix={<DollarOutlined />}
                         />
                     </Col>
-                    <Col span={4}>
+                    <Col span={5}>
                         <Statistic
                             title="Маржа"
                             value={summary.margin}
@@ -359,22 +360,13 @@ export default function OrderDetailPage() {
                             valueStyle={{ fontSize: 18, fontWeight: 600, color: summary.margin >= 0 ? '#389e0d' : '#cf1322' }}
                         />
                     </Col>
-                    <Col span={4}>
+                    <Col span={5}>
                         <Statistic
                             title="Поступления"
                             value={summary.totalIncomes}
                             suffix="₸"
                             valueStyle={{ fontSize: 18, color: '#389e0d' }}
                             prefix={<WalletOutlined />}
-                        />
-                    </Col>
-                    <Col span={4}>
-                        <Statistic
-                            title="Расходы"
-                            value={summary.totalExpenses}
-                            suffix="₸"
-                            valueStyle={{ fontSize: 18, color: '#cf1322' }}
-                            prefix={<DollarOutlined />}
                         />
                     </Col>
                     <Col span={4}>
