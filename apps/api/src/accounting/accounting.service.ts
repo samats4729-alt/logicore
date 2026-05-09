@@ -58,16 +58,16 @@ export class AccountingService {
             expenses,
             summary: {
                 customerPrice: order.customerPrice || 0,
-                driverCost: order.driverCost || 0,
+                driverCost: order.driverCost || 0,  // Плановая стоимость исполнителя (legacy)
                 subForwarderPrice: order.subForwarderPrice || 0,
-                margin: (order.customerPrice || 0) - (order.driverCost || 0) - (order.subForwarderPrice || 0),
+                executorCost: totalExpenses,  // Фактические расходы по исполнителю
+                margin: (order.customerPrice || 0) - totalExpenses,
                 totalIncomes,
                 totalExpenses,
                 balance: totalIncomes - totalExpenses,
                 isCustomerPaid: order.isCustomerPaid,
                 isDriverPaid: order.isDriverPaid,
-                customerDebt: order.isCustomerPaid ? 0 : (order.customerPrice || 0) - totalIncomes,
-                driverDebt: order.isDriverPaid ? 0 : (order.driverCost || 0) - totalExpenses,
+                customerDebt: (order.customerPrice || 0) - totalIncomes,
             },
         };
     }

@@ -33,6 +33,8 @@ const statusLabels: Record<string, string> = {
 };
 
 const expenseCategories = [
+    { value: 'executor_payment', label: 'Оплата исполнителю' },
+    { value: 'subcontractor_payment', label: 'Оплата субподрядчику' },
     { value: 'fuel', label: 'Топливо' },
     { value: 'repair', label: 'Ремонт' },
     { value: 'salary', label: 'Зарплата' },
@@ -343,14 +345,11 @@ export default function OrderDetailPage() {
                     </Col>
                     <Col span={4}>
                         <Statistic
-                            title="Оплата водителю"
-                            value={summary.driverCost}
+                            title="Расходы по исполнителю"
+                            value={summary.executorCost}
                             suffix="₸"
-                            valueStyle={{ fontSize: 18, fontWeight: 600 }}
+                            valueStyle={{ fontSize: 18, fontWeight: 600, color: '#cf1322' }}
                         />
-                        <Tag color={summary.isDriverPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                            {summary.isDriverPaid ? 'Оплачено' : 'Не оплачено'}
-                        </Tag>
                     </Col>
                     <Col span={4}>
                         <Statistic
