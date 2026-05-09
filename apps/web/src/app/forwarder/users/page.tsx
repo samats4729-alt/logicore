@@ -40,12 +40,14 @@ interface Invitation {
 const roleLabels: Record<string, string> = {
     FORWARDER: 'Администратор',
     LOGISTICIAN: 'Менеджер',
+    ACCOUNTANT: 'Бухгалтер',
     WAREHOUSE_MANAGER: 'Завсклад',
 };
 
 const roleColors: Record<string, string> = {
     FORWARDER: 'red',
     LOGISTICIAN: 'blue',
+    ACCOUNTANT: 'gold',
     WAREHOUSE_MANAGER: 'green',
 };
 
@@ -308,6 +310,7 @@ export default function ForwarderUsersPage() {
                         <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
                             <Select placeholder="Выберите роль">
                                 <Select.Option value="LOGISTICIAN">Менеджер</Select.Option>
+                                <Select.Option value="ACCOUNTANT">Бухгалтер</Select.Option>
                                 <Select.Option value="WAREHOUSE_MANAGER">Завсклад</Select.Option>
                             </Select>
                         </Form.Item>

@@ -88,10 +88,10 @@ export class CompanyService {
             password: string;
             firstName: string;
             lastName: string;
-            role: 'LOGISTICIAN' | 'WAREHOUSE_MANAGER';
+            role: 'LOGISTICIAN' | 'WAREHOUSE_MANAGER' | 'ACCOUNTANT';
         },
     ) {
-        if (!['LOGISTICIAN', 'WAREHOUSE_MANAGER'].includes(data.role)) {
+        if (!['LOGISTICIAN', 'WAREHOUSE_MANAGER', 'ACCOUNTANT'].includes(data.role)) {
             throw new BadRequestException('Недопустимая роль');
         }
 
@@ -157,7 +157,7 @@ export class CompanyService {
         data: Partial<{
             firstName: string;
             lastName: string;
-            role: 'COMPANY_ADMIN' | 'LOGISTICIAN' | 'WAREHOUSE_MANAGER';
+            role: 'COMPANY_ADMIN' | 'LOGISTICIAN' | 'WAREHOUSE_MANAGER' | 'ACCOUNTANT';
             password: string;
         }>,
     ) {

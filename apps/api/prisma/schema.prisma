@@ -24,6 +24,7 @@ enum UserRole {
   COMPANY_ADMIN     // Админ компании-клиента (Заказчик)
   LOGISTICIAN       // Логист (создаёт заявки)
   WAREHOUSE_MANAGER // Завсклад (управляет очередью)
+  ACCOUNTANT        // Бухгалтер
   DRIVER            // Водитель
   RECIPIENT         // Грузополучатель
   PARTNER           // Иная ТК (субподрядчик)

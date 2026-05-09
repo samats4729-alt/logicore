@@ -38,15 +38,17 @@ interface Invitation {
 }
 
 const roleLabels: Record<string, string> = {
-    COMPANY_ADMIN: 'Админ',
-    LOGISTICIAN: 'Логист',
+    COMPANY_ADMIN: 'Администратор',
+    LOGISTICIAN: 'Менеджер',
+    ACCOUNTANT: 'Бухгалтер',
     WAREHOUSE_MANAGER: 'Завсклад',
     FORWARDER: 'Экспедитор',
 };
 
 const roleColors: Record<string, string> = {
-    COMPANY_ADMIN: 'purple',
+    COMPANY_ADMIN: 'red',
     LOGISTICIAN: 'blue',
+    ACCOUNTANT: 'gold',
     WAREHOUSE_MANAGER: 'green',
     FORWARDER: 'orange',
 };
@@ -309,7 +311,8 @@ export default function CompanyUsersPage() {
                         </Form.Item>
                         <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
                             <Select placeholder="Выберите роль">
-                                <Select.Option value="LOGISTICIAN">Логист</Select.Option>
+                                <Select.Option value="LOGISTICIAN">Менеджер</Select.Option>
+                                <Select.Option value="ACCOUNTANT">Бухгалтер</Select.Option>
                                 <Select.Option value="WAREHOUSE_MANAGER">Завсклад</Select.Option>
                             </Select>
                         </Form.Item>
