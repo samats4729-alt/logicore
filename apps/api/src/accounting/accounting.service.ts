@@ -25,6 +25,15 @@ export class AccountingService {
                 subForwarder: { select: { id: true, name: true } },
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
                 statusHistory: { orderBy: { changedAt: 'desc' } },
+                assignees: {
+                    include: { user: { select: { id: true, firstName: true, lastName: true, role: true } } },
+                    orderBy: { assignedAt: 'desc' },
+                },
+                changeLog: {
+                    include: { user: { select: { id: true, firstName: true, lastName: true } } },
+                    orderBy: { createdAt: 'desc' },
+                    take: 50,
+                },
             },
         });
         if (!order) throw new NotFoundException('Заявка не найдена');

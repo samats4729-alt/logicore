@@ -54,6 +54,10 @@ export class ForwarderService {
                 responsibleManager: {
                     select: { id: true, firstName: true, lastName: true }
                 },
+                assignees: {
+                    include: { user: { select: { id: true, firstName: true, lastName: true, role: true } } },
+                    orderBy: { assignedAt: 'desc' },
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -86,6 +90,15 @@ export class ForwarderService {
                         name: true,
                         phone: true,
                     },
+                },
+                assignees: {
+                    include: { user: { select: { id: true, firstName: true, lastName: true, role: true } } },
+                    orderBy: { assignedAt: 'desc' },
+                },
+                changeLog: {
+                    include: { user: { select: { id: true, firstName: true, lastName: true } } },
+                    orderBy: { createdAt: 'desc' },
+                    take: 50,
                 },
             },
         });
@@ -138,7 +151,7 @@ export class ForwarderService {
         }
 
         // Обновляем заявку с данными водителя и устанавливаем экспедитора
-        return this.prisma.order.update({
+        const result = await this.prisma.order.update({
             where: { id: orderId },
             data: {
                 forwarderId: companyId, // Устанавливаем экспедитора если ещё не установлен
@@ -157,6 +170,11 @@ export class ForwarderService {
                 },
             },
         });
+
+        // Логируем изменение
+        await this.logOrderChange(orderId, companyId, 'driver_assigned', `Назначен водитель: ${data.driverName} (${data.driverPlate})`);
+
+        return result;
     }
 
     /**
@@ -336,11 +354,11 @@ export class ForwarderService {
     /**
      * Обновить статус заявки
      */
-    async updateOrderStatus(orderId: string, companyId: string, status: string, comment?: string) {
+    async updateOrderStatus(orderId: string, companyId: string, status: string, comment?: string, userId?: string) {
         // Проверяем что заявка принадлежит экспедитору
         await this.getForwarderOrder(orderId, companyId);
 
-        return this.prisma.order.update({
+        const result = await this.prisma.order.update({
             where: { id: orderId },
             data: {
                 status: status as any,
@@ -351,6 +369,94 @@ export class ForwarderService {
                     },
                 },
             },
+        });
+
+        // Логируем изменение статуса
+        if (userId) {
+            await this.logOrderChange(orderId, userId, 'status_changed', `Статус изменён на: ${status}${comment ? ' — ' + comment : ''}`);
+        }
+
+        return result;
+    }
+
+    // ==================== МЕНЕДЖЕРЫ НА ЗАЯВКЕ ====================
+
+    /**
+     * Менеджер прикрепляет себя к заявке
+     */
+    async assignManagerToOrder(orderId: string, companyId: string, userId: string) {
+        // Проверяем что заявка принадлежит компании
+        const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+        if (!order) throw new NotFoundException('Заявка не найдена');
+        if (order.forwarderId !== companyId && order.subForwarderId !== companyId) {
+            throw new ForbiddenException('Нет доступа к этой заявке');
+        }
+
+        // Проверяем что пользователь из этой компании
+        const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { companyId: true, firstName: true, lastName: true } });
+        if (!user || user.companyId !== companyId) {
+            throw new ForbiddenException('Пользователь не принадлежит этой компании');
+        }
+
+        // Создаём привязку (upsert чтобы не дублировать)
+        const assignee = await this.prisma.orderAssignee.upsert({
+            where: { orderId_userId: { orderId, userId } },
+            create: { orderId, userId },
+            update: {},
+            include: { user: { select: { id: true, firstName: true, lastName: true, role: true } } },
+        });
+
+        // Логируем
+        await this.logOrderChange(orderId, userId, 'manager_assigned', `${user.firstName} ${user.lastName} взял(а) заявку в работу`);
+
+        return assignee;
+    }
+
+    /**
+     * Менеджер открепляет себя от заявки
+     */
+    async unassignManagerFromOrder(orderId: string, companyId: string, userId: string) {
+        const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+        if (!order) throw new NotFoundException('Заявка не найдена');
+        if (order.forwarderId !== companyId && order.subForwarderId !== companyId) {
+            throw new ForbiddenException('Нет доступа к этой заявке');
+        }
+
+        const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+
+        await this.prisma.orderAssignee.deleteMany({
+            where: { orderId, userId },
+        });
+
+        // Логируем
+        await this.logOrderChange(orderId, userId, 'manager_unassigned', `${user?.firstName} ${user?.lastName} открепился(-ась) от заявки`);
+
+        return { success: true };
+    }
+
+    /**
+     * Получить лог изменений заявки
+     */
+    async getOrderChangeLog(orderId: string, companyId: string) {
+        const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+        if (!order) throw new NotFoundException('Заявка не найдена');
+        if (order.forwarderId !== companyId && order.subForwarderId !== companyId) {
+            throw new ForbiddenException('Нет доступа к этой заявке');
+        }
+
+        return this.prisma.orderChangeLog.findMany({
+            where: { orderId },
+            include: { user: { select: { id: true, firstName: true, lastName: true } } },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+
+    /**
+     * Записать изменение в лог заявки
+     */
+    async logOrderChange(orderId: string, userId: string, action: string, details?: string) {
+        return this.prisma.orderChangeLog.create({
+            data: { orderId, userId, action, details },
         });
     }
 }

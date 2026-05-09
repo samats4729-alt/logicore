@@ -9,9 +9,11 @@ import {
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
     DollarOutlined, WalletOutlined, CheckCircleOutlined, ClockCircleOutlined,
-    EditOutlined, DeleteOutlined, FilePdfOutlined, UploadOutlined
+    EditOutlined, DeleteOutlined, FilePdfOutlined, UploadOutlined,
+    UserAddOutlined, UserDeleteOutlined, HistoryOutlined, TeamOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -51,6 +53,7 @@ export default function OrderDetailPage() {
     const params = useParams();
     const router = useRouter();
     const orderId = params.id as string;
+    const { user: currentUser } = useAuthStore();
 
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
@@ -181,6 +184,24 @@ export default function OrderDetailPage() {
 
     const { order, incomes, expenses, summary } = data;
 
+    const isAssigned = order.assignees?.some((a: any) => a.user.id === currentUser?.id);
+
+    const handleAssignMe = async () => {
+        try {
+            await api.put(`/forwarder/orders/${orderId}/assign-me`);
+            message.success('Вы взяли заявку в работу');
+            fetchData();
+        } catch { message.error('Ошибка'); }
+    };
+
+    const handleUnassignMe = async () => {
+        try {
+            await api.delete(`/forwarder/orders/${orderId}/unassign-me`);
+            message.success('Вы открепились от заявки');
+            fetchData();
+        } catch { message.error('Ошибка'); }
+    };
+
     const fmt = (n: number) => n.toLocaleString('ru-RU');
 
     const incomeColumns = [
@@ -262,7 +283,7 @@ export default function OrderDetailPage() {
                     </Card>
                 </Col>
                 <Col span={12}>
-                    <Card size="small" title="Участники" style={{ height: '100%' }}>
+                    <Card size="small" title={<span><TeamOutlined style={{ marginRight: 6 }} />Участники</span>} style={{ height: '100%' }}>
                         <Descriptions size="small" column={1}>
                             <Descriptions.Item label="Заказчик">{order.customerCompany?.name || '—'}</Descriptions.Item>
                             <Descriptions.Item label="Контакт">{order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : '—'}</Descriptions.Item>
@@ -277,6 +298,31 @@ export default function OrderDetailPage() {
                                 <Descriptions.Item label="Ответственный">{order.responsibleManager.firstName} {order.responsibleManager.lastName}</Descriptions.Item>
                             )}
                         </Descriptions>
+
+                        {/* МЕНЕДЖЕРЫ НА ЗАЯВКЕ */}
+                        <Divider style={{ margin: '12px 0 8px' }} />
+                        <div style={{ marginBottom: 8 }}>
+                            <Text strong style={{ fontSize: 13 }}>Менеджеры на заявке:</Text>
+                        </div>
+                        <Space wrap style={{ marginBottom: 8 }}>
+                            {order.assignees?.length > 0 ? order.assignees.map((a: any) => (
+                                <Tag key={a.id} color="blue" style={{ fontSize: 13, padding: '2px 8px' }}>
+                                    {a.user.firstName} {a.user.lastName}
+                                    <Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>
+                                        {dayjs(a.assignedAt).format('DD.MM HH:mm')}
+                                    </Text>
+                                </Tag>
+                            )) : (
+                                <Text type="secondary" style={{ fontSize: 12 }}>Никто ещё не взял в работу</Text>
+                            )}
+                        </Space>
+                        <div>
+                            {isAssigned ? (
+                                <Button size="small" danger icon={<UserDeleteOutlined />} onClick={handleUnassignMe}>Открепиться</Button>
+                            ) : (
+                                <Button size="small" type="primary" icon={<UserAddOutlined />} onClick={handleAssignMe}>Взять в работу</Button>
+                            )}
+                        </div>
                     </Card>
                 </Col>
             </Row>
@@ -400,7 +446,7 @@ export default function OrderDetailPage() {
 
             {/* STATUS HISTORY */}
             {order.statusHistory && order.statusHistory.length > 0 && (
-                <Card size="small" title="История статусов" style={{ marginTop: 16, marginBottom: 24 }}>
+                <Card size="small" title="История статусов" style={{ marginTop: 16 }}>
                     <Timeline
                         items={order.statusHistory.map((h: any) => ({
                             color: h.status === 'COMPLETED' ? 'green' : h.status === 'PROBLEM' ? 'red' : 'blue',
@@ -411,6 +457,26 @@ export default function OrderDetailPage() {
                                         {dayjs(h.changedAt).format('DD.MM.YY HH:mm')}
                                     </Text>
                                     {h.comment && <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{h.comment}</div>}
+                                </div>
+                            ),
+                        }))}
+                    />
+                </Card>
+            )}
+
+            {/* CHANGE LOG */}
+            {order.changeLog && order.changeLog.length > 0 && (
+                <Card size="small" title={<span><HistoryOutlined style={{ marginRight: 6 }} />Лог изменений</span>} style={{ marginTop: 16, marginBottom: 24 }}>
+                    <Timeline
+                        items={order.changeLog.map((log: any) => ({
+                            color: log.action.includes('assigned') ? 'green' : log.action.includes('unassigned') ? 'red' : 'blue',
+                            children: (
+                                <div>
+                                    <Text strong style={{ fontSize: 13 }}>{log.user.firstName} {log.user.lastName}</Text>
+                                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                                        {dayjs(log.createdAt).format('DD.MM.YY HH:mm')}
+                                    </Text>
+                                    {log.details && <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>{log.details}</div>}
                                 </div>
                             ),
                         }))}

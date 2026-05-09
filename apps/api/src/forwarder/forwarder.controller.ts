@@ -162,6 +162,29 @@ export class ForwarderController {
         @Body() dto: { status: string; comment?: string },
         @Request() req: any
     ) {
-        return this.forwarderService.updateOrderStatus(id, req.user.companyId, dto.status, dto.comment);
+        return this.forwarderService.updateOrderStatus(id, req.user.companyId, dto.status, dto.comment, req.user.sub);
+    }
+
+    // ==================== МЕНЕДЖЕРЫ НА ЗАЯВКЕ ====================
+
+    @Put('orders/:id/assign-me')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Взять заявку в работу (прикрепить себя)' })
+    async assignMe(@Param('id') id: string, @Request() req: any) {
+        return this.forwarderService.assignManagerToOrder(id, req.user.companyId, req.user.sub);
+    }
+
+    @Delete('orders/:id/unassign-me')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Открепиться от заявки' })
+    async unassignMe(@Param('id') id: string, @Request() req: any) {
+        return this.forwarderService.unassignManagerFromOrder(id, req.user.companyId, req.user.sub);
+    }
+
+    @Get('orders/:id/changelog')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Получить лог изменений заявки' })
+    async getChangeLog(@Param('id') id: string, @Request() req: any) {
+        return this.forwarderService.getOrderChangeLog(id, req.user.companyId);
     }
 }

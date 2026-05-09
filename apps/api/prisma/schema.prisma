@@ -101,6 +101,8 @@ model User {
   bonuses       Bonus[]
   gpsPoints     GpsPoint[]
   documents     Document[]
+  orderAssignments  OrderAssignee[]  @relation("OrderAssignees")
+  orderChangeLogs   OrderChangeLog[] @relation("OrderChangeLogs")
   
   // Компания (для PARTNER и WAREHOUSE)
   companyId     String?
@@ -392,6 +394,8 @@ model Order {
   expenses        Expense[]
   incomes         Income[]
   bonuses         Bonus[]
+  assignees       OrderAssignee[]
+  changeLog       OrderChangeLog[]
   
   @@index([status])
   @@index([customerId])
@@ -733,4 +737,32 @@ model Invitation {
   
   @@index([companyId])
   @@index([token])
+}
+
+// ==================== ORDER ASSIGNEES & CHANGE LOG ====================
+
+model OrderAssignee {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation("OrderAssignees", fields: [userId], references: [id])
+  assignedAt DateTime @default(now())
+
+  @@unique([orderId, userId])
+  @@index([orderId])
+  @@index([userId])
+}
+
+model OrderChangeLog {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("OrderChangeLogs", fields: [userId], references: [id])
+  action    String   // "assigned", "unassigned", "updated", "status_changed", "driver_assigned", etc.
+  details   String?  // Human-readable description
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
 }
