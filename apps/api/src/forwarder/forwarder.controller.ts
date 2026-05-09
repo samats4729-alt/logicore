@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ForwarderService } from './forwarder.service';
 import { ForwarderDriversService } from './services/forwarder-drivers.service';
@@ -186,5 +186,51 @@ export class ForwarderController {
     @ApiOperation({ summary: 'Получить лог изменений заявки' })
     async getChangeLog(@Param('id') id: string, @Request() req: any) {
         return this.forwarderService.getOrderChangeLog(id, req.user.companyId);
+    }
+
+    // ==================== КОМИССИЯ МЕНЕДЖЕРОВ ====================
+
+    @Put('users/:id/commission')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Установить процент комиссии менеджеру' })
+    async setCommission(
+        @Param('id') id: string,
+        @Body() dto: { commissionPercent: number },
+        @Request() req: any
+    ) {
+        return this.forwarderService.setManagerCommission(req.user.companyId, id, dto.commissionPercent);
+    }
+
+    @Get('my-earnings')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Мой заработок за месяц' })
+    async getMyEarnings(
+        @Request() req: any,
+        @Query('year') year?: string,
+        @Query('month') month?: string,
+    ) {
+        return this.forwarderService.getManagerEarnings(
+            req.user.companyId,
+            req.user.sub,
+            year ? parseInt(year) : undefined,
+            month ? parseInt(month) : undefined,
+        );
+    }
+
+    @Get('users/:id/earnings')
+    @Roles(UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Заработок менеджера за месяц (для админа)' })
+    async getUserEarnings(
+        @Param('id') id: string,
+        @Request() req: any,
+        @Query('year') year?: string,
+        @Query('month') month?: string,
+    ) {
+        return this.forwarderService.getManagerEarnings(
+            req.user.companyId,
+            id,
+            year ? parseInt(year) : undefined,
+            month ? parseInt(month) : undefined,
+        );
     }
 }

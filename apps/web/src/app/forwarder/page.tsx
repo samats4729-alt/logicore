@@ -7,6 +7,7 @@ import {
     CheckCircleOutlined,
     ClockCircleOutlined,
     TruckOutlined,
+    DollarOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 
@@ -17,6 +18,14 @@ interface Stats {
     pending: number;
     assigned: number;
     completed: number;
+}
+
+interface Earnings {
+    user: { commissionPercent: number };
+    period: { label: string };
+    ordersCount: number;
+    totalMargin: number;
+    totalEarning: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -55,17 +64,20 @@ function extractCity(loc: { name?: string; address?: string; city?: string } | u
 export default function ForwarderDashboard() {
     const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, assigned: 0, completed: 0 });
     const [orders, setOrders] = useState<Order[]>([]);
+    const [earnings, setEarnings] = useState<Earnings | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [statsRes, ordersRes] = await Promise.all([
+                const [statsRes, ordersRes, earningsRes] = await Promise.all([
                     api.get('/forwarder/stats'),
                     api.get('/forwarder/orders'),
+                    api.get('/forwarder/my-earnings').catch(() => null),
                 ]);
                 setStats(statsRes.data);
                 setOrders(ordersRes.data);
+                if (earningsRes) setEarnings(earningsRes.data);
             } catch (error) { console.error('Failed to fetch:', error); }
             finally { setLoading(false); }
         };
@@ -170,6 +182,37 @@ export default function ForwarderDashboard() {
                     </div>
                 </Col>
             </Row>
+
+            {/* MONTHLY EARNINGS */}
+            {earnings && earnings.user.commissionPercent > 0 && (
+                <div className="premium-card" style={{ padding: '24px', marginBottom: 24 }}>
+                    <Row gutter={24} align="middle">
+                        <Col>
+                            <DollarOutlined style={{ fontSize: 32, color: '#389e0d' }} />
+                        </Col>
+                        <Col flex="auto">
+                            <div style={{ fontSize: 14, color: '#71717a', marginBottom: 4 }}>
+                                Мой заработок за {earnings.period.label} ({earnings.user.commissionPercent}% от маржи)
+                            </div>
+                            <div style={{ fontSize: 28, fontWeight: 700, color: '#389e0d', letterSpacing: '-0.02em' }}>
+                                {earnings.totalEarning.toLocaleString('ru-RU')} ₸
+                            </div>
+                        </Col>
+                        <Col>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: 12, color: '#71717a' }}>Завершённых заявок</div>
+                                <div style={{ fontSize: 20, fontWeight: 600 }}>{earnings.ordersCount}</div>
+                            </div>
+                        </Col>
+                        <Col>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: 12, color: '#71717a' }}>Общая маржа</div>
+                                <div style={{ fontSize: 20, fontWeight: 600 }}>{earnings.totalMargin.toLocaleString('ru-RU')} ₸</div>
+                            </div>
+                        </Col>
+                    </Row>
+                </div>
+            )}
 
             {/* COMPACT LAST 10 ORDERS TABLE */}
             <div className="premium-card" style={{ overflow: 'hidden' }}>

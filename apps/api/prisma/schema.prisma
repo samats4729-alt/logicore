@@ -121,6 +121,8 @@ model User {
   docIssuedAt   DateTime? // Дата выдачи
   docExpiresAt  DateTime? // Срок действия
   docIssuedBy   String?   // Кем выдан
+  // Комиссия менеджера (% от маржи)
+  commissionPercent Float     @default(0)
   
   @@index([phone])
   @@index([role])

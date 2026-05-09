@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox } from 'antd';
+import { Table, Card, Button, Tag, Modal, Form, Input, InputNumber, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox } from 'antd';
 import { MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -25,6 +25,7 @@ interface ForwarderUser {
     lastName: string;
     role: string;
     permissions: string[];
+    commissionPercent: number;
     createdAt: string;
 }
 
@@ -112,10 +113,17 @@ export default function ForwarderUsersPage() {
     const handleEditPermissions = async (values: any) => {
         try {
             if (!editingUser) return;
+            // Сохраняем права
             await api.put(`/company/users/${editingUser.id}/permissions`, {
                 permissions: values.permissions || [],
             });
-            message.success('Права доступа обновлены');
+            // Сохраняем комиссию
+            if (values.commissionPercent !== undefined) {
+                await api.put(`/forwarder/users/${editingUser.id}/commission`, {
+                    commissionPercent: values.commissionPercent || 0,
+                });
+            }
+            message.success('Настройки обновлены');
             setEditModalOpen(false);
             fetchData();
         } catch (error: any) {
@@ -173,6 +181,13 @@ export default function ForwarderUsersPage() {
             ),
         },
         {
+            title: '% от маржи',
+            dataIndex: 'commissionPercent',
+            key: 'commission',
+            width: 100,
+            render: (v: number) => <Tag color={v > 0 ? 'green' : 'default'}>{v || 0}%</Tag>,
+        },
+        {
             title: 'Действия',
             key: 'actions',
             render: (_: any, record: ForwarderUser) => (
@@ -182,7 +197,10 @@ export default function ForwarderUsersPage() {
                             icon={<SettingOutlined />} 
                             onClick={() => {
                                 setEditingUser(record);
-                                editForm.setFieldsValue({ permissions: record.permissions || [] });
+                                editForm.setFieldsValue({ 
+                                    permissions: record.permissions || [],
+                                    commissionPercent: record.commissionPercent || 0,
+                                });
                                 setEditModalOpen(true);
                             }}
                         />
@@ -329,7 +347,7 @@ export default function ForwarderUsersPage() {
             </Modal>
 
             <Modal
-                title={`Права доступа: ${editingUser?.firstName} ${editingUser?.lastName}`}
+                title={`Настройки: ${editingUser?.firstName} ${editingUser?.lastName}`}
                 open={editModalOpen}
                 onCancel={() => setEditModalOpen(false)}
                 onOk={() => editForm.submit()}
@@ -337,6 +355,9 @@ export default function ForwarderUsersPage() {
                 cancelText="Отмена"
             >
                 <Form form={editForm} layout="vertical" onFinish={handleEditPermissions}>
+                    <Form.Item name="commissionPercent" label="Процент от маржи (%)">
+                        <InputNumber min={0} max={100} step={1} style={{ width: '100%' }} placeholder="0" addonAfter="%" />
+                    </Form.Item>
                     <Form.Item name="permissions" label="Доступ к разделам">
                         <Checkbox.Group options={MODULE_PERMISSIONS} />
                     </Form.Item>

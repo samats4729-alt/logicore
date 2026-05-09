@@ -459,4 +459,111 @@ export class ForwarderService {
             data: { orderId, userId, action, details },
         });
     }
+
+    // ==================== КОМИССИЯ МЕНЕДЖЕРОВ ====================
+
+    /**
+     * Установить процент комиссии для менеджера (только админ)
+     */
+    async setManagerCommission(companyId: string, userId: string, commissionPercent: number) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user || user.companyId !== companyId) {
+            throw new ForbiddenException('Пользователь не найден в этой компании');
+        }
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: { commissionPercent },
+            select: { id: true, firstName: true, lastName: true, commissionPercent: true },
+        });
+    }
+
+    /**
+     * Получить заработок менеджера за указанный месяц
+     */
+    async getManagerEarnings(companyId: string, userId: string, year?: number, month?: number) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, firstName: true, lastName: true, companyId: true, commissionPercent: true },
+        });
+        if (!user || user.companyId !== companyId) {
+            throw new ForbiddenException('Пользователь не найден в этой компании');
+        }
+
+        const now = new Date();
+        const targetYear = year || now.getFullYear();
+        const targetMonth = month || (now.getMonth() + 1); // 1-indexed
+
+        const startOfMonth = new Date(targetYear, targetMonth - 1, 1);
+        const endOfMonth = new Date(targetYear, targetMonth, 1);
+
+        // Находим все заявки, к которым прикреплён этот менеджер, завершённые в этом месяце
+        const assignments = await this.prisma.orderAssignee.findMany({
+            where: {
+                userId,
+                order: {
+                    OR: [
+                        { forwarderId: companyId },
+                        { subForwarderId: companyId },
+                    ],
+                    completedAt: {
+                        gte: startOfMonth,
+                        lt: endOfMonth,
+                    },
+                    status: 'COMPLETED',
+                },
+            },
+            include: {
+                order: {
+                    select: {
+                        id: true,
+                        orderNumber: true,
+                        customerPrice: true,
+                        completedAt: true,
+                        expenses: {
+                            where: { isDeleted: false, companyId },
+                            select: { amount: true },
+                        },
+                    },
+                },
+            },
+        });
+
+        // Считаем маржу и заработок по каждой заявке
+        const orderEarnings = assignments.map(a => {
+            const customerPrice = a.order.customerPrice || 0;
+            const totalExpenses = a.order.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
+            const margin = customerPrice - totalExpenses;
+            const earning = Math.max(0, margin * (user.commissionPercent / 100));
+            return {
+                orderId: a.order.id,
+                orderNumber: a.order.orderNumber,
+                customerPrice,
+                totalExpenses,
+                margin,
+                earning: Math.round(earning),
+                completedAt: a.order.completedAt,
+            };
+        });
+
+        const totalMargin = orderEarnings.reduce((s, o) => s + o.margin, 0);
+        const totalEarning = orderEarnings.reduce((s, o) => s + o.earning, 0);
+
+        return {
+            user: {
+                id: user.id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                commissionPercent: user.commissionPercent,
+            },
+            period: {
+                year: targetYear,
+                month: targetMonth,
+                label: `${String(targetMonth).padStart(2, '0')}.${targetYear}`,
+            },
+            ordersCount: orderEarnings.length,
+            totalMargin,
+            totalEarning,
+            orders: orderEarnings,
+        };
+    }
 }
