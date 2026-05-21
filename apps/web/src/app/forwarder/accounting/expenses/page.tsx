@@ -15,17 +15,21 @@ const { RangePicker } = DatePicker;
 
 interface JournalEntry {
     id: string; orderNumber: string; createdAt: string; status: string;
-    cargoDescription: string; driverCost: number; isDriverPaid: boolean;
-    driverPaidAt: string | null; driverPaymentCondition: string | null;
-    driverPaymentForm: string | null; pickupDate: string | null; completedAt: string | null;
+    cargoDescription: string;
+    // Заказчик
+    customerPrice: number | null; isCustomerPaid: boolean; customerPaidAt: string | null;
+    customerCompany: { id: string; name: string } | null;
+    // Водитель / партнёр
+    driverCost: number | null; isDriverPaid: boolean; driverPaidAt: string | null;
+    driverPaymentCondition: string | null; driverPaymentForm: string | null;
     assignedDriverName: string | null; assignedDriverPhone: string | null;
     driver: { id: string; firstName: string; lastName: string; phone: string } | null;
     partner: { id: string; name: string } | null;
+    // Суб-экспедитор
+    subForwarderId?: string; subForwarderPrice?: number | null;
+    isSubForwarderPaid: boolean; subForwarderPaidAt: string | null;
     subForwarder: { id: string; name: string } | null;
-    subForwarderId?: string;
-    subForwarderPrice?: number;
-    isSubForwarderPaid: boolean;
-    subForwarderPaidAt: string | null;
+    pickupDate: string | null; completedAt: string | null;
 }
 
 interface ManualExpense { id: string; date: string; category: string; description: string; amount: number; note?: string; order?: { orderNumber: string }; }
@@ -71,7 +75,7 @@ export default function ForwarderExpensesPage() {
 
     useEffect(() => { fetchJournal(); fetchManual(); }, []);
 
-    const fetchJournal = async () => { setLoading(true); try { const res = await api.get('/accounting/expenses-journal'); setEntries(res.data); } catch {} finally { setLoading(false); } };
+    const fetchJournal = async () => { setLoading(true); try { const res = await api.get('/accounting/financial-registry'); setEntries(res.data); } catch {} finally { setLoading(false); } };
     const fetchManual = async () => { try { const res = await api.get('/accounting/expenses'); setManualExpenses(res.data); } catch {} };
 
     const getIsPaid = (e: JournalEntry): boolean => {
@@ -104,6 +108,21 @@ export default function ForwarderExpensesPage() {
                 }
             }
         } catch { message.error('Ошибка'); }
+    };
+
+    const toggleCustomerPaid = async (entry: JournalEntry) => {
+        try {
+            await api.put(`/accounting/orders/${entry.id}/customer-paid`, { paid: !entry.isCustomerPaid });
+            message.success(!entry.isCustomerPaid ? 'Оплата отмечена' : 'Отметка снята');
+            fetchJournal();
+        } catch { message.error('Ошибка'); }
+    };
+
+    // Строка «в порядке» только если все нужные платежи закрыты
+    const isFullyPaid = (e: JournalEntry): boolean => {
+        const customerOk = e.isCustomerPaid;
+        const carrierOk = e.subForwarderId ? e.isSubForwarderPaid : e.isDriverPaid;
+        return customerOk && carrierOk;
     };
 
     const getExpenseCost = (e: JournalEntry): number => {
@@ -161,20 +180,22 @@ export default function ForwarderExpensesPage() {
     };
 
     const filtered = entries.filter(e => {
-        if (searchQuery) { const q = searchQuery.toLowerCase(); if (!e.orderNumber.toLowerCase().includes(q) && !getCarrierName(e).toLowerCase().includes(q) && !e.cargoDescription.toLowerCase().includes(q)) return false; }
-        if (paymentFilter === 'paid' && !getIsPaid(e)) return false;
-        if (paymentFilter === 'unpaid' && getIsPaid(e)) return false;
+        const q = searchQuery.toLowerCase();
+        if (searchQuery && !e.orderNumber.toLowerCase().includes(q) && !(e.customerCompany?.name || '').toLowerCase().includes(q) && !getCarrierName(e).toLowerCase().includes(q)) return false;
+        if (paymentFilter === 'paid' && !isFullyPaid(e)) return false;
+        if (paymentFilter === 'unpaid' && isFullyPaid(e)) return false;
         if (dateRange && dateRange[0] && dateRange[1]) { const d = dayjs(e.createdAt); if (d.isBefore(dateRange[0], 'day') || d.isAfter(dateRange[1], 'day')) return false; }
         return true;
     });
 
-    const totalSum = filtered.reduce((s, e) => s + getExpenseCost(e), 0);
-    const paidSum = filtered.filter(e => getIsPaid(e)).reduce((s, e) => s + getExpenseCost(e), 0);
-    const debtSum = totalSum - paidSum;
+    const totalCustomer = filtered.reduce((s, e) => s + (e.customerPrice || 0), 0);
+    const paidCustomer = filtered.filter(e => e.isCustomerPaid).reduce((s, e) => s + (e.customerPrice || 0), 0);
+    const totalCarrier = filtered.reduce((s, e) => s + getExpenseCost(e), 0);
+    const paidCarrier = filtered.filter(e => getIsPaid(e)).reduce((s, e) => s + getExpenseCost(e), 0);
 
     const orderExpenses = manualExpenses.filter(exp => {
         if (!exp.order) return false;
-        if (searchQuery) { const q = searchQuery.toLowerCase(); if (!exp.description.toLowerCase().includes(q) && !(exp.note || '').toLowerCase().includes(q)) return false; }
+        if (searchQuery) { const q = searchQuery.toLowerCase(); if (!exp.description.toLowerCase().includes(q) && !(exp.note || '').toLowerCase().includes(q) && !(exp.order?.orderNumber || '').toLowerCase().includes(q)) return false; }
         if (dateRange && dateRange[0] && dateRange[1]) { const d = dayjs(exp.date); if (d.isBefore(dateRange[0], 'day') || d.isAfter(dateRange[1], 'day')) return false; }
         return true;
     });
@@ -189,25 +210,41 @@ export default function ForwarderExpensesPage() {
     const otherExpensesTotal = otherExpenses.reduce((s, exp) => s + exp.amount, 0);
 
     const journalColumns = [
-        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 100, render: (val: string) => <Text strong style={{ fontSize: 13 }}>{val}</Text> },
-        { title: 'Дата', dataIndex: 'createdAt', key: 'createdAt', width: 100, sorter: (a: JournalEntry, b: JournalEntry) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <Text style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</Text> },
-        { title: 'Исполнитель', key: 'carrier', width: 200, render: (_: any, r: JournalEntry) => (
-            <div>
-                <Text strong={!getIsPaid(r)} style={{ fontSize: 13, color: getIsPaid(r) ? undefined : '#cf1322' }}>{getCarrierName(r)}</Text>
-                <div><Text type="secondary" style={{ fontSize: 11 }}>{getExecutorLabel(r)}</Text></div>
-            </div>
-        ) },
-        { title: 'Описание', dataIndex: 'cargoDescription', key: 'cargoDescription', ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val}</Text> },
-        { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, render: (val: string) => <Tag color={val === 'COMPLETED' ? 'green' : val === 'PROBLEM' ? 'red' : 'blue'} style={{ fontSize: 12 }}>{STATUS_LABELS[val] || val}</Tag> },
-        { title: 'Сумма', key: 'driverCost', width: 130, align: 'right' as const, sorter: (a: JournalEntry, b: JournalEntry) => getExpenseCost(a) - getExpenseCost(b), render: (_: any, r: JournalEntry) => <Text strong style={{ fontSize: 13 }}>{getExpenseCost(r).toLocaleString('ru-RU')} ₸</Text> },
-        { title: 'Оплата', key: 'paid', width: 90, align: 'center' as const, render: (_: any, r: JournalEntry) => <Tooltip title={getIsPaid(r) ? 'Оплачено' : 'Не оплачено'}><Switch size="small" checked={getIsPaid(r)} onChange={(_, e) => { e.stopPropagation(); togglePaid(r); }} checkedChildren={<CheckCircleOutlined />} unCheckedChildren={<CloseCircleOutlined />} style={{ background: getIsPaid(r) ? '#52c41a' : '#ff4d4f' }} /></Tooltip> },
+        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 90, render: (val: string) => <Text strong style={{ fontSize: 13 }}>{val}</Text> },
+        { title: 'Дата', dataIndex: 'createdAt', key: 'createdAt', width: 95, sorter: (a: JournalEntry, b: JournalEntry) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <Text style={{ fontSize: 12 }}>{dayjs(val).format('DD.MM.YYYY')}</Text> },
+        { title: 'Заказчик', key: 'customer', width: 160, render: (_: any, r: JournalEntry) => <Text style={{ fontSize: 12 }}>{r.customerCompany?.name || '—'}</Text> },
+        { title: 'Описание', dataIndex: 'cargoDescription', key: 'desc', ellipsis: true, render: (val: string) => <Text style={{ fontSize: 12 }}>{val}</Text> },
+        {
+            title: 'Заказчик оплатил', key: 'custPaid', width: 160, align: 'center' as const,
+            render: (_: any, r: JournalEntry) => (
+                <Space direction="vertical" size={0} style={{ alignItems: 'center' }}>
+                    <Switch size="small" checked={r.isCustomerPaid} onChange={(_, e) => { e.stopPropagation(); toggleCustomerPaid(r); }} checkedChildren={<CheckCircleOutlined />} unCheckedChildren={<CloseCircleOutlined />} style={{ background: r.isCustomerPaid ? '#52c41a' : '#ff4d4f' }} />
+                    <Text style={{ fontSize: 11, color: r.isCustomerPaid ? '#389e0d' : '#cf1322' }}>{(r.customerPrice || 0).toLocaleString('ru-RU')} ₸</Text>
+                </Space>
+            ),
+        },
+        {
+            title: 'Мы оплатили', key: 'carrierPaid', width: 160, align: 'center' as const,
+            render: (_: any, r: JournalEntry) => (
+                <Space direction="vertical" size={0} style={{ alignItems: 'center' }}>
+                    <Space size={4}>
+                        <Switch size="small" checked={getIsPaid(r)} onChange={(_, e) => { e.stopPropagation(); togglePaid(r); }} checkedChildren={<CheckCircleOutlined />} unCheckedChildren={<CloseCircleOutlined />} style={{ background: getIsPaid(r) ? '#52c41a' : '#ff4d4f' }} />
+                        {r.subForwarderId && <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>Суб</Tag>}
+                    </Space>
+                    <Text style={{ fontSize: 11, color: getIsPaid(r) ? '#389e0d' : '#cf1322' }}>{getExpenseCost(r).toLocaleString('ru-RU')} ₸</Text>
+                    <Text type="secondary" style={{ fontSize: 10 }}>{getCarrierName(r)}</Text>
+                </Space>
+            ),
+        },
+        { title: 'Статус', dataIndex: 'status', key: 'status', width: 110, render: (val: string) => <Tag color={val === 'COMPLETED' ? 'green' : val === 'PROBLEM' ? 'red' : 'blue'} style={{ fontSize: 11 }}>{STATUS_LABELS[val] || val}</Tag> },
     ];
 
     const manualColumns = [
         { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, sorter: (a: ManualExpense, b: ManualExpense) => dayjs(a.date).unix() - dayjs(b.date).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <Text style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</Text> },
+        { title: 'Заявка №', key: 'orderNum', width: 100, render: (_: any, r: ManualExpense) => r.order ? <Text style={{ fontSize: 13 }}>{r.order.orderNumber}</Text> : <Text type="secondary">—</Text> },
         { title: 'Категория', dataIndex: 'category', key: 'category', width: 150, render: (val: string) => <Tag color={categoryColors[val] || 'default'} style={{ fontSize: 12 }}>{EXPENSE_CATEGORIES.find(c => c.value === val)?.label || val}</Tag> },
         { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <Text strong style={{ fontSize: 13, color: '#cf1322' }}>−{val.toLocaleString('ru-RU')} ₸</Text> },
-        { title: 'Примечание', dataIndex: 'note', key: 'note', width: 180, ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val || '—'}</Text> },
+        { title: 'Примечание', dataIndex: 'note', key: 'note', ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val || '—'}</Text> },
         { title: '', key: 'actions', width: 80, render: (_: any, r: ManualExpense) => <Space><Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditingExpense(r); form.setFieldsValue({ ...r, date: dayjs(r.date) }); setModalOpen(true); }} /><Popconfirm title="Удалить?" onConfirm={() => handleDeleteManual(r.id)} okText="Да" cancelText="Нет"><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
     ];
 
@@ -232,9 +269,10 @@ export default function ForwarderExpensesPage() {
             {tab === 'journal' ? (
                 <>
                     <Row gutter={16} style={{ marginBottom: 16 }}>
-                        <Col xs={24} sm={8}><Card size="small"><Statistic title="Общая сумма" value={totalSum} suffix="₸" valueStyle={{ fontSize: 20 }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
-                        <Col xs={24} sm={8}><Card size="small"><Statistic title="Оплачено" value={paidSum} suffix="₸" valueStyle={{ fontSize: 20, color: '#389e0d' }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
-                        <Col xs={24} sm={8}><Card size="small"><Statistic title="Наш долг" value={debtSum} suffix="₸" valueStyle={{ fontSize: 20, color: debtSum > 0 ? '#cf1322' : '#389e0d' }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
+                        <Col xs={24} sm={6}><Card size="small"><Statistic title="Заказчики должны" value={totalCustomer - paidCustomer} suffix="₸" valueStyle={{ fontSize: 18, color: (totalCustomer - paidCustomer) > 0 ? '#cf1322' : '#389e0d' }} formatter={(v) => Number(v).toLocaleString('ru-RU')} /></Card></Col>
+                        <Col xs={24} sm={6}><Card size="small"><Statistic title="Заказчики оплатили" value={paidCustomer} suffix="₸" valueStyle={{ fontSize: 18, color: '#389e0d' }} formatter={(v) => Number(v).toLocaleString('ru-RU')} /></Card></Col>
+                        <Col xs={24} sm={6}><Card size="small"><Statistic title="Мы должны исполнителям" value={totalCarrier - paidCarrier} suffix="₸" valueStyle={{ fontSize: 18, color: (totalCarrier - paidCarrier) > 0 ? '#cf1322' : '#389e0d' }} formatter={(v) => Number(v).toLocaleString('ru-RU')} /></Card></Col>
+                        <Col xs={24} sm={6}><Card size="small"><Statistic title="Мы оплатили" value={paidCarrier} suffix="₸" valueStyle={{ fontSize: 18, color: '#389e0d' }} formatter={(v) => Number(v).toLocaleString('ru-RU')} /></Card></Col>
                     </Row>
                     <Card size="small" style={{ marginBottom: 12 }}>
                         <Space wrap>
@@ -246,7 +284,7 @@ export default function ForwarderExpensesPage() {
                     <Card size="small" styles={{ body: { padding: 0 } }}>
                         <Table columns={journalColumns} dataSource={filtered} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет данных' }}
                             pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }}
-                            rowClassName={(r) => `${r.isDriverPaid ? '' : 'unpaid-row'} clickable-row`}
+                            rowClassName={(r) => `${!isFullyPaid(r) ? 'unpaid-row' : ''} clickable-row`}
                             onRow={(record) => ({ onClick: () => openDetail(record) })}
                         />
                     </Card>
