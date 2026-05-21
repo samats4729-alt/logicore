@@ -24,6 +24,8 @@ interface JournalEntry {
     subForwarder: { id: string; name: string } | null;
     subForwarderId?: string;
     subForwarderPrice?: number;
+    isSubForwarderPaid: boolean;
+    subForwarderPaidAt: string | null;
 }
 
 interface ManualExpense { id: string; date: string; category: string; description: string; amount: number; note?: string; order?: { orderNumber: string }; }
@@ -72,13 +74,34 @@ export default function ForwarderExpensesPage() {
     const fetchJournal = async () => { setLoading(true); try { const res = await api.get('/accounting/expenses-journal'); setEntries(res.data); } catch {} finally { setLoading(false); } };
     const fetchManual = async () => { try { const res = await api.get('/accounting/expenses'); setManualExpenses(res.data); } catch {} };
 
-    const togglePaid = async (orderId: string, currentPaid: boolean) => {
+    const getIsPaid = (e: JournalEntry): boolean => {
+        return e.subForwarderId ? e.isSubForwarderPaid : e.isDriverPaid;
+    };
+
+    const getPaidAt = (e: JournalEntry): string | null => {
+        return e.subForwarderId ? e.subForwarderPaidAt : e.driverPaidAt;
+    };
+
+    const getExecutorLabel = (e: JournalEntry): string => {
+        return e.subForwarderId ? 'Суб-экспедитор' : 'Водитель / Партнёр';
+    };
+
+    const togglePaid = async (entry: JournalEntry) => {
+        const isSubForwarder = !!entry.subForwarderId;
+        const currentPaid = isSubForwarder ? entry.isSubForwarderPaid : entry.isDriverPaid;
+        const endpoint = isSubForwarder
+            ? `/accounting/orders/${entry.id}/subforwarder-paid`
+            : `/accounting/orders/${entry.id}/driver-paid`;
         try {
-            await api.put(`/accounting/orders/${orderId}/driver-paid`, { paid: !currentPaid });
+            await api.put(endpoint, { paid: !currentPaid });
             message.success(!currentPaid ? 'Оплата отмечена' : 'Отметка снята');
             fetchJournal();
-            if (selectedEntry?.id === orderId) {
-                setSelectedEntry(prev => prev ? { ...prev, isDriverPaid: !currentPaid, driverPaidAt: !currentPaid ? new Date().toISOString() : null } : null);
+            if (selectedEntry?.id === entry.id) {
+                if (isSubForwarder) {
+                    setSelectedEntry(prev => prev ? { ...prev, isSubForwarderPaid: !currentPaid, subForwarderPaidAt: !currentPaid ? new Date().toISOString() : null } : null);
+                } else {
+                    setSelectedEntry(prev => prev ? { ...prev, isDriverPaid: !currentPaid, driverPaidAt: !currentPaid ? new Date().toISOString() : null } : null);
+                }
             }
         } catch { message.error('Ошибка'); }
     };
@@ -139,14 +162,14 @@ export default function ForwarderExpensesPage() {
 
     const filtered = entries.filter(e => {
         if (searchQuery) { const q = searchQuery.toLowerCase(); if (!e.orderNumber.toLowerCase().includes(q) && !getCarrierName(e).toLowerCase().includes(q) && !e.cargoDescription.toLowerCase().includes(q)) return false; }
-        if (paymentFilter === 'paid' && !e.isDriverPaid) return false;
-        if (paymentFilter === 'unpaid' && e.isDriverPaid) return false;
+        if (paymentFilter === 'paid' && !getIsPaid(e)) return false;
+        if (paymentFilter === 'unpaid' && getIsPaid(e)) return false;
         if (dateRange && dateRange[0] && dateRange[1]) { const d = dayjs(e.createdAt); if (d.isBefore(dateRange[0], 'day') || d.isAfter(dateRange[1], 'day')) return false; }
         return true;
     });
 
     const totalSum = filtered.reduce((s, e) => s + getExpenseCost(e), 0);
-    const paidSum = filtered.filter(e => e.isDriverPaid).reduce((s, e) => s + getExpenseCost(e), 0);
+    const paidSum = filtered.filter(e => getIsPaid(e)).reduce((s, e) => s + getExpenseCost(e), 0);
     const debtSum = totalSum - paidSum;
 
     const orderExpenses = manualExpenses.filter(exp => {
@@ -168,11 +191,16 @@ export default function ForwarderExpensesPage() {
     const journalColumns = [
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 100, render: (val: string) => <Text strong style={{ fontSize: 13 }}>{val}</Text> },
         { title: 'Дата', dataIndex: 'createdAt', key: 'createdAt', width: 100, sorter: (a: JournalEntry, b: JournalEntry) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <Text style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</Text> },
-        { title: 'Перевозчик / Водитель', key: 'carrier', width: 220, render: (_: any, r: JournalEntry) => <Text strong={!r.isDriverPaid} style={{ fontSize: 13, color: r.isDriverPaid ? undefined : '#cf1322' }}>{getCarrierName(r)}</Text> },
+        { title: 'Исполнитель', key: 'carrier', width: 200, render: (_: any, r: JournalEntry) => (
+            <div>
+                <Text strong={!getIsPaid(r)} style={{ fontSize: 13, color: getIsPaid(r) ? undefined : '#cf1322' }}>{getCarrierName(r)}</Text>
+                <div><Text type="secondary" style={{ fontSize: 11 }}>{getExecutorLabel(r)}</Text></div>
+            </div>
+        ) },
         { title: 'Описание', dataIndex: 'cargoDescription', key: 'cargoDescription', ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val}</Text> },
         { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, render: (val: string) => <Tag color={val === 'COMPLETED' ? 'green' : val === 'PROBLEM' ? 'red' : 'blue'} style={{ fontSize: 12 }}>{STATUS_LABELS[val] || val}</Tag> },
         { title: 'Сумма', key: 'driverCost', width: 130, align: 'right' as const, sorter: (a: JournalEntry, b: JournalEntry) => getExpenseCost(a) - getExpenseCost(b), render: (_: any, r: JournalEntry) => <Text strong style={{ fontSize: 13 }}>{getExpenseCost(r).toLocaleString('ru-RU')} ₸</Text> },
-        { title: 'Оплата', key: 'paid', width: 90, align: 'center' as const, render: (_: any, r: JournalEntry) => <Tooltip title={r.isDriverPaid ? 'Оплачено' : 'Не оплачено'}><Switch size="small" checked={r.isDriverPaid} onChange={(_, e) => { e.stopPropagation(); togglePaid(r.id, r.isDriverPaid); }} checkedChildren={<CheckCircleOutlined />} unCheckedChildren={<CloseCircleOutlined />} style={{ background: r.isDriverPaid ? '#52c41a' : '#ff4d4f' }} /></Tooltip> },
+        { title: 'Оплата', key: 'paid', width: 90, align: 'center' as const, render: (_: any, r: JournalEntry) => <Tooltip title={getIsPaid(r) ? 'Оплачено' : 'Не оплачено'}><Switch size="small" checked={getIsPaid(r)} onChange={(_, e) => { e.stopPropagation(); togglePaid(r); }} checkedChildren={<CheckCircleOutlined />} unCheckedChildren={<CloseCircleOutlined />} style={{ background: getIsPaid(r) ? '#52c41a' : '#ff4d4f' }} /></Tooltip> },
     ];
 
     const manualColumns = [
@@ -280,9 +308,10 @@ export default function ForwarderExpensesPage() {
                             <Descriptions.Item label="Номер">{selectedEntry.orderNumber}</Descriptions.Item>
                             <Descriptions.Item label="Дата создания">{dayjs(selectedEntry.createdAt).format('DD.MM.YYYY HH:mm')}</Descriptions.Item>
                             <Descriptions.Item label="Контрагент">
-                                <Text strong style={{ color: selectedEntry.isDriverPaid ? undefined : '#cf1322' }}>
+                                <Text strong style={{ color: getIsPaid(selectedEntry) ? undefined : '#cf1322' }}>
                                     {getCarrierName(selectedEntry)}
                                 </Text>
+                                <div><Text type="secondary" style={{ fontSize: 12 }}>{getExecutorLabel(selectedEntry)}</Text></div>
                             </Descriptions.Item>
                             {selectedEntry.assignedDriverPhone && (
                                 <Descriptions.Item label="Телефон">{selectedEntry.assignedDriverPhone}</Descriptions.Item>
@@ -295,13 +324,13 @@ export default function ForwarderExpensesPage() {
                             </Descriptions.Item>
                             <Descriptions.Item label="Статус оплаты">
                                 <Switch
-                                    checked={selectedEntry.isDriverPaid}
-                                    onChange={() => togglePaid(selectedEntry.id, selectedEntry.isDriverPaid)}
+                                    checked={getIsPaid(selectedEntry)}
+                                    onChange={() => togglePaid(selectedEntry)}
                                     checkedChildren="Оплачено"
                                     unCheckedChildren="Не оплачено"
-                                    style={{ background: selectedEntry.isDriverPaid ? '#52c41a' : '#ff4d4f' }}
+                                    style={{ background: getIsPaid(selectedEntry) ? '#52c41a' : '#ff4d4f' }}
                                 />
-                                {selectedEntry.driverPaidAt && <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>{dayjs(selectedEntry.driverPaidAt).format('DD.MM.YYYY')}</Text>}
+                                {getPaidAt(selectedEntry) && <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>{dayjs(getPaidAt(selectedEntry)).format('DD.MM.YYYY')}</Text>}
                             </Descriptions.Item>
                         </Descriptions>
 

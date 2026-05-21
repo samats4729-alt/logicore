@@ -48,6 +48,11 @@ export class AccountingController {
         return this.accountingService.markDriverPaid(req.user.companyId, id, body.paid);
     }
 
+    @Put('orders/:id/subforwarder-paid')
+    async markSubForwarderPaid(@Request() req: any, @Param('id') id: string, @Body() body: { paid: boolean }) {
+        return this.accountingService.markSubForwarderPaid(req.user.companyId, id, body.paid);
+    }
+
     @Put('orders/:id/update-finance')
     async updateOrderFinance(@Request() req: any, @Param('id') id: string, @Body() body: any) {
         return this.accountingService.updateOrderFinance(req.user.companyId, id, body);

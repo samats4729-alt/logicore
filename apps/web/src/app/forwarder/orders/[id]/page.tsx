@@ -352,7 +352,20 @@ export default function OrderDetailPage() {
                             prefix={<DollarOutlined />}
                         />
                     </Col>
-                    <Col span={5}>
+                    {order.subForwarderId && summary.subForwarderPrice > 0 && (
+                        <Col span={4}>
+                            <Statistic
+                                title="Оплата суб-экспедитору"
+                                value={summary.subForwarderPrice}
+                                suffix="₸"
+                                valueStyle={{ fontSize: 18, fontWeight: 600 }}
+                            />
+                            <Tag color={summary.isSubForwarderPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                {summary.isSubForwarderPaid ? 'Оплачено' : 'Не оплачено'}
+                            </Tag>
+                        </Col>
+                    )}
+                    <Col span={4}>
                         <Statistic
                             title="Маржа"
                             value={summary.margin}
@@ -371,14 +384,17 @@ export default function OrderDetailPage() {
                     </Col>
                     <Col span={4}>
                         <Statistic
-                            title="Долг заказчика"
-                            value={summary.customerDebt}
+                            title="Расходы"
+                            value={summary.totalExpenses}
                             suffix="₸"
-                            valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#faad14' : '#389e0d' }}
+                            valueStyle={{ fontSize: 18, color: '#cf1322' }}
+                            prefix={<DollarOutlined />}
                         />
                     </Col>
                 </Row>
             </Card>
+
+
 
             {/* INCOMES TABLE */}
             <Card

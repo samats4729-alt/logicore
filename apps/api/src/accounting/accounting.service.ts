@@ -67,7 +67,10 @@ export class AccountingService {
                 balance: totalIncomes - totalExpenses,
                 isCustomerPaid: order.isCustomerPaid,
                 isDriverPaid: order.isDriverPaid,
-                customerDebt: (order.customerPrice || 0) - totalIncomes,
+                isSubForwarderPaid: order.isSubForwarderPaid,
+                customerDebt: order.isCustomerPaid ? 0 : (order.customerPrice || 0) - totalIncomes,
+                driverDebt: order.isDriverPaid ? 0 : (order.driverCost || 0) - totalExpenses,
+                subForwarderDebt: order.isSubForwarderPaid ? 0 : (order.subForwarderPrice || 0),
             },
         };
     }
@@ -100,6 +103,8 @@ export class AccountingService {
                 subForwarderId: true,
                 isDriverPaid: true,
                 driverPaidAt: true,
+                isSubForwarderPaid: true,
+                subForwarderPaidAt: true,
                 // Связи
                 customerCompany: { select: { id: true, name: true } },
                 assignedDriverName: true,
@@ -172,6 +177,8 @@ export class AccountingService {
                 subForwarderId: true,
                 isDriverPaid: true,
                 driverPaidAt: true,
+                isSubForwarderPaid: true,
+                subForwarderPaidAt: true,
                 driverPaymentCondition: true,
                 driverPaymentForm: true,
                 pickupDate: true,
@@ -241,6 +248,21 @@ export class AccountingService {
             data: {
                 isDriverPaid: paid,
                 driverPaidAt: paid ? new Date() : null,
+            },
+        });
+    }
+
+    async markSubForwarderPaid(companyId: string, orderId: string, paid: boolean) {
+        const order = await this.prisma.order.findFirst({
+            where: { id: orderId, forwarderId: companyId },
+        });
+        if (!order) throw new NotFoundException('Заявка не найдена');
+
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                isSubForwarderPaid: paid,
+                subForwarderPaidAt: paid ? new Date() : null,
             },
         });
     }
