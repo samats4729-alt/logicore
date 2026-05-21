@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
     Typography, Tag, Button, Descriptions, Card, Row, Col, Statistic, Table,
-    Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline, Space, Spin, Divider, Popconfirm, Upload
+    Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline, Space, Spin, Divider, Popconfirm, Upload, Switch
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
@@ -339,30 +339,53 @@ export default function OrderDetailPage() {
                             suffix="₸"
                             valueStyle={{ fontSize: 18, fontWeight: 600 }}
                         />
-                        <Tag color={summary.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                            {summary.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}
-                        </Tag>
+                        <Switch
+                            size="small"
+                            checked={summary.isCustomerPaid}
+                            onChange={async (checked) => {
+                                try { await api.put(`/accounting/orders/${orderId}/customer-paid`, { paid: checked }); message.success(checked ? 'Оплата отмечена' : 'Отметка снята'); fetchData(); } catch { message.error('Ошибка'); }
+                            }}
+                            checkedChildren="Заказчик оплатил"
+                            unCheckedChildren="Не оплачено"
+                            style={{ marginTop: 4, background: summary.isCustomerPaid ? '#52c41a' : '#ff4d4f' }}
+                        />
                     </Col>
                     <Col span={5}>
                         <Statistic
-                            title="Расходы"
-                            value={summary.totalExpenses}
+                            title="Оплата водителю"
+                            value={summary.driverCost}
                             suffix="₸"
-                            valueStyle={{ fontSize: 18, color: '#cf1322' }}
-                            prefix={<DollarOutlined />}
+                            valueStyle={{ fontSize: 18, fontWeight: 600 }}
+                        />
+                        <Switch
+                            size="small"
+                            checked={summary.isDriverPaid}
+                            onChange={async (checked) => {
+                                try { await api.put(`/accounting/orders/${orderId}/driver-paid`, { paid: checked }); message.success(checked ? 'Оплата отмечена' : 'Отметка снята'); fetchData(); } catch { message.error('Ошибка'); }
+                            }}
+                            checkedChildren="Оплачено"
+                            unCheckedChildren="Не оплачено"
+                            style={{ marginTop: 4, background: summary.isDriverPaid ? '#52c41a' : '#ff4d4f' }}
                         />
                     </Col>
                     {order.subForwarderId && summary.subForwarderPrice > 0 && (
                         <Col span={4}>
                             <Statistic
-                                title="Оплата суб-экспедитору"
+                                title="Суб-экспедитор"
                                 value={summary.subForwarderPrice}
                                 suffix="₸"
                                 valueStyle={{ fontSize: 18, fontWeight: 600 }}
                             />
-                            <Tag color={summary.isSubForwarderPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                {summary.isSubForwarderPaid ? 'Оплачено' : 'Не оплачено'}
-                            </Tag>
+                            <Switch
+                                size="small"
+                                checked={summary.isSubForwarderPaid}
+                                onChange={async (checked) => {
+                                    try { await api.put(`/accounting/orders/${orderId}/subforwarder-paid`, { paid: checked }); message.success(checked ? 'Оплата отмечена' : 'Отметка снята'); fetchData(); } catch { message.error('Ошибка'); }
+                                }}
+                                checkedChildren="Оплачено"
+                                unCheckedChildren="Не оплачено"
+                                style={{ marginTop: 4, background: summary.isSubForwarderPaid ? '#52c41a' : '#ff4d4f' }}
+                            />
                         </Col>
                     )}
                     <Col span={4}>
@@ -373,21 +396,21 @@ export default function OrderDetailPage() {
                             valueStyle={{ fontSize: 18, fontWeight: 600, color: summary.margin >= 0 ? '#389e0d' : '#cf1322' }}
                         />
                     </Col>
-                    <Col span={5}>
+                    <Col span={3}>
                         <Statistic
                             title="Поступления"
                             value={summary.totalIncomes}
                             suffix="₸"
-                            valueStyle={{ fontSize: 18, color: '#389e0d' }}
+                            valueStyle={{ fontSize: 16, color: '#389e0d' }}
                             prefix={<WalletOutlined />}
                         />
                     </Col>
-                    <Col span={4}>
+                    <Col span={3}>
                         <Statistic
                             title="Расходы"
                             value={summary.totalExpenses}
                             suffix="₸"
-                            valueStyle={{ fontSize: 18, color: '#cf1322' }}
+                            valueStyle={{ fontSize: 16, color: '#cf1322' }}
                             prefix={<DollarOutlined />}
                         />
                     </Col>
