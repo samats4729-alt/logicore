@@ -57,8 +57,6 @@ export default function OrderDetailPage() {
     const orderId = params.id as string;
     const { user: currentUser } = useAuthStore();
 
-    const hasAccountingAccess = currentUser?.role === 'FORWARDER' || currentUser?.role === 'ACCOUNTANT' || currentUser?.permissions?.includes('accounting');
-
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
     const [documents, setDocuments] = useState<any[]>([]);
@@ -341,22 +339,9 @@ export default function OrderDetailPage() {
                             suffix="₸"
                             valueStyle={{ fontSize: 18, fontWeight: 600 }}
                         />
-                        {hasAccountingAccess ? (
-                            <Switch
-                                size="small"
-                                checked={summary.isCustomerPaid}
-                                onChange={async (checked) => {
-                                    try { await api.put(`/accounting/orders/${orderId}/customer-paid`, { paid: checked }); message.success(checked ? 'Оплата отмечена' : 'Отметка снята'); fetchData(); } catch { message.error('Ошибка'); }
-                                }}
-                                checkedChildren="Заказчик оплатил"
-                                unCheckedChildren="Не оплачено"
-                                style={{ marginTop: 4, background: summary.isCustomerPaid ? '#52c41a' : '#ff4d4f' }}
-                            />
-                        ) : (
-                            <Tag color={summary.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                {summary.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено заказчиком'}
-                            </Tag>
-                        )}
+                        <Tag color={summary.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                            {summary.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено заказчиком'}
+                        </Tag>
                     </Col>
                     <Col span={5}>
                         <Statistic
@@ -365,22 +350,9 @@ export default function OrderDetailPage() {
                             suffix="₸"
                             valueStyle={{ fontSize: 18, fontWeight: 600 }}
                         />
-                        {hasAccountingAccess ? (
-                            <Switch
-                                size="small"
-                                checked={summary.isDriverPaid}
-                                onChange={async (checked) => {
-                                    try { await api.put(`/accounting/orders/${orderId}/driver-paid`, { paid: checked }); message.success(checked ? 'Оплата отмечена' : 'Отметка снята'); fetchData(); } catch { message.error('Ошибка'); }
-                                }}
-                                checkedChildren="Оплачено"
-                                unCheckedChildren="Не оплачено"
-                                style={{ marginTop: 4, background: summary.isDriverPaid ? '#52c41a' : '#ff4d4f' }}
-                            />
-                        ) : (
-                            <Tag color={summary.isDriverPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                {summary.isDriverPaid ? 'Оплачено водителю' : 'Не оплачено водителю'}
-                            </Tag>
-                        )}
+                        <Tag color={summary.isDriverPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                            {summary.isDriverPaid ? 'Оплачено водителю' : 'Не оплачено водителю'}
+                        </Tag>
                     </Col>
                     {order.subForwarderId && summary.subForwarderPrice > 0 && (
                         <Col span={4}>
@@ -390,22 +362,9 @@ export default function OrderDetailPage() {
                                 suffix="₸"
                                 valueStyle={{ fontSize: 18, fontWeight: 600 }}
                             />
-                            {hasAccountingAccess ? (
-                                <Switch
-                                    size="small"
-                                    checked={summary.isSubForwarderPaid}
-                                    onChange={async (checked) => {
-                                        try { await api.put(`/accounting/orders/${orderId}/subforwarder-paid`, { paid: checked }); message.success(checked ? 'Оплата отмечена' : 'Отметка снята'); fetchData(); } catch { message.error('Ошибка'); }
-                                    }}
-                                    checkedChildren="Оплачено"
-                                    unCheckedChildren="Не оплачено"
-                                    style={{ marginTop: 4, background: summary.isSubForwarderPaid ? '#52c41a' : '#ff4d4f' }}
-                                />
-                            ) : (
-                                <Tag color={summary.isSubForwarderPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                    {summary.isSubForwarderPaid ? 'Оплачено суб-экспедитору' : 'Не оплачено суб-экспедитору'}
-                                </Tag>
-                            )}
+                            <Tag color={summary.isSubForwarderPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                {summary.isSubForwarderPaid ? 'Оплачено суб-экспедитору' : 'Не оплачено суб-экспедитору'}
+                            </Tag>
                         </Col>
                     )}
                     <Col span={4}>

@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { message, Switch } from 'antd';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -42,6 +43,8 @@ interface RegistryOrder {
     subForwarderId?: string;
     isDriverPaid: boolean;
     driverPaidAt?: string;
+    isSubForwarderPaid: boolean;
+    subForwarderPaidAt?: string;
     customerCompany?: { id: string; name: string };
     assignedDriverName?: string;
     driver?: { firstName: string; lastName: string };
@@ -82,6 +85,7 @@ export default function FinancialRegistryPage() {
         if (!inc) return 0;
         return Math.round((getMargin(o) / inc) * 100);
     };
+    const isCreditorPaid = (o: RegistryOrder) => o.subForwarderId ? !!o.isSubForwarderPaid : !!o.isDriverPaid;
 
     // Filters
     const filtered = useMemo(() => {
@@ -107,8 +111,8 @@ export default function FinancialRegistryPage() {
         }
 
         if (paymentFilter === 'debtor') result = result.filter(o => !o.isCustomerPaid && getIncome(o) > 0);
-        if (paymentFilter === 'creditor') result = result.filter(o => !o.isDriverPaid && getExpense(o) > 0);
-        if (paymentFilter === 'all_paid') result = result.filter(o => o.isCustomerPaid && o.isDriverPaid);
+        if (paymentFilter === 'creditor') result = result.filter(o => !isCreditorPaid(o) && getExpense(o) > 0);
+        if (paymentFilter === 'all_paid') result = result.filter(o => o.isCustomerPaid && isCreditorPaid(o));
 
         return result;
     }, [orders, search, dateRange, paymentFilter]);
@@ -119,7 +123,7 @@ export default function FinancialRegistryPage() {
         const totalExpense = filtered.reduce((s, o) => s + getExpense(o), 0);
         const totalMargin = totalIncome - totalExpense;
         const debtorSum = filtered.filter(o => !o.isCustomerPaid).reduce((s, o) => s + getIncome(o), 0);
-        const creditorSum = filtered.filter(o => !o.isDriverPaid).reduce((s, o) => s + getExpense(o), 0);
+        const creditorSum = filtered.filter(o => !isCreditorPaid(o)).reduce((s, o) => s + getExpense(o), 0);
         return { totalIncome, totalExpense, totalMargin, debtorSum, creditorSum };
     }, [filtered]);
 
@@ -152,9 +156,12 @@ export default function FinancialRegistryPage() {
             render: (_: any, r: RegistryOrder) => {
                 const name = r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—');
                 return (
-                    <span style={{ fontSize: 12, color: !r.isDriverPaid && getExpense(r) > 0 ? '#cf1322' : undefined, fontWeight: !r.isDriverPaid && getExpense(r) > 0 ? 600 : 400 }}>
-                        {name}
-                    </span>
+                    <Space size={4}>
+                        <span style={{ fontSize: 12, color: !isCreditorPaid(r) && getExpense(r) > 0 ? '#cf1322' : undefined, fontWeight: !isCreditorPaid(r) && getExpense(r) > 0 ? 600 : 400 }}>
+                            {name}
+                        </span>
+                        {r.subForwarderId && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: 0 }}>Суб</Tag>}
+                    </Space>
                 );
             },
         },
@@ -164,7 +171,7 @@ export default function FinancialRegistryPage() {
         },
         {
             title: <Tooltip title="Дебиторская задолженность — сколько должны нам"><span>Должны нам ₸</span></Tooltip>,
-            key: 'debit', width: 120, align: 'right' as const,
+            key: 'debit', width: 140, align: 'right' as const,
             sorter: (a: RegistryOrder, b: RegistryOrder) => getIncome(a) - getIncome(b),
             render: (_: any, r: RegistryOrder) => {
                 const v = getIncome(r);
@@ -172,26 +179,59 @@ export default function FinancialRegistryPage() {
                 return (
                     <Space size={4}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: r.isCustomerPaid ? '#389e0d' : '#cf1322' }}>{fmt(v)}</span>
-                        {r.isCustomerPaid
-                            ? <CheckCircleOutlined style={{ color: '#389e0d', fontSize: 11 }} />
-                            : <CloseCircleOutlined style={{ color: '#cf1322', fontSize: 11 }} />}
+                        <Switch 
+                            size="small" 
+                            checked={r.isCustomerPaid} 
+                            checkedChildren={<CheckCircleOutlined />} 
+                            unCheckedChildren={<CloseCircleOutlined />} 
+                            style={{ background: r.isCustomerPaid ? '#52c41a' : '#ff4d4f', marginLeft: 4 }}
+                            onChange={async (checked, e) => {
+                                e.stopPropagation();
+                                try {
+                                    await api.put(`/accounting/orders/${r.id}/customer-paid`, { paid: checked });
+                                    message.success(checked ? 'Оплата от заказчика получена' : 'Оплата от заказчика отменена');
+                                    fetchData();
+                                } catch {
+                                    message.error('Ошибка сохранения');
+                                }
+                            }}
+                        />
                     </Space>
                 );
             },
         },
         {
             title: <Tooltip title="Кредиторская задолженность — сколько должны мы"><span>Должны мы ₸</span></Tooltip>,
-            key: 'credit', width: 120, align: 'right' as const,
+            key: 'credit', width: 140, align: 'right' as const,
             sorter: (a: RegistryOrder, b: RegistryOrder) => getExpense(a) - getExpense(b),
             render: (_: any, r: RegistryOrder) => {
                 const v = getExpense(r);
                 if (!v) return <span style={{ color: '#ccc' }}>—</span>;
+                const isPaid = isCreditorPaid(r);
                 return (
                     <Space size={4}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: r.isDriverPaid ? '#389e0d' : '#cf1322' }}>{fmt(v)}</span>
-                        {r.isDriverPaid
-                            ? <CheckCircleOutlined style={{ color: '#389e0d', fontSize: 11 }} />
-                            : <CloseCircleOutlined style={{ color: '#cf1322', fontSize: 11 }} />}
+                        <span style={{ fontSize: 12, fontWeight: 600, color: isPaid ? '#389e0d' : '#cf1322' }}>{fmt(v)}</span>
+                        <Switch 
+                            size="small" 
+                            checked={isPaid} 
+                            checkedChildren={<CheckCircleOutlined />} 
+                            unCheckedChildren={<CloseCircleOutlined />} 
+                            style={{ background: isPaid ? '#52c41a' : '#ff4d4f', marginLeft: 4 }}
+                            onChange={async (checked, e) => {
+                                e.stopPropagation();
+                                try {
+                                    if (r.subForwarderId) {
+                                        await api.put(`/accounting/orders/${r.id}/subforwarder-paid`, { paid: checked });
+                                    } else {
+                                        await api.put(`/accounting/orders/${r.id}/driver-paid`, { paid: checked });
+                                    }
+                                    message.success(checked ? 'Оплата исполнителю проведена' : 'Оплата исполнителю отменена');
+                                    fetchData();
+                                } catch {
+                                    message.error('Ошибка сохранения');
+                                }
+                            }}
+                        />
                     </Space>
                 );
             },
@@ -425,11 +465,11 @@ export default function FinancialRegistryPage() {
                                             <div style={{ fontSize: 11, color: '#8c8c8c' }}>Кредиторская задолженность (мы должны)</div>
                                             <div style={{ fontSize: 22, fontWeight: 700, color: '#cf1322' }}>{fmt(expense)} ₸</div>
                                         </div>
-                                        <Tag color={o.isDriverPaid ? 'green' : 'red'} style={{ fontSize: 12 }}>
-                                            {o.isDriverPaid ? '✅ Оплачено' : '❌ Не оплачено'}
+                                        <Tag color={isCreditorPaid(o) ? 'green' : 'red'} style={{ fontSize: 12 }}>
+                                            {isCreditorPaid(o) ? '✅ Оплачено' : '❌ Не оплачено'}
                                         </Tag>
                                     </div>
-                                    {o.driverPaidAt && <div style={{ fontSize: 11, color: '#52c41a', marginTop: 4 }}>Оплачено: {dayjs(o.driverPaidAt).format('DD.MM.YYYY')}</div>}
+                                    {isCreditorPaid(o) && (o.driverPaidAt || o.subForwarderPaidAt) && <div style={{ fontSize: 11, color: '#52c41a', marginTop: 4 }}>Оплачено: {dayjs(o.subForwarderId ? o.subForwarderPaidAt : o.driverPaidAt).format('DD.MM.YYYY')}</div>}
                                 </Card>
 
                                 <Card size="small" style={{ background: margin >= 0 ? '#f6ffed' : '#fff2f0', border: `2px solid ${margin >= 0 ? '#b7eb8f' : '#ffa39e'}` }}>
