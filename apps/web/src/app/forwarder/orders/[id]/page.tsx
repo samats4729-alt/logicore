@@ -377,7 +377,7 @@ export default function OrderDetailPage() {
                     </Col>
                     <Col span={3}>
                         <Statistic
-                            title="Поступления"
+                            title="Доп. поступления"
                             value={summary.totalIncomes}
                             suffix="₸"
                             valueStyle={{ fontSize: 16, color: '#389e0d' }}
@@ -386,7 +386,7 @@ export default function OrderDetailPage() {
                     </Col>
                     <Col span={3}>
                         <Statistic
-                            title="Расходы"
+                            title="Доп. расходы"
                             value={summary.totalExpenses}
                             suffix="₸"
                             valueStyle={{ fontSize: 16, color: '#cf1322' }}
@@ -401,7 +401,7 @@ export default function OrderDetailPage() {
             {/* INCOMES TABLE */}
             <Card
                 size="small"
-                title={<span><WalletOutlined style={{ color: '#389e0d', marginRight: 6 }} />Поступления ({incomes.length})</span>}
+                title={<span><WalletOutlined style={{ color: '#389e0d', marginRight: 6 }} />Доп. поступления ({incomes.length})</span>}
                 extra={<Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); setIncomeModalOpen(true); }}>Добавить</Button>}
                 style={{ marginTop: 16 }}
             >
@@ -418,7 +418,7 @@ export default function OrderDetailPage() {
             {/* EXPENSES TABLE */}
             <Card
                 size="small"
-                title={<span><DollarOutlined style={{ color: '#cf1322', marginRight: 6 }} />Расходы ({expenses.length})</span>}
+                title={<span><DollarOutlined style={{ color: '#cf1322', marginRight: 6 }} />Доп. расходы ({expenses.length})</span>}
                 extra={<Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); setExpenseModalOpen(true); }}>Добавить</Button>}
                 style={{ marginTop: 16 }}
             >

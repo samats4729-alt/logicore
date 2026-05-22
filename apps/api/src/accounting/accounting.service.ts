@@ -52,16 +52,18 @@ export class AccountingService {
         const totalIncomes = incomes.filter((i: any) => !i.isDeleted).reduce((s: number, i: any) => s + i.amount, 0);
         const totalExpenses = expenses.filter((e: any) => !e.isDeleted).reduce((s: number, e: any) => s + e.amount, 0);
 
+        const executorCost = order.subForwarderId ? (order.subForwarderPrice || 0) : (order.driverCost || 0);
+
         return {
             order,
             incomes,
             expenses,
             summary: {
                 customerPrice: order.customerPrice || 0,
-                driverCost: order.driverCost || 0,  // Плановая стоимость исполнителя (legacy)
+                driverCost: order.driverCost || 0,  // Плановая стоимость исполнителя
                 subForwarderPrice: order.subForwarderPrice || 0,
-                executorCost: totalExpenses,  // Фактические расходы по исполнителю
-                margin: (order.customerPrice || 0) - totalExpenses,
+                executorCost,  
+                margin: (order.customerPrice || 0) + totalIncomes - executorCost - totalExpenses,
                 totalIncomes,
                 totalExpenses,
                 balance: totalIncomes - totalExpenses,

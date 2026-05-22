@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker, Select, Space, Tooltip, Drawer, Descriptions, Button } from 'antd';
+import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker, Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm } from 'antd';
 import {
     ArrowUpOutlined, ArrowDownOutlined, DollarOutlined,
     SearchOutlined, CheckCircleOutlined, CloseCircleOutlined,
@@ -179,23 +179,33 @@ export default function FinancialRegistryPage() {
                 return (
                     <Space size={4}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: r.isCustomerPaid ? '#389e0d' : '#cf1322' }}>{fmt(v)}</span>
-                        <Switch 
-                            size="small" 
-                            checked={r.isCustomerPaid} 
-                            checkedChildren={<CheckCircleOutlined />} 
-                            unCheckedChildren={<CloseCircleOutlined />} 
-                            style={{ background: r.isCustomerPaid ? '#52c41a' : '#ff4d4f', marginLeft: 4 }}
-                            onChange={async (checked, e) => {
-                                e.stopPropagation();
+                        <Popconfirm
+                            title="Подтвердите действие"
+                            description={r.isCustomerPaid ? "Отменить оплату от заказчика?" : "Подтвердить оплату от заказчика?"}
+                            okText="Да"
+                            cancelText="Нет"
+                            onConfirm={async (e) => {
+                                e?.stopPropagation();
                                 try {
-                                    await api.put(`/accounting/orders/${r.id}/customer-paid`, { paid: checked });
-                                    message.success(checked ? 'Оплата от заказчика получена' : 'Оплата от заказчика отменена');
+                                    await api.put(`/accounting/orders/${r.id}/customer-paid`, { paid: !r.isCustomerPaid });
+                                    message.success(!r.isCustomerPaid ? 'Оплата от заказчика получена' : 'Оплата от заказчика отменена');
                                     fetchData();
                                 } catch {
                                     message.error('Ошибка сохранения');
                                 }
                             }}
-                        />
+                            onCancel={(e) => e?.stopPropagation()}
+                        >
+                            <div onClick={(e) => e.stopPropagation()} style={{ cursor: 'pointer', display: 'inline-block' }}>
+                                <Switch 
+                                    size="small" 
+                                    checked={r.isCustomerPaid} 
+                                    checkedChildren={<CheckCircleOutlined />} 
+                                    unCheckedChildren={<CloseCircleOutlined />} 
+                                    style={{ background: r.isCustomerPaid ? '#52c41a' : '#ff4d4f', marginLeft: 4, pointerEvents: 'none' }}
+                                />
+                            </div>
+                        </Popconfirm>
                     </Space>
                 );
             },
@@ -211,27 +221,37 @@ export default function FinancialRegistryPage() {
                 return (
                     <Space size={4}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: isPaid ? '#389e0d' : '#cf1322' }}>{fmt(v)}</span>
-                        <Switch 
-                            size="small" 
-                            checked={isPaid} 
-                            checkedChildren={<CheckCircleOutlined />} 
-                            unCheckedChildren={<CloseCircleOutlined />} 
-                            style={{ background: isPaid ? '#52c41a' : '#ff4d4f', marginLeft: 4 }}
-                            onChange={async (checked, e) => {
-                                e.stopPropagation();
+                        <Popconfirm
+                            title="Подтвердите действие"
+                            description={isPaid ? "Отменить оплату исполнителю?" : "Подтвердить оплату исполнителю?"}
+                            okText="Да"
+                            cancelText="Нет"
+                            onConfirm={async (e) => {
+                                e?.stopPropagation();
                                 try {
                                     if (r.subForwarderId) {
-                                        await api.put(`/accounting/orders/${r.id}/subforwarder-paid`, { paid: checked });
+                                        await api.put(`/accounting/orders/${r.id}/subforwarder-paid`, { paid: !isPaid });
                                     } else {
-                                        await api.put(`/accounting/orders/${r.id}/driver-paid`, { paid: checked });
+                                        await api.put(`/accounting/orders/${r.id}/driver-paid`, { paid: !isPaid });
                                     }
-                                    message.success(checked ? 'Оплата исполнителю проведена' : 'Оплата исполнителю отменена');
+                                    message.success(!isPaid ? 'Оплата исполнителю проведена' : 'Оплата исполнителю отменена');
                                     fetchData();
                                 } catch {
                                     message.error('Ошибка сохранения');
                                 }
                             }}
-                        />
+                            onCancel={(e) => e?.stopPropagation()}
+                        >
+                            <div onClick={(e) => e.stopPropagation()} style={{ cursor: 'pointer', display: 'inline-block' }}>
+                                <Switch 
+                                    size="small" 
+                                    checked={isPaid} 
+                                    checkedChildren={<CheckCircleOutlined />} 
+                                    unCheckedChildren={<CloseCircleOutlined />} 
+                                    style={{ background: isPaid ? '#52c41a' : '#ff4d4f', marginLeft: 4, pointerEvents: 'none' }}
+                                />
+                            </div>
+                        </Popconfirm>
                     </Space>
                 );
             },
