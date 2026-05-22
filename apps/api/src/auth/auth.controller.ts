@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { RequestSmsCodeDto, VerifySmsCodeDto, LoginEmailDto, RegisterCompanyDto } from './dto/auth.dto';
+import { RequestSmsCodeDto, VerifySmsCodeDto, LoginEmailDto, RegisterCompanyDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('auth')
@@ -51,6 +51,25 @@ export class AuthController {
     async logout(@Request() req: any) {
         await this.authService.logout(req.user.id);
         return { message: 'Успешный выход' };
+    }
+
+    // ==================== Восстановление пароля ====================
+
+    @Post('forgot-password')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Запрос на восстановление пароля' })
+    @ApiResponse({ status: 200, description: 'Если email существует, отправлено письмо' })
+    async forgotPassword(@Body() dto: ForgotPasswordDto) {
+        return this.authService.forgotPassword(dto.email);
+    }
+
+    @Post('reset-password')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Сброс пароля' })
+    @ApiResponse({ status: 200, description: 'Пароль успешно изменен' })
+    @ApiResponse({ status: 400, description: 'Неверный или просроченный токен' })
+    async resetPassword(@Body() dto: ResetPasswordDto) {
+        return this.authService.resetPassword(dto.token, dto.newPassword);
     }
 
     // ==================== Регистрация компании ====================

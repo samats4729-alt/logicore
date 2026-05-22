@@ -191,15 +191,20 @@ export default function LoginPage() {
                                             />
                                         </Form.Item>
                                         <Form.Item>
-                                            <Button
-                                                type="primary"
-                                                htmlType="submit"
-                                                size="large"
-                                                block
-                                                loading={loading}
-                                            >
-                                                Войти
-                                            </Button>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Button
+                                                    type="primary"
+                                                    htmlType="submit"
+                                                    size="large"
+                                                    style={{ flex: 1, marginRight: 16 }}
+                                                    loading={loading}
+                                                >
+                                                    Войти
+                                                </Button>
+                                                <a onClick={() => router.push('/forgot-password')} style={{ fontSize: 13, color: '#1677ff' }}>
+                                                    Забыли пароль?
+                                                </a>
+                                            </div>
                                         </Form.Item>
                                     </Form>
                                     <Divider plain style={{ margin: '8px 0', fontSize: 13, color: '#999' }}>или</Divider>

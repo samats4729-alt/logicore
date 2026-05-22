@@ -6,7 +6,9 @@ import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { SmsService } from './sms.service';
+import { EmailService } from '../email/email.service';
 import { UserRole } from '@prisma/client';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +18,7 @@ export class AuthService {
         private configService: ConfigService,
         private redisService: RedisService,
         private smsService: SmsService,
+        private emailService: EmailService,
     ) { }
 
     // ==================== SMS AUTH (для водителей) ====================
@@ -248,6 +251,74 @@ export class AuthService {
         // If DB session exists and is valid (expiry check could be added here if needed)
         // For now just existence + token match (which findFirst ensures)
         return !!dbSession;
+    }
+
+    // ==================== ВОССТАНОВЛЕНИЕ ПАРОЛЯ ====================
+
+    async forgotPassword(email: string): Promise<{ message: string }> {
+        const user = await this.prisma.user.findUnique({
+            where: { email },
+        });
+
+        if (!user) {
+            // Для безопасности всегда возвращаем success, чтобы не раскрывать базу email-ов
+            return { message: 'Если этот email существует, мы отправили на него ссылку для восстановления' };
+        }
+
+        if (!user.isActive) {
+            return { message: 'Если этот email существует, мы отправили на него ссылку для восстановления' };
+        }
+
+        const resetToken = uuidv4();
+        const ttl = 1800; // 30 минут
+
+        // Сохраняем токен в Redis
+        await this.redisService.set(`password_reset:${resetToken}`, user.id, ttl);
+
+        // Отправляем email
+        try {
+            await this.emailService.sendPasswordResetEmail(user.email!, resetToken, user.firstName || '');
+        } catch (error) {
+            console.error('Ошибка отправки email:', error);
+            // Даже если email не отправился, мы все равно говорим что "отправили" для безопасности,
+            // но логируем ошибку.
+        }
+
+        return { message: 'Если этот email существует, мы отправили на него ссылку для восстановления' };
+    }
+
+    async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+        const userId = await this.redisService.get(`password_reset:${token}`);
+
+        if (!userId) {
+            throw new BadRequestException('Срок действия ссылки истек или она недействительна');
+        }
+
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new BadRequestException('Пользователь не найден');
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { passwordHash },
+        });
+
+        // Удаляем токен из Redis
+        await this.redisService.del(`password_reset:${token}`);
+
+        // Завершаем все сессии пользователя в целях безопасности
+        await this.redisService.deleteSession(user.id);
+        await this.prisma.session.deleteMany({
+            where: { userId: user.id },
+        });
+
+        return { message: 'Пароль успешно изменен' };
     }
 
     // ==================== РЕГИСТРАЦИЯ КОМПАНИИ ====================

@@ -121,3 +121,23 @@ export class RegisterInvitedUserDto {
     @MinLength(6)
     password: string;
 }
+
+export class ForgotPasswordDto {
+    @ApiProperty({ example: 'user@example.com' })
+    @IsEmail()
+    @IsNotEmpty()
+    email: string;
+}
+
+export class ResetPasswordDto {
+    @ApiProperty({ description: 'Токен сброса пароля' })
+    @IsString()
+    @IsNotEmpty()
+    token: string;
+
+    @ApiProperty({ description: 'Новый пароль', example: 'newpassword123' })
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(6)
+    newPassword: string;
+}

@@ -18,6 +18,7 @@ import { CargoTypesModule } from './cargo-types/cargo-types.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ExternalCompaniesModule } from './external-companies/external-companies.module';
 import { AccountingModule } from './accounting/accounting.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
     imports: [
@@ -43,6 +44,7 @@ import { AccountingModule } from './accounting/accounting.module';
         ContractsModule,
         ExternalCompaniesModule,
         AccountingModule,
+        EmailModule,
     ],
 })
 export class AppModule { }
