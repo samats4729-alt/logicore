@@ -2,7 +2,19 @@
 
 import { useEffect, useRef } from 'react';
 
-export default function InteractiveBackground({ children }: { children: React.ReactNode }) {
+interface InteractiveBackgroundProps {
+    children: React.ReactNode;
+    background?: string;
+    particleColor?: string;
+    lineColor?: string;
+}
+
+export default function InteractiveBackground({ 
+    children, 
+    background = '#ffffff', 
+    particleColor = 'rgba(22, 119, 255, 0.6)', 
+    lineColor = 'rgba(22, 119, 255, ' 
+}: InteractiveBackgroundProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +88,7 @@ export default function InteractiveBackground({ children }: { children: React.Re
                 if (!ctx) return;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(22, 119, 255, 0.6)'; // Blue LogiCore color
+                ctx.fillStyle = particleColor;
                 ctx.fill();
             }
         }
@@ -106,7 +118,7 @@ export default function InteractiveBackground({ children }: { children: React.Re
 
                     if (distance < connectionDistance) {
                         ctx.beginPath();
-                        ctx.strokeStyle = `rgba(22, 119, 255, ${0.15 - distance / connectionDistance * 0.1})`;
+                        ctx.strokeStyle = `${lineColor}${0.15 - distance / connectionDistance * 0.1})`;
                         ctx.lineWidth = 1;
                         ctx.moveTo(particles[i].x, particles[i].y);
                         ctx.lineTo(particles[j].x, particles[j].y);
@@ -156,7 +168,7 @@ export default function InteractiveBackground({ children }: { children: React.Re
             container.removeEventListener('mouseleave', handleMouseLeave);
             cancelAnimationFrame(animationFrameId);
         };
-    }, []);
+    }, [particleColor, lineColor]);
 
     return (
         <div
@@ -166,7 +178,7 @@ export default function InteractiveBackground({ children }: { children: React.Re
                 minHeight: '100vh',
                 width: '100%',
                 overflow: 'hidden',
-                background: '#ffffff', // White background
+                background: background,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -180,11 +192,10 @@ export default function InteractiveBackground({ children }: { children: React.Re
                     left: 0,
                     width: '100%',
                     height: '100%',
-                    pointerEvents: 'none', // Let clicks pass through if needed, but we intercept mouse on container
+                    pointerEvents: 'none',
                     zIndex: 0,
                 }}
             />
-            {/* Content */}
             <div style={{ position: 'relative', zIndex: 10, width: '100%', display: 'flex', justifyContent: 'center' }}>
                 {children}
             </div>
