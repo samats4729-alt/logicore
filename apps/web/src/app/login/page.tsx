@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Form, Input, Button, Card, Typography, App, Tabs, Divider } from 'antd';
 import { UserOutlined, LockOutlined, PhoneOutlined, GoogleOutlined } from '@ant-design/icons';
-import { useGoogleLogin } from '@react-oauth/google';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import InteractiveBackground from '@/components/ui/InteractiveBackground';
@@ -208,36 +208,17 @@ export default function LoginPage() {
                                         </Form.Item>
                                     </Form>
                                     <Divider plain style={{ margin: '8px 0', fontSize: 13, color: '#999' }}>или</Divider>
-                                    <div id="google-login-button" style={{ display: 'flex', justifyContent: 'center' }}>
-                                        <Button
-                                            block
+                                    <div id="google-login-button" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                                        <GoogleLogin
+                                            onSuccess={handleGoogleSuccess}
+                                            onError={() => {
+                                                message.error('Ошибка входа через Google');
+                                            }}
+                                            theme="outline"
                                             size="large"
-                                            icon={<GoogleOutlined />}
-                                            loading={loading}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: 8,
-                                                border: '1px solid #d9d9d9',
-                                                background: '#fff',
-                                                fontWeight: 500,
-                                            }}
-                                            onClick={() => {
-                                                const google = (window as any).google;
-                                                if (google?.accounts?.id) {
-                                                    google.accounts.id.initialize({
-                                                        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com',
-                                                        callback: handleGoogleSuccess,
-                                                    });
-                                                    google.accounts.id.prompt();
-                                                } else {
-                                                    message.error('Google SDK не загружен. Обновите страницу.');
-                                                }
-                                            }}
-                                        >
-                                            Войти через Google
-                                        </Button>
+                                            width="370px"
+                                            locale="ru"
+                                        />
                                     </div>
                                 </>
                             ),

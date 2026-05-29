@@ -6,6 +6,7 @@ import { Card, Form, Input, Button, Typography, message, Steps, Result, Radio, S
 import { UserOutlined, BankOutlined, CheckCircleOutlined, ShopOutlined, TruckOutlined, GoogleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { GoogleLogin } from '@react-oauth/google';
 import InteractiveBackground from '@/components/ui/InteractiveBackground';
 
 const { Title, Text, Paragraph } = Typography;
@@ -38,7 +39,7 @@ function RegisterContent() {
         }
     }, [searchParams]);
 
-    const handleGoogleRegisterClick = () => {
+    const handleGoogleRegisterSuccess = async (credentialResponse: any) => {
         // Проверяем что телефон заполнен
         const phone = form.getFieldValue('phone');
         if (!phone) {
@@ -46,45 +47,34 @@ function RegisterContent() {
             return;
         }
 
-        const google = (window as any).google;
-        if (google?.accounts?.id) {
-            google.accounts.id.initialize({
-                client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com',
-                callback: async (response: any) => {
-                    const token = response.credential;
-                    setGoogleToken(token);
-                    setLoading(true);
-                    try {
-                        const formValues = form.getFieldsValue();
-                        const res = await api.post('/auth/google/register', {
-                            token,
-                            companyName: formValues.companyName,
-                            companyType,
-                            bin: formValues.bin,
-                            phone: formValues.phone || '+70000000000',
-                        });
-
-                        localStorage.setItem('token', res.data.accessToken);
-                        setUser(res.data.admin, res.data.accessToken);
-                        setStep(3);
-
-                        setTimeout(() => {
-                            if (companyType === 'FORWARDER') {
-                                router.push('/forwarder');
-                            } else {
-                                router.push('/company');
-                            }
-                        }, 2000);
-                    } catch (error: any) {
-                        message.error(error.response?.data?.message || 'Ошибка регистрации через Google');
-                    } finally {
-                        setLoading(false);
-                    }
-                },
+        const token = credentialResponse.credential;
+        setGoogleToken(token);
+        setLoading(true);
+        try {
+            const formValues = form.getFieldsValue();
+            const res = await api.post('/auth/google/register', {
+                token,
+                companyName: formValues.companyName,
+                companyType,
+                bin: formValues.bin,
+                phone: formValues.phone || '+70000000000',
             });
-            google.accounts.id.prompt();
-        } else {
-            message.error('Google SDK не загружен. Обновите страницу.');
+
+            localStorage.setItem('token', res.data.accessToken);
+            setUser(res.data.admin, res.data.accessToken);
+            setStep(3);
+
+            setTimeout(() => {
+                if (companyType === 'FORWARDER') {
+                    router.push('/forwarder');
+                } else {
+                    router.push('/company');
+                }
+            }, 2000);
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка регистрации через Google');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -303,24 +293,18 @@ function RegisterContent() {
                                 </Button>
                             </div>
                             <Divider plain style={{ margin: '12px 0', fontSize: 13, color: '#999' }}>или</Divider>
-                            <Button
-                                block
-                                size="large"
-                                icon={<GoogleOutlined />}
-                                loading={loading}
-                                onClick={handleGoogleRegisterClick}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 8,
-                                    border: '1px solid #d9d9d9',
-                                    background: '#fff',
-                                    fontWeight: 500,
-                                }}
-                            >
-                                Регистрация через Google
-                            </Button>
+                            <div id="google-register-button" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                                <GoogleLogin
+                                    onSuccess={handleGoogleRegisterSuccess}
+                                    onError={() => {
+                                        message.error('Ошибка входа через Google');
+                                    }}
+                                    theme="outline"
+                                    size="large"
+                                    width="470px"
+                                    locale="ru"
+                                />
+                            </div>
                         </div>
                     </Form>
                 )}
