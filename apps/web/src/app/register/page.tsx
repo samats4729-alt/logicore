@@ -302,7 +302,6 @@ function RegisterContent() {
                                     theme="outline"
                                     size="large"
                                     width="470px"
-                                    locale="ru"
                                 />
                             </div>
                         </div>

@@ -217,7 +217,6 @@ export default function LoginPage() {
                                             theme="outline"
                                             size="large"
                                             width="370px"
-                                            locale="ru"
                                         />
                                     </div>
                                 </>
