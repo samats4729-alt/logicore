@@ -8,14 +8,10 @@ export class CreateOrderDto {
     @IsOptional()
     customerId?: string;
 
-    @ApiProperty({ example: 'location-id-123' })
-    @IsString()
+    @ApiProperty({ required: true, type: [Object], description: 'Массив точек маршрута (Погрузка, Догруз, Выгрузка)' })
+    @IsArray()
     @IsNotEmpty()
-    pickupLocationId: string;
-
-    @ApiProperty()
-    @IsString()
-    deliveryLocationId: string;
+    routePoints: { locationId: string; pointType: 'PICKUP' | 'ADDITIONAL_PICKUP' | 'DELIVERY'; notes?: string; expectedDate?: string }[];
 
     @ApiProperty({ required: false, example: 'Строительные материалы - кирпич' })
     @IsString()
@@ -47,20 +43,6 @@ export class CreateOrderDto {
     @IsOptional()
     natureOfCargo?: string;
 
-    @ApiProperty({ required: false })
-    @IsDateString()
-    @IsOptional()
-    pickupDate?: string;
-
-    @ApiProperty({ required: false })
-    @IsString()
-    @IsOptional()
-    pickupNotes?: string;
-
-    @ApiProperty({ required: false, type: [Object] })
-    @IsArray()
-    @IsOptional()
-    deliveryPoints?: { locationId: string; notes?: string }[];
 
     @ApiProperty({ required: false, example: 150000 })
     @IsNumber()

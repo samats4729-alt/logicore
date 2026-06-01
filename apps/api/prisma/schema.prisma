@@ -59,6 +59,12 @@ enum CompanyType {
   FORWARDER   // Экспедитор
 }
 
+enum RoutePointType {
+  PICKUP             // Погрузка
+  ADDITIONAL_PICKUP  // Догруз
+  DELIVERY           // Выгрузка
+}
+
 enum ContractStatus {
   DRAFT       // Черновик
   PENDING     // На согласовании
@@ -229,8 +235,7 @@ model Location {
   createdById String?
   
   // Relations
-  ordersAsPickup    Order[] @relation("PickupLocation")
-  ordersAsDelivery  OrderDeliveryPoint[]
+  routePoints   OrderRoutePoint[]
   warehouseGates    WarehouseGate[]
   
   @@index([latitude, longitude])
@@ -291,12 +296,6 @@ model Order {
   cargoType       String?     // Тип транспорта (Тент, Реф и т.д.)
   natureOfCargo   String?     // Характер груза (Сыпучие, Твердые и т.д.)
   requirements    String?     // Особые требования
-  
-  // Точка погрузки
-  pickupLocationId String
-  pickupLocation  Location    @relation("PickupLocation", fields: [pickupLocationId], references: [id])
-  pickupDate      DateTime?
-  pickupNotes     String?
   
   // Участники
   customerId      String
@@ -389,7 +388,7 @@ model Order {
   completedAt     DateTime?
   
   // Relations
-  deliveryPoints  OrderDeliveryPoint[]
+  routePoints     OrderRoutePoint[]
   documents       Document[]
   statusHistory   OrderStatusHistory[]
   gpsPoints       GpsPoint[]
@@ -407,16 +406,18 @@ model Order {
   @@index([createdAt])
 }
 
-model OrderDeliveryPoint {
-  id          String    @id @default(cuid())
+model OrderRoutePoint {
+  id          String         @id @default(cuid())
   orderId     String
-  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   
   locationId  String
-  location    Location  @relation(fields: [locationId], references: [id])
+  location    Location       @relation(fields: [locationId], references: [id])
   
-  sequence    Int       // Порядок выгрузки
-  deliveredAt DateTime?
+  pointType   RoutePointType
+  sequence    Int            // Порядок маршрута (1, 2, 3...)
+  
+  expectedDate DateTime?
   notes       String?
   
   @@index([orderId])

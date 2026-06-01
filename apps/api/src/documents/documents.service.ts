@@ -103,8 +103,7 @@ export class DocumentsService {
             include: {
                 driver: true,
                 customer: { include: { company: true } },
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
             },
         });
 
@@ -128,8 +127,7 @@ export class DocumentsService {
                 weight: order.cargoWeight,
                 volume: order.cargoVolume,
             },
-            pickupLocation: order.pickupLocation,
-            deliveryPoints: order.deliveryPoints.map((p: any) => p.location),
+            routePoints: order.routePoints,
         };
     }
 }

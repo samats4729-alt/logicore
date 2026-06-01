@@ -68,14 +68,9 @@ export class LocationsService {
 
     async delete(id: string) {
         // Check for dependencies before deletion to prevent Foreign Key errors
-        const usedInPickup = await this.prisma.order.count({ where: { pickupLocationId: id } });
-        if (usedInPickup > 0) {
-            throw new ConflictException('Невозможно удалить локацию: она используется как точку забора в заявках.');
-        }
-
-        const usedInDelivery = await this.prisma.orderDeliveryPoint.count({ where: { locationId: id } });
-        if (usedInDelivery > 0) {
-            throw new ConflictException('Невозможно удалить локацию: она используется как точку доставки в заявках.');
+        const usedInOrder = await this.prisma.orderRoutePoint.count({ where: { locationId: id } });
+        if (usedInOrder > 0) {
+            throw new ConflictException('Невозможно удалить локацию: она используется в маршрутах заявок.');
         }
 
         const usedInWarehouse = await this.prisma.warehouseGate.count({ where: { locationId: id } });

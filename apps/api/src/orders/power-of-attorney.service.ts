@@ -16,8 +16,7 @@ export class PowerOfAttorneyService {
                 driver: true,
                 customerCompany: true,
                 forwarder: true,
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
             },
         });
 
@@ -46,11 +45,12 @@ export class PowerOfAttorneyService {
         const customerBin = customerCompany?.bin || '—';
 
         // Получатель груза (из точки доставки)
-        const deliveryPoint = order.deliveryPoints?.[0];
+        const deliveryPoint = order.routePoints?.find(p => p.pointType === 'DELIVERY');
         const receiverName = deliveryPoint?.location?.name || deliveryPoint?.location?.contactName || '';
 
         // Маршрут
-        const pickupCity = order.pickupLocation?.city || order.pickupLocation?.address || '—';
+        const pickupPoint = order.routePoints?.find(p => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
+        const pickupCity = pickupPoint?.location?.city || pickupPoint?.location?.address || '—';
         const deliveryCity = deliveryPoint?.location?.city || deliveryPoint?.location?.address || '—';
         const route = `${pickupCity} → ${deliveryCity}`;
 

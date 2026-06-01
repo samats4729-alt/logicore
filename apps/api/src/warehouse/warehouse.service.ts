@@ -12,7 +12,9 @@ export class WarehouseService {
         return this.prisma.warehouseQueueItem.findMany({
             where: {
                 order: {
-                    pickupLocationId: locationId,
+                    routePoints: {
+                        some: { locationId: locationId, pointType: { in: ['PICKUP', 'ADDITIONAL_PICKUP'] } }
+                    }
                 },
                 completedAt: null,
             },
@@ -44,12 +46,12 @@ export class WarehouseService {
                 order: {
                     include: {
                         driver: true,
-                        pickupLocation: true,
+                        routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                     },
                 },
                 gate: true,
             },
-            orderBy: [{ order: { pickupLocationId: 'asc' } }, { arrivedAt: 'asc' }],
+            orderBy: [{ arrivedAt: 'asc' }],
         });
     }
 

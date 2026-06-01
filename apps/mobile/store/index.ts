@@ -19,15 +19,8 @@ interface Order {
     status: string;
     cargoDescription: string;
     cargoWeight?: number;
-    pickupLocation: {
-        id: string;
-        name: string;
-        address: string;
-        latitude: number;
-        longitude: number;
-    };
-    deliveryPoints: Array<{
-        id: string;
+    routePoints: Array<{
+        pointType: string;
         sequence: number;
         location: {
             id: string;

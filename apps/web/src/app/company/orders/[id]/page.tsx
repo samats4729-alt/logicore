@@ -209,8 +209,10 @@ export default function OrderDetailPage() {
         )}
     ];
 
-    const pickupCity = order.pickupLocation?.city || order.pickupLocation?.name || '';
-    const deliveryCity = order.deliveryPoints?.[0]?.location?.city || order.deliveryPoints?.[0]?.location?.name || '';
+    const pickupPt = order.routePoints?.find((p: any) => p.pointType === 'PICKUP');
+    const pickupCity = pickupPt?.location?.city || pickupPt?.location?.name || '';
+    const deliveryPt = order.routePoints?.find((p: any) => p.pointType === 'DELIVERY');
+    const deliveryCity = deliveryPt?.location?.city || deliveryPt?.location?.name || '';
 
     return (
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -234,20 +236,18 @@ export default function OrderDetailPage() {
             <Row gutter={[16, 16]}>
                 <Col span={12}>
                     <Card size="small" title="Маршрут и Груз" style={{ height: '100%' }}>
-                        <div style={{ marginBottom: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                <EnvironmentOutlined style={{ color: '#1890ff' }} />
-                                <Text strong>{pickupCity}</Text>
+                        {order.routePoints?.map((pt: any, i: number) => (
+                            <div key={i} style={{ marginBottom: pt.pointType === 'DELIVERY' ? 12 : 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                    {pt.pointType === 'DELIVERY' ? <FlagOutlined style={{ color: '#52c41a' }} /> : <EnvironmentOutlined style={{ color: '#1890ff' }} />}
+                                    <Text strong>
+                                        {pt.pointType === 'PICKUP' ? 'Погрузка: ' : pt.pointType === 'ADDITIONAL_PICKUP' ? 'Доп. погрузка: ' : 'Выгрузка: '}
+                                        {pt.location?.city || pt.location?.name}
+                                    </Text>
+                                </div>
+                                <Text type="secondary" style={{ fontSize: 12, paddingLeft: 22 }}>{pt.location?.address}</Text>
                             </div>
-                            <Text type="secondary" style={{ fontSize: 12, paddingLeft: 22 }}>{order.pickupLocation?.address}</Text>
-                        </div>
-                        <div style={{ marginBottom: 12 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                <FlagOutlined style={{ color: '#52c41a' }} />
-                                <Text strong>{deliveryCity}</Text>
-                            </div>
-                            <Text type="secondary" style={{ fontSize: 12, paddingLeft: 22 }}>{order.deliveryPoints?.[0]?.location?.address}</Text>
-                        </div>
+                        ))}
                         <Divider style={{ margin: '8px 0' }} />
                         <Descriptions size="small" column={2}>
                             <Descriptions.Item label="Груз">{order.cargoDescription || '—'}</Descriptions.Item>
@@ -255,7 +255,7 @@ export default function OrderDetailPage() {
                             <Descriptions.Item label="Вес">{order.cargoWeight ? `${order.cargoWeight} кг` : '—'}</Descriptions.Item>
                             <Descriptions.Item label="Объём">{order.cargoVolume ? `${order.cargoVolume} м³` : '—'}</Descriptions.Item>
                             <Descriptions.Item label="Кузов">{order.cargoType || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Дата погр.">{order.pickupDate ? dayjs(order.pickupDate).format('DD.MM.YY HH:mm') : '—'}</Descriptions.Item>
+                            <Descriptions.Item label="Дата погр.">{pickupPt?.expectedDate ? dayjs(pickupPt.expectedDate).format('DD.MM.YY HH:mm') : '—'}</Descriptions.Item>
                         </Descriptions>
                     </Card>
                 </Col>

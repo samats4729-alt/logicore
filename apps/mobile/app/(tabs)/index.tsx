@@ -182,49 +182,38 @@ export default function TripScreen() {
                 )}
             </View>
 
-            {/* Pickup Location */}
-            <View style={[styles.card, { backgroundColor: colors.card }]}>
-                <View style={styles.locationHeader}>
-                    <Ionicons name="location" size={20} color="#52c41a" />
-                    <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>Погрузка</Text>
-                </View>
-                <Text style={[styles.locationName, { color: colors.text }]}>{currentOrder.pickupLocation.name}</Text>
-                <Text style={[styles.locationAddress, { color: colors.textSecondary }]}>{currentOrder.pickupLocation.address}</Text>
-                <TouchableOpacity
-                    style={[styles.navButton, { backgroundColor: isDark ? '#333' : '#e6f4ff' }]}
-                    onPress={() => showNavigationOptions(
-                        currentOrder.pickupLocation.latitude,
-                        currentOrder.pickupLocation.longitude,
-                        currentOrder.pickupLocation.address
-                    )}
-                >
-                    <Ionicons name="navigate" size={18} color="#1677ff" />
-                    <Text style={styles.navButtonText}>Открыть в навигаторе</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Delivery Points */}
-            {currentOrder.deliveryPoints?.map((point, index) => (
-                <View key={point.id} style={[styles.card, { backgroundColor: colors.card }]}>
-                    <View style={styles.locationHeader}>
-                        <Ionicons name="flag" size={20} color="#f5222d" />
-                        <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>Выгрузка {index + 1}</Text>
+            {/* Route Points */}
+            {currentOrder.routePoints?.map((point, index) => {
+                const isDelivery = point.pointType === 'DELIVERY';
+                const iconName = isDelivery ? 'flag' : 'location';
+                const iconColor = isDelivery ? '#f5222d' : '#52c41a';
+                let label = 'Точка маршрута';
+                if (point.pointType === 'PICKUP') label = 'Погрузка';
+                else if (point.pointType === 'ADDITIONAL_PICKUP') label = `Доп. погрузка ${index}`;
+                else if (point.pointType === 'DELIVERY') label = `Выгрузка ${index}`;
+                
+                return (
+                    <View key={`${point.pointType}-${point.sequence}`} style={[styles.card, { backgroundColor: colors.card }]}>
+                        <View style={styles.locationHeader}>
+                            <Ionicons name={iconName} size={20} color={iconColor} />
+                            <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>{label}</Text>
+                        </View>
+                        <Text style={[styles.locationName, { color: colors.text }]}>{point.location.name}</Text>
+                        <Text style={[styles.locationAddress, { color: colors.textSecondary }]}>{point.location.address}</Text>
+                        <TouchableOpacity
+                            style={[styles.navButton, { backgroundColor: isDark ? '#333' : '#e6f4ff' }]}
+                            onPress={() => showNavigationOptions(
+                                point.location.latitude,
+                                point.location.longitude,
+                                point.location.address
+                            )}
+                        >
+                            <Ionicons name="navigate" size={18} color="#1677ff" />
+                            <Text style={styles.navButtonText}>Открыть в навигаторе</Text>
+                        </TouchableOpacity>
                     </View>
-                    <Text style={[styles.locationName, { color: colors.text }]}>{point.location.name}</Text>
-                    <Text style={[styles.locationAddress, { color: colors.textSecondary }]}>{point.location.address}</Text>
-                    <TouchableOpacity
-                        style={[styles.navButton, { backgroundColor: isDark ? '#333' : '#e6f4ff' }]}
-                        onPress={() => showNavigationOptions(
-                            point.location.latitude,
-                            point.location.longitude,
-                            point.location.address
-                        )}
-                    >
-                        <Ionicons name="navigate" size={18} color="#1677ff" />
-                        <Text style={styles.navButtonText}>Открыть в навигаторе</Text>
-                    </TouchableOpacity>
-                </View>
-            ))}
+                );
+            })}
 
             {/* Action Button */}
             {statusInfo.next && (

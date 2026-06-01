@@ -19,8 +19,7 @@ export class AccountingService {
             include: {
                 customerCompany: { select: { id: true, name: true } },
                 customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 forwarder: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
@@ -92,7 +91,6 @@ export class AccountingService {
                 createdAt: true,
                 status: true,
                 cargoDescription: true,
-                pickupDate: true,
                 completedAt: true,
                 // Доходная часть
                 customerPrice: true,
@@ -113,8 +111,7 @@ export class AccountingService {
                 driver: { select: { id: true, firstName: true, lastName: true } },
                 partner: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
-                pickupLocation: { select: { address: true, city: true } },
-                deliveryPoints: { select: { location: { select: { address: true, city: true } } }, orderBy: { sequence: 'desc' as const }, take: 1 },
+                routePoints: { select: { pointType: true, sequence: true, location: { select: { address: true, city: true } } }, orderBy: { sequence: 'asc' } },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -143,7 +140,6 @@ export class AccountingService {
                 customerPaidAt: true,
                 customerPaymentCondition: true,
                 customerPaymentForm: true,
-                pickupDate: true,
                 completedAt: true,
                 customerCompany: {
                     select: { id: true, name: true },
@@ -183,7 +179,6 @@ export class AccountingService {
                 subForwarderPaidAt: true,
                 driverPaymentCondition: true,
                 driverPaymentForm: true,
-                pickupDate: true,
                 completedAt: true,
                 assignedDriverName: true,
                 assignedDriverPhone: true,

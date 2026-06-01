@@ -12,6 +12,24 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+    if (process.env.WIPE_DB_ONCE === 'true') {
+        console.log('⚠️ WIPE_DB_ONCE is enabled. TRUNCATING ALL TABLES...');
+        try {
+            await prisma.$executeRawUnsafe(`
+                DO $$ DECLARE
+                    r RECORD;
+                BEGIN
+                    FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema()) LOOP
+                        EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
+                    END LOOP;
+                END $$;
+            `);
+            console.log('✅ DATABASE WIPED SUCCESSFULLY');
+        } catch (e) {
+            console.error('❌ Failed to wipe DB:', e);
+        }
+    }
+
     console.log('🌱 Seeding database...');
 
     // Создаём тестового админа
@@ -111,20 +129,33 @@ async function main() {
             status: 'ASSIGNED',
             cargoDescription: 'Тестовый груз - электроника',
             cargoWeight: 500,
-            pickupLocationId: warehouse.id,
         },
     });
     console.log(`✅ Test order created: ${testOrder.orderNumber} (assigned to driver)`);
 
-    // Добавляем точку доставки
-    await prisma.orderDeliveryPoint.upsert({
-        where: { id: 'dp-1' },
+    // Добавляем точки маршрута (Погрузка и Выгрузка)
+    await prisma.orderRoutePoint.upsert({
+        where: { id: 'rp-pickup-1' },
         update: {},
         create: {
-            id: 'dp-1',
+            id: 'rp-pickup-1',
+            orderId: testOrder.id,
+            locationId: warehouse.id,
+            pointType: 'PICKUP',
+            sequence: 1,
+        },
+    });
+    console.log(`✅ Pickup point added to order`);
+
+    await prisma.orderRoutePoint.upsert({
+        where: { id: 'rp-delivery-1' },
+        update: {},
+        create: {
+            id: 'rp-delivery-1',
             orderId: testOrder.id,
             locationId: deliveryPoint.id,
-            sequence: 1,
+            pointType: 'DELIVERY',
+            sequence: 2,
         },
     });
     console.log(`✅ Delivery point added to order`);

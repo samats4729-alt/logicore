@@ -26,7 +26,6 @@ export class OrdersController {
             ...dto,
             customerId: dto.customerId || req.user.sub,
             responsibleManagerId: req.user.sub,
-            pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : undefined,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
         });
@@ -99,7 +98,6 @@ export class OrdersController {
     async update(@Param('id') id: string, @Body() dto: Partial<CreateOrderDto>) {
         return this.ordersService.update(id, {
             ...dto,
-            pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : undefined,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
         });

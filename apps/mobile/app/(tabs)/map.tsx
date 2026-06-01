@@ -81,12 +81,8 @@ export default function MapScreen() {
         if (!currentOrder) return;
 
         const points = [];
-        // Add pickup
-        points.push([currentOrder.pickupLocation.longitude, currentOrder.pickupLocation.latitude]);
-
-        // Add delivery points
-        if (currentOrder.deliveryPoints) {
-            currentOrder.deliveryPoints.forEach(p => {
+        if (currentOrder.routePoints) {
+            currentOrder.routePoints.forEach(p => {
                 points.push([p.location.longitude, p.location.latitude]);
             });
         }
@@ -130,10 +126,7 @@ export default function MapScreen() {
     };
 
     // Prepare Route Line
-    const routeCoordinates = currentOrder ? [
-        [currentOrder.pickupLocation.longitude, currentOrder.pickupLocation.latitude],
-        ...(currentOrder.deliveryPoints?.map(p => [p.location.longitude, p.location.latitude]) || [])
-    ] : [];
+    const routeCoordinates = currentOrder?.routePoints?.map(p => [p.location.longitude, p.location.latitude]) || [];
 
     const routeFeature = routeCoordinates.length > 1 ? lineString(routeCoordinates) : null;
 
@@ -191,26 +184,15 @@ export default function MapScreen() {
                     </Mapbox.ShapeSource>
                 )}
 
-                {/* Pickup Marker */}
-                {currentOrder && (
+                {/* Route Markers */}
+                {currentOrder?.routePoints?.map((point, index) => (
                     <Mapbox.PointAnnotation
-                        id="pickup"
-                        coordinate={[currentOrder.pickupLocation.longitude, currentOrder.pickupLocation.latitude]}
-                    >
-                        <View style={[styles.marker, { backgroundColor: 'green' }]} />
-                        <Mapbox.Callout title="Погрузка" />
-                    </Mapbox.PointAnnotation>
-                )}
-
-                {/* Delivery Markers */}
-                {currentOrder?.deliveryPoints?.map((point, index) => (
-                    <Mapbox.PointAnnotation
-                        key={point.id}
-                        id={`delivery-${point.id}`}
+                        key={`${point.pointType}-${point.sequence}`}
+                        id={`point-${point.sequence}`}
                         coordinate={[point.location.longitude, point.location.latitude]}
                     >
-                        <View style={[styles.marker, { backgroundColor: 'red' }]} />
-                        <Mapbox.Callout title={`Выгрузка ${index + 1}`} />
+                        <View style={[styles.marker, { backgroundColor: point.pointType === 'DELIVERY' ? 'red' : 'green' }]} />
+                        <Mapbox.Callout title={point.pointType === 'DELIVERY' ? `Выгрузка ${index}` : point.pointType === 'PICKUP' ? 'Погрузка' : `Доп. погрузка ${index}`} />
                     </Mapbox.PointAnnotation>
                 ))}
 
@@ -248,7 +230,7 @@ export default function MapScreen() {
                 <View style={styles.infoCard}>
                     <Text style={styles.infoTitle}>{currentOrder.orderNumber}</Text>
                     <Text style={styles.infoText}>
-                        {currentOrder.pickupLocation.name} → {currentOrder.deliveryPoints?.[0]?.location.name || '...'}
+                        {currentOrder.routePoints?.[0]?.location.name || '...'} → {currentOrder.routePoints?.[currentOrder.routePoints.length - 1]?.location.name || '...'}
                     </Text>
                 </View>
             )}

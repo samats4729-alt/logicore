@@ -85,9 +85,7 @@ interface Order {
     customerPrice?: number;
     customerPriceType?: string;
     createdAt: string;
-    pickupDate?: string;
-    pickupLocation?: { id?: string; name: string; address: string; city?: string };
-    deliveryPoints?: { location: { id?: string; name: string; address: string; city?: string } }[];
+    routePoints?: { pointType: string; sequence: number; location: { id?: string; name: string; address: string; city?: string } }[];
     customer?: { firstName: string; lastName: string; phone: string; email?: string };
     customerCompany?: { name: string; phone?: string };
     assignedDriverName?: string;
@@ -250,7 +248,8 @@ export default function CompanyOrdersPage() {
     // =================== HELPER ===================
     function extractCity(order: Order, type: 'pickup' | 'delivery'): string {
         if (type === 'pickup') {
-            const loc = order.pickupLocation;
+            const pt = order.routePoints?.find(p => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
+            const loc = pt?.location;
             if (loc?.city) return loc.city;
             if (loc?.address) {
                 const m = loc.address.match(/г\.\s*([^,]+)/);
@@ -258,10 +257,9 @@ export default function CompanyOrdersPage() {
             }
             return loc?.name || '';
         } else {
-            const dp = order.deliveryPoints?.length
-                ? order.deliveryPoints[order.deliveryPoints.length - 1]
-                : null;
-            const loc = dp?.location;
+            const pts = order.routePoints?.filter(p => p.pointType === 'DELIVERY') || [];
+            const pt = pts.length > 0 ? pts[pts.length - 1] : null;
+            const loc = pt?.location;
             if (loc?.city) return loc.city;
             if (loc?.address) {
                 const m = loc.address.match(/г\.\s*([^,]+)/);
@@ -396,25 +394,22 @@ export default function CompanyOrdersPage() {
             forwarderId: order.forwarderId || order.forwarder?.id || undefined,
         });
         // Populate location state for edit
-        if (order.pickupLocation) {
-            setPickupLocation({ city: order.pickupLocation.city || '', address: order.pickupLocation.address, id: order.pickupLocation.id });
+        const pickupPt = order.routePoints?.find(p => p.pointType === 'PICKUP');
+        if (pickupPt?.location) {
+            setPickupLocation({ city: pickupPt.location.city || '', address: pickupPt.location.address, id: pickupPt.location.id });
         } else {
             setPickupLocation({ city: '', address: '' });
         }
-        if (order.deliveryPoints?.[0]?.location) {
-            const loc = order.deliveryPoints[0].location;
-            setDeliveryLocation({ city: loc.city || '', address: loc.address, id: loc.id });
+        const deliveryPt = order.routePoints?.find(p => p.pointType === 'DELIVERY');
+        if (deliveryPt?.location) {
+            setDeliveryLocation({ city: deliveryPt.location.city || '', address: deliveryPt.location.address, id: deliveryPt.location.id });
         } else {
             setDeliveryLocation({ city: '', address: '' });
         }
-        // Load intermediate delivery points (skip the first one, it's the main delivery)
-        if (order.deliveryPoints && order.deliveryPoints.length > 1) {
-            setIntermediatePoints(order.deliveryPoints.slice(1).map(dp => ({
-                city: dp.location.city || '', address: dp.location.address, id: dp.location.id,
-            })));
-        } else {
-            setIntermediatePoints([]);
-        }
+        const additionalPts = order.routePoints?.filter(p => p.pointType === 'ADDITIONAL_PICKUP') || [];
+        setIntermediatePoints(additionalPts.map(dp => ({
+            city: dp.location.city || '', address: dp.location.address, id: dp.location.id,
+        })));
         // Ensure current forwarder is in the list so Select shows the name
         const fwdId = order.forwarderId || order.forwarder?.id;
         if (fwdId && order.forwarder?.name && !forwarders.some(f => f.id === fwdId)) {
@@ -432,12 +427,25 @@ export default function CompanyOrdersPage() {
                 return res.data.id;
             };
             const updateData: any = { ...values };
+            const routePoints = [];
             if (pickupLocation.id || (pickupLocation.city && pickupLocation.address)) {
-                updateData.pickupLocationId = await getLocId(pickupLocation);
+                routePoints.push({ locationId: await getLocId(pickupLocation), pointType: 'PICKUP', sequence: 1, expectedDate: values.pickupDate });
+            }
+            for (let i = 0; i < intermediatePoints.length; i++) {
+                const p = intermediatePoints[i];
+                if ((p.city && p.address) || p.id) {
+                    routePoints.push({ locationId: await getLocId(p), pointType: 'ADDITIONAL_PICKUP', sequence: i + 2 });
+                }
             }
             if (deliveryLocation.id || (deliveryLocation.city && deliveryLocation.address)) {
-                updateData.deliveryLocationId = await getLocId(deliveryLocation);
+                routePoints.push({ locationId: await getLocId(deliveryLocation), pointType: 'DELIVERY', sequence: routePoints.length + 1 });
             }
+            
+            delete updateData.pickupDate;
+            if (routePoints.length > 0) {
+                updateData.routePoints = routePoints;
+            }
+
             await api.put(`/orders/${selectedOrder.id}`, updateData);
             message.success('Заявка обновлена');
             setEditModalOpen(false);
@@ -555,10 +563,19 @@ export default function CompanyOrdersPage() {
             const pickupId = await getLocId(pickupLocation);
             if (!deliveryLocation.city && !deliveryLocation.address && !deliveryLocation.id) { message.error('Заполните адрес выгрузки'); return; }
             const deliveryId = await getLocId(deliveryLocation);
-            const dps = [];
-            for (const p of intermediatePoints) { if ((p.city && p.address) || p.id) { dps.push({ locationId: await getLocId(p) }); } }
-            const { isMarketplace: _, ...ov } = values;
-            await api.post('/orders', { ...ov, pickupLocationId: pickupId, deliveryLocationId: deliveryId, deliveryPoints: dps, customerId: user?.id, appliedTariffId: appliedTariff?.id || undefined });
+            const routePoints = [
+                { locationId: pickupId, pointType: 'PICKUP', sequence: 1, expectedDate: values.pickupDate }
+            ];
+            for (let i = 0; i < intermediatePoints.length; i++) {
+                const p = intermediatePoints[i];
+                if ((p.city && p.address) || p.id) {
+                    routePoints.push({ locationId: await getLocId(p), pointType: 'ADDITIONAL_PICKUP', sequence: i + 2 });
+                }
+            }
+            routePoints.push({ locationId: deliveryId, pointType: 'DELIVERY', sequence: routePoints.length + 1 });
+
+            const { isMarketplace: _, pickupDate: __, ...ov } = values;
+            await api.post('/orders', { ...ov, routePoints, customerId: user?.id, appliedTariffId: appliedTariff?.id || undefined });
             message.success('Заявка создана');
             setCreateModalOpen(false); createForm.resetFields(); fetchOutgoingOrders();
         } catch (error: any) { message.error(error.response?.data?.message || 'Ошибка создания'); }
@@ -1065,12 +1082,13 @@ export default function CompanyOrdersPage() {
                         )}
 
                         <Title level={5} style={{ marginTop: 16 }}>Маршрут</Title>
-                        <div><strong>Погрузка:</strong> {selectedOrder.pickupLocation?.name}</div>
-                        <div style={{ color: '#666' }}>{selectedOrder.pickupLocation?.address}</div>
-                        {selectedOrder.deliveryPoints?.map((dp, i) => (
+                        {selectedOrder.routePoints?.map((pt, i) => (
                             <div key={i} style={{ marginTop: 8 }}>
-                                <strong>Выгрузка {i + 1}:</strong> {dp.location.name}
-                                <div style={{ color: '#666' }}>{dp.location.address}</div>
+                                <strong>
+                                    {pt.pointType === 'PICKUP' ? 'Погрузка' : 
+                                     pt.pointType === 'ADDITIONAL_PICKUP' ? 'Доп. погрузка' : 'Выгрузка'}:
+                                </strong> {pt.location.name}
+                                <div style={{ color: '#666' }}>{pt.location.address}</div>
                             </div>
                         ))}
 

@@ -233,8 +233,7 @@ export class CompanyService {
         return this.prisma.order.findMany({
             where: { customerCompanyId: companyId },
             include: {
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 driver: {
                     select: {
                         id: true,

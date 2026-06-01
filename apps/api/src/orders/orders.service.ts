@@ -11,15 +11,12 @@ export class OrdersService {
      */
     async create(data: {
         customerId: string;
-        pickupLocationId: string;
+        routePoints: { locationId: string; pointType: 'PICKUP' | 'ADDITIONAL_PICKUP' | 'DELIVERY'; notes?: string; expectedDate?: string | Date }[];
         cargoDescription?: string;
         cargoWeight?: number;
         cargoVolume?: number;
         cargoType?: string;
         requirements?: string;
-        pickupDate?: Date;
-        pickupNotes?: string;
-        deliveryLocationId?: string;
         customerPrice?: number;
         driverId?: string;
         forwarderId?: string; // Экспедитор
@@ -70,14 +67,11 @@ export class OrdersService {
                 orderNumber,
                 customerId: data.customerId,
                 customerCompanyId: customer?.companyId, // Устанавливаем компанию заказчика
-                pickupLocationId: data.pickupLocationId,
                 cargoDescription: data.cargoDescription || '',
                 cargoWeight: data.cargoWeight,
                 cargoVolume: data.cargoVolume,
                 cargoType: data.cargoType,
                 requirements: data.requirements,
-                pickupDate: data.pickupDate,
-                pickupNotes: data.pickupNotes,
                 customerPrice: data.customerPrice,
                 driverId: data.driverId,
                 forwarderId: data.forwarderId, // Связь с экспедитором
@@ -97,12 +91,15 @@ export class OrdersService {
                 actualVolume: data.actualVolume,
                 appliedTariffId: data.appliedTariffId,
                 responsibleManagerId: data.responsibleManagerId,
-                deliveryPoints: data.deliveryLocationId ? {
-                    create: [{
-                        locationId: data.deliveryLocationId,
-                        sequence: 1,
-                    }]
-                } : undefined,
+                routePoints: {
+                    create: data.routePoints?.map((rp, index) => ({
+                        locationId: rp.locationId,
+                        pointType: rp.pointType,
+                        sequence: index + 1,
+                        expectedDate: rp.expectedDate ? new Date(rp.expectedDate) : null,
+                        notes: rp.notes,
+                    })) || [],
+                },
                 statusHistory: {
                     create: {
                         status,
@@ -118,8 +115,7 @@ export class OrdersService {
                 customer: true,
                 customerCompany: true, // Включаем компанию заказчика
                 driver: true,
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 forwarder: true, // Включаем экспедитора в ответ
                 appliedTariff: { include: { originCity: true, destinationCity: true } }, // Включаем тариф с городами
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
@@ -152,8 +148,7 @@ export class OrdersService {
             include: {
                 customer: true,
                 driver: true,
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -170,8 +165,7 @@ export class OrdersService {
                 driver: true,
                 recipient: true,
                 partner: true,
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 documents: true,
                 statusHistory: { orderBy: { changedAt: 'desc' } },
                 problems: true,
@@ -243,12 +237,9 @@ export class OrdersService {
         requirements?: string;
         customerPrice?: number;
         driverCost?: number;
-        pickupLocationId?: string;
-        deliveryLocationId?: string;
+        routePoints?: { locationId: string; pointType: 'PICKUP' | 'ADDITIONAL_PICKUP' | 'DELIVERY'; notes?: string; expectedDate?: string | Date }[];
         driverId?: string;
         forwarderId?: string;
-        pickupDate?: Date;
-        pickupNotes?: string;
         customerPaymentCondition?: string;
         customerPaymentForm?: string;
         customerPaymentDate?: Date;
@@ -267,8 +258,8 @@ export class OrdersService {
     }) {
         const order = await this.findById(orderId);
 
-        // Собираем данные для обновления, убирая deliveryLocationId (это для точек)
-        const { deliveryLocationId, ...updateFields } = data;
+        // Собираем данные для обновления
+        const { routePoints, ...updateFields } = data;
         const updateData: any = { ...updateFields };
 
         // Если назначается водитель - меняем статус на ASSIGNED
@@ -276,23 +267,18 @@ export class OrdersService {
             updateData.status = OrderStatus.ASSIGNED;
         }
 
-        // Обновляем точку выгрузки, если передана
-        if (deliveryLocationId) {
-            // Заменяем первую точку выгрузки
-            const existingPoints = await this.prisma.orderDeliveryPoint.findMany({
-                where: { orderId },
-                orderBy: { sequence: 'asc' },
-            });
-            if (existingPoints.length > 0) {
-                await this.prisma.orderDeliveryPoint.update({
-                    where: { id: existingPoints[0].id },
-                    data: { locationId: deliveryLocationId },
-                });
-            } else {
-                await this.prisma.orderDeliveryPoint.create({
-                    data: { orderId, locationId: deliveryLocationId, sequence: 1 },
-                });
-            }
+        // Обновляем точки маршрута, если переданы
+        if (routePoints) {
+            await this.prisma.orderRoutePoint.deleteMany({ where: { orderId } });
+            updateData.routePoints = {
+                create: routePoints.map((rp, index) => ({
+                    locationId: rp.locationId,
+                    pointType: rp.pointType,
+                    sequence: index + 1,
+                    expectedDate: rp.expectedDate ? new Date(rp.expectedDate) : null,
+                    notes: rp.notes,
+                })),
+            };
         }
 
         return this.prisma.order.update({
@@ -301,8 +287,7 @@ export class OrdersService {
             include: {
                 customer: true,
                 driver: true,
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 forwarder: true,
                 appliedTariff: { include: { originCity: true, destinationCity: true } },
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
@@ -314,15 +299,16 @@ export class OrdersService {
      * Добавление точки выгрузки в пути
      */
     async addDeliveryPoint(orderId: string, locationId: string, notes?: string) {
-        const lastPoint = await this.prisma.orderDeliveryPoint.findFirst({
+        const lastPoint = await this.prisma.orderRoutePoint.findFirst({
             where: { orderId },
             orderBy: { sequence: 'desc' },
         });
 
-        return this.prisma.orderDeliveryPoint.create({
+        return this.prisma.orderRoutePoint.create({
             data: {
                 orderId,
                 locationId,
+                pointType: 'DELIVERY',
                 sequence: (lastPoint?.sequence || 0) + 1,
                 notes,
             },
@@ -384,8 +370,7 @@ export class OrdersService {
                 },
             },
             include: {
-                pickupLocation: true,
-                deliveryPoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
             },
             orderBy: { createdAt: 'desc' },
         });
