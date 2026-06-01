@@ -79,7 +79,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
     // Меню в зависимости от роли
     const getMenuItems = () => {
-        const hasPerm = (perm: string) => user.role === 'COMPANY_ADMIN' || user.permissions?.includes(perm);
+        const hasPerm = (perm: string) => ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role) || user.permissions?.includes(perm);
 
         const items: any[] = [
             {
@@ -129,7 +129,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         });
 
         // Для завсклада — очередь на погрузку
-        if (user.role === 'WAREHOUSE_MANAGER' || user.role === 'COMPANY_ADMIN') {
+        if (user.role === 'WAREHOUSE_MANAGER' || ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
             items.push({
                 key: '/company/warehouse',
                 icon: <InboxOutlined />,
@@ -146,7 +146,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         }
 
         // Управление пользователями — только для админа компании
-        if (user.role === 'COMPANY_ADMIN') {
+        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
             items.push({
                 key: '/company/users',
                 icon: <TeamOutlined />,
@@ -301,7 +301,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                             <Text strong style={{ fontSize: 14, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>
                                                 {user.firstName} {user.lastName}
                                             </Text>
-                                            <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.2 }}>Клиент</Text>
+                                            <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.2 }}>
+                                                {['COMPANY_ADMIN', 'FORWARDER'].includes(user.role) ? 'Владелец' : 'Сотрудник'}
+                                            </Text>
                                         </div>
                                     )}
                                 </div>
