@@ -46,11 +46,7 @@ export default function LoginPage() {
             if (userRole === 'ADMIN') {
                 router.push('/admin');
             } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(userRole)) {
-                if (user.company?.type === 'FORWARDER') {
-                    router.push('/forwarder');
-                } else {
-                    router.push('/company');
-                }
+                router.push('/company');
             } else {
                 router.push('/');
             }
@@ -88,11 +84,7 @@ export default function LoginPage() {
             if (userRole === 'ADMIN') {
                 router.push('/admin');
             } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(userRole)) {
-                if (user.company?.type === 'FORWARDER') {
-                    router.push('/forwarder');
-                } else {
-                    router.push('/company');
-                }
+                router.push('/company');
             } else {
                 router.push('/');
             }

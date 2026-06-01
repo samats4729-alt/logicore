@@ -18,6 +18,8 @@ import {
     MenuFoldOutlined,
     MenuUnfoldOutlined,
     DollarOutlined,
+    CarOutlined,
+    SearchOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -47,17 +49,12 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             const currentUser = useAuthStore.getState().user;
             if (!currentUser) {
                 router.replace('/login');
-            } else if (!['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER'].includes(currentUser.role)) {
+            } else if (!['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(currentUser.role)) {
                 if (currentUser.role === 'ADMIN') {
                     router.replace('/admin');
-                } else if (currentUser.role === 'FORWARDER') {
-                    router.replace('/forwarder');
                 } else {
                     router.replace('/login');
                 }
-            } else if (currentUser.role === 'LOGISTICIAN' && currentUser.company?.type === 'FORWARDER') {
-                // Если это логист экспедитора - редирект на /forwarder
-                router.replace('/forwarder');
             }
         });
     }, [checkAuth, router]);
@@ -98,7 +95,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 icon: <FileTextOutlined />,
                 label: 'Заявки',
             });
+            items.push({
+                key: '/company/search',
+                icon: <SearchOutlined />,
+                label: 'Биржа грузов',
+            });
         }
+
+        items.push({
+            key: '/company/drivers',
+            icon: <CarOutlined />,
+            label: 'Водители',
+        });
 
         if (hasPerm('partners')) {
             items.push({

@@ -17,7 +17,6 @@ function RegisterContent() {
     const { setUser } = useAuthStore();
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState(0);
-    const [companyType, setCompanyType] = useState<'CUSTOMER' | 'FORWARDER' | null>(null);
     const [form] = Form.useForm();
     const [googleToken, setGoogleToken] = useState<string | null>(null);
 
@@ -55,21 +54,17 @@ function RegisterContent() {
             const res = await api.post('/auth/google/register', {
                 token,
                 companyName: formValues.companyName,
-                companyType,
+                companyType: 'CUSTOMER',
                 bin: formValues.bin,
                 phone: formValues.phone || '+70000000000',
             });
 
             localStorage.setItem('token', res.data.accessToken);
             setUser(res.data.admin, res.data.accessToken);
-            setStep(3);
+            setStep(2);
 
             setTimeout(() => {
-                if (companyType === 'FORWARDER') {
-                    router.push('/forwarder');
-                } else {
-                    router.push('/company');
-                }
+                router.push('/company');
             }, 2000);
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка регистрации через Google');
@@ -83,22 +78,18 @@ function RegisterContent() {
         try {
             const response = await api.post('/auth/register-company', {
                 ...values,
-                companyType,
+                companyType: 'CUSTOMER',
             });
 
             // Сохраняем токен
             localStorage.setItem('token', response.data.accessToken);
             setUser(response.data.admin, response.data.accessToken);
 
-            setStep(3);
+            setStep(2);
 
             // Через 2 секунды редирект
             setTimeout(() => {
-                if (companyType === 'FORWARDER') {
-                    router.push('/forwarder');
-                } else {
-                    router.push('/company');
-                }
+                router.push('/company');
             }, 2000);
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка регистрации');
@@ -130,13 +121,12 @@ function RegisterContent() {
                     size="small"
                     items={[
                         { title: 'Компания', icon: <BankOutlined /> },
-                        { title: 'Тип', icon: <TruckOutlined /> },
                         { title: 'Админ', icon: <UserOutlined /> },
                         { title: 'Готово', icon: <CheckCircleOutlined /> },
                     ]}
                 />
 
-                {step === 3 ? (
+                {step === 2 ? (
                     <Result
                         status="success"
                         title="Компания зарегистрирована!"
@@ -173,79 +163,8 @@ function RegisterContent() {
                             </Button>
                         </div>
 
-                        {/* Шаг 1: Выбор типа аккаунта */}
+                        {/* Шаг 1: Данные администратора */}
                         <div style={{ display: step === 1 ? 'block' : 'none' }}>
-                            <Paragraph type="secondary" style={{ marginBottom: 16, textAlign: 'center' }}>
-                                Выберите тип вашей компании
-                            </Paragraph>
-                            <Radio.Group
-                                value={companyType}
-                                onChange={(e) => setCompanyType(e.target.value)}
-                                style={{ width: '100%' }}
-                            >
-                                <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                                    <Radio.Button
-                                        value="CUSTOMER"
-                                        style={{
-                                            width: '100%',
-                                            height: 'auto',
-                                            padding: '16px 20px',
-                                            borderRadius: 8,
-                                            display: 'flex',
-                                            alignItems: 'flex-start',
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <ShopOutlined style={{ fontSize: 28, color: '#1677ff' }} />
-                                            <div>
-                                                <div style={{ fontWeight: 600, fontSize: 16 }}>Я Заказчик</div>
-                                                <div style={{ fontSize: 13, color: '#666', fontWeight: 400 }}>
-                                                    Создаю заявки на перевозку грузов
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Radio.Button>
-                                    <Radio.Button
-                                        value="FORWARDER"
-                                        style={{
-                                            width: '100%',
-                                            height: 'auto',
-                                            padding: '16px 20px',
-                                            borderRadius: 8,
-                                            display: 'flex',
-                                            alignItems: 'flex-start',
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <TruckOutlined style={{ fontSize: 28, color: '#52c41a' }} />
-                                            <div>
-                                                <div style={{ fontWeight: 600, fontSize: 16 }}>Я Экспедитор</div>
-                                                <div style={{ fontSize: 13, color: '#666', fontWeight: 400 }}>
-                                                    Выполняю перевозки, назначаю водителей
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Radio.Button>
-                                </Space>
-                            </Radio.Group>
-                            <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
-                                <Button size="large" onClick={() => setStep(0)} style={{ flex: 1 }}>
-                                    Назад
-                                </Button>
-                                <Button
-                                    type="primary"
-                                    size="large"
-                                    style={{ flex: 2 }}
-                                    disabled={!companyType}
-                                    onClick={() => setStep(2)}
-                                >
-                                    Далее
-                                </Button>
-                            </div>
-                        </div>
-
-                        {/* Шаг 2: Данные администратора */}
-                        <div style={{ display: step === 2 ? 'block' : 'none' }}>
                             <Paragraph type="secondary" style={{ marginBottom: 16 }}>
                                 Данные администратора компании
                             </Paragraph>
@@ -285,7 +204,7 @@ function RegisterContent() {
                                 <Input.Password size="large" />
                             </Form.Item>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <Button size="large" onClick={() => setStep(1)} style={{ flex: 1 }}>
+                                <Button size="large" onClick={() => setStep(0)} style={{ flex: 1 }}>
                                     Назад
                                 </Button>
                                 <Button type="primary" htmlType="submit" loading={loading} size="large" style={{ flex: 2 }}>
@@ -308,7 +227,7 @@ function RegisterContent() {
                     </Form>
                 )}
 
-                {step < 3 && (
+                {step < 2 && (
                     <div style={{ textAlign: 'center', marginTop: 24 }}>
                         <Text type="secondary">
                             Уже есть аккаунт?{' '}

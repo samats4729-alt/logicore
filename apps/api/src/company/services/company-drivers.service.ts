@@ -4,7 +4,7 @@ import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
-export class ForwarderDriversService {
+export class CompanyDriversService {
     constructor(private prisma: PrismaService) { }
 
     private readonly driverSelect = {

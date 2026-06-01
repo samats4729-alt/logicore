@@ -41,7 +41,7 @@ export default function ForwarderSearchPage() {
     const fetchOrders = async () => {
         setLoading(true);
         try {
-            const response = await api.get('/forwarder/marketplace');
+            const response = await api.get('/company/marketplace');
             setOrders(response.data);
         } catch (error) {
             console.error('Failed to fetch marketplace orders:', error);
@@ -62,7 +62,7 @@ export default function ForwarderSearchPage() {
             cancelText: 'Отмена',
             onOk: async () => {
                 try {
-                    await api.put(`/forwarder/orders/${order.id}/take`);
+                    await api.put(`/company/orders/${order.id}/take`);
                     message.success('Заявка взята в работу! Теперь она в списке "Мои заявки".');
                     fetchOrders();
                 } catch (error: any) {

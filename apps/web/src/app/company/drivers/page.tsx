@@ -48,7 +48,7 @@ export default function ForwarderDriversPage() {
     const fetchDrivers = async () => {
         try {
             setLoading(true);
-            const res = await api.get('/forwarder/drivers');
+            const res = await api.get('/company/drivers');
             setDrivers(res.data);
         } catch {
             message.error('Ошибка загрузки водителей');
@@ -69,10 +69,10 @@ export default function ForwarderDriversPage() {
             };
 
             if (editingDriver) {
-                await api.put(`/forwarder/drivers/${editingDriver.id}`, payload);
+                await api.put(`/company/drivers/${editingDriver.id}`, payload);
                 message.success('Данные водителя обновлены');
             } else {
-                await api.post('/forwarder/drivers', payload);
+                await api.post('/company/drivers', payload);
                 message.success('Водитель добавлен');
             }
             setModalOpen(false);
@@ -103,7 +103,7 @@ export default function ForwarderDriversPage() {
             okType: 'danger',
             onOk: async () => {
                 try {
-                    await api.delete(`/forwarder/drivers/${id}`);
+                    await api.delete(`/company/drivers/${id}`);
                     message.success('Водитель удалён');
                     fetchDrivers();
                 } catch {

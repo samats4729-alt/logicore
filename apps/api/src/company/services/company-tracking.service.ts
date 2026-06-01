@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 
 @Injectable()
-export class ForwarderTrackingService {
+export class CompanyTrackingService {
     constructor(private prisma: PrismaService) { }
 
     /**
