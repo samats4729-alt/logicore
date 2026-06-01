@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Res, UseGuards, UseInterceptors, UploadedFile, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Res, UseGuards, UseInterceptors, UploadedFile, Request, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { CreateCompanyUserDto, UpdateCompanyProfileDto } from './dto/company.dto';
+import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -31,8 +32,8 @@ export class CompanyController {
     @Get('users')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Получить пользователей своей компании' })
-    async getCompanyUsers(@Request() req: any) {
-        return this.companyService.getCompanyUsers(req.user.companyId);
+    async getCompanyUsers(@Request() req: any, @Query() query: PaginationQueryDto) {
+        return this.companyService.getCompanyUsers(req.user.companyId, query);
     }
 
     @Post('users')
@@ -102,8 +103,8 @@ export class CompanyController {
     @Get('orders')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER)
     @ApiOperation({ summary: 'Получить заявки своей компании' })
-    async getCompanyOrders(@Request() req: any) {
-        return this.companyService.getCompanyOrders(req.user.companyId);
+    async getCompanyOrders(@Request() req: any, @Query() query: PaginationQueryDto) {
+        return this.companyService.getCompanyOrders(req.user.companyId, query);
     }
 
     // ==================== Профиль компании ====================

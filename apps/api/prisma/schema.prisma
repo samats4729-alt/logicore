@@ -404,6 +404,9 @@ model Order {
   @@index([customerId])
   @@index([driverId])
   @@index([createdAt])
+  @@index([customerCompanyId, status])
+  @@index([forwarderId, status])
+  @@index([partnerId, status])
 }
 
 model OrderRoutePoint {

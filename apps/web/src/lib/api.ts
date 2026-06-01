@@ -24,6 +24,9 @@ api.interceptors.response.use(
     }
 );
 
+// Универсальный fetcher для SWR
+export const fetcher = (url: string) => api.get(url).then(res => res.data);
+
 // Типы для API
 export interface Location {
     id: string;

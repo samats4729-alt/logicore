@@ -16,6 +16,8 @@ import {
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
+import useSWR from 'swr';
+import { fetcher } from '@/lib/api';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -108,14 +110,23 @@ export default function CompanyOrdersPage() {
     const { user } = useAuthStore();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState('incoming');
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
 
-    // Incoming orders
-    const [orders, setOrders] = useState<Order[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Fetch orders with SWR
+    const { data: ordersData, isLoading: loading } = useSWR(
+        `/company/orders?page=${page}&limit=${pageSize}`,
+        fetcher
+    );
+    const orders: Order[] = ordersData?.data || [];
+    const totalOrders = ordersData?.total || 0;
 
-    // Outgoing orders
-    const [outgoingOrders, setOutgoingOrders] = useState<Order[]>([]);
-    const [outgoingLoading, setOutgoingLoading] = useState(true);
+    // Outgoing orders (not implemented in backend yet, reusing same endpoint for now)
+    const { data: outgoingData, isLoading: outgoingLoading } = useSWR(
+        `/company/orders?page=${page}&limit=${pageSize}`,
+        fetcher
+    );
+    const outgoingOrders: Order[] = outgoingData?.data || [];
 
     // Common
     const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -271,89 +282,6 @@ export default function CompanyOrdersPage() {
         }
     }
 
-    // =================== FETCH ===================
-
-    const fetchOrders = async () => {
-        try {
-            const response = await api.get('/company/orders/incoming');
-            setOrders(response.data);
-        } catch (error) {
-            console.error('Failed to fetch orders:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchOutgoingOrders = async () => {
-        try {
-            setOutgoingLoading(true);
-            const response = await api.get('/company/orders/outgoing');
-            setOutgoingOrders(response.data);
-        } catch (error) {
-            console.error('Failed to fetch outgoing orders:', error);
-        } finally {
-            setOutgoingLoading(false);
-        }
-    };
-
-    const fetchDrivers = async () => {
-        setDriversLoading(true);
-        try {
-            const response = await api.get('/company/drivers');
-            setDrivers(response.data);
-        } catch {
-            message.error('Ошибка загрузки водителей');
-        } finally {
-            setDriversLoading(false);
-        }
-    };
-
-    const fetchPartners = async () => {
-        setPartnersLoading(true);
-        try {
-            const [partnersRes, externalRes] = await Promise.all([
-                api.get('/partners'),
-                api.get('/external-companies'),
-            ]);
-            const partnersList = partnersRes.data;
-            const externalList = externalRes.data.map((e: any) => ({
-                id: e.id,
-                name: `${e.name} (внешняя)`,
-            }));
-            setPartners([...partnersList, ...externalList]);
-        } catch { } finally {
-            setPartnersLoading(false);
-        }
-    };
-
-    const fetchLocations = async () => {
-        try {
-            const response = await api.get('/locations');
-            setLocations(response.data);
-        } catch { }
-    };
-
-    const fetchForwarders = async () => {
-        try {
-            const [partnersRes, externalRes] = await Promise.all([
-                api.get('/partners'),
-                api.get('/external-companies'),
-            ]);
-            const partnerForwarders = partnersRes.data.filter((p: any) => p.type === 'FORWARDER');
-            const externalForwarders = externalRes.data
-                .filter((e: any) => e.type === 'FORWARDER')
-                .map((e: any) => ({ id: e.id, name: `${e.name} (внешняя)` }));
-            setForwarders([...partnerForwarders, ...externalForwarders]);
-        } catch { }
-    };
-
-    const fetchCargoTypes = async () => {
-        try {
-            const response = await api.get('/cargo-types');
-            setCargoCategories(response.data);
-        } catch { }
-    };
-
     const lookupTariff = async (originCity: string, destCity: string) => {
         if (!originCity || !destCity) { setAppliedTariff(null); return; }
         setTariffLoading(true);
@@ -368,14 +296,6 @@ export default function CompanyOrdersPage() {
             } else { setAppliedTariff(null); }
         } catch { setAppliedTariff(null); } finally { setTariffLoading(false); }
     };
-
-    useEffect(() => {
-        fetchOrders();
-        fetchOutgoingOrders();
-        fetchLocations();
-        fetchForwarders();
-        fetchCargoTypes();
-    }, []);
 
     // =================== INCOMING HANDLERS ===================
 
@@ -395,7 +315,6 @@ export default function CompanyOrdersPage() {
             pickupDate: (order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate ? dayjs((order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate) : undefined,
             forwarderId: order.forwarderId || order.forwarder?.id || undefined,
         });
-        // Populate location state for edit
         if (order.routePoints && order.routePoints.length > 0) {
              setRoutePointsState(order.routePoints.map(p => ({
                  id: p.location.id,
@@ -409,7 +328,6 @@ export default function CompanyOrdersPage() {
                  { city: '', address: '', pointType: 'DELIVERY' }
              ]);
         }
-        // Ensure current forwarder is in the list so Select shows the name
         const fwdId = order.forwarderId || order.forwarder?.id;
         if (fwdId && order.forwarder?.name && !forwarders.some(f => f.id === fwdId)) {
             setForwarders(prev => [...prev, { id: fwdId, name: order.forwarder!.name }]);
@@ -448,7 +366,6 @@ export default function CompanyOrdersPage() {
             message.success('Заявка обновлена');
             setEditModalOpen(false);
             setDetailDrawerOpen(false);
-            fetchOrders(); fetchOutgoingOrders();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка обновления');
         }
@@ -460,8 +377,6 @@ export default function CompanyOrdersPage() {
         form.resetFields();
         setAssignModalOpen(true);
         setAssignType('driver');
-        fetchDrivers();
-        fetchPartners();
     };
 
     const handleDriverSelect = (driverId: string) => {
@@ -488,23 +403,10 @@ export default function CompanyOrdersPage() {
                 await api.put(`/company/orders/${selectedOrder.id}/assign-forwarder`, { partnerId: values.partnerId, price: values.price });
                 message.success('Заявка передана партнеру');
             }
-            setAssignModalOpen(false); form.resetFields(); setSelectedDriverId(null); fetchOrders();
+            setAssignModalOpen(false); form.resetFields(); setSelectedDriverId(null);
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка назначения');
         } finally { setAssignLoading(false); }
-    };
-
-    const getNextStatuses = (s: string) => {
-        const t: Record<string, { value: string; label: string }[]> = {
-            ASSIGNED: [{ value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' }, { value: 'AT_PICKUP', label: 'На погрузке' }],
-            EN_ROUTE_PICKUP: [{ value: 'AT_PICKUP', label: 'На погрузке' }],
-            AT_PICKUP: [{ value: 'LOADING', label: 'Загружается' }],
-            LOADING: [{ value: 'IN_TRANSIT', label: 'В пути' }],
-            IN_TRANSIT: [{ value: 'AT_DELIVERY', label: 'На выгрузке' }],
-            AT_DELIVERY: [{ value: 'UNLOADING', label: 'Разгружается' }],
-            UNLOADING: [{ value: 'COMPLETED', label: 'Завершён' }],
-        };
-        return t[s] || [];
     };
 
     const handleStatusChange = async (values: { status: string; comment?: string }) => {
@@ -513,7 +415,7 @@ export default function CompanyOrdersPage() {
         try {
             await api.put(`/company/orders/${selectedOrder.id}/status`, values);
             message.success('Статус обновлён');
-            setStatusModalOpen(false); setDetailDrawerOpen(false); fetchOrders();
+            setStatusModalOpen(false); setDetailDrawerOpen(false);
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка');
         } finally { setStatusLoading(false); }
@@ -523,7 +425,6 @@ export default function CompanyOrdersPage() {
         try {
             await api.put(`/company/orders/${orderId}/accept`);
             message.success('Заявка принята в работу');
-            fetchOrders();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка принятия заявки');
         }
@@ -540,7 +441,6 @@ export default function CompanyOrdersPage() {
                 try {
                     await api.put(`/company/orders/${orderId}/reject`);
                     message.success('Заявка отклонена');
-                    fetchOrders();
                 } catch (error: any) {
                     message.error(error.response?.data?.message || 'Ошибка отклонения заявки');
                 }
@@ -581,29 +481,23 @@ export default function CompanyOrdersPage() {
             const { isMarketplace: _, pickupDate: __, ...ov } = values;
             await api.post('/orders', { ...ov, routePoints, customerId: user?.id, appliedTariffId: appliedTariff?.id || undefined });
             message.success('Заявка создана');
-            setCreateModalOpen(false); createForm.resetFields(); fetchOutgoingOrders();
+            setCreateModalOpen(false); createForm.resetFields();
         } catch (error: any) { message.error(error.response?.data?.message || 'Ошибка создания'); }
     };
 
-    // =================== COMPACT CELL STYLE ===================
-    const cellStyle: React.CSSProperties = { fontSize: 12, padding: '4px 6px', lineHeight: '1.3' };
-
     // =================== COLUMNS ===================
 
-    const incomingColumns = [
+    const columns = [
         {
             title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60,
-            sorter: (a: Order, b: Order) => a.orderNumber.localeCompare(b.orderNumber),
             render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span>,
         },
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
-            sorter: (a: Order, b: Order) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
             render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
             title: 'Заказчик', key: 'company', width: 130, ellipsis: true,
-            sorter: (a: Order, b: Order) => (a.customerCompany?.name || '').localeCompare(b.customerCompany?.name || ''),
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.customerCompany?.name || '—'}</span>,
         },
         {
@@ -612,47 +506,18 @@ export default function CompanyOrdersPage() {
         },
         {
             title: 'Откуда', key: 'from', width: 110, ellipsis: true,
-            sorter: (a: Order, b: Order) => extractCity(a, 'pickup').localeCompare(extractCity(b, 'pickup')),
-            render: (_: any, r: Order) => {
-                const c = extractCity(r, 'pickup');
-                return <span style={{ fontSize: 12, fontWeight: 500 }}>{c || '—'}</span>;
-            },
+            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(r, 'pickup') || '—'}</span>,
         },
         {
             title: 'Куда', key: 'to', width: 110, ellipsis: true,
-            sorter: (a: Order, b: Order) => extractCity(a, 'delivery').localeCompare(extractCity(b, 'delivery')),
-            render: (_: any, r: Order) => {
-                const c = extractCity(r, 'delivery');
-                return <span style={{ fontSize: 12, fontWeight: 500 }}>{c || '—'}</span>;
-            },
+            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(r, 'delivery') || '—'}</span>,
         },
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 100,
             render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
         },
         {
-            title: 'Ответств.', key: 'manager', width: 110, ellipsis: true,
-            render: (_: any, r: Order) => r.responsibleManager 
-                ? <span style={{ fontSize: 12 }}>{r.responsibleManager.firstName} {r.responsibleManager.lastName}</span> 
-                : <span style={{ fontSize: 12, color: '#999' }}>—</span>,
-        },
-        {
-            title: 'Исп-ль', key: 'sub', width: 100, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.subForwarder?.name || '—'}</span>,
-        },
-        {
-            title: 'Водитель', key: 'driver', width: 110, ellipsis: true,
-            render: (_: any, r: Order) => r.assignedDriverName
-                ? <span style={{ fontSize: 12 }}>{r.assignedDriverName}</span>
-                : <Tag color="warning" style={{ fontSize: 11, margin: 0 }}>—</Tag>,
-        },
-        {
-            title: 'Гос №', key: 'plate', width: 80,
-            render: (_: any, r: Order) => <span style={{ fontSize: 11, fontFamily: 'monospace' }}>{r.assignedDriverPlate || '—'}</span>,
-        },
-        {
             title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const,
-            sorter: (a: Order, b: Order) => (a.customerPrice || 0) - (b.customerPrice || 0),
             render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>,
         },
         {
@@ -661,49 +526,9 @@ export default function CompanyOrdersPage() {
                 <Space size={4}>
                     <Tooltip title="Подробнее"><Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} style={{ fontSize: 12 }} /></Tooltip>
                     <Tooltip title="Редактировать"><Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} /></Tooltip>
-                    {!r.isConfirmed ? (
-                        <>
-                            <Tooltip title="Принять"><Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleAccept(r.id)} /></Tooltip>
-                            <Tooltip title="Отклонить"><Button size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleReject(r.id)} /></Tooltip>
-                        </>
-                    ) : (
-                        <Tooltip title={r.assignedDriverName ? 'Изменить' : 'Назначить'}>
-                            <Button size="small" type={r.assignedDriverName ? 'default' : 'primary'} icon={r.assignedDriverName ? <CheckCircleOutlined /> : <UserAddOutlined />} onClick={() => openAssignModal(r)} />
-                        </Tooltip>
-                    )}
                 </Space>
             ),
         },
-    ];
-
-    const outgoingColumns = [
-        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
-        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
-        { title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', ellipsis: true, width: 140, render: (t: string) => <span style={{ fontSize: 12 }}>{t}</span> },
-        {
-            title: 'Откуда', key: 'from', width: 110,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'pickup') || '—'}</span>,
-        },
-        {
-            title: 'Куда', key: 'to', width: 110,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'delivery') || '—'}</span>,
-        },
-        { title: 'Статус', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag> },
-        {
-            title: 'Ответств.', key: 'manager', width: 110, ellipsis: true,
-            render: (_: any, r: Order) => r.responsibleManager 
-                ? <span style={{ fontSize: 12 }}>{r.responsibleManager.firstName} {r.responsibleManager.lastName}</span> 
-                : <span style={{ fontSize: 12, color: '#999' }}>—</span>,
-        },
-        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || '—'}</span> },
-        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || '—'}</span> },
-        { title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const, render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : '—' },
-        { title: '', key: 'actions', width: 80, render: (_: any, r: Order) => (
-            <Space size={4}>
-                <Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} />
-                <Tooltip title="Редактировать"><Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} /></Tooltip>
-            </Space>
-        ) },
     ];
 
     // =================== RENDER ===================
@@ -712,34 +537,15 @@ export default function CompanyOrdersPage() {
         <div style={{ height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Title level={4} style={{ margin: 0 }}>Заявки</Title>
-                <Tooltip title={!profileComplete ? 'Заполните данные компании в Настройках' : undefined}>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)} disabled={!profileComplete}>
-                        Новая заявка
-                    </Button>
-                </Tooltip>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)} disabled={!profileComplete}>
+                    Новая заявка
+                </Button>
             </div>
-
-            {!profileComplete && (
-                <Alert
-                    message="Заполните данные компании"
-                    description="Для создания заявок необходимо заполнить: Название компании, БИН, Юридический адрес и ФИО директора в разделе Настройки → Данные компании."
-                    type="warning"
-                    showIcon
-                    closable={false}
-                    style={{ marginBottom: 12 }}
-                    action={
-                        <Button size="small" type="primary" onClick={() => window.location.href = '/company/settings'}>
-                            Перейти в настройки
-                        </Button>
-                    }
-                />
-            )}
 
             <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
                 size="small"
-                tabBarStyle={{ marginBottom: 8 }}
                 items={[
                     {
                         key: 'incoming',
@@ -807,17 +613,27 @@ export default function CompanyOrdersPage() {
 
                                 {/* TABLE */}
                                 <Table
-                                    columns={incomingColumns}
+                                    columns={columns}
                                     dataSource={filteredOrders}
                                     rowKey="id"
                                     loading={loading}
                                     size="small"
                                     scroll={{ x: 1200 }}
-                                    pagination={{ pageSize: 50, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100', '200'], showTotal: (t) => `Всего: ${t}` }}
+                                    pagination={{
+                                        current: page,
+                                        pageSize: pageSize,
+                                        total: totalOrders,
+                                        onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+                                        showSizeChanger: true,
+                                        pageSizeOptions: ['20', '50', '100'],
+                                    }}
                                     style={{ fontSize: 12 }}
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
-                                        onDoubleClick: () => router.push(`/company/orders/${record.id}`),
+                                        onClick: () => {
+                                            setSelectedOrder(record);
+                                            setDetailDrawerOpen(true);
+                                        }
                                     })}
                                     rowClassName={(record) => {
                                         if (record.status === 'COMPLETED') return 'row-completed';

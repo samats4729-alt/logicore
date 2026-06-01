@@ -1,9 +1,10 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class LocationsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private redis: RedisService) { }
 
     async create(data: {
         name: string;
@@ -23,7 +24,7 @@ export class LocationsService {
             city
         } = data as any;
 
-        return this.prisma.location.create({
+        const location = await this.prisma.location.create({
             data: {
                 name,
                 address,
@@ -36,10 +37,17 @@ export class LocationsService {
                 city: city || null,
             }
         });
+        await this.redis.del('locations:all');
+        return location;
     }
 
     async findAll(search?: string) {
-        return this.prisma.location.findMany({
+        if (!search) {
+            const cached = await this.redis.get('locations:all');
+            if (cached) return JSON.parse(cached);
+        }
+
+        const data = await this.prisma.location.findMany({
             where: search ? {
                 OR: [
                     { name: { contains: search, mode: 'insensitive' } },
@@ -48,6 +56,11 @@ export class LocationsService {
             } : undefined,
             orderBy: { name: 'asc' },
         });
+
+        if (!search) {
+            await this.redis.set('locations:all', JSON.stringify(data), 3600); // cache for 1 hour
+        }
+        return data;
     }
 
     async findById(id: string) {
@@ -63,7 +76,9 @@ export class LocationsService {
         contactPhone: string;
         notes: string;
     }>) {
-        return this.prisma.location.update({ where: { id }, data });
+        const updated = await this.prisma.location.update({ where: { id }, data });
+        await this.redis.del('locations:all');
+        return updated;
     }
 
     async delete(id: string) {
@@ -78,6 +93,8 @@ export class LocationsService {
             throw new ConflictException('Невозможно удалить локацию: она привязана к складским воротам.');
         }
 
-        return this.prisma.location.delete({ where: { id } });
+        const deleted = await this.prisma.location.delete({ where: { id } });
+        await this.redis.del('locations:all');
+        return deleted;
     }
 }

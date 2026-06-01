@@ -4,6 +4,7 @@ import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
+import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class CompanyService {
@@ -12,21 +13,37 @@ export class CompanyService {
     /**
      * Получить пользователей компании
      */
-    async getCompanyUsers(companyId: string) {
-        return this.prisma.user.findMany({
-            where: { companyId, isActive: true },
-            select: {
-                id: true,
-                email: true,
-                phone: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-                permissions: true,
-                createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+    async getCompanyUsers(companyId: string, query: PaginationQueryDto = {}) {
+        const { skip, take, page, limit } = getPaginationParams(query);
+        const where = { companyId, isActive: true };
+
+        const [data, total] = await Promise.all([
+            this.prisma.user.findMany({
+                where,
+                skip,
+                take,
+                select: {
+                    id: true,
+                    email: true,
+                    phone: true,
+                    firstName: true,
+                    lastName: true,
+                    role: true,
+                    permissions: true,
+                    createdAt: true,
+                },
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.user.count({ where })
+        ]);
+
+        return {
+            data,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        };
     }
 
     /**
@@ -227,12 +244,18 @@ export class CompanyService {
     }
 
     /**
-     * Получить заявки компании
+     * Получить заявки компании с пагинацией
      */
-    async getCompanyOrders(companyId: string) {
-        return this.prisma.order.findMany({
-            where: { customerCompanyId: companyId },
-            include: {
+    async getCompanyOrders(companyId: string, query: PaginationQueryDto = {}) {
+        const { skip, take, page, limit } = getPaginationParams(query);
+        const where = { customerCompanyId: companyId };
+
+        const [data, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                skip,
+                take,
+                include: {
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 driver: {
                     select: {
@@ -251,7 +274,17 @@ export class CompanyService {
                 },
             },
             orderBy: { createdAt: 'desc' },
-        });
+            }),
+            this.prisma.order.count({ where })
+        ]);
+
+        return {
+            data,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        };
     }
 
     /**

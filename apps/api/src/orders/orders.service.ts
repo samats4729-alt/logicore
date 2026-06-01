@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { OrderStatus } from '@prisma/client';
+import { UserRole, OrderStatus, Prisma } from '@prisma/client';
+import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class OrdersService {
@@ -134,24 +135,40 @@ export class OrdersService {
         driverId?: string;
         fromDate?: Date;
         toDate?: Date;
-    }) {
-        return this.prisma.order.findMany({
-            where: {
-                status: filters?.status,
-                customerId: filters?.customerId,
-                driverId: filters?.driverId,
-                createdAt: {
-                    gte: filters?.fromDate,
-                    lte: filters?.toDate,
+    }, query: PaginationQueryDto = {}) {
+        const { skip, take, page, limit } = getPaginationParams(query);
+        const where = {
+            status: filters?.status,
+            customerId: filters?.customerId,
+            driverId: filters?.driverId,
+            createdAt: {
+                gte: filters?.fromDate,
+                lte: filters?.toDate,
+            },
+        };
+
+        const [data, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                skip,
+                take,
+                include: {
+                    customer: true,
+                    driver: true,
+                    routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 },
-            },
-            include: {
-                customer: true,
-                driver: true,
-                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.order.count({ where })
+        ]);
+
+        return {
+            data,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        };
     }
 
     /**

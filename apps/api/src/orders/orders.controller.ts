@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { CreateOrderDto, UpdateStatusDto, AssignDriverDto } from './dto/order.dto';
 import { UserRole, OrderStatus } from '@prisma/client';
+import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -37,12 +38,14 @@ export class OrdersController {
     @ApiQuery({ name: 'status', required: false, enum: OrderStatus })
     @ApiQuery({ name: 'customerId', required: false })
     @ApiQuery({ name: 'driverId', required: false })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
     async findAll(
         @Query('status') status?: OrderStatus,
         @Query('customerId') customerId?: string,
         @Query('driverId') driverId?: string,
+        @Query() pagination?: PaginationQueryDto,
     ) {
-        return this.ordersService.findAll({ status, customerId, driverId });
+        return this.ordersService.findAll({ status, customerId, driverId }, pagination);
     }
 
     @Get('my')
