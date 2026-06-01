@@ -140,9 +140,10 @@ export default function CompanyOrdersPage() {
     const [createForm] = Form.useForm();
     const [locations, setLocations] = useState<Location[]>([]);
     const [cargoCategories, setCargoCategories] = useState<any[]>([]);
-    const [pickupLocation, setPickupLocation] = useState<LocationState>({ city: '', address: '' });
-    const [deliveryLocation, setDeliveryLocation] = useState<LocationState>({ city: '', address: '' });
-    const [intermediatePoints, setIntermediatePoints] = useState<LocationState[]>([]);
+    const [routePointsState, setRoutePointsState] = useState<Array<LocationState & { pointType: string, expectedDate?: string }>>([
+        { city: '', address: '', pointType: 'PICKUP' },
+        { city: '', address: '', pointType: 'DELIVERY' }
+    ]);
     const [forwarders, setForwarders] = useState<{ id: string; name: string }[]>([]);
     const [isMarketplace, setIsMarketplace] = useState(false);
     const [appliedTariff, setAppliedTariff] = useState<any>(null);
@@ -168,9 +169,10 @@ export default function CompanyOrdersPage() {
     // Reset location state when modal closes
     useEffect(() => {
         if (!createModalOpen) {
-            setPickupLocation({ city: '', address: '' });
-            setDeliveryLocation({ city: '', address: '' });
-            setIntermediatePoints([]);
+            setRoutePointsState([
+                 { city: '', address: '', pointType: 'PICKUP' },
+                 { city: '', address: '', pointType: 'DELIVERY' }
+            ]);
             setIsMarketplace(false);
             setAppliedTariff(null);
         }
@@ -390,26 +392,23 @@ export default function CompanyOrdersPage() {
             requirements: order.requirements,
             customerPrice: order.customerPrice,
             customerPriceType: order.customerPriceType || 'FIXED',
-            pickupDate: order.pickupDate ? dayjs(order.pickupDate) : undefined,
+            pickupDate: (order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate ? dayjs((order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate) : undefined,
             forwarderId: order.forwarderId || order.forwarder?.id || undefined,
         });
         // Populate location state for edit
-        const pickupPt = order.routePoints?.find(p => p.pointType === 'PICKUP');
-        if (pickupPt?.location) {
-            setPickupLocation({ city: pickupPt.location.city || '', address: pickupPt.location.address, id: pickupPt.location.id });
+        if (order.routePoints && order.routePoints.length > 0) {
+             setRoutePointsState(order.routePoints.map(p => ({
+                 id: p.location.id,
+                 city: p.location.city || '',
+                 address: p.location.address,
+                 pointType: p.pointType
+             })));
         } else {
-            setPickupLocation({ city: '', address: '' });
+             setRoutePointsState([
+                 { city: '', address: '', pointType: 'PICKUP' },
+                 { city: '', address: '', pointType: 'DELIVERY' }
+             ]);
         }
-        const deliveryPt = order.routePoints?.find(p => p.pointType === 'DELIVERY');
-        if (deliveryPt?.location) {
-            setDeliveryLocation({ city: deliveryPt.location.city || '', address: deliveryPt.location.address, id: deliveryPt.location.id });
-        } else {
-            setDeliveryLocation({ city: '', address: '' });
-        }
-        const additionalPts = order.routePoints?.filter(p => p.pointType === 'ADDITIONAL_PICKUP') || [];
-        setIntermediatePoints(additionalPts.map(dp => ({
-            city: dp.location.city || '', address: dp.location.address, id: dp.location.id,
-        })));
         // Ensure current forwarder is in the list so Select shows the name
         const fwdId = order.forwarderId || order.forwarder?.id;
         if (fwdId && order.forwarder?.name && !forwarders.some(f => f.id === fwdId)) {
@@ -428,17 +427,16 @@ export default function CompanyOrdersPage() {
             };
             const updateData: any = { ...values };
             const routePoints = [];
-            if (pickupLocation.id || (pickupLocation.city && pickupLocation.address)) {
-                routePoints.push({ locationId: await getLocId(pickupLocation), pointType: 'PICKUP', sequence: 1, expectedDate: values.pickupDate });
-            }
-            for (let i = 0; i < intermediatePoints.length; i++) {
-                const p = intermediatePoints[i];
-                if ((p.city && p.address) || p.id) {
-                    routePoints.push({ locationId: await getLocId(p), pointType: 'ADDITIONAL_PICKUP', sequence: i + 2 });
-                }
-            }
-            if (deliveryLocation.id || (deliveryLocation.city && deliveryLocation.address)) {
-                routePoints.push({ locationId: await getLocId(deliveryLocation), pointType: 'DELIVERY', sequence: routePoints.length + 1 });
+            for (let i = 0; i < routePointsState.length; i++) {
+                const p = routePointsState[i];
+                if (!p.city && !p.address && !p.id) continue;
+                const locId = await getLocId(p);
+                routePoints.push({
+                    locationId: locId,
+                    pointType: p.pointType,
+                    sequence: routePoints.length + 1,
+                    expectedDate: p.pointType === 'PICKUP' ? values.pickupDate : undefined
+                });
             }
             
             delete updateData.pickupDate;
@@ -559,20 +557,26 @@ export default function CompanyOrdersPage() {
                 const res = await api.post('/locations', { name: `${loc.city}, ${loc.address}`, address: `${loc.city}, ${loc.address}`, latitude: 0, longitude: 0, city: loc.city || '' });
                 return res.data.id;
             };
-            if (!pickupLocation.city && !pickupLocation.address && !pickupLocation.id) { message.error('Заполните адрес погрузки'); return; }
-            const pickupId = await getLocId(pickupLocation);
-            if (!deliveryLocation.city && !deliveryLocation.address && !deliveryLocation.id) { message.error('Заполните адрес выгрузки'); return; }
-            const deliveryId = await getLocId(deliveryLocation);
-            const routePoints = [
-                { locationId: pickupId, pointType: 'PICKUP', sequence: 1, expectedDate: values.pickupDate }
-            ];
-            for (let i = 0; i < intermediatePoints.length; i++) {
-                const p = intermediatePoints[i];
-                if ((p.city && p.address) || p.id) {
-                    routePoints.push({ locationId: await getLocId(p), pointType: 'ADDITIONAL_PICKUP', sequence: i + 2 });
+            const routePoints = [];
+            for (let i = 0; i < routePointsState.length; i++) {
+                const p = routePointsState[i];
+                if (!p.city && !p.address && !p.id) {
+                    if (p.pointType === 'PICKUP') { message.error('Заполните адрес погрузки'); return; }
+                    if (p.pointType === 'DELIVERY') { message.error('Заполните адрес выгрузки'); return; }
+                    continue;
                 }
+                const locId = await getLocId(p);
+                routePoints.push({
+                    locationId: locId,
+                    pointType: p.pointType,
+                    sequence: routePoints.length + 1,
+                    expectedDate: p.pointType === 'PICKUP' ? values.pickupDate : undefined
+                });
             }
-            routePoints.push({ locationId: deliveryId, pointType: 'DELIVERY', sequence: routePoints.length + 1 });
+            if (routePoints.length < 2) {
+                message.error('Укажите минимум 2 точки маршрута');
+                return;
+            }
 
             const { isMarketplace: _, pickupDate: __, ...ov } = values;
             await api.post('/orders', { ...ov, routePoints, customerId: user?.id, appliedTariffId: appliedTariff?.id || undefined });
@@ -889,59 +893,45 @@ export default function CompanyOrdersPage() {
                             <Form.Item name="pickupDate" label="Дата погрузки" rules={[{ required: true, message: 'Укажите дату' }]}>
                                 <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
                             </Form.Item>
-                            <div style={{ padding: '8px 12px', background: '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#1890ff' }}><EnvironmentOutlined /> Погрузка</div>
-                                <Select
-                                    placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
-                                    onChange={(val) => {
-                                        if (!val) { setPickupLocation({ city: '', address: '' }); setAppliedTariff(null); }
-                                        else {
-                                            const loc = locations.find(l => l.id === val);
-                                            if (loc) {
-                                                setPickupLocation({ city: loc.city || '', address: loc.address, id: loc.id });
-                                                if (loc.city && deliveryLocation.city) lookupTariff(loc.city, deliveryLocation.city);
-                                            }
-                                        }
-                                    }}
-                                >
-                                    {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
-                                </Select>
-                            </div>
-                            <div style={{ padding: '8px 12px', background: '#f6ffed', borderRadius: 8, marginBottom: 12 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#52c41a' }}><FlagOutlined /> Выгрузка</div>
-                                <Select
-                                    placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
-                                    onChange={(val) => {
-                                        if (!val) { setDeliveryLocation({ city: '', address: '' }); setAppliedTariff(null); }
-                                        else {
-                                            const loc = locations.find(l => l.id === val);
-                                            if (loc) {
-                                                setDeliveryLocation({ city: loc.city || '', address: loc.address, id: loc.id });
-                                                if (pickupLocation.city && loc.city) lookupTariff(pickupLocation.city, loc.city);
-                                            }
-                                        }
-                                    }}
-                                >
-                                    {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
-                                </Select>
-                            </div>
-                            {intermediatePoints.map((_, i) => (
-                                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                                    <Select placeholder={`Доп. ${i + 1}`} allowClear showSearch optionFilterProp="children" style={{ flex: 1 }}
+                            {routePointsState.map((pt, i) => (
+                                <div key={i} style={{ padding: '8px 12px', background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                         <Select value={pt.pointType} onChange={val => { const newPts = [...routePointsState]; newPts[i].pointType = val; setRoutePointsState(newPts); }} size="small" style={{ width: 140, fontWeight: 600 }} variant="borderless">
+                                              <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Погрузка</Select.Option>
+                                              <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Доп. погрузка</Select.Option>
+                                              <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }}/> Выгрузка</Select.Option>
+                                         </Select>
+                                         <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => { const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts); }} />
+                                    </div>
+                                    <Select
+                                        placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
+                                        value={pt.id || undefined}
                                         onChange={(val) => {
-                                            const loc = locations.find(l => l.id === val);
-                                            const np = [...intermediatePoints];
-                                            np[i] = loc ? { city: loc.city || '', address: loc.address, id: loc.id } : { city: '', address: '' };
-                                            setIntermediatePoints(np);
+                                            const newPts = [...routePointsState];
+                                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined }; }
+                                            else {
+                                                const loc = locations.find(l => l.id === val);
+                                                if (loc) {
+                                                    newPts[i] = { ...newPts[i], city: loc.city || '', address: loc.address, id: loc.id };
+                                                    // Trigger tariff lookup if we have at least one pickup and delivery city
+                                                    const firstPickup = newPts.find(p => p.pointType === 'PICKUP');
+                                                    const lastDelivery = [...newPts].reverse().find(p => p.pointType === 'DELIVERY');
+                                                    if (firstPickup?.city && lastDelivery?.city) {
+                                                        lookupTariff(firstPickup.city, lastDelivery.city);
+                                                    } else {
+                                                        setAppliedTariff(null);
+                                                    }
+                                                }
+                                            }
+                                            setRoutePointsState(newPts);
                                         }}
                                     >
-                                        {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name}</Select.Option>)}
+                                        {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
                                     </Select>
-                                    <Button danger icon={<DeleteOutlined />} onClick={() => { const np = [...intermediatePoints]; np.splice(i, 1); setIntermediatePoints(np); }} />
                                 </div>
                             ))}
-                            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setIntermediatePoints([...intermediatePoints, { city: '', address: '' }])} style={{ width: '100%' }}>
-                                Доп. адрес
+                            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])} style={{ width: '100%', marginBottom: 12 }}>
+                                Добавить точку
                             </Button>
                         </Col>
                         <Col span={12}>
@@ -1176,56 +1166,35 @@ export default function CompanyOrdersPage() {
                             <Form.Item name="pickupDate" label="Дата погрузки">
                                 <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
                             </Form.Item>
-                            <div style={{ padding: '8px 12px', background: '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#1890ff' }}><EnvironmentOutlined /> Погрузка</div>
-                                <Select
-                                    placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
-                                    value={pickupLocation.id || undefined}
-                                    onChange={(val) => {
-                                        if (!val) { setPickupLocation({ city: '', address: '' }); }
-                                        else {
-                                            const loc = locations.find(l => l.id === val);
-                                            if (loc) setPickupLocation({ city: loc.city || '', address: loc.address, id: loc.id });
-                                        }
-                                    }}
-                                >
-                                    {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
-                                </Select>
-                            </div>
-                            <div style={{ padding: '8px 12px', background: '#f6ffed', borderRadius: 8, marginBottom: 12 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#52c41a' }}><FlagOutlined /> Выгрузка</div>
-                                <Select
-                                    placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
-                                    value={deliveryLocation.id || undefined}
-                                    onChange={(val) => {
-                                        if (!val) { setDeliveryLocation({ city: '', address: '' }); }
-                                        else {
-                                            const loc = locations.find(l => l.id === val);
-                                            if (loc) setDeliveryLocation({ city: loc.city || '', address: loc.address, id: loc.id });
-                                        }
-                                    }}
-                                >
-                                    {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
-                                </Select>
-                            </div>
-                            {intermediatePoints.map((pt, i) => (
-                                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                                    <Select placeholder={`Доп. ${i + 1}`} allowClear showSearch optionFilterProp="children" style={{ flex: 1 }}
+                            {routePointsState.map((pt, i) => (
+                                <div key={i} style={{ padding: '8px 12px', background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                         <Select value={pt.pointType} onChange={val => { const newPts = [...routePointsState]; newPts[i].pointType = val; setRoutePointsState(newPts); }} size="small" style={{ width: 140, fontWeight: 600 }} variant="borderless">
+                                              <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Погрузка</Select.Option>
+                                              <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Доп. погрузка</Select.Option>
+                                              <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }}/> Выгрузка</Select.Option>
+                                         </Select>
+                                         <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => { const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts); }} />
+                                    </div>
+                                    <Select
+                                        placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
                                         value={pt.id || undefined}
                                         onChange={(val) => {
-                                            const loc = locations.find(l => l.id === val);
-                                            const np = [...intermediatePoints];
-                                            np[i] = loc ? { city: loc.city || '', address: loc.address, id: loc.id } : { city: '', address: '' };
-                                            setIntermediatePoints(np);
+                                            const newPts = [...routePointsState];
+                                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined }; }
+                                            else {
+                                                const loc = locations.find(l => l.id === val);
+                                                if (loc) newPts[i] = { ...newPts[i], city: loc.city || '', address: loc.address, id: loc.id };
+                                            }
+                                            setRoutePointsState(newPts);
                                         }}
                                     >
-                                        {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name}</Select.Option>)}
+                                        {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
                                     </Select>
-                                    <Button danger icon={<DeleteOutlined />} onClick={() => { const np = [...intermediatePoints]; np.splice(i, 1); setIntermediatePoints(np); }} />
                                 </div>
                             ))}
-                            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setIntermediatePoints([...intermediatePoints, { city: '', address: '' }])} style={{ width: '100%' }}>
-                                Доп. адрес
+                            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])} style={{ width: '100%', marginBottom: 12 }}>
+                                Добавить точку
                             </Button>
                         </Col>
                         <Col span={12}>

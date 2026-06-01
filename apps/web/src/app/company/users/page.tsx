@@ -6,7 +6,7 @@ import { MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlin
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
-export const MODULE_PERMISSIONS = [
+const MODULE_PERMISSIONS = [
     { label: 'Заявки', value: 'orders' },
     { label: 'Документы', value: 'documents' },
     { label: 'Бухгалтерия', value: 'accounting' },
