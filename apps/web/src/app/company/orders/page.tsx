@@ -180,6 +180,7 @@ export default function CompanyOrdersPage() {
     const [appliedTariff, setAppliedTariff] = useState<any>(null);
     const [tariffLoading, setTariffLoading] = useState(false);
     const [profileComplete, setProfileComplete] = useState(true);
+    const [isSubcontract, setIsSubcontract] = useState(false);
 
     const fetchDrivers = async () => {
         setDriversLoading(true);
@@ -444,6 +445,12 @@ export default function CompanyOrdersPage() {
 
     const openEditModal = (order: Order) => {
         setSelectedOrder(order);
+        const hasSubcontract = !!(
+            order.driverCost ||
+            (order.customerCompanyId && order.customerCompanyId !== user?.companyId) ||
+            (order.forwarderId && order.forwarderId !== user?.companyId)
+        );
+        setIsSubcontract(hasSubcontract);
         editForm.setFieldsValue({
             cargoDescription: order.cargoDescription,
             cargoWeight: order.cargoWeight,
@@ -768,7 +775,7 @@ export default function CompanyOrdersPage() {
         <div style={{ height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Title level={4} style={{ margin: 0 }}>Заявки</Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)} disabled={!profileComplete}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => { setIsSubcontract(false); setCreateModalOpen(true); }} disabled={!profileComplete}>
                     Новая заявка
                 </Button>
             </div>
@@ -1133,47 +1140,88 @@ export default function CompanyOrdersPage() {
                                 <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
                                 <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
                             </Row>
-                            <Row gutter={12}>
-                                <Col span={8}>
-                                    <Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
-                                    {appliedTariff && <div style={{ marginTop: -12, marginBottom: 8, padding: '3px 6px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}</div>}
-                                </Col>
-                                <Col span={8}>
-                                    <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
-                                        <Select style={{ width: '100%' }}>
-                                            <Select.Option value="FIXED">За рейс</Select.Option>
-                                            <Select.Option value="PER_KM">За км</Select.Option>
-                                            <Select.Option value="PER_TON">За тонну</Select.Option>
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={8}>
-                                    <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
-                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                            <Row gutter={12}>
-                                <Col span={12}>
-                                    <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
-                                        <Select placeholder="По умолчанию — ваша компания" allowClear showSearch optionFilterProp="children">
-                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="forwarderId" label="Экспедитор" style={{ marginBottom: 8 }}>
-                                        <Select placeholder="Экспедитор" allowClear showSearch optionFilterProp="children" disabled={isMarketplace}>
-                                            {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
-                                        </Select>
-                                    </Form.Item>
-                                    <Form.Item name="isMarketplace" valuePropName="checked" noStyle>
-                                        <Checkbox checked={isMarketplace} onChange={e => { setIsMarketplace(e.target.checked); if (e.target.checked) createForm.setFieldsValue({ forwarderId: null }); }}>
-                                            На биржу (всем)
-                                        </Checkbox>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
+                            <div style={{ marginBottom: 16, padding: '8px 12px', background: '#fafafa', borderRadius: 8, border: '1px dashed #d9d9d9' }}>
+                                <Checkbox checked={isSubcontract} onChange={e => {
+                                    const checked = e.target.checked;
+                                    setIsSubcontract(checked);
+                                    if (!checked) {
+                                        createForm.setFieldsValue({
+                                            driverCost: null,
+                                            customerCompanyId: null,
+                                            forwarderId: null,
+                                            isMarketplace: false
+                                        });
+                                        setIsMarketplace(false);
+                                    }
+                                }}>
+                                    <span style={{ fontWeight: 500 }}>Сложная сделка (субподряд)</span>
+                                    <div style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 24 }}>
+                                        Включите, если нужно указать стороннего заказчика, стороннего экспедитора или ставку для перевозчика
+                                    </div>
+                                </Checkbox>
+                            </div>
+
+                            {isSubcontract ? (
+                                <>
+                                    <Row gutter={12}>
+                                        <Col span={8}>
+                                            <Form.Item name="customerPrice" label="Сумма заказчика ₸"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
+                                            {appliedTariff && <div style={{ marginTop: -12, marginBottom: 8, padding: '3px 6px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}</div>}
+                                        </Col>
+                                        <Col span={8}>
+                                            <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
+                                                <Select style={{ width: '100%' }}>
+                                                    <Select.Option value="FIXED">За рейс</Select.Option>
+                                                    <Select.Option value="PER_KM">За км</Select.Option>
+                                                    <Select.Option value="PER_TON">За тонну</Select.Option>
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={8}>
+                                            <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
+                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row gutter={12}>
+                                        <Col span={12}>
+                                            <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
+                                                <Select placeholder="По умолчанию — ваша компания" allowClear showSearch optionFilterProp="children">
+                                                    {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="forwarderId" label="Экспедитор" style={{ marginBottom: 8 }}>
+                                                <Select placeholder="Экспедитор" allowClear showSearch optionFilterProp="children" disabled={isMarketplace}>
+                                                    {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
+                                                </Select>
+                                            </Form.Item>
+                                            <Form.Item name="isMarketplace" valuePropName="checked" noStyle>
+                                                <Checkbox checked={isMarketplace} onChange={e => { setIsMarketplace(e.target.checked); if (e.target.checked) createForm.setFieldsValue({ forwarderId: null }); }}>
+                                                    На биржу (всем)
+                                                </Checkbox>
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                </>
+                            ) : (
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
+                                        {appliedTariff && <div style={{ marginTop: -12, marginBottom: 8, padding: '3px 6px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}</div>}
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
+                                            <Select style={{ width: '100%' }}>
+                                                <Select.Option value="FIXED">За рейс</Select.Option>
+                                                <Select.Option value="PER_KM">За км</Select.Option>
+                                                <Select.Option value="PER_TON">За тонну</Select.Option>
+                                            </Select>
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                            )}
                             <Form.Item name="requirements" label="Доп. требования" style={{ marginBottom: 0 }}>
                                 <TextArea rows={2} placeholder="Ремни, коники..." />
                             </Form.Item>
@@ -1451,39 +1499,75 @@ export default function CompanyOrdersPage() {
                                 <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
                                 <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
                             </Row>
-                            <Row gutter={12}>
-                                <Col span={8}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={8}>
-                                    <Form.Item name="customerPriceType" label="Тип оплаты">
-                                        <Select style={{ width: '100%' }}>
-                                            <Select.Option value="FIXED">За рейс (всего)</Select.Option>
-                                            <Select.Option value="PER_KM">За км</Select.Option>
-                                            <Select.Option value="PER_TON">За тонну</Select.Option>
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={8}>
-                                    <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
-                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                            <Row gutter={12}>
-                                <Col span={12}>
-                                    <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
-                                        <Select placeholder="По умолчанию — ваша компания" allowClear showSearch optionFilterProp="children">
-                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="forwarderId" label="Экспедитор">
-                                        <Select placeholder="Экспедитор" allowClear showSearch optionFilterProp="children">
-                                            {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
+                            <div style={{ marginBottom: 16, padding: '8px 12px', background: '#fafafa', borderRadius: 8, border: '1px dashed #d9d9d9' }}>
+                                <Checkbox checked={isSubcontract} onChange={e => {
+                                    const checked = e.target.checked;
+                                    setIsSubcontract(checked);
+                                    if (!checked) {
+                                        editForm.setFieldsValue({
+                                            driverCost: null,
+                                            customerCompanyId: null,
+                                            forwarderId: null,
+                                        });
+                                    }
+                                }}>
+                                    <span style={{ fontWeight: 500 }}>Сложная сделка (субподряд)</span>
+                                    <div style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 24 }}>
+                                        Включите, если нужно указать стороннего заказчика, стороннего экспедитора или ставку для перевозчика
+                                    </div>
+                                </Checkbox>
+                            </div>
+
+                            {isSubcontract ? (
+                                <>
+                                    <Row gutter={12}>
+                                        <Col span={8}><Form.Item name="customerPrice" label="Сумма заказчика ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                        <Col span={8}>
+                                            <Form.Item name="customerPriceType" label="Тип оплаты">
+                                                <Select style={{ width: '100%' }}>
+                                                    <Select.Option value="FIXED">За рейс (всего)</Select.Option>
+                                                    <Select.Option value="PER_KM">За км</Select.Option>
+                                                    <Select.Option value="PER_TON">За тонну</Select.Option>
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={8}>
+                                            <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
+                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row gutter={12}>
+                                        <Col span={12}>
+                                            <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
+                                                <Select placeholder="По умолчанию — ваша компания" allowClear showSearch optionFilterProp="children">
+                                                    {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="forwarderId" label="Экспедитор">
+                                                <Select placeholder="Экспедитор" allowClear showSearch optionFilterProp="children">
+                                                    {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                </>
+                            ) : (
+                                <Row gutter={12}>
+                                    <Col span={12}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                    <Col span={12}>
+                                        <Form.Item name="customerPriceType" label="Тип оплаты">
+                                            <Select style={{ width: '100%' }}>
+                                                <Select.Option value="FIXED">За рейс (всего)</Select.Option>
+                                                <Select.Option value="PER_KM">За км</Select.Option>
+                                                <Select.Option value="PER_TON">За тонну</Select.Option>
+                                            </Select>
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                            )}
                             <Form.Item name="requirements" label="Доп. требования">
                                 <Input.TextArea rows={2} />
                             </Form.Item>
