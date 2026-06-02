@@ -6,6 +6,7 @@ import {
     DollarOutlined,
     WalletOutlined,
     RightOutlined,
+    BarChartOutlined,
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -40,6 +41,18 @@ const sections: MenuSection[] = [
                 icon: <DollarOutlined />,
                 color: '#cf1322',
                 href: '/company/accounting/expenses',
+            },
+        ],
+    },
+    {
+        title: 'Аналитика',
+        items: [
+            {
+                key: 'registry',
+                label: 'Реестр заявок (Маржа)',
+                icon: <BarChartOutlined />,
+                color: '#1890ff',
+                href: '/company/accounting/registry',
             },
         ],
     },
