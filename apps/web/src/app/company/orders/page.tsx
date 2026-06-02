@@ -161,11 +161,72 @@ export default function CompanyOrdersPage() {
     const [tariffLoading, setTariffLoading] = useState(false);
     const [profileComplete, setProfileComplete] = useState(true);
 
-    // Check profile completeness
+    const fetchDrivers = async () => {
+        setDriversLoading(true);
+        try {
+            const response = await api.get('/company/drivers');
+            setDrivers(response.data);
+        } catch {
+            message.error('Ошибка загрузки водителей');
+        } finally {
+            setDriversLoading(false);
+        }
+    };
+
+    const fetchPartners = async () => {
+        setPartnersLoading(true);
+        try {
+            const [partnersRes, externalRes] = await Promise.all([
+                api.get('/partners'),
+                api.get('/external-companies'),
+            ]);
+            const partnersList = partnersRes.data;
+            const externalList = externalRes.data.map((e: any) => ({
+                id: e.id,
+                name: `${e.name} (внешняя)`,
+            }));
+            setPartners([...partnersList, ...externalList]);
+        } catch { } finally {
+            setPartnersLoading(false);
+        }
+    };
+
+    const fetchLocations = async () => {
+        try {
+            const response = await api.get('/locations');
+            setLocations(response.data);
+        } catch { }
+    };
+
+    const fetchForwarders = async () => {
+        try {
+            const [partnersRes, externalRes] = await Promise.all([
+                api.get('/partners'),
+                api.get('/external-companies'),
+            ]);
+            const partnerForwarders = partnersRes.data.filter((p: any) => p.type === 'FORWARDER');
+            const externalForwarders = externalRes.data
+                .filter((e: any) => e.type === 'FORWARDER')
+                .map((e: any) => ({ id: e.id, name: `${e.name} (внешняя)` }));
+            setForwarders([...partnerForwarders, ...externalForwarders]);
+        } catch { }
+    };
+
+    const fetchCargoTypes = async () => {
+        try {
+            const response = await api.get('/cargo-types');
+            setCargoCategories(response.data);
+        } catch { }
+    };
+
+    // Check profile completeness and load data on mount
     useEffect(() => {
         api.get('/company/profile-status').then(res => {
             setProfileComplete(res.data.isComplete);
         }).catch(() => {});
+        fetchLocations();
+        fetchForwarders();
+        fetchCargoTypes();
     }, []);
 
     // =================== FILTERS ===================
@@ -377,6 +438,8 @@ export default function CompanyOrdersPage() {
         form.resetFields();
         setAssignModalOpen(true);
         setAssignType('driver');
+        fetchDrivers();
+        fetchPartners();
     };
 
     const handleDriverSelect = (driverId: string) => {
