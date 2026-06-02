@@ -12,6 +12,7 @@ export class OrdersService {
      */
     async create(data: {
         customerId: string;
+        customerCompanyId?: string; // Компания заказчика
         routePoints: { locationId: string; pointType: 'PICKUP' | 'ADDITIONAL_PICKUP' | 'DELIVERY'; notes?: string; expectedDate?: string | Date }[];
         cargoDescription?: string;
         cargoWeight?: number;
@@ -67,7 +68,7 @@ export class OrdersService {
             data: {
                 orderNumber,
                 customerId: data.customerId,
-                customerCompanyId: customer?.companyId, // Устанавливаем компанию заказчика
+                customerCompanyId: data.customerCompanyId || customer?.companyId, // Устанавливаем компанию заказчика
                 cargoDescription: data.cargoDescription || '',
                 cargoWeight: data.cargoWeight,
                 cargoVolume: data.cargoVolume,
@@ -247,6 +248,7 @@ export class OrdersService {
      * Обновление данных заявки (на любом этапе)
      */
     async update(orderId: string, data: {
+        customerCompanyId?: string;
         cargoDescription?: string;
         cargoWeight?: number;
         cargoVolume?: number;

@@ -101,9 +101,9 @@ export class CompanyController {
     // ==================== Заявки компании ====================
 
     @Get('orders')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Получить заявки своей компании' })
-    async getCompanyOrders(@Request() req: any, @Query() query: PaginationQueryDto) {
+    async getCompanyOrders(@Request() req: any, @Query() query: PaginationQueryDto & { type?: string }) {
         return this.companyService.getCompanyOrders(req.user.companyId, query);
     }
 

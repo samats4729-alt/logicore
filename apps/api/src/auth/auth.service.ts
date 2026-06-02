@@ -352,24 +352,79 @@ export class AuthService {
             throw new BadRequestException('Телефон уже зарегистрирован');
         }
 
+        // Проверяем существование компании с таким БИН
+        const existingCompanies = await this.prisma.company.findMany({
+            where: { bin: data.bin },
+        });
+        const registeredCompany = existingCompanies.find(c => !c.isExternal);
+        if (registeredCompany) {
+            throw new BadRequestException('Компания с таким БИН уже зарегистрирована в системе');
+        }
+        const externalCompanies = existingCompanies.filter(c => c.isExternal);
+
         // Определяем роль на основе типа компании
         const userRole = data.companyType === 'FORWARDER'
             ? UserRole.FORWARDER
             : UserRole.COMPANY_ADMIN;
 
-        // Создаём компанию и админа в транзакции
+        // Создаём или обновляем компанию и админа в транзакции
         const result = await this.prisma.$transaction(async (tx) => {
-            // Создаём компанию
-            const company = await tx.company.create({
-                data: {
-                    name: data.companyName,
-                    bin: data.bin,
-                    email: data.adminEmail,
-                    phone: data.phone,
-                    type: data.companyType,
-                    isOurCompany: false,
-                },
-            });
+            let company;
+
+            if (externalCompanies.length > 0) {
+                // Берем первую внешнюю компанию как основную
+                const mainCompany = externalCompanies[0];
+                company = await tx.company.update({
+                    where: { id: mainCompany.id },
+                    data: {
+                        isExternal: false,
+                        name: data.companyName,
+                        email: data.adminEmail,
+                        phone: data.phone,
+                        type: data.companyType,
+                    },
+                });
+
+                // Если есть дубликаты, переносим их связи на основную и удаляем
+                const duplicates = externalCompanies.slice(1);
+                for (const dup of duplicates) {
+                    await tx.order.updateMany({
+                        where: { customerCompanyId: dup.id },
+                        data: { customerCompanyId: mainCompany.id },
+                    });
+                    await tx.order.updateMany({
+                        where: { forwarderId: dup.id },
+                        data: { forwarderId: mainCompany.id },
+                    });
+                    await tx.order.updateMany({
+                        where: { partnerId: dup.id },
+                        data: { partnerId: mainCompany.id },
+                    });
+                    await tx.contract.updateMany({
+                        where: { customerCompanyId: dup.id },
+                        data: { customerCompanyId: mainCompany.id },
+                    });
+                    await tx.contract.updateMany({
+                        where: { forwarderCompanyId: dup.id },
+                        data: { forwarderCompanyId: mainCompany.id },
+                    });
+                    await tx.company.delete({
+                        where: { id: dup.id },
+                    });
+                }
+            } else {
+                company = await tx.company.create({
+                    data: {
+                        name: data.companyName,
+                        bin: data.bin,
+                        email: data.adminEmail,
+                        phone: data.phone,
+                        type: data.companyType,
+                        isOurCompany: false,
+                        isExternal: false,
+                    },
+                });
+            }
 
             // Хешируем пароль
             const passwordHash = await bcrypt.hash(data.adminPassword, 10);
@@ -564,21 +619,77 @@ export class AuthService {
             throw new BadRequestException('Телефон уже зарегистрирован');
         }
 
+        // Проверяем существование компании с таким БИН
+        const existingCompanies = await this.prisma.company.findMany({
+            where: { bin: data.bin },
+        });
+        const registeredCompany = existingCompanies.find(c => !c.isExternal);
+        if (registeredCompany) {
+            throw new BadRequestException('Компания с таким БИН уже зарегистрирована в системе');
+        }
+        const externalCompanies = existingCompanies.filter(c => c.isExternal);
+
         const userRole = data.companyType === 'FORWARDER'
             ? UserRole.FORWARDER
             : UserRole.COMPANY_ADMIN;
 
         const result = await this.prisma.$transaction(async (tx) => {
-            const company = await tx.company.create({
-                data: {
-                    name: data.companyName,
-                    bin: data.bin,
-                    email: googleData.email || undefined,
-                    phone: data.phone,
-                    type: data.companyType,
-                    isOurCompany: false,
-                },
-            });
+            let company;
+
+            if (externalCompanies.length > 0) {
+                // Берем первую внешнюю компанию как основную
+                const mainCompany = externalCompanies[0];
+                company = await tx.company.update({
+                    where: { id: mainCompany.id },
+                    data: {
+                        isExternal: false,
+                        name: data.companyName,
+                        email: googleData.email || undefined,
+                        phone: data.phone,
+                        type: data.companyType,
+                    },
+                });
+
+                // Если есть дубликаты, переносим их связи на основную и удаляем
+                const duplicates = externalCompanies.slice(1);
+                for (const dup of duplicates) {
+                    await tx.order.updateMany({
+                        where: { customerCompanyId: dup.id },
+                        data: { customerCompanyId: mainCompany.id },
+                    });
+                    await tx.order.updateMany({
+                        where: { forwarderId: dup.id },
+                        data: { forwarderId: mainCompany.id },
+                    });
+                    await tx.order.updateMany({
+                        where: { partnerId: dup.id },
+                        data: { partnerId: mainCompany.id },
+                    });
+                    await tx.contract.updateMany({
+                        where: { customerCompanyId: dup.id },
+                        data: { customerCompanyId: mainCompany.id },
+                    });
+                    await tx.contract.updateMany({
+                        where: { forwarderCompanyId: dup.id },
+                        data: { forwarderCompanyId: mainCompany.id },
+                    });
+                    await tx.company.delete({
+                        where: { id: dup.id },
+                    });
+                }
+            } else {
+                company = await tx.company.create({
+                    data: {
+                        name: data.companyName,
+                        bin: data.bin,
+                        email: googleData.email || undefined,
+                        phone: data.phone,
+                        type: data.companyType,
+                        isOurCompany: false,
+                        isExternal: false,
+                    },
+                });
+            }
 
             const admin = await tx.user.create({
                 data: {

@@ -8,6 +8,11 @@ export class CreateOrderDto {
     @IsOptional()
     customerId?: string;
 
+    @ApiProperty({ required: false, description: 'ID компании-заказчика' })
+    @IsString()
+    @IsOptional()
+    customerCompanyId?: string;
+
     @ApiProperty({ required: true, type: [Object], description: 'Массив точек маршрута (Погрузка, Догруз, Выгрузка)' })
     @IsArray()
     @IsNotEmpty()

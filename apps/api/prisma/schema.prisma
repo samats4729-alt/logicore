@@ -148,7 +148,7 @@ model Company {
   bankBic        String?     // БИК банка
   kbe            String?     // КБЕ
   stampImage     String?     // Путь к PNG печати
-  type           CompanyType @default(CUSTOMER)
+  type           CompanyType? @default(CUSTOMER)
   isOurCompany   Boolean     @default(false)  // true = LogComp
   isExternal     Boolean     @default(false)  // Внешняя компания (справочник)
   isActive       Boolean     @default(true)
@@ -175,6 +175,8 @@ model Company {
   contractsAsForwarder Contract[] @relation("ContractForwarder")
   
   invitations       Invitation[]
+
+  @@index([bin])
 }
 
 // ... existing models ...

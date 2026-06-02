@@ -246,9 +246,28 @@ export class CompanyService {
     /**
      * Получить заявки компании с пагинацией
      */
-    async getCompanyOrders(companyId: string, query: PaginationQueryDto = {}) {
+    async getCompanyOrders(companyId: string, query: PaginationQueryDto & { type?: string } = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
-        const where = { customerCompanyId: companyId };
+        
+        let where: any = {};
+        if (query.type === 'incoming') {
+            where = {
+                OR: [
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                ],
+            };
+        } else if (query.type === 'outgoing') {
+            where = { customerCompanyId: companyId };
+        } else {
+            where = {
+                OR: [
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                ],
+            };
+        }
 
         const [data, total] = await Promise.all([
             this.prisma.order.findMany({
@@ -256,24 +275,30 @@ export class CompanyService {
                 skip,
                 take,
                 include: {
-                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
-                driver: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        phone: true,
-                        vehiclePlate: true,
+                    routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                    driver: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            phone: true,
+                            vehiclePlate: true,
+                        },
+                    },
+                    forwarder: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+                    customerCompany: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
                     },
                 },
-                forwarder: {
-                    select: {
-                        id: true,
-                        name: true,
-                    },
-                },
-            },
-            orderBy: { createdAt: 'desc' },
+                orderBy: { createdAt: 'desc' },
             }),
             this.prisma.order.count({ where })
         ]);

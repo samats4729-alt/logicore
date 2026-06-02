@@ -89,7 +89,8 @@ interface Order {
     createdAt: string;
     routePoints?: { pointType: string; sequence: number; location: { id?: string; name: string; address: string; city?: string } }[];
     customer?: { firstName: string; lastName: string; phone: string; email?: string };
-    customerCompany?: { name: string; phone?: string };
+    customerCompany?: { id?: string; name: string; phone?: string };
+    customerCompanyId?: string;
     assignedDriverName?: string;
     assignedDriverPhone?: string;
     assignedDriverPlate?: string;
@@ -110,23 +111,31 @@ export default function CompanyOrdersPage() {
     const { user } = useAuthStore();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState('incoming');
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
+    const [incomingPage, setIncomingPage] = useState(1);
+    const [incomingPageSize, setIncomingPageSize] = useState(20);
+    const [outgoingPage, setOutgoingPage] = useState(1);
+    const [outgoingPageSize, setOutgoingPageSize] = useState(20);
 
     // Fetch orders with SWR
-    const { data: ordersData, isLoading: loading } = useSWR(
-        `/company/orders?page=${page}&limit=${pageSize}`,
+    const { data: ordersData, isLoading: loading, mutate: mutateIncoming } = useSWR(
+        `/company/orders?page=${incomingPage}&limit=${incomingPageSize}&type=incoming`,
         fetcher
     );
     const orders: Order[] = ordersData?.data || [];
     const totalOrders = ordersData?.total || 0;
 
-    // Outgoing orders (not implemented in backend yet, reusing same endpoint for now)
-    const { data: outgoingData, isLoading: outgoingLoading } = useSWR(
-        `/company/orders?page=${page}&limit=${pageSize}`,
+    // Outgoing orders
+    const { data: outgoingData, isLoading: outgoingLoading, mutate: mutateOutgoing } = useSWR(
+        `/company/orders?page=${outgoingPage}&limit=${outgoingPageSize}&type=outgoing`,
         fetcher
     );
     const outgoingOrders: Order[] = outgoingData?.data || [];
+    const totalOutgoingOrders = outgoingData?.total || 0;
+
+    const mutateAll = () => {
+        mutateIncoming();
+        mutateOutgoing();
+    };
 
     // Common
     const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -227,6 +236,7 @@ export default function CompanyOrdersPage() {
         fetchLocations();
         fetchForwarders();
         fetchCargoTypes();
+        fetchPartners();
     }, []);
 
     // =================== FILTERS ===================
@@ -251,25 +261,43 @@ export default function CompanyOrdersPage() {
     }, [createModalOpen]);
 
     // =================== UNIQUE VALUES FOR FILTERS ===================
-    const uniqueCompanies = useMemo(() => {
+    const uniqueIncomingCompanies = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => { if (o.customerCompany?.name) set.add(o.customerCompany.name); });
         return Array.from(set).sort();
     }, [orders]);
 
-    const uniqueDrivers = useMemo(() => {
+    const uniqueOutgoingCompanies = useMemo(() => {
+        const set = new Set<string>();
+        outgoingOrders.forEach(o => { if (o.forwarder?.name) set.add(o.forwarder.name); });
+        return Array.from(set).sort();
+    }, [outgoingOrders]);
+
+    const uniqueIncomingDrivers = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => { if (o.assignedDriverName) set.add(o.assignedDriverName); });
         return Array.from(set).sort();
     }, [orders]);
 
-    const uniqueStatuses = useMemo(() => {
+    const uniqueOutgoingDrivers = useMemo(() => {
+        const set = new Set<string>();
+        outgoingOrders.forEach(o => { if (o.assignedDriverName) set.add(o.assignedDriverName); });
+        return Array.from(set).sort();
+    }, [outgoingOrders]);
+
+    const uniqueIncomingStatuses = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => set.add(o.status));
         return Array.from(set);
     }, [orders]);
 
-    const uniqueFromCities = useMemo(() => {
+    const uniqueOutgoingStatuses = useMemo(() => {
+        const set = new Set<string>();
+        outgoingOrders.forEach(o => set.add(o.status));
+        return Array.from(set);
+    }, [outgoingOrders]);
+
+    const uniqueIncomingFromCities = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => {
             const city = extractCity(o, 'pickup');
@@ -278,7 +306,16 @@ export default function CompanyOrdersPage() {
         return Array.from(set).sort();
     }, [orders]);
 
-    const uniqueToCities = useMemo(() => {
+    const uniqueOutgoingFromCities = useMemo(() => {
+        const set = new Set<string>();
+        outgoingOrders.forEach(o => {
+            const city = extractCity(o, 'pickup');
+            if (city) set.add(city);
+        });
+        return Array.from(set).sort();
+    }, [outgoingOrders]);
+
+    const uniqueIncomingToCities = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => {
             const city = extractCity(o, 'delivery');
@@ -286,6 +323,15 @@ export default function CompanyOrdersPage() {
         });
         return Array.from(set).sort();
     }, [orders]);
+
+    const uniqueOutgoingToCities = useMemo(() => {
+        const set = new Set<string>();
+        outgoingOrders.forEach(o => {
+            const city = extractCity(o, 'delivery');
+            if (city) set.add(city);
+        });
+        return Array.from(set).sort();
+    }, [outgoingOrders]);
 
     // =================== FILTERED DATA ===================
     const filteredOrders = useMemo(() => {
@@ -307,6 +353,25 @@ export default function CompanyOrdersPage() {
         });
     }, [orders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
 
+    const filteredOutgoingOrders = useMemo(() => {
+        return outgoingOrders.filter(o => {
+            if (filterCompany && o.forwarder?.name !== filterCompany) return false;
+            if (filterDriver && o.assignedDriverName !== filterDriver) return false;
+            if (filterStatus && o.status !== filterStatus) return false;
+            if (filterFrom) {
+                const city = extractCity(o, 'pickup');
+                if (city !== filterFrom) return false;
+            }
+            if (filterTo) {
+                const city = extractCity(o, 'delivery');
+                if (city !== filterTo) return false;
+            }
+            if (filterSumMin !== undefined && (o.customerPrice || 0) < filterSumMin) return false;
+            if (filterSumMax !== undefined && (o.customerPrice || 0) > filterSumMax) return false;
+            return true;
+        });
+    }, [outgoingOrders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
+
     const hasActiveFilters = filterCompany || filterDriver || filterStatus || filterFrom || filterTo || filterSumMin !== undefined || filterSumMax !== undefined;
 
     const clearFilters = () => {
@@ -318,6 +383,10 @@ export default function CompanyOrdersPage() {
         setFilterSumMin(undefined);
         setFilterSumMax(undefined);
     };
+
+    useEffect(() => {
+        clearFilters();
+    }, [activeTab]);
 
     // =================== HELPER ===================
     function extractCity(order: Order, type: 'pickup' | 'delivery'): string {
@@ -375,6 +444,7 @@ export default function CompanyOrdersPage() {
             customerPriceType: order.customerPriceType || 'FIXED',
             pickupDate: (order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate ? dayjs((order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate) : undefined,
             forwarderId: order.forwarderId || order.forwarder?.id || undefined,
+            customerCompanyId: order.customerCompanyId || order.customerCompany?.id || undefined,
         });
         if (order.routePoints && order.routePoints.length > 0) {
              setRoutePointsState(order.routePoints.map(p => ({
@@ -423,8 +493,13 @@ export default function CompanyOrdersPage() {
                 updateData.routePoints = routePoints;
             }
 
+            if (updateData.customerCompanyId && updateData.customerCompanyId !== user?.companyId && !updateData.forwarderId) {
+                updateData.forwarderId = user?.companyId;
+            }
+
             await api.put(`/orders/${selectedOrder.id}`, updateData);
             message.success('Заявка обновлена');
+            mutateAll();
             setEditModalOpen(false);
             setDetailDrawerOpen(false);
         } catch (error: any) {
@@ -466,6 +541,7 @@ export default function CompanyOrdersPage() {
                 await api.put(`/company/orders/${selectedOrder.id}/assign-forwarder`, { partnerId: values.partnerId, price: values.price });
                 message.success('Заявка передана партнеру');
             }
+            mutateAll();
             setAssignModalOpen(false); form.resetFields(); setSelectedDriverId(null);
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка назначения');
@@ -491,6 +567,7 @@ export default function CompanyOrdersPage() {
         try {
             await api.put(`/company/orders/${selectedOrder.id}/status`, values);
             message.success('Статус обновлён');
+            mutateAll();
             setStatusModalOpen(false); setDetailDrawerOpen(false);
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка');
@@ -501,6 +578,7 @@ export default function CompanyOrdersPage() {
         try {
             await api.put(`/company/orders/${orderId}/accept`);
             message.success('Заявка принята в работу');
+            mutateAll();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка принятия заявки');
         }
@@ -517,6 +595,7 @@ export default function CompanyOrdersPage() {
                 try {
                     await api.put(`/company/orders/${orderId}/reject`);
                     message.success('Заявка отклонена');
+                    mutateAll();
                 } catch (error: any) {
                     message.error(error.response?.data?.message || 'Ошибка отклонения заявки');
                 }
@@ -555,8 +634,12 @@ export default function CompanyOrdersPage() {
             }
 
             const { isMarketplace: _, pickupDate: __, ...ov } = values;
+            if (ov.customerCompanyId && ov.customerCompanyId !== user?.companyId && !ov.forwarderId) {
+                ov.forwarderId = user?.companyId;
+            }
             await api.post('/orders', { ...ov, routePoints, customerId: user?.id, appliedTariffId: appliedTariff?.id || undefined });
             message.success('Заявка создана');
+            mutateAll();
             setCreateModalOpen(false); createForm.resetFields();
         } catch (error: any) { message.error(error.response?.data?.message || 'Ошибка создания'); }
     };
@@ -670,35 +753,35 @@ export default function CompanyOrdersPage() {
                                         placeholder="Заказчик" style={{ width: 150 }}
                                         value={filterCompany} onChange={setFilterCompany}
                                     >
-                                        {uniqueCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                        {uniqueIncomingCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
                                         placeholder="Водитель" style={{ width: 140 }}
                                         value={filterDriver} onChange={setFilterDriver}
                                     >
-                                        {uniqueDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
+                                        {uniqueIncomingDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear
                                         placeholder="Статус" style={{ width: 120 }}
                                         value={filterStatus} onChange={setFilterStatus}
                                     >
-                                        {uniqueStatuses.map(s => <Select.Option key={s} value={s}>{statusLabels[s] || s}</Select.Option>)}
+                                        {uniqueIncomingStatuses.map(s => <Select.Option key={s} value={s}>{statusLabels[s] || s}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
                                         placeholder="Откуда" style={{ width: 120 }}
                                         value={filterFrom} onChange={setFilterFrom}
                                     >
-                                        {uniqueFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                        {uniqueIncomingFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
                                         placeholder="Куда" style={{ width: 120 }}
                                         value={filterTo} onChange={setFilterTo}
                                     >
-                                        {uniqueToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                        {uniqueIncomingToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
                                     </Select>
                                     <InputNumber
                                         size="small" placeholder="Сумма от" style={{ width: 90 }}
@@ -726,10 +809,10 @@ export default function CompanyOrdersPage() {
                                     size="small"
                                     scroll={{ x: 1200 }}
                                     pagination={{
-                                        current: page,
-                                        pageSize: pageSize,
+                                        current: incomingPage,
+                                        pageSize: incomingPageSize,
                                         total: totalOrders,
-                                        onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+                                        onChange: (p, ps) => { setIncomingPage(p); setIncomingPageSize(ps); },
                                         showSizeChanger: true,
                                         pageSizeOptions: ['20', '50', '100'],
                                     }}
@@ -752,21 +835,98 @@ export default function CompanyOrdersPage() {
                     },
                     {
                         key: 'outgoing',
-                        label: <span>Исходящие <Tag style={{ marginLeft: 4, fontSize: 11 }}>{outgoingOrders.length}</Tag></span>,
+                        label: <span>Исходящие <Tag style={{ marginLeft: 4, fontSize: 11 }}>{filteredOutgoingOrders.length}{hasActiveFilters ? `/${outgoingOrders.length}` : ''}</Tag></span>,
                         children: (
                             <div>
+                                {/* FILTER BAR */}
+                                <div style={{
+                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8,
+                                    padding: '8px 12px', background: '#fafafa', borderRadius: 8,
+                                    border: '1px solid #f0f0f0', alignItems: 'center'
+                                }}>
+                                    <FilterOutlined style={{ color: '#999', fontSize: 13 }} />
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Экспедитор" style={{ width: 150 }}
+                                        value={filterCompany} onChange={setFilterCompany}
+                                    >
+                                        {uniqueOutgoingCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Водитель" style={{ width: 140 }}
+                                        value={filterDriver} onChange={setFilterDriver}
+                                    >
+                                        {uniqueOutgoingDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear
+                                        placeholder="Статус" style={{ width: 120 }}
+                                        value={filterStatus} onChange={setFilterStatus}
+                                    >
+                                        {uniqueOutgoingStatuses.map(s => <Select.Option key={s} value={s}>{statusLabels[s] || s}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Откуда" style={{ width: 120 }}
+                                        value={filterFrom} onChange={setFilterFrom}
+                                    >
+                                        {uniqueOutgoingFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Куда" style={{ width: 120 }}
+                                        value={filterTo} onChange={setFilterTo}
+                                    >
+                                        {uniqueOutgoingToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                    </Select>
+                                    <InputNumber
+                                        size="small" placeholder="Сумма от" style={{ width: 90 }}
+                                        value={filterSumMin} onChange={v => setFilterSumMin(v ?? undefined)}
+                                        min={0} controls={false}
+                                    />
+                                    <InputNumber
+                                        size="small" placeholder="Сумма до" style={{ width: 90 }}
+                                        value={filterSumMax} onChange={v => setFilterSumMax(v ?? undefined)}
+                                        min={0} controls={false}
+                                    />
+                                    {hasActiveFilters && (
+                                        <Button size="small" icon={<ClearOutlined />} onClick={clearFilters} type="link" danger>
+                                            Сбросить
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {/* TABLE */}
                                 <Table
                                     columns={outgoingColumns}
-                                    dataSource={outgoingOrders}
+                                    dataSource={filteredOutgoingOrders}
                                     rowKey="id"
                                     loading={outgoingLoading}
                                     size="small"
                                     scroll={{ x: 1000 }}
-                                    pagination={{ pageSize: 50, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100', '200'], showTotal: (t) => `Всего: ${t}` }}
+                                    pagination={{
+                                        current: outgoingPage,
+                                        pageSize: outgoingPageSize,
+                                        total: totalOutgoingOrders,
+                                        onChange: (p, ps) => { setOutgoingPage(p); setOutgoingPageSize(ps); },
+                                        showSizeChanger: true,
+                                        pageSizeOptions: ['20', '50', '100'],
+                                        size: 'small',
+                                        showTotal: (t) => `Всего: ${t}`
+                                    }}
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
-                                        onDoubleClick: () => router.push(`/company/orders/${record.id}`),
+                                        onClick: () => {
+                                            setSelectedOrder(record);
+                                            setDetailDrawerOpen(true);
+                                        }
                                     })}
+                                    rowClassName={(record) => {
+                                        if (record.status === 'COMPLETED') return 'row-completed';
+                                        if (record.status === 'PROBLEM') return 'row-problem';
+                                        return '';
+                                    }}
                                 />
                             </div>
                         ),
@@ -887,6 +1047,15 @@ export default function CompanyOrdersPage() {
                                 <Col span={8}>
                                     <Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
                                     {appliedTariff && <div style={{ marginTop: -12, marginBottom: 8, padding: '3px 6px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}</div>}
+                                </Col>
+                            </Row>
+                            <Row gutter={12}>
+                                <Col span={24}>
+                                    <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
+                                        <Select placeholder="Выберите заказчика (по умолчанию — ваша компания)" allowClear showSearch optionFilterProp="children">
+                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                        </Select>
+                                    </Form.Item>
                                 </Col>
                             </Row>
                             <Row gutter={12}>
@@ -1148,6 +1317,15 @@ export default function CompanyOrdersPage() {
                                 <Col span={8}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
                                 <Col span={8}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
                                 <Col span={8}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                            </Row>
+                            <Row gutter={12}>
+                                <Col span={24}>
+                                    <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
+                                        <Select placeholder="Выберите заказчика (по умолчанию — ваша компания)" allowClear showSearch optionFilterProp="children">
+                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
                             </Row>
                             <Row gutter={12}>
                                 <Col span={12}>
