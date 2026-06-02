@@ -84,15 +84,24 @@ export class AccountingService {
     async getFinancialRegistry(companyId: string) {
         return this.prisma.order.findMany({
             where: {
-                OR: [
-                    { customerCompanyId: companyId },
-                    { forwarderId: companyId },
-                    { partnerId: companyId },
-                    { subForwarderId: companyId },
-                    { responsibleManager: { companyId: companyId } },
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            { responsibleManager: { companyId: companyId } },
+                        ]
+                    },
+                    {
+                        OR: [
+                            { isConfirmed: true },
+                            { status: { not: 'PENDING' } }
+                        ]
+                    }
                 ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
-                isConfirmed: true,
             },
             select: {
                 id: true,
@@ -132,16 +141,25 @@ export class AccountingService {
         // Заявки где мы экспедитор или заказчик/посредник — ждём оплату от заказчика
         return this.prisma.order.findMany({
             where: {
-                OR: [
-                    { customerCompanyId: companyId },
-                    { forwarderId: companyId },
-                    { partnerId: companyId },
-                    { subForwarderId: companyId },
-                    { responsibleManager: { companyId: companyId } },
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            { responsibleManager: { companyId: companyId } },
+                        ]
+                    },
+                    {
+                        OR: [
+                            { isConfirmed: true },
+                            { status: { not: 'PENDING' } }
+                        ]
+                    }
                 ],
                 customerPrice: { not: null },
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
-                isConfirmed: true,
             },
             select: {
                 id: true,
@@ -171,21 +189,30 @@ export class AccountingService {
         // Заявки где мы экспедитор — должны оплатить перевозчику
         return this.prisma.order.findMany({
             where: {
-                OR: [
-                    { customerCompanyId: companyId },
-                    { forwarderId: companyId },
-                    { partnerId: companyId },
-                    { subForwarderId: companyId },
-                    { responsibleManager: { companyId: companyId } },
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            { responsibleManager: { companyId: companyId } },
+                        ]
+                    },
+                    {
+                        OR: [
+                            { driverCost: { not: null } },
+                            { subForwarderPrice: { not: null } }
+                        ]
+                    },
+                    {
+                        OR: [
+                            { isConfirmed: true },
+                            { status: { not: 'PENDING' } }
+                        ]
+                    }
                 ],
-                AND: {
-                    OR: [
-                        { driverCost: { not: null } },
-                        { subForwarderPrice: { not: null } }
-                    ]
-                },
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
-                isConfirmed: true,
             },
             select: {
                 id: true,
