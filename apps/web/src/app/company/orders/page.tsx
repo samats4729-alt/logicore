@@ -854,6 +854,9 @@ export default function CompanyOrdersPage() {
                                         onClick: () => {
                                             setSelectedOrder(record);
                                             setDetailDrawerOpen(true);
+                                        },
+                                        onDoubleClick: () => {
+                                            router.push(`/company/orders/${record.id}`);
                                         }
                                     })}
                                     rowClassName={(record) => {
@@ -952,6 +955,9 @@ export default function CompanyOrdersPage() {
                                         onClick: () => {
                                             setSelectedOrder(record);
                                             setDetailDrawerOpen(true);
+                                        },
+                                        onDoubleClick: () => {
+                                            router.push(`/company/orders/${record.id}`);
                                         }
                                     })}
                                     rowClassName={(record) => {
