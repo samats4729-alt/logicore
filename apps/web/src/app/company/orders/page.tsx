@@ -1139,6 +1139,22 @@ export default function CompanyOrdersPage() {
                                 <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
                                 <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
                             </Row>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
+                                    {appliedTariff && <div style={{ marginTop: -12, marginBottom: 8, padding: '3px 6px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}</div>}
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
+                                        <Select style={{ width: '100%' }}>
+                                            <Select.Option value="FIXED">За рейс</Select.Option>
+                                            <Select.Option value="PER_KM">За км</Select.Option>
+                                            <Select.Option value="PER_TON">За тонну</Select.Option>
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+
                             <Row style={{ marginBottom: 12 }}>
                                 <Col span={24}>
                                     <Space size={16}>
@@ -1160,22 +1176,6 @@ export default function CompanyOrdersPage() {
                                             Добавить экспедитора
                                         </Checkbox>
                                     </Space>
-                                </Col>
-                            </Row>
-
-                            <Row gutter={12}>
-                                <Col span={12}>
-                                    <Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
-                                    {appliedTariff && <div style={{ marginTop: -12, marginBottom: 8, padding: '3px 6px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}</div>}
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
-                                        <Select style={{ width: '100%' }}>
-                                            <Select.Option value="FIXED">За рейс</Select.Option>
-                                            <Select.Option value="PER_KM">За км</Select.Option>
-                                            <Select.Option value="PER_TON">За тонну</Select.Option>
-                                        </Select>
-                                    </Form.Item>
                                 </Col>
                             </Row>
 
@@ -1489,6 +1489,19 @@ export default function CompanyOrdersPage() {
                                 <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
                                 <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
                             </Row>
+                            <Row gutter={12}>
+                                <Col span={12}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={12}>
+                                    <Form.Item name="customerPriceType" label="Тип оплаты">
+                                        <Select style={{ width: '100%' }}>
+                                            <Select.Option value="FIXED">За рейс (всего)</Select.Option>
+                                            <Select.Option value="PER_KM">За км</Select.Option>
+                                            <Select.Option value="PER_TON">За тонну</Select.Option>
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+
                             <Row style={{ marginBottom: 12 }}>
                                 <Col span={24}>
                                     <Space size={16}>
@@ -1509,19 +1522,6 @@ export default function CompanyOrdersPage() {
                                             Добавить экспедитора
                                         </Checkbox>
                                     </Space>
-                                </Col>
-                            </Row>
-
-                            <Row gutter={12}>
-                                <Col span={12}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={12}>
-                                    <Form.Item name="customerPriceType" label="Тип оплаты">
-                                        <Select style={{ width: '100%' }}>
-                                            <Select.Option value="FIXED">За рейс (всего)</Select.Option>
-                                            <Select.Option value="PER_KM">За км</Select.Option>
-                                            <Select.Option value="PER_TON">За тонну</Select.Option>
-                                        </Select>
-                                    </Form.Item>
                                 </Col>
                             </Row>
 
