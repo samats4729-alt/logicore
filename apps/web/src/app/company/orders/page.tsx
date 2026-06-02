@@ -1148,7 +1148,7 @@ export default function CompanyOrdersPage() {
                                                 createForm.setFieldsValue({ customerCompanyId: null });
                                             }
                                         }}>
-                                            Сторонний заказчик
+                                            Заказчик — другая компания
                                         </Checkbox>
                                         <Checkbox checked={showForwarderField} onChange={e => {
                                             setShowForwarderField(e.target.checked);
@@ -1157,7 +1157,7 @@ export default function CompanyOrdersPage() {
                                                 setIsMarketplace(false);
                                             }
                                         }}>
-                                            Сторонний исполнитель (экспедитор)
+                                            Привлечь экспедитора
                                         </Checkbox>
                                     </Space>
                                 </Col>
@@ -1498,7 +1498,7 @@ export default function CompanyOrdersPage() {
                                                 editForm.setFieldsValue({ customerCompanyId: null });
                                             }
                                         }}>
-                                            Сторонний заказчик
+                                            Заказчик — другая компания
                                         </Checkbox>
                                         <Checkbox checked={showForwarderField} onChange={e => {
                                             setShowForwarderField(e.target.checked);
@@ -1506,7 +1506,7 @@ export default function CompanyOrdersPage() {
                                                 editForm.setFieldsValue({ forwarderId: null, driverCost: null });
                                             }
                                         }}>
-                                            Сторонний исполнитель (экспедитор)
+                                            Привлечь экспедитора
                                         </Checkbox>
                                     </Space>
                                 </Col>
