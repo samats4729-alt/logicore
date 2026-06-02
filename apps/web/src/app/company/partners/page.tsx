@@ -444,8 +444,15 @@ export default function PartnersPage() {
                             </Select>
                         </Form.Item>
                     )}
-                    <Form.Item name="bin" label="БИН/ИИН">
-                        <Input placeholder="123456789012" />
+                    <Form.Item 
+                        name="bin" 
+                        label="БИН/ИИН" 
+                        rules={[
+                            { required: true, message: 'Введите БИН/ИИН' },
+                            { pattern: /^\d{12}$/, message: 'БИН/ИИН должен состоять ровно из 12 цифр' }
+                        ]}
+                    >
+                        <Input placeholder="123456789012" maxLength={12} />
                     </Form.Item>
                     <Form.Item name="phone" label="Телефон">
                         <Input placeholder="+77001234567" />
