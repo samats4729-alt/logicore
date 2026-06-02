@@ -12,8 +12,11 @@ export class AccountingService {
             where: {
                 id: orderId,
                 OR: [
-                    { forwarderId: companyId },
                     { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
                 ],
             },
             include: {
@@ -81,7 +84,13 @@ export class AccountingService {
     async getFinancialRegistry(companyId: string) {
         return this.prisma.order.findMany({
             where: {
-                forwarderId: companyId,
+                OR: [
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
+                ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
                 isConfirmed: true,
             },
@@ -120,10 +129,16 @@ export class AccountingService {
     // ==================== PAYMENT JOURNAL ====================
 
     async getIncomesJournal(companyId: string) {
-        // Заявки где мы экспедитор — ждём оплату от заказчика
+        // Заявки где мы экспедитор или заказчик/посредник — ждём оплату от заказчика
         return this.prisma.order.findMany({
             where: {
-                forwarderId: companyId,
+                OR: [
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
+                ],
                 customerPrice: { not: null },
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
                 isConfirmed: true,
@@ -156,11 +171,19 @@ export class AccountingService {
         // Заявки где мы экспедитор — должны оплатить перевозчику
         return this.prisma.order.findMany({
             where: {
-                forwarderId: companyId,
                 OR: [
-                    { driverCost: { not: null } },
-                    { subForwarderPrice: { not: null } }
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
                 ],
+                AND: {
+                    OR: [
+                        { driverCost: { not: null } },
+                        { subForwarderPrice: { not: null } }
+                    ]
+                },
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
                 isConfirmed: true,
             },
@@ -221,7 +244,16 @@ export class AccountingService {
 
     async markCustomerPaid(companyId: string, orderId: string, paid: boolean) {
         const order = await this.prisma.order.findFirst({
-            where: { id: orderId, forwarderId: companyId },
+            where: {
+                id: orderId,
+                OR: [
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
+                ],
+            },
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
@@ -236,7 +268,16 @@ export class AccountingService {
 
     async markDriverPaid(companyId: string, orderId: string, paid: boolean) {
         const order = await this.prisma.order.findFirst({
-            where: { id: orderId, forwarderId: companyId },
+            where: {
+                id: orderId,
+                OR: [
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
+                ],
+            },
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
@@ -251,7 +292,16 @@ export class AccountingService {
 
     async markSubForwarderPaid(companyId: string, orderId: string, paid: boolean) {
         const order = await this.prisma.order.findFirst({
-            where: { id: orderId, forwarderId: companyId },
+            where: {
+                id: orderId,
+                OR: [
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
+                ],
+            },
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
@@ -274,7 +324,16 @@ export class AccountingService {
         driverPaymentForm?: string;
     }) {
         const order = await this.prisma.order.findFirst({
-            where: { id: orderId, forwarderId: companyId },
+            where: {
+                id: orderId,
+                OR: [
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
+                ],
+            },
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
