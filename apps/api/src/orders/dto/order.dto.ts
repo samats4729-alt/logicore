@@ -60,6 +60,11 @@ export class CreateOrderDto {
     @IsEnum(['FIXED', 'PER_KM', 'PER_TON'])
     customerPriceType?: 'FIXED' | 'PER_KM' | 'PER_TON';
 
+    @ApiProperty({ required: false, example: 120000, description: 'Ставка перевозчику (водителю/экспедитору)' })
+    @IsNumber()
+    @IsOptional()
+    driverCost?: number;
+
     @ApiProperty({ required: false, description: 'ID водителя для назначения' })
     @IsString()
     @IsOptional()

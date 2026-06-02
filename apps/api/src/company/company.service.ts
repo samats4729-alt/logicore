@@ -255,16 +255,31 @@ export class CompanyService {
                 OR: [
                     { forwarderId: companyId },
                     { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    {
+                        responsibleManager: { companyId: companyId },
+                        NOT: { customerCompanyId: companyId }
+                    }
                 ],
             };
         } else if (query.type === 'outgoing') {
-            where = { customerCompanyId: companyId };
+            where = {
+                OR: [
+                    { customerCompanyId: companyId },
+                    {
+                        responsibleManager: { companyId: companyId },
+                        NOT: { forwarderId: companyId }
+                    }
+                ]
+            };
         } else {
             where = {
                 OR: [
                     { customerCompanyId: companyId },
                     { forwarderId: companyId },
                     { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } },
                 ],
             };
         }
@@ -295,6 +310,13 @@ export class CompanyService {
                         select: {
                             id: true,
                             name: true,
+                        },
+                    },
+                    responsibleManager: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
                         },
                     },
                 },

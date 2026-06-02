@@ -20,6 +20,7 @@ export class OrdersService {
         cargoType?: string;
         requirements?: string;
         customerPrice?: number;
+        driverCost?: number;
         driverId?: string;
         forwarderId?: string; // Экспедитор
         // New fields
@@ -75,6 +76,7 @@ export class OrdersService {
                 cargoType: data.cargoType,
                 requirements: data.requirements,
                 customerPrice: data.customerPrice,
+                driverCost: data.driverCost,
                 driverId: data.driverId,
                 forwarderId: data.forwarderId, // Связь с экспедитором
                 status,

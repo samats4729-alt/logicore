@@ -86,6 +86,7 @@ interface Order {
     requirements?: string;
     customerPrice?: number;
     customerPriceType?: string;
+    driverCost?: number;
     createdAt: string;
     routePoints?: { pointType: string; sequence: number; location: { id?: string; name: string; address: string; city?: string } }[];
     customer?: { firstName: string; lastName: string; phone: string; email?: string };
@@ -442,6 +443,7 @@ export default function CompanyOrdersPage() {
             requirements: order.requirements,
             customerPrice: order.customerPrice,
             customerPriceType: order.customerPriceType || 'FIXED',
+            driverCost: order.driverCost,
             pickupDate: (order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate ? dayjs((order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate) : undefined,
             forwarderId: order.forwarderId || order.forwarder?.id || undefined,
             customerCompanyId: order.customerCompanyId || order.customerCompany?.id || undefined,
@@ -684,8 +686,12 @@ export default function CompanyOrdersPage() {
             render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
         },
         {
-            title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const,
-            render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>,
+            title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
+            render: (_: any, r: Order) => {
+                const isExecutor = r.forwarderId === user?.companyId;
+                const price = (isExecutor && r.driverCost) ? r.driverCost : r.customerPrice;
+                return price ? <span style={{ fontSize: 12, fontWeight: 600 }}>{price.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+            },
         },
         {
             title: '', key: 'actions', width: 120, fixed: 'right' as const,
@@ -719,7 +725,25 @@ export default function CompanyOrdersPage() {
         },
         { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || '—'}</span> },
         { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || '—'}</span> },
-        { title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const, render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : '—' },
+        {
+            title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
+            render: (_: any, r: Order) => {
+                const isClient = r.customerCompanyId === user?.companyId;
+                if (isClient) {
+                    return r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600 }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : '—';
+                }
+                // If we are the subcontractor / middleman
+                if (r.driverCost) {
+                    return (
+                        <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#3f8600' }}>{r.customerPrice?.toLocaleString('ru-RU')}</span>
+                            <div style={{ fontSize: 10, color: '#cf1322', marginTop: -2 }}>{r.driverCost.toLocaleString('ru-RU')}</div>
+                        </div>
+                    );
+                }
+                return r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600 }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : '—';
+            }
+        },
         { title: '', key: 'actions', width: 80, render: (_: any, r: Order) => (
             <Space size={4}>
                 <Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} />
@@ -1050,19 +1074,26 @@ export default function CompanyOrdersPage() {
                                 <TextArea rows={2} placeholder="Мебель, 20 коробок..." />
                             </Form.Item>
                             <Row gutter={12}>
-                                <Col span={6}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
-                                <Col span={6}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
-                                <Col span={6}>
+                                <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
+                            </Row>
+                            <Row gutter={12}>
+                                <Col span={8}>
                                     <Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
                                     {appliedTariff && <div style={{ marginTop: -12, marginBottom: 8, padding: '3px 6px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}</div>}
                                 </Col>
-                                <Col span={6}>
+                                <Col span={8}>
                                     <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
-                                        <Select>
+                                        <Select style={{ width: '100%' }}>
                                             <Select.Option value="FIXED">За рейс</Select.Option>
                                             <Select.Option value="PER_KM">За км</Select.Option>
                                             <Select.Option value="PER_TON">За тонну</Select.Option>
                                         </Select>
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
+                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                                     </Form.Item>
                                 </Col>
                             </Row>
@@ -1162,9 +1193,20 @@ export default function CompanyOrdersPage() {
                         {selectedOrder.cargoVolume && <div>Объём: {selectedOrder.cargoVolume} м³</div>}
                         {selectedOrder.cargoType && <div>Кузов: <strong>{selectedOrder.cargoType}</strong></div>}
                         {selectedOrder.requirements && <div>Треб.: {selectedOrder.requirements}</div>}
-                        {selectedOrder.customerPrice && (
-                            <div style={{ marginTop: 8, fontSize: 16 }}>
-                                <Text type="success" strong>{selectedOrder.customerPrice.toLocaleString('ru-RU')} ₸</Text>
+                        {(selectedOrder.customerPrice || selectedOrder.driverCost) && (
+                            <div style={{ marginTop: 8 }}>
+                                {selectedOrder.customerPrice && (
+                                    <div style={{ fontSize: 14 }}>
+                                        <span>Ставка заказчика: </span>
+                                        <Text type="success" strong>{selectedOrder.customerPrice.toLocaleString('ru-RU')} ₸</Text>
+                                    </div>
+                                )}
+                                {selectedOrder.driverCost && selectedOrder.customerCompanyId !== user?.companyId && (
+                                    <div style={{ fontSize: 14, marginTop: 4 }}>
+                                        <span>Ставка перевозчику: </span>
+                                        <Text type="danger" strong>{selectedOrder.driverCost.toLocaleString('ru-RU')} ₸</Text>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -1320,16 +1362,23 @@ export default function CompanyOrdersPage() {
                                 <Input.TextArea rows={2} />
                             </Form.Item>
                             <Row gutter={12}>
-                                <Col span={6}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={6}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={6}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={6}>
+                                <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                            </Row>
+                            <Row gutter={12}>
+                                <Col span={8}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={8}>
                                     <Form.Item name="customerPriceType" label="Тип оплаты">
-                                        <Select>
+                                        <Select style={{ width: '100%' }}>
                                             <Select.Option value="FIXED">За рейс (всего)</Select.Option>
                                             <Select.Option value="PER_KM">За км</Select.Option>
                                             <Select.Option value="PER_TON">За тонну</Select.Option>
                                         </Select>
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
+                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                                     </Form.Item>
                                 </Col>
                             </Row>
