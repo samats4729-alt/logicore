@@ -1148,7 +1148,7 @@ export default function CompanyOrdersPage() {
                                                 createForm.setFieldsValue({ customerCompanyId: null });
                                             }
                                         }}>
-                                            Заказчик — другая компания
+                                            Добавить заказчика
                                         </Checkbox>
                                         <Checkbox checked={showForwarderField} onChange={e => {
                                             setShowForwarderField(e.target.checked);
@@ -1157,7 +1157,7 @@ export default function CompanyOrdersPage() {
                                                 setIsMarketplace(false);
                                             }
                                         }}>
-                                            Привлечь экспедитора
+                                            Добавить экспедитора
                                         </Checkbox>
                                     </Space>
                                 </Col>
@@ -1498,7 +1498,7 @@ export default function CompanyOrdersPage() {
                                                 editForm.setFieldsValue({ customerCompanyId: null });
                                             }
                                         }}>
-                                            Заказчик — другая компания
+                                            Добавить заказчика
                                         </Checkbox>
                                         <Checkbox checked={showForwarderField} onChange={e => {
                                             setShowForwarderField(e.target.checked);
@@ -1506,7 +1506,7 @@ export default function CompanyOrdersPage() {
                                                 editForm.setFieldsValue({ forwarderId: null, driverCost: null });
                                             }
                                         }}>
-                                            Привлечь экспедитора
+                                            Добавить экспедитора
                                         </Checkbox>
                                     </Space>
                                 </Col>
