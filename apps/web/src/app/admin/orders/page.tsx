@@ -83,7 +83,8 @@ export default function OrdersPage() {
                 api.get('/locations'),
                 api.get('/users/drivers'),
             ]);
-            setOrders(ordersRes.data);
+            const ordersRaw = ordersRes.data;
+            setOrders(Array.isArray(ordersRaw) ? ordersRaw : (ordersRaw?.data || []));
             setLocations(locationsRes.data);
             setDrivers(driversRes.data || []);
         } catch (error) {

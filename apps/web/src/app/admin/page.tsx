@@ -58,15 +58,16 @@ export default function AdminDashboard() {
         const fetchData = async () => {
             try {
                 const response = await api.get('/orders');
-                const data = response.data;
-                setOrders(data);
+                const rawData = response.data;
+                const ordersList = Array.isArray(rawData) ? rawData : (rawData?.data || []);
+                setOrders(ordersList);
 
                 setStats({
-                    total: data.length,
-                    pending: data.filter((o: Order) => o.status === 'PENDING').length,
-                    inTransit: data.filter((o: Order) => o.status === 'IN_TRANSIT').length,
-                    completed: data.filter((o: Order) => o.status === 'COMPLETED').length,
-                    problems: data.filter((o: Order) => o.status === 'PROBLEM').length,
+                    total: Array.isArray(rawData) ? rawData.length : (rawData?.total || 0),
+                    pending: ordersList.filter((o: Order) => o.status === 'PENDING').length,
+                    inTransit: ordersList.filter((o: Order) => o.status === 'IN_TRANSIT').length,
+                    completed: ordersList.filter((o: Order) => o.status === 'COMPLETED').length,
+                    problems: ordersList.filter((o: Order) => o.status === 'PROBLEM').length,
                 });
             } catch (error) {
                 console.error('Failed to fetch orders:', error);

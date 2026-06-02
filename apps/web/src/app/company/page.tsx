@@ -56,13 +56,14 @@ export default function CompanyDashboard() {
         const fetchOrders = async () => {
             try {
                 const response = await api.get('/company/orders');
-                const data = response.data;
-                setOrders(data);
+                const rawData = response.data;
+                const ordersList = Array.isArray(rawData) ? rawData : (rawData?.data || []);
+                setOrders(ordersList);
                 setStats({
-                    total: data.length,
-                    pending: data.filter((o: Order) => o.status === 'PENDING').length,
-                    inProgress: data.filter((o: Order) => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length,
-                    completed: data.filter((o: Order) => o.status === 'COMPLETED').length,
+                    total: Array.isArray(rawData) ? rawData.length : (rawData?.total || 0),
+                    pending: ordersList.filter((o: Order) => o.status === 'PENDING').length,
+                    inProgress: ordersList.filter((o: Order) => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length,
+                    completed: ordersList.filter((o: Order) => o.status === 'COMPLETED').length,
                 });
             } catch (error) { console.error('Failed to fetch orders:', error); }
             finally { setLoading(false); }
