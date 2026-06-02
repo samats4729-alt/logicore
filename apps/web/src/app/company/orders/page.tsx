@@ -1042,29 +1042,27 @@ export default function CompanyOrdersPage() {
                                 <TextArea rows={2} placeholder="Мебель, 20 коробок..." />
                             </Form.Item>
                             <Row gutter={12}>
-                                <Col span={8}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
-                                <Col span={8}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
-                                <Col span={8}>
+                                <Col span={6}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
+                                <Col span={6}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item></Col>
+                                <Col span={6}>
                                     <Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
                                     {appliedTariff && <div style={{ marginTop: -12, marginBottom: 8, padding: '3px 6px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}</div>}
                                 </Col>
-                            </Row>
-                            <Row gutter={12}>
-                                <Col span={24}>
-                                    <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
-                                        <Select placeholder="Выберите заказчика (по умолчанию — ваша компания)" allowClear showSearch optionFilterProp="children">
-                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                <Col span={6}>
+                                    <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
+                                        <Select>
+                                            <Select.Option value="FIXED">За рейс</Select.Option>
+                                            <Select.Option value="PER_KM">За км</Select.Option>
+                                            <Select.Option value="PER_TON">За тонну</Select.Option>
                                         </Select>
                                     </Form.Item>
                                 </Col>
                             </Row>
                             <Row gutter={12}>
                                 <Col span={12}>
-                                    <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
-                                        <Select>
-                                            <Select.Option value="FIXED">За рейс</Select.Option>
-                                            <Select.Option value="PER_KM">За км</Select.Option>
-                                            <Select.Option value="PER_TON">За тонну</Select.Option>
+                                    <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
+                                        <Select placeholder="По умолчанию — ваша компания" allowClear showSearch optionFilterProp="children">
+                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                                         </Select>
                                     </Form.Item>
                                 </Col>
@@ -1314,26 +1312,24 @@ export default function CompanyOrdersPage() {
                                 <Input.TextArea rows={2} />
                             </Form.Item>
                             <Row gutter={12}>
-                                <Col span={8}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={8}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={8}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                            </Row>
-                            <Row gutter={12}>
-                                <Col span={24}>
-                                    <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
-                                        <Select placeholder="Выберите заказчика (по умолчанию — ваша компания)" allowClear showSearch optionFilterProp="children">
-                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                <Col span={6}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={6}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={6}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                <Col span={6}>
+                                    <Form.Item name="customerPriceType" label="Тип оплаты">
+                                        <Select>
+                                            <Select.Option value="FIXED">За рейс (всего)</Select.Option>
+                                            <Select.Option value="PER_KM">За км</Select.Option>
+                                            <Select.Option value="PER_TON">За тонну</Select.Option>
                                         </Select>
                                     </Form.Item>
                                 </Col>
                             </Row>
                             <Row gutter={12}>
                                 <Col span={12}>
-                                    <Form.Item name="customerPriceType" label="Тип оплаты">
-                                        <Select>
-                                            <Select.Option value="FIXED">За рейс (всего)</Select.Option>
-                                            <Select.Option value="PER_KM">За км</Select.Option>
-                                            <Select.Option value="PER_TON">За тонну</Select.Option>
+                                    <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
+                                        <Select placeholder="По умолчанию — ваша компания" allowClear showSearch optionFilterProp="children">
+                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                                         </Select>
                                     </Form.Item>
                                 </Col>
