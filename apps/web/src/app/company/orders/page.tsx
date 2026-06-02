@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Table, Button, Tag, Space, Modal, Form, Input, message, Typography,
@@ -111,6 +111,16 @@ interface Order {
 export default function CompanyOrdersPage() {
     const { user } = useAuthStore();
     const router = useRouter();
+    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastClickedOrderIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (clickTimeoutRef.current) {
+                clearTimeout(clickTimeoutRef.current);
+            }
+        };
+    }, []);
     const [activeTab, setActiveTab] = useState('incoming');
     const [incomingPage, setIncomingPage] = useState(1);
     const [incomingPageSize, setIncomingPageSize] = useState(20);
@@ -852,11 +862,23 @@ export default function CompanyOrdersPage() {
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
                                         onClick: () => {
-                                            setSelectedOrder(record);
-                                            setDetailDrawerOpen(true);
-                                        },
-                                        onDoubleClick: () => {
-                                            router.push(`/company/orders/${record.id}`);
+                                            if (clickTimeoutRef.current && lastClickedOrderIdRef.current === record.id) {
+                                                clearTimeout(clickTimeoutRef.current);
+                                                clickTimeoutRef.current = null;
+                                                lastClickedOrderIdRef.current = null;
+                                                router.push(`/company/orders/${record.id}`);
+                                            } else {
+                                                if (clickTimeoutRef.current) {
+                                                    clearTimeout(clickTimeoutRef.current);
+                                                }
+                                                lastClickedOrderIdRef.current = record.id;
+                                                clickTimeoutRef.current = setTimeout(() => {
+                                                    setSelectedOrder(record);
+                                                    setDetailDrawerOpen(true);
+                                                    clickTimeoutRef.current = null;
+                                                    lastClickedOrderIdRef.current = null;
+                                                }, 250);
+                                            }
                                         }
                                     })}
                                     rowClassName={(record) => {
@@ -954,11 +976,23 @@ export default function CompanyOrdersPage() {
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
                                         onClick: () => {
-                                            setSelectedOrder(record);
-                                            setDetailDrawerOpen(true);
-                                        },
-                                        onDoubleClick: () => {
-                                            router.push(`/company/orders/${record.id}`);
+                                            if (clickTimeoutRef.current && lastClickedOrderIdRef.current === record.id) {
+                                                clearTimeout(clickTimeoutRef.current);
+                                                clickTimeoutRef.current = null;
+                                                lastClickedOrderIdRef.current = null;
+                                                router.push(`/company/orders/${record.id}`);
+                                            } else {
+                                                if (clickTimeoutRef.current) {
+                                                    clearTimeout(clickTimeoutRef.current);
+                                                }
+                                                lastClickedOrderIdRef.current = record.id;
+                                                clickTimeoutRef.current = setTimeout(() => {
+                                                    setSelectedOrder(record);
+                                                    setDetailDrawerOpen(true);
+                                                    clickTimeoutRef.current = null;
+                                                    lastClickedOrderIdRef.current = null;
+                                                }, 250);
+                                            }
                                         }
                                     })}
                                     rowClassName={(record) => {
