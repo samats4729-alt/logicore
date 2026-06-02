@@ -142,7 +142,7 @@ export default function CompanyContractsPage() {
             const partnersList = partnersRes.data;
             const externalList = externalRes.data.map((e: any) => ({
                 id: e.id,
-                name: `${e.name} (внешняя)`,
+                name: `${e.name} (офлайн)`,
                 isExternal: true,
             }));
             setPartners([...partnersList, ...externalList]);

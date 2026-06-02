@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, message, List } from 'antd';
+import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, message, List, Modal, Form, Select, Popconfirm } from 'antd';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
-    CheckCircleOutlined, CloseCircleOutlined, ShopOutlined, GlobalOutlined
+    CheckCircleOutlined, CloseCircleOutlined, ShopOutlined,
+    PlusOutlined, EditOutlined, DeleteOutlined
 } from '@ant-design/icons';
-import ExternalCompaniesSection from '@/components/ExternalCompaniesSection';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
@@ -17,7 +17,7 @@ export default function PartnersPage() {
     const [activeTab, setActiveTab] = useState('my-partners');
 
     // Data States
-    const [partners, setPartners] = useState<any[]>([]);
+    const [counterparties, setCounterparties] = useState<any[]>([]);
     const [requests, setRequests] = useState<any[]>([]);
     const [sentRequests, setSentRequests] = useState<any[]>([]);
 
@@ -27,12 +27,17 @@ export default function PartnersPage() {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
 
+    // Modal & Form States
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingCompany, setEditingCompany] = useState<any | null>(null);
+    const [form] = Form.useForm();
+
     // Loading States
     const [loading, setLoading] = useState(false);
     const [searchLoading, setSearchLoading] = useState(false);
 
     useEffect(() => {
-        fetchPartners();
+        fetchCounterparties();
         fetchRequests();
     }, []);
 
@@ -43,13 +48,28 @@ export default function PartnersPage() {
         }
     }, [activeTab]);
 
-    const fetchPartners = async () => {
+    const fetchCounterparties = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/partners');
-            setPartners(res.data);
+            const [partnersRes, externalRes] = await Promise.all([
+                api.get('/partners'),
+                api.get('/external-companies')
+            ]);
+            
+            const systemPartners = partnersRes.data.map((p: any) => ({
+                ...p,
+                isExternal: false
+            }));
+            
+            const externalCompanies = externalRes.data.map((e: any) => ({
+                ...e,
+                isExternal: true
+            }));
+            
+            setCounterparties([...systemPartners, ...externalCompanies]);
         } catch (error) {
-            console.error('Failed to fetch partners');
+            console.error('Failed to fetch counterparties:', error);
+            message.error('Ошибка загрузки контрагентов');
         } finally {
             setLoading(false);
         }
@@ -108,7 +128,6 @@ export default function PartnersPage() {
         try {
             await api.post('/partners/invite', { recipientId: companyId });
             message.success('Приглашение отправлено');
-            // Update local state to show pending status immediately
             setSearchResults(prev => prev.map(c =>
                 c.id === companyId ? { ...c, partnershipStatus: 'PENDING' } : c
             ));
@@ -123,7 +142,7 @@ export default function PartnersPage() {
             await api.put(`/partners/${id}/accept`);
             message.success('Приглашение принято');
             fetchRequests();
-            fetchPartners();
+            fetchCounterparties();
         } catch (error) {
             message.error('Ошибка');
         }
@@ -139,6 +158,46 @@ export default function PartnersPage() {
         }
     };
 
+    const handleSave = async (values: any) => {
+        try {
+            if (editingCompany) {
+                await api.patch(`/external-companies/${editingCompany.id}`, values);
+                message.success('Контрагент обновлен');
+            } else {
+                await api.post('/external-companies', values);
+                message.success('Контрагент добавлен');
+            }
+            setModalOpen(false);
+            form.resetFields();
+            setEditingCompany(null);
+            fetchCounterparties();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка сохранения');
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        try {
+            await api.delete(`/external-companies/${id}`);
+            message.success('Контрагент удален');
+            fetchCounterparties();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка удаления');
+        }
+    };
+
+    const openEdit = (company: any) => {
+        setEditingCompany(company);
+        form.setFieldsValue(company);
+        setModalOpen(true);
+    };
+
+    const openCreate = () => {
+        setEditingCompany(null);
+        form.resetFields();
+        setModalOpen(true);
+    };
+
     const columns = [
         {
             title: 'Компания',
@@ -146,13 +205,19 @@ export default function PartnersPage() {
             key: 'name',
             render: (text: string, record: any) => (
                 <Space>
-                    <Avatar icon={<ShopOutlined />} style={{ backgroundColor: '#1890ff' }} />
+                    <Avatar icon={<ShopOutlined />} style={{ backgroundColor: record.isExternal ? '#8c8c8c' : '#1890ff' }} />
                     <Space direction="vertical" size={0}>
                         <Text strong>{text}</Text>
                         <Text type="secondary" style={{ fontSize: 12 }}>{record.type === 'FORWARDER' ? 'Экспедитор' : 'Заказчик'}</Text>
                     </Space>
                 </Space>
             )
+        },
+        {
+            title: 'БИН/ИИН',
+            dataIndex: 'bin',
+            key: 'bin',
+            render: (text: string) => text || '—'
         },
         {
             title: 'Телефон',
@@ -169,7 +234,36 @@ export default function PartnersPage() {
         {
             title: 'Статус',
             key: 'status',
-            render: () => <Tag color="green">Партнер</Tag>
+            render: (_: any, record: any) => (
+                record.isExternal ? (
+                    <Tag color="default">Офлайн</Tag>
+                ) : (
+                    <Tag color="green">В системе</Tag>
+                )
+            )
+        },
+        {
+            title: 'Действия',
+            key: 'actions',
+            render: (_: any, record: any) => (
+                record.isExternal ? (
+                    <Space>
+                        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                            Изменить
+                        </Button>
+                        <Popconfirm 
+                            title="Удалить контрагента?" 
+                            onConfirm={() => handleDelete(record.id)}
+                            okText="Да"
+                            cancelText="Нет"
+                        >
+                            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                                Удалить
+                            </Button>
+                        </Popconfirm>
+                    </Space>
+                ) : null
+            )
         }
     ];
 
@@ -203,16 +297,21 @@ export default function PartnersPage() {
             )}
 
             <Card style={{ minHeight: 400 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <Title level={4}>Список партнеров</Title>
-                    <Button onClick={fetchPartners}>Обновить</Button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+                    <Title level={4} style={{ margin: 0 }}>Список контрагентов</Title>
+                    <Space>
+                        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                            Добавить контрагента
+                        </Button>
+                        <Button onClick={fetchCounterparties}>Обновить</Button>
+                    </Space>
                 </div>
                 <Table
                     columns={columns}
-                    dataSource={partners}
+                    dataSource={counterparties}
                     rowKey="id"
                     loading={loading}
-                    locale={{ emptyText: 'У вас пока нет партнеров' }}
+                    locale={{ emptyText: 'У вас пока нет контрагентов' }}
                 />
             </Card>
         </Space>
@@ -221,8 +320,8 @@ export default function PartnersPage() {
     const searchContent = (
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
             <div style={{ marginBottom: 32, textAlign: 'center' }}>
-                <Title level={3}>Поиск партнеров</Title>
-                <Text type="secondary">Находите заказчиков и экспедиторов для сотрудничества</Text>
+                <Title level={3}>Поиск компаний</Title>
+                <Text type="secondary">Находите зарегистрированные компании для сотрудничества на платформе</Text>
                 <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
                     <Input
                         size="large"
@@ -265,7 +364,7 @@ export default function PartnersPage() {
                                 </Space>
 
                                 {company.partnershipStatus === 'ACCEPTED' ? (
-                                    <Tag color="green" icon={<CheckCircleOutlined />}>Ваш партнер</Tag>
+                                    <Tag color="green" icon={<CheckCircleOutlined />}>Ваш контрагент</Tag>
                                 ) : company.partnershipStatus === 'PENDING' ? (
                                     <Tag color="orange">Запрос отправлен</Tag>
                                 ) : (
@@ -294,7 +393,7 @@ export default function PartnersPage() {
 
     return (
         <div>
-            <Title level={2} style={{ marginBottom: 24 }}>Партнеры</Title>
+            <Title level={2} style={{ marginBottom: 24 }}>Контрагенты</Title>
 
             <Tabs
                 activeKey={activeTab}
@@ -306,7 +405,7 @@ export default function PartnersPage() {
                         label: (
                             <Space>
                                 <TeamOutlined />
-                                Мои партнеры
+                                Мои контрагенты
                                 {requests.length > 0 && <Badge count={requests.length} size="small" />}
                             </Space>
                         ),
@@ -321,19 +420,47 @@ export default function PartnersPage() {
                             </Space>
                         ),
                         children: searchContent
-                    },
-                    {
-                        key: 'external',
-                        label: (
-                            <Space>
-                                <GlobalOutlined />
-                                Внешние компании
-                            </Space>
-                        ),
-                        children: <ExternalCompaniesSection />
                     }
                 ]}
             />
+
+            <Modal
+                title={editingCompany ? 'Редактировать контрагента' : 'Новый контрагент'}
+                open={modalOpen}
+                onCancel={() => { setModalOpen(false); setEditingCompany(null); form.resetFields(); }}
+                onOk={() => form.submit()}
+                okText="Сохранить"
+                cancelText="Отмена"
+            >
+                <Form form={form} layout="vertical" onFinish={handleSave}>
+                    <Form.Item name="name" label="Название компании" rules={[{ required: true, message: 'Введите название' }]}>
+                        <Input placeholder="ТОО Пример" />
+                    </Form.Item>
+                    {!editingCompany && (
+                        <Form.Item name="type" label="Тип" rules={[{ required: true, message: 'Выберите тип' }]}>
+                            <Select placeholder="Выберите тип">
+                                <Select.Option value="CUSTOMER">Заказчик</Select.Option>
+                                <Select.Option value="FORWARDER">Экспедитор</Select.Option>
+                            </Select>
+                        </Form.Item>
+                    )}
+                    <Form.Item name="bin" label="БИН/ИИН">
+                        <Input placeholder="123456789012" />
+                    </Form.Item>
+                    <Form.Item name="phone" label="Телефон">
+                        <Input placeholder="+77001234567" />
+                    </Form.Item>
+                    <Form.Item name="email" label="Email">
+                        <Input placeholder="company@example.com" />
+                    </Form.Item>
+                    <Form.Item name="address" label="Адрес">
+                        <Input placeholder="г. Алматы, ул. Абая 1" />
+                    </Form.Item>
+                    <Form.Item name="directorName" label="ФИО директора">
+                        <Input placeholder="Иванов Иван Иванович" />
+                    </Form.Item>
+                </Form>
+            </Modal>
         </div>
     );
 }

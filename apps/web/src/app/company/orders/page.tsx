@@ -192,7 +192,7 @@ export default function CompanyOrdersPage() {
             const partnersList = partnersRes.data;
             const externalList = externalRes.data.map((e: any) => ({
                 id: e.id,
-                name: `${e.name} (внешняя)`,
+                name: `${e.name} (офлайн)`,
             }));
             setPartners([...partnersList, ...externalList]);
         } catch { } finally {
@@ -216,7 +216,7 @@ export default function CompanyOrdersPage() {
             const partnerForwarders = partnersRes.data.filter((p: any) => p.type === 'FORWARDER');
             const externalForwarders = externalRes.data
                 .filter((e: any) => e.type === 'FORWARDER')
-                .map((e: any) => ({ id: e.id, name: `${e.name} (внешняя)` }));
+                .map((e: any) => ({ id: e.id, name: `${e.name} (офлайн)` }));
             setForwarders([...partnerForwarders, ...externalForwarders]);
         } catch { }
     };

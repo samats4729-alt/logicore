@@ -10,7 +10,7 @@ const MODULE_PERMISSIONS = [
     { label: 'Заявки', value: 'orders' },
     { label: 'Документы', value: 'documents' },
     { label: 'Бухгалтерия', value: 'accounting' },
-    { label: 'Партнеры', value: 'partners' },
+    { label: 'Контрагенты', value: 'partners' },
     { label: 'Карта / Трекинг', value: 'tracking' },
     { label: 'Водители', value: 'drivers' },
 ];

@@ -112,7 +112,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             items.push({
                 key: '/company/partners',
                 icon: <TeamOutlined />,
-                label: 'Партнеры',
+                label: 'Контрагенты',
             });
             // Договоры обычно идут с партнерами или заявками
             items.push({
