@@ -640,6 +640,14 @@ export default function CompanyOrdersPage() {
             await api.post('/orders', { ...ov, routePoints, customerId: user?.id, appliedTariffId: appliedTariff?.id || undefined });
             message.success('Заявка создана');
             mutateAll();
+            
+            // Автоматически переключаемся на нужную вкладку, чтобы пользователь сразу увидел созданную заявку
+            if (ov.customerCompanyId && ov.customerCompanyId !== user?.companyId) {
+                setActiveTab('incoming');
+            } else {
+                setActiveTab('outgoing');
+            }
+
             setCreateModalOpen(false); createForm.resetFields();
         } catch (error: any) { message.error(error.response?.data?.message || 'Ошибка создания'); }
     };
