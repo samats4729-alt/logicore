@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
     Table, Button, Tag, Space, Modal, Form, Input, message, Typography,
     Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col,
-    DatePicker, Checkbox, Slider, Alert
+    DatePicker, Checkbox, Slider, Alert, Popconfirm
 } from 'antd';
 import dayjs from 'dayjs';
 import {
@@ -862,6 +862,7 @@ export default function CompanyOrdersPage() {
                                     rowClassName={(record) => {
                                         if (record.status === 'COMPLETED') return 'row-completed';
                                         if (record.status === 'PROBLEM') return 'row-problem';
+                                        if (record.status === 'CANCELLED') return 'row-cancelled';
                                         return '';
                                     }}
                                 />
@@ -963,6 +964,7 @@ export default function CompanyOrdersPage() {
                                     rowClassName={(record) => {
                                         if (record.status === 'COMPLETED') return 'row-completed';
                                         if (record.status === 'PROBLEM') return 'row-problem';
+                                        if (record.status === 'CANCELLED') return 'row-cancelled';
                                         return '';
                                     }}
                                 />
@@ -998,6 +1000,20 @@ export default function CompanyOrdersPage() {
                 }
                 .ant-table-small .ant-table-tbody > tr.row-problem > td {
                     background: #fff2f0 !important;
+                }
+                .ant-table-small .ant-table-tbody > tr.row-cancelled > td {
+                    background: #fafafa !important;
+                    color: #bbbbbb !important;
+                }
+                .ant-table-small .ant-table-tbody > tr.row-cancelled > td span,
+                .ant-table-small .ant-table-tbody > tr.row-cancelled > td div,
+                .ant-table-small .ant-table-tbody > tr.row-cancelled > td a {
+                    color: #bbbbbb !important;
+                }
+                .ant-table-small .ant-table-tbody > tr.row-cancelled > td .ant-tag {
+                    background: #f5f5f5 !important;
+                    color: #bbbbbb !important;
+                    border-color: #d9d9d9 !important;
                 }
                 .ant-table-small .ant-pagination {
                     margin: 8px 0 !important;
@@ -1270,6 +1286,36 @@ export default function CompanyOrdersPage() {
                                 <Button type="primary" style={{ marginTop: 8 }} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }} block>
                                     Изменить статус
                                 </Button>
+                            )}
+                            {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
+                                <Popconfirm
+                                    title="Отменить заявку?"
+                                    description="Вы уверены, что хотите отменить эту заявку? Она станет серой."
+                                    onConfirm={async () => {
+                                        try {
+                                            await api.put(`/orders/${selectedOrder.id}/status`, { status: 'CANCELLED', comment: 'Отменено пользователем' });
+                                            message.success('Заявка отменена');
+                                            mutateAll();
+                                            setDetailDrawerOpen(false);
+                                        } catch (error: any) {
+                                            try {
+                                                await api.put(`/company/orders/${selectedOrder.id}/status`, { status: 'CANCELLED', comment: 'Отменено пользователем' });
+                                                message.success('Заявка отменена');
+                                                mutateAll();
+                                                setDetailDrawerOpen(false);
+                                            } catch (err: any) {
+                                                message.error(err.response?.data?.message || 'Ошибка отмены');
+                                            }
+                                        }
+                                    }}
+                                    okText="Да, отменить"
+                                    cancelText="Нет"
+                                    okButtonProps={{ danger: true }}
+                                >
+                                    <Button danger style={{ marginTop: 8 }} block>
+                                        Отменить заявку
+                                    </Button>
+                                </Popconfirm>
                             )}
                         </div>
                     </div>
