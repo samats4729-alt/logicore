@@ -409,6 +409,19 @@ export default function CompanyOrdersPage() {
         } finally { setAssignLoading(false); }
     };
 
+    const getNextStatuses = (s: string) => {
+        const t: Record<string, { value: string; label: string }[]> = {
+            ASSIGNED: [{ value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' }, { value: 'AT_PICKUP', label: 'На погрузке' }],
+            EN_ROUTE_PICKUP: [{ value: 'AT_PICKUP', label: 'На погрузке' }],
+            AT_PICKUP: [{ value: 'LOADING', label: 'Загружается' }],
+            LOADING: [{ value: 'IN_TRANSIT', label: 'В пути' }],
+            IN_TRANSIT: [{ value: 'AT_DELIVERY', label: 'На выгрузке' }],
+            AT_DELIVERY: [{ value: 'UNLOADING', label: 'Разгружается' }],
+            UNLOADING: [{ value: 'COMPLETED', label: 'Завершён' }],
+        };
+        return t[s] || [];
+    };
+
     const handleStatusChange = async (values: { status: string; comment?: string }) => {
         if (!selectedOrder) return;
         setStatusLoading(true);
@@ -529,6 +542,36 @@ export default function CompanyOrdersPage() {
                 </Space>
             ),
         },
+    ];
+
+    const outgoingColumns = [
+        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
+        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
+        { title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', ellipsis: true, width: 140, render: (t: string) => <span style={{ fontSize: 12 }}>{t}</span> },
+        {
+            title: 'Откуда', key: 'from', width: 110,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'pickup') || '—'}</span>,
+        },
+        {
+            title: 'Куда', key: 'to', width: 110,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'delivery') || '—'}</span>,
+        },
+        { title: 'Статус', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag> },
+        {
+            title: 'Ответств.', key: 'manager', width: 110, ellipsis: true,
+            render: (_: any, r: Order) => r.responsibleManager 
+                ? <span style={{ fontSize: 12 }}>{r.responsibleManager.firstName} {r.responsibleManager.lastName}</span> 
+                : <span style={{ fontSize: 12, color: '#999' }}>—</span>,
+        },
+        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || '—'}</span> },
+        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || '—'}</span> },
+        { title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const, render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : '—' },
+        { title: '', key: 'actions', width: 80, render: (_: any, r: Order) => (
+            <Space size={4}>
+                <Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} />
+                <Tooltip title="Редактировать"><Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} /></Tooltip>
+            </Space>
+        ) },
     ];
 
     // =================== RENDER ===================
