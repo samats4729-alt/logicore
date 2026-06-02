@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagg
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { CompanyService } from './company.service';
+import { OrdersService } from '../orders/orders.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
@@ -16,7 +17,7 @@ import * as fs from 'fs';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class CompanyController {
-    constructor(private companyService: CompanyService) { }
+    constructor(private companyService: CompanyService, private ordersService: OrdersService) { }
 
     // ==================== Уведомления ====================
 
@@ -184,4 +185,60 @@ export class CompanyController {
     async getForwarders() {
         return this.companyService.getForwarders();
     }
+
+    // ==================== Действия с заявками (экспедирование/субподряд) ====================
+
+    @Put('orders/:id/status')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Обновить статус заявки' })
+    async updateOrderStatus(
+        @Param('id') id: string,
+        @Body() dto: { status: string; comment?: string },
+        @Request() req: any
+    ) {
+        return this.ordersService.updateStatus(id, dto.status as any, dto.comment, req.user.sub);
+    }
+
+    @Put('orders/:id/accept')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Принять заявку в работу' })
+    async acceptOrder(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.acceptOrder(id, req.user.companyId);
+    }
+
+    @Put('orders/:id/reject')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Отклонить заявку' })
+    async rejectOrder(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.rejectOrder(id, req.user.companyId);
+    }
+
+    @Put('orders/:id/take')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Взять заявку в работу с биржи' })
+    async takeOrder(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.takeOrder(id, req.user.companyId);
+    }
+
+    @Put('orders/:id/assign-driver')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Назначить водителя на заявку' })
+    async assignDriver(
+        @Param('id') id: string,
+        @Body() dto: { driverId: string; partnerId?: string },
+    ) {
+        return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId);
+    }
+
+    @Put('orders/:id/assign-forwarder')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Назначить партнера экспедитором' })
+    async assignForwarder(
+        @Param('id') id: string,
+        @Body() dto: { partnerId: string; price: number },
+        @Request() req: any
+    ) {
+        return this.ordersService.assignForwarder(id, req.user.companyId, dto.partnerId, dto.price);
+    }
+
 }

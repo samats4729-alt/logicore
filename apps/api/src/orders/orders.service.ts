@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, OrderStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
@@ -80,6 +80,7 @@ export class OrdersService {
                 driverId: data.driverId,
                 forwarderId: data.forwarderId, // Связь с экспедитором
                 status,
+                isConfirmed: (data.driverId || isForwarderExternal || !data.forwarderId || data.forwarderId === (data.customerCompanyId || customer?.companyId)) ? true : false,
                 // New fields
                 customerPaymentCondition: data.customerPaymentCondition,
                 customerPaymentForm: data.customerPaymentForm,
@@ -215,6 +216,7 @@ export class OrdersService {
                 driverId,
                 partnerId,
                 status: OrderStatus.ASSIGNED,
+                isConfirmed: true,
                 statusHistory: {
                     create: {
                         status: OrderStatus.ASSIGNED,
@@ -397,4 +399,98 @@ export class OrdersService {
         });
         return orders;
     }
+
+    /**
+     * Принять заявку в работу
+     */
+    async acceptOrder(orderId: string, companyId: string) {
+        const order = await this.findById(orderId);
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                isConfirmed: true,
+                statusHistory: {
+                    create: {
+                        status: order.status,
+                        comment: 'Заявка принята экспедитором',
+                    },
+                },
+            },
+        });
+    }
+
+    /**
+     * Отклонить заявку от заказчика
+     */
+    async rejectOrder(orderId: string, companyId: string) {
+        const order = await this.findById(orderId);
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                forwarderId: null,
+                subForwarderId: null,
+                isConfirmed: false,
+                status: OrderStatus.DRAFT,
+                statusHistory: {
+                    create: {
+                        status: OrderStatus.DRAFT,
+                        comment: 'Заявка отклонена экспедитором',
+                    },
+                },
+            },
+        });
+    }
+
+    /**
+     * Переназначить заявку на партнера-экспедитора
+     */
+    async assignForwarder(orderId: string, companyId: string, partnerId: string, price: number) {
+        const order = await this.findById(orderId);
+        const partnerCompany = await this.prisma.company.findUnique({
+            where: { id: partnerId }
+        });
+        if (!partnerCompany) throw new NotFoundException('Компания не найдена');
+
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                subForwarderId: partnerId,
+                subForwarderPrice: price,
+                isConfirmed: false,
+                status: OrderStatus.PENDING,
+                statusHistory: {
+                    create: {
+                        status: OrderStatus.PENDING,
+                        comment: `Заявка переназначена на партнера ${partnerCompany.name}`,
+                    },
+                },
+            },
+        });
+    }
+
+
+    /**
+     * Взять заявку в работу с биржи
+     */
+    async takeOrder(orderId: string, companyId: string) {
+        const order = await this.findById(orderId);
+        if (order.forwarderId) throw new ForbiddenException('Заявка уже занята другим экспедитором');
+        if (order.status !== OrderStatus.PENDING) throw new ForbiddenException('Заявка не доступна для взятия');
+
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                forwarderId: companyId,
+                status: OrderStatus.PENDING,
+                isConfirmed: true, // Подтверждается автоматически при взятии
+                statusHistory: {
+                    create: {
+                        status: OrderStatus.PENDING,
+                        comment: 'Заявка взята экспедитором с биржи',
+                    },
+                },
+            },
+        });
+    }
+
 }
