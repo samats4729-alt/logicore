@@ -182,37 +182,31 @@ export default function CompanyOrdersPage() {
     const [profileComplete, setProfileComplete] = useState(true);
     const [showCustomerField, setShowCustomerField] = useState(false);
     const [showForwarderField, setShowForwarderField] = useState(false);
-    const [creatorRole, setCreatorRole] = useState<'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR'>('CUSTOMER');
-    const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR'>('CUSTOMER');
+    const [creatorRole, setCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
+    const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
 
-    const handleCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR') => {
+    const handleCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
         setCreatorRole(role);
+        setIsMarketplace(false);
         if (role === 'CUSTOMER') {
             setShowCustomerField(false);
             setShowForwarderField(false);
             createForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
         } else if (role === 'FORWARDER') {
-            setShowCustomerField(true);
-            setShowForwarderField(true);
-            createForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
-        } else if (role === 'SUBCONTRACTOR') {
             setShowCustomerField(true);
             setShowForwarderField(false);
             createForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
         }
     };
 
-    const handleEditCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR') => {
+    const handleEditCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
         setEditCreatorRole(role);
+        setIsMarketplace(false);
         if (role === 'CUSTOMER') {
             setShowCustomerField(false);
             setShowForwarderField(false);
             editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
         } else if (role === 'FORWARDER') {
-            setShowCustomerField(true);
-            setShowForwarderField(true);
-            editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
-        } else if (role === 'SUBCONTRACTOR') {
             setShowCustomerField(true);
             setShowForwarderField(false);
             editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
@@ -495,20 +489,21 @@ export default function CompanyOrdersPage() {
     const openEditModal = (order: Order) => {
         setSelectedOrder(order);
         const hasExternalCustomer = !!(order.customerCompanyId && order.customerCompanyId !== user?.companyId);
-        const hasExternalForwarder = !!(order.forwarderId && order.forwarderId !== user?.companyId) || !!order.driverCost;
         
-        let currentRole: 'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR' = 'CUSTOMER';
-        if (hasExternalCustomer && hasExternalForwarder) {
+        let currentRole: 'CUSTOMER' | 'FORWARDER' = 'CUSTOMER';
+        if (hasExternalCustomer) {
             currentRole = 'FORWARDER';
-        } else if (hasExternalCustomer && !hasExternalForwarder) {
-            currentRole = 'SUBCONTRACTOR';
         } else {
             currentRole = 'CUSTOMER';
         }
         setEditCreatorRole(currentRole);
 
+        const isFwdAssigned = !!(order.forwarderId && order.forwarderId !== user?.companyId);
+        const isMkt = !order.forwarderId && (!!order.driverCost || order.status === 'PENDING');
+
         setShowCustomerField(hasExternalCustomer);
-        setShowForwarderField(hasExternalForwarder);
+        setShowForwarderField(isFwdAssigned);
+        setIsMarketplace(isMkt);
         editForm.setFieldsValue({
             cargoDescription: order.cargoDescription,
             cargoWeight: order.cargoWeight,
@@ -566,12 +561,24 @@ export default function CompanyOrdersPage() {
             }
             
             delete updateData.pickupDate;
+            delete updateData.isMarketplace;
             if (routePoints.length > 0) {
                 updateData.routePoints = routePoints;
             }
 
-            if (updateData.customerCompanyId && updateData.customerCompanyId !== user?.companyId && !updateData.forwarderId) {
-                updateData.forwarderId = user?.companyId;
+            if (editCreatorRole === 'CUSTOMER') {
+                updateData.customerCompanyId = user?.companyId;
+                if (!showForwarderField) {
+                    updateData.forwarderId = null;
+                    if (!isMarketplace) {
+                        updateData.driverCost = null;
+                    }
+                }
+            } else { // FORWARDER
+                if (!showForwarderField) {
+                    updateData.forwarderId = user?.companyId;
+                    updateData.driverCost = null;
+                }
             }
 
             await api.put(`/orders/${selectedOrder.id}`, updateData);
@@ -710,10 +717,25 @@ export default function CompanyOrdersPage() {
                 return;
             }
 
-            const { isMarketplace: _, pickupDate: __, ...ov } = values;
-            if (ov.customerCompanyId && ov.customerCompanyId !== user?.companyId && !ov.forwarderId) {
-                ov.forwarderId = user?.companyId;
+            const ov = { ...values };
+            delete ov.pickupDate;
+            delete ov.isMarketplace;
+
+            if (creatorRole === 'CUSTOMER') {
+                ov.customerCompanyId = user?.companyId;
+                if (!showForwarderField) {
+                    ov.forwarderId = null;
+                    if (!isMarketplace) {
+                        ov.driverCost = null;
+                    }
+                }
+            } else { // FORWARDER
+                if (!showForwarderField) {
+                    ov.forwarderId = user?.companyId;
+                    ov.driverCost = null;
+                }
             }
+
             await api.post('/orders', { ...ov, routePoints, customerId: user?.id, appliedTariffId: appliedTariff?.id || undefined });
             message.success('Заявка создана');
             mutateAll();
@@ -1133,7 +1155,6 @@ export default function CompanyOrdersPage() {
                         >
                             <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Заказчик</Radio.Button>
                             <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Экспедитор</Radio.Button>
-                            <Radio.Button value="SUBCONTRACTOR" style={{ flex: 1, textAlign: 'center' }}>Субподрядчик</Radio.Button>
                         </Radio.Group>
                     </div>
                     <Row gutter={24}>
@@ -1230,15 +1251,56 @@ export default function CompanyOrdersPage() {
 
                             {creatorRole === 'CUSTOMER' && (
                                 <Row style={{ marginBottom: 12 }}>
+                                    <Col span={12}>
+                                        <Checkbox 
+                                            checked={isMarketplace} 
+                                            onChange={e => {
+                                                const val = e.target.checked;
+                                                setIsMarketplace(val);
+                                                if (val) {
+                                                    setShowForwarderField(false);
+                                                    createForm.setFieldsValue({ forwarderId: null });
+                                                } else {
+                                                    createForm.setFieldsValue({ driverCost: null });
+                                                }
+                                            }}
+                                        >
+                                            Отправить на биржу
+                                        </Checkbox>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Checkbox 
+                                            checked={showForwarderField} 
+                                            onChange={e => {
+                                                const val = e.target.checked;
+                                                setShowForwarderField(val);
+                                                if (val) {
+                                                    setIsMarketplace(false);
+                                                } else {
+                                                    createForm.setFieldsValue({ forwarderId: null, driverCost: null });
+                                                }
+                                            }}
+                                        >
+                                            Назначить контрагента
+                                        </Checkbox>
+                                    </Col>
+                                </Row>
+                            )}
+
+                            {creatorRole === 'FORWARDER' && (
+                                <Row style={{ marginBottom: 12 }}>
                                     <Col span={24}>
-                                        <Checkbox checked={showForwarderField} onChange={e => {
-                                            setShowForwarderField(e.target.checked);
-                                            if (!e.target.checked) {
-                                                createForm.setFieldsValue({ forwarderId: null, driverCost: null, isMarketplace: false });
-                                                setIsMarketplace(false);
-                                            }
-                                        }}>
-                                            Добавить стороннего экспедитора
+                                        <Checkbox 
+                                            checked={showForwarderField} 
+                                            onChange={e => {
+                                                const val = e.target.checked;
+                                                setShowForwarderField(val);
+                                                if (!val) {
+                                                    createForm.setFieldsValue({ forwarderId: null, driverCost: null });
+                                                }
+                                            }}
+                                        >
+                                            Назначить исполнителя (субподряд)
                                         </Checkbox>
                                     </Col>
                                 </Row>
@@ -1250,6 +1312,7 @@ export default function CompanyOrdersPage() {
                                         <Form.Item 
                                             name="customerCompanyId" 
                                             label="Заказчик" 
+                                            rules={[{ required: creatorRole === 'FORWARDER', message: 'Укажите компанию заказчика' }]}
                                             style={{ marginBottom: 12 }}
                                             help={
                                                 <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
@@ -1265,30 +1328,28 @@ export default function CompanyOrdersPage() {
                                 </Row>
                             )}
 
-                            {showForwarderField && (
+                            {(showForwarderField || isMarketplace) && (
                                 <Row gutter={12} style={{ marginBottom: 12 }}>
-                                    <Col span={12}>
-                                        <Form.Item 
-                                            name="forwarderId" 
-                                            label="Экспедитор" 
-                                            style={{ marginBottom: 8 }}
-                                            help={
-                                                <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
-                                                    + Создать нового контрагента
-                                                </Button>
-                                            }
-                                        >
-                                            <Select placeholder="Выберите компанию исполнителя" allowClear showSearch optionFilterProp="children" disabled={isMarketplace}>
-                                                {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
-                                            </Select>
-                                        </Form.Item>
-                                        <Form.Item name="isMarketplace" valuePropName="checked" noStyle>
-                                            <Checkbox checked={isMarketplace} onChange={e => { setIsMarketplace(e.target.checked); if (e.target.checked) createForm.setFieldsValue({ forwarderId: null }); }}>
-                                                На биржу (всем)
-                                            </Checkbox>
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
+                                    {!isMarketplace && (
+                                        <Col span={12}>
+                                            <Form.Item 
+                                                name="forwarderId" 
+                                                label="Исполнитель" 
+                                                rules={[{ required: true, message: 'Выберите исполнителя' }]}
+                                                style={{ marginBottom: 8 }}
+                                                help={
+                                                    <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
+                                                        + Создать нового контрагента
+                                                    </Button>
+                                                }
+                                            >
+                                                <Select placeholder="Выберите компанию исполнителя" allowClear showSearch optionFilterProp="children">
+                                                    {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                    )}
+                                    <Col span={isMarketplace ? 24 : 12}>
                                         <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
                                             <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                                         </Form.Item>
@@ -1517,7 +1578,6 @@ export default function CompanyOrdersPage() {
                         >
                             <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Заказчик</Radio.Button>
                             <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Экспедитор</Radio.Button>
-                            <Radio.Button value="SUBCONTRACTOR" style={{ flex: 1, textAlign: 'center' }}>Субподрядчик</Radio.Button>
                         </Radio.Group>
                     </div>
                     <Row gutter={24}>
@@ -1601,14 +1661,56 @@ export default function CompanyOrdersPage() {
 
                             {editCreatorRole === 'CUSTOMER' && (
                                 <Row style={{ marginBottom: 12 }}>
+                                    <Col span={12}>
+                                        <Checkbox 
+                                            checked={isMarketplace} 
+                                            onChange={e => {
+                                                const val = e.target.checked;
+                                                setIsMarketplace(val);
+                                                if (val) {
+                                                    setShowForwarderField(false);
+                                                    editForm.setFieldsValue({ forwarderId: null });
+                                                } else {
+                                                    editForm.setFieldsValue({ driverCost: null });
+                                                }
+                                            }}
+                                        >
+                                            Отправить на биржу
+                                        </Checkbox>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Checkbox 
+                                            checked={showForwarderField} 
+                                            onChange={e => {
+                                                const val = e.target.checked;
+                                                setShowForwarderField(val);
+                                                if (val) {
+                                                    setIsMarketplace(false);
+                                                } else {
+                                                    editForm.setFieldsValue({ forwarderId: null, driverCost: null });
+                                                }
+                                            }}
+                                        >
+                                            Назначить контрагента
+                                        </Checkbox>
+                                    </Col>
+                                </Row>
+                            )}
+
+                            {editCreatorRole === 'FORWARDER' && (
+                                <Row style={{ marginBottom: 12 }}>
                                     <Col span={24}>
-                                        <Checkbox checked={showForwarderField} onChange={e => {
-                                            setShowForwarderField(e.target.checked);
-                                            if (!e.target.checked) {
-                                                editForm.setFieldsValue({ forwarderId: null, driverCost: null });
-                                            }
-                                        }}>
-                                            Добавить стороннего экспедитора
+                                        <Checkbox 
+                                            checked={showForwarderField} 
+                                            onChange={e => {
+                                                const val = e.target.checked;
+                                                setShowForwarderField(val);
+                                                if (!val) {
+                                                    editForm.setFieldsValue({ forwarderId: null, driverCost: null });
+                                                }
+                                            }}
+                                        >
+                                            Назначить исполнителя (субподряд)
                                         </Checkbox>
                                     </Col>
                                 </Row>
@@ -1620,6 +1722,7 @@ export default function CompanyOrdersPage() {
                                         <Form.Item 
                                             name="customerCompanyId" 
                                             label="Заказчик" 
+                                            rules={[{ required: editCreatorRole === 'FORWARDER', message: 'Укажите компанию заказчика' }]}
                                             style={{ marginBottom: 12 }}
                                             help={
                                                 <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
@@ -1635,25 +1738,28 @@ export default function CompanyOrdersPage() {
                                 </Row>
                             )}
 
-                            {showForwarderField && (
+                            {(showForwarderField || isMarketplace) && (
                                 <Row gutter={12}>
-                                    <Col span={12}>
-                                        <Form.Item 
-                                            name="forwarderId" 
-                                            label="Экспедитор" 
-                                            style={{ marginBottom: 12 }}
-                                            help={
-                                                <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
-                                                    + Создать нового контрагента
-                                                </Button>
-                                            }
-                                        >
-                                            <Select placeholder="Выберите компанию исполнителя" allowClear showSearch optionFilterProp="children">
-                                                {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
-                                            </Select>
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
+                                    {!isMarketplace && (
+                                        <Col span={12}>
+                                            <Form.Item 
+                                                name="forwarderId" 
+                                                label="Исполнитель" 
+                                                rules={[{ required: true, message: 'Выберите исполнителя' }]}
+                                                style={{ marginBottom: 12 }}
+                                                help={
+                                                    <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
+                                                        + Создать нового контрагента
+                                                    </Button>
+                                                }
+                                            >
+                                                <Select placeholder="Выберите компанию исполнителя" allowClear showSearch optionFilterProp="children">
+                                                    {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                    )}
+                                    <Col span={isMarketplace ? 24 : 12}>
                                         <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
                                             <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                                         </Form.Item>
