@@ -283,6 +283,13 @@ export class CompanyService {
                 ]
             };
         } else if (query.type === 'archive') {
+            const firstUser = await this.prisma.user.findFirst({
+                where: { companyId },
+                orderBy: { createdAt: 'asc' },
+                select: { createdAt: true },
+            });
+            const registeredAt = firstUser?.createdAt;
+
             where = {
                 status: 'CANCELLED',
                 OR: [
@@ -293,6 +300,10 @@ export class CompanyService {
                     { responsibleManager: { companyId: companyId } }
                 ]
             };
+
+            if (registeredAt) {
+                where.createdAt = { gte: registeredAt };
+            }
         } else {
             where = {
                 OR: [
