@@ -182,26 +182,40 @@ export default function CompanyOrdersPage() {
     const [profileComplete, setProfileComplete] = useState(true);
     const [showCustomerField, setShowCustomerField] = useState(false);
     const [showForwarderField, setShowForwarderField] = useState(false);
-    const [creatorRole, setCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
-    const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
+    const [creatorRole, setCreatorRole] = useState<'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR'>('CUSTOMER');
+    const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR'>('CUSTOMER');
 
-    const handleCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
+    const handleCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR') => {
         setCreatorRole(role);
         if (role === 'CUSTOMER') {
             setShowCustomerField(false);
-            createForm.setFieldsValue({ customerCompanyId: null });
-        } else {
+            setShowForwarderField(false);
+            createForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
+        } else if (role === 'FORWARDER') {
             setShowCustomerField(true);
+            setShowForwarderField(true);
+            createForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
+        } else if (role === 'SUBCONTRACTOR') {
+            setShowCustomerField(true);
+            setShowForwarderField(false);
+            createForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
         }
     };
 
-    const handleEditCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
+    const handleEditCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR') => {
         setEditCreatorRole(role);
         if (role === 'CUSTOMER') {
             setShowCustomerField(false);
-            editForm.setFieldsValue({ customerCompanyId: null });
-        } else {
+            setShowForwarderField(false);
+            editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
+        } else if (role === 'FORWARDER') {
             setShowCustomerField(true);
+            setShowForwarderField(true);
+            editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
+        } else if (role === 'SUBCONTRACTOR') {
+            setShowCustomerField(true);
+            setShowForwarderField(false);
+            editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
         }
     };
 
@@ -483,7 +497,14 @@ export default function CompanyOrdersPage() {
         const hasExternalCustomer = !!(order.customerCompanyId && order.customerCompanyId !== user?.companyId);
         const hasExternalForwarder = !!(order.forwarderId && order.forwarderId !== user?.companyId) || !!order.driverCost;
         
-        const currentRole = hasExternalCustomer ? 'FORWARDER' : 'CUSTOMER';
+        let currentRole: 'CUSTOMER' | 'FORWARDER' | 'SUBCONTRACTOR' = 'CUSTOMER';
+        if (hasExternalCustomer && hasExternalForwarder) {
+            currentRole = 'FORWARDER';
+        } else if (hasExternalCustomer && !hasExternalForwarder) {
+            currentRole = 'SUBCONTRACTOR';
+        } else {
+            currentRole = 'CUSTOMER';
+        }
         setEditCreatorRole(currentRole);
 
         setShowCustomerField(hasExternalCustomer);
@@ -1110,8 +1131,9 @@ export default function CompanyOrdersPage() {
                             buttonStyle="solid"
                             style={{ width: '100%', display: 'flex' }}
                         >
-                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Я — Заказчик (ищу исполнителя для своего груза)</Radio.Button>
-                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Я — Экспедитор / Посредник (перепоручаю груз)</Radio.Button>
+                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Заказчик</Radio.Button>
+                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Экспедитор</Radio.Button>
+                            <Radio.Button value="SUBCONTRACTOR" style={{ flex: 1, textAlign: 'center' }}>Субподрядчик</Radio.Button>
                         </Radio.Group>
                     </div>
                     <Row gutter={24}>
@@ -1206,19 +1228,21 @@ export default function CompanyOrdersPage() {
                                 </Col>
                             </Row>
 
-                            <Row style={{ marginBottom: 12 }}>
-                                <Col span={24}>
-                                    <Checkbox checked={showForwarderField} onChange={e => {
-                                        setShowForwarderField(e.target.checked);
-                                        if (!e.target.checked) {
-                                            createForm.setFieldsValue({ forwarderId: null, driverCost: null, isMarketplace: false });
-                                            setIsMarketplace(false);
-                                        }
-                                    }}>
-                                        {creatorRole === 'CUSTOMER' ? 'Добавить стороннего экспедитора' : 'Добавить исполнителя (субподряд)'}
-                                    </Checkbox>
-                                </Col>
-                            </Row>
+                            {creatorRole === 'CUSTOMER' && (
+                                <Row style={{ marginBottom: 12 }}>
+                                    <Col span={24}>
+                                        <Checkbox checked={showForwarderField} onChange={e => {
+                                            setShowForwarderField(e.target.checked);
+                                            if (!e.target.checked) {
+                                                createForm.setFieldsValue({ forwarderId: null, driverCost: null, isMarketplace: false });
+                                                setIsMarketplace(false);
+                                            }
+                                        }}>
+                                            Добавить стороннего экспедитора
+                                        </Checkbox>
+                                    </Col>
+                                </Row>
+                            )}
 
                             {showCustomerField && (
                                 <Row gutter={12}>
@@ -1491,8 +1515,9 @@ export default function CompanyOrdersPage() {
                             buttonStyle="solid"
                             style={{ width: '100%', display: 'flex' }}
                         >
-                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Я — Заказчик (ищу исполнителя для своего груза)</Radio.Button>
-                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Я — Экспедитор / Посредник (перепоручаю груз)</Radio.Button>
+                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Заказчик</Radio.Button>
+                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Экспедитор</Radio.Button>
+                            <Radio.Button value="SUBCONTRACTOR" style={{ flex: 1, textAlign: 'center' }}>Субподрядчик</Radio.Button>
                         </Radio.Group>
                     </div>
                     <Row gutter={24}>
@@ -1574,18 +1599,20 @@ export default function CompanyOrdersPage() {
                                 </Col>
                             </Row>
 
-                            <Row style={{ marginBottom: 12 }}>
-                                <Col span={24}>
-                                    <Checkbox checked={showForwarderField} onChange={e => {
-                                        setShowForwarderField(e.target.checked);
-                                        if (!e.target.checked) {
-                                            editForm.setFieldsValue({ forwarderId: null, driverCost: null });
-                                        }
-                                    }}>
-                                        {editCreatorRole === 'CUSTOMER' ? 'Добавить стороннего экспедитора' : 'Добавить исполнителя (субподряд)'}
-                                    </Checkbox>
-                                </Col>
-                            </Row>
+                            {editCreatorRole === 'CUSTOMER' && (
+                                <Row style={{ marginBottom: 12 }}>
+                                    <Col span={24}>
+                                        <Checkbox checked={showForwarderField} onChange={e => {
+                                            setShowForwarderField(e.target.checked);
+                                            if (!e.target.checked) {
+                                                editForm.setFieldsValue({ forwarderId: null, driverCost: null });
+                                            }
+                                        }}>
+                                            Добавить стороннего экспедитора
+                                        </Checkbox>
+                                    </Col>
+                                </Row>
+                            )}
 
                             {showCustomerField && (
                                 <Row gutter={12}>
