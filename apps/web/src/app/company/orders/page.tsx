@@ -198,19 +198,24 @@ export default function CompanyOrdersPage() {
     const fetchPartners = async () => {
         setPartnersLoading(true);
         try {
-            const response = await api.get('/partners');
-            setPartners(response.data);
+            const [partnersRes, externalRes] = await Promise.all([
+                api.get('/partners'),
+                api.get('/external-companies'),
+            ]);
+            const partnersList = partnersRes.data;
+            const externalList = externalRes.data.map((e: any) => ({
+                id: e.id,
+                name: `${e.name} (офлайн)`,
+            }));
+            const combined = [...partnersList, ...externalList];
+            setPartners(combined);
+            setForwarders(combined);
         } catch { } finally {
             setPartnersLoading(false);
         }
     };
 
-    const fetchForwarders = async () => {
-        try {
-            const response = await api.get('/partners');
-            setForwarders(response.data);
-        } catch { }
-    };
+    const fetchForwarders = async () => {};
 
     const fetchLocations = async () => {
         try {
@@ -232,7 +237,6 @@ export default function CompanyOrdersPage() {
             setProfileComplete(res.data.isComplete);
         }).catch(() => {});
         fetchLocations();
-        fetchForwarders();
         fetchCargoTypes();
         fetchPartners();
     }, []);
