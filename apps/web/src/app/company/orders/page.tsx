@@ -183,6 +183,26 @@ export default function CompanyOrdersPage() {
     const [showCustomerField, setShowCustomerField] = useState(false);
     const [showForwarderField, setShowForwarderField] = useState(false);
 
+    // Quick add partner
+    const [quickPartnerModalOpen, setQuickPartnerModalOpen] = useState(false);
+    const [quickPartnerForm] = Form.useForm();
+    const [quickPartnerLoading, setQuickPartnerLoading] = useState(false);
+
+    const handleCreateQuickPartner = async (values: any) => {
+        setQuickPartnerLoading(true);
+        try {
+            await api.post('/external-companies', { ...values, type: 'CUSTOMER' });
+            message.success('Контрагент успешно добавлен');
+            setQuickPartnerModalOpen(false);
+            quickPartnerForm.resetFields();
+            await fetchPartners();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка при создании контрагента');
+        } finally {
+            setQuickPartnerLoading(false);
+        }
+    };
+
     const fetchDrivers = async () => {
         setDriversLoading(true);
         try {
@@ -1171,7 +1191,16 @@ export default function CompanyOrdersPage() {
                             {showCustomerField && (
                                 <Row gutter={12}>
                                     <Col span={24}>
-                                        <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
+                                        <Form.Item 
+                                            name="customerCompanyId" 
+                                            label="Заказчик" 
+                                            style={{ marginBottom: 12 }}
+                                            help={
+                                                <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
+                                                    + Создать нового контрагента
+                                                </Button>
+                                            }
+                                        >
                                             <Select placeholder="Выберите компанию заказчика" allowClear showSearch optionFilterProp="children">
                                                 {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                                             </Select>
@@ -1183,7 +1212,16 @@ export default function CompanyOrdersPage() {
                             {showForwarderField && (
                                 <Row gutter={12} style={{ marginBottom: 12 }}>
                                     <Col span={12}>
-                                        <Form.Item name="forwarderId" label="Экспедитор" style={{ marginBottom: 8 }}>
+                                        <Form.Item 
+                                            name="forwarderId" 
+                                            label="Экспедитор" 
+                                            style={{ marginBottom: 8 }}
+                                            help={
+                                                <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
+                                                    + Создать нового контрагента
+                                                </Button>
+                                            }
+                                        >
                                             <Select placeholder="Выберите компанию исполнителя" allowClear showSearch optionFilterProp="children" disabled={isMarketplace}>
                                                 {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
                                             </Select>
@@ -1517,7 +1555,16 @@ export default function CompanyOrdersPage() {
                             {showCustomerField && (
                                 <Row gutter={12}>
                                     <Col span={24}>
-                                        <Form.Item name="customerCompanyId" label="Заказчик" style={{ marginBottom: 12 }}>
+                                        <Form.Item 
+                                            name="customerCompanyId" 
+                                            label="Заказчик" 
+                                            style={{ marginBottom: 12 }}
+                                            help={
+                                                <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
+                                                    + Создать нового контрагента
+                                                </Button>
+                                            }
+                                        >
                                             <Select placeholder="Выберите компанию заказчика" allowClear showSearch optionFilterProp="children">
                                                 {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                                             </Select>
@@ -1529,7 +1576,16 @@ export default function CompanyOrdersPage() {
                             {showForwarderField && (
                                 <Row gutter={12}>
                                     <Col span={12}>
-                                        <Form.Item name="forwarderId" label="Экспедитор" style={{ marginBottom: 12 }}>
+                                        <Form.Item 
+                                            name="forwarderId" 
+                                            label="Экспедитор" 
+                                            style={{ marginBottom: 12 }}
+                                            help={
+                                                <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
+                                                    + Создать нового контрагента
+                                                </Button>
+                                            }
+                                        >
                                             <Select placeholder="Выберите компанию исполнителя" allowClear showSearch optionFilterProp="children">
                                                 {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
                                             </Select>
@@ -1547,6 +1603,38 @@ export default function CompanyOrdersPage() {
                             </Form.Item>
                         </Col>
                     </Row>
+                </Form>
+            </Modal>
+
+            <Modal
+                title="Новый контрагент (офлайн)"
+                open={quickPartnerModalOpen}
+                onCancel={() => { setQuickPartnerModalOpen(false); quickPartnerForm.resetFields(); }}
+                onOk={() => quickPartnerForm.submit()}
+                confirmLoading={quickPartnerLoading}
+                okText="Создать"
+                cancelText="Отмена"
+            >
+                <Form form={quickPartnerForm} layout="vertical" onFinish={handleCreateQuickPartner}>
+                    <Form.Item name="name" label="Название компании" rules={[{ required: true, message: 'Введите название' }]}>
+                        <Input placeholder="ТОО Пример" />
+                    </Form.Item>
+                    <Form.Item 
+                        name="bin" 
+                        label="БИН/ИИН" 
+                        rules={[
+                            { required: true, message: 'Введите БИН/ИИН' },
+                            { pattern: /^\d{12}$/, message: 'БИН/ИИН должен состоять ровно из 12 цифр' }
+                        ]}
+                    >
+                        <Input placeholder="123456789012" maxLength={12} />
+                    </Form.Item>
+                    <Form.Item name="phone" label="Телефон">
+                        <Input placeholder="+77001234567" />
+                    </Form.Item>
+                    <Form.Item name="email" label="Email">
+                        <Input placeholder="company@example.com" />
+                    </Form.Item>
                 </Form>
             </Modal>
         </div>
