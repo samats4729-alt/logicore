@@ -4,10 +4,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { CompanyService } from './company.service';
 import { OrdersService } from '../orders/orders.service';
+import { CompanyDriversService } from './services/company-drivers.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
-import { CreateCompanyUserDto, UpdateCompanyProfileDto } from './dto/company.dto';
+import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -17,7 +18,11 @@ import * as fs from 'fs';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class CompanyController {
-    constructor(private companyService: CompanyService, private ordersService: OrdersService) { }
+    constructor(
+        private companyService: CompanyService,
+        private ordersService: OrdersService,
+        private companyDriversService: CompanyDriversService,
+    ) { }
 
     // ==================== Уведомления ====================
 
@@ -239,6 +244,50 @@ export class CompanyController {
         @Request() req: any
     ) {
         return this.ordersService.assignForwarder(id, req.user.companyId, dto.partnerId, dto.price);
+    }
+
+    // ==================== Водители компании ====================
+
+    @Get('drivers')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Получить список водителей' })
+    async getDrivers(@Request() req: any) {
+        return this.companyDriversService.getDrivers(req.user.companyId);
+    }
+
+    @Post('drivers')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Создать водителя в своей компании' })
+    async createDriver(@Request() req: any, @Body() dto: CreateDriverDto) {
+        const createData = {
+            ...dto,
+            docIssuedAt: dto.docIssuedAt ? new Date(dto.docIssuedAt) : undefined,
+            docExpiresAt: dto.docExpiresAt ? new Date(dto.docExpiresAt) : undefined,
+        };
+        return this.companyDriversService.createDriver(req.user.companyId, createData);
+    }
+
+    @Put('drivers/:id')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Обновить данные водителя' })
+    async updateDriver(
+        @Request() req: any,
+        @Param('id') driverId: string,
+        @Body() dto: UpdateDriverDto,
+    ) {
+        const updateData = {
+            ...dto,
+            docIssuedAt: dto.docIssuedAt ? new Date(dto.docIssuedAt) : undefined,
+            docExpiresAt: dto.docExpiresAt ? new Date(dto.docExpiresAt) : undefined,
+        };
+        return this.companyDriversService.updateDriver(driverId, req.user.companyId, updateData);
+    }
+
+    @Delete('drivers/:id')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Деактивировать водителя' })
+    async deleteDriver(@Request() req: any, @Param('id') driverId: string) {
+        return this.companyDriversService.deactivateDriver(driverId, req.user.companyId);
     }
 
 }
