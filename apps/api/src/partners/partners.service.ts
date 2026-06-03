@@ -30,13 +30,11 @@ export class PartnersService {
         const where: any = {
             id: { not: myCompanyId },
             isActive: true,
+            isExternal: false,
         };
 
         if (query) {
             where.name = { contains: query, mode: 'insensitive' };
-        } else {
-            // Default: show only FORWARDERs if no query
-            where.type = 'FORWARDER';
         }
 
         // Find companies

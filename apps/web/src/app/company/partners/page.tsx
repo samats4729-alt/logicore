@@ -164,7 +164,7 @@ export default function PartnersPage() {
                 await api.patch(`/external-companies/${editingCompany.id}`, values);
                 message.success('Контрагент обновлен');
             } else {
-                await api.post('/external-companies', values);
+                await api.post('/external-companies', { ...values, type: 'CUSTOMER' });
                 message.success('Контрагент добавлен');
             }
             setModalOpen(false);
@@ -206,10 +206,7 @@ export default function PartnersPage() {
             render: (text: string, record: any) => (
                 <Space>
                     <Avatar icon={<ShopOutlined />} style={{ backgroundColor: record.isExternal ? '#8c8c8c' : '#1890ff' }} />
-                    <Space direction="vertical" size={0}>
-                        <Text strong>{text}</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{record.type === 'FORWARDER' ? 'Экспедитор' : 'Заказчик'}</Text>
-                    </Space>
+                    <Text strong>{text}</Text>
                 </Space>
             )
         },
@@ -353,13 +350,10 @@ export default function PartnersPage() {
                         <Card>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Space>
-                                    <Avatar size={48} icon={<ShopOutlined />} style={{ backgroundColor: company.type === 'FORWARDER' ? '#722ed1' : '#1890ff' }} />
+                                    <Avatar size={48} icon={<ShopOutlined />} style={{ backgroundColor: '#1890ff' }} />
                                     <div>
                                         <div style={{ fontSize: 16, fontWeight: 'bold' }}>{company.name}</div>
-                                        <Tag color={company.type === 'FORWARDER' ? 'purple' : 'blue'}>
-                                            {company.type === 'FORWARDER' ? 'Экспедитор' : 'Заказчик'}
-                                        </Tag>
-                                        <Text type="secondary" style={{ marginLeft: 8 }}>{company.city || ''}</Text>
+                                        {company.city && <Text type="secondary">{company.city}</Text>}
                                     </div>
                                 </Space>
 
@@ -436,14 +430,7 @@ export default function PartnersPage() {
                     <Form.Item name="name" label="Название компании" rules={[{ required: true, message: 'Введите название' }]}>
                         <Input placeholder="ТОО Пример" />
                     </Form.Item>
-                    {!editingCompany && (
-                        <Form.Item name="type" label="Тип" rules={[{ required: true, message: 'Выберите тип' }]}>
-                            <Select placeholder="Выберите тип">
-                                <Select.Option value="CUSTOMER">Заказчик</Select.Option>
-                                <Select.Option value="FORWARDER">Экспедитор</Select.Option>
-                            </Select>
-                        </Form.Item>
-                    )}
+                    {/* Тип скрыт, т.к. компании универсальны */}
                     <Form.Item 
                         name="bin" 
                         label="БИН/ИИН" 
