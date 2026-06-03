@@ -205,7 +205,7 @@ export default function CompanyOrdersPage() {
             const partnersList = partnersRes.data;
             const externalList = externalRes.data.map((e: any) => ({
                 id: e.id,
-                name: `${e.name} (офлайн)`,
+                name: e.name,
             }));
             const combined = [...partnersList, ...externalList];
             setPartners(combined);
