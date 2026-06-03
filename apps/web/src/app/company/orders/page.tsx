@@ -435,6 +435,7 @@ export default function CompanyOrdersPage() {
     // =================== FILTERED DATA ===================
     const filteredOrders = useMemo(() => {
         return orders.filter(o => {
+            if (o.status === 'CANCELLED') return false;
             if (filterCompany && o.customerCompany?.name !== filterCompany) return false;
             if (filterDriver && o.assignedDriverName !== filterDriver) return false;
             if (filterStatus && o.status !== filterStatus) return false;
@@ -454,6 +455,7 @@ export default function CompanyOrdersPage() {
 
     const filteredOutgoingOrders = useMemo(() => {
         return outgoingOrders.filter(o => {
+            if (o.status === 'CANCELLED') return false;
             if (filterCompany && o.forwarder?.name !== filterCompany) return false;
             if (filterDriver && o.assignedDriverName !== filterDriver) return false;
             if (filterStatus && o.status !== filterStatus) return false;
@@ -1703,7 +1705,7 @@ export default function CompanyOrdersPage() {
                             {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
                                 <Popconfirm
                                     title="Отменить заявку?"
-                                    description="Вы уверены, что хотите отменить эту заявку? Она станет серой."
+                                    description="Вы уверены, что хотите отменить эту заявку?"
                                     onConfirm={async () => {
                                         try {
                                             await api.put(`/orders/${selectedOrder.id}/status`, { status: 'CANCELLED', comment: 'Отменено пользователем' });
