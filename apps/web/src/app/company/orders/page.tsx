@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
     Table, Button, Tag, Space, Modal, Form, Input, message, Typography,
     Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col,
-    DatePicker, Checkbox, Slider, Alert, Popconfirm
+    DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio
 } from 'antd';
 import dayjs from 'dayjs';
 import {
@@ -182,6 +182,28 @@ export default function CompanyOrdersPage() {
     const [profileComplete, setProfileComplete] = useState(true);
     const [showCustomerField, setShowCustomerField] = useState(false);
     const [showForwarderField, setShowForwarderField] = useState(false);
+    const [creatorRole, setCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
+    const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
+
+    const handleCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
+        setCreatorRole(role);
+        if (role === 'CUSTOMER') {
+            setShowCustomerField(false);
+            createForm.setFieldsValue({ customerCompanyId: null });
+        } else {
+            setShowCustomerField(true);
+        }
+    };
+
+    const handleEditCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
+        setEditCreatorRole(role);
+        if (role === 'CUSTOMER') {
+            setShowCustomerField(false);
+            editForm.setFieldsValue({ customerCompanyId: null });
+        } else {
+            setShowCustomerField(true);
+        }
+    };
 
     // Quick add partner
     const [quickPartnerModalOpen, setQuickPartnerModalOpen] = useState(false);
@@ -279,6 +301,9 @@ export default function CompanyOrdersPage() {
             ]);
             setIsMarketplace(false);
             setAppliedTariff(null);
+            setCreatorRole('CUSTOMER');
+            setShowCustomerField(false);
+            setShowForwarderField(false);
         }
     }, [createModalOpen]);
 
@@ -457,6 +482,10 @@ export default function CompanyOrdersPage() {
         setSelectedOrder(order);
         const hasExternalCustomer = !!(order.customerCompanyId && order.customerCompanyId !== user?.companyId);
         const hasExternalForwarder = !!(order.forwarderId && order.forwarderId !== user?.companyId) || !!order.driverCost;
+        
+        const currentRole = hasExternalCustomer ? 'FORWARDER' : 'CUSTOMER';
+        setEditCreatorRole(currentRole);
+
         setShowCustomerField(hasExternalCustomer);
         setShowForwarderField(hasExternalForwarder);
         editForm.setFieldsValue({
@@ -1072,6 +1101,19 @@ export default function CompanyOrdersPage() {
             {/* ========== CREATE ORDER MODAL ========== */}
             <Modal title="Новая заявка" open={createModalOpen} onCancel={() => setCreateModalOpen(false)} onOk={() => createForm.submit()} okText="Создать" cancelText="Отмена" width={900} style={{ top: 20 }}>
                 <Form form={createForm} layout="vertical" onFinish={handleCreateOrder}>
+                    <div style={{ marginBottom: 20, background: '#fafafa', padding: '12px 16px', borderRadius: 8, border: '1px solid #f0f0f0' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: '#333' }}>Ваша роль в этой сделке:</div>
+                        <Radio.Group 
+                            value={creatorRole} 
+                            onChange={e => handleCreatorRoleChange(e.target.value)}
+                            optionType="button"
+                            buttonStyle="solid"
+                            style={{ width: '100%', display: 'flex' }}
+                        >
+                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Я — Заказчик (ищу исполнителя для своего груза)</Radio.Button>
+                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Я — Экспедитор / Посредник (перепоручаю груз)</Radio.Button>
+                        </Radio.Group>
+                    </div>
                     <Row gutter={24}>
                         <Col span={12}>
                             <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Маршрут</Title>
@@ -1166,25 +1208,15 @@ export default function CompanyOrdersPage() {
 
                             <Row style={{ marginBottom: 12 }}>
                                 <Col span={24}>
-                                    <Space size={16}>
-                                        <Checkbox checked={showCustomerField} onChange={e => {
-                                            setShowCustomerField(e.target.checked);
-                                            if (!e.target.checked) {
-                                                createForm.setFieldsValue({ customerCompanyId: null });
-                                            }
-                                        }}>
-                                            Добавить заказчика
-                                        </Checkbox>
-                                        <Checkbox checked={showForwarderField} onChange={e => {
-                                            setShowForwarderField(e.target.checked);
-                                            if (!e.target.checked) {
-                                                createForm.setFieldsValue({ forwarderId: null, driverCost: null, isMarketplace: false });
-                                                setIsMarketplace(false);
-                                            }
-                                        }}>
-                                            Добавить экспедитора
-                                        </Checkbox>
-                                    </Space>
+                                    <Checkbox checked={showForwarderField} onChange={e => {
+                                        setShowForwarderField(e.target.checked);
+                                        if (!e.target.checked) {
+                                            createForm.setFieldsValue({ forwarderId: null, driverCost: null, isMarketplace: false });
+                                            setIsMarketplace(false);
+                                        }
+                                    }}>
+                                        {creatorRole === 'CUSTOMER' ? 'Добавить стороннего экспедитора' : 'Добавить исполнителя (субподряд)'}
+                                    </Checkbox>
                                 </Col>
                             </Row>
 
@@ -1450,6 +1482,19 @@ export default function CompanyOrdersPage() {
                 style={{ top: 20 }}
             >
                 <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
+                    <div style={{ marginBottom: 20, background: '#fafafa', padding: '12px 16px', borderRadius: 8, border: '1px solid #f0f0f0' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: '#333' }}>Ваша роль в этой сделке:</div>
+                        <Radio.Group 
+                            value={editCreatorRole} 
+                            onChange={e => handleEditCreatorRoleChange(e.target.value)}
+                            optionType="button"
+                            buttonStyle="solid"
+                            style={{ width: '100%', display: 'flex' }}
+                        >
+                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Я — Заказчик (ищу исполнителя для своего груза)</Radio.Button>
+                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Я — Экспедитор / Посредник (перепоручаю груз)</Radio.Button>
+                        </Radio.Group>
+                    </div>
                     <Row gutter={24}>
                         <Col span={12}>
                             <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Маршрут</Title>
@@ -1531,24 +1576,14 @@ export default function CompanyOrdersPage() {
 
                             <Row style={{ marginBottom: 12 }}>
                                 <Col span={24}>
-                                    <Space size={16}>
-                                        <Checkbox checked={showCustomerField} onChange={e => {
-                                            setShowCustomerField(e.target.checked);
-                                            if (!e.target.checked) {
-                                                editForm.setFieldsValue({ customerCompanyId: null });
-                                            }
-                                        }}>
-                                            Добавить заказчика
-                                        </Checkbox>
-                                        <Checkbox checked={showForwarderField} onChange={e => {
-                                            setShowForwarderField(e.target.checked);
-                                            if (!e.target.checked) {
-                                                editForm.setFieldsValue({ forwarderId: null, driverCost: null });
-                                            }
-                                        }}>
-                                            Добавить экспедитора
-                                        </Checkbox>
-                                    </Space>
+                                    <Checkbox checked={showForwarderField} onChange={e => {
+                                        setShowForwarderField(e.target.checked);
+                                        if (!e.target.checked) {
+                                            editForm.setFieldsValue({ forwarderId: null, driverCost: null });
+                                        }
+                                    }}>
+                                        {editCreatorRole === 'CUSTOMER' ? 'Добавить стороннего экспедитора' : 'Добавить исполнителя (субподряд)'}
+                                    </Checkbox>
                                 </Col>
                             </Row>
 
