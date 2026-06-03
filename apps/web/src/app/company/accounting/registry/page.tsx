@@ -177,7 +177,7 @@ export default function FinancialRegistryPage() {
         {
             title: 'Исполнитель', key: 'executor', width: 130, ellipsis: true,
             render: (_: any, r: RegistryOrder) => {
-                const name = r.customerCompany?.id === user?.companyId
+                const name = (r.customerCompany?.id === user?.companyId || r.forwarder?.id !== user?.companyId)
                     ? (r.forwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—'))
                     : (r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—'));
                 return (
@@ -476,7 +476,7 @@ export default function FinancialRegistryPage() {
                     const expense = getExpense(o);
                     const margin = getMargin(o);
                     const marginPct = getMarginPercent(o);
-                    const executor = o.customerCompany?.id === user?.companyId
+                    const executor = (o.customerCompany?.id === user?.companyId || o.forwarder?.id !== user?.companyId)
                         ? (o.forwarder?.name || o.partner?.name || o.assignedDriverName || (o.driver ? `${o.driver.lastName} ${o.driver.firstName}` : '—'))
                         : (o.subForwarder?.name || o.partner?.name || o.assignedDriverName || (o.driver ? `${o.driver.lastName} ${o.driver.firstName}` : '—'));
                     const pickupCity = o.pickupLocation?.city || o.pickupLocation?.address || '—';

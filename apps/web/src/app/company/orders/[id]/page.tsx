@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { useAuthStore } from '@/store/auth';
 
 const { Title, Text } = Typography;
 
@@ -48,6 +49,7 @@ const incomeCategories = [
 ];
 
 export default function OrderDetailPage() {
+    const { user } = useAuthStore();
     const params = useParams();
     const router = useRouter();
     const orderId = params.id as string;
@@ -281,45 +283,109 @@ export default function OrderDetailPage() {
 
             {/* FINANCIAL SUMMARY */}
             <Card size="small" style={{ marginTop: 16 }}>
-                <Row gutter={16}>
-                    <Col span={6}>
-                        <Statistic
-                            title="Стоимость перевозки"
-                            value={summary.customerPrice}
-                            suffix="₸"
-                            valueStyle={{ fontSize: 18, fontWeight: 600 }}
-                        />
-                        <Tag color={summary.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                            {summary.isCustomerPaid ? 'Оплачено экспедитору' : 'Не оплачено экспедитору'}
-                        </Tag>
-                    </Col>
-                    <Col span={6}>
-                        <Statistic
-                            title="Ваши Поступления"
-                            value={summary.totalIncomes}
-                            suffix="₸"
-                            valueStyle={{ fontSize: 18, color: '#389e0d' }}
-                            prefix={<WalletOutlined />}
-                        />
-                    </Col>
-                    <Col span={6}>
-                        <Statistic
-                            title="Ваши Расходы"
-                            value={summary.totalExpenses}
-                            suffix="₸"
-                            valueStyle={{ fontSize: 18, color: '#cf1322' }}
-                            prefix={<DollarOutlined />}
-                        />
-                    </Col>
-                    <Col span={6}>
-                        <Statistic
-                            title="Долг экспедитору"
-                            value={summary.customerDebt}
-                            suffix="₸"
-                            valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#faad14' : '#389e0d' }}
-                        />
-                    </Col>
-                </Row>
+                {(() => {
+                    const isClient = order.customerCompanyId === user?.companyId;
+                    const isExecutorPaid = order.subForwarderId ? order.isSubForwarderPaid : order.isDriverPaid;
+                    const executorDebt = order.subForwarderId
+                        ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
+                        : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses);
+
+                    if (isClient) {
+                        return (
+                            <Row gutter={16}>
+                                <Col span={6}>
+                                    <Statistic
+                                        title="Стоимость перевозки"
+                                        value={summary.customerPrice}
+                                        suffix="₸"
+                                        valueStyle={{ fontSize: 18, fontWeight: 600 }}
+                                    />
+                                    <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                        {order.isCustomerPaid ? 'Оплачено экспедитору' : 'Не оплачено экспедитору'}
+                                    </Tag>
+                                </Col>
+                                <Col span={6}>
+                                    <Statistic
+                                        title="Ваши Поступления"
+                                        value={summary.totalIncomes}
+                                        suffix="₸"
+                                        valueStyle={{ fontSize: 18, color: '#389e0d' }}
+                                        prefix={<WalletOutlined />}
+                                    />
+                                </Col>
+                                <Col span={6}>
+                                    <Statistic
+                                        title="Ваши Расходы"
+                                        value={summary.totalExpenses}
+                                        suffix="₸"
+                                        valueStyle={{ fontSize: 18, color: '#cf1322' }}
+                                        prefix={<DollarOutlined />}
+                                    />
+                                </Col>
+                                <Col span={6}>
+                                    <Statistic
+                                        title="Долг экспедитору"
+                                        value={summary.customerDebt}
+                                        suffix="₸"
+                                        valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#faad14' : '#389e0d' }}
+                                    />
+                                </Col>
+                            </Row>
+                        );
+                    }
+
+                    return (
+                        <Row gutter={12}>
+                            <Col span={5}>
+                                <Statistic
+                                    title="Стоимость от заказчика"
+                                    value={summary.customerPrice}
+                                    suffix="₸"
+                                    valueStyle={{ fontSize: 18, fontWeight: 600 }}
+                                />
+                                <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                    {order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено заказчиком'}
+                                </Tag>
+                            </Col>
+                            <Col span={5}>
+                                <Statistic
+                                    title="Ставка исполнителю"
+                                    value={summary.executorCost}
+                                    suffix="₸"
+                                    valueStyle={{ fontSize: 18, fontWeight: 600 }}
+                                />
+                                <Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                    {isExecutorPaid ? 'Оплачено исполнителю' : 'Не оплачено исполнителю'}
+                                </Tag>
+                            </Col>
+                            <Col span={5}>
+                                <Statistic
+                                    title="Долг заказчика перед нами"
+                                    value={summary.customerDebt}
+                                    suffix="₸"
+                                    valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#cf1322' : '#389e0d' }}
+                                />
+                            </Col>
+                            <Col span={5}>
+                                <Statistic
+                                    title="Наш долг исполнителю"
+                                    value={executorDebt}
+                                    suffix="₸"
+                                    valueStyle={{ fontSize: 18, color: executorDebt > 0 ? '#cf1322' : '#389e0d' }}
+                                />
+                            </Col>
+                            <Col span={4}>
+                                <Statistic
+                                    title="Ожидаемая маржа"
+                                    value={summary.margin}
+                                    suffix="₸"
+                                    valueStyle={{ fontSize: 18, fontWeight: 700, color: summary.margin >= 0 ? '#389e0d' : '#cf1322' }}
+                                    prefix={<DollarOutlined />}
+                                />
+                            </Col>
+                        </Row>
+                    );
+                })()}
             </Card>
 
             {/* INCOMES TABLE */}
