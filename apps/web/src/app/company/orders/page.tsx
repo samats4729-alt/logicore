@@ -1331,7 +1331,7 @@ export default function CompanyOrdersPage() {
                             {(showForwarderField || isMarketplace) && (
                                 <Row gutter={12} style={{ marginBottom: 12 }}>
                                     {!isMarketplace && (
-                                        <Col span={12}>
+                                        <Col span={creatorRole === 'CUSTOMER' ? 24 : 12}>
                                             <Form.Item 
                                                 name="forwarderId" 
                                                 label="Исполнитель" 
@@ -1349,11 +1349,13 @@ export default function CompanyOrdersPage() {
                                             </Form.Item>
                                         </Col>
                                     )}
-                                    <Col span={isMarketplace ? 24 : 12}>
-                                        <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
-                                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                                        </Form.Item>
-                                    </Col>
+                                    {creatorRole !== 'CUSTOMER' && (
+                                        <Col span={isMarketplace ? 24 : 12}>
+                                            <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
+                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                                            </Form.Item>
+                                        </Col>
+                                    )}
                                 </Row>
                             )}
                             <Form.Item name="requirements" label="Доп. требования" style={{ marginBottom: 0 }}>
@@ -1741,7 +1743,7 @@ export default function CompanyOrdersPage() {
                             {(showForwarderField || isMarketplace) && (
                                 <Row gutter={12}>
                                     {!isMarketplace && (
-                                        <Col span={12}>
+                                        <Col span={editCreatorRole === 'CUSTOMER' ? 24 : 12}>
                                             <Form.Item 
                                                 name="forwarderId" 
                                                 label="Исполнитель" 
@@ -1759,11 +1761,13 @@ export default function CompanyOrdersPage() {
                                             </Form.Item>
                                         </Col>
                                     )}
-                                    <Col span={isMarketplace ? 24 : 12}>
-                                        <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
-                                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                                        </Form.Item>
-                                    </Col>
+                                    {editCreatorRole !== 'CUSTOMER' && (
+                                        <Col span={isMarketplace ? 24 : 12}>
+                                            <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
+                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                                            </Form.Item>
+                                        </Col>
+                                    )}
                                 </Row>
                             )}
                             <Form.Item name="requirements" label="Доп. требования">
