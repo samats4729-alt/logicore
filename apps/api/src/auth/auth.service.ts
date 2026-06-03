@@ -385,6 +385,32 @@ export class AuthService {
                     },
                 });
 
+                // Создаем партнерство для первой (основной) внешней компании
+                if (mainCompany.createdByCompanyId) {
+                    const existing = await tx.partnership.findFirst({
+                        where: {
+                            OR: [
+                                { requesterId: mainCompany.createdByCompanyId, recipientId: mainCompany.id },
+                                { requesterId: mainCompany.id, recipientId: mainCompany.createdByCompanyId }
+                            ]
+                        }
+                    });
+                    if (!existing) {
+                        await tx.partnership.create({
+                            data: {
+                                requesterId: mainCompany.createdByCompanyId,
+                                recipientId: mainCompany.id,
+                                status: 'ACCEPTED',
+                            }
+                        });
+                    } else if (existing.status !== 'ACCEPTED') {
+                        await tx.partnership.update({
+                            where: { id: existing.id },
+                            data: { status: 'ACCEPTED' }
+                        });
+                    }
+                }
+
                 // Если есть дубликаты, переносим их связи на основную и удаляем
                 const duplicates = externalCompanies.slice(1);
                 for (const dup of duplicates) {
@@ -408,6 +434,33 @@ export class AuthService {
                         where: { forwarderCompanyId: dup.id },
                         data: { forwarderCompanyId: mainCompany.id },
                     });
+
+                    // Создаем партнерство для создателя дубликата с основной компанией
+                    if (dup.createdByCompanyId) {
+                        const existing = await tx.partnership.findFirst({
+                            where: {
+                                OR: [
+                                    { requesterId: dup.createdByCompanyId, recipientId: mainCompany.id },
+                                    { requesterId: mainCompany.id, recipientId: dup.createdByCompanyId }
+                                ]
+                            }
+                        });
+                        if (!existing) {
+                            await tx.partnership.create({
+                                data: {
+                                    requesterId: dup.createdByCompanyId,
+                                    recipientId: mainCompany.id,
+                                    status: 'ACCEPTED',
+                                }
+                            });
+                        } else if (existing.status !== 'ACCEPTED') {
+                            await tx.partnership.update({
+                                where: { id: existing.id },
+                                data: { status: 'ACCEPTED' }
+                            });
+                        }
+                    }
+
                     await tx.company.delete({
                         where: { id: dup.id },
                     });
@@ -650,6 +703,32 @@ export class AuthService {
                     },
                 });
 
+                // Создаем партнерство для первой (основной) внешней компании
+                if (mainCompany.createdByCompanyId) {
+                    const existing = await tx.partnership.findFirst({
+                        where: {
+                            OR: [
+                                { requesterId: mainCompany.createdByCompanyId, recipientId: mainCompany.id },
+                                { requesterId: mainCompany.id, recipientId: mainCompany.createdByCompanyId }
+                            ]
+                        }
+                    });
+                    if (!existing) {
+                        await tx.partnership.create({
+                            data: {
+                                requesterId: mainCompany.createdByCompanyId,
+                                recipientId: mainCompany.id,
+                                status: 'ACCEPTED',
+                            }
+                        });
+                    } else if (existing.status !== 'ACCEPTED') {
+                        await tx.partnership.update({
+                            where: { id: existing.id },
+                            data: { status: 'ACCEPTED' }
+                        });
+                    }
+                }
+
                 // Если есть дубликаты, переносим их связи на основную и удаляем
                 const duplicates = externalCompanies.slice(1);
                 for (const dup of duplicates) {
@@ -673,6 +752,33 @@ export class AuthService {
                         where: { forwarderCompanyId: dup.id },
                         data: { forwarderCompanyId: mainCompany.id },
                     });
+
+                    // Создаем партнерство для создателя дубликата с основной компанией
+                    if (dup.createdByCompanyId) {
+                        const existing = await tx.partnership.findFirst({
+                            where: {
+                                OR: [
+                                    { requesterId: dup.createdByCompanyId, recipientId: mainCompany.id },
+                                    { requesterId: mainCompany.id, recipientId: dup.createdByCompanyId }
+                                ]
+                            }
+                        });
+                        if (!existing) {
+                            await tx.partnership.create({
+                                data: {
+                                    requesterId: dup.createdByCompanyId,
+                                    recipientId: mainCompany.id,
+                                    status: 'ACCEPTED',
+                                }
+                            });
+                        } else if (existing.status !== 'ACCEPTED') {
+                            await tx.partnership.update({
+                                where: { id: existing.id },
+                                data: { status: 'ACCEPTED' }
+                            });
+                        }
+                    }
+
                     await tx.company.delete({
                         where: { id: dup.id },
                     });
