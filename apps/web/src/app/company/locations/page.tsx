@@ -7,8 +7,13 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api, Location, City, Country, Region } from '@/lib/api';
-import MapPicker from '@/components/ui/MapPicker';
+import dynamic from 'next/dynamic';
 import AddressAutocomplete from '@/components/ui/AddressAutocomplete';
+
+const MapPicker = dynamic(() => import('@/components/ui/MapPicker'), {
+    ssr: false,
+    loading: () => <div style={{ height: 400, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Загрузка карты...</div>
+});
 
 const { Title, Text } = Typography;
 const { Option } = Select;
