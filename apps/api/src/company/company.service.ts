@@ -252,24 +252,45 @@ export class CompanyService {
         let where: any = {};
         if (query.type === 'incoming') {
             where = {
-                OR: [
-                    { forwarderId: companyId },
-                    { partnerId: companyId },
-                    { subForwarderId: companyId },
+                AND: [
+                    { status: { not: 'CANCELLED' } },
                     {
-                        responsibleManager: { companyId: companyId },
-                        NOT: { customerCompanyId: companyId }
+                        OR: [
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            {
+                                responsibleManager: { companyId: companyId },
+                                NOT: { customerCompanyId: companyId }
+                            }
+                        ]
                     }
-                ],
+                ]
             };
         } else if (query.type === 'outgoing') {
             where = {
+                AND: [
+                    { status: { not: 'CANCELLED' } },
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            {
+                                responsibleManager: { companyId: companyId },
+                                NOT: { forwarderId: companyId }
+                            }
+                        ]
+                    }
+                ]
+            };
+        } else if (query.type === 'archive') {
+            where = {
+                status: 'CANCELLED',
                 OR: [
                     { customerCompanyId: companyId },
-                    {
-                        responsibleManager: { companyId: companyId },
-                        NOT: { forwarderId: companyId }
-                    }
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId: companyId } }
                 ]
             };
         } else {

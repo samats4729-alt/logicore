@@ -126,6 +126,8 @@ export default function CompanyOrdersPage() {
     const [incomingPageSize, setIncomingPageSize] = useState(20);
     const [outgoingPage, setOutgoingPage] = useState(1);
     const [outgoingPageSize, setOutgoingPageSize] = useState(20);
+    const [archivePage, setArchivePage] = useState(1);
+    const [archivePageSize, setArchivePageSize] = useState(20);
 
     // Fetch orders with SWR
     const { data: ordersData, isLoading: loading, mutate: mutateIncoming } = useSWR(
@@ -143,9 +145,18 @@ export default function CompanyOrdersPage() {
     const outgoingOrders: Order[] = outgoingData?.data || [];
     const totalOutgoingOrders = outgoingData?.total || 0;
 
+    // Archive orders
+    const { data: archiveData, isLoading: archiveLoading, mutate: mutateArchive } = useSWR(
+        `/company/orders?page=${archivePage}&limit=${archivePageSize}&type=archive`,
+        fetcher
+    );
+    const archiveOrders: Order[] = archiveData?.data || [];
+    const totalArchiveOrders = archiveData?.total || 0;
+
     const mutateAll = () => {
         mutateIncoming();
         mutateOutgoing();
+        mutateArchive();
     };
 
     // Common
@@ -328,6 +339,15 @@ export default function CompanyOrdersPage() {
         return Array.from(set).sort();
     }, [outgoingOrders]);
 
+    const uniqueArchiveCompanies = useMemo(() => {
+        const set = new Set<string>();
+        archiveOrders.forEach(o => {
+            if (o.customerCompany?.name) set.add(o.customerCompany.name);
+            if (o.forwarder?.name) set.add(o.forwarder.name);
+        });
+        return Array.from(set).sort();
+    }, [archiveOrders]);
+
     const uniqueIncomingDrivers = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => { if (o.assignedDriverName) set.add(o.assignedDriverName); });
@@ -339,6 +359,12 @@ export default function CompanyOrdersPage() {
         outgoingOrders.forEach(o => { if (o.assignedDriverName) set.add(o.assignedDriverName); });
         return Array.from(set).sort();
     }, [outgoingOrders]);
+
+    const uniqueArchiveDrivers = useMemo(() => {
+        const set = new Set<string>();
+        archiveOrders.forEach(o => { if (o.assignedDriverName) set.add(o.assignedDriverName); });
+        return Array.from(set).sort();
+    }, [archiveOrders]);
 
     const uniqueIncomingStatuses = useMemo(() => {
         const set = new Set<string>();
@@ -370,6 +396,15 @@ export default function CompanyOrdersPage() {
         return Array.from(set).sort();
     }, [outgoingOrders]);
 
+    const uniqueArchiveFromCities = useMemo(() => {
+        const set = new Set<string>();
+        archiveOrders.forEach(o => {
+            const city = extractCity(o, 'pickup');
+            if (city) set.add(city);
+        });
+        return Array.from(set).sort();
+    }, [archiveOrders]);
+
     const uniqueIncomingToCities = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => {
@@ -387,6 +422,15 @@ export default function CompanyOrdersPage() {
         });
         return Array.from(set).sort();
     }, [outgoingOrders]);
+
+    const uniqueArchiveToCities = useMemo(() => {
+        const set = new Set<string>();
+        archiveOrders.forEach(o => {
+            const city = extractCity(o, 'delivery');
+            if (city) set.add(city);
+        });
+        return Array.from(set).sort();
+    }, [archiveOrders]);
 
     // =================== FILTERED DATA ===================
     const filteredOrders = useMemo(() => {
@@ -426,6 +470,25 @@ export default function CompanyOrdersPage() {
             return true;
         });
     }, [outgoingOrders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
+
+    const filteredArchiveOrders = useMemo(() => {
+        return archiveOrders.filter(o => {
+            if (filterCompany && o.customerCompany?.name !== filterCompany && o.forwarder?.name !== filterCompany) return false;
+            if (filterDriver && o.assignedDriverName !== filterDriver) return false;
+            if (filterStatus && o.status !== filterStatus) return false;
+            if (filterFrom) {
+                const city = extractCity(o, 'pickup');
+                if (city !== filterFrom) return false;
+            }
+            if (filterTo) {
+                const city = extractCity(o, 'delivery');
+                if (city !== filterTo) return false;
+            }
+            if (filterSumMin !== undefined && (o.customerPrice || 0) < filterSumMin) return false;
+            if (filterSumMax !== undefined && (o.customerPrice || 0) > filterSumMax) return false;
+            return true;
+        });
+    }, [archiveOrders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
 
     const hasActiveFilters = filterCompany || filterDriver || filterStatus || filterFrom || filterTo || filterSumMin !== undefined || filterSumMax !== undefined;
 
@@ -849,6 +912,36 @@ export default function CompanyOrdersPage() {
         ) },
     ];
 
+    const archiveColumns = [
+        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
+        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
+        { title: 'Заказчик', key: 'company', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.customerCompany?.name || '—'}</span> },
+        { title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', ellipsis: true, width: 140, render: (t: string) => <span style={{ fontSize: 12 }}>{t}</span> },
+        {
+            title: 'Откуда', key: 'from', width: 110,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'pickup') || '—'}</span>,
+        },
+        {
+            title: 'Куда', key: 'to', width: 110,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'delivery') || '—'}</span>,
+        },
+        { title: 'Статус', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag> },
+        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || '—'}</span> },
+        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || '—'}</span> },
+        {
+            title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
+            render: (_: any, r: Order) => {
+                const price = r.customerPrice;
+                return price ? <span style={{ fontSize: 12, fontWeight: 600 }}>{price.toLocaleString('ru-RU')}</span> : '—';
+            }
+        },
+        { title: '', key: 'actions', width: 60, render: (_: any, r: Order) => (
+            <Space size={4}>
+                <Tooltip title="Подробнее"><Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} style={{ fontSize: 12 }} /></Tooltip>
+            </Space>
+        ) },
+    ];
+
     // =================== RENDER ===================
 
     return (
@@ -1088,6 +1181,108 @@ export default function CompanyOrdersPage() {
                                         if (record.status === 'CANCELLED') return 'row-cancelled';
                                         return '';
                                     }}
+                                />
+                            </div>
+                        ),
+                    },
+                    {
+                        key: 'archive',
+                        label: <span>Архив <Tag style={{ marginLeft: 4, fontSize: 11 }}>{filteredArchiveOrders.length}{hasActiveFilters ? `/${archiveOrders.length}` : ''}</Tag></span>,
+                        children: (
+                            <div>
+                                {/* FILTER BAR */}
+                                <div style={{
+                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8,
+                                    padding: '8px 12px', background: '#fafafa', borderRadius: 8,
+                                    border: '1px solid #f0f0f0', alignItems: 'center'
+                                }}>
+                                    <FilterOutlined style={{ color: '#999', fontSize: 13 }} />
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Контрагент" style={{ width: 150 }}
+                                        value={filterCompany} onChange={setFilterCompany}
+                                    >
+                                        {uniqueArchiveCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Водитель" style={{ width: 140 }}
+                                        value={filterDriver} onChange={setFilterDriver}
+                                    >
+                                        {uniqueArchiveDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Откуда" style={{ width: 120 }}
+                                        value={filterFrom} onChange={setFilterFrom}
+                                    >
+                                        {uniqueArchiveFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Куда" style={{ width: 120 }}
+                                        value={filterTo} onChange={setFilterTo}
+                                    >
+                                        {uniqueArchiveToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                    </Select>
+                                    <InputNumber
+                                        size="small" placeholder="Сумма от" style={{ width: 90 }}
+                                        value={filterSumMin} onChange={v => setFilterSumMin(v ?? undefined)}
+                                        min={0} controls={false}
+                                    />
+                                    <InputNumber
+                                        size="small" placeholder="Сумма до" style={{ width: 90 }}
+                                        value={filterSumMax} onChange={v => setFilterSumMax(v ?? undefined)}
+                                        min={0} controls={false}
+                                    />
+                                    {hasActiveFilters && (
+                                        <Button size="small" icon={<ClearOutlined />} onClick={clearFilters} type="link" danger>
+                                            Сбросить
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {/* TABLE */}
+                                <Table
+                                    columns={archiveColumns}
+                                    dataSource={filteredArchiveOrders}
+                                    rowKey="id"
+                                    loading={archiveLoading}
+                                    size="small"
+                                    scroll={{ x: 1000 }}
+                                    pagination={{
+                                        current: archivePage,
+                                        pageSize: archivePageSize,
+                                        total: totalArchiveOrders,
+                                        onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
+                                        showSizeChanger: true,
+                                        pageSizeOptions: ['20', '50', '100'],
+                                        size: 'small',
+                                        showTotal: (t) => `Всего: ${t}`
+                                    }}
+                                    onRow={(record) => ({
+                                        style: { cursor: 'pointer' },
+                                        onClick: () => {
+                                            if (clickTimeoutRef.current && lastClickedOrderIdRef.current === record.id) {
+                                                clearTimeout(clickTimeoutRef.current);
+                                                clickTimeoutRef.current = null;
+                                                lastClickedOrderIdRef.current = null;
+                                                router.push(`/company/orders/${record.id}`);
+                                            } else {
+                                                if (clickTimeoutRef.current) {
+                                                    clearTimeout(clickTimeoutRef.current);
+                                                }
+                                                lastClickedOrderIdRef.current = record.id;
+                                                clickTimeoutRef.current = setTimeout(() => {
+                                                    setSelectedOrder(record);
+                                                    setDetailDrawerOpen(true);
+                                                    clickTimeoutRef.current = null;
+                                                    lastClickedOrderIdRef.current = null;
+                                                }, 250);
+                                            }
+                                        }
+                                    })}
+                                    rowClassName={() => 'row-cancelled'}
                                 />
                             </div>
                         ),
