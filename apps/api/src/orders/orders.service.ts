@@ -1,11 +1,42 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, OrderStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 
 @Injectable()
-export class OrdersService {
+export class OrdersService implements OnModuleInit {
     constructor(private prisma: PrismaService) { }
+
+    async onModuleInit() {
+        try {
+            const orders = await this.prisma.order.findMany({
+                where: {
+                    isConfirmed: false,
+                    status: 'PENDING',
+                },
+                include: {
+                    customer: { select: { companyId: true } },
+                    customerCompany: { select: { isExternal: true } },
+                }
+            });
+
+            for (const order of orders) {
+                const isCustomerExternal = order.customerCompany?.isExternal ?? false;
+                const creatorCompanyId = order.customer?.companyId;
+                const isCreatorForwarder = creatorCompanyId && order.forwarderId && creatorCompanyId === order.forwarderId;
+
+                if (isCustomerExternal || isCreatorForwarder) {
+                    await this.prisma.order.update({
+                        where: { id: order.id },
+                        data: { isConfirmed: true }
+                    });
+                    console.log(`Auto-confirmed order #${order.orderNumber} (isCustomerExternal=${isCustomerExternal}, isCreatorForwarder=${isCreatorForwarder})`);
+                }
+            }
+        } catch (error) {
+            console.error('Error auto-confirming existing pending orders on init:', error);
+        }
+    }
 
     /**
      * Создание заявки на перевозку
@@ -52,6 +83,23 @@ export class OrdersService {
             isForwarderExternal = forwarderCompany?.isExternal ?? false;
         }
 
+        // Получаем companyId заказчика
+        const customer = await this.prisma.user.findUnique({
+            where: { id: data.customerId },
+            select: { companyId: true },
+        });
+
+        // Проверяем: если заказчик — внешняя компания
+        let isCustomerExternal = false;
+        const targetCustomerCompanyId = data.customerCompanyId || customer?.companyId;
+        if (targetCustomerCompanyId) {
+            const customerCompany = await this.prisma.company.findUnique({
+                where: { id: targetCustomerCompanyId },
+                select: { isExternal: true },
+            });
+            isCustomerExternal = customerCompany?.isExternal ?? false;
+        }
+
         // Если водитель назначен → ASSIGNED
         // Если экспедитор внешний → ASSIGNED (подтверждать некому)
         // Иначе → PENDING
@@ -59,11 +107,14 @@ export class OrdersService {
             ? OrderStatus.ASSIGNED
             : OrderStatus.PENDING;
 
-        // Получаем companyId заказчика
-        const customer = await this.prisma.user.findUnique({
-            where: { id: data.customerId },
-            select: { companyId: true },
-        });
+        const isConfirmed = (
+            data.driverId ||
+            isForwarderExternal ||
+            isCustomerExternal ||
+            !data.forwarderId ||
+            data.forwarderId === customer?.companyId ||
+            data.forwarderId === (data.customerCompanyId || customer?.companyId)
+        ) ? true : false;
 
         const order = await this.prisma.order.create({
             data: {
@@ -80,7 +131,7 @@ export class OrdersService {
                 driverId: data.driverId,
                 forwarderId: data.forwarderId, // Связь с экспедитором
                 status,
-                isConfirmed: (data.driverId || isForwarderExternal || !data.forwarderId || data.forwarderId === (data.customerCompanyId || customer?.companyId)) ? true : false,
+                isConfirmed,
                 // New fields
                 customerPaymentCondition: data.customerPaymentCondition,
                 customerPaymentForm: data.customerPaymentForm,
