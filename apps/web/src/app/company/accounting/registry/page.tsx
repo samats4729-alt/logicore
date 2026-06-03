@@ -10,6 +10,7 @@ import {
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { message, Switch } from 'antd';
+import { useAuthStore } from '@/store/auth';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -46,6 +47,7 @@ interface RegistryOrder {
     isSubForwarderPaid: boolean;
     subForwarderPaidAt?: string;
     customerCompany?: { id: string; name: string };
+    forwarder?: { id: string; name: string };
     assignedDriverName?: string;
     driver?: { firstName: string; lastName: string };
     partner?: { name: string };
@@ -55,6 +57,7 @@ interface RegistryOrder {
 }
 
 export default function FinancialRegistryPage() {
+    const { user } = useAuthStore();
     const [orders, setOrders] = useState<RegistryOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -77,15 +80,35 @@ export default function FinancialRegistryPage() {
     useEffect(() => { fetchData(); }, []);
 
     // Helpers
-    const getExpense = (o: RegistryOrder) => o.subForwarderId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
-    const getIncome = (o: RegistryOrder) => o.customerPrice || 0;
-    const getMargin = (o: RegistryOrder) => getIncome(o) - getExpense(o);
+    const getExpense = (o: RegistryOrder) => {
+        if (o.customerCompany?.id === user?.companyId) {
+            return o.customerPrice || 0;
+        }
+        return o.subForwarderId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
+    };
+    const getIncome = (o: RegistryOrder) => {
+        if (o.customerCompany?.id === user?.companyId) {
+            return 0;
+        }
+        return o.customerPrice || 0;
+    };
+    const getMargin = (o: RegistryOrder) => {
+        if (o.customerCompany?.id === user?.companyId) {
+            return 0;
+        }
+        return getIncome(o) - getExpense(o);
+    };
     const getMarginPercent = (o: RegistryOrder) => {
         const inc = getIncome(o);
         if (!inc) return 0;
         return Math.round((getMargin(o) / inc) * 100);
     };
-    const isCreditorPaid = (o: RegistryOrder) => o.subForwarderId ? !!o.isSubForwarderPaid : !!o.isDriverPaid;
+    const isCreditorPaid = (o: RegistryOrder) => {
+        if (o.customerCompany?.id === user?.companyId) {
+            return !!o.isCustomerPaid;
+        }
+        return o.subForwarderId ? !!o.isSubForwarderPaid : !!o.isDriverPaid;
+    };
 
     // Filters
     const filtered = useMemo(() => {
@@ -115,17 +138,17 @@ export default function FinancialRegistryPage() {
         if (paymentFilter === 'all_paid') result = result.filter(o => o.isCustomerPaid && isCreditorPaid(o));
 
         return result;
-    }, [orders, search, dateRange, paymentFilter]);
+    }, [orders, search, dateRange, paymentFilter, user?.companyId]);
 
     // Totals
     const totals = useMemo(() => {
         const totalIncome = filtered.reduce((s, o) => s + getIncome(o), 0);
         const totalExpense = filtered.reduce((s, o) => s + getExpense(o), 0);
-        const totalMargin = totalIncome - totalExpense;
+        const totalMargin = filtered.reduce((s, o) => s + getMargin(o), 0);
         const debtorSum = filtered.filter(o => !o.isCustomerPaid).reduce((s, o) => s + getIncome(o), 0);
         const creditorSum = filtered.filter(o => !isCreditorPaid(o)).reduce((s, o) => s + getExpense(o), 0);
         return { totalIncome, totalExpense, totalMargin, debtorSum, creditorSum };
-    }, [filtered]);
+    }, [filtered, user?.companyId]);
 
     const fmt = (n: number) => n.toLocaleString('ru-RU');
 
@@ -154,7 +177,9 @@ export default function FinancialRegistryPage() {
         {
             title: 'Исполнитель', key: 'executor', width: 130, ellipsis: true,
             render: (_: any, r: RegistryOrder) => {
-                const name = r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—');
+                const name = r.customerCompany?.id === user?.companyId
+                    ? (r.forwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—'))
+                    : (r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—'));
                 return (
                     <Space size={4}>
                         <span style={{ fontSize: 12, color: !isCreditorPaid(r) && getExpense(r) > 0 ? '#cf1322' : undefined, fontWeight: !isCreditorPaid(r) && getExpense(r) > 0 ? 600 : 400 }}>
@@ -229,7 +254,9 @@ export default function FinancialRegistryPage() {
                             onConfirm={async (e) => {
                                 e?.stopPropagation();
                                 try {
-                                    if (r.subForwarderId) {
+                                    if (r.customerCompany?.id === user?.companyId) {
+                                        await api.put(`/accounting/orders/${r.id}/customer-paid`, { paid: !isPaid });
+                                    } else if (r.subForwarderId) {
                                         await api.put(`/accounting/orders/${r.id}/subforwarder-paid`, { paid: !isPaid });
                                     } else {
                                         await api.put(`/accounting/orders/${r.id}/driver-paid`, { paid: !isPaid });
@@ -449,7 +476,9 @@ export default function FinancialRegistryPage() {
                     const expense = getExpense(o);
                     const margin = getMargin(o);
                     const marginPct = getMarginPercent(o);
-                    const executor = o.subForwarder?.name || o.partner?.name || o.assignedDriverName || (o.driver ? `${o.driver.lastName} ${o.driver.firstName}` : '—');
+                    const executor = o.customerCompany?.id === user?.companyId
+                        ? (o.forwarder?.name || o.partner?.name || o.assignedDriverName || (o.driver ? `${o.driver.lastName} ${o.driver.firstName}` : '—'))
+                        : (o.subForwarder?.name || o.partner?.name || o.assignedDriverName || (o.driver ? `${o.driver.lastName} ${o.driver.firstName}` : '—'));
                     const pickupCity = o.pickupLocation?.city || o.pickupLocation?.address || '—';
                     const deliveryCity = o.deliveryPoints?.[0]?.location?.city || o.deliveryPoints?.[0]?.location?.address || '—';
 

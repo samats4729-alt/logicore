@@ -125,6 +125,7 @@ export class AccountingService {
                 subForwarderPaidAt: true,
                 // Связи
                 customerCompany: { select: { id: true, name: true } },
+                forwarder: { select: { id: true, name: true } },
                 assignedDriverName: true,
                 driver: { select: { id: true, firstName: true, lastName: true } },
                 partner: { select: { id: true, name: true } },
@@ -144,12 +145,14 @@ export class AccountingService {
                 AND: [
                     {
                         OR: [
-                            { customerCompanyId: companyId },
                             { forwarderId: companyId },
                             { partnerId: companyId },
                             { subForwarderId: companyId },
                             { responsibleManager: { companyId: companyId } },
                         ]
+                    },
+                    {
+                        customerCompanyId: { not: companyId }
                     },
                     {
                         OR: [
@@ -201,8 +204,23 @@ export class AccountingService {
                     },
                     {
                         OR: [
-                            { driverCost: { not: null } },
-                            { subForwarderPrice: { not: null } }
+                            {
+                                AND: [
+                                    { customerCompanyId: companyId },
+                                    { customerPrice: { not: null } }
+                                ]
+                            },
+                            {
+                                AND: [
+                                    { customerCompanyId: { not: companyId } },
+                                    {
+                                        OR: [
+                                            { driverCost: { not: null } },
+                                            { subForwarderPrice: { not: null } }
+                                        ]
+                                    }
+                                ]
+                            }
                         ]
                     },
                     {
