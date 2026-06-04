@@ -967,16 +967,63 @@ export class AuthService {
             }
 
             const companyInfo = data[0];
-            let address = companyInfo.addressru || companyInfo.address_ru || companyInfo.address || null;
+            const addressRaw = companyInfo.addressru || companyInfo.address_ru || companyInfo.address || '';
+            
+            // Пытаемся вытащить телефон
+            let phone = companyInfo.phone || companyInfo.telephone || companyInfo.contacts || null;
+            if (!phone && addressRaw) {
+                const phoneMatch = addressRaw.match(/(?:тел|телефон|контактный|контакты)\s*[\.:]?\s*([\d\s\-\+\(\)\/]{7,})/i);
+                if (phoneMatch) {
+                    phone = phoneMatch[1].trim();
+                    phone = phone.replace(/[,.;\s\-]+$/, '').trim(); // очистка хвостов
+                }
+            }
+            if (!phone) {
+                phone = '+77000000000'; // Дефолтный телефон для автозаполнения, если не найден
+            }
+
+            // Пытаемся вытащить email
+            let email = companyInfo.email || companyInfo.e_mail || companyInfo.mail || companyInfo.email_address || null;
+            if (!email && addressRaw) {
+                const emailMatch = addressRaw.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/i);
+                if (emailMatch) {
+                    email = emailMatch[1].trim();
+                }
+            }
+            
+            const name = companyInfo.nameru || companyInfo.name_ru || companyInfo.name || null;
+            if (!email && name) {
+                // Генерация красивого авто-email
+                const rus = 'щ    ш  ч  ц  ю  я  ё  ж  а б в г д е з и й к л м н о п р с т у ф х  ь ы ъ э'.split(/\s+/);
+                const eng = 'shch sh ch ts yu ya yo zh a b v g d e z i y k l m n o p r s t u f kh i y i e'.split(/\s+/);
+                let cleanedName = name.toLowerCase();
+                for (let i = 0; i < rus.length; i++) {
+                    cleanedName = cleanedName.split(rus[i]).join(eng[i]);
+                }
+                cleanedName = cleanedName.replace(/[^a-z0-9]/g, '');
+                if (cleanedName) {
+                    email = `info@${cleanedName}.kz`;
+                } else {
+                    email = `info@company-${bin}.kz`;
+                }
+            } else if (!email) {
+                email = `info@company-${bin}.kz`;
+            }
+
+            // Очищаем адрес от хвостового телефона, если он там был
+            let address = addressRaw;
             if (address) {
-                address = address.replace(/,\s*тел\s*[\.:]?\s*[\d\s\-\+\(\)]+$/i, '').trim();
+                address = address.replace(/,\s*(?:тел|телефон|контакты)\s*[\.:]?\s*[\d\s\-\+\(\)\/]+$/i, '').trim();
+                address = address.replace(/[,.;\s]+$/, '').trim();
             }
 
             return {
-                name: companyInfo.nameru || companyInfo.name_ru || companyInfo.name || null,
+                name,
                 address,
                 directorName: companyInfo.director || companyInfo.director_fio || companyInfo.fio_ru || null,
                 bin: companyInfo.bin || bin,
+                phone,
+                email,
             };
         } catch (error) {
             console.error('Egov lookup error:', error);

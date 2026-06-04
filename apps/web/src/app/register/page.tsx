@@ -142,9 +142,14 @@ function RegisterContent() {
                             if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
                                 try {
                                     const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
-                                    if (res.data && res.data.name) {
-                                        form.setFieldsValue({ companyName: res.data.name });
-                                        message.success(`Название компании загружено: ${res.data.name}`);
+                                    if (res.data) {
+                                        const updateVals: any = {};
+                                        if (res.data.name) updateVals.companyName = res.data.name;
+                                        if (res.data.phone) updateVals.phone = res.data.phone;
+                                        if (res.data.email) updateVals.adminEmail = res.data.email;
+                                        
+                                        form.setFieldsValue(updateVals);
+                                        message.success(`Данные компании подтянуты: ${res.data.name}`);
                                     }
                                 } catch (e) {
                                     // Ignore error to avoid blocking user flow

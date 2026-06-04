@@ -230,8 +230,13 @@ export default function SettingsPage() {
                                     if (res.data) {
                                         const updateObj: any = {};
                                         if (res.data.name) updateObj.name = res.data.name;
-                                        if (res.data.address) updateObj.address = res.data.address;
+                                        if (res.data.address) {
+                                            updateObj.address = res.data.address;
+                                            updateObj.actualAddress = res.data.address;
+                                        }
                                         if (res.data.directorName) updateObj.directorName = res.data.directorName;
+                                        if (res.data.phone) updateObj.phone = res.data.phone;
+                                        if (res.data.email) updateObj.email = res.data.email;
                                         
                                         companyForm.setFieldsValue(updateObj);
                                         message.success('Реквизиты компании подтянуты');
