@@ -72,7 +72,7 @@ export default function CompanyUsersPage() {
                 api.get('/company/users'),
                 api.get('/company/invitations')
             ]);
-            setUsers(usersRes.data);
+            setUsers(Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data.data || []));
             setInvitations(invRes.data);
         } catch (error) {
             console.error('Failed to fetch data:', error);
