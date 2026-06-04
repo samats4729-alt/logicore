@@ -363,9 +363,7 @@ export class AuthService {
         const externalCompanies = existingCompanies.filter(c => c.isExternal);
 
         // Определяем роль на основе типа компании
-        const userRole = data.companyType === 'FORWARDER'
-            ? UserRole.FORWARDER
-            : UserRole.COMPANY_ADMIN;
+        const userRole = UserRole.COMPANY_ADMIN;
 
         // Создаём или обновляем компанию и админа в транзакции
         const result = await this.prisma.$transaction(async (tx) => {
@@ -696,9 +694,7 @@ export class AuthService {
         }
         const externalCompanies = existingCompanies.filter(c => c.isExternal);
 
-        const userRole = data.companyType === 'FORWARDER'
-            ? UserRole.FORWARDER
-            : UserRole.COMPANY_ADMIN;
+        const userRole = UserRole.COMPANY_ADMIN;
 
         const result = await this.prisma.$transaction(async (tx) => {
             let company;

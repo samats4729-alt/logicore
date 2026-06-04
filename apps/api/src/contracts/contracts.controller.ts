@@ -195,7 +195,7 @@ export class ContractsController {
     }
 
     @Put('tariffs/:id')
-    @Roles(UserRole.FORWARDER)
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Обновить тариф' })
     async updateTariff(
         @Param('id') id: string,
@@ -206,7 +206,7 @@ export class ContractsController {
     }
 
     @Delete('tariffs/:id')
-    @Roles(UserRole.FORWARDER)
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Удалить тариф' })
     async removeTariff(@Param('id') id: string, @Request() req: any) {
         return this.contractsService.removeTariff(req.user.companyId, id);

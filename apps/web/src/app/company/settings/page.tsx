@@ -181,7 +181,7 @@ export default function SettingsPage() {
                 </Card>
             ),
         },
-        ...(user?.role === 'COMPANY_ADMIN' ? [{
+        ...(user?.role === 'COMPANY_ADMIN' || user?.role === 'FORWARDER' ? [{
             key: 'company',
             label: (
                 <span><BankOutlined style={{ marginRight: 6 }} />Данные компании</span>
