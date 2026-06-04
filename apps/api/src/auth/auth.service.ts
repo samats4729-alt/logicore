@@ -967,9 +967,14 @@ export class AuthService {
             }
 
             const companyInfo = data[0];
+            let address = companyInfo.addressru || companyInfo.address_ru || companyInfo.address || null;
+            if (address) {
+                address = address.replace(/,\s*тел\s*[\.:]?\s*[\d\s\-\+\(\)]+$/i, '').trim();
+            }
+
             return {
                 name: companyInfo.nameru || companyInfo.name_ru || companyInfo.name || null,
-                address: companyInfo.addressru || companyInfo.address_ru || companyInfo.address || null,
+                address,
                 directorName: companyInfo.director || companyInfo.director_fio || companyInfo.fio_ru || null,
                 bin: companyInfo.bin || bin,
             };
