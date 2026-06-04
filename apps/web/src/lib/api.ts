@@ -9,15 +9,41 @@ export const api = axios.create({
     },
 });
 
+// Попытка восстановить токен из localStorage сразу при загрузке модуля (до инициализации React компонентов)
+const getInitialToken = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const authData = localStorage.getItem('logcomp-auth');
+        if (authData) {
+            const parsed = JSON.parse(authData);
+            return parsed.state?.token || null;
+        }
+    } catch (e) {
+        return null;
+    }
+    return null;
+};
+
+const initialToken = getInitialToken();
+if (initialToken) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+}
+
 // Интерцептор для обработки ошибок авторизации
 api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Токен невалидный — очищаем
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('logcomp-auth');
-                window.location.href = '/login';
+            // Исключаем запросы авторизации, чтобы некорректный пароль или код не вызывали перезагрузку страницы
+            const url = error.config?.url || '';
+            const isAuthRequest = url.includes('/auth/login') || url.includes('/auth/sms/verify');
+            
+            if (!isAuthRequest) {
+                // Токен невалидный — очищаем
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('logcomp-auth');
+                    window.location.href = '/login';
+                }
             }
         }
         return Promise.reject(error);
