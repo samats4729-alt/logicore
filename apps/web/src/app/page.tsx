@@ -1,4 +1,5 @@
 'use client';
+// Force rebuild frontend 2026-06-04 08:59
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
