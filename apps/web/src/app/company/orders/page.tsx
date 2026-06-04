@@ -928,8 +928,13 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.customerCompany?.name || '—'}</span>,
         },
         {
-            title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', ellipsis: true, width: 130,
-            render: (t: string) => <span style={{ fontSize: 12 }}>{t}</span>,
+            title: 'Груз', key: 'cargo', ellipsis: true, width: 130,
+            render: (_: any, r: Order) => {
+                const parts = [];
+                if (r.natureOfCargo) parts.push(r.natureOfCargo);
+                if (r.cargoDescription) parts.push(r.cargoDescription);
+                return <span style={{ fontSize: 12 }}>{parts.join(' / ') || '—'}</span>;
+            }
         },
         {
             title: 'Откуда', key: 'from', width: 110, ellipsis: true,
@@ -965,7 +970,15 @@ export default function CompanyOrdersPage() {
     const outgoingColumns = [
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
-        { title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', ellipsis: true, width: 140, render: (t: string) => <span style={{ fontSize: 12 }}>{t}</span> },
+        {
+            title: 'Груз', key: 'cargo', ellipsis: true, width: 140,
+            render: (_: any, r: Order) => {
+                const parts = [];
+                if (r.natureOfCargo) parts.push(r.natureOfCargo);
+                if (r.cargoDescription) parts.push(r.cargoDescription);
+                return <span style={{ fontSize: 12 }}>{parts.join(' / ') || '—'}</span>;
+            }
+        },
         {
             title: 'Откуда', key: 'from', width: 110,
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'pickup') || '—'}</span>,
@@ -1014,7 +1027,15 @@ export default function CompanyOrdersPage() {
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
         { title: 'Заказчик', key: 'company', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.customerCompany?.name || '—'}</span> },
-        { title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', ellipsis: true, width: 140, render: (t: string) => <span style={{ fontSize: 12 }}>{t}</span> },
+        {
+            title: 'Груз', key: 'cargo', ellipsis: true, width: 140,
+            render: (_: any, r: Order) => {
+                const parts = [];
+                if (r.natureOfCargo) parts.push(r.natureOfCargo);
+                if (r.cargoDescription) parts.push(r.cargoDescription);
+                return <span style={{ fontSize: 12 }}>{parts.join(' / ') || '—'}</span>;
+            }
+        },
         {
             title: 'Откуда', key: 'from', width: 110,
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'pickup') || '—'}</span>,

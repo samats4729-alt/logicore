@@ -120,6 +120,8 @@ export interface Order {
     trailerNumber?: string;
     actualWeight?: number;
     actualVolume?: number;
+    natureOfCargo?: string;
+    cargoType?: string;
 }
 
 export interface User {

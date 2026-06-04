@@ -170,10 +170,15 @@ export default function OrdersPage() {
         },
         {
             title: 'Груз',
-            dataIndex: 'cargoDescription',
             key: 'cargoDescription',
             ellipsis: true,
             width: 200,
+            render: (_: any, r: Order) => {
+                const parts = [];
+                if (r.natureOfCargo) parts.push(r.natureOfCargo);
+                if (r.cargoDescription) parts.push(r.cargoDescription);
+                return <span>{parts.join(' / ') || '—'}</span>;
+            }
         },
         {
             title: 'Вес, кг',

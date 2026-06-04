@@ -88,9 +88,14 @@ export default function AdminDashboard() {
         },
         {
             title: 'Груз',
-            dataIndex: 'cargoDescription',
             key: 'cargoDescription',
             ellipsis: true,
+            render: (_: any, r: Order) => {
+                const parts = [];
+                if (r.natureOfCargo) parts.push(r.natureOfCargo);
+                if (r.cargoDescription) parts.push(r.cargoDescription);
+                return <span>{parts.join(' / ') || '—'}</span>;
+            }
         },
         {
             title: 'Откуда',

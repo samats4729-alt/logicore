@@ -29,6 +29,7 @@ interface Order {
     orderNumber: string;
     status: string;
     cargoDescription: string;
+    natureOfCargo?: string;
     customerPrice?: number;
     createdAt: string;
     pickupLocation?: { name: string; address: string; city?: string };
@@ -81,8 +82,13 @@ export default function CompanyDashboard() {
             render: (d: string) => <span style={{ fontSize: 11, color: '#888' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
-            title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', ellipsis: true, width: 120,
-            render: (t: string) => <span style={{ fontSize: 12 }}>{t}</span>,
+            title: 'Груз', key: 'cargo', ellipsis: true, width: 120,
+            render: (_: any, r: Order) => {
+                const parts = [];
+                if (r.natureOfCargo) parts.push(r.natureOfCargo);
+                if (r.cargoDescription) parts.push(r.cargoDescription);
+                return <span style={{ fontSize: 12 }}>{parts.join(' / ') || '—'}</span>;
+            }
         },
         {
             title: 'Откуда', key: 'from', width: 100, ellipsis: true,
