@@ -972,6 +972,7 @@ export class AuthService {
                 address: companyInfo.address_ru || companyInfo.legal_address || companyInfo.address || null,
                 directorName: companyInfo.director_fio || companyInfo.fio_ru || companyInfo.director || null,
                 bin: companyInfo.bin || bin,
+                raw: companyInfo,
             };
         } catch (error) {
             console.error('Egov lookup error:', error);
