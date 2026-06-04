@@ -9,6 +9,7 @@ import { CreateOrderDto, UpdateStatusDto, AssignDriverDto } from './dto/order.dt
 import { UserRole, OrderStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { EmailService } from '../email/email.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -19,6 +20,7 @@ export class OrdersController {
         private ordersService: OrdersService,
         private poaService: PowerOfAttorneyService,
         private emailService: EmailService,
+        private prisma: PrismaService,
     ) { }
 
     @Post()
@@ -100,13 +102,19 @@ export class OrdersController {
             throw new NotFoundException('Заявка не найдена');
         }
 
+        // Fetch sender's company name
+        const company = req.user.companyId
+            ? await this.prisma.company.findUnique({ where: { id: req.user.companyId }, select: { name: true } })
+            : null;
+        const senderCompanyName = company?.name || 'LogiCore';
+
         // Generate the PDF buffer
         const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId);
 
         // Send emails in parallel
         await Promise.all(
             body.emails.map(email =>
-                this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, pdfBuffer)
+                this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, senderCompanyName, pdfBuffer)
             )
         );
 

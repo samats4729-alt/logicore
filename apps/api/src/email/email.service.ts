@@ -95,7 +95,7 @@ export class EmailService {
         }
     }
 
-    async sendPowerOfAttorneyEmail(to: string, orderNumber: string, pdfBuffer: Buffer): Promise<void> {
+    async sendPowerOfAttorneyEmail(to: string, orderNumber: string, senderCompanyName: string, pdfBuffer: Buffer): Promise<void> {
         const subject = `Доверенность к заявке № ${orderNumber} — LogiCore`;
         const html = `
 <!DOCTYPE html>
@@ -119,7 +119,7 @@ export class EmailService {
                 Здравствуйте!
             </p>
             <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-                Вам направлена доверенность на водителя по заявке <strong>№ ${orderNumber}</strong>. Документ прикреплен к этому письму в формате PDF.
+                Вам направлена доверенность на водителя от компании <strong>${senderCompanyName}</strong> по заявке <strong>№ ${orderNumber}</strong>. Документ прикреплен к этому письму в формате PDF.
             </p>
             
             <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 24px 0;">
@@ -134,7 +134,7 @@ export class EmailService {
 </html>`;
 
         if (!this.resend) {
-            this.logger.log(`📧 [DEV] Power of Attorney email for ${to} (Order: ${orderNumber}), attachment size: ${pdfBuffer.length} bytes`);
+            this.logger.log(`📧 [DEV] Power of Attorney email for ${to} (from: ${senderCompanyName}, Order: ${orderNumber}), attachment size: ${pdfBuffer.length} bytes`);
             return;
         }
 
