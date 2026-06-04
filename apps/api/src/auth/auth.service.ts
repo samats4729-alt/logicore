@@ -968,11 +968,10 @@ export class AuthService {
 
             const companyInfo = data[0];
             return {
-                name: companyInfo.name_ru || companyInfo.name_ru_raw || companyInfo.name_ru_full || companyInfo.name || null,
-                address: companyInfo.address_ru || companyInfo.legal_address || companyInfo.address || null,
-                directorName: companyInfo.director_fio || companyInfo.fio_ru || companyInfo.director || null,
+                name: companyInfo.nameru || companyInfo.name_ru || companyInfo.name || null,
+                address: companyInfo.addressru || companyInfo.address_ru || companyInfo.address || null,
+                directorName: companyInfo.director || companyInfo.director_fio || companyInfo.fio_ru || null,
                 bin: companyInfo.bin || bin,
-                raw: companyInfo,
             };
         } catch (error) {
             console.error('Egov lookup error:', error);
