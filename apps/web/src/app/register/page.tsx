@@ -133,7 +133,25 @@ function RegisterContent() {
                         subTitle="Перенаправляем в личный кабинет..."
                     />
                 ) : (
-                    <Form form={form} layout="vertical" onFinish={handleRegister} preserve={true}>
+                    <Form 
+                        form={form} 
+                        layout="vertical" 
+                        onFinish={handleRegister} 
+                        preserve={true}
+                        onValuesChange={async (changedValues) => {
+                            if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
+                                try {
+                                    const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
+                                    if (res.data && res.data.name) {
+                                        form.setFieldsValue({ companyName: res.data.name });
+                                        message.success(`Название компании загружено: ${res.data.name}`);
+                                    }
+                                } catch (e) {
+                                    // Ignore error to avoid blocking user flow
+                                }
+                            }
+                        }}
+                    >
                         {/* Шаг 0: Данные компании */}
                         <div style={{ display: step === 0 ? 'block' : 'none' }}>
                             <Form.Item

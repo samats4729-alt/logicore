@@ -134,4 +134,11 @@ export class AuthController {
     async registerInvitedUser(@Body() dto: any) {
         return this.authService.registerInvitedUser(dto);
     }
+
+    @Get('company-lookup/:bin')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Поиск компании по БИН/ИИН через eGov' })
+    async lookupCompany(@Param('bin') bin: string) {
+        return this.authService.lookupCompanyByBin(bin);
+    }
 }

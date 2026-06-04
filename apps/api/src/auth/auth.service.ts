@@ -938,4 +938,44 @@ export class AuthService {
             accessToken,
         };
     }
+
+    async lookupCompanyByBin(bin: string): Promise<any> {
+        const apiKey = this.configService.get<string>('EGOV_API_KEY');
+        if (!apiKey) {
+            throw new BadRequestException('EGOV_API_KEY не задан в конфигурации сервера');
+        }
+
+        try {
+            const sourceQuery = {
+                query: {
+                    match: {
+                        bin: bin
+                    }
+                }
+            };
+            const sourceStr = JSON.stringify(sourceQuery);
+            const url = `https://data.egov.kz/api/v4/gbd_ul/v1?apiKey=${apiKey}&source=${encodeURIComponent(sourceStr)}`;
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Ошибка запроса к data.egov.kz: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (!Array.isArray(data) || data.length === 0) {
+                return null;
+            }
+
+            const companyInfo = data[0];
+            return {
+                name: companyInfo.name_ru || companyInfo.name_ru_raw || companyInfo.name_ru_full || companyInfo.name || null,
+                address: companyInfo.address_ru || companyInfo.legal_address || companyInfo.address || null,
+                directorName: companyInfo.director_fio || companyInfo.fio_ru || companyInfo.director || null,
+                bin: companyInfo.bin || bin,
+            };
+        } catch (error) {
+            console.error('Egov lookup error:', error);
+            throw new BadRequestException('Не удалось получить данные о компании из egov');
+        }
+    }
 }

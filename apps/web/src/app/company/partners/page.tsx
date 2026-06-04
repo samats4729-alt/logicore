@@ -426,7 +426,29 @@ export default function PartnersPage() {
                 okText="Сохранить"
                 cancelText="Отмена"
             >
-                <Form form={form} layout="vertical" onFinish={handleSave}>
+                <Form 
+                    form={form} 
+                    layout="vertical" 
+                    onFinish={handleSave}
+                    onValuesChange={async (changedValues) => {
+                        if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
+                            try {
+                                const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
+                                if (res.data) {
+                                    const updateObj: any = {};
+                                    if (res.data.name) updateObj.name = res.data.name;
+                                    if (res.data.address) updateObj.address = res.data.address;
+                                    if (res.data.directorName) updateObj.directorName = res.data.directorName;
+                                    
+                                    form.setFieldsValue(updateObj);
+                                    message.success('Реквизиты компании подтянуты');
+                                }
+                            } catch (e) {
+                                // Ignore
+                            }
+                        }
+                    }}
+                >
                     <Form.Item name="name" label="Название компании" rules={[{ required: true, message: 'Введите название' }]}>
                         <Input placeholder="ТОО Пример" />
                     </Form.Item>

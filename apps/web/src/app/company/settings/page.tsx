@@ -192,6 +192,24 @@ export default function SettingsPage() {
                         form={companyForm}
                         layout="vertical"
                         onFinish={handleCompanyUpdate}
+                        onValuesChange={async (changedValues) => {
+                            if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
+                                try {
+                                    const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
+                                    if (res.data) {
+                                        const updateObj: any = {};
+                                        if (res.data.name) updateObj.name = res.data.name;
+                                        if (res.data.address) updateObj.address = res.data.address;
+                                        if (res.data.directorName) updateObj.directorName = res.data.directorName;
+                                        
+                                        companyForm.setFieldsValue(updateObj);
+                                        message.success('Реквизиты компании подтянуты');
+                                    }
+                                } catch (e) {
+                                    // Ignore
+                                }
+                            }
+                        }}
                     >
                         <Title level={5} style={{ marginBottom: 16 }}>Основная информация</Title>
                         <Row gutter={24}>
