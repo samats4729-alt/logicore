@@ -91,14 +91,15 @@ interface Order {
     createdAt: string;
     routePoints?: { pointType: string; sequence: number; location: { id?: string; name: string; address: string; city?: string } }[];
     customer?: { firstName: string; lastName: string; phone: string; email?: string };
-    customerCompany?: { id?: string; name: string; phone?: string };
+    customerCompany?: { id?: string; name: string; phone?: string; email?: string };
     customerCompanyId?: string;
     assignedDriverName?: string;
     assignedDriverPhone?: string;
     assignedDriverPlate?: string;
     assignedAt?: string;
-    subForwarder?: { name: string };
-    forwarder?: { id?: string; name: string };
+    subForwarder?: { name: string; email?: string };
+    forwarder?: { id?: string; name: string; email?: string };
+    partner?: { name: string; email?: string };
     forwarderId?: string;
     isConfirmed?: boolean;
     driverId?: string;
@@ -281,7 +282,7 @@ export default function CompanyOrdersPage() {
     const [tariffLoading, setTariffLoading] = useState(false);
     const [profileComplete, setProfileComplete] = useState(true);
     const [showCustomerField, setShowCustomerField] = useState(false);
-    const [showForwarderField, setShowForwarderField] = useState(false);
+    const [showForwarderField, setShowForwarderField] = useState(true);
     const [creatorRole, setCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
     const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
 
@@ -290,7 +291,7 @@ export default function CompanyOrdersPage() {
         setIsMarketplace(false);
         if (role === 'CUSTOMER') {
             setShowCustomerField(false);
-            setShowForwarderField(false);
+            setShowForwarderField(true);
             createForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
         } else if (role === 'FORWARDER') {
             setShowCustomerField(true);
@@ -304,7 +305,7 @@ export default function CompanyOrdersPage() {
         setIsMarketplace(false);
         if (role === 'CUSTOMER') {
             setShowCustomerField(false);
-            setShowForwarderField(false);
+            setShowForwarderField(true);
             editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
         } else if (role === 'FORWARDER') {
             setShowCustomerField(true);
@@ -418,7 +419,7 @@ export default function CompanyOrdersPage() {
             setAppliedTariff(null);
             setCreatorRole('CUSTOMER');
             setShowCustomerField(false);
-            setShowForwarderField(false);
+            setShowForwarderField(true);
         }
     }, [createModalOpen]);
 
@@ -663,8 +664,13 @@ export default function CompanyOrdersPage() {
         const isMkt = !order.forwarderId && (!!order.driverCost || order.status === 'PENDING');
 
         setShowCustomerField(hasExternalCustomer);
-        setShowForwarderField(isFwdAssigned);
-        setIsMarketplace(isMkt);
+        if (currentRole === 'CUSTOMER' && !isFwdAssigned && !isMkt) {
+            setShowForwarderField(true);
+            setIsMarketplace(false);
+        } else {
+            setShowForwarderField(isFwdAssigned);
+            setIsMarketplace(isMkt);
+        }
         editForm.setFieldsValue({
             cargoDescription: order.cargoDescription,
             cargoWeight: order.cargoWeight,
@@ -1067,7 +1073,7 @@ export default function CompanyOrdersPage() {
         <div style={{ height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Title level={4} style={{ margin: 0 }}>Заявки</Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => { setShowCustomerField(false); setShowForwarderField(false); setCreateModalOpen(true); }} disabled={!profileComplete}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => { setShowCustomerField(false); setShowForwarderField(true); setCreateModalOpen(true); }} disabled={!profileComplete}>
                     Новая заявка
                 </Button>
             </div>
@@ -1583,6 +1589,7 @@ export default function CompanyOrdersPage() {
                                                     setShowForwarderField(false);
                                                     createForm.setFieldsValue({ forwarderId: null });
                                                 } else {
+                                                    setShowForwarderField(true);
                                                     createForm.setFieldsValue({ driverCost: null });
                                                 }
                                             }}
@@ -1599,6 +1606,7 @@ export default function CompanyOrdersPage() {
                                                 if (val) {
                                                     setIsMarketplace(false);
                                                 } else {
+                                                    setIsMarketplace(true);
                                                     createForm.setFieldsValue({ forwarderId: null, driverCost: null });
                                                 }
                                             }}
@@ -2072,6 +2080,7 @@ export default function CompanyOrdersPage() {
                                                     setShowForwarderField(false);
                                                     editForm.setFieldsValue({ forwarderId: null });
                                                 } else {
+                                                    setShowForwarderField(true);
                                                     editForm.setFieldsValue({ driverCost: null });
                                                 }
                                             }}
@@ -2088,6 +2097,7 @@ export default function CompanyOrdersPage() {
                                                 if (val) {
                                                     setIsMarketplace(false);
                                                 } else {
+                                                    setIsMarketplace(true);
                                                     editForm.setFieldsValue({ forwarderId: null, driverCost: null });
                                                 }
                                             }}
