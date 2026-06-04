@@ -139,12 +139,14 @@ export default function CompanyContractsPage() {
                 api.get('/partners'),
                 api.get('/external-companies'),
             ]);
-            const partnersList = partnersRes.data;
-            const externalList = externalRes.data.map((e: any) => ({
-                id: e.id,
-                name: e.name,
-                isExternal: true,
-            }));
+            const partnersList = partnersRes.data.filter((p: any) => p.isCarrier);
+            const externalList = externalRes.data
+                .filter((e: any) => e.isCarrier)
+                .map((e: any) => ({
+                    id: e.id,
+                    name: e.name,
+                    isExternal: true,
+                }));
             setPartners([...partnersList, ...externalList]);
         } catch (error) {
             console.error('Failed to fetch partners:', error);

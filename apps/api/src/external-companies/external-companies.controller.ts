@@ -24,6 +24,8 @@ export class ExternalCompaniesController {
         phone?: string;
         email?: string;
         type: 'CUSTOMER' | 'FORWARDER';
+        isCustomer?: boolean;
+        isCarrier?: boolean;
         address?: string;
         directorName?: string;
     }) {
@@ -39,6 +41,8 @@ export class ExternalCompaniesController {
         email?: string;
         address?: string;
         directorName?: string;
+        isCustomer?: boolean;
+        isCarrier?: boolean;
     }) {
         return this.service.updateExternalCompany(req.user.companyId, id, dto);
     }

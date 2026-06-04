@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, message, List, Modal, Form, Select, Popconfirm } from 'antd';
+import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, message, List, Modal, Form, Select, Popconfirm, Checkbox } from 'antd';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
     CheckCircleOutlined, CloseCircleOutlined, ShopOutlined,
-    PlusOutlined, EditOutlined, DeleteOutlined
+    PlusOutlined, EditOutlined, DeleteOutlined, CarOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -14,7 +14,7 @@ const { Title, Text } = Typography;
 
 export default function PartnersPage() {
     const { user } = useAuthStore();
-    const [activeTab, setActiveTab] = useState('my-partners');
+    const [activeTab, setActiveTab] = useState('customers');
 
     // Data States
     const [counterparties, setCounterparties] = useState<any[]>([]);
@@ -159,12 +159,23 @@ export default function PartnersPage() {
     };
 
     const handleSave = async (values: any) => {
+        const { roles, ...rest } = values;
+        const isCustomer = roles?.includes('customer') ?? true;
+        const isCarrier = roles?.includes('carrier') ?? false;
+        
+        const body = {
+            ...rest,
+            isCustomer,
+            isCarrier,
+            type: isCustomer ? 'CUSTOMER' : 'FORWARDER'
+        };
+
         try {
             if (editingCompany) {
-                await api.patch(`/external-companies/${editingCompany.id}`, values);
+                await api.patch(`/external-companies/${editingCompany.id}`, body);
                 message.success('Контрагент обновлен');
             } else {
-                await api.post('/external-companies', { ...values, type: 'CUSTOMER' });
+                await api.post('/external-companies', body);
                 message.success('Контрагент добавлен');
             }
             setModalOpen(false);
@@ -188,13 +199,20 @@ export default function PartnersPage() {
 
     const openEdit = (company: any) => {
         setEditingCompany(company);
-        form.setFieldsValue(company);
+        const roles = [];
+        if (company.isCustomer) roles.push('customer');
+        if (company.isCarrier) roles.push('carrier');
+        form.setFieldsValue({
+            ...company,
+            roles
+        });
         setModalOpen(true);
     };
 
     const openCreate = () => {
         setEditingCompany(null);
         form.resetFields();
+        form.setFieldsValue({ roles: ['customer'] });
         setModalOpen(true);
     };
 
@@ -204,9 +222,15 @@ export default function PartnersPage() {
             dataIndex: 'name',
             key: 'name',
             render: (text: string, record: any) => (
-                <Space>
-                    <Avatar icon={<ShopOutlined />} style={{ backgroundColor: record.isExternal ? '#8c8c8c' : '#1890ff' }} />
-                    <Text strong>{text}</Text>
+                <Space direction="vertical" size={2}>
+                    <Space>
+                        <Avatar icon={<ShopOutlined />} style={{ backgroundColor: record.isExternal ? '#8c8c8c' : '#1890ff' }} />
+                        <Text strong>{text}</Text>
+                    </Space>
+                    <Space size={4}>
+                        {record.isCustomer && <Tag color="blue" style={{ fontSize: '10px', lineHeight: '14px', margin: 0 }}>Заказчик</Tag>}
+                        {record.isCarrier && <Tag color="green" style={{ fontSize: '10px', lineHeight: '14px', margin: 0 }}>Перевозчик</Tag>}
+                    </Space>
                 </Space>
             )
         },
@@ -264,55 +288,41 @@ export default function PartnersPage() {
         }
     ];
 
-    const myPartnersContent = (
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
-            {/* Incoming Requests Section - Only show if there are requests */}
-            {requests.length > 0 && (
-                <Card
-                    title={<Space><Badge count={requests.length} /> Входящие заявки</Space>}
-                    style={{ borderColor: '#faad14' }}
-                >
-                    <List
-                        itemLayout="horizontal"
-                        dataSource={requests}
-                        renderItem={(item: any) => (
-                            <List.Item
-                                actions={[
-                                    <Button key="accept" type="primary" icon={<CheckCircleOutlined />} onClick={() => acceptInvite(item.id)}>Принять</Button>,
-                                    <Button key="reject" danger icon={<CloseCircleOutlined />} onClick={() => rejectInvite(item.id)}>Отклонить</Button>
-                                ]}
-                            >
-                                <List.Item.Meta
-                                    avatar={<Avatar icon={<TeamOutlined />} />}
-                                    title={item.requester.name}
-                                    description={`Хочет стать вашим партнером. Дата: ${new Date(item.createdAt).toLocaleDateString()}`}
-                                />
-                            </List.Item>
-                        )}
-                    />
-                </Card>
-            )}
-
+    const renderPartnersTable = (data: any[], tabType: 'customers' | 'carriers') => {
+        const filteredData = data.filter(c => tabType === 'customers' ? c.isCustomer : c.isCarrier);
+        
+        return (
             <Card style={{ minHeight: 400 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
-                    <Title level={4} style={{ margin: 0 }}>Список контрагентов</Title>
+                    <Title level={4} style={{ margin: 0 }}>
+                        {tabType === 'customers' ? 'Список заказчиков' : 'Список перевозчиков'}
+                    </Title>
                     <Space>
-                        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                            Добавить контрагента
+                        <Button 
+                            type="primary" 
+                            icon={<PlusOutlined />} 
+                            onClick={() => {
+                                setEditingCompany(null);
+                                form.resetFields();
+                                form.setFieldsValue({ roles: [tabType === 'customers' ? 'customer' : 'carrier'] });
+                                setModalOpen(true);
+                            }}
+                        >
+                            Добавить {tabType === 'customers' ? 'заказчика' : 'перевозчика'}
                         </Button>
                         <Button onClick={fetchCounterparties}>Обновить</Button>
                     </Space>
                 </div>
                 <Table
                     columns={columns}
-                    dataSource={counterparties}
+                    dataSource={filteredData}
                     rowKey="id"
                     loading={loading}
-                    locale={{ emptyText: 'У вас пока нет контрагентов' }}
+                    locale={{ emptyText: tabType === 'customers' ? 'У вас пока нет заказчиков' : 'У вас пока нет перевозчиков' }}
                 />
             </Card>
-        </Space>
-    );
+        );
+    };
 
     const searchContent = (
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
@@ -395,15 +405,82 @@ export default function PartnersPage() {
                 type="card"
                 items={[
                     {
-                        key: 'my-partners',
+                        key: 'customers',
                         label: (
                             <Space>
                                 <TeamOutlined />
-                                Мои контрагенты
+                                Заказчики
+                            </Space>
+                        ),
+                        children: renderPartnersTable(counterparties, 'customers')
+                    },
+                    {
+                        key: 'carriers',
+                        label: (
+                            <Space>
+                                <CarOutlined />
+                                Перевозчики
+                            </Space>
+                        ),
+                        children: renderPartnersTable(counterparties, 'carriers')
+                    },
+                    {
+                        key: 'requests',
+                        label: (
+                            <Space>
+                                <TeamOutlined />
+                                Запросы
                                 {requests.length > 0 && <Badge count={requests.length} size="small" />}
                             </Space>
                         ),
-                        children: myPartnersContent
+                        children: (
+                            <Space direction="vertical" style={{ width: '100%' }} size="large">
+                                <Card title="Входящие запросы">
+                                    {requests.length > 0 ? (
+                                        <List
+                                            itemLayout="horizontal"
+                                            dataSource={requests}
+                                            renderItem={(item: any) => (
+                                                <List.Item
+                                                    actions={[
+                                                        <Button key="accept" type="primary" icon={<CheckCircleOutlined />} onClick={() => acceptInvite(item.id)}>Принять</Button>,
+                                                        <Button key="reject" danger icon={<CloseCircleOutlined />} onClick={() => rejectInvite(item.id)}>Отклонить</Button>
+                                                    ]}
+                                                >
+                                                    <List.Item.Meta
+                                                        avatar={<Avatar icon={<TeamOutlined />} />}
+                                                        title={item.requester.name}
+                                                        description={`Хочет стать вашим партнером. Дата: ${new Date(item.createdAt).toLocaleDateString()}`}
+                                                    />
+                                                </List.Item>
+                                            )}
+                                        />
+                                    ) : (
+                                        <Text type="secondary">Нет входящих запросов</Text>
+                                    )}
+                                </Card>
+                                <Card title="Исходящие запросы">
+                                    {sentRequests.length > 0 ? (
+                                        <List
+                                            itemLayout="horizontal"
+                                            dataSource={sentRequests}
+                                            renderItem={(item: any) => (
+                                                <List.Item>
+                                                    <List.Item.Meta
+                                                        avatar={<Avatar icon={<UserAddOutlined />} />}
+                                                        title={item.recipient.name}
+                                                        description={`Запрос отправлен. Дата: ${new Date(item.createdAt).toLocaleDateString()}`}
+                                                    />
+                                                    <Tag color="orange">Ожидает подтверждения</Tag>
+                                                </List.Item>
+                                            )}
+                                        />
+                                    ) : (
+                                        <Text type="secondary">Нет исходящих запросов</Text>
+                                    )}
+                                </Card>
+                            </Space>
+                        )
                     },
                     {
                         key: 'search',
@@ -453,6 +530,18 @@ export default function PartnersPage() {
                 >
                     <Form.Item name="name" label="Название компании" rules={[{ required: true, message: 'Введите название' }]}>
                         <Input placeholder="ТОО Пример" />
+                    </Form.Item>
+                    <Form.Item 
+                        name="roles" 
+                        label="Роль контрагента" 
+                        rules={[{ required: true, message: 'Выберите хотя бы одну роль' }]}
+                    >
+                        <Checkbox.Group style={{ width: '100%' }}>
+                            <Space direction="horizontal" size="large">
+                                <Checkbox value="customer">Заказчик</Checkbox>
+                                <Checkbox value="carrier">Перевозчик</Checkbox>
+                            </Space>
+                        </Checkbox.Group>
                     </Form.Item>
                     {/* Тип скрыт, т.к. компании универсальны */}
                     <Form.Item 

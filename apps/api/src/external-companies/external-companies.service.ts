@@ -22,6 +22,8 @@ export class ExternalCompaniesService {
                 phone: true,
                 email: true,
                 type: true,
+                isCustomer: true,
+                isCarrier: true,
                 address: true,
                 directorName: true,
                 isActive: true,
@@ -39,9 +41,14 @@ export class ExternalCompaniesService {
         phone?: string;
         email?: string;
         type: 'CUSTOMER' | 'FORWARDER';
+        isCustomer?: boolean;
+        isCarrier?: boolean;
         address?: string;
         directorName?: string;
     }) {
+        const isCustomer = data.isCustomer !== undefined ? data.isCustomer : (data.type === 'CUSTOMER');
+        const isCarrier = data.isCarrier !== undefined ? data.isCarrier : (data.type === 'FORWARDER');
+
         return this.prisma.company.create({
             data: {
                 name: data.name,
@@ -49,6 +56,8 @@ export class ExternalCompaniesService {
                 phone: data.phone,
                 email: data.email,
                 type: data.type,
+                isCustomer,
+                isCarrier,
                 address: data.address,
                 directorName: data.directorName,
                 isExternal: true,
@@ -68,6 +77,8 @@ export class ExternalCompaniesService {
         email?: string;
         address?: string;
         directorName?: string;
+        isCustomer?: boolean;
+        isCarrier?: boolean;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: externalId },

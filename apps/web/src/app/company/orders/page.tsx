@@ -321,7 +321,12 @@ export default function CompanyOrdersPage() {
     const handleCreateQuickPartner = async (values: any) => {
         setQuickPartnerLoading(true);
         try {
-            await api.post('/external-companies', { ...values, type: 'CUSTOMER' });
+            await api.post('/external-companies', {
+                ...values,
+                isCustomer: false,
+                isCarrier: true,
+                type: 'FORWARDER'
+            });
             message.success('Контрагент успешно добавлен');
             setQuickPartnerModalOpen(false);
             quickPartnerForm.resetFields();
@@ -352,11 +357,13 @@ export default function CompanyOrdersPage() {
                 api.get('/partners'),
                 api.get('/external-companies'),
             ]);
-            const partnersList = partnersRes.data;
-            const externalList = externalRes.data.map((e: any) => ({
-                id: e.id,
-                name: e.name,
-            }));
+            const partnersList = partnersRes.data.filter((p: any) => p.isCarrier);
+            const externalList = externalRes.data
+                .filter((e: any) => e.isCarrier)
+                .map((e: any) => ({
+                    id: e.id,
+                    name: e.name,
+                }));
             const combined = [...partnersList, ...externalList];
             setPartners(combined);
             setForwarders(combined);

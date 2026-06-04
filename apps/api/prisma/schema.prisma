@@ -150,6 +150,8 @@ model Company {
   stampImage     String?     // Путь к PNG печати
   signatureImage String?     // Путь к PNG подписи
   type           CompanyType? @default(CUSTOMER)
+  isCustomer     Boolean     @default(true)
+  isCarrier      Boolean     @default(false)
   isOurCompany   Boolean     @default(false)  // true = LogComp
   isExternal     Boolean     @default(false)  // Внешняя компания (справочник)
   isActive       Boolean     @default(true)
