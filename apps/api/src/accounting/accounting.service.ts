@@ -40,21 +40,69 @@ export class AccountingService {
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
+        const isCustomer = order.customerCompanyId === companyId;
+
         const [incomes, expenses] = await Promise.all([
             this.prisma.income.findMany({
                 where: { orderId, companyId },
                 orderBy: { date: 'desc' },
             }),
-            this.prisma.expense.findMany({
-                where: { orderId, companyId },
-                orderBy: { date: 'desc' },
-            }),
+            isCustomer
+                ? [] // Customer should not see any carrier expenses
+                : this.prisma.expense.findMany({
+                    where: { orderId, companyId },
+                    orderBy: { date: 'desc' },
+                }),
         ]);
 
         const totalIncomes = incomes.filter((i: any) => !i.isDeleted).reduce((s: number, i: any) => s + i.amount, 0);
         const totalExpenses = expenses.filter((e: any) => !e.isDeleted).reduce((s: number, e: any) => s + e.amount, 0);
 
+        // Exclude main customer payment category ('order_payment' and 'prepayment') from margins to prevent double-counting
+        const extraIncomes = incomes
+            .filter((i: any) => !i.isDeleted && i.category !== 'order_payment' && i.category !== 'prepayment')
+            .reduce((s: number, i: any) => s + i.amount, 0);
+
         const executorCost = order.subForwarderId ? (order.subForwarderPrice || 0) : (order.driverCost || 0);
+
+        if (isCustomer) {
+            // Safe redacted response for customer
+            return {
+                order: {
+                    ...order,
+                    driverCost: null,
+                    subForwarderPrice: null,
+                    subForwarderId: null,
+                    isDriverPaid: false,
+                    driverPaidAt: null,
+                    isSubForwarderPaid: false,
+                    subForwarderPaidAt: null,
+                    assignedDriverName: null,
+                    assignedDriverPhone: null,
+                    driver: null,
+                    partner: null,
+                    subForwarder: null,
+                },
+                incomes,
+                expenses: [],
+                summary: {
+                    customerPrice: order.customerPrice || 0,
+                    driverCost: 0,
+                    subForwarderPrice: 0,
+                    executorCost: 0,
+                    margin: 0,
+                    totalIncomes,
+                    totalExpenses: 0,
+                    balance: totalIncomes,
+                    isCustomerPaid: order.isCustomerPaid,
+                    isDriverPaid: false,
+                    isSubForwarderPaid: false,
+                    customerDebt: order.isCustomerPaid ? 0 : (order.customerPrice || 0) - totalIncomes,
+                    driverDebt: 0,
+                    subForwarderDebt: 0,
+                },
+            };
+        }
 
         return {
             order,
@@ -65,7 +113,7 @@ export class AccountingService {
                 driverCost: order.driverCost || 0,  // Плановая стоимость исполнителя
                 subForwarderPrice: order.subForwarderPrice || 0,
                 executorCost,  
-                margin: (order.customerPrice || 0) + totalIncomes - executorCost - totalExpenses,
+                margin: (order.customerPrice || 0) + extraIncomes - executorCost - totalExpenses,
                 totalIncomes,
                 totalExpenses,
                 balance: totalIncomes - totalExpenses,
@@ -82,7 +130,7 @@ export class AccountingService {
     // ==================== FINANCIAL REGISTRY (Реестр) ====================
 
     async getFinancialRegistry(companyId: string) {
-        return this.prisma.order.findMany({
+        const orders = await this.prisma.order.findMany({
             where: {
                 AND: [
                     {
@@ -124,6 +172,7 @@ export class AccountingService {
                 isSubForwarderPaid: true,
                 subForwarderPaidAt: true,
                 // Связи
+                customerCompanyId: true,
                 customerCompany: { select: { id: true, name: true } },
                 forwarder: { select: { id: true, name: true } },
                 assignedDriverName: true,
@@ -133,6 +182,27 @@ export class AccountingService {
                 routePoints: { select: { pointType: true, sequence: true, location: { select: { address: true, city: true } } }, orderBy: { sequence: 'asc' } },
             },
             orderBy: { createdAt: 'desc' },
+        });
+
+        // Safe redaction for Customer company to prevent price leakage
+        return orders.map(order => {
+            if (order.customerCompanyId === companyId) {
+                return {
+                    ...order,
+                    driverCost: null,
+                    subForwarderPrice: null,
+                    subForwarderId: null,
+                    isDriverPaid: false,
+                    driverPaidAt: null,
+                    isSubForwarderPaid: false,
+                    subForwarderPaidAt: null,
+                    assignedDriverName: null,
+                    driver: null,
+                    partner: null,
+                    subForwarder: null,
+                };
+            }
+            return order;
         });
     }
 
@@ -189,13 +259,12 @@ export class AccountingService {
     }
 
     async getExpensesJournal(companyId: string) {
-        // Заявки где мы экспедитор — должны оплатить перевозчику
+        // Заявки где мы экспедитор/исполнитель — должны оплатить перевозчику (исключаем заказы, где мы заказчик)
         return this.prisma.order.findMany({
             where: {
                 AND: [
                     {
                         OR: [
-                            { customerCompanyId: companyId },
                             { forwarderId: companyId },
                             { partnerId: companyId },
                             { subForwarderId: companyId },
@@ -203,24 +272,12 @@ export class AccountingService {
                         ]
                     },
                     {
+                        customerCompanyId: { not: companyId }
+                    },
+                    {
                         OR: [
-                            {
-                                AND: [
-                                    { customerCompanyId: companyId },
-                                    { customerPrice: { not: null } }
-                                ]
-                            },
-                            {
-                                AND: [
-                                    { customerCompanyId: { not: companyId } },
-                                    {
-                                        OR: [
-                                            { driverCost: { not: null } },
-                                            { subForwarderPrice: { not: null } }
-                                        ]
-                                    }
-                                ]
-                            }
+                            { driverCost: { not: null } },
+                            { subForwarderPrice: { not: null } }
                         ]
                     },
                     {
@@ -292,10 +349,8 @@ export class AccountingService {
             where: {
                 id: orderId,
                 OR: [
-                    { customerCompanyId: companyId },
                     { forwarderId: companyId },
                     { partnerId: companyId },
-                    { subForwarderId: companyId },
                     { responsibleManager: { companyId: companyId } },
                 ],
             },
@@ -316,7 +371,6 @@ export class AccountingService {
             where: {
                 id: orderId,
                 OR: [
-                    { customerCompanyId: companyId },
                     { forwarderId: companyId },
                     { partnerId: companyId },
                     { subForwarderId: companyId },
@@ -340,10 +394,8 @@ export class AccountingService {
             where: {
                 id: orderId,
                 OR: [
-                    { customerCompanyId: companyId },
                     { forwarderId: companyId },
                     { partnerId: companyId },
-                    { subForwarderId: companyId },
                     { responsibleManager: { companyId: companyId } },
                 ],
             },
