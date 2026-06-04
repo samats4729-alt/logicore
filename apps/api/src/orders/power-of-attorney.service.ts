@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import * as PDFDocument from 'pdfkit';
@@ -7,6 +7,8 @@ import * as fs from 'fs';
 
 @Injectable()
 export class PowerOfAttorneyService {
+    private readonly logger = new Logger(PowerOfAttorneyService.name);
+
     constructor(
         private prisma: PrismaService,
         private s3Service: S3Service,
@@ -28,6 +30,7 @@ export class PowerOfAttorneyService {
 
         // Определяем экспедиторскую компанию (кто везет груз)
         const issuerCompanyId = order.subForwarderId || order.forwarderId || order.partnerId || order.customerCompanyId || companyId;
+        this.logger.log(`[PoA] Generating PDF for orderId=${orderId}. Logged-in companyId=${companyId}. Selected issuerCompanyId=${issuerCompanyId}`);
         const forwarderCompany = await this.prisma.company.findUnique({
             where: { id: issuerCompanyId },
         });
@@ -38,11 +41,15 @@ export class PowerOfAttorneyService {
         let stampBuffer: Buffer | null = null;
         let signatureBuffer: Buffer | null = null;
 
+        this.logger.log(`[PoA] Company "${forwarderCompany.name}" (ID: ${forwarderCompany.id}) has stampImage="${forwarderCompany.stampImage}", signatureImage="${forwarderCompany.signatureImage}"`);
+
         if (forwarderCompany.stampImage) {
             stampBuffer = await this.getImageBuffer(forwarderCompany.stampImage);
+            this.logger.log(`[PoA] Loaded stampBuffer: ${stampBuffer ? stampBuffer.length + ' bytes' : 'failed/null'}`);
         }
         if (forwarderCompany.signatureImage) {
             signatureBuffer = await this.getImageBuffer(forwarderCompany.signatureImage);
+            this.logger.log(`[PoA] Loaded signatureBuffer: ${signatureBuffer ? signatureBuffer.length + ' bytes' : 'failed/null'}`);
         }
 
         // Данные водителя
@@ -208,7 +215,10 @@ export class PowerOfAttorneyService {
                         width: 120,
                         height: 120,
                     });
-                } catch { }
+                    this.logger.log(`[PoA] Successfully rendered stamp image on PDF`);
+                } catch (err) {
+                    this.logger.error(`[PoA] Failed to render stamp image onto PDF:`, err);
+                }
             }
 
             // ============ ПОДПИСЬ ДИРЕКТОРА (РИСУНОК) ============
@@ -218,7 +228,10 @@ export class PowerOfAttorneyService {
                         width: 100,
                         height: 40,
                     });
-                } catch { }
+                    this.logger.log(`[PoA] Successfully rendered signature image on PDF`);
+                } catch (err) {
+                    this.logger.error(`[PoA] Failed to render signature image onto PDF:`, err);
+                }
             }
 
             doc.end();
@@ -349,6 +362,7 @@ export class PowerOfAttorneyService {
     private async getImageBuffer(relativePath: string): Promise<Buffer | null> {
         if (this.s3Service.isS3Enabled()) {
             try {
+                this.logger.log(`[PoA] Attempting S3 download for path: ${relativePath}`);
                 const { stream } = await this.s3Service.downloadFile(relativePath);
                 return new Promise<Buffer>((resolve, reject) => {
                     const chunks: Buffer[] = [];
@@ -356,18 +370,24 @@ export class PowerOfAttorneyService {
                     stream.on('end', () => resolve(Buffer.concat(chunks)));
                     stream.on('error', (err) => reject(err));
                 });
-            } catch (error) {
-                // Fallback to local file if S3 download fails
+            } catch (error: any) {
+                this.logger.warn(`[PoA] S3 download failed for ${relativePath}. Falling back to local file. Error: ${error.message}`);
             }
+        } else {
+            this.logger.log(`[PoA] S3 is not enabled, using local storage check`);
         }
 
         const localPath = path.join(process.cwd(), relativePath);
+        this.logger.log(`[PoA] Checking local path: ${localPath}`);
         if (fs.existsSync(localPath)) {
             try {
                 return fs.readFileSync(localPath);
             } catch (e) {
+                this.logger.error(`[PoA] Failed to read local file at ${localPath}:`, e);
                 return null;
             }
+        } else {
+            this.logger.warn(`[PoA] Local file not found at: ${localPath}`);
         }
         return null;
     }
