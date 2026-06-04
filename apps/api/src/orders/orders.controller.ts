@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
@@ -8,6 +8,7 @@ import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { CreateOrderDto, UpdateStatusDto, AssignDriverDto } from './dto/order.dto';
 import { UserRole, OrderStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
+import { EmailService } from '../email/email.service';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -17,6 +18,7 @@ export class OrdersController {
     constructor(
         private ordersService: OrdersService,
         private poaService: PowerOfAttorneyService,
+        private emailService: EmailService,
     ) { }
 
     @Post()
@@ -80,6 +82,35 @@ export class OrdersController {
             'Content-Length': pdfBuffer.length,
         });
         res.end(pdfBuffer);
+    }
+
+    @Post(':id/share-power-of-attorney')
+    @ApiOperation({ summary: 'Отправить доверенность по email получателям' })
+    async sharePowerOfAttorney(
+        @Param('id') id: string,
+        @Body() body: { emails: string[] },
+        @Request() req: any,
+    ) {
+        if (!body.emails || !Array.isArray(body.emails) || body.emails.length === 0) {
+            throw new BadRequestException('Не указаны email-адреса для рассылки');
+        }
+
+        const order = await this.ordersService.findById(id);
+        if (!order) {
+            throw new NotFoundException('Заявка не найдена');
+        }
+
+        // Generate the PDF buffer
+        const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId);
+
+        // Send emails in parallel
+        await Promise.all(
+            body.emails.map(email =>
+                this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, pdfBuffer)
+            )
+        );
+
+        return { success: true, message: 'Доверенность успешно отправлена на указанные адреса' };
     }
 
     @Get(':id')

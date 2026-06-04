@@ -11,7 +11,8 @@ import dayjs from 'dayjs';
 import {
     EyeOutlined, UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
-    FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined, EditOutlined
+    FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined, EditOutlined,
+    MailOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -175,6 +176,94 @@ export default function CompanyOrdersPage() {
     const [form] = Form.useForm();
     const [editForm] = Form.useForm();
     const [statusForm] = Form.useForm();
+
+    // Share Power of Attorney modal
+    const [sharePoAModalOpen, setSharePoAModalOpen] = useState(false);
+    const [sharePoALoading, setSharePoALoading] = useState(false);
+    const [shareEmailsList, setShareEmailsList] = useState<{ email: string; checked: boolean; label: string }[]>([]);
+    const [customEmailInput, setCustomEmailInput] = useState('');
+
+    const openSharePoAModal = (order: Order) => {
+        const list: { email: string; checked: boolean; label: string }[] = [];
+        
+        if (order.customerCompany?.email) {
+            list.push({ email: order.customerCompany.email, checked: true, label: `Компания-заказчик (${order.customerCompany.name})` });
+        }
+        if (order.customer?.email) {
+            list.push({ email: order.customer.email, checked: true, label: `Заказчик (${order.customer.firstName} ${order.customer.lastName})` });
+        }
+        if (order.forwarder?.email) {
+            list.push({ email: order.forwarder.email, checked: true, label: `Экспедитор (${order.forwarder.name})` });
+        }
+        if (order.subForwarder?.email) {
+            list.push({ email: order.subForwarder.email, checked: true, label: `Суб-экспедитор (${order.subForwarder.name})` });
+        }
+        if (order.partner?.email) {
+            list.push({ email: order.partner.email, checked: true, label: `Партнер (${order.partner.name})` });
+        }
+        
+        // Remove duplicates
+        const uniqueList: typeof list = [];
+        const seenEmails = new Set<string>();
+        for (const item of list) {
+            if (!seenEmails.has(item.email)) {
+                seenEmails.add(item.email);
+                uniqueList.push(item);
+            }
+        }
+        
+        setShareEmailsList(uniqueList);
+        setCustomEmailInput('');
+        setSharePoAModalOpen(true);
+    };
+
+    const handleSharePoA = async () => {
+        const selectedEmails = shareEmailsList.filter(item => item.checked).map(item => item.email);
+        if (selectedEmails.length === 0) {
+            message.warning('Выберите хотя бы один email для отправки');
+            return;
+        }
+
+        setSharePoALoading(true);
+        try {
+            await api.post(`/orders/${selectedOrder?.id}/share-power-of-attorney`, {
+                emails: selectedEmails,
+            });
+            message.success('Доверенность успешно отправлена на выбранные email-адреса');
+            setSharePoAModalOpen(false);
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка отправки доверенности');
+        } finally {
+            setSharePoALoading(false);
+        }
+    };
+
+    const handleAddCustomEmail = () => {
+        const email = customEmailInput.trim();
+        if (!email) return;
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            message.error('Некорректный формат email');
+            return;
+        }
+        
+        if (shareEmailsList.some(item => item.email === email)) {
+            message.warning('Этот email уже добавлен');
+            return;
+        }
+        
+        if (shareEmailsList.length >= 15) {
+            message.warning('Максимум 15 получателей');
+            return;
+        }
+        
+        setShareEmailsList([
+            ...shareEmailsList,
+            { email, checked: true, label: `Вручную: ${email}` }
+        ]);
+        setCustomEmailInput('');
+    };
 
     // Create / Edit order
     const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -1605,6 +1694,65 @@ export default function CompanyOrdersPage() {
                 </Form>
             </Modal>
 
+            {/* ========== SHARE POWER OF ATTORNEY MODAL ========== */}
+            <Modal
+                title="Отправить доверенность по email"
+                open={sharePoAModalOpen}
+                onCancel={() => setSharePoAModalOpen(false)}
+                onOk={handleSharePoA}
+                okText="Отправить"
+                cancelText="Отмена"
+                confirmLoading={sharePoALoading}
+                width={480}
+            >
+                <div style={{ marginBottom: 16 }}>
+                    <Text type="secondary">
+                        Выберите получателей для отправки доверенности (в формате PDF):
+                    </Text>
+                </div>
+
+                {shareEmailsList.length > 0 ? (
+                    <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 16, border: '1px solid #f0f0f0', borderRadius: 8, padding: 12 }}>
+                        {shareEmailsList.map((item, idx) => (
+                            <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                                <Checkbox
+                                    checked={item.checked}
+                                    onChange={(e) => {
+                                        const newList = [...shareEmailsList];
+                                        newList[idx].checked = e.target.checked;
+                                        setShareEmailsList(newList);
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13 }}>{item.label}</Text>
+                                    <div style={{ fontSize: 11, color: '#999', paddingLeft: 24 }}>{item.email}</div>
+                                </Checkbox>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div style={{ textAlign: 'center', padding: 24, background: '#fafafa', borderRadius: 8, marginBottom: 16 }}>
+                        <Text type="secondary">В заявке нет сохраненных email-адресов.</Text>
+                    </div>
+                )}
+
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+                    <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
+                        Добавить получателя вручную:
+                    </Text>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <Input
+                            placeholder="example@mail.com"
+                            value={customEmailInput}
+                            onChange={(e) => setCustomEmailInput(e.target.value)}
+                            onPressEnter={handleAddCustomEmail}
+                        />
+                        <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddCustomEmail}>
+                            Добавить
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
             {/* ========== ORDER DETAIL DRAWER ========== */}
             <Drawer title={`Заявка ${selectedOrder?.orderNumber}`} open={detailDrawerOpen} onClose={() => setDetailDrawerOpen(false)} width={500}>
                 {selectedOrder && (
@@ -1672,27 +1820,37 @@ export default function CompanyOrdersPage() {
                                 {selectedOrder.assignedDriverName ? 'Изменить водителя' : 'Назначить водителя'}
                             </Button>
                             {(selectedOrder.assignedDriverName || selectedOrder.driverId) && (
-                                <Button
-                                    icon={<FileTextOutlined />}
-                                    style={{ marginTop: 8 }}
-                                    onClick={async () => {
-                                        try {
-                                            const res = await api.get(`/orders/${selectedOrder.id}/power-of-attorney`, { responseType: 'blob' });
-                                            const blob = new Blob([res.data], { type: 'application/pdf' });
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a');
-                                            a.href = url;
-                                            a.download = `Доверенность_${selectedOrder.orderNumber}.pdf`;
-                                            a.click();
-                                            URL.revokeObjectURL(url);
-                                        } catch {
-                                            message.error('Ошибка скачивания доверенности');
-                                        }
-                                    }}
-                                    block
-                                >
-                                    Скачать доверенность
-                                </Button>
+                                <>
+                                    <Button
+                                        icon={<FileTextOutlined />}
+                                        style={{ marginTop: 8 }}
+                                        onClick={async () => {
+                                            try {
+                                                const res = await api.get(`/orders/${selectedOrder.id}/power-of-attorney`, { responseType: 'blob' });
+                                                const blob = new Blob([res.data], { type: 'application/pdf' });
+                                                const url = URL.createObjectURL(blob);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = `Доверенность_${selectedOrder.orderNumber}.pdf`;
+                                                a.click();
+                                                URL.revokeObjectURL(url);
+                                            } catch {
+                                                message.error('Ошибка скачивания доверенности');
+                                            }
+                                        }}
+                                        block
+                                    >
+                                        Скачать доверенность
+                                    </Button>
+                                    <Button
+                                        icon={<MailOutlined />}
+                                        style={{ marginTop: 8 }}
+                                        onClick={() => openSharePoAModal(selectedOrder)}
+                                        block
+                                    >
+                                        Отправить по email
+                                    </Button>
+                                </>
                             )}
                             <Button icon={<EditOutlined />} style={{ marginTop: 8 }} onClick={() => openEditModal(selectedOrder)} block>
                                 Редактировать заявку

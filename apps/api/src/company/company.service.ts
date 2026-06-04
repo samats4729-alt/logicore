@@ -337,12 +337,37 @@ export class CompanyService {
                         select: {
                             id: true,
                             name: true,
+                            email: true,
                         },
                     },
                     customerCompany: {
                         select: {
                             id: true,
                             name: true,
+                            email: true,
+                        },
+                    },
+                    partner: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                    subForwarder: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                    customer: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            phone: true,
+                            email: true,
                         },
                     },
                     responsibleManager: {
