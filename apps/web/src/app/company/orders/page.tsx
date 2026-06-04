@@ -1513,7 +1513,15 @@ export default function CompanyOrdersPage() {
                                 </Col>
                                 <Col span={12}>
                                     <Form.Item name="cargoType" label="Тип кузова">
-                                        <Select placeholder="Тент, Реф..." allowClear>
+                                        <Select 
+                                            placeholder="Тент, Реф..." 
+                                            allowClear
+                                            showSearch
+                                            optionFilterProp="children"
+                                            filterOption={(input, option) =>
+                                                (option?.children as unknown as string ?? '').toLowerCase().includes(input.toLowerCase())
+                                            }
+                                        >
                                             {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
                                         </Select>
                                     </Form.Item>
@@ -1997,7 +2005,15 @@ export default function CompanyOrdersPage() {
                                 </Col>
                                 <Col span={12}>
                                     <Form.Item name="cargoType" label="Тип кузова">
-                                        <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children">
+                                        <Select 
+                                            placeholder="Тент, Реф..." 
+                                            allowClear
+                                            showSearch
+                                            optionFilterProp="children"
+                                            filterOption={(input, option) =>
+                                                (option?.children as unknown as string ?? '').toLowerCase().includes(input.toLowerCase())
+                                            }
+                                        >
                                             {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
                                         </Select>
                                     </Form.Item>
