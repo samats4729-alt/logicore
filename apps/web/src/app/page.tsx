@@ -36,6 +36,9 @@ export default function HomePage() {
                     break;
                 case 'COMPANY_ADMIN':
                 case 'LOGISTICIAN':
+                case 'FORWARDER':
+                case 'ACCOUNTANT':
+                case 'PARTNER':
                     router.push('/company');
                     break;
                 case 'WAREHOUSE_MANAGER':

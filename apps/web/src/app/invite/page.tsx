@@ -58,7 +58,7 @@ function InviteForm() {
             const user = res.data.user;
             if (user.role === 'DRIVER') {
                 router.push('/driver');
-            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(user.role)) {
+            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER', 'ACCOUNTANT', 'PARTNER'].includes(user.role)) {
                 router.push('/company');
             } else {
                 router.push(`/${user.role.toLowerCase()}`);

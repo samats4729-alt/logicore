@@ -37,7 +37,7 @@ export default function LoginPage() {
         if (currentUser) {
             if (currentUser.role === 'ADMIN') {
                 router.replace('/admin');
-            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(currentUser.role)) {
+            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER', 'ACCOUNTANT', 'PARTNER'].includes(currentUser.role)) {
                 router.replace('/company');
             } else {
                 router.replace('/');
@@ -70,7 +70,7 @@ export default function LoginPage() {
             // Редирект по роли
             if (userRole === 'ADMIN') {
                 router.push('/admin');
-            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(userRole)) {
+            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER', 'ACCOUNTANT', 'PARTNER'].includes(userRole)) {
                 router.push('/company');
             } else {
                 router.push('/');
@@ -108,7 +108,7 @@ export default function LoginPage() {
             const userRole = user.role;
             if (userRole === 'ADMIN') {
                 router.push('/admin');
-            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(userRole)) {
+            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER', 'ACCOUNTANT', 'PARTNER'].includes(userRole)) {
                 router.push('/company');
             } else {
                 router.push('/');

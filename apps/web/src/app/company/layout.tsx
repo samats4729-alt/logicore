@@ -62,15 +62,16 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             const currentUser = useAuthStore.getState().user;
             if (!currentUser) {
                 router.replace('/login');
-            } else if (!['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(currentUser.role)) {
+            } else if (!['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER', 'ACCOUNTANT', 'PARTNER'].includes(currentUser.role)) {
                 if (currentUser.role === 'ADMIN') {
                     router.replace('/admin');
                 } else {
+                    logout();
                     router.replace('/login');
                 }
             }
         });
-    }, [hydrated, checkAuth, router]);
+    }, [hydrated, checkAuth, router, logout]);
 
     if (!hydrated || isLoading || !user) {
         return (
