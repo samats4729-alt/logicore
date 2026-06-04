@@ -328,22 +328,46 @@ export default function SettingsPage() {
 
                     <Divider />
                     <Title level={5} style={{ marginBottom: 16 }}>Печать компании</Title>
-                    <Space direction="vertical" size="middle">
+                    <Space direction="vertical" size="middle" style={{ marginBottom: 24, display: 'block' }}>
                         {stampUrl && (
-                            <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, display: 'inline-block' }}>
+                            <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, display: 'inline-block', marginBottom: 8 }}>
                                 <Image src={stampUrl} alt="Печать" width={150} />
                             </div>
                         )}
-                        <Upload
-                            accept=".png,.jpg,.jpeg"
-                            showUploadList={false}
-                            beforeUpload={handleStampUpload}
-                        >
-                            <Button icon={<UploadOutlined />} loading={stampLoading} size="large">
-                                {stampUrl ? 'Заменить печать' : 'Загрузить печать (PNG)'}
-                            </Button>
-                        </Upload>
-                        <Text type="secondary">Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
+                        <div>
+                            <Upload
+                                accept=".png,.jpg,.jpeg"
+                                showUploadList={false}
+                                beforeUpload={handleStampUpload}
+                            >
+                                <Button icon={<UploadOutlined />} loading={stampLoading} size="large">
+                                    {stampUrl ? 'Заменить печать' : 'Загрузить печать (PNG)'}
+                                </Button>
+                            </Upload>
+                        </div>
+                        <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
+                    </Space>
+
+                    <Divider />
+                    <Title level={5} style={{ marginBottom: 16 }}>Подпись руководителя</Title>
+                    <Space direction="vertical" size="middle" style={{ display: 'block' }}>
+                        {signatureUrl && (
+                            <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, display: 'inline-block', marginBottom: 8 }}>
+                                <Image src={signatureUrl} alt="Подпись" width={150} />
+                            </div>
+                        )}
+                        <div>
+                            <Upload
+                                accept=".png,.jpg,.jpeg"
+                                showUploadList={false}
+                                beforeUpload={handleSignatureUpload}
+                            >
+                                <Button icon={<UploadOutlined />} loading={signatureLoading} size="large">
+                                    {signatureUrl ? 'Заменить подпись' : 'Загрузить подпись (PNG)'}
+                                </Button>
+                            </Upload>
+                        </div>
+                        <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
                     </Space>
                 </Card>
             ),

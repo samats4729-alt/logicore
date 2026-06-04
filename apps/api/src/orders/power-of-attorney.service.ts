@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Service } from '../s3/s3.service';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
 import * as fs from 'fs';
 
 @Injectable()
 export class PowerOfAttorneyService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private s3Service: S3Service,
+    ) { }
 
     async generatePdf(orderId: string, companyId: string): Promise<Buffer> {
         const order = await this.prisma.order.findUnique({
@@ -29,6 +33,17 @@ export class PowerOfAttorneyService {
         });
 
         if (!forwarderCompany) throw new NotFoundException('Компания не найдена');
+
+        // Загружаем буферы для печати и подписи
+        let stampBuffer: Buffer | null = null;
+        let signatureBuffer: Buffer | null = null;
+
+        if (forwarderCompany.stampImage) {
+            stampBuffer = await this.getImageBuffer(forwarderCompany.stampImage);
+        }
+        if (forwarderCompany.signatureImage) {
+            signatureBuffer = await this.getImageBuffer(forwarderCompany.signatureImage);
+        }
 
         // Данные водителя
         const driver = order.driver;
@@ -187,16 +202,23 @@ export class PowerOfAttorneyService {
             doc.text('/___________________/', leftM + 300, signY + 30);
 
             // ============ ПЕЧАТЬ ============
-            if (forwarderCompany.stampImage) {
-                const stampPath = path.join(process.cwd(), forwarderCompany.stampImage);
-                if (fs.existsSync(stampPath)) {
-                    try {
-                        doc.image(stampPath, leftM + 300, signY - 20, {
-                            width: 120,
-                            height: 120,
-                        });
-                    } catch { }
-                }
+            if (stampBuffer) {
+                try {
+                    doc.image(stampBuffer, leftM + 300, signY - 20, {
+                        width: 120,
+                        height: 120,
+                    });
+                } catch { }
+            }
+
+            // ============ ПОДПИСЬ ДИРЕКТОРА (РИСУНОК) ============
+            if (signatureBuffer) {
+                try {
+                    doc.image(signatureBuffer, leftM + 320, signY + 10, {
+                        width: 100,
+                        height: 40,
+                    });
+                } catch { }
             }
 
             doc.end();
@@ -322,5 +344,31 @@ export class PowerOfAttorneyService {
 
     private stripCompanyPrefix(name: string): string {
         return name.replace(/^(ТОО|TOO|тоо)\s+/i, '').trim();
+    }
+
+    private async getImageBuffer(relativePath: string): Promise<Buffer | null> {
+        if (this.s3Service.isS3Enabled()) {
+            try {
+                const { stream } = await this.s3Service.downloadFile(relativePath);
+                return new Promise<Buffer>((resolve, reject) => {
+                    const chunks: Buffer[] = [];
+                    stream.on('data', (chunk) => chunks.push(chunk));
+                    stream.on('end', () => resolve(Buffer.concat(chunks)));
+                    stream.on('error', (err) => reject(err));
+                });
+            } catch (error) {
+                // Fallback to local file if S3 download fails
+            }
+        }
+
+        const localPath = path.join(process.cwd(), relativePath);
+        if (fs.existsSync(localPath)) {
+            try {
+                return fs.readFileSync(localPath);
+            } catch (e) {
+                return null;
+            }
+        }
+        return null;
     }
 }

@@ -476,6 +476,72 @@ export class CompanyService {
     }
 
     /**
+     * Загрузить подпись руководителя (PNG)
+     */
+    async uploadSignature(companyId: string, file: Express.Multer.File) {
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+        });
+        if (!company) {
+            throw new NotFoundException('Компания не найдена');
+        }
+
+        const filename = `signature_${companyId}_${Date.now()}.png`;
+        const relativePath = `uploads/signatures/${filename}`;
+
+        if (this.s3Service.isS3Enabled()) {
+            // Upload to S3
+            await this.s3Service.uploadFile(relativePath, file.buffer, file.mimetype);
+
+            // Delete old file from S3 and local disk (for cleanup of legacy local files)
+            if (company.signatureImage) {
+                await this.s3Service.deleteFile(company.signatureImage);
+                const oldLocalPath = path.join(process.cwd(), company.signatureImage);
+                if (fs.existsSync(oldLocalPath)) {
+                    fs.unlinkSync(oldLocalPath);
+                }
+            }
+        } else {
+            // Fallback: Local disk storage
+            const uploadsDir = path.join(process.cwd(), 'uploads', 'signatures');
+            if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+            const filepath = path.join(uploadsDir, filename);
+            fs.writeFileSync(filepath, file.buffer);
+
+            // Delete old local file
+            if (company.signatureImage) {
+                const oldLocalPath = path.join(process.cwd(), company.signatureImage);
+                if (fs.existsSync(oldLocalPath)) {
+                    fs.unlinkSync(oldLocalPath);
+                }
+            }
+        }
+
+        await this.prisma.company.update({
+            where: { id: companyId },
+            data: { signatureImage: relativePath },
+        });
+
+        return { signatureImage: relativePath };
+    }
+
+    /**
+     * Получить путь к подписи руководителя
+     */
+    async getSignaturePath(companyId: string): Promise<string | null> {
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { signatureImage: true },
+        });
+        if (!company) {
+            throw new NotFoundException('Компания не найдена');
+        }
+        return company.signatureImage;
+    }
+
+    /**
      * Получить список экспедиторов
      */
     async getForwarders() {

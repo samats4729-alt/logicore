@@ -198,6 +198,60 @@ export class CompanyController {
         }
     }
 
+    // ==================== Подпись руководителя ====================
+
+    @Post('signature')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @UseInterceptors(FileInterceptor('signature', {
+        limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+        fileFilter: (req, file, cb) => {
+            if (!file.mimetype.match(/^image\/(png|jpeg|jpg)$/)) {
+                cb(new Error('Только PNG/JPG файлы'), false);
+            } else {
+                cb(null, true);
+            }
+        },
+    }))
+    @ApiOperation({ summary: 'Загрузить подпись руководителя (PNG)' })
+    @ApiConsumes('multipart/form-data')
+    async uploadSignature(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
+        if (!file) {
+            throw new Error('Файл не загружен');
+        }
+        return this.companyService.uploadSignature(req.user.companyId, file);
+    }
+
+    @Get('signature')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER)
+    @ApiOperation({ summary: 'Получить подпись руководителя' })
+    async getSignature(@Request() req: any, @Res() res: Response) {
+        const signaturePath = await this.companyService.getSignaturePath(req.user.companyId);
+        if (!signaturePath) {
+            return res.status(404).json({ message: 'Подпись не загружена' });
+        }
+
+        if (this.s3Service.isS3Enabled()) {
+            try {
+                const { stream, mimeType } = await this.s3Service.downloadFile(signaturePath);
+                res.setHeader('Content-Type', mimeType || 'image/png');
+                return stream.pipe(res);
+            } catch (error) {
+                // Fallback to local file if S3 download fails (legacy local files support)
+                const absolutePath = path.join(process.cwd(), signaturePath);
+                if (fs.existsSync(absolutePath)) {
+                    return res.sendFile(absolutePath);
+                }
+                return res.status(404).json({ message: 'Файл не найден в S3 и локально' });
+            }
+        } else {
+            const absolutePath = path.join(process.cwd(), signaturePath);
+            if (!fs.existsSync(absolutePath)) {
+                return res.status(404).json({ message: 'Файл не найден' });
+            }
+            return res.sendFile(absolutePath);
+        }
+    }
+
     // ==================== Экспедиторы ====================
 
     @Get('forwarders')
