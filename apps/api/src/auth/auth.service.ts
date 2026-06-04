@@ -426,6 +426,10 @@ export class AuthService {
                         where: { partnerId: dup.id },
                         data: { partnerId: mainCompany.id },
                     });
+                    await tx.order.updateMany({
+                        where: { subForwarderId: dup.id },
+                        data: { subForwarderId: mainCompany.id },
+                    });
                     await tx.contract.updateMany({
                         where: { customerCompanyId: dup.id },
                         data: { customerCompanyId: mainCompany.id },
@@ -460,6 +464,16 @@ export class AuthService {
                             });
                         }
                     }
+
+                    // Удаляем связи партнерства дубликата, чтобы база разрешила его удаление
+                    await tx.partnership.deleteMany({
+                        where: {
+                            OR: [
+                                { requesterId: dup.id },
+                                { recipientId: dup.id }
+                            ]
+                        }
+                    });
 
                     await tx.company.delete({
                         where: { id: dup.id },
@@ -744,6 +758,10 @@ export class AuthService {
                         where: { partnerId: dup.id },
                         data: { partnerId: mainCompany.id },
                     });
+                    await tx.order.updateMany({
+                        where: { subForwarderId: dup.id },
+                        data: { subForwarderId: mainCompany.id },
+                    });
                     await tx.contract.updateMany({
                         where: { customerCompanyId: dup.id },
                         data: { customerCompanyId: mainCompany.id },
@@ -778,6 +796,16 @@ export class AuthService {
                             });
                         }
                     }
+
+                    // Удаляем связи партнерства дубликата, чтобы база разрешила его удаление
+                    await tx.partnership.deleteMany({
+                        where: {
+                            OR: [
+                                { requesterId: dup.id },
+                                { recipientId: dup.id }
+                            ]
+                        }
+                    });
 
                     await tx.company.delete({
                         where: { id: dup.id },

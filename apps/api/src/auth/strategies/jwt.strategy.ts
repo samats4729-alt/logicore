@@ -33,6 +33,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             throw new UnauthorizedException('Сессия недействительна. Возможно вы вошли с другого устройства.');
         }
 
-        return payload;
+        return {
+            id: payload.sub,
+            ...payload
+        };
     }
 }
