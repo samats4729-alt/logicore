@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Service } from '../s3/s3.service';
 import { getDefaultContractTemplate } from './contract-template';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
@@ -7,7 +8,12 @@ import * as fs from 'fs';
 
 @Injectable()
 export class ContractPdfService {
-    constructor(private prisma: PrismaService) { }
+    private readonly logger = new Logger(ContractPdfService.name);
+
+    constructor(
+        private prisma: PrismaService,
+        private s3Service: S3Service,
+    ) { }
 
     async generateContractPdf(contractId: string): Promise<Buffer> {
         const contract = await this.prisma.contract.findUnique({
@@ -32,6 +38,27 @@ export class ContractPdfService {
 
         const customer = contract.customerCompany;
         const forwarder = contract.forwarderCompany;
+
+        // Загружаем буферы печатей и подписей для обеих сторон
+        let forwarderStampBuffer: Buffer | null = null;
+        let forwarderSignatureBuffer: Buffer | null = null;
+        let customerStampBuffer: Buffer | null = null;
+        let customerSignatureBuffer: Buffer | null = null;
+
+        this.logger.log(`[ContractPdf] Generating PDF for contractId=${contractId}. Forwarder="${forwarder?.name}", Customer="${customer?.name}"`);
+
+        if (forwarder?.stampImage) {
+            forwarderStampBuffer = await this.getImageBuffer(forwarder.stampImage);
+        }
+        if (forwarder?.signatureImage) {
+            forwarderSignatureBuffer = await this.getImageBuffer(forwarder.signatureImage);
+        }
+        if (customer?.stampImage) {
+            customerStampBuffer = await this.getImageBuffer(customer.stampImage);
+        }
+        if (customer?.signatureImage) {
+            customerSignatureBuffer = await this.getImageBuffer(customer.signatureImage);
+        }
 
         return new Promise<Buffer>((resolve, reject) => {
             const doc = new PDFDocument({
@@ -125,14 +152,30 @@ export class ContractPdfService {
             doc.moveDown(1);
 
             // Рисуем таблицу реквизитов как в оригинале
-            this.drawRequisitesTable(doc, forwarder, customer);
+            this.drawRequisitesTable(
+                doc,
+                forwarder,
+                customer,
+                forwarderStampBuffer,
+                forwarderSignatureBuffer,
+                customerStampBuffer,
+                customerSignatureBuffer
+            );
 
             doc.end();
         });
     }
 
     // ============ ТАБЛИЦА РЕКВИЗИТОВ ============
-    private drawRequisitesTable(doc: PDFKit.PDFDocument, forwarder: any, customer: any) {
+    private drawRequisitesTable(
+        doc: PDFKit.PDFDocument,
+        forwarder: any,
+        customer: any,
+        forwarderStampBuffer: Buffer | null,
+        forwarderSignatureBuffer: Buffer | null,
+        customerStampBuffer: Buffer | null,
+        customerSignatureBuffer: Buffer | null
+    ) {
         const startX = 60;
         const tableWidth = 475;
         const colWidth = tableWidth / 2;
@@ -237,37 +280,64 @@ export class ContractPdfService {
         doc.text('Директор__________________', signLeftX, signLineY, { width: signColWidth });
         doc.text('Директор __________________', signRightX, signLineY, { width: signColWidth });
 
+        // ============ ПОДПИСИ РУКОВОДИТЕЛЕЙ ============
+        const signatureW = 85;
+        const signatureH = 35;
+        const signatureY = signLineY - 15;
+
+        // Подпись экспедитора (слева)
+        if (forwarderSignatureBuffer) {
+            try {
+                doc.image(forwarderSignatureBuffer, signLeftX + 55, signatureY, {
+                    width: signatureW,
+                    height: signatureH,
+                });
+                this.logger.log(`[ContractPdf] Rendered forwarder signature`);
+            } catch (err) {
+                this.logger.error(`[ContractPdf] Failed to render forwarder signature:`, err);
+            }
+        }
+
+        // Подпись заказчика (справа)
+        if (customerSignatureBuffer) {
+            try {
+                doc.image(customerSignatureBuffer, signRightX + 55, signatureY, {
+                    width: signatureW,
+                    height: signatureH,
+                });
+                this.logger.log(`[ContractPdf] Rendered customer signature`);
+            } catch (err) {
+                this.logger.error(`[ContractPdf] Failed to render customer signature:`, err);
+            }
+        }
+
         // ============ ПЕЧАТИ КОМПАНИЙ ============
-        const stampY = signBlockY - 10;
-        const stampSize = 120;
+        const stampY = signBlockY - 15;
+        const stampSize = 110;
 
         // Печать экспедитора (слева)
-        if (forwarder.stampImage) {
-            const stampPath = path.join(process.cwd(), forwarder.stampImage);
-            if (fs.existsSync(stampPath)) {
-                try {
-                    doc.image(stampPath, signLeftX + (signColWidth - stampSize) / 2, stampY, {
-                        width: stampSize,
-                        height: stampSize,
-                    });
-                } catch (e) {
-                    // Ignore image rendering errors
-                }
+        if (forwarderStampBuffer) {
+            try {
+                doc.image(forwarderStampBuffer, signLeftX + (signColWidth - stampSize) / 2, stampY, {
+                    width: stampSize,
+                    height: stampSize,
+                });
+                this.logger.log(`[ContractPdf] Rendered forwarder stamp`);
+            } catch (err) {
+                this.logger.error(`[ContractPdf] Failed to render forwarder stamp:`, err);
             }
         }
 
         // Печать заказчика (справа)
-        if (customer.stampImage) {
-            const stampPath = path.join(process.cwd(), customer.stampImage);
-            if (fs.existsSync(stampPath)) {
-                try {
-                    doc.image(stampPath, signRightX + (signColWidth - stampSize) / 2, stampY, {
-                        width: stampSize,
-                        height: stampSize,
-                    });
-                } catch (e) {
-                    // Ignore image rendering errors
-                }
+        if (customerStampBuffer) {
+            try {
+                doc.image(customerStampBuffer, signRightX + (signColWidth - stampSize) / 2, stampY, {
+                    width: stampSize,
+                    height: stampSize,
+                });
+                this.logger.log(`[ContractPdf] Rendered customer stamp`);
+            } catch (err) {
+                this.logger.error(`[ContractPdf] Failed to render customer stamp:`, err);
             }
         }
 
@@ -315,5 +385,38 @@ export class ContractPdfService {
     /** Убирает префикс ТОО/TOO из названия компании */
     private stripCompanyPrefix(name: string): string {
         return name.replace(/^(ТОО|TOO|тоо)\s+/i, '').trim();
+    }
+
+    private async getImageBuffer(relativePath: string): Promise<Buffer | null> {
+        if (this.s3Service.isS3Enabled()) {
+            try {
+                this.logger.log(`[ContractPdf] Attempting S3 download for path: ${relativePath}`);
+                const { stream } = await this.s3Service.downloadFile(relativePath);
+                return new Promise<Buffer>((resolve, reject) => {
+                    const chunks: Buffer[] = [];
+                    stream.on('data', (chunk) => chunks.push(chunk));
+                    stream.on('end', () => resolve(Buffer.concat(chunks)));
+                    stream.on('error', (err) => reject(err));
+                });
+            } catch (error: any) {
+                this.logger.warn(`[ContractPdf] S3 download failed for ${relativePath}. Falling back to local file. Error: ${error.message}`);
+            }
+        } else {
+            this.logger.log(`[ContractPdf] S3 is not enabled, using local storage check`);
+        }
+
+        const localPath = path.join(process.cwd(), relativePath);
+        this.logger.log(`[ContractPdf] Checking local path: ${localPath}`);
+        if (fs.existsSync(localPath)) {
+            try {
+                return fs.readFileSync(localPath);
+            } catch (e) {
+                this.logger.error(`[ContractPdf] Failed to read local file at ${localPath}:`, e);
+                return null;
+            }
+        } else {
+            this.logger.warn(`[ContractPdf] Local file not found at: ${localPath}`);
+        }
+        return null;
     }
 }
