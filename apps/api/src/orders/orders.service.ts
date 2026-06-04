@@ -234,6 +234,7 @@ export class OrdersService implements OnModuleInit {
             where: { id },
             include: {
                 customer: true,
+                customerCompany: true,
                 driver: true,
                 recipient: true,
                 partner: true,
@@ -329,8 +330,21 @@ export class OrdersService implements OnModuleInit {
         appliedTariffId?: string;
         natureOfCargo?: string;
         customerPriceType?: string;
-    }) {
+    }, user?: { id: string; role: string; companyId?: string }) {
         const order = await this.findById(orderId);
+
+        if (user) {
+            const isAdmin = user.role === 'ADMIN';
+            const isCreator = order.customerId === user.id || order.responsibleManagerId === user.id;
+            const isRegisteredCustomerCompany = order.customerCompanyId &&
+                (order as any).customerCompany &&
+                !(order as any).customerCompany.isExternal &&
+                user.companyId === order.customerCompanyId;
+
+            if (!isAdmin && !isCreator && !isRegisteredCustomerCompany) {
+                throw new ForbiddenException('У вас нет прав на редактирование этой заявки');
+            }
+        }
 
         // Собираем данные для обновления
         const { routePoints, ...updateFields } = data;

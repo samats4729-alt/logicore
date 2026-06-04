@@ -137,11 +137,15 @@ export class OrdersController {
     @Put(':id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Обновить заявку' })
-    async update(@Param('id') id: string, @Body() dto: Partial<CreateOrderDto>) {
+    async update(@Param('id') id: string, @Body() dto: Partial<CreateOrderDto>, @Request() req: any) {
         return this.ordersService.update(id, {
             ...dto,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
+        }, {
+            id: req.user.sub,
+            role: req.user.role,
+            companyId: req.user.companyId,
         });
     }
 
