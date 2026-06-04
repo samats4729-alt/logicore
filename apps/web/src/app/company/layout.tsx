@@ -34,6 +34,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
+    const [hydrated, setHydrated] = useState(false);
+
     // Определяем мобильное устройство
     useEffect(() => {
         const checkMobile = () => {
@@ -44,7 +46,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    // Дожидаемся гидратации хранилища Zustand из localStorage
     useEffect(() => {
+        setHydrated(useAuthStore.persist.hasHydrated());
+        const unsub = useAuthStore.persist.onFinishHydration(() => {
+            setHydrated(true);
+        });
+        return () => unsub();
+    }, []);
+
+    useEffect(() => {
+        if (!hydrated) return;
+
         checkAuth().then(() => {
             const currentUser = useAuthStore.getState().user;
             if (!currentUser) {
@@ -57,9 +70,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 }
             }
         });
-    }, [checkAuth, router]);
+    }, [hydrated, checkAuth, router]);
 
-    if (isLoading || !user) {
+    if (!hydrated || isLoading || !user) {
         return (
             <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spin size="large" />

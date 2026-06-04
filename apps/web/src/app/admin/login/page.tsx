@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Form, Input, Button, Card, Typography, message, Layout } from 'antd';
 import { UserOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
@@ -13,6 +13,25 @@ export default function AdminLoginPage() {
     const router = useRouter();
     const { login, user, logout } = useAuthStore();
     const [loading, setLoading] = useState(false);
+    const [hydrated, setHydrated] = useState(false);
+
+    // Дожидаемся гидратации хранилища Zustand из localStorage
+    useEffect(() => {
+        setHydrated(useAuthStore.persist.hasHydrated());
+        const unsub = useAuthStore.persist.onFinishHydration(() => {
+            setHydrated(true);
+        });
+        return () => unsub();
+    }, []);
+
+    // Редирект авторизованного администратора
+    useEffect(() => {
+        if (!hydrated) return;
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser && currentUser.role === 'ADMIN') {
+            router.replace('/admin');
+        }
+    }, [hydrated, router]);
 
     const onFinish = async (values: any) => {
         setLoading(true);

@@ -59,25 +59,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    const [hydrated, setHydrated] = useState(false);
+
+    // Дожидаемся гидратации хранилища Zustand из localStorage
     useEffect(() => {
+        setHydrated(useAuthStore.persist.hasHydrated());
+        const unsub = useAuthStore.persist.onFinishHydration(() => {
+            setHydrated(true);
+        });
+        return () => unsub();
+    }, []);
+
+    useEffect(() => {
+        if (!hydrated) return;
         const init = async () => {
             await checkAuth();
             setLoading(false);
         };
         init();
-    }, [checkAuth]);
+    }, [hydrated, checkAuth]);
 
     useEffect(() => {
-        if (!loading) {
-            if (!isAuthenticated) {
-                // Not logged in -> Go to Admin Login
-                router.push('/admin/login');
-            } else if (user?.role !== 'ADMIN') {
-                // Logged in but not Admin -> Kick out
-                // Optionally verify if it's COMPANY_ADMIN etc, but user asked for strict separation.
-                message.error('У вас нет прав администратора');
-                router.push('/'); // Or access-denied
-            }
+        if (loading) return;
+        if (!isAuthenticated) {
+            // Not logged in -> Go to Admin Login
+            router.push('/admin/login');
+        } else if (user?.role !== 'ADMIN') {
+            // Logged in but not Admin -> Kick out
+            message.error('У вас нет прав администратора');
+            router.push('/'); // Or access-denied
         }
     }, [loading, isAuthenticated, user, router]);
 
@@ -91,7 +101,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         setMobileMenuOpen(false);
     };
 
-    if (loading) {
+    if (!hydrated || loading) {
         return (
             <div style={{
                 height: '100vh',

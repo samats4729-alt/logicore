@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Form, Input, Button, Card, Typography, App, Tabs, Divider } from 'antd';
 import { UserOutlined, LockOutlined, PhoneOutlined, GoogleOutlined } from '@ant-design/icons';
@@ -19,6 +19,31 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [smsStep, setSmsStep] = useState<'phone' | 'code'>('phone');
     const [phoneNumber, setPhoneNumber] = useState('');
+    const [hydrated, setHydrated] = useState(false);
+
+    // Дожидаемся гидратации хранилища Zustand из localStorage
+    useEffect(() => {
+        setHydrated(useAuthStore.persist.hasHydrated());
+        const unsub = useAuthStore.persist.onFinishHydration(() => {
+            setHydrated(true);
+        });
+        return () => unsub();
+    }, []);
+
+    // Редирект авторизованного пользователя
+    useEffect(() => {
+        if (!hydrated) return;
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser) {
+            if (currentUser.role === 'ADMIN') {
+                router.replace('/admin');
+            } else if (['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'FORWARDER'].includes(currentUser.role)) {
+                router.replace('/company');
+            } else {
+                router.replace('/');
+            }
+        }
+    }, [hydrated, router]);
 
     // Device ID для Single Session Policy
     const getDeviceId = () => {
