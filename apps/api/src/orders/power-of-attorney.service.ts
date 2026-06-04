@@ -22,9 +22,10 @@ export class PowerOfAttorneyService {
 
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        // Определяем экспедиторскую компанию (от чьего имени доверенность)
+        // Определяем экспедиторскую компанию (кто везет груз)
+        const issuerCompanyId = order.subForwarderId || order.forwarderId || order.partnerId || order.customerCompanyId || companyId;
         const forwarderCompany = await this.prisma.company.findUnique({
-            where: { id: companyId },
+            where: { id: issuerCompanyId },
         });
 
         if (!forwarderCompany) throw new NotFoundException('Компания не найдена');
