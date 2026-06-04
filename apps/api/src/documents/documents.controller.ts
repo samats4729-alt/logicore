@@ -5,6 +5,7 @@ import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
 import { DocumentsService } from './documents.service';
+import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole, DocumentType } from '@prisma/client';
@@ -14,7 +15,10 @@ import { UserRole, DocumentType } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class DocumentsController {
-    constructor(private documentsService: DocumentsService) { }
+    constructor(
+        private documentsService: DocumentsService,
+        private s3Service: S3Service,
+    ) { }
 
     @Post('upload/:orderId')
     @UseInterceptors(FileInterceptor('file', {
@@ -66,11 +70,27 @@ export class DocumentsController {
     @ApiOperation({ summary: 'Скачать файл документа' })
     async downloadFile(@Param('id') id: string, @Res() res: Response) {
         const doc = await this.documentsService.findById(id);
-        const absolutePath = path.join(process.cwd(), doc.fileUrl);
-        if (!fs.existsSync(absolutePath)) {
-            return res.status(404).json({ message: 'Файл не найден' });
+
+        if (this.s3Service.isS3Enabled()) {
+            try {
+                const { stream, mimeType } = await this.s3Service.downloadFile(doc.fileUrl);
+                res.setHeader('Content-Type', mimeType || doc.mimeType || 'application/octet-stream');
+                return stream.pipe(res);
+            } catch (error) {
+                // Fallback to local file if S3 download fails
+                const absolutePath = path.join(process.cwd(), doc.fileUrl);
+                if (fs.existsSync(absolutePath)) {
+                    return res.sendFile(absolutePath);
+                }
+                return res.status(404).json({ message: 'Файл не найден в S3 и локально' });
+            }
+        } else {
+            const absolutePath = path.join(process.cwd(), doc.fileUrl);
+            if (!fs.existsSync(absolutePath)) {
+                return res.status(404).json({ message: 'Файл не найден' });
+            }
+            return res.sendFile(absolutePath);
         }
-        return res.sendFile(absolutePath);
     }
 
     @Put(':id/verify')

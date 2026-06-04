@@ -5,10 +5,11 @@ import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
+import { S3Service } from '../s3/s3.service';
 
 @Injectable()
 export class CompanyService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private s3Service: S3Service) { }
 
     /**
      * Получить пользователей компании
@@ -419,24 +420,39 @@ export class CompanyService {
             throw new NotFoundException('Компания не найдена');
         }
 
-        const uploadsDir = path.join(process.cwd(), 'uploads', 'stamps');
-        if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-
         const filename = `stamp_${companyId}_${Date.now()}.png`;
-        const filepath = path.join(uploadsDir, filename);
-        fs.writeFileSync(filepath, file.buffer);
+        const relativePath = `uploads/stamps/${filename}`;
 
-        // Удаляем старый файл
-        if (company.stampImage) {
-            const oldPath = path.join(process.cwd(), company.stampImage);
-            if (fs.existsSync(oldPath)) {
-                fs.unlinkSync(oldPath);
+        if (this.s3Service.isS3Enabled()) {
+            // Upload to S3
+            await this.s3Service.uploadFile(relativePath, file.buffer, file.mimetype);
+
+            // Delete old file from S3 and local disk (for cleanup of legacy local files)
+            if (company.stampImage) {
+                await this.s3Service.deleteFile(company.stampImage);
+                const oldLocalPath = path.join(process.cwd(), company.stampImage);
+                if (fs.existsSync(oldLocalPath)) {
+                    fs.unlinkSync(oldLocalPath);
+                }
+            }
+        } else {
+            // Fallback: Local disk storage
+            const uploadsDir = path.join(process.cwd(), 'uploads', 'stamps');
+            if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+            const filepath = path.join(uploadsDir, filename);
+            fs.writeFileSync(filepath, file.buffer);
+
+            // Delete old local file
+            if (company.stampImage) {
+                const oldLocalPath = path.join(process.cwd(), company.stampImage);
+                if (fs.existsSync(oldLocalPath)) {
+                    fs.unlinkSync(oldLocalPath);
+                }
             }
         }
 
-        const relativePath = `uploads/stamps/${filename}`;
         await this.prisma.company.update({
             where: { id: companyId },
             data: { stampImage: relativePath },

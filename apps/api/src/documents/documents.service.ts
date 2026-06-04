@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentType } from '@prisma/client';
+import { S3Service } from '../s3/s3.service';
 import * as path from 'path';
 import * as fs from 'fs';
 
 @Injectable()
 export class DocumentsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private s3Service: S3Service) { }
 
     /**
      * Сохранение информации о загруженном документе
@@ -29,17 +30,20 @@ export class DocumentsService {
     async uploadFile(orderId: string, userId: string, type: DocumentType, file: Express.Multer.File) {
         if (!file) throw new NotFoundException('Файл не найден');
         
-        const uploadsDir = path.join(process.cwd(), 'uploads', 'documents');
-        if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-
         const ext = path.extname(file.originalname);
         const filename = `doc_${orderId}_${Date.now()}${ext}`;
-        const filepath = path.join(uploadsDir, filename);
-        fs.writeFileSync(filepath, file.buffer);
-
         const relativePath = `uploads/documents/${filename}`;
+
+        if (this.s3Service.isS3Enabled()) {
+            await this.s3Service.uploadFile(relativePath, file.buffer, file.mimetype);
+        } else {
+            const uploadsDir = path.join(process.cwd(), 'uploads', 'documents');
+            if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+            const filepath = path.join(uploadsDir, filename);
+            fs.writeFileSync(filepath, file.buffer);
+        }
 
         return this.prisma.document.create({
             data: {

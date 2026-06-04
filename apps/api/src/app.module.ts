@@ -11,6 +11,7 @@ import { WarehouseModule } from './warehouse/warehouse.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RedisModule } from './redis/redis.module';
 import { CompanyModule } from './company/company.module';
+import { S3Module } from './s3/s3.module';
 
 import { CitiesModule } from './cities/cities.module';
 import { PartnersModule } from './partners/partners.module';
@@ -37,6 +38,7 @@ import { EmailModule } from './email/email.module';
         WarehouseModule,
         NotificationsModule,
         CompanyModule,
+        S3Module,
 
         CitiesModule,
         PartnersModule,

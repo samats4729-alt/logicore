@@ -5,6 +5,7 @@ import { Response } from 'express';
 import { CompanyService } from './company.service';
 import { OrdersService } from '../orders/orders.service';
 import { CompanyDriversService } from './services/company-drivers.service';
+import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
@@ -22,6 +23,7 @@ export class CompanyController {
         private companyService: CompanyService,
         private ordersService: OrdersService,
         private companyDriversService: CompanyDriversService,
+        private s3Service: S3Service,
     ) { }
 
     // ==================== Уведомления ====================
@@ -174,12 +176,26 @@ export class CompanyController {
             return res.status(404).json({ message: 'Печать не загружена' });
         }
 
-        const absolutePath = path.join(process.cwd(), stampPath);
-        if (!fs.existsSync(absolutePath)) {
-            return res.status(404).json({ message: 'Файл не найден' });
+        if (this.s3Service.isS3Enabled()) {
+            try {
+                const { stream, mimeType } = await this.s3Service.downloadFile(stampPath);
+                res.setHeader('Content-Type', mimeType || 'image/png');
+                return stream.pipe(res);
+            } catch (error) {
+                // Fallback to local file if S3 download fails (legacy local files support)
+                const absolutePath = path.join(process.cwd(), stampPath);
+                if (fs.existsSync(absolutePath)) {
+                    return res.sendFile(absolutePath);
+                }
+                return res.status(404).json({ message: 'Файл не найден в S3 и локально' });
+            }
+        } else {
+            const absolutePath = path.join(process.cwd(), stampPath);
+            if (!fs.existsSync(absolutePath)) {
+                return res.status(404).json({ message: 'Файл не найден' });
+            }
+            return res.sendFile(absolutePath);
         }
-
-        return res.sendFile(absolutePath);
     }
 
     // ==================== Экспедиторы ====================
