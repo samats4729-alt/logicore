@@ -15,6 +15,8 @@ export default function SettingsPage() {
     const [companyLoading, setCompanyLoading] = useState(false);
     const [stampLoading, setStampLoading] = useState(false);
     const [stampUrl, setStampUrl] = useState<string | null>(null);
+    const [signatureLoading, setSignatureLoading] = useState(false);
+    const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
     const [profileForm] = Form.useForm();
     const [passwordForm] = Form.useForm();
     const [companyForm] = Form.useForm();
@@ -22,6 +24,7 @@ export default function SettingsPage() {
     useEffect(() => {
         loadCompanyProfile();
         loadStamp();
+        loadSignature();
     }, []);
 
     const loadCompanyProfile = async () => {
@@ -53,6 +56,16 @@ export default function SettingsPage() {
             setStampUrl(url);
         } catch (error) {
             // Печать не загружена
+        }
+    };
+
+    const loadSignature = async () => {
+        try {
+            const response = await api.get('/company/signature', { responseType: 'blob' });
+            const url = URL.createObjectURL(response.data);
+            setSignatureUrl(url);
+        } catch (error) {
+            // Подпись не загружена
         }
     };
 
@@ -94,6 +107,24 @@ export default function SettingsPage() {
             message.error(error.response?.data?.message || 'Ошибка загрузки печати');
         } finally {
             setStampLoading(false);
+        }
+        return false;
+    };
+
+    const handleSignatureUpload = async (file: File) => {
+        setSignatureLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('signature', file);
+            await api.post('/company/signature', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            message.success('Подпись загружена');
+            loadSignature();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка загрузки подписи');
+        } finally {
+            setSignatureLoading(false);
         }
         return false;
     };
