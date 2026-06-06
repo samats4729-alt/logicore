@@ -69,6 +69,8 @@ export class OrdersService implements OnModuleInit {
         actualVolume?: number;
         appliedTariffId?: string;
         responsibleManagerId?: string;
+        natureOfCargo?: string;
+        customerPriceType?: string;
     }) {
         // Генерация номера заявки
         const orderNumber = await this.generateOrderNumber();
@@ -147,6 +149,8 @@ export class OrdersService implements OnModuleInit {
                 actualVolume: data.actualVolume,
                 appliedTariffId: data.appliedTariffId,
                 responsibleManagerId: data.responsibleManagerId,
+                natureOfCargo: data.natureOfCargo,
+                customerPriceType: data.customerPriceType,
                 routePoints: {
                     create: data.routePoints?.map((rp, index) => ({
                         locationId: rp.locationId,
