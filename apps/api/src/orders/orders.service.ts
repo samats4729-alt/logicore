@@ -70,7 +70,7 @@ export class OrdersService implements OnModuleInit {
         appliedTariffId?: string;
         responsibleManagerId?: string;
         natureOfCargo?: string;
-        customerPriceType?: string;
+        customerPriceType?: 'FIXED' | 'PER_KM' | 'PER_TON';
     }) {
         // Генерация номера заявки
         const orderNumber = await this.generateOrderNumber();
