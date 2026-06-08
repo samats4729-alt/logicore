@@ -171,7 +171,7 @@ export default function CompanyOrdersPage() {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const [assignLoading, setAssignLoading] = useState(false);
-    const [assignType, setAssignType] = useState<'driver' | 'partner'>('driver');
+    const [assignType, setAssignType] = useState<'driver' | 'partner' | 'partner_manual'>('driver');
     const [statusModalOpen, setStatusModalOpen] = useState(false);
     const [statusLoading, setStatusLoading] = useState(false);
     const [form] = Form.useForm();
@@ -788,6 +788,15 @@ export default function CompanyOrdersPage() {
             if (assignType === 'driver') {
                 await api.put(`/company/orders/${selectedOrder.id}/assign-driver`, { ...values, driverId: selectedDriverId });
                 message.success('Водитель назначен');
+            } else if (assignType === 'partner_manual') {
+                await api.put(`/company/orders/${selectedOrder.id}/assign-driver`, {
+                    partnerId: values.partnerId,
+                    assignedDriverName: values.assignedDriverName,
+                    assignedDriverPhone: values.assignedDriverPhone,
+                    assignedDriverPlate: values.assignedDriverPlate,
+                    assignedDriverTrailer: values.assignedDriverTrailer,
+                });
+                message.success('Водитель контрагента назначен');
             } else {
                 await api.put(`/company/orders/${selectedOrder.id}/assign-forwarder`, { partnerId: values.partnerId, price: values.price });
                 message.success('Заявка передана партнеру');
@@ -1718,6 +1727,28 @@ export default function CompanyOrdersPage() {
                                             <Form.Item name="trailerNumber" label="Прицеп"><Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} placeholder="—" /></Form.Item>
                                         </>
                                     )}
+                                </>
+                            )
+                        },
+                        {
+                            key: 'partner_manual', label: 'Водитель контрагента (вручную)',
+                            children: (
+                                <>
+                                    <Form.Item name="partnerId" label="Компания-контрагент (перевозчик)" rules={[{ required: assignType === 'partner_manual', message: 'Выберите контрагента' }]}>
+                                        <Select placeholder="Выберите контрагента" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
+                                    </Form.Item>
+                                    <Form.Item name="assignedDriverName" label="ФИО водителя" rules={[{ required: assignType === 'partner_manual', message: 'Введите ФИО водителя' }]}>
+                                        <Input placeholder="Иванов Иван Иванович" size="large" />
+                                    </Form.Item>
+                                    <Form.Item name="assignedDriverPhone" label="Телефон водителя">
+                                        <Input placeholder="+7 (700) 123-45-67" size="large" />
+                                    </Form.Item>
+                                    <Form.Item name="assignedDriverPlate" label="Госномер авто">
+                                        <Input placeholder="123 ABC 01" size="large" />
+                                    </Form.Item>
+                                    <Form.Item name="assignedDriverTrailer" label="Госномер прицепа">
+                                        <Input placeholder="1234 XX 01" size="large" />
+                                    </Form.Item>
                                 </>
                             )
                         },

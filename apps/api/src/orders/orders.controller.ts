@@ -149,7 +149,12 @@ export class OrdersController {
     @Roles(UserRole.ADMIN)
     @ApiOperation({ summary: 'Назначить водителя на заявку' })
     async assignDriver(@Param('id') id: string, @Body() dto: AssignDriverDto) {
-        return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId);
+        return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
+            assignedDriverName: dto.assignedDriverName,
+            assignedDriverPhone: dto.assignedDriverPhone,
+            assignedDriverPlate: dto.assignedDriverPlate,
+            assignedDriverTrailer: dto.assignedDriverTrailer,
+        });
     }
 
     @Put(':id')

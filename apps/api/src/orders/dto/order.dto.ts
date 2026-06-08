@@ -154,13 +154,33 @@ export class UpdateStatusDto {
 }
 
 export class AssignDriverDto {
-    @ApiProperty({ example: 'driver-id-123' })
+    @ApiProperty({ required: false, example: 'driver-id-123' })
     @IsString()
-    @IsNotEmpty()
-    driverId: string;
+    @IsOptional()
+    driverId?: string;
 
     @ApiProperty({ required: false, description: 'ID компании-субподрядчика' })
     @IsString()
     @IsOptional()
     partnerId?: string;
+
+    @ApiProperty({ required: false, description: 'ФИО водителя вручную' })
+    @IsString()
+    @IsOptional()
+    assignedDriverName?: string;
+
+    @ApiProperty({ required: false, description: 'Телефон водителя вручную' })
+    @IsString()
+    @IsOptional()
+    assignedDriverPhone?: string;
+
+    @ApiProperty({ required: false, description: 'Госномер авто вручную' })
+    @IsString()
+    @IsOptional()
+    assignedDriverPlate?: string;
+
+    @ApiProperty({ required: false, description: 'Госномер прицепа вручную' })
+    @IsString()
+    @IsOptional()
+    assignedDriverTrailer?: string;
 }

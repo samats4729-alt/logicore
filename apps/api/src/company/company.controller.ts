@@ -11,6 +11,7 @@ import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
+import { AssignDriverDto } from '../orders/dto/order.dto';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -300,9 +301,14 @@ export class CompanyController {
     @ApiOperation({ summary: 'Назначить водителя на заявку' })
     async assignDriver(
         @Param('id') id: string,
-        @Body() dto: { driverId: string; partnerId?: string },
+        @Body() dto: AssignDriverDto,
     ) {
-        return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId);
+        return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
+            assignedDriverName: dto.assignedDriverName,
+            assignedDriverPhone: dto.assignedDriverPhone,
+            assignedDriverPlate: dto.assignedDriverPlate,
+            assignedDriverTrailer: dto.assignedDriverTrailer,
+        });
     }
 
     @Put('orders/:id/assign-forwarder')

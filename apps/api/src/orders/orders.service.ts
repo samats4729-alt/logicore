@@ -259,24 +259,40 @@ export class OrdersService implements OnModuleInit {
     /**
      * Назначение водителя на заявку
      */
-    async assignDriver(orderId: string, driverId: string, partnerId?: string) {
+    async assignDriver(
+        orderId: string,
+        driverId?: string,
+        partnerId?: string,
+        manualDriverData?: {
+            assignedDriverName?: string;
+            assignedDriverPhone?: string;
+            assignedDriverPlate?: string;
+            assignedDriverTrailer?: string;
+        }
+    ) {
         const order = await this.findById(orderId);
 
-        if (order.status !== OrderStatus.PENDING) {
+        if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DRAFT) {
             throw new BadRequestException('Нельзя назначить водителя на эту заявку');
         }
 
         return this.prisma.order.update({
             where: { id: orderId },
             data: {
-                driverId,
-                partnerId,
+                driverId: driverId || null,
+                partnerId: partnerId || null,
+                assignedDriverName: manualDriverData?.assignedDriverName || null,
+                assignedDriverPhone: manualDriverData?.assignedDriverPhone || null,
+                assignedDriverPlate: manualDriverData?.assignedDriverPlate || null,
+                assignedDriverTrailer: manualDriverData?.assignedDriverTrailer || null,
                 status: OrderStatus.ASSIGNED,
                 isConfirmed: true,
                 statusHistory: {
                     create: {
                         status: OrderStatus.ASSIGNED,
-                        comment: 'Назначен водитель',
+                        comment: manualDriverData?.assignedDriverName 
+                            ? `Назначен водитель вручную: ${manualDriverData.assignedDriverName}`
+                            : 'Назначен водитель',
                     },
                 },
             },
