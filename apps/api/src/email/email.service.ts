@@ -95,8 +95,58 @@ export class EmailService {
         }
     }
 
-    async sendPowerOfAttorneyEmail(to: string, orderNumber: string, senderCompanyName: string, pdfBuffer: Buffer): Promise<void> {
+    async sendPowerOfAttorneyEmail(
+        to: string,
+        orderNumber: string,
+        senderCompanyName: string,
+        pdfBuffer: Buffer,
+        driverInfo?: {
+            fullName?: string;
+            vehicleModel?: string;
+            vehiclePlate?: string;
+            phone?: string;
+            route?: string;
+        },
+    ): Promise<void> {
         const subject = `Доверенность к заявке № ${orderNumber} — LogiCore`;
+
+        // Формируем блок ключевых данных водителя
+        const driverRows: string[] = [];
+        if (driverInfo?.fullName) {
+            driverRows.push(`
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">👤 Водитель</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.fullName}</td>
+                </tr>`);
+        }
+        if (driverInfo?.vehicleModel || driverInfo?.vehiclePlate) {
+            const vehicleText = [driverInfo.vehicleModel, driverInfo.vehiclePlate].filter(Boolean).join(' · ');
+            driverRows.push(`
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚛 Транспорт</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${vehicleText}</td>
+                </tr>`);
+        }
+        if (driverInfo?.phone) {
+            driverRows.push(`
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">📞 Телефон</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.phone}</td>
+                </tr>`);
+        }
+        if (driverInfo?.route) {
+            driverRows.push(`
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">📍 Маршрут</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.route}</td>
+                </tr>`);
+        }
+
+        const driverInfoBlock = driverRows.length > 0 ? `
+            <table cellpadding="0" cellspacing="0" style="width: 100%; background: #f0f5ff; border-radius: 8px; border: 1px solid #d6e4ff; margin: 0 0 20px;">
+                ${driverRows.join('')}
+            </table>` : '';
+
         const html = `
 <!DOCTYPE html>
 <html>
@@ -115,6 +165,10 @@ export class EmailService {
         <!-- Content -->
         <div style="padding: 32px 24px;">
             <h2 style="margin: 0 0 16px; font-size: 20px; color: #1a1a1a;">Доверенность на водителя</h2>
+
+            <!-- Ключевые данные рейса -->
+            ${driverInfoBlock}
+
             <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
                 Здравствуйте!
             </p>

@@ -111,10 +111,28 @@ export class OrdersController {
         // Generate the PDF buffer
         const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId);
 
+        // Собираем ключевые данные водителя для отображения в письме
+        const driver = (order as any).driver;
+        const routePoints = (order as any).routePoints || [];
+        const pickupPoint = routePoints.find((p: any) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
+        const deliveryPoint = routePoints.find((p: any) => p.pointType === 'DELIVERY');
+        const pickupCity = pickupPoint?.location?.city || pickupPoint?.location?.address || '';
+        const deliveryCity = deliveryPoint?.location?.city || deliveryPoint?.location?.address || '';
+
+        const driverInfo = {
+            fullName: driver
+                ? `${driver.lastName || ''} ${driver.firstName || ''} ${driver.middleName || ''}`.trim()
+                : ((order as any).assignedDriverName || undefined),
+            vehicleModel: driver?.vehicleModel || undefined,
+            vehiclePlate: driver?.vehiclePlate || (order as any).assignedDriverPlate || undefined,
+            phone: driver?.phone || (order as any).assignedDriverPhone || undefined,
+            route: (pickupCity && deliveryCity) ? `${pickupCity} → ${deliveryCity}` : undefined,
+        };
+
         // Send emails in parallel
         await Promise.all(
             body.emails.map(email =>
-                this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, senderCompanyName, pdfBuffer)
+                this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, senderCompanyName, pdfBuffer, driverInfo)
             )
         );
 
