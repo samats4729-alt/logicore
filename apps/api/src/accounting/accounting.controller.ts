@@ -101,4 +101,11 @@ export class AccountingController {
     async deleteIncome(@Request() req: any, @Param('id') id: string) {
         return this.accountingService.deleteIncome(req.user.companyId, id);
     }
+
+    // ==================== COUNTERPARTY REPORT ====================
+
+    @Get('counterparty-report')
+    async getCounterpartyReport(@Request() req: any) {
+        return this.accountingService.getCounterpartyReport(req.user.companyId);
+    }
 }

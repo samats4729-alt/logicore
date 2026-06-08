@@ -596,4 +596,206 @@ export class AccountingService {
             data: { isDeleted: true },
         });
     }
+
+    // ==================== COUNTERPARTY REPORT (Взаиморасчёты) ====================
+
+    async getCounterpartyReport(companyId: string) {
+        // Загружаем все заявки, где наша компания участвует в любой роли
+        const orders = await this.prisma.order.findMany({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { subForwarderId: companyId },
+                            { partnerId: companyId },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { isConfirmed: true },
+                            { status: { not: 'PENDING' } },
+                        ],
+                    },
+                ],
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+            },
+            select: {
+                id: true,
+                orderNumber: true,
+                createdAt: true,
+                completedAt: true,
+                status: true,
+                cargoDescription: true,
+                // Финансы
+                customerPrice: true,
+                driverCost: true,
+                subForwarderPrice: true,
+                isCustomerPaid: true,
+                customerPaidAt: true,
+                isDriverPaid: true,
+                driverPaidAt: true,
+                isSubForwarderPaid: true,
+                subForwarderPaidAt: true,
+                // Роли
+                customerCompanyId: true,
+                forwarderId: true,
+                subForwarderId: true,
+                partnerId: true,
+                // Связи
+                customerCompany: { select: { id: true, name: true } },
+                forwarder: { select: { id: true, name: true } },
+                subForwarder: { select: { id: true, name: true } },
+                partner: { select: { id: true, name: true } },
+                // Маршрут
+                routePoints: {
+                    select: {
+                        pointType: true,
+                        sequence: true,
+                        location: { select: { city: true, address: true } },
+                    },
+                    orderBy: { sequence: 'asc' },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Группировка по контрагентам
+        // Для каждой заявки определяем пары "наша роль ↔ контрагент" и финансовое направление
+        const counterpartyMap = new Map<string, {
+            counterparty: { id: string; name: string };
+            ourRole: string;
+            orders: any[];
+            theyOweUs: number;       // Дебиторка (нам должны)
+            theyOweUsPaid: number;   // Из дебиторки — оплачено
+            weOweThem: number;       // Кредиторка (мы должны)
+            weOweThemPaid: number;   // Из кредиторки — оплачено
+        }>();
+
+        const getOrCreateEntry = (counterpartyId: string, counterpartyName: string, ourRole: string) => {
+            const key = `${counterpartyId}__${ourRole}`;
+            if (!counterpartyMap.has(key)) {
+                counterpartyMap.set(key, {
+                    counterparty: { id: counterpartyId, name: counterpartyName },
+                    ourRole,
+                    orders: [],
+                    theyOweUs: 0,
+                    theyOweUsPaid: 0,
+                    weOweThem: 0,
+                    weOweThemPaid: 0,
+                });
+            }
+            return counterpartyMap.get(key)!;
+        };
+
+        for (const order of orders) {
+            const isCustomer = order.customerCompanyId === companyId;
+            const isForwarder = order.forwarderId === companyId;
+            const isSubForwarder = order.subForwarderId === companyId;
+
+            // Базовый объект заявки для ответа (без лишних внутренних полей)
+            const orderData = {
+                id: order.id,
+                orderNumber: order.orderNumber,
+                createdAt: order.createdAt,
+                completedAt: order.completedAt,
+                status: order.status,
+                cargoDescription: order.cargoDescription,
+                customerPrice: order.customerPrice,
+                isCustomerPaid: order.isCustomerPaid,
+                customerPaidAt: order.customerPaidAt,
+                routePoints: order.routePoints,
+            };
+
+            if (isCustomer && order.forwarder) {
+                // Мы заказчик → контрагент = экспедитор → мы ДОЛЖНЫ ему (кредиторка)
+                const entry = getOrCreateEntry(order.forwarder.id, order.forwarder.name, 'Заказчик');
+                const amount = order.customerPrice || 0;
+                entry.weOweThem += amount;
+                if (order.isCustomerPaid) entry.weOweThemPaid += amount;
+                entry.orders.push({
+                    ...orderData,
+                    amount,
+                    isPaid: order.isCustomerPaid,
+                    paidAt: order.customerPaidAt,
+                    direction: 'weOwe', // мы должны
+                });
+            }
+
+            if (isForwarder && order.customerCompany) {
+                // Мы экспедитор → контрагент = заказчик → он ДОЛЖЕН нам (дебиторка)
+                const entry = getOrCreateEntry(order.customerCompany.id, order.customerCompany.name, 'Экспедитор');
+                const amount = order.customerPrice || 0;
+                entry.theyOweUs += amount;
+                if (order.isCustomerPaid) entry.theyOweUsPaid += amount;
+                entry.orders.push({
+                    ...orderData,
+                    amount,
+                    isPaid: order.isCustomerPaid,
+                    paidAt: order.customerPaidAt,
+                    direction: 'theyOwe', // нам должны
+                });
+            }
+
+            if (isForwarder && order.subForwarder) {
+                // Мы экспедитор, но назначили суб → мы ДОЛЖНЫ суб-экспедитору (кредиторка)
+                const entry = getOrCreateEntry(order.subForwarder.id, order.subForwarder.name, 'Экспедитор');
+                const amount = order.subForwarderPrice || 0;
+                entry.weOweThem += amount;
+                if (order.isSubForwarderPaid) entry.weOweThemPaid += amount;
+                entry.orders.push({
+                    ...orderData,
+                    amount,
+                    isPaid: order.isSubForwarderPaid,
+                    paidAt: order.subForwarderPaidAt,
+                    direction: 'weOwe',
+                });
+            }
+
+            if (isSubForwarder && order.forwarder) {
+                // Мы суб-экспедитор → контрагент = основной экспедитор → он ДОЛЖЕН нам (дебиторка)
+                const entry = getOrCreateEntry(order.forwarder.id, order.forwarder.name, 'Суб-экспедитор');
+                const amount = order.subForwarderPrice || 0;
+                entry.theyOweUs += amount;
+                if (order.isSubForwarderPaid) entry.theyOweUsPaid += amount;
+                entry.orders.push({
+                    ...orderData,
+                    amount,
+                    isPaid: order.isSubForwarderPaid,
+                    paidAt: order.subForwarderPaidAt,
+                    direction: 'theyOwe',
+                });
+            }
+        }
+
+        // Формируем массив контрагентов
+        const counterparties = Array.from(counterpartyMap.values()).map(entry => ({
+            ...entry,
+            balance: entry.theyOweUs - entry.weOweThem,
+            unpaidTheyOweUs: entry.theyOweUs - entry.theyOweUsPaid,
+            unpaidWeOweThem: entry.weOweThem - entry.weOweThemPaid,
+            totalOrders: entry.orders.length,
+        }));
+
+        // Сортируем: сначала с бо́льшим балансом неоплаченных
+        counterparties.sort((a, b) => {
+            const aUnpaid = a.unpaidTheyOweUs + a.unpaidWeOweThem;
+            const bUnpaid = b.unpaidTheyOweUs + b.unpaidWeOweThem;
+            return bUnpaid - aUnpaid;
+        });
+
+        // Общие итоги
+        const totals = {
+            totalTheyOweUs: counterparties.reduce((s, c) => s + c.theyOweUs, 0),
+            totalWeOweThem: counterparties.reduce((s, c) => s + c.weOweThem, 0),
+            unpaidTheyOweUs: counterparties.reduce((s, c) => s + c.unpaidTheyOweUs, 0),
+            unpaidWeOweThem: counterparties.reduce((s, c) => s + c.unpaidWeOweThem, 0),
+            balance: counterparties.reduce((s, c) => s + c.balance, 0),
+            totalCounterparties: counterparties.length,
+            totalOrders: counterparties.reduce((s, c) => s + c.totalOrders, 0),
+        };
+
+        return { counterparties, totals };
+    }
 }

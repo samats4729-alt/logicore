@@ -7,6 +7,7 @@ import {
     WalletOutlined,
     RightOutlined,
     BarChartOutlined,
+    TeamOutlined,
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -53,6 +54,13 @@ const sections: MenuSection[] = [
                 icon: <BarChartOutlined />,
                 color: '#1890ff',
                 href: '/company/accounting/registry',
+            },
+            {
+                key: 'counterparty-report',
+                label: 'Взаиморасчёты (по контрагентам)',
+                icon: <TeamOutlined />,
+                color: '#722ed1',
+                href: '/company/accounting/counterparty-report',
             },
         ],
     },
