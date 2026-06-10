@@ -803,7 +803,7 @@ export default function CompanyOrdersPage() {
         setAssignLoading(true);
         try {
             if (assignType === 'driver') {
-                await api.put(`/company/orders/${selectedOrder.id}/assign-driver`, { ...values, driverId: selectedDriverId });
+                await api.put(`/company/orders/${selectedOrder.id}/assign-driver`, { driverId: selectedDriverId || values.driverId });
                 message.success('Водитель назначен');
             } else if (assignType === 'partner_manual') {
                 await api.put(`/company/orders/${selectedOrder.id}/assign-driver`, {
