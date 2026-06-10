@@ -272,7 +272,7 @@ export class OrdersService implements OnModuleInit {
     ) {
         const order = await this.findById(orderId);
 
-        if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DRAFT) {
+        if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.ASSIGNED) {
             throw new BadRequestException('Нельзя назначить водителя на эту заявку');
         }
 
@@ -281,6 +281,7 @@ export class OrdersService implements OnModuleInit {
             data: {
                 driverId: driverId || null,
                 partnerId: partnerId || null,
+                forwarderId: partnerId || order.forwarderId || null,
                 assignedDriverName: manualDriverData?.assignedDriverName || null,
                 assignedDriverPhone: manualDriverData?.assignedDriverPhone || null,
                 assignedDriverPlate: manualDriverData?.assignedDriverPlate || null,

@@ -267,9 +267,17 @@ export default function OrderDetailPage() {
                             <Descriptions.Item label="Заказчик">{order.customerCompany?.name || '—'}</Descriptions.Item>
                             <Descriptions.Item label="Контакт">{order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : '—'}</Descriptions.Item>
                             <Descriptions.Item label="Телефон">{order.customer?.phone || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Водитель">{order.assignedDriverName || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Гос. номер">{order.assignedDriverPlate || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Экспедитор">{order.forwarder?.name || '—'}</Descriptions.Item>
+                            <Descriptions.Item label="Водитель">
+                                {order.assignedDriverName || 
+                                 (order.driver ? `${order.driver.lastName} ${order.driver.firstName} ${order.driver.middleName || ''}`.trim() : '—')}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Телефон водителя">
+                                {order.assignedDriverPhone || order.driver?.phone || '—'}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Гос. номер">
+                                {order.assignedDriverPlate || order.driver?.vehiclePlate || '—'}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Экспедитор">{order.forwarder?.name || order.partner?.name || '—'}</Descriptions.Item>
                             {order.subForwarder && (
                                 <Descriptions.Item label="Суб-экспедитор">{order.subForwarder.name}</Descriptions.Item>
                             )}

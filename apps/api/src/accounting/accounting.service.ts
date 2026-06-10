@@ -27,6 +27,8 @@ export class AccountingService {
                 subForwarder: { select: { id: true, name: true } },
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
                 statusHistory: { orderBy: { changedAt: 'desc' } },
+                driver: { select: { id: true, firstName: true, lastName: true, phone: true, vehiclePlate: true } },
+                partner: { select: { id: true, name: true } },
                 assignees: {
                     include: { user: { select: { id: true, firstName: true, lastName: true, role: true } } },
                     orderBy: { assignedAt: 'desc' },

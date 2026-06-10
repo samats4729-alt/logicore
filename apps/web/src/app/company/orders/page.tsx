@@ -354,9 +354,10 @@ export default function CompanyOrdersPage() {
     const fetchPartners = async () => {
         setPartnersLoading(true);
         try {
-            const [partnersRes, externalRes] = await Promise.all([
+            const [partnersRes, externalRes, profileRes] = await Promise.all([
                 api.get('/partners'),
                 api.get('/external-companies'),
+                api.get('/company/profile'),
             ]);
             const partnersList = partnersRes.data.filter((p: any) => p.isCarrier);
             const externalList = externalRes.data
@@ -365,7 +366,8 @@ export default function CompanyOrdersPage() {
                     id: e.id,
                     name: e.name,
                 }));
-            const combined = [...partnersList, ...externalList];
+            const ownCompany = profileRes.data ? [{ id: profileRes.data.id, name: `${profileRes.data.name} (Моя компания)` }] : [];
+            const combined = [...ownCompany, ...partnersList, ...externalList];
             setPartners(combined);
             setForwarders(combined);
         } catch { } finally {
@@ -760,10 +762,25 @@ export default function CompanyOrdersPage() {
 
     const openAssignModal = (order: Order) => {
         setSelectedOrder(order);
-        setSelectedDriverId(null);
+        setSelectedDriverId(order.driverId || null);
         form.resetFields();
         setAssignModalOpen(true);
-        setAssignType('driver');
+
+        const initialAssignType = order.assignedDriverName ? 'partner_manual' : 'driver';
+        setAssignType(initialAssignType as any);
+
+        form.setFieldsValue({
+            driverId: order.driverId || undefined,
+            driverPhone: order.driver?.phone || undefined,
+            driverPlate: order.driver?.vehiclePlate || undefined,
+            trailerNumber: order.trailerNumber || undefined,
+            partnerId: order.partnerId || order.forwarderId || order.subForwarderId || undefined,
+            assignedDriverName: order.assignedDriverName || undefined,
+            assignedDriverPhone: order.assignedDriverPhone || undefined,
+            assignedDriverPlate: order.assignedDriverPlate || undefined,
+            assignedDriverTrailer: order.assignedDriverTrailer || undefined,
+        });
+
         fetchDrivers();
         fetchPartners();
     };
@@ -1009,8 +1026,8 @@ export default function CompanyOrdersPage() {
                 ? <span style={{ fontSize: 12 }}>{r.responsibleManager.firstName} {r.responsibleManager.lastName}</span> 
                 : <span style={{ fontSize: 12, color: '#999' }}>—</span>,
         },
-        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || '—'}</span> },
-        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || '—'}</span> },
+        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || r.partner?.name || '—'}</span> },
+        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
         {
             title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
             render: (_: any, r: Order) => {
@@ -1060,8 +1077,8 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'delivery') || '—'}</span>,
         },
         { title: 'Статус', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag> },
-        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || '—'}</span> },
-        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || '—'}</span> },
+        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || r.partner?.name || '—'}</span> },
+        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
         {
             title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
             render: (_: any, r: Order) => {
@@ -1882,11 +1899,18 @@ export default function CompanyOrdersPage() {
                         ))}
 
                         <Title level={5} style={{ marginTop: 16 }}>Водитель</Title>
-                        {selectedOrder.assignedDriverName ? (
+                        {selectedOrder.assignedDriverName || selectedOrder.driver ? (
                             <Descriptions size="small" column={1}>
-                                <Descriptions.Item label="ФИО">{selectedOrder.assignedDriverName}</Descriptions.Item>
-                                <Descriptions.Item label="Телефон">{selectedOrder.assignedDriverPhone}</Descriptions.Item>
-                                <Descriptions.Item label="Госномер">{selectedOrder.assignedDriverPlate}</Descriptions.Item>
+                                <Descriptions.Item label="ФИО">
+                                    {selectedOrder.assignedDriverName || 
+                                     (selectedOrder.driver ? `${selectedOrder.driver.lastName} ${selectedOrder.driver.firstName} ${selectedOrder.driver.middleName || ''}`.trim() : '—')}
+                                </Descriptions.Item>
+                                <Descriptions.Item label="Телефон">
+                                    {selectedOrder.assignedDriverPhone || selectedOrder.driver?.phone || '—'}
+                                </Descriptions.Item>
+                                <Descriptions.Item label="Госномер">
+                                    {selectedOrder.assignedDriverPlate || selectedOrder.driver?.vehiclePlate || '—'}
+                                </Descriptions.Item>
                             </Descriptions>
                         ) : <Tag color="warning">Не назначен</Tag>}
 
