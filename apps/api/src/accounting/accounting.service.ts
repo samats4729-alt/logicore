@@ -67,6 +67,14 @@ export class AccountingService {
         const totalIncomes = incomes.filter((i: any) => !i.isDeleted).reduce((s: number, i: any) => s + i.amount, 0);
         const totalExpenses = expenses.filter((e: any) => !e.isDeleted).reduce((s: number, e: any) => s + e.amount, 0);
 
+        // Находим только выплаты исполнителю (категория driver_payment)
+        const executorPayments = expenses
+            .filter((e: any) => !e.isDeleted && e.category === 'driver_payment')
+            .reduce((s: number, e: any) => s + e.amount, 0);
+
+        // Другие расходы по заказу (топливо, ремонт и т.д.)
+        const otherExpenses = totalExpenses - executorPayments;
+
         // Exclude main customer payment category ('order_payment' and 'prepayment') from margins to prevent double-counting
         const extraIncomes = incomes
             .filter((i: any) => !i.isDeleted && i.category !== 'order_payment' && i.category !== 'prepayment')
@@ -109,9 +117,14 @@ export class AccountingService {
                     customerDebt: order.isCustomerPaid ? 0 : (order.customerPrice || 0) - totalIncomes,
                     driverDebt: 0,
                     subForwarderDebt: 0,
+                    executorDebt: 0,
                 },
             };
         }
+
+        const executorDebt = order.subForwarderId
+            ? (order.isSubForwarderPaid ? 0 : (order.subForwarderPrice || 0) - executorPayments)
+            : (order.isDriverPaid ? 0 : (order.driverCost || 0) - executorPayments);
 
         return {
             order,
@@ -119,10 +132,10 @@ export class AccountingService {
             expenses,
             summary: {
                 customerPrice: order.customerPrice || 0,
-                driverCost: order.driverCost || 0,  // Плановая стоимость исполнителя
+                driverCost: order.driverCost || 0,
                 subForwarderPrice: order.subForwarderPrice || 0,
                 executorCost,  
-                margin: (order.customerPrice || 0) + extraIncomes - executorCost - totalExpenses,
+                margin: (order.customerPrice || 0) + extraIncomes - executorCost - otherExpenses,
                 totalIncomes,
                 totalExpenses,
                 balance: totalIncomes - totalExpenses,
@@ -130,8 +143,9 @@ export class AccountingService {
                 isDriverPaid: order.isDriverPaid,
                 isSubForwarderPaid: order.isSubForwarderPaid,
                 customerDebt: order.isCustomerPaid ? 0 : (order.customerPrice || 0) - totalIncomes,
-                driverDebt: order.isDriverPaid ? 0 : (order.driverCost || 0) - totalExpenses,
-                subForwarderDebt: order.isSubForwarderPaid ? 0 : (order.subForwarderPrice || 0),
+                driverDebt: order.isDriverPaid ? 0 : (order.driverCost || 0) - executorPayments,
+                subForwarderDebt: order.isSubForwarderPaid ? 0 : (order.subForwarderPrice || 0) - executorPayments,
+                executorDebt,
             },
         };
     }

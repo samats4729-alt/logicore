@@ -294,9 +294,11 @@ export default function OrderDetailPage() {
                 {(() => {
                     const isClient = order.customerCompanyId === user?.companyId;
                     const isExecutorPaid = order.subForwarderId ? order.isSubForwarderPaid : order.isDriverPaid;
-                    const executorDebt = order.subForwarderId
-                        ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
-                        : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses);
+                    const executorDebt = summary.executorDebt !== undefined
+                        ? summary.executorDebt
+                        : (order.subForwarderId
+                            ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
+                            : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses));
 
                     if (isClient) {
                         return (

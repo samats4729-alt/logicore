@@ -93,9 +93,6 @@ export default function FinancialRegistryPage() {
         return o.customerPrice || 0;
     };
     const getMargin = (o: RegistryOrder) => {
-        if (o.customerCompany?.id === user?.companyId) {
-            return 0;
-        }
         return getIncome(o) - getExpense(o);
     };
     const getMarginPercent = (o: RegistryOrder) => {
