@@ -22,33 +22,33 @@ export class PowerOfAttorneyService {
                 driver: true,
                 customerCompany: true,
                 forwarder: true,
+                subForwarder: true,
+                partner: true,
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
             },
         });
 
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        // Определяем экспедиторскую компанию (кто везет груз)
-        const issuerCompanyId = order.subForwarderId || order.forwarderId || order.partnerId || order.customerCompanyId || companyId;
-        this.logger.log(`[PoA] Generating PDF for orderId=${orderId}. Logged-in companyId=${companyId}. Selected issuerCompanyId=${issuerCompanyId}`);
-        const forwarderCompany = await this.prisma.company.findUnique({
-            where: { id: issuerCompanyId },
-        });
+        // Определяем компанию-эмитента доверенности (Заказчик)
+        const issuerCompany = order.customerCompany || await this.prisma.company.findUnique({ where: { id: companyId } });
+        if (!issuerCompany) throw new NotFoundException('Компания-отправитель не найдена');
 
-        if (!forwarderCompany) throw new NotFoundException('Компания не найдена');
+        // Определяем компанию-исполнителя (кто везет груз)
+        const executorCompany = order.subForwarder || order.forwarder || order.partner || issuerCompany;
 
-        // Загружаем буферы для печати и подписи
+        // Загружаем буферы для печати и подписи компании-эмитента (Заказчика)
         let stampBuffer: Buffer | null = null;
         let signatureBuffer: Buffer | null = null;
 
-        this.logger.log(`[PoA] Company "${forwarderCompany.name}" (ID: ${forwarderCompany.id}) has stampImage="${forwarderCompany.stampImage}", signatureImage="${forwarderCompany.signatureImage}"`);
+        this.logger.log(`[PoA] Issuer company "${issuerCompany.name}" (ID: ${issuerCompany.id}) has stampImage="${issuerCompany.stampImage}", signatureImage="${issuerCompany.signatureImage}"`);
 
-        if (forwarderCompany.stampImage) {
-            stampBuffer = await this.getImageBuffer(forwarderCompany.stampImage);
+        if (issuerCompany.stampImage) {
+            stampBuffer = await this.getImageBuffer(issuerCompany.stampImage);
             this.logger.log(`[PoA] Loaded stampBuffer: ${stampBuffer ? stampBuffer.length + ' bytes' : 'failed/null'}`);
         }
-        if (forwarderCompany.signatureImage) {
-            signatureBuffer = await this.getImageBuffer(forwarderCompany.signatureImage);
+        if (issuerCompany.signatureImage) {
+            signatureBuffer = await this.getImageBuffer(issuerCompany.signatureImage);
             this.logger.log(`[PoA] Loaded signatureBuffer: ${signatureBuffer ? signatureBuffer.length + ' bytes' : 'failed/null'}`);
         }
 
@@ -61,11 +61,6 @@ export class PowerOfAttorneyService {
         const driverPlate = driver?.vehiclePlate || order.assignedDriverPlate || '—';
         const driverTrailer = driver?.trailerNumber || order.assignedDriverTrailer || '—';
         const driverPhone = driver?.phone || order.assignedDriverPhone || '';
-
-        // Компания-заказчик (отправитель груза)
-        const customerCompany = order.customerCompany;
-        const customerName = customerCompany?.name || '—';
-        const customerBin = customerCompany?.bin || '—';
 
         // Получатель груза (из точки доставки)
         const deliveryPoint = order.routePoints?.find(p => p.pointType === 'DELIVERY');
@@ -83,7 +78,7 @@ export class PowerOfAttorneyService {
                 margins: { top: 40, bottom: 40, left: 50, right: 50 },
                 info: {
                     Title: `Доверенность к заявке ${order.orderNumber}`,
-                    Author: forwarderCompany.name,
+                    Author: issuerCompany.name,
                 },
             });
 
@@ -101,8 +96,9 @@ export class PowerOfAttorneyService {
             const leftM = doc.page.margins.left;
 
             // ============ ШАПКА ============
+            const issuerClean = this.stripCompanyPrefix(issuerCompany.name);
             doc.fontSize(12).font('Roboto-Bold');
-            doc.text('ФИРМЕННЫЙ БЛАНК ЭКСПЕДИТОРСКОЙ КОМПАНИИ', { align: 'center' });
+            doc.text('ФИРМЕННЫЙ БЛАНК КОМПАНИИ-ЗАКАЗЧИКА', { align: 'center' });
             doc.moveDown(1.5);
 
             // Номер доверенности
@@ -113,7 +109,7 @@ export class PowerOfAttorneyService {
 
             // Город и дата
             const now = new Date();
-            const city = forwarderCompany.address ? forwarderCompany.address.split(',')[0] : 'г. Алматы';
+            const city = issuerCompany.address ? issuerCompany.address.split(',')[0] : 'г. Алматы';
             const dateStr = `«${now.getDate()}» ${this.getMonthName(now)} ${now.getFullYear()} года`;
 
             doc.fontSize(10).font('Roboto');
@@ -123,12 +119,11 @@ export class PowerOfAttorneyService {
             doc.moveDown(1);
 
             // ============ ПРЕАМБУЛА ============
-            const fwClean = this.stripCompanyPrefix(forwarderCompany.name);
-            const directorName = forwarderCompany.directorName || '_______________';
+            const directorName = issuerCompany.directorName || '_______________';
 
             doc.fontSize(10).font('Roboto');
             doc.text('Настоящей доверенностью, ', { continued: true, align: 'justify', lineGap: 2 });
-            doc.font('Roboto-Bold').text(`ТОО ${fwClean}`, { continued: true });
+            doc.font('Roboto-Bold').text(`ТОО "${issuerClean}"`, { continued: true });
             doc.font('Roboto').text(` в лице ${directorName}, действующего на основании Устава`, { align: 'justify', lineGap: 2 });
             doc.moveDown(0.3);
             doc.text('доверяет водителю:', { align: 'left' });
@@ -146,14 +141,18 @@ export class PowerOfAttorneyService {
             doc.x = leftM; // Reset x position after table
 
             // ============ ТЕКСТ ДОВЕРЕННОСТИ ============
+            const executorClean = this.stripCompanyPrefix(executorCompany.name);
+            const issuerBin = issuerCompany.bin || '—';
+            const executorBin = executorCompany.bin || '—';
+
             doc.fontSize(10).font('Roboto');
             doc.text('действовать от своего имени и совершать все необходимые действия, связанные с транспортно-экспедиционным обслуживанием грузов, в рамках заявки ', { continued: true, align: 'justify', lineGap: 2, width: pageWidth });
             doc.font('Roboto-Bold').text(`№ ${order.orderNumber}`, { continued: true });
             doc.font('Roboto').text(` между `, { continued: true });
-            doc.font('Roboto-Bold').text(`ТОО "${this.stripCompanyPrefix(customerName)}"`, { continued: true });
-            doc.font('Roboto').text(` (БИН ${customerBin}) и `, { continued: true });
-            doc.font('Roboto-Bold').text(`ТОО ${fwClean}`, { continued: true });
-            doc.font('Roboto').text(` (БИН ${forwarderCompany.bin || '—'}).`, { align: 'justify', lineGap: 2, width: pageWidth });
+            doc.font('Roboto-Bold').text(`ТОО "${issuerClean}"`, { continued: true });
+            doc.font('Roboto').text(` (БИН ${issuerBin}) и `, { continued: true });
+            doc.font('Roboto-Bold').text(`ТОО "${executorClean}"`, { continued: true });
+            doc.font('Roboto').text(` (БИН ${executorBin}).`, { align: 'justify', lineGap: 2, width: pageWidth });
             doc.moveDown(0.5);
 
             // Полномочия
@@ -178,7 +177,7 @@ export class PowerOfAttorneyService {
             doc.moveDown(0.3);
 
             this.drawCargoTable(doc, {
-                senderName: customerName,
+                senderName: issuerCompany.name,
                 receiverName: receiverName,
                 cargoDescription: order.cargoDescription || '—',
                 weight: order.cargoWeight ? String(order.cargoWeight) : '—',
@@ -204,7 +203,7 @@ export class PowerOfAttorneyService {
 
             doc.font('Roboto').fontSize(10);
             doc.text('Директор', leftM, signY);
-            doc.text(`Наименование экспедиторской компании ${fwClean}`, leftM, signY + 15);
+            doc.text(`Наименование компании-заказчика ТОО "${issuerClean}"`, leftM, signY + 15);
             doc.text(`ФИО ${directorName}`, leftM, signY + 30);
             doc.text('/___________________/', leftM + 300, signY + 30);
 
