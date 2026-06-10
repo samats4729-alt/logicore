@@ -1,9 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AccountingService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private redisService: RedisService,
+        private configService: ConfigService,
+    ) { }
 
     // ==================== ORDER FINANCIALS ====================
 
@@ -799,5 +806,96 @@ export class AccountingService {
         };
 
         return { counterparties, totals };
+    }
+
+    // ==================== SHARE REPORT (Публичный доступ) ====================
+
+    /**
+     * Генерирует share-токен для публичного доступа к отчёту по контрагенту.
+     * Токен хранится в Redis с TTL 7 дней.
+     */
+    async generateShareToken(companyId: string, counterpartyId: string, ourRole: string): Promise<{ token: string; shareUrl: string }> {
+        // Проверяем, что компания и контрагент существуют
+        const [company, counterparty] = await Promise.all([
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true } }),
+            this.prisma.company.findUnique({ where: { id: counterpartyId }, select: { id: true, name: true } }),
+        ]);
+
+        if (!company) throw new NotFoundException('Компания не найдена');
+        if (!counterparty) throw new NotFoundException('Контрагент не найден');
+
+        const token = uuidv4();
+        const ttl = 60 * 60 * 24 * 7; // 7 дней
+
+        await this.redisService.set(
+            `share_report:${token}`,
+            JSON.stringify({
+                companyId,
+                companyName: company.name,
+                counterpartyId,
+                counterpartyName: counterparty.name,
+                ourRole,
+                createdAt: new Date().toISOString(),
+            }),
+            ttl,
+        );
+
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+        const shareUrl = `${frontendUrl}/shared/report/${token}`;
+
+        return { token, shareUrl };
+    }
+
+    /**
+     * Получает отчёт по share-токену (публичный доступ, без JWT).
+     * Возвращает данные только по конкретному контрагенту.
+     */
+    async getSharedReport(token: string) {
+        const raw = await this.redisService.get(`share_report:${token}`);
+        if (!raw) {
+            throw new NotFoundException('Ссылка недействительна или истёк срок действия');
+        }
+
+        const { companyId, companyName, counterpartyId, ourRole, createdAt } = JSON.parse(raw);
+
+        // Получаем полный отчёт компании
+        const fullReport = await this.getCounterpartyReport(companyId);
+
+        // Фильтруем: оставляем только данные по конкретному контрагенту и роли
+        const key = `${counterpartyId}__${ourRole}`;
+        const counterparty = fullReport.counterparties.find(
+            (c: any) => `${c.counterparty.id}__${c.ourRole}` === key
+        );
+
+        if (!counterparty) {
+            // Контрагент есть, но по нему пока нет сделок
+            const { counterpartyName: cpName } = JSON.parse(raw);
+            return {
+                senderCompany: companyName,
+                counterpartyName: cpName,
+                ourRole,
+                createdAt,
+                expiresIn: '7 дней',
+                counterparty: null,
+                totals: null,
+            };
+        }
+
+        return {
+            senderCompany: companyName,
+            counterpartyName: counterparty.counterparty.name,
+            ourRole,
+            createdAt,
+            expiresIn: '7 дней',
+            counterparty,
+            totals: {
+                theyOweUs: counterparty.theyOweUs,
+                weOweThem: counterparty.weOweThem,
+                unpaidTheyOweUs: counterparty.unpaidTheyOweUs,
+                unpaidWeOweThem: counterparty.unpaidWeOweThem,
+                balance: counterparty.balance,
+                totalOrders: counterparty.totalOrders,
+            },
+        };
     }
 }

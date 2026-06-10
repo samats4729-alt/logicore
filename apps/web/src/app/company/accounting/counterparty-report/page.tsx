@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Collapse, Space, Empty, Spin, Drawer, Descriptions } from 'antd';
+import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Collapse, Space, Empty, Spin, Drawer, Descriptions, Modal, Button, message } from 'antd';
 import {
     SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined,
     CheckCircleOutlined, CloseCircleOutlined, TeamOutlined,
-    RightOutlined, DownOutlined,
+    RightOutlined, DownOutlined, ShareAltOutlined, CopyOutlined, SendOutlined, LinkOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -87,6 +87,51 @@ export default function CounterpartyReportPage() {
     const [paymentFilter, setPaymentFilter] = useState<string>('all');
     const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
     const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+
+    // Share modal state
+    const [shareModal, setShareModal] = useState<{ open: boolean; counterpartyId: string; ourRole: string; counterpartyName: string }>({ open: false, counterpartyId: '', ourRole: '', counterpartyName: '' });
+    const [shareUrl, setShareUrl] = useState('');
+    const [shareLoading, setShareLoading] = useState(false);
+    const [shareEmail, setShareEmail] = useState('');
+    const [emailSending, setEmailSending] = useState(false);
+
+    const handleShare = async (counterpartyId: string, ourRole: string, counterpartyName: string) => {
+        setShareModal({ open: true, counterpartyId, ourRole, counterpartyName });
+        setShareUrl('');
+        setShareEmail('');
+        setShareLoading(true);
+        try {
+            const res = await api.post('/accounting/share-report', { counterpartyId, ourRole });
+            setShareUrl(res.data.shareUrl);
+        } catch {
+            message.error('Ошибка генерации ссылки');
+        } finally {
+            setShareLoading(false);
+        }
+    };
+
+    const handleCopyLink = () => {
+        navigator.clipboard.writeText(shareUrl);
+        message.success('Ссылка скопирована!');
+    };
+
+    const handleSendEmail = async () => {
+        if (!shareEmail) { message.warning('Введите email'); return; }
+        setEmailSending(true);
+        try {
+            await api.post('/accounting/share-report', {
+                counterpartyId: shareModal.counterpartyId,
+                ourRole: shareModal.ourRole,
+                email: shareEmail,
+            });
+            message.success('Отчёт отправлен на ' + shareEmail);
+            setShareEmail('');
+        } catch {
+            message.error('Ошибка отправки');
+        } finally {
+            setEmailSending(false);
+        }
+    };
 
     useEffect(() => {
         (async () => {
@@ -377,6 +422,18 @@ export default function CounterpartyReportPage() {
                                             {cp.balance >= 0 ? '+' : ''}{fmt(cp.balance)} ₸
                                         </div>
                                     </div>
+                                    {/* Share button */}
+                                    <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<ShareAltOutlined />}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleShare(cp.counterparty.id, cp.ourRole, cp.counterparty.name);
+                                        }}
+                                        style={{ marginLeft: 8, color: '#1677ff', borderRadius: 6 }}
+                                        title="Поделиться отчётом"
+                                    />
                                 </div>
                             </div>
 
@@ -493,6 +550,67 @@ export default function CounterpartyReportPage() {
                     );
                 })()}
             </Drawer>
+
+            {/* SHARE MODAL */}
+            <Modal
+                title={<><ShareAltOutlined style={{ marginRight: 8 }} />Поделиться отчётом — {shareModal.counterpartyName}</>}
+                open={shareModal.open}
+                onCancel={() => setShareModal({ open: false, counterpartyId: '', ourRole: '', counterpartyName: '' })}
+                footer={null}
+                width={520}
+            >
+                {shareLoading ? (
+                    <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>
+                ) : shareUrl ? (
+                    <div>
+                        <div style={{ marginBottom: 20 }}>
+                            <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
+                                Ссылка на отчёт (действительна 7 дней):
+                            </Text>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <Input
+                                    value={shareUrl}
+                                    readOnly
+                                    prefix={<LinkOutlined style={{ color: '#bbb' }} />}
+                                    style={{ flex: 1, fontSize: 13 }}
+                                />
+                                <Button
+                                    type="primary"
+                                    icon={<CopyOutlined />}
+                                    onClick={handleCopyLink}
+                                >
+                                    Копировать
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+                            <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
+                                Или отправить на email:
+                            </Text>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <Input
+                                    placeholder="email@example.com"
+                                    value={shareEmail}
+                                    onChange={(e) => setShareEmail(e.target.value)}
+                                    onPressEnter={handleSendEmail}
+                                    style={{ flex: 1 }}
+                                    type="email"
+                                />
+                                <Button
+                                    icon={<SendOutlined />}
+                                    onClick={handleSendEmail}
+                                    loading={emailSending}
+                                >
+                                    Отправить
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <Empty description="Не удалось сгенерировать ссылку" />
+                )}
+            </Modal>
 
             {/* COMPACT TABLE STYLES */}
             <style jsx global>{`

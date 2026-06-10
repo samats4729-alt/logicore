@@ -1,11 +1,15 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailService } from '../email/email.service';
 
 @Controller('accounting')
 @UseGuards(JwtAuthGuard)
 export class AccountingController {
-    constructor(private readonly accountingService: AccountingService) { }
+    constructor(
+        private readonly accountingService: AccountingService,
+        private readonly emailService: EmailService,
+    ) { }
 
     // ==================== ORDER FINANCIALS ====================
 
@@ -107,5 +111,40 @@ export class AccountingController {
     @Get('counterparty-report')
     async getCounterpartyReport(@Request() req: any) {
         return this.accountingService.getCounterpartyReport(req.user.companyId);
+    }
+
+    // ==================== SHARE REPORT ====================
+
+    @Post('share-report')
+    async shareReport(
+        @Request() req: any,
+        @Body() body: { counterpartyId: string; ourRole: string; email?: string },
+    ) {
+        const result = await this.accountingService.generateShareToken(
+            req.user.companyId,
+            body.counterpartyId,
+            body.ourRole,
+        );
+
+        // Если передан email — отправляем письмо
+        if (body.email) {
+            try {
+                // Получаем название компании отправителя
+                const company = await this.accountingService['prisma'].company.findUnique({
+                    where: { id: req.user.companyId },
+                    select: { name: true },
+                });
+                await this.emailService.sendCounterpartyReportEmail(
+                    body.email,
+                    result.shareUrl,
+                    company?.name || 'Компания',
+                    '', // counterparty name будет виден из контекста
+                );
+            } catch (err) {
+                console.error('Ошибка отправки email отчёта:', err);
+            }
+        }
+
+        return result;
     }
 }
