@@ -101,6 +101,8 @@ interface Order {
     forwarder?: { id?: string; name: string; email?: string };
     partner?: { name: string; email?: string };
     forwarderId?: string;
+    subForwarderId?: string;
+    partnerId?: string;
     isConfirmed?: boolean;
     driverId?: string;
     responsibleManager?: { firstName: string; lastName: string; };
@@ -123,29 +125,19 @@ export default function CompanyOrdersPage() {
             }
         };
     }, []);
-    const [activeTab, setActiveTab] = useState('incoming');
-    const [incomingPage, setIncomingPage] = useState(1);
-    const [incomingPageSize, setIncomingPageSize] = useState(20);
-    const [outgoingPage, setOutgoingPage] = useState(1);
-    const [outgoingPageSize, setOutgoingPageSize] = useState(20);
+    const [activeTab, setActiveTab] = useState('all');
+    const [ordersPage, setOrdersPage] = useState(1);
+    const [ordersPageSize, setOrdersPageSize] = useState(20);
     const [archivePage, setArchivePage] = useState(1);
     const [archivePageSize, setArchivePageSize] = useState(20);
 
-    // Fetch orders with SWR
-    const { data: ordersData, isLoading: loading, mutate: mutateIncoming } = useSWR(
-        `/company/orders?page=${incomingPage}&limit=${incomingPageSize}&type=incoming`,
+    // Fetch all active orders with SWR (unified — no incoming/outgoing split)
+    const { data: ordersData, isLoading: loading, mutate: mutateOrders } = useSWR(
+        `/company/orders?page=${ordersPage}&limit=${ordersPageSize}&type=active`,
         fetcher
     );
     const orders: Order[] = ordersData?.data || [];
     const totalOrders = ordersData?.total || 0;
-
-    // Outgoing orders
-    const { data: outgoingData, isLoading: outgoingLoading, mutate: mutateOutgoing } = useSWR(
-        `/company/orders?page=${outgoingPage}&limit=${outgoingPageSize}&type=outgoing`,
-        fetcher
-    );
-    const outgoingOrders: Order[] = outgoingData?.data || [];
-    const totalOutgoingOrders = outgoingData?.total || 0;
 
     // Archive orders
     const { data: archiveData, isLoading: archiveLoading, mutate: mutateArchive } = useSWR(
@@ -156,8 +148,7 @@ export default function CompanyOrdersPage() {
     const totalArchiveOrders = archiveData?.total || 0;
 
     const mutateAll = () => {
-        mutateIncoming();
-        mutateOutgoing();
+        mutateOrders();
         mutateArchive();
     };
 
@@ -403,6 +394,8 @@ export default function CompanyOrdersPage() {
 
     // =================== FILTERS ===================
     const [filterCompany, setFilterCompany] = useState<string | undefined>(undefined);
+    const [filterForwarder, setFilterForwarder] = useState<string | undefined>(undefined);
+    const [filterExpeditor, setFilterExpeditor] = useState<string | undefined>(undefined);
     const [filterDriver, setFilterDriver] = useState<string | undefined>(undefined);
     const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
     const [filterFrom, setFilterFrom] = useState<string | undefined>(undefined);
@@ -426,17 +419,26 @@ export default function CompanyOrdersPage() {
     }, [createModalOpen]);
 
     // =================== UNIQUE VALUES FOR FILTERS ===================
-    const uniqueIncomingCompanies = useMemo(() => {
+    const uniqueCompanies = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => { if (o.customerCompany?.name) set.add(o.customerCompany.name); });
         return Array.from(set).sort();
     }, [orders]);
 
-    const uniqueOutgoingCompanies = useMemo(() => {
+    const uniqueForwarders = useMemo(() => {
         const set = new Set<string>();
-        outgoingOrders.forEach(o => { if (o.forwarder?.name) set.add(o.forwarder.name); });
+        orders.forEach(o => { if (o.forwarder?.name) set.add(o.forwarder.name); });
         return Array.from(set).sort();
-    }, [outgoingOrders]);
+    }, [orders]);
+
+    const uniqueExpeditors = useMemo(() => {
+        const set = new Set<string>();
+        orders.forEach(o => {
+            const name = o.subForwarder?.name || o.partner?.name;
+            if (name) set.add(name);
+        });
+        return Array.from(set).sort();
+    }, [orders]);
 
     const uniqueArchiveCompanies = useMemo(() => {
         const set = new Set<string>();
@@ -447,17 +449,11 @@ export default function CompanyOrdersPage() {
         return Array.from(set).sort();
     }, [archiveOrders]);
 
-    const uniqueIncomingDrivers = useMemo(() => {
+    const uniqueDrivers = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => { if (o.assignedDriverName) set.add(o.assignedDriverName); });
         return Array.from(set).sort();
     }, [orders]);
-
-    const uniqueOutgoingDrivers = useMemo(() => {
-        const set = new Set<string>();
-        outgoingOrders.forEach(o => { if (o.assignedDriverName) set.add(o.assignedDriverName); });
-        return Array.from(set).sort();
-    }, [outgoingOrders]);
 
     const uniqueArchiveDrivers = useMemo(() => {
         const set = new Set<string>();
@@ -465,19 +461,13 @@ export default function CompanyOrdersPage() {
         return Array.from(set).sort();
     }, [archiveOrders]);
 
-    const uniqueIncomingStatuses = useMemo(() => {
+    const uniqueStatuses = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => set.add(o.status));
         return Array.from(set);
     }, [orders]);
 
-    const uniqueOutgoingStatuses = useMemo(() => {
-        const set = new Set<string>();
-        outgoingOrders.forEach(o => set.add(o.status));
-        return Array.from(set);
-    }, [outgoingOrders]);
-
-    const uniqueIncomingFromCities = useMemo(() => {
+    const uniqueFromCities = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => {
             const city = extractCity(o, 'pickup');
@@ -485,15 +475,6 @@ export default function CompanyOrdersPage() {
         });
         return Array.from(set).sort();
     }, [orders]);
-
-    const uniqueOutgoingFromCities = useMemo(() => {
-        const set = new Set<string>();
-        outgoingOrders.forEach(o => {
-            const city = extractCity(o, 'pickup');
-            if (city) set.add(city);
-        });
-        return Array.from(set).sort();
-    }, [outgoingOrders]);
 
     const uniqueArchiveFromCities = useMemo(() => {
         const set = new Set<string>();
@@ -504,7 +485,7 @@ export default function CompanyOrdersPage() {
         return Array.from(set).sort();
     }, [archiveOrders]);
 
-    const uniqueIncomingToCities = useMemo(() => {
+    const uniqueToCities = useMemo(() => {
         const set = new Set<string>();
         orders.forEach(o => {
             const city = extractCity(o, 'delivery');
@@ -512,15 +493,6 @@ export default function CompanyOrdersPage() {
         });
         return Array.from(set).sort();
     }, [orders]);
-
-    const uniqueOutgoingToCities = useMemo(() => {
-        const set = new Set<string>();
-        outgoingOrders.forEach(o => {
-            const city = extractCity(o, 'delivery');
-            if (city) set.add(city);
-        });
-        return Array.from(set).sort();
-    }, [outgoingOrders]);
 
     const uniqueArchiveToCities = useMemo(() => {
         const set = new Set<string>();
@@ -536,6 +508,11 @@ export default function CompanyOrdersPage() {
         return orders.filter(o => {
             if (o.status === 'CANCELLED') return false;
             if (filterCompany && o.customerCompany?.name !== filterCompany) return false;
+            if (filterForwarder && o.forwarder?.name !== filterForwarder) return false;
+            if (filterExpeditor) {
+                const expName = o.subForwarder?.name || o.partner?.name;
+                if (expName !== filterExpeditor) return false;
+            }
             if (filterDriver && o.assignedDriverName !== filterDriver) return false;
             if (filterStatus && o.status !== filterStatus) return false;
             if (filterFrom) {
@@ -550,27 +527,7 @@ export default function CompanyOrdersPage() {
             if (filterSumMax !== undefined && (o.customerPrice || 0) > filterSumMax) return false;
             return true;
         });
-    }, [orders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
-
-    const filteredOutgoingOrders = useMemo(() => {
-        return outgoingOrders.filter(o => {
-            if (o.status === 'CANCELLED') return false;
-            if (filterCompany && o.forwarder?.name !== filterCompany) return false;
-            if (filterDriver && o.assignedDriverName !== filterDriver) return false;
-            if (filterStatus && o.status !== filterStatus) return false;
-            if (filterFrom) {
-                const city = extractCity(o, 'pickup');
-                if (city !== filterFrom) return false;
-            }
-            if (filterTo) {
-                const city = extractCity(o, 'delivery');
-                if (city !== filterTo) return false;
-            }
-            if (filterSumMin !== undefined && (o.customerPrice || 0) < filterSumMin) return false;
-            if (filterSumMax !== undefined && (o.customerPrice || 0) > filterSumMax) return false;
-            return true;
-        });
-    }, [outgoingOrders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
+    }, [orders, filterCompany, filterForwarder, filterExpeditor, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
 
     const filteredArchiveOrders = useMemo(() => {
         return archiveOrders.filter(o => {
@@ -591,10 +548,12 @@ export default function CompanyOrdersPage() {
         });
     }, [archiveOrders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
 
-    const hasActiveFilters = filterCompany || filterDriver || filterStatus || filterFrom || filterTo || filterSumMin !== undefined || filterSumMax !== undefined;
+    const hasActiveFilters = filterCompany || filterForwarder || filterExpeditor || filterDriver || filterStatus || filterFrom || filterTo || filterSumMin !== undefined || filterSumMax !== undefined;
 
     const clearFilters = () => {
         setFilterCompany(undefined);
+        setFilterForwarder(undefined);
+        setFilterExpeditor(undefined);
         setFilterDriver(undefined);
         setFilterStatus(undefined);
         setFilterFrom(undefined);
@@ -747,6 +706,11 @@ export default function CompanyOrdersPage() {
                 if (!showForwarderField) {
                     updateData.forwarderId = user?.companyId;
                     updateData.driverCost = null;
+                    updateData.subForwarderId = null;
+                    updateData.subForwarderPrice = null;
+                } else {
+                    updateData.subForwarderId = user?.companyId;
+                    updateData.subForwarderPrice = values.driverCost;
                 }
             }
 
@@ -926,6 +890,11 @@ export default function CompanyOrdersPage() {
                 if (!showForwarderField) {
                     ov.forwarderId = user?.companyId;
                     ov.driverCost = null;
+                    ov.subForwarderId = null;
+                    ov.subForwarderPrice = null;
+                } else {
+                    ov.subForwarderId = user?.companyId;
+                    ov.subForwarderPrice = values.driverCost;
                 }
             }
 
@@ -933,12 +902,8 @@ export default function CompanyOrdersPage() {
             message.success('Заявка создана');
             mutateAll();
             
-            // Автоматически переключаемся на нужную вкладку, чтобы пользователь сразу увидел созданную заявку
-            if (ov.customerCompanyId && ov.customerCompanyId !== user?.companyId) {
-                setActiveTab('incoming');
-            } else {
-                setActiveTab('outgoing');
-            }
+            // Автоматически переключаемся на вкладку «Все заявки»
+            setActiveTab('all');
 
             setCreateModalOpen(false); createForm.resetFields();
         } catch (error: any) { message.error(error.response?.data?.message || 'Ошибка создания'); }
@@ -956,11 +921,19 @@ export default function CompanyOrdersPage() {
             render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
-            title: 'Заказчик', key: 'company', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.customerCompany?.name || '—'}</span>,
+            title: 'Заказчик', key: 'customer', width: 130, ellipsis: true,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{r.customerCompany?.name || '—'}</span>,
         },
         {
-            title: 'Груз', key: 'cargo', ellipsis: true, width: 130,
+            title: 'Исполнитель', key: 'forwarder', width: 130, ellipsis: true,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{r.forwarder?.name || '—'}</span>,
+        },
+        {
+            title: 'Экспедитор', key: 'expeditor', width: 130, ellipsis: true,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: (r.subForwarderId === user?.companyId || r.partnerId === user?.companyId) ? 600 : undefined }}>{r.subForwarder?.name || r.partner?.name || '—'}</span>,
+        },
+        {
+            title: 'Груз', key: 'cargo', ellipsis: true, width: 120,
             render: (_: any, r: Order) => {
                 const parts = [];
                 if (r.natureOfCargo) parts.push(r.natureOfCargo);
@@ -969,16 +942,20 @@ export default function CompanyOrdersPage() {
             }
         },
         {
-            title: 'Откуда', key: 'from', width: 110, ellipsis: true,
+            title: 'Откуда', key: 'from', width: 100, ellipsis: true,
             render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(r, 'pickup') || '—'}</span>,
         },
         {
-            title: 'Куда', key: 'to', width: 110, ellipsis: true,
+            title: 'Куда', key: 'to', width: 100, ellipsis: true,
             render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(r, 'delivery') || '—'}</span>,
         },
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 100,
             render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
+        },
+        {
+            title: 'Водитель', key: 'drv', width: 110, ellipsis: true,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span>,
         },
         {
             title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
@@ -989,7 +966,7 @@ export default function CompanyOrdersPage() {
             },
         },
         {
-            title: '', key: 'actions', width: 120, fixed: 'right' as const,
+            title: '', key: 'actions', width: 80, fixed: 'right' as const,
             render: (_: any, r: Order) => (
                 <Space size={4}>
                     <Tooltip title="Подробнее"><Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} style={{ fontSize: 12 }} /></Tooltip>
@@ -999,68 +976,14 @@ export default function CompanyOrdersPage() {
         },
     ];
 
-    const outgoingColumns = [
-        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
-        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
-        {
-            title: 'Груз', key: 'cargo', ellipsis: true, width: 140,
-            render: (_: any, r: Order) => {
-                const parts = [];
-                if (r.natureOfCargo) parts.push(r.natureOfCargo);
-                if (r.cargoDescription) parts.push(r.cargoDescription);
-                return <span style={{ fontSize: 12 }}>{parts.join(' / ') || '—'}</span>;
-            }
-        },
-        {
-            title: 'Откуда', key: 'from', width: 110,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'pickup') || '—'}</span>,
-        },
-        {
-            title: 'Куда', key: 'to', width: 110,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'delivery') || '—'}</span>,
-        },
-        { title: 'Статус', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag> },
-        {
-            title: 'Ответств.', key: 'manager', width: 110, ellipsis: true,
-            render: (_: any, r: Order) => r.responsibleManager 
-                ? <span style={{ fontSize: 12 }}>{r.responsibleManager.firstName} {r.responsibleManager.lastName}</span> 
-                : <span style={{ fontSize: 12, color: '#999' }}>—</span>,
-        },
-        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || r.partner?.name || '—'}</span> },
-        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
-        {
-            title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
-            render: (_: any, r: Order) => {
-                const isClient = r.customerCompanyId === user?.companyId;
-                if (isClient) {
-                    return r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600 }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : '—';
-                }
-                // If we are the subcontractor / middleman
-                if (r.driverCost) {
-                    return (
-                        <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: '#3f8600' }}>{r.customerPrice?.toLocaleString('ru-RU')}</span>
-                            <div style={{ fontSize: 10, color: '#cf1322', marginTop: -2 }}>{r.driverCost.toLocaleString('ru-RU')}</div>
-                        </div>
-                    );
-                }
-                return r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600 }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : '—';
-            }
-        },
-        { title: '', key: 'actions', width: 80, render: (_: any, r: Order) => (
-            <Space size={4}>
-                <Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} />
-                <Tooltip title="Редактировать"><Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} /></Tooltip>
-            </Space>
-        ) },
-    ];
-
     const archiveColumns = [
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
-        { title: 'Заказчик', key: 'company', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.customerCompany?.name || '—'}</span> },
+        { title: 'Заказчик', key: 'customer', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{r.customerCompany?.name || '—'}</span> },
+        { title: 'Исполнитель', key: 'forwarder', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{r.forwarder?.name || '—'}</span> },
+        { title: 'Экспедитор', key: 'expeditor', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: (r.subForwarderId === user?.companyId || r.partnerId === user?.companyId) ? 600 : undefined }}>{r.subForwarder?.name || r.partner?.name || '—'}</span> },
         {
-            title: 'Груз', key: 'cargo', ellipsis: true, width: 140,
+            title: 'Груз', key: 'cargo', ellipsis: true, width: 120,
             render: (_: any, r: Order) => {
                 const parts = [];
                 if (r.natureOfCargo) parts.push(r.natureOfCargo);
@@ -1069,16 +992,15 @@ export default function CompanyOrdersPage() {
             }
         },
         {
-            title: 'Откуда', key: 'from', width: 110,
+            title: 'Откуда', key: 'from', width: 100,
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'pickup') || '—'}</span>,
         },
         {
-            title: 'Куда', key: 'to', width: 110,
+            title: 'Куда', key: 'to', width: 100,
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'delivery') || '—'}</span>,
         },
         { title: 'Статус', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag> },
-        { title: 'Экспедитор', key: 'fwd', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.forwarder?.name || r.partner?.name || '—'}</span> },
-        { title: 'Водитель', key: 'drv', width: 110, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
+        { title: 'Водитель', key: 'drv', width: 110, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
         {
             title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
             render: (_: any, r: Order) => {
@@ -1110,8 +1032,8 @@ export default function CompanyOrdersPage() {
                 size="small"
                 items={[
                     {
-                        key: 'incoming',
-                        label: <span>Входящие <Tag style={{ marginLeft: 4, fontSize: 11 }}>{filteredOrders.length}{hasActiveFilters ? `/${orders.length}` : ''}</Tag></span>,
+                        key: 'all',
+                        label: <span>Все заявки <Tag style={{ marginLeft: 4, fontSize: 11 }}>{filteredOrders.length}{hasActiveFilters ? `/${orders.length}` : ''}</Tag></span>,
                         children: (
                             <div>
                                 {/* FILTER BAR */}
@@ -1123,38 +1045,52 @@ export default function CompanyOrdersPage() {
                                     <FilterOutlined style={{ color: '#999', fontSize: 13 }} />
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Заказчик" style={{ width: 150 }}
+                                        placeholder="Заказчик" style={{ width: 140 }}
                                         value={filterCompany} onChange={setFilterCompany}
                                     >
-                                        {uniqueIncomingCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                        {uniqueCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Водитель" style={{ width: 140 }}
+                                        placeholder="Исполнитель" style={{ width: 140 }}
+                                        value={filterForwarder} onChange={setFilterForwarder}
+                                    >
+                                        {uniqueForwarders.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Экспедитор" style={{ width: 140 }}
+                                        value={filterExpeditor} onChange={setFilterExpeditor}
+                                    >
+                                        {uniqueExpeditors.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                    </Select>
+                                    <Select
+                                        size="small" allowClear showSearch optionFilterProp="children"
+                                        placeholder="Водитель" style={{ width: 130 }}
                                         value={filterDriver} onChange={setFilterDriver}
                                     >
-                                        {uniqueIncomingDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
+                                        {uniqueDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear
                                         placeholder="Статус" style={{ width: 120 }}
                                         value={filterStatus} onChange={setFilterStatus}
                                     >
-                                        {uniqueIncomingStatuses.map(s => <Select.Option key={s} value={s}>{statusLabels[s] || s}</Select.Option>)}
+                                        {uniqueStatuses.map(s => <Select.Option key={s} value={s}>{statusLabels[s] || s}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Откуда" style={{ width: 120 }}
+                                        placeholder="Откуда" style={{ width: 110 }}
                                         value={filterFrom} onChange={setFilterFrom}
                                     >
-                                        {uniqueIncomingFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                        {uniqueFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Куда" style={{ width: 120 }}
+                                        placeholder="Куда" style={{ width: 110 }}
                                         value={filterTo} onChange={setFilterTo}
                                     >
-                                        {uniqueIncomingToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                        {uniqueToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
                                     </Select>
                                     <InputNumber
                                         size="small" placeholder="Сумма от" style={{ width: 90 }}
@@ -1180,130 +1116,18 @@ export default function CompanyOrdersPage() {
                                     rowKey="id"
                                     loading={loading}
                                     size="small"
-                                    scroll={{ x: 1200 }}
+                                    scroll={{ x: 1400 }}
                                     pagination={{
-                                        current: incomingPage,
-                                        pageSize: incomingPageSize,
+                                        current: ordersPage,
+                                        pageSize: ordersPageSize,
                                         total: totalOrders,
-                                        onChange: (p, ps) => { setIncomingPage(p); setIncomingPageSize(ps); },
-                                        showSizeChanger: true,
-                                        pageSizeOptions: ['20', '50', '100'],
-                                    }}
-                                    style={{ fontSize: 12 }}
-                                    onRow={(record) => ({
-                                        style: { cursor: 'pointer' },
-                                        onClick: () => {
-                                            if (clickTimeoutRef.current && lastClickedOrderIdRef.current === record.id) {
-                                                clearTimeout(clickTimeoutRef.current);
-                                                clickTimeoutRef.current = null;
-                                                lastClickedOrderIdRef.current = null;
-                                                router.push(`/company/orders/${record.id}`);
-                                            } else {
-                                                if (clickTimeoutRef.current) {
-                                                    clearTimeout(clickTimeoutRef.current);
-                                                }
-                                                lastClickedOrderIdRef.current = record.id;
-                                                clickTimeoutRef.current = setTimeout(() => {
-                                                    setSelectedOrder(record);
-                                                    setDetailDrawerOpen(true);
-                                                    clickTimeoutRef.current = null;
-                                                    lastClickedOrderIdRef.current = null;
-                                                }, 250);
-                                            }
-                                        }
-                                    })}
-                                    rowClassName={(record) => {
-                                        if (record.status === 'COMPLETED') return 'row-completed';
-                                        if (record.status === 'PROBLEM') return 'row-problem';
-                                        if (record.status === 'CANCELLED') return 'row-cancelled';
-                                        return '';
-                                    }}
-                                />
-                            </div>
-                        ),
-                    },
-                    {
-                        key: 'outgoing',
-                        label: <span>Исходящие <Tag style={{ marginLeft: 4, fontSize: 11 }}>{filteredOutgoingOrders.length}{hasActiveFilters ? `/${outgoingOrders.length}` : ''}</Tag></span>,
-                        children: (
-                            <div>
-                                {/* FILTER BAR */}
-                                <div style={{
-                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8,
-                                    padding: '8px 12px', background: '#fafafa', borderRadius: 8,
-                                    border: '1px solid #f0f0f0', alignItems: 'center'
-                                }}>
-                                    <FilterOutlined style={{ color: '#999', fontSize: 13 }} />
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Экспедитор" style={{ width: 150 }}
-                                        value={filterCompany} onChange={setFilterCompany}
-                                    >
-                                        {uniqueOutgoingCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Водитель" style={{ width: 140 }}
-                                        value={filterDriver} onChange={setFilterDriver}
-                                    >
-                                        {uniqueOutgoingDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear
-                                        placeholder="Статус" style={{ width: 120 }}
-                                        value={filterStatus} onChange={setFilterStatus}
-                                    >
-                                        {uniqueOutgoingStatuses.map(s => <Select.Option key={s} value={s}>{statusLabels[s] || s}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Откуда" style={{ width: 120 }}
-                                        value={filterFrom} onChange={setFilterFrom}
-                                    >
-                                        {uniqueOutgoingFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Куда" style={{ width: 120 }}
-                                        value={filterTo} onChange={setFilterTo}
-                                    >
-                                        {uniqueOutgoingToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <InputNumber
-                                        size="small" placeholder="Сумма от" style={{ width: 90 }}
-                                        value={filterSumMin} onChange={v => setFilterSumMin(v ?? undefined)}
-                                        min={0} controls={false}
-                                    />
-                                    <InputNumber
-                                        size="small" placeholder="Сумма до" style={{ width: 90 }}
-                                        value={filterSumMax} onChange={v => setFilterSumMax(v ?? undefined)}
-                                        min={0} controls={false}
-                                    />
-                                    {hasActiveFilters && (
-                                        <Button size="small" icon={<ClearOutlined />} onClick={clearFilters} type="link" danger>
-                                            Сбросить
-                                        </Button>
-                                    )}
-                                </div>
-
-                                {/* TABLE */}
-                                <Table
-                                    columns={outgoingColumns}
-                                    dataSource={filteredOutgoingOrders}
-                                    rowKey="id"
-                                    loading={outgoingLoading}
-                                    size="small"
-                                    scroll={{ x: 1000 }}
-                                    pagination={{
-                                        current: outgoingPage,
-                                        pageSize: outgoingPageSize,
-                                        total: totalOutgoingOrders,
-                                        onChange: (p, ps) => { setOutgoingPage(p); setOutgoingPageSize(ps); },
+                                        onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
                                         showSizeChanger: true,
                                         pageSizeOptions: ['20', '50', '100'],
                                         size: 'small',
                                         showTotal: (t) => `Всего: ${t}`
                                     }}
+                                    style={{ fontSize: 12 }}
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
                                         onClick: () => {

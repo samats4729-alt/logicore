@@ -54,6 +54,8 @@ export class OrdersService implements OnModuleInit {
         driverCost?: number;
         driverId?: string;
         forwarderId?: string; // Экспедитор
+        subForwarderId?: string; // Суб-экспедитор
+        subForwarderPrice?: number; // Цена для суб-экспедитора
         // New fields
         customerPaymentCondition?: string;
         customerPaymentForm?: string;
@@ -132,6 +134,8 @@ export class OrdersService implements OnModuleInit {
                 driverCost: data.driverCost,
                 driverId: data.driverId,
                 forwarderId: data.forwarderId, // Связь с экспедитором
+                subForwarderId: data.subForwarderId, // Связь с суб-экспедитором
+                subForwarderPrice: data.subForwarderPrice,
                 status,
                 isConfirmed,
                 // New fields
@@ -177,6 +181,8 @@ export class OrdersService implements OnModuleInit {
                 driver: true,
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 forwarder: true, // Включаем экспедитора в ответ
+                subForwarder: true, // Включаем суб-экспедитора
+                partner: true, // Включаем партнера
                 appliedTariff: { include: { originCity: true, destinationCity: true } }, // Включаем тариф с городами
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
             },
@@ -336,6 +342,8 @@ export class OrdersService implements OnModuleInit {
         routePoints?: { locationId: string; pointType: 'PICKUP' | 'ADDITIONAL_PICKUP' | 'DELIVERY'; notes?: string; expectedDate?: string | Date }[];
         driverId?: string;
         forwarderId?: string;
+        subForwarderId?: string;
+        subForwarderPrice?: number;
         customerPaymentCondition?: string;
         customerPaymentForm?: string;
         customerPaymentDate?: Date;
@@ -398,6 +406,8 @@ export class OrdersService implements OnModuleInit {
                 driver: true,
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 forwarder: true,
+                subForwarder: true,
+                partner: true,
                 appliedTariff: { include: { originCity: true, destinationCity: true } },
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
             },

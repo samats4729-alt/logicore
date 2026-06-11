@@ -251,7 +251,22 @@ export class CompanyService {
         const { skip, take, page, limit } = getPaginationParams(query);
         
         let where: any = {};
-        if (query.type === 'incoming') {
+        if (query.type === 'active') {
+            where = {
+                AND: [
+                    { status: { not: 'CANCELLED' } },
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            { responsibleManager: { companyId: companyId } },
+                        ],
+                    }
+                ]
+            };
+        } else if (query.type === 'incoming') {
             where = {
                 AND: [
                     { status: { not: 'CANCELLED' } },

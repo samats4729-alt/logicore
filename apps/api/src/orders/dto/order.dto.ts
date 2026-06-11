@@ -75,6 +75,16 @@ export class CreateOrderDto {
     @IsOptional()
     forwarderId?: string;
 
+    @ApiProperty({ required: false, description: 'ID суб-экспедитора' })
+    @IsString()
+    @IsOptional()
+    subForwarderId?: string;
+
+    @ApiProperty({ required: false, description: 'Цена для суб-экспедитора' })
+    @IsNumber()
+    @IsOptional()
+    subForwarderPrice?: number;
+
     // --- New Fields ---
     @ApiProperty({ required: false })
     @IsString()
