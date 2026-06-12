@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
     Table, Card, Button, Space, Modal, Form,
-    Input, Typography, App, InputNumber, Row, Col, Select, Tag
+    Input, Typography, App, InputNumber, Row, Col, Select, Tag, Tooltip
 } from 'antd';
 import { 
     PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined,
@@ -348,10 +348,11 @@ export default function CompanyLocationsPage() {
             title: 'Название',
             dataIndex: 'name',
             key: 'name',
+            width: 170,
             render: (text: string) => (
                 <Space>
                     <EnvironmentOutlined style={{ color: '#1677ff' }} />
-                    <strong>{text}</strong>
+                    <strong style={{ whiteSpace: 'nowrap' }}>{text}</strong>
                 </Space>
             ),
         },
@@ -365,26 +366,36 @@ export default function CompanyLocationsPage() {
             title: 'Контрагент',
             dataIndex: 'company',
             key: 'company',
+            width: 170,
             render: (company: any) => {
-                if (!company) return <Tag icon={<GlobalOutlined />} color="default">Общий адрес</Tag>;
-                return <Tag color="geekblue" style={{ fontWeight: 500 }}>🏢 {company.name}</Tag>;
+                if (!company) return <Tag icon={<GlobalOutlined />} color="default" style={{ margin: 0 }}>Общий адрес</Tag>;
+                return (
+                    <Tooltip title={company.name}>
+                        <Tag color="geekblue" style={{ fontWeight: 500, margin: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            🏢 {company.name}
+                        </Tag>
+                    </Tooltip>
+                );
             }
         },
         {
             title: 'Email',
             dataIndex: 'emails',
             key: 'emails',
+            width: 220,
             render: (emails: string) => {
                 if (!emails) return '—';
                 const list = emails.split(',').map(e => e.trim()).filter(Boolean);
                 return (
-                    <Space wrap size={[0, 4]}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                         {list.map(email => (
-                            <Tag key={email} icon={<MailOutlined />} color="blue" style={{ fontSize: 11 }}>
-                                {email}
-                            </Tag>
+                            <Tooltip key={email} title={email} placement="top">
+                                <Tag icon={<MailOutlined />} color="blue" style={{ fontSize: 11, margin: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {email}
+                                </Tag>
+                            </Tooltip>
                         ))}
-                    </Space>
+                    </div>
                 );
             }
         },
@@ -392,12 +403,22 @@ export default function CompanyLocationsPage() {
             title: 'Контакт',
             dataIndex: 'contactName',
             key: 'contactName',
+            width: 170,
             render: (name: string, record: Location) => {
                 if (!name && !record.contactPhone) return '—';
                 return (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {name && <span><UserOutlined style={{ marginRight: 4, color: '#8c8c8c' }} />{name}</span>}
-                        {record.contactPhone && <span style={{ color: '#8c8c8c', fontSize: 12 }}>{record.contactPhone}</span>}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {name && (
+                            <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <UserOutlined style={{ marginRight: 4, color: '#8c8c8c' }} />
+                                {name}
+                            </span>
+                        )}
+                        {record.contactPhone && (
+                            <span style={{ color: '#8c8c8c', fontSize: 12, whiteSpace: 'nowrap' }}>
+                                {record.contactPhone}
+                            </span>
+                        )}
                     </div>
                 );
             }
@@ -405,8 +426,9 @@ export default function CompanyLocationsPage() {
         {
             title: 'Координаты',
             key: 'coords',
+            width: 120,
             render: (_: any, record: Location) => (
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                     {record.latitude?.toFixed(4)}, {record.longitude?.toFixed(4)}
                 </Text>
             ),
@@ -414,18 +436,21 @@ export default function CompanyLocationsPage() {
         {
             title: 'Действия',
             key: 'actions',
+            width: 100,
             render: (_: any, record: Location) => (
-                <Space>
+                <Space size="middle">
                     <Button
                         type="text"
                         icon={<EditOutlined style={{ color: '#1677ff' }} />}
                         onClick={() => handleEditClick(record)}
+                        style={{ padding: 0 }}
                     />
                     <Button
                         type="text"
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => handleDelete(record.id)}
+                        style={{ padding: 0 }}
                     />
                 </Space>
             ),
