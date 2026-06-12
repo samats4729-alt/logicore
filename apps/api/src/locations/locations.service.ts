@@ -19,30 +19,35 @@ export class LocationsService {
         companyId?: string;
         emails?: string;
     }) {
-        // Explicitly select fields to avoid passing unknown args (like countryId, regionId) to Prisma
-        const {
-            name, address, latitude, longitude,
-            contactName, contactPhone, notes, createdById,
-            city, companyId, emails
-        } = data as any;
+        try {
+            // Explicitly select fields to avoid passing unknown args (like countryId, regionId) to Prisma
+            const {
+                name, address, latitude, longitude,
+                contactName, contactPhone, notes, createdById,
+                city, companyId, emails
+            } = data as any;
 
-        const location = await this.prisma.location.create({
-            data: {
-                name,
-                address,
-                latitude,
-                longitude,
-                contactName,
-                contactPhone,
-                notes,
-                createdById,
-                city: city || null,
-                companyId: companyId || null,
-                emails: emails || null,
-            }
-        });
-        await this.redis.del('locations:all');
-        return location;
+            const location = await this.prisma.location.create({
+                data: {
+                    name,
+                    address,
+                    latitude: Number(latitude),
+                    longitude: Number(longitude),
+                    contactName,
+                    contactPhone,
+                    notes,
+                    createdById,
+                    city: city || null,
+                    companyId: companyId || null,
+                    emails: emails || null,
+                }
+            });
+            await this.redis.del('locations:all');
+            return location;
+        } catch (error: any) {
+            console.error('Failed to create location in DB:', error);
+            throw new ConflictException(`Ошибка базы данных при создании адреса: ${error.message || error}`);
+        }
     }
 
     async findAll(search?: string) {
@@ -100,9 +105,21 @@ export class LocationsService {
         companyId: string | null;
         emails: string | null;
     }>) {
-        const updated = await this.prisma.location.update({ where: { id }, data });
-        await this.redis.del('locations:all');
-        return updated;
+        try {
+            const updateData: any = { ...data };
+            if (updateData.latitude !== undefined) updateData.latitude = Number(updateData.latitude);
+            if (updateData.longitude !== undefined) updateData.longitude = Number(updateData.longitude);
+            
+            const updated = await this.prisma.location.update({ 
+                where: { id }, 
+                data: updateData 
+            });
+            await this.redis.del('locations:all');
+            return updated;
+        } catch (error: any) {
+            console.error('Failed to update location in DB:', error);
+            throw new ConflictException(`Ошибка базы данных при изменении адреса: ${error.message || error}`);
+        }
     }
 
     async delete(id: string) {

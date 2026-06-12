@@ -12,8 +12,31 @@ async function bootstrap() {
     // Run database migrations/db push programmatically on startup
     try {
         console.log('🔄 Running database schema migration (prisma db push)...');
-        const output = execSync('npx prisma db push --accept-data-loss', { encoding: 'utf-8' });
-        console.log('✅ Database migration output:', output);
+        
+        let migrated = false;
+        const commands = [
+            'npx prisma db push --accept-data-loss',
+            'node node_modules/prisma/build/index.js db push --accept-data-loss',
+            'node ../node_modules/prisma/build/index.js db push --accept-data-loss',
+            'node ../../node_modules/prisma/build/index.js db push --accept-data-loss',
+            'node ../../../node_modules/prisma/build/index.js db push --accept-data-loss'
+        ];
+
+        for (const cmd of commands) {
+            try {
+                console.log(`Executing migration: ${cmd}`);
+                const output = execSync(cmd, { encoding: 'utf-8' });
+                console.log(`✅ Success output for [${cmd}]:`, output);
+                migrated = true;
+                break;
+            } catch (err: any) {
+                console.warn(`⚠️ Command [${cmd}] failed:`, err.message || err);
+            }
+        }
+
+        if (!migrated) {
+            console.error('❌ All programmatic migration attempts failed. Please run prisma db push manually.');
+        }
     } catch (error: any) {
         console.error('⚠️ Programmatic database migration failed:', error.message || error);
     }
