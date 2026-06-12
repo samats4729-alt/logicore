@@ -4,10 +4,20 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
+import { execSync } from 'child_process';
 
 // Force rebuild 2026-02-02
 
 async function bootstrap() {
+    // Run database migrations/db push programmatically on startup
+    try {
+        console.log('🔄 Running database schema migration (prisma db push)...');
+        const output = execSync('npx prisma db push --accept-data-loss', { encoding: 'utf-8' });
+        console.log('✅ Database migration output:', output);
+    } catch (error: any) {
+        console.error('⚠️ Programmatic database migration failed:', error.message || error);
+    }
+
     const app = await NestFactory.create(AppModule);
 
     // CORS - allow production domains
