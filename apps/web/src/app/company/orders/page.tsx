@@ -178,21 +178,19 @@ export default function CompanyOrdersPage() {
     const openSharePoAModal = (order: Order) => {
         const list: { email: string; checked: boolean; label: string }[] = [];
         
-        if (order.customerCompany?.email) {
-            list.push({ email: order.customerCompany.email, checked: true, label: `Компания-заказчик (${order.customerCompany.name})` });
-        }
-        if (order.customer?.email) {
-            list.push({ email: order.customer.email, checked: true, label: `Заказчик (${order.customer.firstName} ${order.customer.lastName})` });
-        }
-        if (order.forwarder?.email) {
-            list.push({ email: order.forwarder.email, checked: true, label: `Экспедитор (${order.forwarder.name})` });
-        }
-        if (order.subForwarder?.email) {
-            list.push({ email: order.subForwarder.email, checked: true, label: `Суб-экспедитор (${order.subForwarder.name})` });
-        }
-        if (order.partner?.email) {
-            list.push({ email: order.partner.email, checked: true, label: `Партнер (${order.partner.name})` });
-        }
+        const addEmails = (emailStr: string | null | undefined, label: string) => {
+            if (!emailStr) return;
+            const emails = emailStr.split(',').map(e => e.trim()).filter(Boolean);
+            emails.forEach(email => {
+                list.push({ email, checked: true, label });
+            });
+        };
+
+        addEmails(order.customerCompany?.email, `Компания-заказчик (${order.customerCompany?.name})`);
+        addEmails(order.customer?.email, `Заказчик (${order.customer?.firstName} ${order.customer?.lastName})`);
+        addEmails(order.forwarder?.email, `Экспедитор (${order.forwarder?.name})`);
+        addEmails(order.subForwarder?.email, `Суб-экспедитор (${order.subForwarder?.name})`);
+        addEmails(order.partner?.email, `Партнер (${order.partner?.name})`);
         
         // Add emails from route points/warehouses
         order.routePoints?.forEach(pt => {
@@ -208,12 +206,13 @@ export default function CompanyOrdersPage() {
             }
         });
         
-        // Remove duplicates
+        // Remove duplicate rows only if they have the exact same email AND label
         const uniqueList: typeof list = [];
-        const seenEmails = new Set<string>();
+        const seenCombination = new Set<string>();
         for (const item of list) {
-            if (!seenEmails.has(item.email)) {
-                seenEmails.add(item.email);
+            const key = `${item.email}||${item.label}`;
+            if (!seenCombination.has(key)) {
+                seenCombination.add(key);
                 uniqueList.push(item);
             }
         }
@@ -230,10 +229,13 @@ export default function CompanyOrdersPage() {
             return;
         }
 
+        // Deduplicate emails before sending to prevent duplicate messages
+        const uniqueEmails = Array.from(new Set(selectedEmails));
+
         setSharePoALoading(true);
         try {
             await api.post(`/orders/${selectedOrder?.id}/share-power-of-attorney`, {
-                emails: selectedEmails,
+                emails: uniqueEmails,
             });
             message.success('Доверенность успешно отправлена на выбранные email-адреса');
             setSharePoAModalOpen(false);
