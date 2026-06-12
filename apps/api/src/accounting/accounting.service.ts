@@ -94,9 +94,6 @@ export class AccountingService {
                     driverPaidAt: null,
                     isSubForwarderPaid: false,
                     subForwarderPaidAt: null,
-                    assignedDriverName: null,
-                    assignedDriverPhone: null,
-                    driver: null,
                     partner: null,
                     subForwarder: null,
                 },
@@ -219,8 +216,6 @@ export class AccountingService {
                     driverPaidAt: null,
                     isSubForwarderPaid: false,
                     subForwarderPaidAt: null,
-                    assignedDriverName: null,
-                    driver: null,
                     partner: null,
                     subForwarder: null,
                 };
