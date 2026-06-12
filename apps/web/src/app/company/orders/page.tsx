@@ -194,6 +194,20 @@ export default function CompanyOrdersPage() {
             list.push({ email: order.partner.email, checked: true, label: `Партнер (${order.partner.name})` });
         }
         
+        // Add emails from route points/warehouses
+        order.routePoints?.forEach(pt => {
+            if (pt.location?.emails) {
+                const emails = pt.location.emails.split(',').map(e => e.trim()).filter(Boolean);
+                emails.forEach(email => {
+                    list.push({
+                        email,
+                        checked: true,
+                        label: `Склад/Адрес (${pt.location.name})`
+                    });
+                });
+            }
+        });
+        
         // Remove duplicates
         const uniqueList: typeof list = [];
         const seenEmails = new Set<string>();
@@ -328,6 +342,83 @@ export default function CompanyOrdersPage() {
         } finally {
             setQuickPartnerLoading(false);
         }
+    };
+
+    // Watches for create form
+    const createCustomerCompanyId = Form.useWatch('customerCompanyId', createForm);
+    const createForwarderId = Form.useWatch('forwarderId', createForm);
+
+    // Watches for edit form
+    const editCustomerCompanyId = Form.useWatch('customerCompanyId', editForm);
+    const editForwarderId = Form.useWatch('forwarderId', editForm);
+
+    // Function to group and recommend locations based on selected customer and carrier/executor
+    const getLocationOptions = (customerCompanyId?: string, executorCompanyId?: string) => {
+        if (!locations || locations.length === 0) return [];
+
+        const customerLocs = locations.filter(l => customerCompanyId && (l as any).companyId === customerCompanyId);
+        const executorLocs = locations.filter(l => executorCompanyId && (l as any).companyId === executorCompanyId);
+        
+        // Deduplicate so we don't show the same warehouse in multiple groups
+        const categorizedIds = new Set([
+            ...customerLocs.map(l => l.id),
+            ...executorLocs.map(l => l.id)
+        ]);
+        
+        const otherLocs = locations.filter(l => !categorizedIds.has(l.id));
+
+        const groups: Array<{ label: string; options: Location[] }> = [];
+
+        // Helper to group items by city
+        const groupByCity = (locs: Location[], prefixLabel: string) => {
+            const cityMap = new Map<string, Location[]>();
+            const noCity: Location[] = [];
+            
+            locs.forEach(l => {
+                if (l.city) {
+                    if (!cityMap.has(l.city)) cityMap.set(l.city, []);
+                    cityMap.get(l.city)!.push(l);
+                } else {
+                    noCity.push(l);
+                }
+            });
+            
+            // Add city groups sorted alphabetically
+            const sortedCities = Array.from(cityMap.keys()).sort();
+            sortedCities.forEach(city => {
+                groups.push({
+                    label: `${prefixLabel} (${city})`,
+                    options: cityMap.get(city)!
+                });
+            });
+            
+            // Add no-city group if not empty
+            if (noCity.length > 0) {
+                groups.push({
+                    label: `${prefixLabel} (Без города)`,
+                    options: noCity
+                });
+            }
+        };
+
+        if (customerLocs.length > 0) {
+            const custName = partners.find(p => p.id === customerCompanyId)?.name || 'Заказчик';
+            groupByCity(customerLocs, `Склады заказчика [${custName}]`);
+        }
+
+        if (executorLocs.length > 0) {
+            const execName = partners.find(p => p.id === executorCompanyId)?.name || 'Исполнитель';
+            groupByCity(executorLocs, `Склады исполнителя [${execName}]`);
+        }
+
+        if (otherLocs.length > 0) {
+            groups.push({
+                label: 'Все остальные адреса',
+                options: otherLocs
+            });
+        }
+
+        return groups;
     };
 
     const fetchDrivers = async () => {
@@ -1366,7 +1457,22 @@ export default function CompanyOrdersPage() {
                                             setRoutePointsState(newPts);
                                         }}
                                     >
-                                        {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
+                                        {(() => {
+                                            const activeCustomerCompanyId = creatorRole === 'CUSTOMER' ? user?.companyId : createCustomerCompanyId;
+                                            const activeExecutorCompanyId = creatorRole === 'FORWARDER' 
+                                                ? (showForwarderField ? createForwarderId : user?.companyId) 
+                                                : (isMarketplace ? undefined : createForwarderId);
+                                            const groupedOptions = getLocationOptions(activeCustomerCompanyId || undefined, activeExecutorCompanyId || undefined);
+                                            return groupedOptions.map(group => (
+                                                <Select.OptGroup key={group.label} label={group.label}>
+                                                    {group.options.map(l => (
+                                                        <Select.Option key={l.id} value={l.id}>
+                                                            {l.city ? `[${l.city}] ` : ''}{l.name} ({l.address})
+                                                        </Select.Option>
+                                                    ))}
+                                                </Select.OptGroup>
+                                            ));
+                                        })()}
                                     </Select>
                                 </div>
                             ))}
@@ -1889,7 +1995,22 @@ export default function CompanyOrdersPage() {
                                             setRoutePointsState(newPts);
                                         }}
                                     >
-                                        {locations.map(l => <Select.Option key={l.id} value={l.id}>{l.name} ({l.address})</Select.Option>)}
+                                        {(() => {
+                                            const activeCustomerCompanyId = editCreatorRole === 'CUSTOMER' ? user?.companyId : editCustomerCompanyId;
+                                            const activeExecutorCompanyId = editCreatorRole === 'FORWARDER' 
+                                                ? (showForwarderField ? editForwarderId : user?.companyId) 
+                                                : (isMarketplace ? undefined : editForwarderId);
+                                            const groupedOptions = getLocationOptions(activeCustomerCompanyId || undefined, activeExecutorCompanyId || undefined);
+                                            return groupedOptions.map(group => (
+                                                <Select.OptGroup key={group.label} label={group.label}>
+                                                    {group.options.map(l => (
+                                                        <Select.Option key={l.id} value={l.id}>
+                                                            {l.city ? `[${l.city}] ` : ''}{l.name} ({l.address})
+                                                        </Select.Option>
+                                                    ))}
+                                                </Select.OptGroup>
+                                            ));
+                                        })()}
                                     </Select>
                                 </div>
                             ))}

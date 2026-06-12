@@ -25,6 +25,7 @@ export default function CompanyLocationsPage() {
     const [locations, setLocations] = useState<Location[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
+    const [editingLocation, setEditingLocation] = useState<Location | null>(null);
     const [form] = Form.useForm();
 
     // Coordinates managed manually to sync with Map
@@ -45,21 +46,52 @@ export default function CompanyLocationsPage() {
     const [selectedCityName, setSelectedCityName] = useState<string | undefined>(undefined);
     const [loadingData, setLoadingData] = useState(false);
 
+    // Companies/Partners for linking
+    const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+    const [companiesLoading, setCompaniesLoading] = useState(false);
+
     useEffect(() => {
         fetchLocations();
         fetchCountries();
+        fetchCompanies();
     }, []);
+
+    const fetchCompanies = async () => {
+        setCompaniesLoading(true);
+        try {
+            const [partnersRes, externalRes, profileRes] = await Promise.all([
+                api.get('/partners'),
+                api.get('/external-companies'),
+                api.get('/company/profile'),
+            ]);
+            const partnersList = partnersRes.data;
+            const externalList = externalRes.data.map((e: any) => ({
+                id: e.id,
+                name: e.name,
+            }));
+            const ownCompany = profileRes.data ? [{ id: profileRes.data.id, name: `${profileRes.data.name} (Моя компания)` }] : [];
+            const combined = [...ownCompany, ...partnersList, ...externalList];
+            
+            // Deduplicate
+            const seen = new Set();
+            const unique = combined.filter(c => {
+                if (!c.id) return false;
+                if (seen.has(c.id)) return false;
+                seen.add(c.id);
+                return true;
+            });
+            setCompanies(unique);
+        } catch (e) {
+            console.error('Failed to fetch companies', e);
+        } finally {
+            setCompaniesLoading(false);
+        }
+    };
 
     const fetchCountries = async () => {
         try {
             const res = await api.get('/cities/countries');
             setCountries(res.data);
-
-            // Auto-select Kazakhstan if it's the only one or default
-            const kz = res.data.find((c: Country) => c.code === 'KZ');
-            if (kz) {
-                // We could auto-select, but let's let user choose to be explicit or auto-select on open
-            }
         } catch (e) {
             console.error('Failed to fetch countries');
         }
@@ -106,23 +138,81 @@ export default function CompanyLocationsPage() {
         }
     };
 
-    const handleCreate = async (values: any) => {
+    const handleSubmit = async (values: any) => {
         try {
-            await api.post('/locations', {
+            const payload = {
                 ...values,
                 address: addressValue,
                 latitude: lat,
                 longitude: lng
-            });
-            message.success('Адрес добавлен');
+            };
+            if (editingLocation) {
+                await api.put(`/locations/${editingLocation.id}`, payload);
+                message.success('Адрес обновлен');
+            } else {
+                await api.post('/locations', payload);
+                message.success('Адрес добавлен');
+            }
             setModalOpen(false);
+            setEditingLocation(null);
             form.resetFields();
             setLat(undefined);
             setLng(undefined);
             setAddressValue('');
             fetchLocations();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания');
+            message.error(error.response?.data?.message || 'Ошибка сохранения');
+        }
+    };
+
+    const handleEditClick = async (record: Location) => {
+        setEditingLocation(record);
+        setModalOpen(true);
+        setAddressValue(record.address);
+        setLat(record.latitude);
+        setLng(record.longitude);
+        
+        // Prefill form basic fields
+        form.setFieldsValue({
+            name: record.name,
+            latitude: record.latitude,
+            longitude: record.longitude,
+            contactName: record.contactName,
+            contactPhone: record.contactPhone,
+            emails: (record as any).emails || '',
+            companyId: (record as any).companyId || undefined
+        });
+
+        if (record.city) {
+            try {
+                const res = await api.get(`/cities?search=${encodeURIComponent(record.city)}`);
+                const foundCity = res.data.find((c: any) => c.name.toLowerCase() === record.city?.toLowerCase());
+                if (foundCity) {
+                    const countryId = foundCity.countryId;
+                    const regionId = foundCity.regionId;
+                    
+                    setSelectedCountryId(countryId);
+                    setSelectedRegionId(regionId);
+                    setSelectedCityName(foundCity.name);
+                    setSelectedCityCoords({ lat: foundCity.latitude, lng: foundCity.longitude });
+                    
+                    const [regionsRes, citiesRes] = await Promise.all([
+                        api.get(`/cities/regions?countryId=${countryId}`),
+                        api.get(`/cities?regionId=${regionId}`),
+                    ]);
+                    
+                    setRegions(regionsRes.data);
+                    setCities(citiesRes.data);
+                    
+                    form.setFieldsValue({
+                        countryId,
+                        regionId,
+                        city: foundCity.name
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to prefill city details', e);
+            }
         }
     };
 
@@ -249,6 +339,18 @@ export default function CompanyLocationsPage() {
             ellipsis: true,
         },
         {
+            title: 'Контрагент',
+            dataIndex: 'company',
+            key: 'company',
+            render: (company: any) => company?.name || '—',
+        },
+        {
+            title: 'Email',
+            dataIndex: 'emails',
+            key: 'emails',
+            render: (emails: string) => emails || '—',
+        },
+        {
             title: 'Контакт',
             dataIndex: 'contactName',
             key: 'contactName',
@@ -271,6 +373,11 @@ export default function CompanyLocationsPage() {
                 <Space>
                     <Button
                         type="text"
+                        icon={<EditOutlined style={{ color: '#1677ff' }} />}
+                        onClick={() => handleEditClick(record)}
+                    />
+                    <Button
+                        type="text"
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => handleDelete(record.id)}
@@ -287,7 +394,14 @@ export default function CompanyLocationsPage() {
                     <Title level={2} style={{ margin: 0 }}>Адреса</Title>
                     <Text type="secondary">Управление точками погрузки и выгрузки</Text>
                 </div>
-                <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+                <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => {
+                    setEditingLocation(null);
+                    form.resetFields();
+                    setAddressValue('');
+                    setLat(undefined);
+                    setLng(undefined);
+                    setModalOpen(true);
+                }}>
                     Добавить новый адрес
                 </Button>
             </div>
@@ -303,10 +417,12 @@ export default function CompanyLocationsPage() {
             </Card>
 
             <Modal
-                title="Добавление нового адреса"
+                title={editingLocation ? "Редактирование адреса" : "Добавление нового адреса"}
                 open={modalOpen}
                 onCancel={() => {
                     setModalOpen(false);
+                    setEditingLocation(null);
+                    form.resetFields();
                     setAddressValue('');
                     setLat(undefined);
                     setLng(undefined);
@@ -317,7 +433,7 @@ export default function CompanyLocationsPage() {
             >
                 <Row gutter={24}>
                     <Col span={10}>
-                        <Form form={form} layout="vertical" onFinish={handleCreate}>
+                        <Form form={form} layout="vertical" onFinish={handleSubmit}>
                             <Row gutter={12}>
                                 <Col span={24}>
                                     <Form.Item
@@ -394,7 +510,6 @@ export default function CompanyLocationsPage() {
                                     value={addressValue}
                                     onChange={setAddressValue}
                                     onSelect={handleAddressSelect}
-                                    // disabled={!selectedCityName && !addressValue} // Removed blocking logic to prevent UX issues
                                     placeholder={selectedCityName ? "ул. Гоголя, 1" : "Выберите город или укажите точку на карте"}
                                     proximity={selectedCityCoords}
                                     city={selectedCityName}
@@ -413,6 +528,18 @@ export default function CompanyLocationsPage() {
                                     </Form.Item>
                                 </Col>
                             </Row>
+
+                            <Form.Item name="companyId" label="Привязать к контрагенту (компании)">
+                                <Select placeholder="Без привязки (общий)" allowClear showSearch optionFilterProp="children" loading={companiesLoading}>
+                                    {companies.map(c => (
+                                        <Option key={c.id} value={c.id}>{c.name}</Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+
+                            <Form.Item name="emails" label="Email-адреса склада" help="Укажите один или несколько через запятую">
+                                <Input placeholder="warehouse@company.com, admin@company.com" />
+                            </Form.Item>
 
                             <Form.Item name="contactName" label="Контактное лицо">
                                 <Input placeholder="Иван Иванов" />

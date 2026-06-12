@@ -178,6 +178,7 @@ model Company {
   contractsAsForwarder Contract[] @relation("ContractForwarder")
   
   invitations       Invitation[]
+  locations         Location[]  @relation("CompanyLocations")
 
   @@index([bin])
 }
@@ -234,6 +235,9 @@ model Location {
   contactPhone String?
   city        String?   // <-- Added city field
   notes       String?
+  emails      String?   // Контактные email-адреса
+  companyId   String?   // ID привязанного контрагента
+  company     Company?  @relation("CompanyLocations", fields: [companyId], references: [id])
   createdAt   DateTime  @default(now())
   
   // Кто создал

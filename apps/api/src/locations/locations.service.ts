@@ -16,12 +16,14 @@ export class LocationsService {
         notes?: string;
         createdById?: string;
         city?: string;
+        companyId?: string;
+        emails?: string;
     }) {
         // Explicitly select fields to avoid passing unknown args (like countryId, regionId) to Prisma
         const {
             name, address, latitude, longitude,
             contactName, contactPhone, notes, createdById,
-            city
+            city, companyId, emails
         } = data as any;
 
         const location = await this.prisma.location.create({
@@ -35,6 +37,8 @@ export class LocationsService {
                 notes,
                 createdById,
                 city: city || null,
+                companyId: companyId || null,
+                emails: emails || null,
             }
         });
         await this.redis.del('locations:all');
@@ -54,6 +58,14 @@ export class LocationsService {
                     { address: { contains: search, mode: 'insensitive' } },
                 ],
             } : undefined,
+            include: {
+                company: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            },
             orderBy: { name: 'asc' },
         });
 
@@ -64,7 +76,17 @@ export class LocationsService {
     }
 
     async findById(id: string) {
-        return this.prisma.location.findUnique({ where: { id } });
+        return this.prisma.location.findUnique({ 
+            where: { id },
+            include: {
+                company: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
+        });
     }
 
     async update(id: string, data: Partial<{
@@ -75,6 +97,8 @@ export class LocationsService {
         contactName: string;
         contactPhone: string;
         notes: string;
+        companyId: string | null;
+        emails: string | null;
     }>) {
         const updated = await this.prisma.location.update({ where: { id }, data });
         await this.redis.del('locations:all');
