@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
     Table, Card, Button, Space, Modal, Form,
-    Input, Typography, App, InputNumber, Row, Col, Select
+    Input, Typography, App, InputNumber, Row, Col, Select, Tag
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { 
+    PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined,
+    SearchOutlined, ClearOutlined, MailOutlined, UserOutlined, GlobalOutlined
+} from '@ant-design/icons';
 import { api, Location, City, Country, Region } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import AddressAutocomplete from '@/components/ui/AddressAutocomplete';
@@ -27,6 +30,9 @@ export default function CompanyLocationsPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingLocation, setEditingLocation] = useState<Location | null>(null);
     const [form] = Form.useForm();
+
+    const [searchText, setSearchText] = useState('');
+    const [filterCompanyId, setFilterCompanyId] = useState<string | undefined>(undefined);
 
     // Coordinates managed manually to sync with Map
     const [lat, setLat] = useState<number | undefined>();
@@ -144,7 +150,8 @@ export default function CompanyLocationsPage() {
                 ...values,
                 address: addressValue,
                 latitude: lat,
-                longitude: lng
+                longitude: lng,
+                emails: values.emails ? values.emails.join(',') : null
             };
             if (editingLocation) {
                 await api.put(`/locations/${editingLocation.id}`, payload);
@@ -179,7 +186,7 @@ export default function CompanyLocationsPage() {
             longitude: record.longitude,
             contactName: record.contactName,
             contactPhone: record.contactPhone,
-            emails: (record as any).emails || '',
+            emails: (record as any).emails ? (record as any).emails.split(',').map((e: string) => e.trim()).filter(Boolean) : [],
             companyId: (record as any).companyId || undefined
         });
 
@@ -320,6 +327,22 @@ export default function CompanyLocationsPage() {
         }
     };
 
+    const filteredLocations = useMemo(() => {
+        return locations.filter(loc => {
+            const matchesSearch = !searchText || 
+                loc.name.toLowerCase().includes(searchText.toLowerCase()) || 
+                loc.address.toLowerCase().includes(searchText.toLowerCase()) ||
+                (loc.city && loc.city.toLowerCase().includes(searchText.toLowerCase())) ||
+                (loc.contactName && loc.contactName.toLowerCase().includes(searchText.toLowerCase()));
+
+            const matchesCompany = filterCompanyId === undefined || 
+                (filterCompanyId === 'global' && !loc.companyId) ||
+                (loc.companyId === filterCompanyId);
+
+            return matchesSearch && matchesCompany;
+        });
+    }, [locations, searchText, filterCompanyId]);
+
     const columns = [
         {
             title: 'Название',
@@ -342,20 +365,42 @@ export default function CompanyLocationsPage() {
             title: 'Контрагент',
             dataIndex: 'company',
             key: 'company',
-            render: (company: any) => company?.name || '—',
+            render: (company: any) => {
+                if (!company) return <Tag icon={<GlobalOutlined />} color="default">Общий адрес</Tag>;
+                return <Tag color="geekblue" style={{ fontWeight: 500 }}>🏢 {company.name}</Tag>;
+            }
         },
         {
             title: 'Email',
             dataIndex: 'emails',
             key: 'emails',
-            render: (emails: string) => emails || '—',
+            render: (emails: string) => {
+                if (!emails) return '—';
+                const list = emails.split(',').map(e => e.trim()).filter(Boolean);
+                return (
+                    <Space wrap size={[0, 4]}>
+                        {list.map(email => (
+                            <Tag key={email} icon={<MailOutlined />} color="blue" style={{ fontSize: 11 }}>
+                                {email}
+                            </Tag>
+                        ))}
+                    </Space>
+                );
+            }
         },
         {
             title: 'Контакт',
             dataIndex: 'contactName',
             key: 'contactName',
-            render: (name: string, record: Location) =>
-                name ? `${name} (${record.contactPhone})` : '—',
+            render: (name: string, record: Location) => {
+                if (!name && !record.contactPhone) return '—';
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {name && <span><UserOutlined style={{ marginRight: 4, color: '#8c8c8c' }} />{name}</span>}
+                        {record.contactPhone && <span style={{ color: '#8c8c8c', fontSize: 12 }}>{record.contactPhone}</span>}
+                    </div>
+                );
+            }
         },
         {
             title: 'Координаты',
@@ -407,9 +452,44 @@ export default function CompanyLocationsPage() {
             </div>
 
             <Card bordered={false} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                {/* Search & Filter Panel */}
+                <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <Input
+                        placeholder="Поиск по названию, адресу или городу..."
+                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                        value={searchText}
+                        onChange={e => setSearchText(e.target.value)}
+                        style={{ maxWidth: 350, flex: 1 }}
+                        allowClear
+                    />
+                    <Select
+                        placeholder="Фильтр по контрагенту"
+                        value={filterCompanyId}
+                        onChange={setFilterCompanyId}
+                        style={{ width: 250 }}
+                        allowClear
+                    >
+                        <Option value="global">📍 Общие адреса (без контрагента)</Option>
+                        {companies.map(c => (
+                            <Option key={c.id} value={c.id}>🏢 {c.name}</Option>
+                        ))}
+                    </Select>
+                    {(searchText || filterCompanyId !== undefined) && (
+                        <Button 
+                            icon={<ClearOutlined />} 
+                            onClick={() => {
+                                setSearchText('');
+                                setFilterCompanyId(undefined);
+                            }}
+                        >
+                            Сбросить
+                        </Button>
+                    )}
+                </div>
+
                 <Table
                     columns={columns}
-                    dataSource={locations}
+                    dataSource={filteredLocations}
                     rowKey="id"
                     loading={loading}
                     pagination={{ pageSize: 10 }}
@@ -537,8 +617,8 @@ export default function CompanyLocationsPage() {
                                 </Select>
                             </Form.Item>
 
-                            <Form.Item name="emails" label="Email-адреса склада" help="Укажите один или несколько через запятую">
-                                <Input placeholder="warehouse@company.com, admin@company.com" />
+                            <Form.Item name="emails" label="Email-адреса склада" help="Введите email и нажмите Enter">
+                                <Select mode="tags" placeholder="warehouse@company.com" tokenSeparators={[',', ' ']} style={{ width: '100%' }} />
                             </Form.Item>
 
                             <Form.Item name="contactName" label="Контактное лицо">
