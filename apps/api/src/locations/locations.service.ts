@@ -102,13 +102,28 @@ export class LocationsService {
         contactName: string;
         contactPhone: string;
         notes: string;
+        city: string | null;
         companyId: string | null;
         emails: string | null;
     }>) {
         try {
-            const updateData: any = { ...data };
-            if (updateData.latitude !== undefined) updateData.latitude = Number(updateData.latitude);
-            if (updateData.longitude !== undefined) updateData.longitude = Number(updateData.longitude);
+            const {
+                name, address, latitude, longitude,
+                contactName, contactPhone, notes,
+                city, companyId, emails
+            } = data as any;
+
+            const updateData: any = {};
+            if (name !== undefined) updateData.name = name;
+            if (address !== undefined) updateData.address = address;
+            if (latitude !== undefined) updateData.latitude = Number(latitude);
+            if (longitude !== undefined) updateData.longitude = Number(longitude);
+            if (contactName !== undefined) updateData.contactName = contactName;
+            if (contactPhone !== undefined) updateData.contactPhone = contactPhone;
+            if (notes !== undefined) updateData.notes = notes;
+            if (city !== undefined) updateData.city = city || null;
+            if (companyId !== undefined) updateData.companyId = companyId || null;
+            if (emails !== undefined) updateData.emails = emails || null;
             
             const updated = await this.prisma.location.update({ 
                 where: { id }, 
