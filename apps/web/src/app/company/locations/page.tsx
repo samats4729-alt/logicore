@@ -360,7 +360,14 @@ export default function CompanyLocationsPage() {
             title: 'Адрес',
             dataIndex: 'address',
             key: 'address',
-            ellipsis: true,
+            width: 250,
+            render: (text: string) => (
+                <Tooltip title={text} placement="topLeft">
+                    <span style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {text || '—'}
+                    </span>
+                </Tooltip>
+            ),
         },
         {
             title: 'Контрагент',
@@ -382,20 +389,29 @@ export default function CompanyLocationsPage() {
             title: 'Email',
             dataIndex: 'emails',
             key: 'emails',
-            width: 220,
+            width: 90,
             render: (emails: string) => {
                 if (!emails) return '—';
                 const list = emails.split(',').map(e => e.trim()).filter(Boolean);
-                return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                if (list.length === 0) return '—';
+                
+                const tooltipContent = (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {list.map(email => (
-                            <Tooltip key={email} title={email} placement="top">
-                                <Tag icon={<MailOutlined />} color="blue" style={{ fontSize: 11, margin: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {email}
-                                </Tag>
-                            </Tooltip>
+                            <div key={email} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <MailOutlined style={{ fontSize: 12 }} />
+                                <span>{email}</span>
+                            </div>
                         ))}
                     </div>
+                );
+
+                return (
+                    <Tooltip title={tooltipContent} placement="top" color="#1c2536">
+                        <Tag icon={<MailOutlined />} color="blue" style={{ cursor: 'pointer', margin: 0, fontWeight: 500 }}>
+                            {list.length}
+                        </Tag>
+                    </Tooltip>
                 );
             }
         },
@@ -518,6 +534,7 @@ export default function CompanyLocationsPage() {
                     rowKey="id"
                     loading={loading}
                     pagination={{ pageSize: 10 }}
+                    scroll={{ x: 'max-content' }}
                 />
             </Card>
 
