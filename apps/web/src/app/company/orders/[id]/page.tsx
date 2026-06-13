@@ -1430,10 +1430,14 @@ export default function OrderDetailPage() {
                 <Form form={assignForm} layout="vertical" onFinish={handleAssign}>
                     <Tabs activeKey={assignType} onChange={(k) => setAssignType(k as any)} items={[
                         {
-                            key: 'driver', label: 'Свой водитель',
+                            key: 'driver',
+                            label: 'Собственный транспорт',
                             children: (
-                                <>
-                                    <Form.Item name="driverId" label="Водитель" rules={[{ required: assignType === 'driver', message: 'Выберите' }]}>
+                                <div style={{ marginTop: 12 }}>
+                                    <div style={{ marginBottom: 16, padding: '8px 12px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 6, fontSize: 12 }}>
+                                        💡 Назначьте водителя и транспортное средство из штата вашей собственной компании.
+                                    </div>
+                                    <Form.Item name="driverId" label="Водитель" rules={[{ required: assignType === 'driver', message: 'Выберите водителя' }]}>
                                         <Select placeholder="Выберите водителя" size="large" loading={driversLoading} onChange={handleDriverSelect} value={selectedDriverId}
                                             showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
                                             options={drivers.map(d => ({ value: d.id, label: `${d.lastName} ${d.firstName} ${d.middleName || ''}`.trim() }))}
@@ -1447,14 +1451,32 @@ export default function OrderDetailPage() {
                                             <Form.Item name="trailerNumber" label="Прицеп"><Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} placeholder="—" /></Form.Item>
                                         </>
                                     )}
-                                </>
+                                </div>
                             )
                         },
                         {
-                            key: 'partner_manual', label: 'Водитель контрагента',
+                            key: 'partner_manual',
+                            label: 'Привлечённый (вне платформы)',
                             children: (
-                                <>
-                                    <Form.Item name="partnerId" label="Компания-контрагент" rules={[{ required: assignType === 'partner_manual', message: 'Выберите' }]}>
+                                <div style={{ marginTop: 12 }}>
+                                    <div style={{ marginBottom: 16, padding: '8px 12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 6, fontSize: 12 }}>
+                                        💡 Используйте этот вариант, если вы наняли стороннюю компанию/водителя вне платформы Logicore и хотите вручную вписать их данные.
+                                    </div>
+                                    <Form.Item
+                                        name="partnerId"
+                                        label="Компания-перевозчик (контрагент)"
+                                        rules={[{ required: assignType === 'partner_manual', message: 'Выберите компанию' }]}
+                                        help={
+                                            <Button
+                                                type="link"
+                                                size="small"
+                                                style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 2 }}
+                                                onClick={() => setQuickPartnerModalOpen(true)}
+                                            >
+                                                + Добавить нового контрагента
+                                            </Button>
+                                        }
+                                    >
                                         <Select placeholder="Выберите контрагента" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
                                     </Form.Item>
                                     <Form.Item name="assignedDriverName" label="ФИО водителя" rules={[{ required: assignType === 'partner_manual', message: 'Введите ФИО' }]}>
@@ -1463,20 +1485,38 @@ export default function OrderDetailPage() {
                                     <Form.Item name="assignedDriverPhone" label="Телефон водителя"><Input placeholder="+7 (700) 123-45-67" size="large" /></Form.Item>
                                     <Form.Item name="assignedDriverPlate" label="Госномер авто"><Input placeholder="123 ABC 01" size="large" /></Form.Item>
                                     <Form.Item name="assignedDriverTrailer" label="Госномер прицепа"><Input placeholder="1234 XX 01" size="large" /></Form.Item>
-                                </>
+                                </div>
                             )
                         },
                         {
-                            key: 'partner', label: 'Партнёру',
+                            key: 'partner',
+                            label: 'Субподряд на платформе',
                             children: (
-                                <>
-                                    <Form.Item name="partnerId" label="Партнер" rules={[{ required: assignType === 'partner', message: 'Выберите' }]}>
-                                        <Select placeholder="Компания-партнер" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} />
+                                <div style={{ marginTop: 12 }}>
+                                    <div style={{ marginBottom: 16, padding: '8px 12px', background: '#f9f0ff', border: '1px solid #d3adf7', borderRadius: 6, fontSize: 12 }}>
+                                        💡 Передайте выполнение заказа компании-партнеру на платформе Logicore. Они получат заявку и сами назначат водителя.
+                                    </div>
+                                    <Form.Item
+                                        name="partnerId"
+                                        label="Компания-партнер"
+                                        rules={[{ required: assignType === 'partner', message: 'Выберите компанию' }]}
+                                        help={
+                                            <Button
+                                                type="link"
+                                                size="small"
+                                                style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 2 }}
+                                                onClick={() => setQuickPartnerModalOpen(true)}
+                                            >
+                                                + Добавить нового контрагента
+                                            </Button>
+                                        }
+                                    >
+                                        <Select placeholder="Компания-партнер" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
                                     </Form.Item>
-                                    <Form.Item name="price" label="Стоимость (₸)" rules={[{ required: assignType === 'partner', message: 'Укажите' }]}>
+                                    <Form.Item name="price" label="Стоимость для партнера (₸)" rules={[{ required: assignType === 'partner', message: 'Укажите стоимость' }]}>
                                         <InputNumber style={{ width: '100%' }} size="large" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} parser={v => v!.replace(/\s/g, '')} />
                                     </Form.Item>
-                                </>
+                                </div>
                             )
                         }
                     ]} />
