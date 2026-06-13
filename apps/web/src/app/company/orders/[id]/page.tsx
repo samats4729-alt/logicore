@@ -12,7 +12,7 @@ import {
     DollarOutlined, WalletOutlined, CheckCircleOutlined, ClockCircleOutlined,
     EditOutlined, DeleteOutlined, FilePdfOutlined, UploadOutlined,
     UserAddOutlined, MailOutlined, FileTextOutlined, SwapOutlined,
-    CloseCircleOutlined, CarOutlined
+    CloseCircleOutlined, CarOutlined, InboxOutlined, TeamOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -667,214 +667,417 @@ export default function OrderDetailPage() {
     return (
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             {/* =================== HEADER =================== */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} />
-                <div style={{ flex: 1 }}>
-                    <Title level={4} style={{ margin: 0 }}>
-                        Заявка {order.orderNumber}
-                    </Title>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                        от {dayjs(order.createdAt).format('DD.MM.YYYY')}
-                    </Text>
+            <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 16, 
+                marginBottom: 24,
+                borderBottom: '1px solid #f0f0f0',
+                paddingBottom: 16
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} />
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <Title level={4} style={{ margin: 0 }}>
+                                Заявка {order.orderNumber}
+                            </Title>
+                            <Tag color={statusColors[order.status]} style={{ fontSize: 13, padding: '2px 10px', borderRadius: 4, margin: 0 }}>
+                                {statusLabels[order.status] || order.status}
+                            </Tag>
+                        </div>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            Создана {dayjs(order.createdAt).format('DD.MM.YYYY в HH:mm')}
+                        </Text>
+                    </div>
                 </div>
-                <Tag color={statusColors[order.status]} style={{ fontSize: 14, padding: '4px 12px' }}>
-                    {statusLabels[order.status] || order.status}
-                </Tag>
+
+                {isNotFinished && (
+                    <Space wrap size="small">
+                        {canChangeStatus && (
+                            <Button type="primary" icon={<SwapOutlined />} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
+                                Изменить статус
+                            </Button>
+                        )}
+                        <Button icon={<EditOutlined />} onClick={openEditModal}>
+                            Редактировать
+                        </Button>
+                        <Popconfirm
+                            title="Отменить заявку?"
+                            description="Заявка будет отменена."
+                            onConfirm={handleCancelOrder}
+                            okText="Да, отменить"
+                            cancelText="Нет"
+                            okButtonProps={{ danger: true }}
+                        >
+                            <Button danger icon={<CloseCircleOutlined />}>
+                                Отменить заявку
+                            </Button>
+                        </Popconfirm>
+                    </Space>
+                )}
             </div>
 
-            {/* =================== ACTION BUTTONS =================== */}
-            {isNotFinished && (
-                <div style={{
-                    display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap',
-                    padding: '10px 16px', background: '#fafafa', borderRadius: 10,
-                    border: '1px solid #f0f0f0',
-                }}>
-                    <Button icon={<EditOutlined />} onClick={openEditModal}>
-                        Редактировать
-                    </Button>
-                    {canChangeStatus && (
-                        <Button type="primary" icon={<SwapOutlined />} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
-                            Изменить статус
-                        </Button>
-                    )}
-                    <Popconfirm
-                        title="Отменить заявку?"
-                        description="Заявка будет отменена."
-                        onConfirm={handleCancelOrder}
-                        okText="Да, отменить"
-                        cancelText="Нет"
-                        okButtonProps={{ danger: true }}
-                    >
-                        <Button danger icon={<CloseCircleOutlined />}>
-                            Отменить заявку
-                        </Button>
-                    </Popconfirm>
-                </div>
-            )}
+            {/* =================== MAIN TABS =================== */}
+            <Tabs
+                defaultActiveKey="details"
+                size="large"
+                type="line"
+                style={{ marginBottom: 24 }}
+                items={[
+                    {
+                        key: 'details',
+                        label: (
+                            <span>
+                                <FileTextOutlined style={{ marginRight: 6 }} />
+                                Основная информация
+                            </span>
+                        ),
+                        children: (
+                            <Row gutter={[24, 24]}>
+                                <Col xs={24} lg={15}>
+                                    {/* Route Card */}
+                                    <Card
+                                        title={<span style={{ fontWeight: 600 }}><EnvironmentOutlined style={{ marginRight: 8, color: '#1677ff' }} />Маршрут следования</span>}
+                                        bordered={false}
+                                        className="premium-card"
+                                        style={{ marginBottom: 20 }}
+                                    >
+                                        <Timeline
+                                            style={{ marginTop: 16, paddingLeft: 8 }}
+                                            items={order.routePoints?.map((pt: any, i: number) => {
+                                                const isDelivery = pt.pointType === 'DELIVERY';
+                                                const isAdditional = pt.pointType === 'ADDITIONAL_PICKUP';
+                                                const icon = isDelivery ? (
+                                                    <FlagOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                                                ) : (
+                                                    <EnvironmentOutlined style={{ color: isAdditional ? '#faad14' : '#1677ff', fontSize: 16 }} />
+                                                );
+                                                const labelText = isDelivery ? 'Выгрузка' : isAdditional ? 'Доп. погрузка' : 'Погрузка';
+                                                
+                                                return {
+                                                    dot: icon,
+                                                    children: (
+                                                        <div style={{ marginBottom: 12 }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+                                                                <Text strong style={{ fontSize: 15 }}>
+                                                                    {labelText}: {pt.location?.city || pt.location?.name}
+                                                                </Text>
+                                                                {pt.expectedDate && (
+                                                                    <Text type="secondary" style={{ fontSize: 12 }}>
+                                                                        {dayjs(pt.expectedDate).format('DD.MM.YYYY HH:mm')}
+                                                                    </Text>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ marginTop: 4 }}>
+                                                                <Text type="secondary" style={{ fontSize: 13 }}>
+                                                                    {pt.location?.address}
+                                                                </Text>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                };
+                                            })}
+                                        />
+                                    </Card>
 
-            {/* =================== ORDER INFO =================== */}
-            <Row gutter={[16, 16]}>
-                <Col span={12}>
-                    <Card size="small" title="Маршрут и Груз" style={{ height: '100%' }}>
-                        {order.routePoints?.map((pt: any, i: number) => (
-                            <div key={i} style={{ marginBottom: pt.pointType === 'DELIVERY' ? 12 : 8 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                    {pt.pointType === 'DELIVERY' ? <FlagOutlined style={{ color: '#52c41a' }} /> : <EnvironmentOutlined style={{ color: '#1890ff' }} />}
-                                    <Text strong>
-                                        {pt.pointType === 'PICKUP' ? 'Погрузка: ' : pt.pointType === 'ADDITIONAL_PICKUP' ? 'Доп. погрузка: ' : 'Выгрузка: '}
-                                        {pt.location?.city || pt.location?.name}
-                                    </Text>
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 12, paddingLeft: 22 }}>{pt.location?.address}</Text>
-                            </div>
-                        ))}
-                        <Divider style={{ margin: '8px 0' }} />
-                        <Descriptions size="small" column={2}>
-                            <Descriptions.Item label="Груз">{order.cargoDescription || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Характер">{order.natureOfCargo || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Вес">{order.cargoWeight ? `${order.cargoWeight} кг` : '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Объём">{order.cargoVolume ? `${order.cargoVolume} м³` : '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Кузов">{order.cargoType || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Дата погр.">{pickupPt?.expectedDate ? dayjs(pickupPt.expectedDate).format('DD.MM.YY HH:mm') : '—'}</Descriptions.Item>
-                        </Descriptions>
-                    </Card>
-                </Col>
-                <Col span={12}>
-                    <Card size="small" title="Участники" style={{ height: '100%' }}>
-                        <Descriptions size="small" column={1}>
-                            <Descriptions.Item label="Заказчик">{order.customerCompany?.name || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Контакт">{order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Телефон">{order.customer?.phone || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Экспедитор">{order.forwarder?.name || order.partner?.name || '—'}</Descriptions.Item>
-                            {order.subForwarder && (
-                                <Descriptions.Item label="Суб-экспедитор">{order.subForwarder.name}</Descriptions.Item>
-                            )}
-                            {order.responsibleManager && (
-                                <Descriptions.Item label="Ответственный">{order.responsibleManager.firstName} {order.responsibleManager.lastName}</Descriptions.Item>
-                            )}
-                        </Descriptions>
-                    </Card>
-                </Col>
-            </Row>
-
-            {/* =================== DRIVER & POWER OF ATTORNEY =================== */}
-            <Card
-                size="small"
-                title={<span><CarOutlined style={{ color: '#1890ff', marginRight: 6 }} />Водитель и Доверенность</span>}
-                style={{ marginTop: 16 }}
-            >
-                {hasDriver ? (
-                    <Row gutter={16} align="middle">
-                        <Col flex="1">
-                            <Descriptions size="small" column={2}>
-                                <Descriptions.Item label="ФИО">{driverName || '—'}</Descriptions.Item>
-                                <Descriptions.Item label="Телефон">{driverPhone || '—'}</Descriptions.Item>
-                                <Descriptions.Item label="Госномер авто">{driverPlate || '—'}</Descriptions.Item>
-                                <Descriptions.Item label="Прицеп">{driverTrailer || '—'}</Descriptions.Item>
-                            </Descriptions>
-                        </Col>
-                    </Row>
-                ) : (
-                    <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                        <Tag color="warning" style={{ fontSize: 13, padding: '4px 16px' }}>Водитель не назначен</Tag>
-                    </div>
-                )}
-
-                <Divider style={{ margin: '12px 0' }} />
-
-                <Space wrap>
-                    <Button
-                        type="primary"
-                        icon={<UserAddOutlined />}
-                        onClick={openAssignModal}
-                    >
-                        {hasDriver ? 'Изменить водителя' : 'Назначить водителя'}
-                    </Button>
-                    {hasDriver && (
-                        <>
-                            <Button icon={<FileTextOutlined />} onClick={handleDownloadPoA}>
-                                Скачать доверенность
-                            </Button>
-                            <Button icon={<MailOutlined />} onClick={openSharePoAModal}>
-                                Отправить по email
-                            </Button>
-                        </>
-                    )}
-                </Space>
-            </Card>
-
-            {/* =================== FINANCIAL SUMMARY =================== */}
-            <Card size="small" style={{ marginTop: 16 }}>
-                {(() => {
-                    const isClient = order.customerCompanyId === user?.companyId;
-                    const isExecutorPaid = order.subForwarderId ? order.isSubForwarderPaid : order.isDriverPaid;
-                    const executorDebt = summary.executorDebt !== undefined
-                        ? summary.executorDebt
-                        : (order.subForwarderId
-                            ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
-                            : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses));
-
-                    if (isClient) {
-                        return (
-                            <Row gutter={16}>
-                                <Col span={6}>
-                                    <Statistic title="Стоимость перевозки" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
-                                    <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                        {order.isCustomerPaid ? 'Оплачено экспедитору' : 'Не оплачено экспедитору'}
-                                    </Tag>
+                                    {/* Cargo Card */}
+                                    <Card
+                                        title={<span style={{ fontWeight: 600 }}><InboxOutlined style={{ marginRight: 8, color: '#1677ff' }} />Информация о грузе</span>}
+                                        bordered={false}
+                                        className="premium-card"
+                                    >
+                                        <Descriptions column={{ xs: 1, sm: 2 }} size="middle">
+                                            <Descriptions.Item label="Груз">{order.cargoDescription || '—'}</Descriptions.Item>
+                                            <Descriptions.Item label="Характер груза">{order.natureOfCargo || '—'}</Descriptions.Item>
+                                            <Descriptions.Item label="Вес">{order.cargoWeight ? `${fmt(order.cargoWeight)} кг` : '—'}</Descriptions.Item>
+                                            <Descriptions.Item label="Объем">{order.cargoVolume ? `${order.cargoVolume} м³` : '—'}</Descriptions.Item>
+                                            <Descriptions.Item label="Тип кузова">{order.cargoType || '—'}</Descriptions.Item>
+                                            <Descriptions.Item label="Доп. требования">{order.requirements || '—'}</Descriptions.Item>
+                                        </Descriptions>
+                                    </Card>
                                 </Col>
-                                <Col span={6}><Statistic title="Ваши Поступления" value={summary.totalIncomes} suffix="₸" valueStyle={{ fontSize: 18, color: '#389e0d' }} prefix={<WalletOutlined />} /></Col>
-                                <Col span={6}><Statistic title="Ваши Расходы" value={summary.totalExpenses} suffix="₸" valueStyle={{ fontSize: 18, color: '#cf1322' }} prefix={<DollarOutlined />} /></Col>
-                                <Col span={6}><Statistic title="Долг экспедитору" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#faad14' : '#389e0d' }} /></Col>
+
+                                <Col xs={24} lg={9}>
+                                    {/* Driver & Power of Attorney Card */}
+                                    <Card
+                                        title={<span style={{ fontWeight: 600 }}><CarOutlined style={{ marginRight: 8, color: '#1677ff' }} />Исполнитель и Водитель</span>}
+                                        bordered={false}
+                                        className="premium-card"
+                                        style={{ marginBottom: 20 }}
+                                    >
+                                        {hasDriver ? (
+                                            <div>
+                                                <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
+                                                    <Descriptions.Item label="ФИО">{driverName || '—'}</Descriptions.Item>
+                                                    <Descriptions.Item label="Телефон">
+                                                        {driverPhone ? (
+                                                            <a href={`tel:${driverPhone}`} style={{ color: '#1677ff' }}>{driverPhone}</a>
+                                                        ) : '—'}
+                                                    </Descriptions.Item>
+                                                    <Descriptions.Item label="Автомобиль">{driverPlate || '—'}</Descriptions.Item>
+                                                    <Descriptions.Item label="Прицеп">{driverTrailer || '—'}</Descriptions.Item>
+                                                </Descriptions>
+
+                                                <Divider style={{ margin: '12px 0' }} />
+
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                    <Button
+                                                        type="primary"
+                                                        icon={<UserAddOutlined />}
+                                                        onClick={openAssignModal}
+                                                        block
+                                                    >
+                                                        Изменить водителя
+                                                    </Button>
+                                                    <Button
+                                                        icon={<FileTextOutlined />}
+                                                        onClick={handleDownloadPoA}
+                                                        block
+                                                    >
+                                                        Скачать доверенность (PDF)
+                                                    </Button>
+                                                    <Button
+                                                        icon={<MailOutlined />}
+                                                        onClick={openSharePoAModal}
+                                                        block
+                                                    >
+                                                        Отправить доверенность по email
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                                                <div style={{ marginBottom: 12 }}>
+                                                    <Tag color="warning" style={{ fontSize: 13, padding: '4px 16px', borderRadius: 4 }}>Водитель не назначен</Tag>
+                                                </div>
+                                                <Button
+                                                    type="primary"
+                                                    icon={<UserAddOutlined />}
+                                                    onClick={openAssignModal}
+                                                    block
+                                                >
+                                                    Назначить водителя
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </Card>
+
+                                    {/* Participants Card */}
+                                    <Card
+                                        title={<span style={{ fontWeight: 600 }}><TeamOutlined style={{ marginRight: 8, color: '#1677ff' }} />Участники перевозки</span>}
+                                        bordered={false}
+                                        className="premium-card"
+                                    >
+                                        <Descriptions column={1} size="small">
+                                            <Descriptions.Item label="Заказчик">
+                                                <Text strong>{order.customerCompany?.name || '—'}</Text>
+                                            </Descriptions.Item>
+                                            <Descriptions.Item label="Контактное лицо">
+                                                {order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : '—'}
+                                            </Descriptions.Item>
+                                            <Descriptions.Item label="Телефон заказчика">
+                                                {order.customer?.phone ? (
+                                                    <a href={`tel:${order.customer.phone}`} style={{ color: '#1677ff' }}>{order.customer.phone}</a>
+                                                ) : '—'}
+                                            </Descriptions.Item>
+                                            
+                                            <Divider style={{ margin: '8px 0' }} />
+                                            
+                                            <Descriptions.Item label="Экспедитор">
+                                                <Text strong>{order.forwarder?.name || order.partner?.name || '—'}</Text>
+                                            </Descriptions.Item>
+                                            {order.subForwarder && (
+                                                <Descriptions.Item label="Суб-экспедитор">
+                                                    <Text strong>{order.subForwarder.name}</Text>
+                                                </Descriptions.Item>
+                                            )}
+                                            {order.responsibleManager && (
+                                                <Descriptions.Item label="Менеджер">
+                                                    {order.responsibleManager.firstName} {order.responsibleManager.lastName}
+                                                </Descriptions.Item>
+                                            )}
+                                        </Descriptions>
+                                    </Card>
+                                </Col>
                             </Row>
-                        );
+                        )
+                    },
+                    {
+                        key: 'finances',
+                        label: (
+                            <span>
+                                <DollarOutlined style={{ marginRight: 6 }} />
+                                Финансы
+                            </span>
+                        ),
+                        children: (
+                            <div>
+                                {/* Financial Summary */}
+                                <Card bordered={false} className="premium-card" style={{ marginBottom: 20 }}>
+                                    {(() => {
+                                        const isClient = order.customerCompanyId === user?.companyId;
+                                        const isExecutorPaid = order.subForwarderId ? order.isSubForwarderPaid : order.isDriverPaid;
+                                        const executorDebt = summary.executorDebt !== undefined
+                                            ? summary.executorDebt
+                                            : (order.subForwarderId
+                                                ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
+                                                : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses));
+
+                                        if (isClient) {
+                                            return (
+                                                <Row gutter={[16, 16]}>
+                                                    <Col xs={12} sm={6}>
+                                                        <Statistic title="Стоимость перевозки" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
+                                                        <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                                            {order.isCustomerPaid ? 'Оплачено экспедитору' : 'Не оплачено экспедитору'}
+                                                        </Tag>
+                                                    </Col>
+                                                    <Col xs={12} sm={6}>
+                                                        <Statistic title="Ваши Поступления" value={summary.totalIncomes} suffix="₸" valueStyle={{ fontSize: 18, color: '#389e0d' }} prefix={<WalletOutlined />} />
+                                                    </Col>
+                                                    <Col xs={12} sm={6}>
+                                                        <Statistic title="Ваши Расходы" value={summary.totalExpenses} suffix="₸" valueStyle={{ fontSize: 18, color: '#cf1322' }} prefix={<DollarOutlined />} />
+                                                    </Col>
+                                                    <Col xs={12} sm={6}>
+                                                        <Statistic title="Долг экспедитору" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#faad14' : '#389e0d' }} />
+                                                    </Col>
+                                                </Row>
+                                            );
+                                        }
+                                        return (
+                                            <Row gutter={[16, 16]}>
+                                                <Col xs={12} md={5}>
+                                                    <Statistic title="Стоимость от заказчика" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
+                                                    <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                                        {order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено заказчиком'}
+                                                    </Tag>
+                                                </Col>
+                                                <Col xs={12} md={5}>
+                                                    <Statistic title="Ставка исполнителю" value={summary.executorCost} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
+                                                    <Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                                        {isExecutorPaid ? 'Оплачено исполнителю' : 'Не оплачено исполнителю'}
+                                                    </Tag>
+                                                </Col>
+                                                <Col xs={12} md={5}>
+                                                    <Statistic title="Долг заказчика" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#cf1322' : '#389e0d' }} />
+                                                </Col>
+                                                <Col xs={12} md={5}>
+                                                    <Statistic title="Наш долг исполнителю" value={executorDebt} suffix="₸" valueStyle={{ fontSize: 18, color: executorDebt > 0 ? '#cf1322' : '#389e0d' }} />
+                                                </Col>
+                                                <Col xs={12} md={4}>
+                                                    <Statistic title="Ожидаемая маржа" value={summary.margin} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 700, color: summary.margin >= 0 ? '#389e0d' : '#cf1322' }} prefix={<DollarOutlined />} />
+                                                </Col>
+                                            </Row>
+                                        );
+                                    })()}
+                                </Card>
+
+                                <Row gutter={[24, 24]}>
+                                    <Col xs={24} lg={12}>
+                                        {/* Incomes Card */}
+                                        <Card
+                                            size="small"
+                                            title={<span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: '#389e0d', marginRight: 6 }} />Поступления ({incomes.length})</span>}
+                                            extra={<Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); setIncomeModalOpen(true); }}>Добавить</Button>}
+                                            bordered={false}
+                                            className="premium-card"
+                                        >
+                                            <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
+                                        </Card>
+                                    </Col>
+                                    <Col xs={24} lg={12}>
+                                        {/* Expenses Card */}
+                                        <Card
+                                            size="small"
+                                            title={<span style={{ fontWeight: 600 }}><DollarOutlined style={{ color: '#cf1322', marginRight: 6 }} />Расходы ({expenses.length})</span>}
+                                            extra={<Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); setExpenseModalOpen(true); }}>Добавить</Button>}
+                                            bordered={false}
+                                            className="premium-card"
+                                        >
+                                            <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
+                                        </Card>
+                                    </Col>
+                                </Row>
+                            </div>
+                        )
+                    },
+                    {
+                        key: 'documents',
+                        label: (
+                            <span>
+                                <FilePdfOutlined style={{ marginRight: 6 }} />
+                                Документы ({documents.length})
+                            </span>
+                        ),
+                        children: (
+                            <Card
+                                size="small"
+                                title={<span style={{ fontWeight: 600 }}><FilePdfOutlined style={{ color: '#1890ff', marginRight: 6 }} />Документы ({documents.length})</span>}
+                                extra={
+                                    <Upload customRequest={customUploadTTN} showUploadList={false}>
+                                        <Button size="small" type="primary" icon={<UploadOutlined />} loading={uploadingDoc}>
+                                            Загрузить ТТН
+                                        </Button>
+                                    </Upload>
+                                }
+                                bordered={false}
+                                className="premium-card"
+                            >
+                                <Table columns={docColumns} dataSource={documents} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет документов' }} scroll={{ x: true }} />
+                            </Card>
+                        )
+                    },
+                    {
+                        key: 'history',
+                        label: (
+                            <span>
+                                <ClockCircleOutlined style={{ marginRight: 6 }} />
+                                История ({order.statusHistory?.length || 0})
+                            </span>
+                        ),
+                        children: (
+                            <Card
+                                title={<span style={{ fontWeight: 600 }}><ClockCircleOutlined style={{ color: '#1677ff', marginRight: 8 }} />История изменения статусов</span>}
+                                bordered={false}
+                                className="premium-card"
+                            >
+                                {order.statusHistory && order.statusHistory.length > 0 ? (
+                                    <Timeline
+                                        style={{ marginTop: 16, paddingLeft: 8 }}
+                                        items={order.statusHistory.map((h: any) => ({
+                                            color: h.status === 'COMPLETED' ? 'green' : h.status === 'PROBLEM' ? 'red' : 'blue',
+                                            children: (
+                                                <div style={{ marginBottom: 12 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                        <Tag color={statusColors[h.status]} style={{ margin: 0 }}>
+                                                            {statusLabels[h.status] || h.status}
+                                                        </Tag>
+                                                        <Text type="secondary" style={{ fontSize: 12 }}>
+                                                            {dayjs(h.changedAt).format('DD.MM.YYYY HH:mm:ss')}
+                                                        </Text>
+                                                    </div>
+                                                    {h.comment && (
+                                                        <div style={{ fontSize: 13, color: '#555', marginTop: 4, background: '#f5f5f5', padding: '6px 12px', borderRadius: 4, display: 'inline-block' }}>
+                                                            {h.comment}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ),
+                                        }))}
+                                    />
+                                ) : (
+                                    <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                                        <Text type="secondary">История статусов пуста</Text>
+                                    </div>
+                                )}
+                            </Card>
+                        )
                     }
-                    return (
-                        <Row gutter={12}>
-                            <Col span={5}><Statistic title="Стоимость от заказчика" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} /><Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>{order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено заказчиком'}</Tag></Col>
-                            <Col span={5}><Statistic title="Ставка исполнителю" value={summary.executorCost} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} /><Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>{isExecutorPaid ? 'Оплачено исполнителю' : 'Не оплачено исполнителю'}</Tag></Col>
-                            <Col span={5}><Statistic title="Долг заказчика" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#cf1322' : '#389e0d' }} /></Col>
-                            <Col span={5}><Statistic title="Наш долг исполнителю" value={executorDebt} suffix="₸" valueStyle={{ fontSize: 18, color: executorDebt > 0 ? '#cf1322' : '#389e0d' }} /></Col>
-                            <Col span={4}><Statistic title="Ожидаемая маржа" value={summary.margin} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 700, color: summary.margin >= 0 ? '#389e0d' : '#cf1322' }} prefix={<DollarOutlined />} /></Col>
-                        </Row>
-                    );
-                })()}
-            </Card>
-
-            {/* =================== INCOMES =================== */}
-            <Card size="small" title={<span><WalletOutlined style={{ color: '#389e0d', marginRight: 6 }} />Поступления ({incomes.length})</span>} extra={<Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); setIncomeModalOpen(true); }}>Добавить</Button>} style={{ marginTop: 16 }}>
-                <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} />
-            </Card>
-
-            {/* =================== EXPENSES =================== */}
-            <Card size="small" title={<span><DollarOutlined style={{ color: '#cf1322', marginRight: 6 }} />Расходы ({expenses.length})</span>} extra={<Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); setExpenseModalOpen(true); }}>Добавить</Button>} style={{ marginTop: 16 }}>
-                <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} />
-            </Card>
-
-            {/* =================== DOCUMENTS =================== */}
-            <Card size="small" title={<span><FilePdfOutlined style={{ color: '#1890ff', marginRight: 6 }} />Документы ({documents.length})</span>} extra={<Upload customRequest={customUploadTTN} showUploadList={false}><Button size="small" type="primary" icon={<UploadOutlined />} loading={uploadingDoc}>Загрузить ТТН</Button></Upload>} style={{ marginTop: 16 }}>
-                <Table columns={docColumns} dataSource={documents} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет документов' }} />
-            </Card>
-
-            {/* =================== STATUS HISTORY =================== */}
-            {order.statusHistory && order.statusHistory.length > 0 && (
-                <Card size="small" title="История статусов" style={{ marginTop: 16, marginBottom: 24 }}>
-                    <Timeline
-                        items={order.statusHistory.map((h: any) => ({
-                            color: h.status === 'COMPLETED' ? 'green' : h.status === 'PROBLEM' ? 'red' : 'blue',
-                            children: (
-                                <div>
-                                    <Tag color={statusColors[h.status]}>{statusLabels[h.status] || h.status}</Tag>
-                                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                                        {dayjs(h.changedAt).format('DD.MM.YY HH:mm')}
-                                    </Text>
-                                    {h.comment && <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{h.comment}</div>}
-                                </div>
-                            ),
-                        }))}
-                    />
-                </Card>
-            )}
+                ]}
+            />
 
             {/* =================== ASSIGN DRIVER MODAL =================== */}
             <Modal title="Назначить водителя" open={assignModalOpen} onCancel={() => { setAssignModalOpen(false); setSelectedDriverId(null); assignForm.resetFields(); }} onOk={() => assignForm.submit()} okText="Назначить" cancelText="Отмена" confirmLoading={assignLoading}>
