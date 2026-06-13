@@ -130,8 +130,8 @@ export default function OrderDetailPage() {
     const [statusForm] = Form.useForm();
     const [statusLoading, setStatusLoading] = useState(false);
 
-    // Edit order modal
-    const [editModalOpen, setEditModalOpen] = useState(false);
+    // Edit order inline
+    const [isEditing, setIsEditing] = useState(false);
     const [editForm] = Form.useForm();
     const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
     const [showCustomerField, setShowCustomerField] = useState(false);
@@ -411,7 +411,7 @@ export default function OrderDetailPage() {
 
     // =================== EDIT ORDER ===================
 
-    const openEditModal = () => {
+    const startEditing = () => {
         const order = data?.order;
         if (!order) return;
         const hasExternalCustomer = !!(order.customerCompanyId && order.customerCompanyId !== user?.companyId);
@@ -465,7 +465,7 @@ export default function OrderDetailPage() {
         if (fwdId && order.forwarder?.name && !forwarders.some(f => f.id === fwdId)) {
             setForwarders(prev => [...prev, { id: fwdId, name: order.forwarder!.name }]);
         }
-        setEditModalOpen(true);
+        setIsEditing(true);
     };
 
     const handleEditCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
@@ -521,7 +521,7 @@ export default function OrderDetailPage() {
 
             await api.put(`/orders/${orderId}`, updateData);
             message.success('Заявка обновлена');
-            setEditModalOpen(false);
+            setIsEditing(false);
             fetchData();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка обновления');
@@ -694,14 +694,17 @@ export default function OrderDetailPage() {
                     </div>
                 </div>
 
-                {isNotFinished && (
+                {isEditing && (
+                    <Tag color="blue" style={{ fontSize: 13, padding: '4px 12px', borderRadius: 4, margin: 0 }}>Режим редактирования</Tag>
+                )}
+                {isNotFinished && !isEditing && (
                     <Space wrap size="small">
                         {canChangeStatus && (
                             <Button type="primary" icon={<SwapOutlined />} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
                                 Изменить статус
                             </Button>
                         )}
-                        <Button icon={<EditOutlined />} onClick={openEditModal}>
+                        <Button icon={<EditOutlined />} onClick={startEditing}>
                             Редактировать
                         </Button>
                         <Popconfirm
@@ -736,173 +739,375 @@ export default function OrderDetailPage() {
                             </span>
                         ),
                         children: (
-                            <Row gutter={[24, 24]}>
-                                <Col xs={24} lg={15}>
-                                    {/* Route Card */}
-                                    <Card
-                                        title={<span style={{ fontWeight: 600 }}><EnvironmentOutlined style={{ marginRight: 8, color: '#1677ff' }} />Маршрут следования</span>}
-                                        bordered={false}
-                                        className="premium-card"
-                                        style={{ marginBottom: 20 }}
-                                    >
-                                        <Timeline
-                                            style={{ marginTop: 16, paddingLeft: 8 }}
-                                            items={order.routePoints?.map((pt: any, i: number) => {
-                                                const isDelivery = pt.pointType === 'DELIVERY';
-                                                const isAdditional = pt.pointType === 'ADDITIONAL_PICKUP';
-                                                const icon = isDelivery ? (
-                                                    <FlagOutlined style={{ color: '#52c41a', fontSize: 16 }} />
-                                                ) : (
-                                                    <EnvironmentOutlined style={{ color: isAdditional ? '#faad14' : '#1677ff', fontSize: 16 }} />
-                                                );
-                                                const labelText = isDelivery ? 'Выгрузка' : isAdditional ? 'Доп. погрузка' : 'Погрузка';
-                                                
-                                                return {
-                                                    dot: icon,
-                                                    children: (
-                                                        <div style={{ marginBottom: 12 }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
-                                                                <Text strong style={{ fontSize: 15 }}>
-                                                                    {labelText}: {pt.location?.city || pt.location?.name}
-                                                                </Text>
-                                                                {pt.expectedDate && (
-                                                                    <Text type="secondary" style={{ fontSize: 12 }}>
-                                                                        {dayjs(pt.expectedDate).format('DD.MM.YYYY HH:mm')}
-                                                                    </Text>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ marginTop: 4 }}>
-                                                                <Text type="secondary" style={{ fontSize: 13 }}>
-                                                                    {pt.location?.address}
-                                                                </Text>
-                                                            </div>
+                            isEditing ? (
+                                <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
+                                    <div style={{ marginBottom: 20, background: '#fafafa', padding: '12px 16px', borderRadius: 8, border: '1px solid #f0f0f0' }}>
+                                        <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: '#333' }}>Ваша роль в этой сделке:</div>
+                                        <Radio.Group
+                                            value={editCreatorRole}
+                                            onChange={e => handleEditCreatorRoleChange(e.target.value)}
+                                            optionType="button"
+                                            buttonStyle="solid"
+                                            style={{ width: '100%', display: 'flex' }}
+                                        >
+                                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Заказчик</Radio.Button>
+                                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Экспедитор</Radio.Button>
+                                        </Radio.Group>
+                                    </div>
+                                    <Row gutter={[24, 24]}>
+                                        <Col xs={24} lg={15}>
+                                            {/* Route Card (Editable) */}
+                                            <Card
+                                                title={<span style={{ fontWeight: 600 }}><EnvironmentOutlined style={{ marginRight: 8, color: '#1677ff' }} />Маршрут следования</span>}
+                                                bordered={false}
+                                                className="premium-card"
+                                                style={{ marginBottom: 20 }}
+                                            >
+                                                <Form.Item name="pickupDate" label="Дата погрузки">
+                                                    <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
+                                                </Form.Item>
+                                                {routePointsState.map((pt, i) => (
+                                                    <div key={i} style={{ padding: '12px', background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                            <Select value={pt.pointType} onChange={val => { const newPts = [...routePointsState]; newPts[i].pointType = val; setRoutePointsState(newPts); }} size="small" style={{ width: 140, fontWeight: 600 }} variant="borderless">
+                                                                <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Погрузка</Select.Option>
+                                                                <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Доп. погрузка</Select.Option>
+                                                                <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }}/> Выгрузка</Select.Option>
+                                                            </Select>
+                                                            {routePointsState.length > 2 && (
+                                                                <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => { const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts); }} />
+                                                            )}
                                                         </div>
-                                                    )
-                                                };
-                                            })}
-                                        />
-                                    </Card>
+                                                        <Select
+                                                            placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
+                                                            value={pt.id || undefined}
+                                                            onChange={(val) => {
+                                                                const newPts = [...routePointsState];
+                                                                if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined }; }
+                                                                else {
+                                                                    const loc = locations.find(l => l.id === val);
+                                                                    if (loc) newPts[i] = { ...newPts[i], city: loc.city || '', address: loc.address, id: loc.id };
+                                                                }
+                                                                setRoutePointsState(newPts);
+                                                            }}
+                                                        >
+                                                            {(() => {
+                                                                const activeCustomerCompanyId = editCreatorRole === 'CUSTOMER' ? user?.companyId : editCustomerCompanyId;
+                                                                const activeExecutorCompanyId = editCreatorRole === 'FORWARDER'
+                                                                    ? (showForwarderField ? editForwarderId : user?.companyId)
+                                                                    : (isMarketplace ? undefined : editForwarderId);
+                                                                return getLocationOptions(activeCustomerCompanyId || undefined, activeExecutorCompanyId || undefined).map(group => (
+                                                                    <Select.OptGroup key={group.label} label={group.label}>
+                                                                        {group.options.map(l => (
+                                                                            <Select.Option key={l.id} value={l.id}>
+                                                                                {l.city ? `[${l.city}] ` : ''}{l.name} ({l.address})
+                                                                            </Select.Option>
+                                                                        ))}
+                                                                    </Select.OptGroup>
+                                                                ));
+                                                            })()}
+                                                        </Select>
+                                                    </div>
+                                                ))}
+                                                <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])} style={{ width: '100%' }}>
+                                                    Добавить точку
+                                                </Button>
+                                            </Card>
 
-                                    {/* Cargo Card */}
-                                    <Card
-                                        title={<span style={{ fontWeight: 600 }}><InboxOutlined style={{ marginRight: 8, color: '#1677ff' }} />Информация о грузе</span>}
-                                        bordered={false}
-                                        className="premium-card"
-                                    >
-                                        <Descriptions column={{ xs: 1, sm: 2 }} size="middle">
-                                            <Descriptions.Item label="Груз">{order.cargoDescription || '—'}</Descriptions.Item>
-                                            <Descriptions.Item label="Характер груза">{order.natureOfCargo || '—'}</Descriptions.Item>
-                                            <Descriptions.Item label="Вес">{order.cargoWeight ? `${fmt(order.cargoWeight)} кг` : '—'}</Descriptions.Item>
-                                            <Descriptions.Item label="Объем">{order.cargoVolume ? `${order.cargoVolume} м³` : '—'}</Descriptions.Item>
-                                            <Descriptions.Item label="Тип кузова">{order.cargoType || '—'}</Descriptions.Item>
-                                            <Descriptions.Item label="Доп. требования">{order.requirements || '—'}</Descriptions.Item>
-                                        </Descriptions>
-                                    </Card>
-                                </Col>
+                                            {/* Cargo Card (Editable) */}
+                                            <Card
+                                                title={<span style={{ fontWeight: 600 }}><InboxOutlined style={{ marginRight: 8, color: '#1677ff' }} />Информация о грузе</span>}
+                                                bordered={false}
+                                                className="premium-card"
+                                            >
+                                                <Row gutter={12}>
+                                                    <Col span={12}>
+                                                        <Form.Item name="natureOfCargo" label="Характер груза">
+                                                            <Select placeholder="Выберите..." showSearch optionFilterProp="children" allowClear style={{ width: '100%' }}>
+                                                                {cargoCategories.map(cat => (
+                                                                    <Select.OptGroup key={cat.id} label={cat.name}>
+                                                                        {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
+                                                                    </Select.OptGroup>
+                                                                ))}
+                                                            </Select>
+                                                        </Form.Item>
+                                                    </Col>
+                                                    <Col span={12}>
+                                                        <Form.Item name="cargoType" label="Тип кузова">
+                                                            <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}>
+                                                                {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
+                                                            </Select>
+                                                        </Form.Item>
+                                                    </Col>
+                                                </Row>
+                                                <Form.Item name="cargoDescription" label="Описание груза"><TextArea rows={2} /></Form.Item>
+                                                <Row gutter={12}>
+                                                    <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                                    <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                                </Row>
+                                                <Row gutter={12}>
+                                                    <Col span={12}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+                                                    <Col span={12}>
+                                                        <Form.Item name="customerPriceType" label="Тип оплаты">
+                                                            <Select style={{ width: '100%' }}>
+                                                                <Select.Option value="FIXED">За рейс (всего)</Select.Option>
+                                                                <Select.Option value="PER_KM">За км</Select.Option>
+                                                                <Select.Option value="PER_TON">За тонну</Select.Option>
+                                                            </Select>
+                                                        </Form.Item>
+                                                    </Col>
+                                                </Row>
+                                                <Form.Item name="requirements" label="Доп. требования"><TextArea rows={2} /></Form.Item>
+                                            </Card>
+                                        </Col>
 
-                                <Col xs={24} lg={9}>
-                                    {/* Driver & Power of Attorney Card */}
-                                    <Card
-                                        title={<span style={{ fontWeight: 600 }}><CarOutlined style={{ marginRight: 8, color: '#1677ff' }} />Исполнитель и Водитель</span>}
-                                        bordered={false}
-                                        className="premium-card"
-                                        style={{ marginBottom: 20 }}
-                                    >
-                                        {hasDriver ? (
-                                            <div>
-                                                <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-                                                    <Descriptions.Item label="ФИО">{driverName || '—'}</Descriptions.Item>
-                                                    <Descriptions.Item label="Телефон">
-                                                        {driverPhone ? (
-                                                            <a href={`tel:${driverPhone}`} style={{ color: '#1677ff' }}>{driverPhone}</a>
-                                                        ) : '—'}
-                                                    </Descriptions.Item>
-                                                    <Descriptions.Item label="Автомобиль">{driverPlate || '—'}</Descriptions.Item>
-                                                    <Descriptions.Item label="Прицеп">{driverTrailer || '—'}</Descriptions.Item>
-                                                </Descriptions>
+                                        <Col xs={24} lg={9}>
+                                            {/* Participants & Role (Editable) */}
+                                            <Card
+                                                title={<span style={{ fontWeight: 600 }}><TeamOutlined style={{ marginRight: 8, color: '#1677ff' }} />Участники перевозки</span>}
+                                                bordered={false}
+                                                className="premium-card"
+                                            >
+                                                {editCreatorRole === 'CUSTOMER' && (
+                                                    <Row style={{ marginBottom: 12 }} gutter={[8, 8]}>
+                                                        <Col span={12}>
+                                                            <Checkbox checked={isMarketplace} onChange={e => { setIsMarketplace(e.target.checked); if (e.target.checked) { setShowForwarderField(false); editForm.setFieldsValue({ forwarderId: null }); } else { setShowForwarderField(true); editForm.setFieldsValue({ driverCost: null }); } }}>
+                                                                На биржу
+                                                            </Checkbox>
+                                                        </Col>
+                                                        <Col span={12}>
+                                                            <Checkbox checked={showForwarderField} onChange={e => { setShowForwarderField(e.target.checked); if (e.target.checked) { setIsMarketplace(false); } else { setIsMarketplace(true); editForm.setFieldsValue({ forwarderId: null, driverCost: null }); } }}>
+                                                                Исполнитель
+                                                            </Checkbox>
+                                                        </Col>
+                                                    </Row>
+                                                )}
 
-                                                <Divider style={{ margin: '12px 0' }} />
+                                                {editCreatorRole === 'FORWARDER' && (
+                                                    <Row style={{ marginBottom: 12 }}>
+                                                        <Col span={24}>
+                                                            <Checkbox checked={showForwarderField} onChange={e => { setShowForwarderField(e.target.checked); if (!e.target.checked) editForm.setFieldsValue({ forwarderId: null, driverCost: null }); }}>
+                                                                Субподряд (исполнитель)
+                                                            </Checkbox>
+                                                        </Col>
+                                                    </Row>
+                                                )}
 
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                {showCustomerField && (
+                                                    <Form.Item name="customerCompanyId" label="Заказчик" rules={[{ required: editCreatorRole === 'FORWARDER', message: 'Укажите заказчика' }]} style={{ marginBottom: 12 }}
+                                                        help={<Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>+ Новый контрагент</Button>}
+                                                    >
+                                                        <Select placeholder="Выберите заказчика" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}>
+                                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                                        </Select>
+                                                    </Form.Item>
+                                                )}
+
+                                                {(showForwarderField || isMarketplace) && (
+                                                    <Row gutter={12}>
+                                                        {!isMarketplace && (
+                                                            <Col span={editCreatorRole === 'CUSTOMER' ? 24 : 12}>
+                                                                <Form.Item name="forwarderId" label="Исполнитель" rules={[{ required: true, message: 'Выберите исполнителя' }]} style={{ marginBottom: 12 }}
+                                                                    help={<Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>+ Новый контрагент</Button>}
+                                                                >
+                                                                    <Select placeholder="Выберите исполнителя" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}>
+                                                                        {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
+                                                                    </Select>
+                                                                </Form.Item>
+                                                            </Col>
+                                                        )}
+                                                        {editCreatorRole !== 'CUSTOMER' && (
+                                                            <Col span={isMarketplace ? 24 : 12}>
+                                                                <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
+                                                                    <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                                                                </Form.Item>
+                                                            </Col>
+                                                        )}
+                                                    </Row>
+                                                )}
+                                            </Card>
+
+                                            {/* Action buttons for saving the inline form */}
+                                            <div style={{ marginTop: 20, background: '#fafafa', padding: 16, borderRadius: 8, border: '1px solid #f0f0f0', display: 'flex', gap: 12 }}>
+                                                <Button type="primary" onClick={() => editForm.submit()} style={{ flex: 1 }}>
+                                                    Сохранить
+                                                </Button>
+                                                <Button onClick={() => setIsEditing(false)} style={{ flex: 1 }}>
+                                                    Отмена
+                                                </Button>
+                                            </div>
+                                        </Col>
+                                    </Row>
+                                </Form>
+                            ) : (
+                                <Row gutter={[24, 24]}>
+                                    <Col xs={24} lg={15}>
+                                        {/* Route Card */}
+                                        <Card
+                                            title={<span style={{ fontWeight: 600 }}><EnvironmentOutlined style={{ marginRight: 8, color: '#1677ff' }} />Маршрут следования</span>}
+                                            bordered={false}
+                                            className="premium-card"
+                                            style={{ marginBottom: 20 }}
+                                        >
+                                            <Timeline
+                                                style={{ marginTop: 16, paddingLeft: 8 }}
+                                                items={order.routePoints?.map((pt: any, i: number) => {
+                                                    const isDelivery = pt.pointType === 'DELIVERY';
+                                                    const isAdditional = pt.pointType === 'ADDITIONAL_PICKUP';
+                                                    const icon = isDelivery ? (
+                                                        <FlagOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                                                    ) : (
+                                                        <EnvironmentOutlined style={{ color: isAdditional ? '#faad14' : '#1677ff', fontSize: 16 }} />
+                                                    );
+                                                    const labelText = isDelivery ? 'Выгрузка' : isAdditional ? 'Доп. погрузка' : 'Погрузка';
+                                                    
+                                                    return {
+                                                        dot: icon,
+                                                        children: (
+                                                            <div style={{ marginBottom: 12 }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+                                                                    <Text strong style={{ fontSize: 15 }}>
+                                                                        {labelText}: {pt.location?.city || pt.location?.name}
+                                                                    </Text>
+                                                                    {pt.expectedDate && (
+                                                                        <Text type="secondary" style={{ fontSize: 12 }}>
+                                                                            {dayjs(pt.expectedDate).format('DD.MM.YYYY HH:mm')}
+                                                                        </Text>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ marginTop: 4 }}>
+                                                                    <Text type="secondary" style={{ fontSize: 13 }}>
+                                                                        {pt.location?.address}
+                                                                    </Text>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    };
+                                                })}
+                                            />
+                                        </Card>
+
+                                        {/* Cargo Card */}
+                                        <Card
+                                            title={<span style={{ fontWeight: 600 }}><InboxOutlined style={{ marginRight: 8, color: '#1677ff' }} />Информация о грузе</span>}
+                                            bordered={false}
+                                            className="premium-card"
+                                        >
+                                            <Descriptions column={{ xs: 1, sm: 2 }} size="middle">
+                                                <Descriptions.Item label="Груз">{order.cargoDescription || '—'}</Descriptions.Item>
+                                                <Descriptions.Item label="Характер груза">{order.natureOfCargo || '—'}</Descriptions.Item>
+                                                <Descriptions.Item label="Вес">{order.cargoWeight ? `${fmt(order.cargoWeight)} кг` : '—'}</Descriptions.Item>
+                                                <Descriptions.Item label="Объем">{order.cargoVolume ? `${order.cargoVolume} м³` : '—'}</Descriptions.Item>
+                                                <Descriptions.Item label="Тип кузова">{order.cargoType || '—'}</Descriptions.Item>
+                                                <Descriptions.Item label="Доп. требования">{order.requirements || '—'}</Descriptions.Item>
+                                            </Descriptions>
+                                        </Card>
+                                    </Col>
+
+                                    <Col xs={24} lg={9}>
+                                        {/* Driver & Power of Attorney Card */}
+                                        <Card
+                                            title={<span style={{ fontWeight: 600 }}><CarOutlined style={{ marginRight: 8, color: '#1677ff' }} />Исполнитель и Водитель</span>}
+                                            bordered={false}
+                                            className="premium-card"
+                                            style={{ marginBottom: 20 }}
+                                        >
+                                            {hasDriver ? (
+                                                <div>
+                                                    <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
+                                                        <Descriptions.Item label="ФИО">{driverName || '—'}</Descriptions.Item>
+                                                        <Descriptions.Item label="Телефон">
+                                                            {driverPhone ? (
+                                                                <a href={`tel:${driverPhone}`} style={{ color: '#1677ff' }}>{driverPhone}</a>
+                                                            ) : '—'}
+                                                        </Descriptions.Item>
+                                                        <Descriptions.Item label="Автомобиль">{driverPlate || '—'}</Descriptions.Item>
+                                                        <Descriptions.Item label="Прицеп">{driverTrailer || '—'}</Descriptions.Item>
+                                                    </Descriptions>
+
+                                                    <Divider style={{ margin: '12px 0' }} />
+
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                        <Button
+                                                            type="primary"
+                                                            icon={<UserAddOutlined />}
+                                                            onClick={openAssignModal}
+                                                            block
+                                                        >
+                                                            Изменить водителя
+                                                        </Button>
+                                                        <Button
+                                                            icon={<FileTextOutlined />}
+                                                            onClick={handleDownloadPoA}
+                                                            block
+                                                        >
+                                                            Скачать доверенность (PDF)
+                                                        </Button>
+                                                        <Button
+                                                            icon={<MailOutlined />}
+                                                            onClick={openSharePoAModal}
+                                                            block
+                                                        >
+                                                            Отправить доверенность по email
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                                                    <div style={{ marginBottom: 12 }}>
+                                                        <Tag color="warning" style={{ fontSize: 13, padding: '4px 16px', borderRadius: 4 }}>Водитель не назначен</Tag>
+                                                    </div>
                                                     <Button
                                                         type="primary"
                                                         icon={<UserAddOutlined />}
                                                         onClick={openAssignModal}
                                                         block
                                                     >
-                                                        Изменить водителя
-                                                    </Button>
-                                                    <Button
-                                                        icon={<FileTextOutlined />}
-                                                        onClick={handleDownloadPoA}
-                                                        block
-                                                    >
-                                                        Скачать доверенность (PDF)
-                                                    </Button>
-                                                    <Button
-                                                        icon={<MailOutlined />}
-                                                        onClick={openSharePoAModal}
-                                                        block
-                                                    >
-                                                        Отправить доверенность по email
+                                                        Назначить водителя
                                                     </Button>
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                                                <div style={{ marginBottom: 12 }}>
-                                                    <Tag color="warning" style={{ fontSize: 13, padding: '4px 16px', borderRadius: 4 }}>Водитель не назначен</Tag>
-                                                </div>
-                                                <Button
-                                                    type="primary"
-                                                    icon={<UserAddOutlined />}
-                                                    onClick={openAssignModal}
-                                                    block
-                                                >
-                                                    Назначить водителя
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </Card>
+                                            )}
+                                        </Card>
 
-                                    {/* Participants Card */}
-                                    <Card
-                                        title={<span style={{ fontWeight: 600 }}><TeamOutlined style={{ marginRight: 8, color: '#1677ff' }} />Участники перевозки</span>}
-                                        bordered={false}
-                                        className="premium-card"
-                                    >
-                                        <Descriptions column={1} size="small">
-                                            <Descriptions.Item label="Заказчик">
-                                                <Text strong>{order.customerCompany?.name || '—'}</Text>
-                                            </Descriptions.Item>
-                                            <Descriptions.Item label="Контактное лицо">
-                                                {order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : '—'}
-                                            </Descriptions.Item>
-                                            <Descriptions.Item label="Телефон заказчика">
-                                                {order.customer?.phone ? (
-                                                    <a href={`tel:${order.customer.phone}`} style={{ color: '#1677ff' }}>{order.customer.phone}</a>
-                                                ) : '—'}
-                                            </Descriptions.Item>
-                                            
-                                            <Divider style={{ margin: '8px 0' }} />
-                                            
-                                            <Descriptions.Item label="Экспедитор">
-                                                <Text strong>{order.forwarder?.name || order.partner?.name || '—'}</Text>
-                                            </Descriptions.Item>
-                                            {order.subForwarder && (
-                                                <Descriptions.Item label="Суб-экспедитор">
-                                                    <Text strong>{order.subForwarder.name}</Text>
+                                        {/* Participants Card */}
+                                        <Card
+                                            title={<span style={{ fontWeight: 600 }}><TeamOutlined style={{ marginRight: 8, color: '#1677ff' }} />Участники перевозки</span>}
+                                            bordered={false}
+                                            className="premium-card"
+                                        >
+                                            <Descriptions column={1} size="small">
+                                                <Descriptions.Item label="Заказчик">
+                                                    <Text strong>{order.customerCompany?.name || '—'}</Text>
                                                 </Descriptions.Item>
-                                            )}
-                                            {order.responsibleManager && (
-                                                <Descriptions.Item label="Менеджер">
-                                                    {order.responsibleManager.firstName} {order.responsibleManager.lastName}
+                                                <Descriptions.Item label="Контактное лицо">
+                                                    {order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : '—'}
                                                 </Descriptions.Item>
-                                            )}
-                                        </Descriptions>
-                                    </Card>
-                                </Col>
-                            </Row>
+                                                <Descriptions.Item label="Телефон заказчика">
+                                                    {order.customer?.phone ? (
+                                                        <a href={`tel:${order.customer.phone}`} style={{ color: '#1677ff' }}>{order.customer.phone}</a>
+                                                    ) : '—'}
+                                                </Descriptions.Item>
+                                                
+                                                <Divider style={{ margin: '8px 0' }} />
+                                                
+                                                <Descriptions.Item label="Экспедитор">
+                                                    <Text strong>{order.forwarder?.name || order.partner?.name || '—'}</Text>
+                                                </Descriptions.Item>
+                                                {order.subForwarder && (
+                                                    <Descriptions.Item label="Суб-экспедитор">
+                                                        <Text strong>{order.subForwarder.name}</Text>
+                                                    </Descriptions.Item>
+                                                )}
+                                                {order.responsibleManager && (
+                                                    <Descriptions.Item label="Менеджер">
+                                                        {order.responsibleManager.firstName} {order.responsibleManager.lastName}
+                                                    </Descriptions.Item>
+                                                )}
+                                            </Descriptions>
+                                        </Card>
+                                    </Col>
+                                </Row>
+                            )
                         )
                     },
                     {
@@ -1152,184 +1357,7 @@ export default function OrderDetailPage() {
                 </Form>
             </Modal>
 
-            {/* =================== EDIT ORDER MODAL =================== */}
-            <Modal
-                title={`Редактировать заявку ${order.orderNumber}`}
-                open={editModalOpen}
-                onCancel={() => setEditModalOpen(false)}
-                onOk={() => editForm.submit()}
-                okText="Сохранить"
-                cancelText="Отмена"
-                width={900}
-                style={{ top: 20 }}
-            >
-                <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
-                    <div style={{ marginBottom: 20, background: '#fafafa', padding: '12px 16px', borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: '#333' }}>Ваша роль в этой сделке:</div>
-                        <Radio.Group
-                            value={editCreatorRole}
-                            onChange={e => handleEditCreatorRoleChange(e.target.value)}
-                            optionType="button"
-                            buttonStyle="solid"
-                            style={{ width: '100%', display: 'flex' }}
-                        >
-                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Заказчик</Radio.Button>
-                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Экспедитор</Radio.Button>
-                        </Radio.Group>
-                    </div>
-                    <Row gutter={24}>
-                        <Col span={12}>
-                            <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Маршрут</Title>
-                            <Form.Item name="pickupDate" label="Дата погрузки">
-                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
-                            </Form.Item>
-                            {routePointsState.map((pt, i) => (
-                                <div key={i} style={{ padding: '8px 12px', background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                        <Select value={pt.pointType} onChange={val => { const newPts = [...routePointsState]; newPts[i].pointType = val; setRoutePointsState(newPts); }} size="small" style={{ width: 140, fontWeight: 600 }} variant="borderless">
-                                            <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Погрузка</Select.Option>
-                                            <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Доп. погрузка</Select.Option>
-                                            <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }}/> Выгрузка</Select.Option>
-                                        </Select>
-                                        <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => { const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts); }} />
-                                    </div>
-                                    <Select
-                                        placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
-                                        value={pt.id || undefined}
-                                        onChange={(val) => {
-                                            const newPts = [...routePointsState];
-                                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined }; }
-                                            else {
-                                                const loc = locations.find(l => l.id === val);
-                                                if (loc) newPts[i] = { ...newPts[i], city: loc.city || '', address: loc.address, id: loc.id };
-                                            }
-                                            setRoutePointsState(newPts);
-                                        }}
-                                    >
-                                        {(() => {
-                                            const activeCustomerCompanyId = editCreatorRole === 'CUSTOMER' ? user?.companyId : editCustomerCompanyId;
-                                            const activeExecutorCompanyId = editCreatorRole === 'FORWARDER'
-                                                ? (showForwarderField ? editForwarderId : user?.companyId)
-                                                : (isMarketplace ? undefined : editForwarderId);
-                                            return getLocationOptions(activeCustomerCompanyId || undefined, activeExecutorCompanyId || undefined).map(group => (
-                                                <Select.OptGroup key={group.label} label={group.label}>
-                                                    {group.options.map(l => (
-                                                        <Select.Option key={l.id} value={l.id}>
-                                                            {l.city ? `[${l.city}] ` : ''}{l.name} ({l.address})
-                                                        </Select.Option>
-                                                    ))}
-                                                </Select.OptGroup>
-                                            ));
-                                        })()}
-                                    </Select>
-                                </div>
-                            ))}
-                            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])} style={{ width: '100%', marginBottom: 12 }}>
-                                Добавить точку
-                            </Button>
-                        </Col>
-                        <Col span={12}>
-                            <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Груз</Title>
-                            <Row gutter={12}>
-                                <Col span={12}>
-                                    <Form.Item name="natureOfCargo" label="Характер груза">
-                                        <Select placeholder="Выберите..." showSearch optionFilterProp="children" allowClear>
-                                            {cargoCategories.map(cat => (
-                                                <Select.OptGroup key={cat.id} label={cat.name}>
-                                                    {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
-                                                </Select.OptGroup>
-                                            ))}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="cargoType" label="Тип кузова">
-                                        <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children" filterOption={(input, option) => (option?.children as unknown as string ?? '').toLowerCase().includes(input.toLowerCase())}>
-                                            {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                            <Form.Item name="cargoDescription" label="Описание груза"><TextArea rows={2} /></Form.Item>
-                            <Row gutter={12}>
-                                <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                            </Row>
-                            <Row gutter={12}>
-                                <Col span={12}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={12}>
-                                    <Form.Item name="customerPriceType" label="Тип оплаты">
-                                        <Select style={{ width: '100%' }}>
-                                            <Select.Option value="FIXED">За рейс (всего)</Select.Option>
-                                            <Select.Option value="PER_KM">За км</Select.Option>
-                                            <Select.Option value="PER_TON">За тонну</Select.Option>
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
 
-                            {editCreatorRole === 'CUSTOMER' && (
-                                <Row style={{ marginBottom: 12 }}>
-                                    <Col span={12}>
-                                        <Checkbox checked={isMarketplace} onChange={e => { setIsMarketplace(e.target.checked); if (e.target.checked) { setShowForwarderField(false); editForm.setFieldsValue({ forwarderId: null }); } else { setShowForwarderField(true); editForm.setFieldsValue({ driverCost: null }); } }}>
-                                            Отправить на биржу
-                                        </Checkbox>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Checkbox checked={showForwarderField} onChange={e => { setShowForwarderField(e.target.checked); if (e.target.checked) { setIsMarketplace(false); } else { setIsMarketplace(true); editForm.setFieldsValue({ forwarderId: null, driverCost: null }); } }}>
-                                            Назначить контрагента
-                                        </Checkbox>
-                                    </Col>
-                                </Row>
-                            )}
-
-                            {editCreatorRole === 'FORWARDER' && (
-                                <Row style={{ marginBottom: 12 }}>
-                                    <Col span={24}>
-                                        <Checkbox checked={showForwarderField} onChange={e => { setShowForwarderField(e.target.checked); if (!e.target.checked) editForm.setFieldsValue({ forwarderId: null, driverCost: null }); }}>
-                                            Назначить исполнителя (субподряд)
-                                        </Checkbox>
-                                    </Col>
-                                </Row>
-                            )}
-
-                            {showCustomerField && (
-                                <Form.Item name="customerCompanyId" label="Заказчик" rules={[{ required: editCreatorRole === 'FORWARDER', message: 'Укажите заказчика' }]} style={{ marginBottom: 12 }}
-                                    help={<Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>+ Создать нового контрагента</Button>}
-                                >
-                                    <Select placeholder="Выберите заказчика" allowClear showSearch optionFilterProp="children">
-                                        {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                                    </Select>
-                                </Form.Item>
-                            )}
-
-                            {(showForwarderField || isMarketplace) && (
-                                <Row gutter={12}>
-                                    {!isMarketplace && (
-                                        <Col span={editCreatorRole === 'CUSTOMER' ? 24 : 12}>
-                                            <Form.Item name="forwarderId" label="Исполнитель" rules={[{ required: true, message: 'Выберите исполнителя' }]} style={{ marginBottom: 12 }}
-                                                help={<Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>+ Создать нового контрагента</Button>}
-                                            >
-                                                <Select placeholder="Выберите исполнителя" allowClear showSearch optionFilterProp="children">
-                                                    {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
-                                                </Select>
-                                            </Form.Item>
-                                        </Col>
-                                    )}
-                                    {editCreatorRole !== 'CUSTOMER' && (
-                                        <Col span={isMarketplace ? 24 : 12}>
-                                            <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
-                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                                            </Form.Item>
-                                        </Col>
-                                    )}
-                                </Row>
-                            )}
-                            <Form.Item name="requirements" label="Доп. требования"><TextArea rows={2} /></Form.Item>
-                        </Col>
-                    </Row>
-                </Form>
-            </Modal>
 
             {/* =================== SHARE POA MODAL =================== */}
             <Modal title="Отправить доверенность по email" open={sharePoAModalOpen} onCancel={() => setSharePoAModalOpen(false)} onOk={handleSharePoA} okText="Отправить" cancelText="Отмена" confirmLoading={sharePoALoading} width={480}>
