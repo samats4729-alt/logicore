@@ -281,21 +281,23 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Header
                 className={isTrackingPage ? 'tracking-header' : ''}
                 style={{
-                    background: isTrackingPage ? 'rgba(255, 255, 255, 0.65)' : '#ffffff',
+                    background: isTrackingPage ? 'rgba(255, 255, 255, 0.35)' : '#ffffff',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
                     height: 56,
-                    borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #e4e4e7',
+                    borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.4)' : '1px solid #e4e4e7',
                     position: isTrackingPage ? 'absolute' : 'sticky',
                     left: 0,
                     right: 0,
                     top: 0,
                     zIndex: 100,
-                    boxShadow: isTrackingPage ? '0 1px 3px 0 rgba(0, 0, 0, 0.06)' : '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
-                    backdropFilter: isTrackingPage ? 'blur(24px) saturate(1.8)' : 'none',
-                    WebkitBackdropFilter: isTrackingPage ? 'blur(24px) saturate(1.8)' : 'none',
-                    transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
+                    boxShadow: isTrackingPage
+                        ? '0 4px 30px rgba(0, 0, 0, 0.06), inset 0 -1px 0 rgba(255,255,255,0.2)'
+                        : '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    backdropFilter: isTrackingPage ? 'blur(40px) saturate(1.6)' : 'none',
+                    WebkitBackdropFilter: isTrackingPage ? 'blur(40px) saturate(1.6)' : 'none',
+                    transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
             >
                 {/* Mobile: burger button */}

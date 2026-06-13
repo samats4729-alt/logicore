@@ -216,227 +216,374 @@ export default function CompanyTrackingPage() {
         return 'red'; // > 5 мин
     };
 
+    const isDark = mapMode === 'night';
+
     return (
         <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 56px - 16px)' : '100vh', overflow: 'hidden' }}>
-            {/* Список водителей (Glassmorphism Sidebar) */}
-            <Card
-                title="Отслеживание грузов"
-                className="tracking-card"
+            {/* ═══════════════════════════════════════════
+                SIDEBAR — Frosted Glass Panel
+                ═══════════════════════════════════════════ */}
+            <div
+                className="tracking-sidebar"
                 style={{
                     position: isMobile ? 'relative' : 'absolute',
                     top: isMobile ? 0 : 80,
                     left: isMobile ? 0 : 24,
-                    bottom: isMobile ? 0 : 24,
-                    width: isMobile ? '100%' : 320,
+                    bottom: isMobile ? 'auto' : 24,
+                    width: isMobile ? '100%' : 340,
                     zIndex: 10,
-                    background: mapMode === 'night'
-                        ? 'rgba(15, 15, 20, 0.72)'
-                        : 'rgba(255, 255, 255, 0.78)',
-                    backdropFilter: 'blur(24px) saturate(1.8)',
-                    WebkitBackdropFilter: 'blur(24px) saturate(1.8)',
-                    border: mapMode === 'night'
-                        ? '1px solid rgba(255, 255, 255, 0.12)'
-                        : '1px solid rgba(0, 0, 0, 0.08)',
-                    boxShadow: mapMode === 'night'
-                        ? '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
-                        : '0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
-                    borderRadius: isMobile ? 0 : 16,
                     display: isMobile ? 'none' : 'flex',
                     flexDirection: 'column',
-                    transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
+                    borderRadius: 20,
+                    overflow: 'hidden',
+                    background: isDark
+                        ? 'linear-gradient(145deg, rgba(20, 20, 30, 0.85), rgba(10, 10, 18, 0.75))'
+                        : 'linear-gradient(145deg, rgba(255, 255, 255, 0.55), rgba(245, 245, 250, 0.45))',
+                    backdropFilter: 'blur(40px) saturate(1.6)',
+                    WebkitBackdropFilter: 'blur(40px) saturate(1.6)',
+                    border: isDark
+                        ? '1px solid rgba(255, 255, 255, 0.1)'
+                        : '1px solid rgba(255, 255, 255, 0.6)',
+                    boxShadow: isDark
+                        ? '0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+                        : '0 20px 60px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
+                    transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
-                bodyStyle={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}
-                extra={<ReloadOutlined onClick={fetchDrivers} style={{ cursor: 'pointer' }} />}
             >
-                {loading ? (
-                    <Spin />
-                ) : drivers.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 20 }}>
-                        <Text type="secondary">Нет активных рейсов с GPS</Text>
-                        <br />
-                        <Text type="secondary" style={{ fontSize: 12 }}>Водители появятся здесь, когда начнут движение по вашим заявкам</Text>
-                    </div>
-                ) : (
-                    <List
-                        dataSource={drivers}
-                        renderItem={(driver) => (
-                            <List.Item
-                                style={{
-                                    cursor: 'pointer',
-                                    background: selectedDriver === driver.driverId ? 'rgba(22, 119, 255, 0.15)' : 'transparent',
-                                    borderRadius: 8,
-                                    padding: '8px 12px',
-                                    marginBottom: 4,
-                                    border: 'none',
-                                    transition: 'background 0.2s',
-                                }}
-                                onClick={() => centerOnDriver(driver)}
-                            >
-                                <List.Item.Meta
-                                    avatar={
-                                        <Badge dot color={getStatusColor(driver.updatedAt)}>
-                                            <Avatar
-                                                icon={<CarOutlined />}
-                                                style={{ background: getDriverColor(driver) }}
-                                            />
-                                        </Badge>
-                                    }
-                                    title={
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontWeight: 600, fontSize: 13 }}>{driver.driverName}</span>
-                                            <Tag style={{ margin: 0, fontSize: 11 }}>{driver.vehiclePlate}</Tag>
-                                        </div>
-                                    }
-                                    description={
-                                        <div style={{ marginTop: 4 }}>
-                                            {driver.orderNumber && (
-                                                <Tag
-                                                    color={getDriverColor(driver)}
-                                                    style={{ marginBottom: 4, fontSize: 10 }}
-                                                >
-                                                    {driver.orderNumber}
-                                                </Tag>
-                                            )}
-                                            <div style={{ fontSize: 11, color: '#666' }}>
-                                                {driver.speed ? `${Math.round(driver.speed * 3.6)} км/ч` : 'Стоит'}
-                                                {' • '}
-                                                {new Date(driver.updatedAt).toLocaleTimeString('ru-RU')}
-                                            </div>
-                                        </div>
-                                    }
-                                />
-                            </List.Item>
-                        )}
-                    />
-                )}
-
-                {/* Легенда */}
-                {orderColorMap.size > 0 && (
-                    <div style={{ marginTop: 16, padding: '8px 0', borderTop: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                        <Text type="secondary" style={{ fontSize: 11 }}>Рейсы:</Text>
-                        <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {(Array.from(orderColorMap.entries()) as any[]).map(([order, color]) => (
-                                <Tag key={order} color={color} style={{ fontSize: 10, margin: 0 }}>{order}</Tag>
-                            ))}
+                {/* Sidebar Header */}
+                <div style={{
+                    padding: '20px 20px 16px',
+                    borderBottom: isDark
+                        ? '1px solid rgba(255, 255, 255, 0.06)'
+                        : '1px solid rgba(0, 0, 0, 0.06)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}>
+                    <div>
+                        <div style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            letterSpacing: '-0.02em',
+                            color: isDark ? '#fff' : '#09090b',
+                        }}>
+                            Отслеживание
+                        </div>
+                        <div style={{
+                            fontSize: 12,
+                            color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)',
+                            marginTop: 2,
+                        }}>
+                            {drivers.length} {drivers.length === 1 ? 'водитель' : 'водителей'} онлайн
                         </div>
                     </div>
-                )}
-            </Card>
+                    <button
+                        onClick={fetchDrivers}
+                        style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 10,
+                            border: isDark
+                                ? '1px solid rgba(255,255,255,0.08)'
+                                : '1px solid rgba(0,0,0,0.06)',
+                            background: isDark
+                                ? 'rgba(255,255,255,0.05)'
+                                : 'rgba(0,0,0,0.03)',
+                            color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 13,
+                            transition: 'all 0.2s ease',
+                        }}
+                    >
+                        <ReloadOutlined />
+                    </button>
+                </div>
 
-            {/* Панель кнопок управления */}
-            <div style={{ position: 'absolute', top: isMobile ? 12 : 80, right: isMobile ? 12 : 24, zIndex: 10, display: 'flex', gap: 8 }}>
-                <Button
-                    onClick={toggleMapTheme}
-                    style={{
-                        background: mapMode === 'night' ? 'rgba(15, 15, 20, 0.65)' : 'rgba(255, 255, 255, 0.82)',
-                        color: mapMode === 'night' ? '#fff' : '#09090b',
-                        border: mapMode === 'night' ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(0, 0, 0, 0.1)',
-                        backdropFilter: 'blur(20px) saturate(1.8)',
-                        WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: 12,
-                        boxShadow: mapMode === 'night'
-                            ? '0 4px 16px rgba(0, 0, 0, 0.3)'
-                            : '0 4px 16px rgba(0, 0, 0, 0.08)',
-                        fontWeight: 500,
-                        transition: 'all 0.3s ease',
-                    }}
-                    icon={mapMode === 'night' ? '🌙' : '☀️'}
-                >
-                    {mapMode === 'night' ? 'Ночь' : 'День'}
-                </Button>
-                <Button
-                    type="primary"
-                    icon={<AimOutlined />}
-                    onClick={centerOnMyLocation}
-                    style={{
-                        borderRadius: 12,
-                        boxShadow: '0 4px 16px rgba(22, 119, 255, 0.3)',
-                        fontWeight: 500,
-                        transition: 'all 0.3s ease',
-                    }}
-                >
-                    Моё место
-                </Button>
+                {/* Sidebar Body */}
+                <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
+                    {loading ? (
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                            <Spin />
+                        </div>
+                    ) : drivers.length === 0 ? (
+                        /* ── Premium Empty State ── */
+                        <div style={{
+                            textAlign: 'center',
+                            padding: '48px 20px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                        }}>
+                            {/* Animated radar pulse */}
+                            <div style={{ position: 'relative', width: 80, height: 80, marginBottom: 24 }}>
+                                <div className="tracking-radar-pulse" />
+                                <div className="tracking-radar-pulse-delayed" />
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 12,
+                                    background: isDark
+                                        ? 'linear-gradient(135deg, rgba(22, 119, 255, 0.3), rgba(114, 46, 209, 0.3))'
+                                        : 'linear-gradient(135deg, rgba(22, 119, 255, 0.15), rgba(114, 46, 209, 0.15))',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}>
+                                    <EnvironmentOutlined style={{
+                                        fontSize: 20,
+                                        color: isDark ? 'rgba(255,255,255,0.7)' : '#1677ff',
+                                    }} />
+                                </div>
+                            </div>
+
+                            <div style={{
+                                fontSize: 14,
+                                fontWeight: 600,
+                                color: isDark ? 'rgba(255,255,255,0.85)' : '#09090b',
+                                marginBottom: 6,
+                            }}>
+                                Нет активных рейсов
+                            </div>
+                            <div style={{
+                                fontSize: 12,
+                                lineHeight: 1.5,
+                                color: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)',
+                                maxWidth: 200,
+                            }}>
+                                Водители появятся здесь, когда начнут движение по вашим заявкам
+                            </div>
+                        </div>
+                    ) : (
+                        <List
+                            dataSource={drivers}
+                            renderItem={(driver) => (
+                                <List.Item
+                                    style={{
+                                        cursor: 'pointer',
+                                        background: selectedDriver === driver.driverId
+                                            ? (isDark ? 'rgba(22, 119, 255, 0.15)' : 'rgba(22, 119, 255, 0.08)')
+                                            : 'transparent',
+                                        borderRadius: 12,
+                                        padding: '10px 12px',
+                                        marginBottom: 4,
+                                        border: selectedDriver === driver.driverId
+                                            ? (isDark ? '1px solid rgba(22, 119, 255, 0.2)' : '1px solid rgba(22, 119, 255, 0.15)')
+                                            : '1px solid transparent',
+                                        transition: 'all 0.2s ease',
+                                    }}
+                                    onClick={() => centerOnDriver(driver)}
+                                >
+                                    <List.Item.Meta
+                                        avatar={
+                                            <Badge dot color={getStatusColor(driver.updatedAt)}>
+                                                <Avatar
+                                                    icon={<CarOutlined />}
+                                                    style={{ background: getDriverColor(driver) }}
+                                                />
+                                            </Badge>
+                                        }
+                                        title={
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{
+                                                    fontWeight: 600,
+                                                    fontSize: 13,
+                                                    color: isDark ? '#fff' : '#09090b',
+                                                }}>{driver.driverName}</span>
+                                                <Tag style={{
+                                                    margin: 0,
+                                                    fontSize: 10,
+                                                    borderRadius: 6,
+                                                    background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                                    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
+                                                    color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)',
+                                                }}>{driver.vehiclePlate}</Tag>
+                                            </div>
+                                        }
+                                        description={
+                                            <div style={{ marginTop: 4 }}>
+                                                {driver.orderNumber && (
+                                                    <Tag
+                                                        color={getDriverColor(driver)}
+                                                        style={{ marginBottom: 4, fontSize: 10, borderRadius: 6 }}
+                                                    >
+                                                        {driver.orderNumber}
+                                                    </Tag>
+                                                )}
+                                                <div style={{
+                                                    fontSize: 11,
+                                                    color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
+                                                }}>
+                                                    {driver.speed ? `${Math.round(driver.speed * 3.6)} км/ч` : 'Стоит'}
+                                                    {' • '}
+                                                    {new Date(driver.updatedAt).toLocaleTimeString('ru-RU')}
+                                                </div>
+                                            </div>
+                                        }
+                                    />
+                                </List.Item>
+                            )}
+                        />
+                    )}
+
+                    {/* Легенда */}
+                    {orderColorMap.size > 0 && (
+                        <div style={{
+                            marginTop: 16,
+                            padding: '12px 0',
+                            borderTop: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(0, 0, 0, 0.06)',
+                        }}>
+                            <Text type="secondary" style={{
+                                fontSize: 11,
+                                color: isDark ? 'rgba(255,255,255,0.4)' : undefined,
+                            }}>Рейсы:</Text>
+                            <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {(Array.from(orderColorMap.entries()) as any[]).map(([order, color]) => (
+                                    <Tag key={order} color={color} style={{ fontSize: 10, margin: 0, borderRadius: 6 }}>{order}</Tag>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Десктопные заблюренные границы и рамки поверх карты */}
+            {/* ═══════════════════════════════════════════
+                CONTROL BUTTONS — Floating Glass Pills
+                ═══════════════════════════════════════════ */}
+            <div style={{
+                position: 'absolute',
+                top: isMobile ? 12 : 80,
+                right: isMobile ? 12 : 24,
+                zIndex: 10,
+                display: 'flex',
+                gap: 8,
+            }}>
+                <button
+                    onClick={toggleMapTheme}
+                    className="tracking-control-btn"
+                    style={{
+                        height: 40,
+                        padding: '0 16px',
+                        borderRadius: 20,
+                        border: isDark
+                            ? '1px solid rgba(255, 255, 255, 0.12)'
+                            : '1px solid rgba(255, 255, 255, 0.7)',
+                        background: isDark
+                            ? 'linear-gradient(135deg, rgba(25, 25, 35, 0.8), rgba(15, 15, 22, 0.7))'
+                            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(245, 245, 250, 0.55))',
+                        color: isDark ? '#fff' : '#09090b',
+                        backdropFilter: 'blur(30px) saturate(1.6)',
+                        WebkitBackdropFilter: 'blur(30px) saturate(1.6)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        boxShadow: isDark
+                            ? '0 8px 32px rgba(0, 0, 0, 0.4)'
+                            : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                >
+                    <span style={{ fontSize: 15 }}>{isDark ? '🌙' : '☀️'}</span>
+                    {isDark ? 'Ночь' : 'День'}
+                </button>
+                <button
+                    onClick={centerOnMyLocation}
+                    className="tracking-control-btn"
+                    style={{
+                        height: 40,
+                        padding: '0 16px',
+                        borderRadius: 20,
+                        border: '1px solid rgba(22, 119, 255, 0.3)',
+                        background: 'linear-gradient(135deg, #1677ff, #0958d9)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        boxShadow: '0 8px 32px rgba(22, 119, 255, 0.35)',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                >
+                    <AimOutlined style={{ fontSize: 14 }} />
+                    Моё место
+                </button>
+            </div>
+
+            {/* ═══════════════════════════════════════════
+                EDGE VIGNETTES — Soft fade overlays
+                ═══════════════════════════════════════════ */}
             {!isMobile && (
                 <>
-                    {/* Верхняя рамка с размытием — виньетка сверху */}
+                    {/* Top edge fade */}
                     <div style={{
-                        position: 'absolute', top: 56, left: 0, right: 0, height: 24, zIndex: 6,
-                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                        background: mapMode === 'night'
-                            ? 'linear-gradient(to bottom, rgba(10, 10, 15, 0.4), transparent)'
-                            : 'linear-gradient(to bottom, rgba(248, 248, 248, 0.6), transparent)',
+                        position: 'absolute', top: 56, left: 0, right: 0, height: 32, zIndex: 5,
+                        background: isDark
+                            ? 'linear-gradient(to bottom, rgba(8, 8, 12, 0.5) 0%, transparent 100%)'
+                            : 'linear-gradient(to bottom, rgba(245, 245, 248, 0.7) 0%, transparent 100%)',
                         pointerEvents: 'none',
-                        transition: 'background 0.4s ease',
+                        transition: 'background 0.5s ease',
                     }} />
-                    
-                    {/* Нижиняя рамка с размытием */}
+
+                    {/* Bottom edge fade */}
                     <div style={{
-                        position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6,
-                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                        background: mapMode === 'night'
-                            ? 'linear-gradient(to top, rgba(10, 10, 15, 0.4), transparent)'
-                            : 'linear-gradient(to top, rgba(248, 248, 248, 0.6), transparent)',
+                        position: 'absolute', bottom: 0, left: 0, right: 0, height: 32, zIndex: 5,
+                        background: isDark
+                            ? 'linear-gradient(to top, rgba(8, 8, 12, 0.5) 0%, transparent 100%)'
+                            : 'linear-gradient(to top, rgba(245, 245, 248, 0.7) 0%, transparent 100%)',
                         pointerEvents: 'none',
-                        transition: 'background 0.4s ease',
+                        transition: 'background 0.5s ease',
                     }} />
-                    
-                    {/* Левая внешняя рамка (до сайдбара) */}
+
+                    {/* Left edge fade */}
                     <div style={{
-                        position: 'absolute', top: 80, bottom: 24, left: 0, width: 24, zIndex: 6,
-                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                        background: mapMode === 'night'
-                            ? 'linear-gradient(to right, rgba(10, 10, 15, 0.3), transparent)'
-                            : 'linear-gradient(to right, rgba(248, 248, 248, 0.5), transparent)',
+                        position: 'absolute', top: 88, bottom: 32, left: 0, width: 24, zIndex: 5,
+                        background: isDark
+                            ? 'linear-gradient(to right, rgba(8, 8, 12, 0.4) 0%, transparent 100%)'
+                            : 'linear-gradient(to right, rgba(245, 245, 248, 0.6) 0%, transparent 100%)',
                         pointerEvents: 'none',
-                        transition: 'background 0.4s ease',
+                        transition: 'background 0.5s ease',
                     }} />
-                    
-                    {/* Правая внешняя рамка */}
+
+                    {/* Right edge fade */}
                     <div style={{
-                        position: 'absolute', top: 80, bottom: 24, right: 0, width: 24, zIndex: 6,
-                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                        background: mapMode === 'night'
-                            ? 'linear-gradient(to left, rgba(10, 10, 15, 0.3), transparent)'
-                            : 'linear-gradient(to left, rgba(248, 248, 248, 0.5), transparent)',
+                        position: 'absolute', top: 88, bottom: 32, right: 0, width: 24, zIndex: 5,
+                        background: isDark
+                            ? 'linear-gradient(to left, rgba(8, 8, 12, 0.4) 0%, transparent 100%)'
+                            : 'linear-gradient(to left, rgba(245, 245, 248, 0.6) 0%, transparent 100%)',
                         pointerEvents: 'none',
-                        transition: 'background 0.4s ease',
+                        transition: 'background 0.5s ease',
                     }} />
-                    
-                    {/* Промежуточная рамка (между сайдбаром и окном карты) */}
+
+                    {/* Map viewport frame — subtle inset glow */}
                     <div style={{
-                        position: 'absolute', top: 80, bottom: 24, left: 344, width: 16, zIndex: 6,
-                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                        background: mapMode === 'night'
-                            ? 'rgba(10, 10, 15, 0.2)'
-                            : 'rgba(248, 248, 248, 0.3)',
-                        pointerEvents: 'none',
-                        transition: 'background 0.4s ease',
-                    }} />
-                    
-                    {/* Физическая рамка оригинального окна карты с тенью */}
-                    <div style={{
-                        position: 'absolute', top: 80, left: 360, right: 24, bottom: 24, zIndex: 7,
-                        border: mapMode === 'night'
-                            ? '1px solid rgba(255, 255, 255, 0.08)'
-                            : '1px solid rgba(0, 0, 0, 0.06)',
+                        position: 'absolute', top: 80, left: 380, right: 24, bottom: 24, zIndex: 6,
                         borderRadius: 24,
                         pointerEvents: 'none',
-                        boxShadow: mapMode === 'night'
-                            ? 'inset 0 0 60px rgba(0, 0, 0, 0.15), 0 0 40px rgba(0, 0, 0, 0.1)'
-                            : 'inset 0 0 60px rgba(0, 0, 0, 0.03), 0 0 40px rgba(0, 0, 0, 0.04)',
-                        transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
+                        border: isDark
+                            ? '1px solid rgba(255, 255, 255, 0.06)'
+                            : '1px solid rgba(0, 0, 0, 0.04)',
+                        boxShadow: isDark
+                            ? 'inset 0 0 80px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255,255,255,0.03)'
+                            : 'inset 0 0 80px rgba(255, 255, 255, 0.15), 0 0 0 1px rgba(0,0,0,0.02)',
+                        transition: 'all 0.5s ease',
                     }} />
                 </>
             )}
 
-            {/* Карта (На весь экран в фоне) */}
+            {/* ═══════════════════════════════════════════
+                MAP — Full screen background
+                ═══════════════════════════════════════════ */}
             <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 0 }}>
                 <InteractiveMap
                     viewState={viewState}
@@ -450,6 +597,63 @@ export default function CompanyTrackingPage() {
                     getDriverColor={getDriverColor}
                 />
             </div>
+
+            {/* ═══════════════════════════════════════════
+                ANIMATIONS
+                ═══════════════════════════════════════════ */}
+            <style jsx global>{`
+                @keyframes tracking-radar {
+                    0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0.6; }
+                    100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
+                }
+                .tracking-radar-pulse,
+                .tracking-radar-pulse-delayed {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    width: 80px;
+                    height: 80px;
+                    border-radius: 50%;
+                    border: 2px solid ${isDark ? 'rgba(22, 119, 255, 0.3)' : 'rgba(22, 119, 255, 0.2)'};
+                    animation: tracking-radar 2.5s ease-out infinite;
+                }
+                .tracking-radar-pulse-delayed {
+                    animation-delay: 1.2s;
+                }
+
+                .tracking-control-btn:hover {
+                    transform: translateY(-1px);
+                    filter: brightness(1.1);
+                }
+                .tracking-control-btn:active {
+                    transform: translateY(0);
+                    filter: brightness(0.95);
+                }
+
+                /* Sidebar scrollbar styling */
+                .tracking-sidebar::-webkit-scrollbar,
+                .tracking-sidebar *::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .tracking-sidebar::-webkit-scrollbar-track,
+                .tracking-sidebar *::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .tracking-sidebar::-webkit-scrollbar-thumb,
+                .tracking-sidebar *::-webkit-scrollbar-thumb {
+                    background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'};
+                    border-radius: 4px;
+                }
+
+                /* Override ant design list items for tracking sidebar */
+                .tracking-sidebar .ant-list-item {
+                    border-bottom: none !important;
+                }
+                .tracking-sidebar .ant-list-item:hover {
+                    background: ${isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'} !important;
+                    border-radius: 12px;
+                }
+            `}</style>
         </div>
     );
 }

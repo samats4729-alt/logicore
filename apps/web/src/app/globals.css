@@ -293,21 +293,21 @@ body {
 
 /* General Tracking Header */
 .tracking-header {
-  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease !important;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* Night theme styling (when dark map is active) */
+/* ── NIGHT THEME ── */
 [data-map-theme="night"] .tracking-header {
-  background: rgba(15, 15, 20, 0.72) !important;
-  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
+  background: linear-gradient(135deg, rgba(10, 10, 18, 0.82), rgba(15, 15, 25, 0.75)) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4), inset 0 -1px 0 rgba(255,255,255,0.04) !important;
 }
 [data-map-theme="night"] .tracking-header .logo-text {
   color: #ffffff !important;
 }
 [data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-item,
 [data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
-  color: rgba(255, 255, 255, 0.75) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
 }
 [data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-item:hover,
 [data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu:hover,
@@ -315,6 +315,10 @@ body {
 [data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title,
 [data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title {
   background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+[data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-item-selected {
+  background-color: rgba(22, 119, 255, 0.6) !important;
   color: #ffffff !important;
 }
 [data-map-theme="night"] .tracking-header .user-profile-trigger {
@@ -339,65 +343,39 @@ body {
   background-color: rgba(255, 255, 255, 0.08) !important;
   color: #ffffff !important;
 }
-
-/* Sidebar Card styling under night theme */
-[data-map-theme="night"] .tracking-card {
-  color: rgba(255, 255, 255, 0.85) !important;
-  background: rgba(15, 15, 20, 0.72) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
-}
-[data-map-theme="night"] .tracking-card .ant-card-head,
-[data-map-theme="night"] .tracking-card .ant-card-head-title {
-  color: #ffffff !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-[data-map-theme="night"] .tracking-card .ant-card-extra {
-  color: rgba(255, 255, 255, 0.65) !important;
-}
-[data-map-theme="night"] .tracking-card .ant-list-item {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-[data-map-theme="night"] .tracking-card .ant-list-item-meta-title {
-  color: #ffffff !important;
-}
-[data-map-theme="night"] .tracking-card .ant-list-item-meta-description {
-  color: rgba(255, 255, 255, 0.5) !important;
-}
-[data-map-theme="night"] .tracking-card .ant-typography {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-[data-map-theme="night"] .tracking-card .ant-typography-secondary {
-  color: rgba(255, 255, 255, 0.5) !important;
+/* Night avatar in header */
+[data-map-theme="night"] .tracking-header .ant-avatar {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
 }
 
-
-/* Day theme styling (when light map is active) */
+/* ── DAY THEME ── */
 [data-map-theme="day"] .tracking-header {
-  background: rgba(255, 255, 255, 0.78) !important;
-  border-bottom-color: rgba(9, 9, 11, 0.08) !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(248, 248, 252, 0.35)) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05), inset 0 -1px 0 rgba(255,255,255,0.3) !important;
 }
 [data-map-theme="day"] .tracking-header .logo-text {
   color: #09090b !important;
 }
 [data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-item,
 [data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
-  color: rgba(9, 9, 11, 0.7) !important;
+  color: rgba(9, 9, 11, 0.6) !important;
 }
 [data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-item:hover,
 [data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu:hover,
 [data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu-active,
 [data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title,
 [data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title {
-  background-color: rgba(9, 9, 11, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.5) !important;
   color: #09090b !important;
 }
 [data-map-theme="day"] .tracking-header .user-profile-trigger {
   color: rgba(9, 9, 11, 0.9) !important;
 }
 [data-map-theme="day"] .tracking-header .user-profile-trigger:hover {
-  background-color: rgba(9, 9, 11, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.5) !important;
 }
 [data-map-theme="day"] .tracking-header .user-profile-trigger .ant-typography {
   color: rgba(9, 9, 11, 0.9) !important;
@@ -406,34 +384,13 @@ body {
   color: rgba(9, 9, 11, 0.9) !important;
 }
 [data-map-theme="day"] .tracking-header .ant-btn-text:hover {
-  background-color: rgba(9, 9, 11, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.5) !important;
 }
 [data-map-theme="day"] .tracking-header .sidebar-toggle-btn {
   color: #09090b !important;
 }
 [data-map-theme="day"] .tracking-header .sidebar-toggle-btn:hover {
-  background-color: rgba(9, 9, 11, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.5) !important;
   color: #09090b !important;
 }
-
-/* Sidebar Card styling under day theme */
-[data-map-theme="day"] .tracking-card {
-  color: #09090b !important;
-  background: rgba(255, 255, 255, 0.78) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
-}
-[data-map-theme="day"] .tracking-card .ant-card-head,
-[data-map-theme="day"] .tracking-card .ant-card-head-title {
-  color: #09090b !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
-}
-[data-map-theme="day"] .tracking-card .ant-card-extra {
-  color: rgba(9, 9, 11, 0.65) !important;
-}
-[data-map-theme="day"] .tracking-card .ant-list-item-meta-title {
-  color: #09090b !important;
-}
-[data-map-theme="day"] .tracking-card .ant-list-item-meta-description {
-  color: rgba(9, 9, 11, 0.6) !important;
-}
+
