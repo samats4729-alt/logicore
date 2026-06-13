@@ -206,6 +206,79 @@ export default function CompanyUsersPage() {
         fetchData();
     }, []);
 
+    // Figma/Miro style drag-to-scroll panning
+    useEffect(() => {
+        if (viewMode !== 'tree') return;
+
+        const container = treeContainerRef.current;
+        if (!container) return;
+
+        let isDown = false;
+        let startX: number;
+        let startY: number;
+        let scrollLeft: number;
+        let scrollTop: number;
+
+        const handleMouseDown = (e: MouseEvent) => {
+            // Only drag with left mouse button
+            if (e.button !== 0) return;
+            
+            // Do not drag if clicking on interactive elements
+            const target = e.target as HTMLElement;
+            if (
+                target.closest('button') || 
+                target.closest('a') || 
+                target.closest('.ant-select') || 
+                target.closest('.node-actions-toolbar') || 
+                target.closest('input')
+            ) {
+                return;
+            }
+
+            isDown = true;
+            container.style.cursor = 'grabbing';
+            startX = e.pageX - container.offsetLeft;
+            startY = e.pageY - container.offsetTop;
+            scrollLeft = container.scrollLeft;
+            scrollTop = container.scrollTop;
+        };
+
+        const handleMouseLeave = () => {
+            isDown = false;
+            container.style.cursor = 'grab';
+        };
+
+        const handleMouseUp = () => {
+            isDown = false;
+            container.style.cursor = 'grab';
+        };
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - container.offsetLeft;
+            const y = e.pageY - container.offsetTop;
+            // Scroll speed multiplier
+            const walkX = (x - startX) * 1.5;
+            const walkY = (y - startY) * 1.5;
+            container.scrollLeft = scrollLeft - walkX;
+            container.scrollTop = scrollTop - walkY;
+        };
+
+        container.style.cursor = 'grab';
+        container.addEventListener('mousedown', handleMouseDown);
+        container.addEventListener('mouseleave', handleMouseLeave);
+        container.addEventListener('mouseup', handleMouseUp);
+        container.addEventListener('mousemove', handleMouseMove);
+
+        return () => {
+            container.removeEventListener('mousedown', handleMouseDown);
+            container.removeEventListener('mouseleave', handleMouseLeave);
+            container.removeEventListener('mouseup', handleMouseUp);
+            container.removeEventListener('mousemove', handleMouseMove);
+        };
+    }, [viewMode]);
+
     // ==================== Department CRUD handlers ====================
 
     const handleCreateDept = async (values: any) => {
@@ -552,6 +625,7 @@ export default function CompanyUsersPage() {
 
         return (
             <div className="org-tree">
+                <div className="org-tree-container-bg"></div>
                 {/* Root Administrators Row */}
                 <div className="org-tree-root-row">
                     {adminUsers.length === 0 ? (
@@ -636,7 +710,7 @@ export default function CompanyUsersPage() {
                             }}
                         />
                     )}
-                    {record.id !== currentUser?.id && (
+                    {record.id !== currentUser?.id && record.role !== 'COMPANY_ADMIN' && (
                         <Popconfirm
                             title="Удалить пользователя?"
                             onConfirm={() => handleDeleteUser(record.id)}
@@ -716,12 +790,12 @@ export default function CompanyUsersPage() {
                     right: 0;
                     bottom: 0;
                     pointer-events: none;
-                    background-image: radial-gradient(#000000 1.2px, transparent 1.2px);
+                    background-image: radial-gradient(#000000 1.5px, transparent 1.5px);
                     background-size: 20px 20px;
-                    opacity: 0.12;
-                    mask-image: radial-gradient(circle, black 30%, transparent 80%);
-                    -webkit-mask-image: radial-gradient(circle, black 30%, transparent 80%);
                     z-index: 1;
+                    /* Center dots are dark black, fading to transparent towards the edges */
+                    mask-image: radial-gradient(circle, rgba(0, 0, 0, 0.7) 10%, rgba(0, 0, 0, 0) 75%);
+                    -webkit-mask-image: radial-gradient(circle, rgba(0, 0, 0, 0.7) 10%, rgba(0, 0, 0, 0) 75%);
                 }
                 
                 .org-tree {
@@ -795,8 +869,10 @@ export default function CompanyUsersPage() {
                     display: flex;
                     justify-content: center;
                     position: relative;
-                    padding-bottom: 24px;
+                    padding-bottom: 0;
                     width: max-content;
+                    flex-shrink: 0;
+                    z-index: 2;
                 }
                 
                 .org-tree-root-card-wrapper {
@@ -805,6 +881,7 @@ export default function CompanyUsersPage() {
                     align-items: center;
                     padding: 0 16px;
                     position: relative;
+                    flex-shrink: 0;
                 }
                 
                 .org-tree-root-card-wrapper::before,
@@ -848,6 +925,8 @@ export default function CompanyUsersPage() {
                     width: 2px;
                     height: 24px;
                     background-color: #d1d5db;
+                    position: relative;
+                    z-index: 2;
                 }
                 
                 /* Child wrappers and hierarchy connectors */
@@ -856,6 +935,8 @@ export default function CompanyUsersPage() {
                     padding-top: 24px;
                     position: relative;
                     width: max-content;
+                    flex-shrink: 0;
+                    z-index: 2;
                 }
                 
                 .org-tree-children-container::before {
@@ -874,6 +955,7 @@ export default function CompanyUsersPage() {
                     align-items: center;
                     padding: 0 12px;
                     position: relative;
+                    flex-shrink: 0;
                 }
                 
                 .org-tree-child-wrapper::before,
@@ -1089,20 +1171,11 @@ export default function CompanyUsersPage() {
                     <Col xs={24} lg={18}>
                         <div style={{ position: 'relative', width: '100%', border: 'none' }}>
                             <div className="org-tree-container" ref={treeContainerRef}>
-                                <div className="org-tree-container-bg"></div>
-                                {departments.length === 0 && getSubDepartments(null).length === 0 ? (
+                                {users.length === 0 ? (
                                     <Empty
                                         image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                        description="Структура отделов еще не создана"
-                                    >
-                                        <Button 
-                                            type="primary" 
-                                            icon={<PlusOutlined />} 
-                                            onClick={() => handleAddSubDeptClick(null)}
-                                        >
-                                            Создать первый отдел
-                                        </Button>
-                                    </Empty>
+                                        description="Пользователи не найдены"
+                                    />
                                 ) : (
                                     renderRootNode()
                                 )}
