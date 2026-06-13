@@ -9,7 +9,7 @@ import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
-import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto } from './dto/company.dto';
+import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { AssignDriverDto } from '../orders/dto/order.dto';
 import * as path from 'path';
@@ -366,6 +366,47 @@ export class CompanyController {
     @ApiOperation({ summary: 'Деактивировать водителя' })
     async deleteDriver(@Request() req: any, @Param('id') driverId: string) {
         return this.companyDriversService.deactivateDriver(driverId, req.user.companyId);
+    }
+
+    // ==================== Отделы компании (Иерархия) ====================
+
+    @Get('departments')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Получить дерево отделов и сотрудников' })
+    async getDepartments(@Request() req: any) {
+        return this.companyService.getDepartments(req.user.companyId);
+    }
+
+    @Post('departments')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Создать новый отдел' })
+    async createDepartment(@Request() req: any, @Body() dto: CreateDepartmentDto) {
+        return this.companyService.createDepartment(req.user.companyId, dto.name, dto.parentDepartmentId);
+    }
+
+    @Put('departments/:id')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Обновить название отдела' })
+    async updateDepartment(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() dto: UpdateDepartmentDto,
+    ) {
+        return this.companyService.updateDepartment(req.user.companyId, id, dto.name);
+    }
+
+    @Delete('departments/:id')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Удалить отдел' })
+    async deleteDepartment(@Request() req: any, @Param('id') id: string) {
+        return this.companyService.deleteDepartment(req.user.companyId, id);
+    }
+
+    @Put('departments/users/assign')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Привязать/отвязать сотрудника к отделу' })
+    async assignUserToDepartment(@Request() req: any, @Body() dto: AssignUserDepartmentDto) {
+        return this.companyService.assignUserToDepartment(req.user.companyId, dto.userId, dto.departmentId);
     }
 
 }

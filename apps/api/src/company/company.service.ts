@@ -32,6 +32,13 @@ export class CompanyService {
                     role: true,
                     permissions: true,
                     createdAt: true,
+                    departmentId: true,
+                    department: {
+                        select: {
+                            id: true,
+                            name: true,
+                        }
+                    },
                 },
                 orderBy: { createdAt: 'desc' },
             }),
@@ -636,5 +643,126 @@ export class CompanyService {
             profileIncomplete,
             settingsCount: profileIncomplete ? 1 : 0,
         };
+    }
+
+    /**
+     * Получить список отделов компании
+     */
+    async getDepartments(companyId: string) {
+        return this.prisma.department.findMany({
+            where: { companyId },
+            include: {
+                users: {
+                    where: { isActive: true },
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        middleName: true,
+                        role: true,
+                        email: true,
+                        phone: true,
+                    },
+                },
+            },
+            orderBy: { createdAt: 'asc' },
+        });
+    }
+
+    /**
+     * Создать отдел
+     */
+    async createDepartment(companyId: string, name: string, parentDepartmentId?: string) {
+        if (parentDepartmentId) {
+            const parent = await this.prisma.department.findFirst({
+                where: { id: parentDepartmentId, companyId },
+            });
+            if (!parent) {
+                throw new NotFoundException('Родительский отдел не найден');
+            }
+        }
+
+        return this.prisma.department.create({
+            data: {
+                name,
+                companyId,
+                parentDepartmentId: parentDepartmentId || null,
+            },
+        });
+    }
+
+    /**
+     * Обновить название отдела
+     */
+    async updateDepartment(companyId: string, id: string, name: string) {
+        const dept = await this.prisma.department.findFirst({
+            where: { id, companyId },
+        });
+        if (!dept) {
+            throw new NotFoundException('Отдел не найден');
+        }
+
+        return this.prisma.department.update({
+            where: { id },
+            data: { name },
+        });
+    }
+
+    /**
+     * Удалить отдел
+     */
+    async deleteDepartment(companyId: string, id: string) {
+        const dept = await this.prisma.department.findFirst({
+            where: { id, companyId },
+        });
+        if (!dept) {
+            throw new NotFoundException('Отдел не найден');
+        }
+
+        await this.prisma.department.updateMany({
+            where: { parentDepartmentId: id },
+            data: { parentDepartmentId: dept.parentDepartmentId },
+        });
+
+        await this.prisma.user.updateMany({
+            where: { departmentId: id, companyId },
+            data: { departmentId: null },
+        });
+
+        return this.prisma.department.delete({
+            where: { id },
+        });
+    }
+
+    /**
+     * Привязать сотрудника к отделу
+     */
+    async assignUserToDepartment(companyId: string, userId: string, departmentId: string | null) {
+        const user = await this.prisma.user.findFirst({
+            where: { id: userId, companyId },
+        });
+        if (!user) {
+            throw new NotFoundException('Сотрудник не найден');
+        }
+
+        if (departmentId) {
+            const dept = await this.prisma.department.findFirst({
+                where: { id: departmentId, companyId },
+            });
+            if (!dept) {
+                throw new NotFoundException('Отдел не найден');
+            }
+        }
+
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: { departmentId },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                departmentId: true,
+            },
+        });
     }
 }

@@ -262,3 +262,34 @@ export class UpdateDriverDto {
     docIssuedBy?: string;
 }
 
+export class CreateDepartmentDto {
+    @ApiProperty({ description: 'Название отдела', example: 'Логистика' })
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+
+    @ApiProperty({ description: 'ID родительского отдела', example: 'cuid...', required: false })
+    @IsString()
+    @IsOptional()
+    parentDepartmentId?: string;
+}
+
+export class UpdateDepartmentDto {
+    @ApiProperty({ description: 'Название отдела', example: 'Бухгалтерия' })
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+}
+
+export class AssignUserDepartmentDto {
+    @ApiProperty({ description: 'ID сотрудника', example: 'cuid...' })
+    @IsString()
+    @IsNotEmpty()
+    userId: string;
+
+    @ApiProperty({ description: 'ID отдела (null для удаления из всех отделов)', example: 'cuid...', required: false })
+    @IsOptional()
+    departmentId?: string | null;
+}
+
+
