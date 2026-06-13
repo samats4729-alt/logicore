@@ -22,6 +22,9 @@ import { useAuthStore } from '@/store/auth';
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
+const MARKETPLACE_VALUE = '__MARKETPLACE__';
+const MY_COMPANY_VALUE = '__MY_COMPANY__';
+
 const statusColors: Record<string, string> = {
     DRAFT: 'default', PENDING: 'orange', ASSIGNED: 'blue',
     EN_ROUTE_PICKUP: 'gold', AT_PICKUP: 'lime', LOADING: 'purple',
@@ -133,11 +136,33 @@ export default function OrderDetailPage() {
     // Edit order inline
     const [isEditing, setIsEditing] = useState(false);
     const [editForm] = Form.useForm();
-    const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
-    const [showCustomerField, setShowCustomerField] = useState(false);
-    const [showForwarderField, setShowForwarderField] = useState(true);
-    const [isMarketplace, setIsMarketplace] = useState(false);
+    const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+    const [selectedCarrier, setSelectedCarrier] = useState<string>('');
+    const [myCompanyName, setMyCompanyName] = useState('');
     const [routePointsState, setRoutePointsState] = useState<Array<LocationState & { pointType: string }>>([]);
+
+    const isMeCust = selectedCustomer === MY_COMPANY_VALUE;
+    const isMeCarr = selectedCarrier === MY_COMPANY_VALUE;
+    const isMkt = selectedCarrier === MARKETPLACE_VALUE;
+
+    const showCustomerPriceField = !isMeCust || (isMeCust && isMeCarr);
+    const showDriverCostField = (isMeCust && !isMeCarr) || (!isMeCust && !isMeCarr);
+
+    const customerPriceLabel = (isMeCust && isMeCarr) ? "Ставка (₸)" : "Ставка от заказчика (₸)";
+    const driverCostLabel = isMkt ? "Ставка для биржи (₸)" : "Ставка перевозчику (₸)";
+
+    const getRoleDescription = () => {
+        if (isMeCust && isMeCarr) return { text: 'Вы и заказчик, и перевозчик — перевозка своими силами', color: '#1890ff' };
+        if (isMeCust && isMkt) return { text: 'Вы — заказчик. Заявка будет опубликована на бирже', color: '#722ed1' };
+        if (isMeCust && selectedCarrier) return { text: 'Вы — заказчик. Перевозку выполняет контрагент', color: '#389e0d' };
+        if (isMeCust && !selectedCarrier) return { text: 'Вы — заказчик. Выберите перевозчика', color: '#faad14' };
+        if (isMeCarr && selectedCustomer) return { text: 'Вы — перевозчик. Заказ от контрагента', color: '#389e0d' };
+        if (!isMeCust && !isMeCarr && selectedCustomer && selectedCarrier) return { text: 'Вы — посредник между заказчиком и перевозчиком', color: '#eb2f96' };
+        if (selectedCustomer && !selectedCarrier) return { text: 'Выберите перевозчика', color: '#faad14' };
+        return { text: 'Укажите стороны сделки', color: '#999' };
+    };
+
+    const roleInfo = getRoleDescription();
 
     // Share PoA modal
     const [sharePoAModalOpen, setSharePoAModalOpen] = useState(false);
@@ -149,10 +174,6 @@ export default function OrderDetailPage() {
     const [quickPartnerModalOpen, setQuickPartnerModalOpen] = useState(false);
     const [quickPartnerForm] = Form.useForm();
     const [quickPartnerLoading, setQuickPartnerLoading] = useState(false);
-
-    // Watches for edit form
-    const editCustomerCompanyId = Form.useWatch('customerCompanyId', editForm);
-    const editForwarderId = Form.useWatch('forwarderId', editForm);
 
     // =================== DATA FETCHING ===================
 
@@ -198,6 +219,9 @@ export default function OrderDetailPage() {
             const combined = [...ownCompany, ...partnersList, ...externalList];
             setPartners(combined);
             setForwarders(combined);
+            if (profileRes.data?.name) {
+                setMyCompanyName(profileRes.data.name);
+            }
         } catch { } finally { setPartnersLoading(false); }
     };
 
@@ -225,20 +249,26 @@ export default function OrderDetailPage() {
 
     // =================== LOCATION OPTIONS ===================
 
-    const getLocationOptions = (customerCompanyId?: string, executorCompanyId?: string) => {
+    const getLocationOptions = () => {
         if (!locations || locations.length === 0) return [];
+        const customerCompanyId = selectedCustomer === MY_COMPANY_VALUE ? user?.companyId : selectedCustomer;
+        const carrierCompanyId = selectedCarrier === MY_COMPANY_VALUE ? user?.companyId : 
+            (selectedCarrier === MARKETPLACE_VALUE || !selectedCarrier) ? undefined : selectedCarrier;
+
         const customerLocs = locations.filter(l => customerCompanyId && (l as any).companyId === customerCompanyId);
-        const executorLocs = locations.filter(l => executorCompanyId && (l as any).companyId === executorCompanyId);
-        const categorizedIds = new Set([...customerLocs.map(l => l.id), ...executorLocs.map(l => l.id)]);
+        const carrierLocs = locations.filter(l => carrierCompanyId && (l as any).companyId === carrierCompanyId);
+        const categorizedIds = new Set([...customerLocs.map(l => l.id), ...carrierLocs.map(l => l.id)]);
         const otherLocs = locations.filter(l => !categorizedIds.has(l.id));
+
         const groups: Array<{ label: string; options: Location[] }> = [];
+
         if (customerLocs.length > 0) {
-            const name = partners.find(p => p.id === customerCompanyId)?.name || 'Заказчик';
+            const name = selectedCustomer === MY_COMPANY_VALUE ? myCompanyName : partners.find(p => p.id === selectedCustomer)?.name || 'Заказчик';
             groups.push({ label: `Склады заказчика [${name}]`, options: customerLocs });
         }
-        if (executorLocs.length > 0) {
-            const name = partners.find(p => p.id === executorCompanyId)?.name || 'Исполнитель';
-            groups.push({ label: `Склады исполнителя [${name}]`, options: executorLocs });
+        if (carrierLocs.length > 0) {
+            const name = selectedCarrier === MY_COMPANY_VALUE ? myCompanyName : partners.find(p => p.id === selectedCarrier)?.name || 'Перевозчик';
+            groups.push({ label: `Склады перевозчика [${name}]`, options: carrierLocs });
         }
         if (otherLocs.length > 0) {
             groups.push({ label: 'Все остальные адреса', options: otherLocs });
@@ -414,21 +444,37 @@ export default function OrderDetailPage() {
     const startEditing = () => {
         const order = data?.order;
         if (!order) return;
-        const hasExternalCustomer = !!(order.customerCompanyId && order.customerCompanyId !== user?.companyId);
-        let currentRole: 'CUSTOMER' | 'FORWARDER' = hasExternalCustomer ? 'FORWARDER' : 'CUSTOMER';
-        setEditCreatorRole(currentRole);
 
-        const isFwdAssigned = !!(order.forwarderId && order.forwarderId !== user?.companyId);
-        const isMkt = !order.forwarderId && (!!order.driverCost || order.status === 'PENDING');
+        const isMeCustomer = order.customerCompanyId === user?.companyId;
+        let initCust = '';
+        let initCarr = '';
 
-        setShowCustomerField(hasExternalCustomer);
-        if (currentRole === 'CUSTOMER' && !isFwdAssigned && !isMkt) {
-            setShowForwarderField(true);
-            setIsMarketplace(false);
+        if (isMeCustomer) {
+            initCust = MY_COMPANY_VALUE;
+            if (order.forwarderId === user?.companyId) {
+                initCarr = MY_COMPANY_VALUE;
+            } else if (!order.forwarderId) {
+                initCarr = MARKETPLACE_VALUE;
+            } else {
+                initCarr = order.forwarderId;
+            }
         } else {
-            setShowForwarderField(isFwdAssigned);
-            setIsMarketplace(isMkt);
+            initCust = order.customerCompanyId || '';
+            if (order.forwarderId === user?.companyId) {
+                initCarr = MY_COMPANY_VALUE;
+            } else if (order.subForwarderId === user?.companyId) {
+                if (!order.forwarderId) {
+                    initCarr = MARKETPLACE_VALUE;
+                } else {
+                    initCarr = order.forwarderId;
+                }
+            } else {
+                initCarr = order.forwarderId || '';
+            }
         }
+
+        setSelectedCustomer(initCust);
+        setSelectedCarrier(initCarr);
 
         editForm.setFieldsValue({
             cargoDescription: order.cargoDescription,
@@ -469,53 +515,81 @@ export default function OrderDetailPage() {
     };
 
     const handleEditCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
-        setEditCreatorRole(role);
-        setIsMarketplace(false);
-        if (role === 'CUSTOMER') {
-            setShowCustomerField(false);
-            setShowForwarderField(true);
-            editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
-        } else {
-            setShowCustomerField(true);
-            setShowForwarderField(false);
-            editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
-        }
+        // Obsolete but keep placeholder or remove since we removed role states. We'll delete unused functions below.
     };
 
     const handleEditOrder = async (values: any) => {
+        if (!selectedCustomer) { message.error('Укажите заказчика'); return; }
+        if (!selectedCarrier) { message.error('Укажите перевозчика'); return; }
+
         try {
             const getLocId = async (loc: LocationState) => {
                 if (loc.id) return loc.id;
                 const res = await api.post('/locations', { name: `${loc.city}, ${loc.address}`, address: `${loc.city}, ${loc.address}`, latitude: 0, longitude: 0, city: loc.city || '' });
                 return res.data.id;
             };
-            const updateData: any = { ...values };
+
             const routePoints = [];
+            const pickupDateStr = values.pickupDate 
+                ? (dayjs.isDayjs(values.pickupDate) ? values.pickupDate.toISOString() : new Date(values.pickupDate).toISOString()) 
+                : undefined;
+
             for (let i = 0; i < routePointsState.length; i++) {
                 const p = routePointsState[i];
                 if (!p.city && !p.address && !p.id) continue;
                 const locId = await getLocId(p);
-                routePoints.push({ locationId: locId, pointType: p.pointType, sequence: routePoints.length + 1, expectedDate: p.pointType === 'PICKUP' ? values.pickupDate : undefined });
+                routePoints.push({
+                    locationId: locId,
+                    pointType: p.pointType,
+                    sequence: routePoints.length + 1,
+                    expectedDate: p.pointType === 'PICKUP' ? pickupDateStr : undefined
+                });
             }
-            delete updateData.pickupDate;
-            delete updateData.isMarketplace;
-            if (routePoints.length > 0) updateData.routePoints = routePoints;
 
-            if (editCreatorRole === 'CUSTOMER') {
+            if (routePoints.length < 2) {
+                message.error('Укажите минимум 2 точки маршрута');
+                return;
+            }
+
+            const finalCustomerPrice = showCustomerPriceField ? values.customerPrice : values.driverCost;
+            const finalDriverCost = showDriverCostField ? values.driverCost : null;
+
+            const updateData: any = {
+                cargoDescription: values.cargoDescription,
+                natureOfCargo: values.natureOfCargo,
+                cargoWeight: values.cargoWeight,
+                cargoVolume: values.cargoVolume,
+                cargoType: values.cargoType,
+                requirements: values.requirements,
+                customerPrice: finalCustomerPrice,
+                customerPriceType: values.customerPriceType || 'FIXED',
+                routePoints,
+                customerCompanyId: null,
+                forwarderId: null,
+                subForwarderId: null,
+                subForwarderPrice: null,
+                driverCost: null,
+            };
+
+            if (isMeCust) {
                 updateData.customerCompanyId = user?.companyId;
-                if (!showForwarderField) {
-                    updateData.forwarderId = null;
-                    if (!isMarketplace) updateData.driverCost = null;
-                }
-            } else {
-                if (!showForwarderField) {
+                if (isMkt) {
+                    updateData.driverCost = finalDriverCost || null;
+                } else if (isMeCarr) {
                     updateData.forwarderId = user?.companyId;
-                    updateData.driverCost = null;
-                    updateData.subForwarderId = null;
-                    updateData.subForwarderPrice = null;
                 } else {
-                    updateData.subForwarderId = user?.companyId;
-                    updateData.subForwarderPrice = values.driverCost;
+                    updateData.forwarderId = selectedCarrier;
+                    updateData.driverCost = finalDriverCost || null;
+                }
+            } else if (isMeCarr) {
+                updateData.customerCompanyId = selectedCustomer;
+                updateData.forwarderId = user?.companyId;
+            } else {
+                updateData.customerCompanyId = selectedCustomer;
+                updateData.subForwarderId = user?.companyId;
+                updateData.subForwarderPrice = finalDriverCost || null;
+                if (!isMkt) {
+                    updateData.forwarderId = selectedCarrier;
                 }
             }
 
@@ -741,19 +815,6 @@ export default function OrderDetailPage() {
                         children: (
                             isEditing ? (
                                 <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
-                                    <div style={{ marginBottom: 20, background: '#fafafa', padding: '12px 16px', borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                                        <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: '#333' }}>Ваша роль в этой сделке:</div>
-                                        <Radio.Group
-                                            value={editCreatorRole}
-                                            onChange={e => handleEditCreatorRoleChange(e.target.value)}
-                                            optionType="button"
-                                            buttonStyle="solid"
-                                            style={{ width: '100%', display: 'flex' }}
-                                        >
-                                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Заказчик</Radio.Button>
-                                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Экспедитор</Radio.Button>
-                                        </Radio.Group>
-                                    </div>
                                     <Row gutter={[24, 24]}>
                                         <Col xs={24} lg={15}>
                                             {/* Route Card (Editable) */}
@@ -763,53 +824,70 @@ export default function OrderDetailPage() {
                                                 className="premium-card"
                                                 style={{ marginBottom: 20 }}
                                             >
-                                                <Form.Item name="pickupDate" label="Дата погрузки">
+                                                <Form.Item name="pickupDate" label="Дата погрузки" rules={[{ required: true, message: 'Укажите дату' }]}>
                                                     <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
                                                 </Form.Item>
                                                 {routePointsState.map((pt, i) => (
-                                                    <div key={i} style={{ padding: '12px', background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                                            <Select value={pt.pointType} onChange={val => { const newPts = [...routePointsState]; newPts[i].pointType = val; setRoutePointsState(newPts); }} size="small" style={{ width: 140, fontWeight: 600 }} variant="borderless">
-                                                                <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Погрузка</Select.Option>
-                                                                <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Доп. погрузка</Select.Option>
-                                                                <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }}/> Выгрузка</Select.Option>
+                                                    <div key={i} style={{
+                                                        padding: '12px 16px',
+                                                        background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff',
+                                                        borderRadius: 10,
+                                                        marginBottom: 12,
+                                                        border: pt.pointType === 'DELIVERY' ? '1px solid #b7eb8f' : '1px solid #adc6ff',
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                                            <Select
+                                                                value={pt.pointType}
+                                                                onChange={val => { const newPts = [...routePointsState]; newPts[i].pointType = val; setRoutePointsState(newPts); }}
+                                                                size="small"
+                                                                style={{ width: 160, fontWeight: 600 }}
+                                                                variant="borderless"
+                                                            >
+                                                                <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }} /> Погрузка</Select.Option>
+                                                                <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }} /> Доп. погрузка</Select.Option>
+                                                                <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }} /> Выгрузка</Select.Option>
                                                             </Select>
                                                             {routePointsState.length > 2 && (
-                                                                <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => { const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts); }} />
+                                                                <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => {
+                                                                    const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts);
+                                                                }} />
                                                             )}
                                                         </div>
                                                         <Select
-                                                            placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
+                                                            placeholder="Выберите адрес"
+                                                            allowClear showSearch optionFilterProp="children"
+                                                            style={{ width: '100%' }}
                                                             value={pt.id || undefined}
                                                             onChange={(val) => {
                                                                 const newPts = [...routePointsState];
                                                                 if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined }; }
                                                                 else {
                                                                     const loc = locations.find(l => l.id === val);
-                                                                    if (loc) newPts[i] = { ...newPts[i], city: loc.city || '', address: loc.address, id: loc.id };
+                                                                    if (loc) {
+                                                                        newPts[i] = { ...newPts[i], city: loc.city || '', address: loc.address, id: loc.id };
+                                                                    }
                                                                 }
                                                                 setRoutePointsState(newPts);
                                                             }}
                                                         >
-                                                            {(() => {
-                                                                const activeCustomerCompanyId = editCreatorRole === 'CUSTOMER' ? user?.companyId : editCustomerCompanyId;
-                                                                const activeExecutorCompanyId = editCreatorRole === 'FORWARDER'
-                                                                    ? (showForwarderField ? editForwarderId : user?.companyId)
-                                                                    : (isMarketplace ? undefined : editForwarderId);
-                                                                return getLocationOptions(activeCustomerCompanyId || undefined, activeExecutorCompanyId || undefined).map(group => (
-                                                                    <Select.OptGroup key={group.label} label={group.label}>
-                                                                        {group.options.map(l => (
-                                                                            <Select.Option key={l.id} value={l.id}>
-                                                                                {l.city ? `[${l.city}] ` : ''}{l.name} ({l.address})
-                                                                            </Select.Option>
-                                                                        ))}
-                                                                    </Select.OptGroup>
-                                                                ));
-                                                            })()}
+                                                            {getLocationOptions().map(group => (
+                                                                <Select.OptGroup key={group.label} label={group.label}>
+                                                                    {group.options.map(l => (
+                                                                        <Select.Option key={l.id} value={l.id}>
+                                                                            {l.city ? `[${l.city}] ` : ''}{l.name} ({l.address})
+                                                                        </Select.Option>
+                                                                    ))}
+                                                                </Select.OptGroup>
+                                                            ))}
                                                         </Select>
                                                     </div>
                                                 ))}
-                                                <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])} style={{ width: '100%' }}>
+                                                <Button
+                                                    type="dashed"
+                                                    icon={<PlusOutlined />}
+                                                    onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])}
+                                                    style={{ width: '100%' }}
+                                                >
                                                     Добавить точку
                                                 </Button>
                                             </Card>
@@ -822,8 +900,8 @@ export default function OrderDetailPage() {
                                             >
                                                 <Row gutter={12}>
                                                     <Col span={12}>
-                                                        <Form.Item name="natureOfCargo" label="Характер груза">
-                                                            <Select placeholder="Выберите..." showSearch optionFilterProp="children" allowClear style={{ width: '100%' }}>
+                                                        <Form.Item name="natureOfCargo" label="Характер груза" rules={[{ required: true, message: 'Выберите характер груза' }]}>
+                                                            <Select placeholder="Выберите..." showSearch optionFilterProp="children" size="large">
                                                                 {cargoCategories.map(cat => (
                                                                     <Select.OptGroup key={cat.id} label={cat.name}>
                                                                         {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
@@ -834,102 +912,165 @@ export default function OrderDetailPage() {
                                                     </Col>
                                                     <Col span={12}>
                                                         <Form.Item name="cargoType" label="Тип кузова">
-                                                            <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}>
+                                                            <Select placeholder="Тент, Реф..." allowClear showSearch optionFilterProp="children" size="large">
                                                                 {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
                                                             </Select>
                                                         </Form.Item>
                                                     </Col>
                                                 </Row>
-                                                <Form.Item name="cargoDescription" label="Описание груза"><TextArea rows={2} /></Form.Item>
+                                                <Form.Item name="cargoDescription" label="Описание груза">
+                                                    <TextArea rows={2} placeholder="Мебель, 20 коробок, палеты..." />
+                                                </Form.Item>
                                                 <Row gutter={12}>
-                                                    <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                                    <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                                </Row>
-                                                <Row gutter={12}>
-                                                    <Col span={12}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
                                                     <Col span={12}>
-                                                        <Form.Item name="customerPriceType" label="Тип оплаты">
-                                                            <Select style={{ width: '100%' }}>
-                                                                <Select.Option value="FIXED">За рейс (всего)</Select.Option>
-                                                                <Select.Option value="PER_KM">За км</Select.Option>
-                                                                <Select.Option value="PER_TON">За тонну</Select.Option>
-                                                            </Select>
+                                                        <Form.Item name="cargoWeight" label="Вес (кг)">
+                                                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                                                        </Form.Item>
+                                                    </Col>
+                                                    <Col span={12}>
+                                                        <Form.Item name="cargoVolume" label="Объём (м³)">
+                                                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
                                                         </Form.Item>
                                                     </Col>
                                                 </Row>
-                                                <Form.Item name="requirements" label="Доп. требования"><TextArea rows={2} /></Form.Item>
+                                                <Form.Item name="requirements" label="Доп. требования">
+                                                    <TextArea rows={2} placeholder="Ремни, коники, гидроборт..." />
+                                                </Form.Item>
                                             </Card>
                                         </Col>
 
                                         <Col xs={24} lg={9}>
-                                            {/* Participants & Role (Editable) */}
+                                            {/* Role & Parties Card (Editable) */}
                                             <Card
-                                                title={<span style={{ fontWeight: 600 }}><TeamOutlined style={{ marginRight: 8, color: '#1677ff' }} />Участники перевозки</span>}
+                                                title={<span style={{ fontWeight: 600 }}><TeamOutlined style={{ marginRight: 8, color: '#1677ff' }} />Участники и Ставки</span>}
                                                 bordered={false}
                                                 className="premium-card"
                                             >
-                                                {editCreatorRole === 'CUSTOMER' && (
-                                                    <Row style={{ marginBottom: 12 }} gutter={[8, 8]}>
-                                                        <Col span={12}>
-                                                            <Checkbox checked={isMarketplace} onChange={e => { setIsMarketplace(e.target.checked); if (e.target.checked) { setShowForwarderField(false); editForm.setFieldsValue({ forwarderId: null }); } else { setShowForwarderField(true); editForm.setFieldsValue({ driverCost: null }); } }}>
-                                                                На биржу
-                                                            </Checkbox>
-                                                        </Col>
-                                                        <Col span={12}>
-                                                            <Checkbox checked={showForwarderField} onChange={e => { setShowForwarderField(e.target.checked); if (e.target.checked) { setIsMarketplace(false); } else { setIsMarketplace(true); editForm.setFieldsValue({ forwarderId: null, driverCost: null }); } }}>
-                                                                Исполнитель
-                                                            </Checkbox>
-                                                        </Col>
-                                                    </Row>
-                                                )}
+                                                {/* Role info text */}
+                                                <div style={{
+                                                    padding: '10px 16px',
+                                                    background: `${roleInfo.color}10`,
+                                                    border: `1px solid ${roleInfo.color}40`,
+                                                    borderRadius: 8,
+                                                    marginBottom: 20,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 8,
+                                                }}>
+                                                    <CheckCircleOutlined style={{ color: roleInfo.color, fontSize: 16 }} />
+                                                    <Text style={{ color: roleInfo.color, fontWeight: 500, fontSize: 13 }}>{roleInfo.text}</Text>
+                                                </div>
 
-                                                {editCreatorRole === 'FORWARDER' && (
-                                                    <Row style={{ marginBottom: 12 }}>
-                                                        <Col span={24}>
-                                                            <Checkbox checked={showForwarderField} onChange={e => { setShowForwarderField(e.target.checked); if (!e.target.checked) editForm.setFieldsValue({ forwarderId: null, driverCost: null }); }}>
-                                                                Субподряд (исполнитель)
-                                                            </Checkbox>
-                                                        </Col>
-                                                    </Row>
-                                                )}
-
-                                                {showCustomerField && (
-                                                    <Form.Item name="customerCompanyId" label="Заказчик" rules={[{ required: editCreatorRole === 'FORWARDER', message: 'Укажите заказчика' }]} style={{ marginBottom: 12 }}
-                                                        help={<Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>+ Новый контрагент</Button>}
+                                                <div style={{ marginBottom: 16 }}>
+                                                    <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Кто заказчик?</div>
+                                                    <Select
+                                                        placeholder="Выберите заказчика"
+                                                        style={{ width: '100%' }}
+                                                        size="large"
+                                                        value={selectedCustomer || undefined}
+                                                        onChange={setSelectedCustomer}
+                                                        showSearch
+                                                        optionFilterProp="children"
                                                     >
-                                                        <Select placeholder="Выберите заказчика" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}>
+                                                        <Select.Option value={MY_COMPANY_VALUE}>
+                                                            <span style={{ fontWeight: 600 }}>🏢 {myCompanyName || 'Моя компания'}</span>
+                                                        </Select.Option>
+                                                        <Select.OptGroup label="Контрагенты">
                                                             {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                                                        </Select>
+                                                        </Select.OptGroup>
+                                                    </Select>
+                                                    <Button
+                                                        type="link" size="small"
+                                                        style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 4 }}
+                                                        onClick={() => setQuickPartnerModalOpen(true)}
+                                                    >
+                                                        + Добавить нового контрагента
+                                                    </Button>
+                                                </div>
+
+                                                <div style={{ marginBottom: 20 }}>
+                                                    <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Кто перевозчик?</div>
+                                                    <Select
+                                                        placeholder="Выберите перевозчика"
+                                                        style={{ width: '100%' }}
+                                                        size="large"
+                                                        value={selectedCarrier || undefined}
+                                                        onChange={setSelectedCarrier}
+                                                        showSearch
+                                                        optionFilterProp="children"
+                                                    >
+                                                        <Select.Option value={MY_COMPANY_VALUE}>
+                                                            <span style={{ fontWeight: 600 }}>🏢 {myCompanyName || 'Моя компания'}</span>
+                                                        </Select.Option>
+                                                        <Select.Option value={MARKETPLACE_VALUE}>
+                                                            <span style={{ color: '#722ed1', fontWeight: 500 }}>📢 Опубликовать на бирже</span>
+                                                        </Select.Option>
+                                                        <Select.OptGroup label="Контрагенты">
+                                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                                        </Select.OptGroup>
+                                                    </Select>
+                                                    <Button
+                                                        type="link" size="small"
+                                                        style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 4 }}
+                                                        onClick={() => setQuickPartnerModalOpen(true)}
+                                                    >
+                                                        + Добавить нового контрагента
+                                                    </Button>
+                                                </div>
+
+                                                <Divider style={{ margin: '8px 0 16px' }}>Ставки</Divider>
+
+                                                {showCustomerPriceField && (
+                                                    <Form.Item name="customerPrice" label={customerPriceLabel}>
+                                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
                                                     </Form.Item>
                                                 )}
 
-                                                {(showForwarderField || isMarketplace) && (
-                                                    <Row gutter={12}>
-                                                        {!isMarketplace && (
-                                                            <Col span={editCreatorRole === 'CUSTOMER' ? 24 : 12}>
-                                                                <Form.Item name="forwarderId" label="Исполнитель" rules={[{ required: true, message: 'Выберите исполнителя' }]} style={{ marginBottom: 12 }}
-                                                                    help={<Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>+ Новый контрагент</Button>}
-                                                                >
-                                                                    <Select placeholder="Выберите исполнителя" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}>
-                                                                        {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
-                                                                    </Select>
-                                                                </Form.Item>
-                                                            </Col>
-                                                        )}
-                                                        {editCreatorRole !== 'CUSTOMER' && (
-                                                            <Col span={isMarketplace ? 24 : 12}>
-                                                                <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
-                                                                    <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                                                                </Form.Item>
-                                                            </Col>
-                                                        )}
-                                                    </Row>
+                                                {showDriverCostField && (
+                                                    <Form.Item name="driverCost" label={driverCostLabel}>
+                                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                                                    </Form.Item>
                                                 )}
+
+                                                <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
+                                                    <Select style={{ width: '100%' }} size="large">
+                                                        <Select.Option value="FIXED">За рейс</Select.Option>
+                                                        <Select.Option value="PER_KM">За км</Select.Option>
+                                                        <Select.Option value="PER_TON">За тонну</Select.Option>
+                                                    </Select>
+                                                </Form.Item>
+
+                                                {/* Margin preview */}
+                                                <Form.Item noStyle dependencies={['customerPrice', 'driverCost']}>
+                                                    {({ getFieldValue }) => {
+                                                        const cp = getFieldValue('customerPrice');
+                                                        const dc = getFieldValue('driverCost');
+                                                        if (cp && dc && showCustomerPriceField && showDriverCostField) {
+                                                            const margin = cp - dc;
+                                                            return (
+                                                                <div style={{
+                                                                    padding: '8px 16px',
+                                                                    background: margin >= 0 ? '#f6ffed' : '#fff2f0',
+                                                                    border: `1px solid ${margin >= 0 ? '#b7eb8f' : '#ffa39e'}`,
+                                                                    borderRadius: 8,
+                                                                    fontSize: 13,
+                                                                    fontWeight: 500,
+                                                                    marginTop: 12,
+                                                                }}>
+                                                                    Маржа: <span style={{ color: margin >= 0 ? '#389e0d' : '#cf1322', fontWeight: 700 }}>
+                                                                        {margin.toLocaleString('ru-RU')} ₸
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    }}
+                                                </Form.Item>
                                             </Card>
 
                                             {/* Action buttons for saving the inline form */}
                                             <div style={{ marginTop: 20, background: '#fafafa', padding: 16, borderRadius: 8, border: '1px solid #f0f0f0', display: 'flex', gap: 12 }}>
-                                                <Button type="primary" onClick={() => editForm.submit()} style={{ flex: 1 }}>
+                                                <Button type="primary" onClick={() => editForm.submit()} style={{ flex: 1 }} disabled={!selectedCustomer || !selectedCarrier}>
                                                     Сохранить
                                                 </Button>
                                                 <Button onClick={() => setIsEditing(false)} style={{ flex: 1 }}>
