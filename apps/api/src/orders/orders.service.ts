@@ -105,11 +105,8 @@ export class OrdersService implements OnModuleInit {
         }
 
         // Если водитель назначен → ASSIGNED
-        // Если экспедитор внешний → ASSIGNED (подтверждать некому)
         // Иначе → PENDING
-        const status = (data.driverId || isForwarderExternal)
-            ? OrderStatus.ASSIGNED
-            : OrderStatus.PENDING;
+        const status = data.driverId ? OrderStatus.ASSIGNED : OrderStatus.PENDING;
 
         const isConfirmed = (
             data.driverId ||

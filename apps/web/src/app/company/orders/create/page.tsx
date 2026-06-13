@@ -235,6 +235,9 @@ export default function CreateOrderPage() {
         setSubmitting(true);
         try {
             const values = form.getFieldsValue();
+            const pickupDateStr = values.pickupDate 
+                ? (dayjs.isDayjs(values.pickupDate) ? values.pickupDate.toISOString() : new Date(values.pickupDate).toISOString()) 
+                : undefined;
 
             const getLocId = async (loc: LocationState) => {
                 if (loc.id) return loc.id;
@@ -256,7 +259,7 @@ export default function CreateOrderPage() {
                     locationId: locId,
                     pointType: p.pointType,
                     sequence: routePoints.length + 1,
-                    expectedDate: p.pointType === 'PICKUP' ? values.pickupDate : undefined
+                    expectedDate: p.pointType === 'PICKUP' ? pickupDateStr : undefined
                 });
             }
 
@@ -631,7 +634,11 @@ export default function CreateOrderPage() {
 
             {/* Form */}
             <Form form={form} layout="vertical" disabled={!profileComplete}>
-                {steps[currentStep].content}
+                {steps.map((step, idx) => (
+                    <div key={idx} style={{ display: currentStep === idx ? 'block' : 'none' }}>
+                        {step.content}
+                    </div>
+                ))}
             </Form>
 
             {/* Navigation buttons */}
