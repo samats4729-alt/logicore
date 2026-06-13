@@ -65,7 +65,26 @@ export default function InteractiveMap({
             if (map.setConfigProperty) {
                 map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
                 map.setConfigProperty('basemap', 'lightPreset', 'day');
-                console.log('Mapbox Standard building select color configured successfully');
+            }
+            
+            // Нативное выделение зданий для стилей на базе Mapbox Standard (v3)
+            if (map.addInteraction) {
+                // Сохраняем текущее выделенное здание в объекте карты, чтобы не зависеть от React State
+                map._currentBuilding = null;
+                map.addInteraction('building-click-interaction', {
+                    type: 'click',
+                    target: { featuresetId: 'buildings', importId: 'basemap' },
+                    handler: (e: any) => {
+                        if (map._currentBuilding) {
+                            map.setFeatureState(map._currentBuilding, { select: false });
+                        }
+                        map._currentBuilding = e.feature;
+                        if (e.feature) {
+                            map.setFeatureState(e.feature, { select: true });
+                        }
+                    }
+                });
+                console.log('Mapbox Standard building interaction enabled successfully');
             }
         } catch (e) {
             console.log('Failed to configure Mapbox Standard properties:', e);
@@ -76,7 +95,7 @@ export default function InteractiveMap({
         const map = event.target;
         if (!map) return;
 
-        // На всякий случай повторно настраиваем цвет и тему
+        // Повторная настройка цвета на всякий случай
         try {
             if (map.setConfigProperty) {
                 map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
@@ -84,65 +103,8 @@ export default function InteractiveMap({
             }
         } catch (e) {}
 
-        // Создаем небольшой bounding box вокруг точки клика (8x8 пикселей) для надежного попадания по 3D-зданиям
-        const width = 8;
-        const height = 8;
-        const bbox = [
-            [event.point.x - width / 2, event.point.y - height / 2],
-            [event.point.x + width / 2, event.point.y + height / 2]
-        ];
-
-        const features = map.queryRenderedFeatures(bbox);
-        
-        // Находим здание по ID слоя, sourceLayer или типу слоя (fill-extrusion)
-        const building = features.find((f: any) => {
-            const layerId = (f.layer?.id || '').toLowerCase();
-            const sourceLayer = (f.sourceLayer || '').toLowerCase();
-            const type = (f.layer?.type || '').toLowerCase();
-            return layerId.includes('building') || 
-                   layerId.includes('structure') || 
-                   layerId.includes('roof') ||
-                   sourceLayer.includes('building') || 
-                   sourceLayer.includes('structure') ||
-                   type === 'fill-extrusion';
-        });
-        
-        // Сбрасываем старое выделение
-        if (selectedBuilding && selectedBuilding.id !== undefined) {
-            try {
-                map.setFeatureState(
-                    { 
-                        source: selectedBuilding.source || 'composite', 
-                        sourceLayer: selectedBuilding.sourceLayer || 'building', 
-                        id: selectedBuilding.id 
-                    },
-                    { select: false }
-                );
-            } catch (e) {}
-        }
-
-        if (building) {
-            setSelectedBuilding(building);
-            
-            // Если есть id, выделяем через featureState
-            if (building.id !== undefined) {
-                try {
-                    map.setFeatureState(
-                        { 
-                            source: building.source || 'composite', 
-                            sourceLayer: building.sourceLayer || 'building', 
-                            id: building.id 
-                        },
-                        { select: true }
-                    );
-                } catch (e) {
-                    console.error('Failed to set feature state for building:', e);
-                }
-            }
-        } else {
-            setSelectedBuilding(null);
-        }
-    }, [selectedBuilding]);
+        // Логика выделения теперь обрабатывается через map.addInteraction
+    }, []);
 
     return (
         <ReactMap
@@ -156,45 +118,6 @@ export default function InteractiveMap({
             onLoad={handleMapLoad}
         >
             <NavigationControl position="bottom-right" />
-
-            {/* Резервная подсветка (GeoJSON) для любых карт (как fallback) */}
-            {selectedBuilding && (
-                <Source id="selected-building-geojson" type="geojson" data={{ type: 'FeatureCollection', features: [selectedBuilding] }}>
-                    <Layer
-                        id="selected-building-highlight-3d"
-                        type="fill-extrusion"
-                        paint={{
-                            'fill-extrusion-color': '#1677ff',
-                            'fill-extrusion-height': [
-                                '+',
-                                [
-                                    'coalesce',
-                                    ['get', 'height'],
-                                    ['get', 'render_height'],
-                                    20
-                                ],
-                                0.5
-                            ],
-                            'fill-extrusion-base': [
-                                'coalesce',
-                                ['get', 'min_height'],
-                                ['get', 'render_min_height'],
-                                0
-                            ],
-                            'fill-extrusion-opacity': 0.8
-                        }}
-                    />
-                    <Layer
-                        id="selected-building-2d-outline"
-                        type="line"
-                        paint={{
-                            'line-color': '#1677ff',
-                            'line-width': 3,
-                            'line-opacity': 0.95
-                        }}
-                    />
-                </Source>
-            )}
 
             {/* 3D Truck Layer */}
             <Truck3DLayer drivers={drivers} />
