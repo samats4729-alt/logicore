@@ -398,19 +398,25 @@ body {
    MAPBOX CONTROLS STYLING & POSITIONING
    ========================================== */
 
-/* Hide Mapbox Logo & Attribution */
+/* Hide Mapbox Logo & Attribution Aggressively */
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-attrib,
 .mapboxgl-ctrl-logo,
-.mapboxgl-ctrl-attrib {
+a.mapboxgl-ctrl-logo,
+.mapboxgl-ctrl-attrib-inner {
   display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
-/* Reposition bottom-right controls inside the desktop map viewport frame */
-@media (min-width: 768px) {
-  .mapboxgl-ctrl-bottom-right {
-    right: 44px !important;
-    bottom: 44px !important;
-  }
-}/* Apple-style Liquid Glass Buttons & Controls */
+/* Reposition bottom-right controls */
+.mapboxgl-ctrl-bottom-right {
+  right: 16px !important;
+  bottom: 24px !important;
+}
+
+/* Apple-style Liquid Glass Buttons & Controls */
 .liquid-glass-btn {
   position: relative;
   display: inline-flex;
@@ -422,14 +428,14 @@ body {
   font-size: 13px;
   font-weight: 600;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  background: rgba(255, 255, 255, 0.07) !important;
-  backdrop-filter: blur(24px) saturate(1.9) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(16px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.5) !important;
   color: #1677ff !important;
   box-shadow: 
-    0 6px 20px rgba(0, 0, 0, 0.05),
-    inset 0 1px 1px rgba(255, 255, 255, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2),
     inset 0 -1px 1px rgba(0, 0, 0, 0.01) !important;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
@@ -447,7 +453,7 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.25),
+    rgba(255, 255, 255, 0.1),
     transparent
   );
   transition: all 0.6s ease;
@@ -455,12 +461,12 @@ body {
 
 .liquid-glass-btn:hover {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.45) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
   box-shadow: 
-    0 10px 28px rgba(22, 119, 255, 0.15),
-    inset 0 1px 1.5px rgba(255, 255, 255, 0.5),
+    0 8px 24px rgba(22, 119, 255, 0.1),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.3),
     inset 0 -1.5px 1px rgba(0, 0, 0, 0.01) !important;
-  background: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 .liquid-glass-btn:hover::before {
@@ -469,23 +475,23 @@ body {
 
 .liquid-glass-btn:active {
   transform: translateY(0);
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
   box-shadow: 
     0 2px 8px rgba(0, 0, 0, 0.03),
-    inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Premium Liquid Glass Frame for Mapbox Controls */
+/* Premium Liquid Glass Frame for Mapbox Controls (Zoom in/out) */
 .mapboxgl-ctrl-group {
   width: 40px !important;
   border-radius: 14px !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  background: rgba(255, 255, 255, 0.07) !important;
-  backdrop-filter: blur(24px) saturate(1.9) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(16px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.5) !important;
   box-shadow: 
-    0 10px 32px rgba(0, 0, 0, 0.05),
-    inset 0 1px 1px rgba(255, 255, 255, 0.35),
+    0 8px 24px rgba(0, 0, 0, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2),
     inset 0 -1px 1px rgba(0, 0, 0, 0.01) !important;
   overflow: hidden !important;
   transition: all 0.5s ease !important;
@@ -495,7 +501,7 @@ body {
 .mapboxgl-ctrl-group button {
   background-color: transparent !important;
   border: none !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
   width: 40px !important;
   height: 40px !important;
   transition: all 0.3s ease !important;
@@ -510,11 +516,11 @@ body {
 
 /* Hover and active states */
 .mapboxgl-ctrl-group button:hover {
-  background-color: rgba(255, 255, 255, 0.14) !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .mapboxgl-ctrl-group button:active {
-  background-color: rgba(255, 255, 255, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.02) !important;
 }
 
 /* Ensure mapbox control icons look great */

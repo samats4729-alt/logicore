@@ -64,10 +64,11 @@ export default function InteractiveMap({
         try {
             if (map.setConfigProperty) {
                 map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
+                map.setConfigProperty('basemap', 'lightPreset', 'day');
                 console.log('Mapbox Standard building select color configured successfully');
             }
         } catch (e) {
-            console.log('Failed to configure Mapbox Standard selection color:', e);
+            console.log('Failed to configure Mapbox Standard properties:', e);
         }
     }, []);
 
@@ -75,10 +76,11 @@ export default function InteractiveMap({
         const map = event.target;
         if (!map) return;
 
-        // На всякий случай повторно настраиваем цвет
+        // На всякий случай повторно настраиваем цвет и тему
         try {
             if (map.setConfigProperty) {
                 map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
+                map.setConfigProperty('basemap', 'lightPreset', 'day');
             }
         } catch (e) {}
 
@@ -91,7 +93,6 @@ export default function InteractiveMap({
         ];
 
         const features = map.queryRenderedFeatures(bbox);
-        console.log('Map clicked. Features under click (bbox):', features);
         
         // Находим здание по ID слоя, sourceLayer или типу слоя (fill-extrusion)
         const building = features.find((f: any) => {
@@ -105,8 +106,6 @@ export default function InteractiveMap({
                    sourceLayer.includes('structure') ||
                    type === 'fill-extrusion';
         });
-        
-        console.log('Selected building feature:', building);
         
         // Сбрасываем старое выделение
         if (selectedBuilding && selectedBuilding.id !== undefined) {
@@ -158,9 +157,9 @@ export default function InteractiveMap({
         >
             <NavigationControl position="bottom-right" />
 
-            {/* Резервная подсветка (GeoJSON) для обычных векторных карт без поддержки select state */}
-            {selectedBuilding && selectedBuilding.id === undefined && (
-                <Source id="selected-building-geojson" type="geojson" data={selectedBuilding}>
+            {/* Резервная подсветка (GeoJSON) для любых карт (как fallback) */}
+            {selectedBuilding && (
+                <Source id="selected-building-geojson" type="geojson" data={{ type: 'FeatureCollection', features: [selectedBuilding] }}>
                     <Layer
                         id="selected-building-highlight-3d"
                         type="fill-extrusion"
