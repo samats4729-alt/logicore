@@ -123,6 +123,7 @@ export default function ForwarderDriversPage() {
                     <div>
                         <div style={{ fontWeight: 600 }}>{record.lastName} {record.firstName} {record.middleName || ''}</div>
                         <div style={{ fontSize: 12, color: '#888' }}>{record.phone}</div>
+                        {record.iin && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>ИИН: {record.iin}</div>}
                     </div>
                 </Space>
             ),
@@ -134,7 +135,8 @@ export default function ForwarderDriversPage() {
                 <div>
                     <div style={{ fontWeight: 600 }}>{record.vehicleType || '—'}</div>
                     <div>{record.vehicleModel || '—'}</div>
-                    <div style={{ fontSize: 12, color: '#888' }}>{record.vehiclePlate || '—'}</div>
+                    <div style={{ fontSize: 12, color: '#4b5563', fontWeight: 500 }}>{record.vehiclePlate || '—'}</div>
+                    {record.trailerNumber && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>Прицеп: {record.trailerNumber}</div>}
                 </div>
             ),
         },
@@ -152,9 +154,15 @@ export default function ForwarderDriversPage() {
                             </Tag>
                         </div>
                         <div style={{ fontSize: 12, fontWeight: 600 }}>№ {record.docNumber || '—'}</div>
+                        {record.docIssuedAt && (
+                            <div style={{ fontSize: 11, color: '#555' }}>
+                                Выдан: {dayjs(record.docIssuedAt).format('DD.MM.YYYY')}
+                                {record.docIssuedBy ? ` ${record.docIssuedBy}` : ''}
+                            </div>
+                        )}
                         {record.docExpiresAt && (
                             <div style={{ fontSize: 11, color: isExpired ? '#ff4d4f' : '#888' }}>
-                                до {dayjs(record.docExpiresAt).format('DD.MM.YYYY')}
+                                Срок: {dayjs(record.docExpiresAt).format('DD.MM.YYYY')}
                                 {isExpired && ' (истёк)'}
                             </div>
                         )}

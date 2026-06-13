@@ -162,6 +162,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
+        if (hasPerm('drivers')) {
+            items.push({
+                key: '/company/drivers',
+                icon: <CarOutlined />,
+                label: 'Водители',
+            });
+        }
+
         if (hasPerm('documents')) {
             items.push({
                 key: '/company/documents',

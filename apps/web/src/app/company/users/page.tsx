@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col } from 'antd';
+import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip } from 'antd';
+import dayjs from 'dayjs';
 import { 
     MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, 
     ApartmentOutlined, FolderOpenOutlined, PlusOutlined, UnorderedListOutlined, UserOutlined,
@@ -37,6 +38,18 @@ interface CompanyUser {
     createdAt: string;
     departmentId?: string | null;
     department?: { id: string; name: string } | null;
+    
+    // Driver fields
+    iin?: string;
+    vehicleType?: string;
+    vehiclePlate?: string;
+    vehicleModel?: string;
+    trailerNumber?: string;
+    docType?: string;
+    docNumber?: string;
+    docIssuedAt?: string;
+    docExpiresAt?: string;
+    docIssuedBy?: string;
 }
 
 interface Invitation {
@@ -181,8 +194,9 @@ export default function CompanyUsersPage() {
     const [assignForm] = Form.useForm();
     const [assignDeptId, setAssignDeptId] = useState<string | null>(null);
 
-    // Driver creation modal state
+    // Driver creation/editing modal state
     const [driverModalOpen, setDriverModalOpen] = useState(false);
+    const [editingDriver, setEditingDriver] = useState<CompanyUser | null>(null);
     const [driverForm] = Form.useForm();
 
     const fetchData = async () => {
@@ -424,17 +438,29 @@ export default function CompanyUsersPage() {
         }
     };
 
-    // ==================== Driver creation handler ====================
+    // ==================== Driver creation/editing handler ====================
 
     const handleCreateDriver = async (values: any) => {
         try {
-            await api.post('/company/drivers', values);
-            message.success('Водитель успешно создан');
+            const payload = {
+                ...values,
+                docIssuedAt: values.docIssuedAt ? values.docIssuedAt.toISOString() : undefined,
+                docExpiresAt: values.docExpiresAt ? values.docExpiresAt.toISOString() : undefined,
+            };
+
+            if (editingDriver) {
+                await api.put(`/company/drivers/${editingDriver.id}`, payload);
+                message.success('Данные водителя обновлены');
+            } else {
+                await api.post('/company/drivers', payload);
+                message.success('Водитель добавлен');
+            }
             setDriverModalOpen(false);
+            setEditingDriver(null);
             driverForm.resetFields();
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания водителя');
+            message.error(error.response?.data?.message || 'Ошибка');
         }
     };
 
@@ -455,6 +481,37 @@ export default function CompanyUsersPage() {
 
     const getSubDepartments = (parentId: string | null) => {
         return departments.filter(d => d.parentDepartmentId === parentId);
+    };
+
+    const getDriverTooltipTitle = (u: CompanyUser) => {
+        return (
+            <div style={{ padding: '6px 4px', fontSize: '12px', lineHeight: '1.5' }}>
+                <div style={{ fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: 6, marginBottom: 8, fontSize: '13px' }}>
+                    Карточка водителя
+                </div>
+                <div style={{ marginBottom: 4 }}><strong>Телефон:</strong> {u.phone || '—'}</div>
+                {u.iin && <div style={{ marginBottom: 4 }}><strong>ИИН:</strong> {u.iin}</div>}
+                
+                <Divider style={{ margin: '8px 0', borderColor: 'rgba(255,255,255,0.15)' }} />
+                
+                <div style={{ marginBottom: 4 }}><strong>Транспорт:</strong> {u.vehicleType || '—'} {u.vehicleModel ? `(${u.vehicleModel})` : ''}</div>
+                <div style={{ marginBottom: 4 }}><strong>Госномер авто:</strong> {u.vehiclePlate || '—'}</div>
+                {u.trailerNumber && <div style={{ marginBottom: 4 }}><strong>Госномер прицепа:</strong> {u.trailerNumber}</div>}
+                
+                <Divider style={{ margin: '8px 0', borderColor: 'rgba(255,255,255,0.15)' }} />
+                
+                {u.docNumber ? (
+                    <>
+                        <div style={{ marginBottom: 4 }}><strong>Документ:</strong> {u.docType === 'ID_CARD' ? 'Удостоверение' : 'Паспорт'}</div>
+                        <div style={{ marginBottom: 4 }}><strong>Номер:</strong> №{u.docNumber}</div>
+                        {u.docIssuedAt && <div style={{ marginBottom: 4 }}><strong>Выдан:</strong> {dayjs(u.docIssuedAt).format('DD.MM.YYYY')}{u.docIssuedBy ? ` (${u.docIssuedBy})` : ''}</div>}
+                        {u.docExpiresAt && <div style={{ marginBottom: 4 }}><strong>Действует до:</strong> {dayjs(u.docExpiresAt).format('DD.MM.YYYY')}</div>}
+                    </>
+                ) : (
+                    <div style={{ fontStyle: 'italic', color: '#9ca3af' }}>Документы не заполнены</div>
+                )}
+            </div>
+        );
     };
 
     const renderEmployeeNode = (u: CompanyUser, isRoot: boolean = false) => {
@@ -487,17 +544,35 @@ export default function CompanyUsersPage() {
                             </>
                         )}
                         {u.id !== currentUser?.id && (
-                            <Button
-                                type="text"
-                                size="small"
-                                icon={<SettingOutlined style={{ fontSize: 12 }} />}
-                                title="Настроить права"
-                                onClick={() => {
-                                    setEditingUser(u);
-                                    editForm.setFieldsValue({ permissions: u.permissions || [] });
-                                    setEditModalOpen(true);
-                                }}
-                            />
+                            u.role === 'DRIVER' ? (
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<EditOutlined style={{ fontSize: 12 }} />}
+                                    title="Редактировать водителя"
+                                    onClick={() => {
+                                        setEditingDriver(u);
+                                        driverForm.setFieldsValue({
+                                            ...u,
+                                            docIssuedAt: u.docIssuedAt ? dayjs(u.docIssuedAt) : undefined,
+                                            docExpiresAt: u.docExpiresAt ? dayjs(u.docExpiresAt) : undefined,
+                                        });
+                                        setDriverModalOpen(true);
+                                    }}
+                                />
+                            ) : (
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<SettingOutlined style={{ fontSize: 12 }} />}
+                                    title="Настроить права"
+                                    onClick={() => {
+                                        setEditingUser(u);
+                                        editForm.setFieldsValue({ permissions: u.permissions || [] });
+                                        setEditModalOpen(true);
+                                    }}
+                                />
+                            )
                         )}
                         {!isRoot && u.departmentId && (
                             <Button
@@ -528,18 +603,40 @@ export default function CompanyUsersPage() {
                 </div>
 
                 {/* Pill-shaped Node Card */}
-                <div className={`node-card employee-card ${isRoot ? 'root-admin-card' : ''}`}>
-                    <div 
-                        className="node-avatar"
-                        style={{ backgroundColor: roleColor }}
-                    >
-                        {firstLetter}
+                {u.role === 'DRIVER' ? (
+                    <Tooltip title={getDriverTooltipTitle(u)} color="#1f2937" overlayStyle={{ maxWidth: '320px' }}>
+                        <div className="node-card employee-card">
+                            <div 
+                                className="node-avatar"
+                                style={{ backgroundColor: roleColor }}
+                            >
+                                {firstLetter}
+                            </div>
+                            <div className="node-info">
+                                <span className="node-role-label" style={{ color: roleColor }}>{roleLabel}</span>
+                                <span className="node-name-label">{initials}</span>
+                                {u.vehiclePlate && (
+                                    <span style={{ fontSize: '10px', color: '#6b7280', marginTop: 1, fontWeight: 500 }}>
+                                        {u.vehiclePlate}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </Tooltip>
+                ) : (
+                    <div className={`node-card employee-card ${isRoot ? 'root-admin-card' : ''}`}>
+                        <div 
+                            className="node-avatar"
+                            style={{ backgroundColor: roleColor }}
+                        >
+                            {firstLetter}
+                        </div>
+                        <div className="node-info">
+                            <span className="node-role-label" style={{ color: roleColor }}>{roleLabel}</span>
+                            <span className="node-name-label">{initials}</span>
+                        </div>
                     </div>
-                    <div className="node-info">
-                        <span className="node-role-label" style={{ color: roleColor }}>{roleLabel}</span>
-                        <span className="node-name-label">{initials}</span>
-                    </div>
-                </div>
+                )}
             </div>
         );
     };
@@ -720,14 +817,29 @@ export default function CompanyUsersPage() {
             render: (_: any, record: CompanyUser) => (
                 <Space>
                     {record.id !== currentUser?.id && (
-                        <Button
-                            icon={<SettingOutlined />}
-                            onClick={() => {
-                                setEditingUser(record);
-                                editForm.setFieldsValue({ permissions: record.permissions || [] });
-                                setEditModalOpen(true);
-                            }}
-                        />
+                        record.role === 'DRIVER' ? (
+                            <Button
+                                icon={<EditOutlined />}
+                                onClick={() => {
+                                    setEditingDriver(record);
+                                    driverForm.setFieldsValue({
+                                        ...record,
+                                        docIssuedAt: record.docIssuedAt ? dayjs(record.docIssuedAt) : undefined,
+                                        docExpiresAt: record.docExpiresAt ? dayjs(record.docExpiresAt) : undefined,
+                                    });
+                                    setDriverModalOpen(true);
+                                }}
+                            />
+                        ) : (
+                            <Button
+                                icon={<SettingOutlined />}
+                                onClick={() => {
+                                    setEditingUser(record);
+                                    editForm.setFieldsValue({ permissions: record.permissions || [] });
+                                    setEditModalOpen(true);
+                                }}
+                            />
+                        )
                     )}
                     {record.id !== currentUser?.id && record.role !== 'COMPANY_ADMIN' && (
                         <Popconfirm
@@ -1144,6 +1256,7 @@ export default function CompanyUsersPage() {
                     <Button
                         icon={<CarOutlined />}
                         onClick={() => {
+                            setEditingDriver(null);
                             driverForm.resetFields();
                             setDriverModalOpen(true);
                         }}
@@ -1463,18 +1576,19 @@ export default function CompanyUsersPage() {
                 </Form>
             </Modal>
 
-            {/* Modal: Create Driver */}
+            {/* Modal: Create/Edit Driver */}
             <Modal
-                title="Добавление водителя"
+                title={editingDriver ? "Редактирование водителя" : "Добавление водителя"}
                 open={driverModalOpen}
                 onCancel={() => {
                     setDriverModalOpen(false);
+                    setEditingDriver(null);
                     driverForm.resetFields();
                 }}
                 onOk={() => driverForm.submit()}
-                okText="Создать"
+                okText={editingDriver ? "Сохранить" : "Создать"}
                 cancelText="Отмена"
-                width={550}
+                width={650}
                 destroyOnClose
             >
                 <Form form={driverForm} layout="vertical" onFinish={handleCreateDriver}>
@@ -1501,27 +1615,34 @@ export default function CompanyUsersPage() {
                     <Form.Item name="middleName" label="Отчество">
                         <Input placeholder="Иванович" />
                     </Form.Item>
-                    <Form.Item
-                        name="phone"
-                        label="Телефон"
-                        rules={[
-                            { required: true, message: 'Обязательное поле' },
-                            { pattern: /^(\+7|8)\d{10}$/, message: 'Формат: +7XXXXXXXXXX' }
-                        ]}
-                    >
-                        <Input placeholder="+77001234567" />
-                    </Form.Item>
-                    <Form.Item
-                        name="iin"
-                        label="ИИН"
-                        rules={[
-                            { required: true, message: 'Введите ИИН' },
-                            { pattern: /^\d{12}$/, message: 'ИИН должен содержать 12 цифр' }
-                        ]}
-                    >
-                        <Input placeholder="123456789012" maxLength={12} />
-                    </Form.Item>
-                    <Divider><CarOutlined /> Транспорт</Divider>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="phone"
+                                label="Телефон"
+                                rules={[
+                                    { required: true, message: 'Обязательное поле' },
+                                    { pattern: /^(\+7|8)\d{10}$/, message: 'Формат: +7XXXXXXXXXX' }
+                                ]}
+                            >
+                                <Input placeholder="+77001234567" disabled={!!editingDriver} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="iin"
+                                label="ИИН"
+                                rules={[
+                                    { required: true, message: 'Введите ИИН' },
+                                    { pattern: /^\d{12}$/, message: 'ИИН должен содержать 12 цифр' }
+                                ]}
+                            >
+                                <Input placeholder="123456789012" maxLength={12} />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    
+                    <Divider><CarOutlined style={{ marginRight: 6 }} />Транспорт</Divider>
                     <Row gutter={12}>
                         <Col span={12}>
                             <Form.Item name="vehicleType" label="Тип транспорта">
@@ -1538,6 +1659,13 @@ export default function CompanyUsersPage() {
                             </Form.Item>
                         </Col>
                         <Col span={12}>
+                            <Form.Item name="vehicleModel" label="Модель автомобиля">
+                                <Input placeholder="Volvo FH16" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={12}>
+                        <Col span={12}>
                             <Form.Item
                                 name="vehiclePlate"
                                 label="Гос. номер авто"
@@ -1546,14 +1674,64 @@ export default function CompanyUsersPage() {
                                 <Input placeholder="A123BC01" />
                             </Form.Item>
                         </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="trailerNumber"
+                                label="Номер прицепа"
+                            >
+                                <Input placeholder="AB1234" />
+                            </Form.Item>
+                        </Col>
                     </Row>
-                    <Alert
-                        message="Водитель будет автоматически добавлен в отдел «Водители»"
-                        description="Расширенные данные (документы, модель авто, прицеп) можно заполнить в разделе Водители."
-                        type="info"
-                        showIcon
-                        style={{ marginTop: 8 }}
-                    />
+
+                    <Divider><IdcardOutlined style={{ marginRight: 6 }} />Документ, удостоверяющий личность</Divider>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="docType"
+                                label="Вид документа"
+                                rules={[{ required: true, message: 'Выберите тип документа' }]}
+                            >
+                                <Select placeholder="Выберите тип" allowClear>
+                                    <Select.Option value="ID_CARD">Удостоверение личности</Select.Option>
+                                    <Select.Option value="PASSPORT">Паспорт</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="docNumber"
+                                label="Номер документа"
+                                rules={[{ required: true, message: 'Введите номер' }]}
+                            >
+                                <Input placeholder="012345678" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="docIssuedAt"
+                                label="Дата выдачи"
+                            >
+                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2020" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="docExpiresAt"
+                                label="Действителен до"
+                            >
+                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2030" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item
+                        name="docIssuedBy"
+                        label="Кем выдан"
+                    >
+                        <Input placeholder="МВД РК / РОВД г. Алматы" />
+                    </Form.Item>
                 </Form>
             </Modal>
         </div>
