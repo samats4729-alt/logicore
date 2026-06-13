@@ -58,9 +58,29 @@ export default function InteractiveMap({
 }: InteractiveMapProps) {
     const [selectedBuilding, setSelectedBuilding] = useState<any | null>(null);
 
+    const handleMapLoad = useCallback((event: any) => {
+        const map = event.target;
+        if (!map) return;
+        try {
+            if (map.setConfigProperty) {
+                map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
+                console.log('Mapbox Standard building select color configured successfully');
+            }
+        } catch (e) {
+            console.log('Failed to configure Mapbox Standard selection color:', e);
+        }
+    }, []);
+
     const handleMapClick = useCallback((event: any) => {
         const map = event.target;
         if (!map) return;
+
+        // На всякий случай повторно настраиваем цвет
+        try {
+            if (map.setConfigProperty) {
+                map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
+            }
+        } catch (e) {}
 
         // Создаем небольшой bounding box вокруг точки клика (8x8 пикселей) для надежного попадания по 3D-зданиям
         const width = 8;
@@ -88,12 +108,42 @@ export default function InteractiveMap({
         
         console.log('Selected building feature:', building);
         
+        // Сбрасываем старое выделение
+        if (selectedBuilding && selectedBuilding.id !== undefined) {
+            try {
+                map.setFeatureState(
+                    { 
+                        source: selectedBuilding.source || 'composite', 
+                        sourceLayer: selectedBuilding.sourceLayer || 'building', 
+                        id: selectedBuilding.id 
+                    },
+                    { select: false }
+                );
+            } catch (e) {}
+        }
+
         if (building) {
             setSelectedBuilding(building);
+            
+            // Если есть id, выделяем через featureState
+            if (building.id !== undefined) {
+                try {
+                    map.setFeatureState(
+                        { 
+                            source: building.source || 'composite', 
+                            sourceLayer: building.sourceLayer || 'building', 
+                            id: building.id 
+                        },
+                        { select: true }
+                    );
+                } catch (e) {
+                    console.error('Failed to set feature state for building:', e);
+                }
+            }
         } else {
             setSelectedBuilding(null);
         }
-    }, []);
+    }, [selectedBuilding]);
 
     return (
         <ReactMap
@@ -104,11 +154,12 @@ export default function InteractiveMap({
             style={{ width: '100%', height: '100%' }}
             terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
             onClick={handleMapClick}
+            onLoad={handleMapLoad}
         >
             <NavigationControl position="bottom-right" />
 
-            {/* Подсветка выбранного здания на основе GeoJSON кликнутого здания */}
-            {selectedBuilding && (
+            {/* Резервная подсветка (GeoJSON) для обычных векторных карт без поддержки select state */}
+            {selectedBuilding && selectedBuilding.id === undefined && (
                 <Source id="selected-building-geojson" type="geojson" data={selectedBuilding}>
                     <Layer
                         id="selected-building-highlight-3d"
