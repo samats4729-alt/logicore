@@ -31,8 +31,8 @@ export class PowerOfAttorneyService {
         if (!order) throw new NotFoundException('Заявка не найдена');
 
         // Определяем компанию-эмитента (кто выписывает доверенность) и исполнителя (кто везет груз)
-        let issuerCompany;
-        let executorCompany;
+        let issuerCompany: any = null;
+        let executorCompany: any = null;
 
         if (companyId && order.forwarderId === companyId) {
             issuerCompany = order.forwarder || await this.prisma.company.findUnique({ where: { id: companyId } });
@@ -46,6 +46,7 @@ export class PowerOfAttorneyService {
         }
 
         if (!issuerCompany) throw new NotFoundException('Компания-отправитель не найдена');
+        if (!executorCompany) throw new NotFoundException('Компания-исполнитель не найдена');
 
         // Загружаем буферы для печати и подписи компании-эмитента (Заказчика)
         let stampBuffer: Buffer | null = null;
