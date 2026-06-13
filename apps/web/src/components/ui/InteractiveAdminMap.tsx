@@ -1,6 +1,7 @@
 'use client';
 
-import ReactMap, { Marker, Popup, NavigationControl } from 'react-map-gl/mapbox';
+import { useState, useCallback } from 'react';
+import ReactMap, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Tag } from 'antd';
 
@@ -70,6 +71,40 @@ export default function InteractiveAdminMap({
     myLocation,
     getDriverColor,
 }: InteractiveAdminMapProps) {
+    const [selectedBuilding, setSelectedBuilding] = useState<any | null>(null);
+
+    const handleMapClick = useCallback((event: any) => {
+        const map = event.target;
+        const features = map.queryRenderedFeatures(event.point);
+        
+        const building = features.find((f: any) => f.layer.id.includes('building') || f.layer.id.includes('structure'));
+        
+        if (building) {
+            setSelectedBuilding(building);
+            
+            if (building.id !== undefined) {
+                if (selectedBuilding && selectedBuilding.id !== undefined) {
+                    map.setFeatureState(
+                        { source: selectedBuilding.source, sourceLayer: selectedBuilding.sourceLayer, id: selectedBuilding.id },
+                        { selected: false }
+                    );
+                }
+                map.setFeatureState(
+                    { source: building.source, sourceLayer: building.sourceLayer, id: building.id },
+                    { selected: true }
+                );
+            }
+        } else {
+            if (selectedBuilding && selectedBuilding.id !== undefined) {
+                map.setFeatureState(
+                    { source: selectedBuilding.source, sourceLayer: selectedBuilding.sourceLayer, id: selectedBuilding.id },
+                    { selected: false }
+                );
+            }
+            setSelectedBuilding(null);
+        }
+    }, [selectedBuilding]);
+
     return (
         <ReactMap
             {...viewState}
@@ -77,8 +112,44 @@ export default function InteractiveAdminMap({
             mapStyle="mapbox://styles/mapbox/streets-v12"
             mapboxAccessToken={mapboxAccessToken}
             style={{ width: '100%', height: '100%' }}
+            onClick={handleMapClick}
         >
             <NavigationControl position="bottom-right" />
+
+            {/* Подсветка выбранного здания (3D объём + 2D контур) */}
+            {selectedBuilding && (
+                <Source id="selected-building" type="geojson" data={selectedBuilding}>
+                    <Layer
+                        id="selected-building-3d"
+                        type="fill-extrusion"
+                        paint={{
+                            'fill-extrusion-color': '#1677ff',
+                            'fill-extrusion-height': [
+                                'coalesce',
+                                ['get', 'height'],
+                                ['get', 'render_height'],
+                                15
+                            ],
+                            'fill-extrusion-base': [
+                                'coalesce',
+                                ['get', 'min_height'],
+                                ['get', 'render_min_height'],
+                                0
+                            ],
+                            'fill-extrusion-opacity': 0.75
+                        }}
+                    />
+                    <Layer
+                        id="selected-building-2d-outline"
+                        type="line"
+                        paint={{
+                            'line-color': '#1677ff',
+                            'line-width': 3,
+                            'line-opacity': 0.9
+                        }}
+                    />
+                </Source>
+            )}
 
             {drivers.map((driver) => (
                 <Marker

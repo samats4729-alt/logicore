@@ -10,7 +10,7 @@ import { io, Socket } from 'socket.io-client';
 const InteractiveAdminMap = dynamic(() => import('@/components/ui/InteractiveAdminMap'), {
     ssr: false,
     loading: () => (
-        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000000' }}>
+        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f8f8' }}>
             <Spin size="large" tip="Загрузка карты..." />
         </div>
     )
