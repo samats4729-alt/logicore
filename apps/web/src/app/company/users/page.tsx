@@ -896,6 +896,7 @@ export default function CompanyUsersPage() {
                 .node-card {
                     display: flex;
                     align-items: center;
+                    justify-content: center;
                     width: 220px;
                     height: 60px;
                     padding: 8px 14px;
@@ -941,7 +942,7 @@ export default function CompanyUsersPage() {
                     border-radius: 50%;
                     display: flex;
                     align-items: center;
-                    justifyContent: center;
+                    justify-content: center;
                     color: #ffffff;
                     font-weight: 700;
                     font-size: 14px;
@@ -963,7 +964,6 @@ export default function CompanyUsersPage() {
                     display: flex;
                     flex-direction: column;
                     justify-content: center;
-                    flex-grow: 1;
                     min-width: 0;
                     text-align: left;
                 }
