@@ -6,7 +6,8 @@ import {
     MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, 
     ApartmentOutlined, FolderOpenOutlined, PlusOutlined, UnorderedListOutlined, UserOutlined,
     DollarOutlined, CalculatorOutlined, TruckOutlined, TeamOutlined, CarryOutlined,
-    NotificationOutlined, ShopOutlined, CoffeeOutlined
+    NotificationOutlined, ShopOutlined, CoffeeOutlined, UserAddOutlined, DisconnectOutlined,
+    CarOutlined, InboxOutlined, PushpinOutlined, FileTextOutlined, EnvironmentOutlined, DashboardOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -63,6 +64,13 @@ const roleColors: Record<string, string> = {
     DRIVER: 'purple',
 };
 
+const formatNameInitials = (user: { firstName: string; lastName: string; middleName?: string | null }) => {
+    const last = user.lastName || '';
+    const firstI = user.firstName ? `${user.firstName[0].toUpperCase()}.` : '';
+    const middleI = user.middleName ? `${user.middleName[0].toUpperCase()}.` : '';
+    return `${last} ${firstI}${middleI}`.trim();
+};
+
 const deptIcons: Record<string, React.ReactNode> = {
     FolderOpenOutlined: <FolderOpenOutlined />,
     DollarOutlined: <DollarOutlined />,
@@ -73,18 +81,32 @@ const deptIcons: Record<string, React.ReactNode> = {
     NotificationOutlined: <NotificationOutlined />,
     ShopOutlined: <ShopOutlined />,
     CoffeeOutlined: <CoffeeOutlined />,
+    CarOutlined: <CarOutlined />,
+    InboxOutlined: <InboxOutlined />,
+    PushpinOutlined: <PushpinOutlined />,
+    FileTextOutlined: <FileTextOutlined />,
+    EnvironmentOutlined: <EnvironmentOutlined />,
+    SettingOutlined: <SettingOutlined />,
+    DashboardOutlined: <DashboardOutlined />,
 };
 
 const iconOptions = [
-    { value: 'FolderOpenOutlined', label: '📁 Папка' },
-    { value: 'DollarOutlined', label: '💵 Финансы (Доллар)' },
-    { value: 'CalculatorOutlined', label: '🧮 Бухгалтерия (Калькулятор)' },
-    { value: 'TruckOutlined', label: '🚚 Логистика / Водители (Грузовик)' },
-    { value: 'TeamOutlined', label: '👥 Сотрудники (Группа)' },
-    { value: 'CarryOutlined', label: '💼 Менеджмент (Портфель)' },
-    { value: 'NotificationOutlined', label: '📣 Оповещения / Продажи' },
-    { value: 'ShopOutlined', label: '🏢 Склад (Офис)' },
-    { value: 'CoffeeOutlined', label: '☕ Разное (Кофе)' },
+    { value: 'FolderOpenOutlined', label: <Space><FolderOpenOutlined style={{ color: '#3b82f6' }} /><span>Папка</span></Space> },
+    { value: 'DollarOutlined', label: <Space><DollarOutlined style={{ color: '#eab308' }} /><span>Бухгалтерия / Финансы</span></Space> },
+    { value: 'CarOutlined', label: <Space><CarOutlined style={{ color: '#3b82f6' }} /><span>Водители / Транспорт</span></Space> },
+    { value: 'TruckOutlined', label: <Space><TruckOutlined style={{ color: '#10b981' }} /><span>Логистика / Доставка</span></Space> },
+    { value: 'TeamOutlined', label: <Space><TeamOutlined style={{ color: '#6366f1' }} /><span>Сотрудники / Отдел</span></Space> },
+    { value: 'InboxOutlined', label: <Space><InboxOutlined style={{ color: '#f97316' }} /><span>Склад / Хранение</span></Space> },
+    { value: 'PushpinOutlined', label: <Space><PushpinOutlined style={{ color: '#ef4444' }} /><span>Адреса / Локации</span></Space> },
+    { value: 'FileTextOutlined', label: <Space><FileTextOutlined style={{ color: '#6b7280' }} /><span>Документы / Договоры</span></Space> },
+    { value: 'EnvironmentOutlined', label: <Space><EnvironmentOutlined style={{ color: '#06b6d4' }} /><span>Карта / Трекинг</span></Space> },
+    { value: 'SettingOutlined', label: <Space><SettingOutlined style={{ color: '#4b5563' }} /><span>Настройки / Админ</span></Space> },
+    { value: 'DashboardOutlined', label: <Space><DashboardOutlined style={{ color: '#8b5cf6' }} /><span>Дашборд / Аналитика</span></Space> },
+    { value: 'CalculatorOutlined', label: <Space><CalculatorOutlined style={{ color: '#ec4899' }} /><span>Калькулятор</span></Space> },
+    { value: 'CarryOutlined', label: <Space><CarryOutlined style={{ color: '#0d9488' }} /><span>Портфель / Менеджмент</span></Space> },
+    { value: 'NotificationOutlined', label: <Space><NotificationOutlined style={{ color: '#ea580c' }} /><span>Оповещения</span></Space> },
+    { value: 'ShopOutlined', label: <Space><ShopOutlined style={{ color: '#4f46e5' }} /><span>Офис / Магазин</span></Space> },
+    { value: 'CoffeeOutlined', label: <Space><CoffeeOutlined style={{ color: '#b45309' }} /><span>Разное (Кофе)</span></Space> },
 ];
 
 export default function CompanyUsersPage() {
@@ -302,142 +324,152 @@ export default function CompanyUsersPage() {
         return departments.filter(d => d.parentDepartmentId === parentId);
     };
 
+    const renderEmployeeNode = (u: CompanyUser, isRoot: boolean = false) => {
+        const roleLabel = roleLabels[u.role] || u.role;
+        const roleColor = roleColors[u.role] || '#6b7280';
+        const initials = formatNameInitials(u);
+        const firstLetter = u.firstName ? u.firstName[0].toUpperCase() : '?';
+
+        return (
+            <div className="node-card-container employee-node-container" key={u.id}>
+                {/* Actions Toolbar on Hover */}
+                <div className="node-actions-toolbar">
+                    <Space size={4}>
+                        {u.id !== currentUser?.id && (
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<SettingOutlined style={{ fontSize: 12 }} />}
+                                title="Настроить права"
+                                onClick={() => {
+                                    setEditingUser(u);
+                                    editForm.setFieldsValue({ permissions: u.permissions || [] });
+                                    setEditModalOpen(true);
+                                }}
+                            />
+                        )}
+                        {!isRoot && u.departmentId && (
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<DisconnectOutlined style={{ fontSize: 12, color: '#f59e0b' }} />}
+                                title="Убрать из отдела"
+                                onClick={() => handleUnassignUser(u.id)}
+                            />
+                        )}
+                        {u.id !== currentUser?.id && (
+                            <Popconfirm
+                                title="Удалить сотрудника из компании?"
+                                onConfirm={() => handleDeleteUser(u.id)}
+                                okText="Да"
+                                cancelText="Нет"
+                            >
+                                <Button
+                                    type="text"
+                                    danger
+                                    size="small"
+                                    icon={<DeleteOutlined style={{ fontSize: 12 }} />}
+                                    title="Удалить сотрудника"
+                                />
+                            </Popconfirm>
+                        )}
+                    </Space>
+                </div>
+
+                {/* Pill-shaped Node Card */}
+                <div className={`node-card employee-card ${isRoot ? 'root-admin-card' : ''}`}>
+                    <div 
+                        className="node-avatar"
+                        style={{ backgroundColor: roleColor }}
+                    >
+                        {firstLetter}
+                    </div>
+                    <div className="node-info">
+                        <span className="node-role-label" style={{ color: roleColor }}>{roleLabel}</span>
+                        <span className="node-name-label">{initials}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const renderDeptNode = (dept: any) => {
         const subDepts = getSubDepartments(dept.id);
         const deptUsers = dept.users || [];
         const currentIcon = deptIcons[dept.icon] || <FolderOpenOutlined />;
+        const hasChildren = subDepts.length > 0 || deptUsers.length > 0;
 
         return (
             <div className="org-tree-child-wrapper" key={dept.id}>
                 {/* Connector line from sibling bar down */}
                 <div className="org-tree-child-wrapper-card-line"></div>
 
-                {/* Card representation of the node */}
-                <Card
-                    size="small"
-                    className="dept-node-card"
-                    title={
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 600, fontSize: 13, color: '#1f2937', display: 'inline-flex', alignItems: 'center' }}>
-                                <span style={{ marginRight: 6, display: 'inline-flex', fontSize: 15, color: '#3b82f6' }}>
-                                    {currentIcon}
-                                </span>
-                                {dept.name}
-                            </span>
-                            <Space size={2}>
+                {/* Pill-shaped Department Card */}
+                <div className="node-card-container dept-node-container">
+                    {/* Actions Toolbar on Hover */}
+                    <div className="node-actions-toolbar">
+                        <Space size={4}>
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<PlusOutlined style={{ fontSize: 12 }} />}
+                                title="Добавить подотдел"
+                                onClick={() => handleAddSubDeptClick(dept.id)}
+                            />
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<UserAddOutlined style={{ fontSize: 12 }} />}
+                                title="Назначить сотрудника"
+                                onClick={() => handleAssignUserClick(dept.id)}
+                            />
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<EditOutlined style={{ fontSize: 12 }} />}
+                                title="Редактировать отдел"
+                                onClick={() => handleRenameDeptClick(dept)}
+                            />
+                            <Popconfirm
+                                title="Удалить отдел? Сотрудники перейдут в нераспределенные."
+                                onConfirm={() => handleDeleteDept(dept.id)}
+                                okText="Да"
+                                cancelText="Нет"
+                            >
                                 <Button
                                     type="text"
+                                    danger
                                     size="small"
-                                    icon={<PlusOutlined style={{ fontSize: 10, color: '#4b5563' }} />}
-                                    title="Добавить подотдел"
-                                    onClick={() => handleAddSubDeptClick(dept.id)}
+                                    icon={<DeleteOutlined style={{ fontSize: 12 }} />}
+                                    title="Удалить отдел"
                                 />
-                                <Button
-                                    type="text"
-                                    size="small"
-                                    icon={<EditOutlined style={{ fontSize: 10, color: '#4b5563' }} />}
-                                    title="Редактировать отдел"
-                                    onClick={() => handleRenameDeptClick(dept)}
-                                />
-                                <Popconfirm
-                                    title="Удалить отдел? Сотрудники перейдут в нераспределенные."
-                                    onConfirm={() => handleDeleteDept(dept.id)}
-                                    okText="Да"
-                                    cancelText="Нет"
-                                >
-                                    <Button
-                                        type="text"
-                                        danger
-                                        size="small"
-                                        icon={<DeleteOutlined style={{ fontSize: 10 }} />}
-                                        title="Удалить отдел"
-                                    />
-                                </Popconfirm>
-                            </Space>
-                        </div>
-                    }
-                    style={{ 
-                        width: 280, 
-                        borderRadius: 12, 
-                        boxShadow: '0 4px 15px rgba(0, 0, 0, 0.03)',
-                        border: '1px solid #e5e7eb'
-                    }}
-                >
-                    <div style={{ minHeight: 40, maxHeight: 180, overflowY: 'auto', padding: '4px 0' }}>
-                        {deptUsers.length === 0 ? (
-                            <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 11, padding: '12px 0' }}>
-                                Нет сотрудников
-                            </div>
-                        ) : (
-                            deptUsers.map((u: any) => (
-                                <div
-                                    key={u.id}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        padding: '4px 8px',
-                                        marginBottom: 4,
-                                        background: '#ffffff',
-                                        borderRadius: 6,
-                                        border: '1px solid #f3f4f6'
-                                    }}
-                                >
-                                    <Space size={6}>
-                                        <div
-                                            style={{
-                                                width: 18,
-                                                height: 18,
-                                                borderRadius: '50%',
-                                                background: roleColors[u.role] || '#9ca3af',
-                                                color: '#fff',
-                                                fontSize: 8,
-                                                fontWeight: 'bold',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center'
-                                            }}
-                                        >
-                                            {u.firstName[0]}
-                                        </div>
-                                        <div style={{ fontSize: 11, fontWeight: 500, color: '#374151', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {u.lastName} {u.firstName[0]}.
-                                        </div>
-                                    </Space>
-                                    <Space size={2}>
-                                        <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 3px', lineHeight: '12px', height: '14px', borderRadius: 4 }}>
-                                            {roleLabels[u.role] || u.role}
-                                        </Tag>
-                                        <Button
-                                            type="text"
-                                            danger
-                                            size="small"
-                                            style={{ padding: 0, width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                            icon={<span style={{ fontSize: 10, lineHeight: 1 }}>×</span>}
-                                            title="Убрать из отдела"
-                                            onClick={() => handleUnassignUser(u.id)}
-                                        />
-                                    </Space>
-                                </div>
-                            ))
-                        )}
+                            </Popconfirm>
+                        </Space>
                     </div>
-                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 6, marginTop: 6 }}>
-                        <Button
-                            type="dashed"
-                            size="small"
-                            icon={<PlusOutlined style={{ fontSize: 9 }} />}
-                            style={{ width: '100%', fontSize: 10, borderRadius: 6, color: '#6b7280', height: 24, padding: '0 8px' }}
-                            onClick={() => handleAssignUserClick(dept.id)}
-                        >
-                            Назначить сотрудника
-                        </Button>
-                    </div>
-                </Card>
 
-                {/* Subdepartments rendered recursively */}
-                {subDepts.length > 0 && (
+                    {/* Node Card UI */}
+                    <div className="node-card dept-card">
+                        <div className="node-avatar dept-icon-avatar">
+                            {currentIcon}
+                        </div>
+                        <div className="node-info">
+                            <span className="node-role-label dept-role-label">Отдел</span>
+                            <span className="node-name-label">{dept.name}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Subdepartments and employees rendered recursively below */}
+                {hasChildren && (
                     <div className="org-tree-children-container">
+                        {/* Render employees first */}
+                        {deptUsers.map((u: any) => (
+                            <div className="org-tree-child-wrapper" key={u.id}>
+                                <div className="org-tree-child-wrapper-card-line"></div>
+                                {renderEmployeeNode(u, false)}
+                            </div>
+                        ))}
+                        {/* Render subdepartments next */}
                         {subDepts.map(sd => renderDeptNode(sd))}
                     </div>
                 )}
@@ -452,89 +484,48 @@ export default function CompanyUsersPage() {
 
         return (
             <div className="org-tree">
-                <Card
-                    size="small"
-                    className="company-root-card"
-                    title={
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>
-                                <ApartmentOutlined style={{ marginRight: 6, color: '#ef4444' }} />
-                                {companyName}
-                            </span>
-                            <Button
-                                type="primary"
-                                size="small"
-                                icon={<PlusOutlined />}
-                                style={{ borderRadius: 6, fontSize: 11, height: 22, padding: '0 8px' }}
-                                onClick={() => handleAddSubDeptClick(null)}
-                            >
-                                Отдел
-                            </Button>
-                        </div>
-                    }
-                    style={{ 
-                        width: 320, 
-                        borderRadius: 12, 
-                        border: '1px solid #fca5a5', 
-                        boxShadow: '0 4px 15px rgba(239, 68, 68, 0.03)' 
-                    }}
-                >
-                    <div style={{ padding: '2px 0' }}>
-                        <div style={{ fontSize: 8, color: '#9ca3af', marginBottom: 4, fontWeight: 700, letterSpacing: '0.05em' }}>
-                            РУКОВОДСТВО
-                        </div>
-                        {adminUsers.length === 0 ? (
-                            <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 11, padding: '8px 0' }}>
-                                Нет назначенных админов
-                            </div>
-                        ) : (
-                            adminUsers.map(u => (
-                                <div
-                                    key={u.id}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        padding: '4px 8px',
-                                        marginBottom: 4,
-                                        background: '#fef2f2',
-                                        borderRadius: 8,
-                                        border: '1px solid #fee2e2'
-                                    }}
-                                >
-                                    <Space size={6}>
-                                        <div
-                                            style={{
-                                                width: 20,
-                                                height: 20,
-                                                borderRadius: '50%',
-                                                background: '#ef4444',
-                                                color: '#fff',
-                                                fontSize: 9,
-                                                fontWeight: 'bold',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center'
-                                            }}
-                                        >
-                                            {u.firstName[0]}
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: 11, fontWeight: 600, color: '#991b1b' }}>{u.lastName} {u.firstName}</div>
-                                            <div style={{ fontSize: 9, color: '#b91c1c', opacity: 0.7 }}>{u.phone || u.email}</div>
-                                        </div>
-                                    </Space>
-                                    <Tag color="red" style={{ fontSize: 8, margin: 0, borderRadius: 4, padding: '0 4px', lineHeight: '14px' }}>Админ</Tag>
-                                </div>
-                            ))
-                        )}
+                {/* Elegant Company Badge */}
+                <div className="company-badge-container">
+                    <div className="company-badge">
+                        <ApartmentOutlined className="company-badge-icon" />
+                        <span className="company-badge-text">{companyName}</span>
+                        <Button
+                            type="primary"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            className="company-add-dept-btn"
+                            title="Создать отдел"
+                            onClick={() => handleAddSubDeptClick(null)}
+                        >
+                            Отдел
+                        </Button>
                     </div>
-                </Card>
+                    <div className="company-badge-line"></div>
+                </div>
+
+                {/* Root Administrators Row */}
+                <div className="org-tree-root-row">
+                    {adminUsers.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 11, padding: '8px 16px', background: '#fff', borderRadius: 20, border: '1px dashed #d1d5db' }}>
+                            Нет назначенных админов
+                        </div>
+                    ) : (
+                        adminUsers.map(u => (
+                            <div className="org-tree-root-card-wrapper" key={u.id}>
+                                {renderEmployeeNode(u, true)}
+                                <div className="org-tree-root-card-line"></div>
+                            </div>
+                        ))
+                    )}
+                </div>
 
                 {rootDepts.length > 0 && (
-                    <div className="org-tree-children-container">
-                        {rootDepts.map(sd => renderDeptNode(sd))}
-                    </div>
+                    <>
+                        <div className="org-tree-root-to-children-line"></div>
+                        <div className="org-tree-children-container">
+                            {rootDepts.map(sd => renderDeptNode(sd))}
+                        </div>
+                    </>
                 )}
             </div>
         );
@@ -628,35 +619,7 @@ export default function CompanyUsersPage() {
             ),
         },
         {
-            title: 'Создано',
-            dataIndex: 'createdAt',
-            key: 'createdAt',
-            render: (date: string) => new Date(date).toLocaleString('ru-RU'),
-        },
-        {
-            title: 'Действия',
-            key: 'actions',
-            render: (_: any, record: Invitation) => (
-                <Popconfirm
-                    title="Отменить приглашение?"
-                    onConfirm={() => handleCancelInvitation(record.id)}
-                    okText="Да"
-                    cancelText="Нет"
-                >
-                    <Button danger>Отменить</Button>
-                </Popconfirm>
-            ),
-        },
-    ];
-
-    // Unassigned users list
-    const unassignedUsers = users.filter(
-        u => !u.departmentId && u.role !== 'COMPANY_ADMIN' && u.role !== 'ADMIN'
-    );
-
-    return (
-        <div className="company-structure-page">
-            {/* Elegant Background Dot Grid Pattern for modern aesthetics */}
+                  {/* Elegant Background Dot Grid Pattern for modern aesthetics */}
             <style>{`
                 .org-tree-container {
                     display: flex;
@@ -679,6 +642,121 @@ export default function CompanyUsersPage() {
                     align-items: center;
                 }
                 
+                /* Company Badge at top */
+                .company-badge-container {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    margin-bottom: 12px;
+                }
+                
+                .company-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    background: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 30px;
+                    padding: 6px 14px 6px 16px;
+                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+                    font-weight: 700;
+                    font-size: 13px;
+                    color: #111827;
+                    transition: all 0.2s ease;
+                }
+                
+                .company-badge:hover {
+                    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+                    border-color: #d1d5db;
+                }
+                
+                .company-badge-icon {
+                    margin-right: 8px;
+                    color: #3b82f6;
+                    font-size: 14px;
+                }
+                
+                .company-badge-text {
+                    max-width: 160px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                
+                .company-add-dept-btn {
+                    margin-left: 12px;
+                    border-radius: 15px;
+                    font-size: 10px;
+                    font-weight: 600;
+                    height: 22px;
+                    padding: 0 10px;
+                }
+                
+                .company-badge-line {
+                    width: 2px;
+                    height: 16px;
+                    background-color: #d1d5db;
+                }
+                
+                /* Root administrators row */
+                .org-tree-root-row {
+                    display: flex;
+                    justify-content: center;
+                    position: relative;
+                    padding-bottom: 24px;
+                }
+                
+                .org-tree-root-card-wrapper {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    padding: 0 16px;
+                    position: relative;
+                }
+                
+                .org-tree-root-card-wrapper::before,
+                .org-tree-root-card-wrapper::after {
+                    content: '';
+                    position: absolute;
+                    bottom: 0;
+                    width: 50%;
+                    height: 2px;
+                    background-color: #d1d5db;
+                }
+                
+                .org-tree-root-card-wrapper::before {
+                    right: 50%;
+                }
+                
+                .org-tree-root-card-wrapper::after {
+                    left: 50%;
+                }
+                
+                .org-tree-root-card-wrapper:only-child::before,
+                .org-tree-root-card-wrapper:only-child::after {
+                    display: none;
+                }
+                
+                .org-tree-root-card-wrapper:first-child::before {
+                    display: none;
+                }
+                
+                .org-tree-root-card-wrapper:last-child::after {
+                    display: none;
+                }
+                
+                .org-tree-root-card-line {
+                    width: 2px;
+                    height: 24px;
+                    background-color: #d1d5db;
+                }
+                
+                .org-tree-root-to-children-line {
+                    width: 2px;
+                    height: 24px;
+                    background-color: #d1d5db;
+                }
+                
+                /* Child wrappers and hierarchy connectors */
                 .org-tree-children-container {
                     display: flex;
                     padding-top: 24px;
@@ -699,7 +777,7 @@ export default function CompanyUsersPage() {
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    padding: 0 16px;
+                    padding: 0 12px;
                     position: relative;
                 }
                 
@@ -735,24 +813,158 @@ export default function CompanyUsersPage() {
                     background-color: #d1d5db;
                 }
                 
-                .dept-node-card {
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                /* Pill-shaped Round Card Nodes styling */
+                .node-card-container {
+                    position: relative;
+                    padding: 4px 0;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    z-index: 2;
                 }
                 
-                .dept-node-card:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.05) !important;
-                    border-color: #cbd5e1 !important;
-                }
-
-                .company-root-card {
+                .node-card {
+                    display: flex;
+                    align-items: center;
+                    width: 220px;
+                    height: 60px;
+                    padding: 8px 14px;
+                    background: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 30px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
                     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    cursor: default;
                 }
-
-                .company-root-card:hover {
+                
+                .node-card-container:hover .node-card {
                     transform: translateY(-2px);
-                    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.05) !important;
-                    border-color: #f87171 !important;
+                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+                    border-color: #cbd5e1;
+                }
+                
+                /* Root Admin node specific styling */
+                .root-admin-card {
+                    border: 1px solid #fca5a5;
+                    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.03);
+                }
+                
+                .node-card-container:hover .root-admin-card {
+                    border-color: #f87171;
+                    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.08);
+                }
+                
+                /* Department node specific styling */
+                .dept-card {
+                    border: 1px solid #bfdbfe;
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.03);
+                }
+                
+                .node-card-container:hover .dept-card {
+                    border-color: #3b82f6;
+                    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.08);
+                }
+                
+                /* Node Avatars */
+                .node-avatar {
+                    width: 42px;
+                    height: 42px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justifyContent: center;
+                    color: #ffffff;
+                    font-weight: 700;
+                    font-size: 14px;
+                    margin-right: 12px;
+                    flex-shrink: 0;
+                    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+                }
+                
+                .dept-icon-avatar {
+                    background-color: #eff6ff;
+                    color: #3b82f6;
+                    font-size: 18px;
+                    box-shadow: none;
+                    border: 1px solid #dbeafe;
+                }
+                
+                /* Node details */
+                .node-info {
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    flex-grow: 1;
+                    min-width: 0;
+                    text-align: left;
+                }
+                
+                .node-role-label {
+                    font-size: 9px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    line-height: 1.2;
+                    margin-bottom: 2px;
+                }
+                
+                .dept-role-label {
+                    color: #3b82f6;
+                }
+                
+                .node-name-label {
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #1f2937;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    line-height: 1.2;
+                }
+                
+                /* Float Actions Toolbar on Hover */
+                .node-actions-toolbar {
+                    position: absolute;
+                    top: -14px;
+                    background: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 20px;
+                    padding: 2px 6px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+                    opacity: 0;
+                    pointer-events: none;
+                    transform: translateY(4px);
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    z-index: 10;
+                    display: flex;
+                    align-items: center;
+                }
+                
+                .node-actions-toolbar .ant-btn {
+                    padding: 0;
+                    width: 24px;
+                    height: 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    color: #4b5563;
+                }
+                
+                .node-actions-toolbar .ant-btn:hover {
+                    background: #f3f4f6;
+                    color: #111827;
+                }
+                
+                .node-actions-toolbar .ant-btn-dangerous:hover {
+                    background: #fef2f2;
+                    color: #ef4444;
+                }
+                
+                .node-card-container:hover .node-actions-toolbar {
+                    opacity: 1;
+                    pointer-events: auto;
+                    transform: translateY(0);
                 }
             `}</style>
 
