@@ -619,7 +619,35 @@ export default function CompanyUsersPage() {
             ),
         },
         {
-                  {/* Elegant Background Dot Grid Pattern for modern aesthetics */}
+            title: 'Создано',
+            dataIndex: 'createdAt',
+            key: 'createdAt',
+            render: (date: string) => new Date(date).toLocaleString('ru-RU'),
+        },
+        {
+            title: 'Действия',
+            key: 'actions',
+            render: (_: any, record: Invitation) => (
+                <Popconfirm
+                    title="Отменить приглашение?"
+                    onConfirm={() => handleCancelInvitation(record.id)}
+                    okText="Да"
+                    cancelText="Нет"
+                >
+                    <Button danger>Отменить</Button>
+                </Popconfirm>
+            ),
+        },
+    ];
+
+    // Unassigned users list
+    const unassignedUsers = users.filter(
+        u => !u.departmentId && u.role !== 'COMPANY_ADMIN' && u.role !== 'ADMIN'
+    );
+
+    return (
+        <div className="company-structure-page">
+            {/* Elegant Background Dot Grid Pattern for modern aesthetics */}
             <style>{`
                 .org-tree-container {
                     display: flex;
