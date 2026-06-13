@@ -1549,16 +1549,6 @@ export default function OrderDetailPage() {
                         name="companyId" 
                         label="Компания-перевозчик (контрагент)" 
                         rules={[{ required: true, message: 'Выберите компанию' }]}
-                        help={
-                            <Button
-                                type="link"
-                                size="small"
-                                style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 2 }}
-                                onClick={() => setQuickPartnerModalOpen(true)}
-                            >
-                                + Добавить нового контрагента
-                            </Button>
-                        }
                     >
                         <Select 
                             placeholder="Выберите компанию" 
