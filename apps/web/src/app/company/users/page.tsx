@@ -417,22 +417,26 @@ export default function CompanyUsersPage() {
         }
     };
 
-    const handlePositionChange = (value: string) => {
-        const lower = value.toLowerCase();
-        if (lower.includes('бух') || lower.includes('финанс') || lower.includes('касс')) {
-            form.setFieldsValue({ role: 'ACCOUNTANT' });
-        } else if (lower.includes('склад') || lower.includes('кладов')) {
-            form.setFieldsValue({ role: 'WAREHOUSE_MANAGER' });
-        } else if (lower.trim() !== '') {
-            form.setFieldsValue({ role: 'LOGISTICIAN' });
-        }
-    };
-
     // ==================== Original employee handlers ====================
 
     const handleInvite = async (values: any) => {
+        // Automatically determine system role from custom position and permissions
+        const lower = (values.position || '').toLowerCase();
+        const perms = values.permissions || [];
+        let systemRole = 'LOGISTICIAN';
+        if (lower.includes('бух') || lower.includes('финанс') || lower.includes('касс') || perms.includes('accounting')) {
+            systemRole = 'ACCOUNTANT';
+        } else if (lower.includes('склад') || lower.includes('кладов')) {
+            systemRole = 'WAREHOUSE_MANAGER';
+        }
+
+        const payload = {
+            ...values,
+            role: systemRole,
+        };
+
         try {
-            const res = await api.post('/company/invitations', values);
+            const res = await api.post('/company/invitations', payload);
             message.success('Приглашение создано');
             const link = `${window.location.origin}/invite?token=${res.data.token}`;
             setGeneratedLink(link);
@@ -828,16 +832,9 @@ export default function CompanyUsersPage() {
             key: 'phone',
         },
         {
-            title: 'Должность / Роль',
+            title: 'Роль',
             key: 'role',
-            render: (_: any, record: CompanyUser) => (
-                <Space>
-                    <span>{record.position || '—'}</span>
-                    <Tag color={roleColors[record.role] || 'default'} style={{ fontSize: '11px', borderRadius: '4px' }}>
-                        {roleLabels[record.role] || record.role}
-                    </Tag>
-                </Space>
-            ),
+            render: (_: any, record: CompanyUser) => record.position || roleLabels[record.role] || record.role,
         },
         {
             title: 'Отдел',
@@ -904,16 +901,9 @@ export default function CompanyUsersPage() {
             key: 'email',
         },
         {
-            title: 'Должность / Роль',
+            title: 'Роль',
             key: 'role',
-            render: (_: any, record: Invitation) => (
-                <Space>
-                    <span>{record.position || '—'}</span>
-                    <Tag color={roleColors[record.role] || 'default'} style={{ fontSize: '11px', borderRadius: '4px' }}>
-                        {roleLabels[record.role] || record.role}
-                    </Tag>
-                </Space>
-            ),
+            render: (_: any, record: Invitation) => record.position || roleLabels[record.role] || record.role,
         },
         {
             title: 'Создано',
@@ -1583,24 +1573,10 @@ export default function CompanyUsersPage() {
                         </Form.Item>
                         <Form.Item 
                             name="position" 
-                            label="Должность" 
-                            rules={[{ required: true, message: 'Введите название должности' }]}
+                            label="Роль / Должность" 
+                            rules={[{ required: true, message: 'Введите название роли/должности' }]}
                         >
-                            <Input 
-                                placeholder="Например: Старший логист, Помощник бухгалтера" 
-                                onChange={(e) => handlePositionChange(e.target.value)}
-                            />
-                        </Form.Item>
-                        <Form.Item 
-                            name="role" 
-                            label="Права доступа (Системная роль)" 
-                            rules={[{ required: true, message: 'Выберите права доступа' }]}
-                        >
-                            <Select placeholder="Выберите права доступа">
-                                <Select.Option value="LOGISTICIAN">Менеджер (заявки, водители)</Select.Option>
-                                <Select.Option value="ACCOUNTANT">Бухгалтер (бухгалтерия)</Select.Option>
-                                <Select.Option value="WAREHOUSE_MANAGER">Завсклад (очередь склада)</Select.Option>
-                            </Select>
+                            <Input placeholder="Например: Менеджер, Бухгалтер, Завсклад" />
                         </Form.Item>
                         <Form.Item name="departmentId" label="Отдел (опционально)">
                             <Select 
