@@ -8,10 +8,11 @@ import {
     DollarOutlined, CalculatorOutlined, TruckOutlined, TeamOutlined, CarryOutlined,
     NotificationOutlined, ShopOutlined, CoffeeOutlined, UserAddOutlined, DisconnectOutlined,
     CarOutlined, InboxOutlined, PushpinOutlined, FileTextOutlined, EnvironmentOutlined, DashboardOutlined,
-    AimOutlined
+    AimOutlined, IdcardOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { VEHICLE_TYPES } from '@/lib/constants';
 
 const MODULE_PERMISSIONS = [
     { label: 'Заявки', value: 'orders' },
@@ -179,6 +180,10 @@ export default function CompanyUsersPage() {
     const [assignModalOpen, setAssignModalOpen] = useState(false);
     const [assignForm] = Form.useForm();
     const [assignDeptId, setAssignDeptId] = useState<string | null>(null);
+
+    // Driver creation modal state
+    const [driverModalOpen, setDriverModalOpen] = useState(false);
+    const [driverForm] = Form.useForm();
 
     const fetchData = async () => {
         setLoading(true);
@@ -416,6 +421,20 @@ export default function CompanyUsersPage() {
             fetchData();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка');
+        }
+    };
+
+    // ==================== Driver creation handler ====================
+
+    const handleCreateDriver = async (values: any) => {
+        try {
+            await api.post('/company/drivers', values);
+            message.success('Водитель успешно создан');
+            setDriverModalOpen(false);
+            driverForm.resetFields();
+            fetchData();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка создания водителя');
         }
     };
 
@@ -781,6 +800,7 @@ export default function CompanyUsersPage() {
                     background-color: #ffffff;
                     border: none;
                     min-height: 480px;
+                    border-radius: 16px;
                 }
                 
                 .org-tree-container-bg {
@@ -790,12 +810,11 @@ export default function CompanyUsersPage() {
                     right: 0;
                     bottom: 0;
                     pointer-events: none;
-                    background-image: radial-gradient(#000000 1.5px, transparent 1.5px);
-                    background-size: 20px 20px;
+                    background-image: radial-gradient(rgba(0, 0, 0, 0.18) 1.2px, transparent 1.2px);
+                    background-size: 22px 22px;
                     z-index: 1;
-                    /* Center dots are dark black, fading to transparent towards the edges */
-                    mask-image: radial-gradient(circle, rgba(0, 0, 0, 0.7) 10%, rgba(0, 0, 0, 0) 75%);
-                    -webkit-mask-image: radial-gradient(circle, rgba(0, 0, 0, 0.7) 10%, rgba(0, 0, 0, 0) 75%);
+                    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
+                    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
                 }
                 
                 .org-tree {
@@ -807,61 +826,6 @@ export default function CompanyUsersPage() {
                     margin: 0 auto;
                     width: max-content;
                     min-width: 100%;
-                }
-                
-                /* Company Badge at top */
-                .company-badge-container {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    margin-bottom: 12px;
-                }
-                
-                .company-badge {
-                    display: inline-flex;
-                    align-items: center;
-                    background: #ffffff;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 30px;
-                    padding: 6px 14px 6px 16px;
-                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
-                    font-weight: 700;
-                    font-size: 13px;
-                    color: #111827;
-                    transition: all 0.2s ease;
-                }
-                
-                .company-badge:hover {
-                    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
-                    border-color: #d1d5db;
-                }
-                
-                .company-badge-icon {
-                    margin-right: 8px;
-                    color: #3b82f6;
-                    font-size: 14px;
-                }
-                
-                .company-badge-text {
-                    max-width: 160px;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                }
-                
-                .company-add-dept-btn {
-                    margin-left: 12px;
-                    border-radius: 15px;
-                    font-size: 10px;
-                    font-weight: 600;
-                    height: 22px;
-                    padding: 0 10px;
-                }
-                
-                .company-badge-line {
-                    width: 2px;
-                    height: 16px;
-                    background-color: #d1d5db;
                 }
                 
                 /* Root administrators row */
@@ -879,7 +843,7 @@ export default function CompanyUsersPage() {
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    padding: 0 16px;
+                    padding: 0 20px;
                     position: relative;
                     flex-shrink: 0;
                 }
@@ -891,7 +855,7 @@ export default function CompanyUsersPage() {
                     bottom: 0;
                     width: 50%;
                     height: 2px;
-                    background-color: #d1d5db;
+                    background: linear-gradient(90deg, #c7d2fe, #a5b4fc);
                 }
                 
                 .org-tree-root-card-wrapper::before {
@@ -917,14 +881,14 @@ export default function CompanyUsersPage() {
                 
                 .org-tree-root-card-line {
                     width: 2px;
-                    height: 24px;
-                    background-color: #d1d5db;
+                    height: 28px;
+                    background: linear-gradient(180deg, #c7d2fe, #a5b4fc);
                 }
                 
                 .org-tree-root-to-children-line {
                     width: 2px;
-                    height: 24px;
-                    background-color: #d1d5db;
+                    height: 28px;
+                    background: linear-gradient(180deg, #a5b4fc, #c7d2fe);
                     position: relative;
                     z-index: 2;
                 }
@@ -932,7 +896,7 @@ export default function CompanyUsersPage() {
                 /* Child wrappers and hierarchy connectors */
                 .org-tree-children-container {
                     display: flex;
-                    padding-top: 24px;
+                    padding-top: 28px;
                     position: relative;
                     width: max-content;
                     flex-shrink: 0;
@@ -945,15 +909,15 @@ export default function CompanyUsersPage() {
                     top: 0;
                     left: 50%;
                     width: 2px;
-                    height: 24px;
-                    background-color: #d1d5db;
+                    height: 28px;
+                    background: linear-gradient(180deg, #c7d2fe, #a5b4fc);
                 }
                 
                 .org-tree-child-wrapper {
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    padding: 0 12px;
+                    padding: 0 16px;
                     position: relative;
                     flex-shrink: 0;
                 }
@@ -965,7 +929,7 @@ export default function CompanyUsersPage() {
                     top: 0;
                     width: 50%;
                     height: 2px;
-                    background-color: #d1d5db;
+                    background: linear-gradient(90deg, #c7d2fe, #a5b4fc);
                 }
                 
                 .org-tree-child-wrapper::before {
@@ -986,14 +950,14 @@ export default function CompanyUsersPage() {
                 
                 .org-tree-child-wrapper-card-line {
                     width: 2px;
-                    height: 24px;
-                    background-color: #d1d5db;
+                    height: 28px;
+                    background: linear-gradient(180deg, #c7d2fe, #a5b4fc);
                 }
                 
-                /* Pill-shaped Round Card Nodes styling */
+                /* Card Nodes */
                 .node-card-container {
                     position: relative;
-                    padding: 4px 0;
+                    padding: 6px 0;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
@@ -1004,66 +968,70 @@ export default function CompanyUsersPage() {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    width: 220px;
-                    height: 60px;
-                    padding: 8px 14px;
+                    width: 240px;
+                    height: 68px;
+                    padding: 10px 16px;
                     background: transparent;
-                    border: none;
+                    border: 1px solid transparent;
+                    border-radius: 16px;
                     box-shadow: none;
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                     cursor: default;
                 }
                 
                 .node-card-container:hover .node-card {
-                    transform: translateY(-2px);
+                    transform: translateY(-3px);
+                    background: rgba(255, 255, 255, 0.7);
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    border-color: rgba(199, 210, 254, 0.5);
+                    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.08);
                 }
                 
-                /* Root Admin node specific styling */
+                /* Root Admin node */
                 .root-admin-card {
                     border: none;
                     box-shadow: none;
                     background: transparent;
                 }
                 
-                .node-card-container:hover .root-admin-card {
-                    border: none;
-                    box-shadow: none;
-                }
-                
-                /* Department node specific styling */
+                /* Department node */
                 .dept-card {
                     border: none;
                     box-shadow: none;
                     background: transparent;
                 }
                 
-                .node-card-container:hover .dept-card {
-                    border: none;
-                    box-shadow: none;
-                }
-                
                 /* Node Avatars */
                 .node-avatar {
-                    width: 42px;
-                    height: 42px;
+                    width: 48px;
+                    height: 48px;
                     border-radius: 50%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     color: #ffffff;
                     font-weight: 700;
-                    font-size: 14px;
-                    margin-right: 12px;
+                    font-size: 16px;
+                    margin-right: 14px;
                     flex-shrink: 0;
-                    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+                    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+                    transition: all 0.25s ease;
+                }
+                
+                .node-card-container:hover .node-avatar {
+                    transform: scale(1.08);
+                    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
                 }
                 
                 .dept-icon-avatar {
-                    background-color: #eff6ff;
-                    color: #3b82f6;
-                    font-size: 18px;
-                    box-shadow: none;
-                    border: 1px solid #dbeafe;
+                    font-size: 20px;
+                    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.15);
+                    border: 2px solid rgba(255, 255, 255, 0.8);
+                }
+                
+                .node-card-container:hover .dept-icon-avatar {
+                    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.25);
                 }
                 
                 /* Node details */
@@ -1076,12 +1044,12 @@ export default function CompanyUsersPage() {
                 }
                 
                 .node-role-label {
-                    font-size: 9px;
+                    font-size: 10px;
                     font-weight: 700;
                     text-transform: uppercase;
-                    letter-spacing: 0.05em;
+                    letter-spacing: 0.08em;
                     line-height: 1.2;
-                    margin-bottom: 2px;
+                    margin-bottom: 3px;
                 }
                 
                 .dept-role-label {
@@ -1089,28 +1057,30 @@ export default function CompanyUsersPage() {
                 }
                 
                 .node-name-label {
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #1f2937;
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: #111827;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                    line-height: 1.2;
+                    line-height: 1.3;
                 }
                 
                 /* Float Actions Toolbar on Hover */
                 .node-actions-toolbar {
                     position: absolute;
-                    top: -14px;
-                    background: #ffffff;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 20px;
-                    padding: 2px 6px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+                    top: -12px;
+                    background: rgba(255, 255, 255, 0.88);
+                    backdrop-filter: blur(12px);
+                    -webkit-backdrop-filter: blur(12px);
+                    border: 1px solid rgba(0, 0, 0, 0.06);
+                    border-radius: 22px;
+                    padding: 3px 8px;
+                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(99, 102, 241, 0.06);
                     opacity: 0;
                     pointer-events: none;
-                    transform: translateY(4px);
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    transform: translateY(6px);
+                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                     z-index: 10;
                     display: flex;
                     align-items: center;
@@ -1118,18 +1088,19 @@ export default function CompanyUsersPage() {
                 
                 .node-actions-toolbar .ant-btn {
                     padding: 0;
-                    width: 24px;
-                    height: 24px;
+                    width: 26px;
+                    height: 26px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     border-radius: 50%;
                     color: #4b5563;
+                    transition: all 0.15s ease;
                 }
                 
                 .node-actions-toolbar .ant-btn:hover {
-                    background: #f3f4f6;
-                    color: #111827;
+                    background: rgba(99, 102, 241, 0.08);
+                    color: #4f46e5;
                 }
                 
                 .node-actions-toolbar .ant-btn-dangerous:hover {
@@ -1141,6 +1112,16 @@ export default function CompanyUsersPage() {
                     opacity: 1;
                     pointer-events: auto;
                     transform: translateY(0);
+                }
+                
+                /* Center button pulse */
+                @keyframes centerBtnPulse {
+                    0%, 100% { box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15); }
+                    50% { box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3); }
+                }
+                
+                .center-view-btn {
+                    animation: centerBtnPulse 3s ease-in-out infinite;
                 }
             `}</style>
 
@@ -1160,6 +1141,15 @@ export default function CompanyUsersPage() {
                             Список
                         </Radio.Button>
                     </Radio.Group>
+                    <Button
+                        icon={<CarOutlined />}
+                        onClick={() => {
+                            driverForm.resetFields();
+                            setDriverModalOpen(true);
+                        }}
+                    >
+                        + Водитель
+                    </Button>
                     <Button type="primary" icon={<MailOutlined />} onClick={openInviteModal}>
                         Пригласить
                     </Button>
@@ -1185,17 +1175,19 @@ export default function CompanyUsersPage() {
                                 shape="circle"
                                 icon={<AimOutlined />}
                                 onClick={handleCenterView}
+                                className="center-view-btn"
                                 style={{
                                     position: 'absolute',
                                     bottom: 20,
                                     right: 20,
                                     zIndex: 10,
-                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    width: 36,
-                                    height: 36,
+                                    width: 38,
+                                    height: 38,
+                                    border: '1px solid rgba(99, 102, 241, 0.2)',
+                                    color: '#6366f1',
                                 }}
                                 title="Центрировать схему"
                             />
@@ -1468,6 +1460,100 @@ export default function CompanyUsersPage() {
                     <Form.Item name="permissions" label="Доступ к разделам">
                         <Checkbox.Group options={MODULE_PERMISSIONS} />
                     </Form.Item>
+                </Form>
+            </Modal>
+
+            {/* Modal: Create Driver */}
+            <Modal
+                title="Добавление водителя"
+                open={driverModalOpen}
+                onCancel={() => {
+                    setDriverModalOpen(false);
+                    driverForm.resetFields();
+                }}
+                onOk={() => driverForm.submit()}
+                okText="Создать"
+                cancelText="Отмена"
+                width={550}
+                destroyOnClose
+            >
+                <Form form={driverForm} layout="vertical" onFinish={handleCreateDriver}>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="lastName"
+                                label="Фамилия"
+                                rules={[{ required: true, message: 'Обязательное поле' }]}
+                            >
+                                <Input placeholder="Иванов" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="firstName"
+                                label="Имя"
+                                rules={[{ required: true, message: 'Обязательное поле' }]}
+                            >
+                                <Input placeholder="Иван" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item name="middleName" label="Отчество">
+                        <Input placeholder="Иванович" />
+                    </Form.Item>
+                    <Form.Item
+                        name="phone"
+                        label="Телефон"
+                        rules={[
+                            { required: true, message: 'Обязательное поле' },
+                            { pattern: /^(\+7|8)\d{10}$/, message: 'Формат: +7XXXXXXXXXX' }
+                        ]}
+                    >
+                        <Input placeholder="+77001234567" />
+                    </Form.Item>
+                    <Form.Item
+                        name="iin"
+                        label="ИИН"
+                        rules={[
+                            { required: true, message: 'Введите ИИН' },
+                            { pattern: /^\d{12}$/, message: 'ИИН должен содержать 12 цифр' }
+                        ]}
+                    >
+                        <Input placeholder="123456789012" maxLength={12} />
+                    </Form.Item>
+                    <Divider><CarOutlined /> Транспорт</Divider>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="vehicleType" label="Тип транспорта">
+                                <Select
+                                    placeholder="Тент, Реф..."
+                                    allowClear
+                                    showSearch
+                                    optionFilterProp="children"
+                                >
+                                    {VEHICLE_TYPES.map(t => (
+                                        <Select.Option key={t} value={t}>{t}</Select.Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="vehiclePlate"
+                                label="Гос. номер авто"
+                                rules={[{ required: true, message: 'Введите гос. номер' }]}
+                            >
+                                <Input placeholder="A123BC01" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Alert
+                        message="Водитель будет автоматически добавлен в отдел «Водители»"
+                        description="Расширенные данные (документы, модель авто, прицеп) можно заполнить в разделе Водители."
+                        type="info"
+                        showIcon
+                        style={{ marginTop: 8 }}
+                    />
                 </Form>
             </Modal>
         </div>
