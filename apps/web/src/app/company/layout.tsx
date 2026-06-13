@@ -144,7 +144,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // --- ОРГАНИЗАЦИЯ ---
+        // --- ПАРТНЁРЫ ---
         const partnersChildren: any[] = [];
         if (hasPerm('partners')) {
             partnersChildren.push({
