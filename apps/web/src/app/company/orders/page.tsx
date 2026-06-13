@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Table, Button, Tag, Space, Modal, Form, Input, message, Typography,
@@ -9,10 +9,10 @@ import {
 } from 'antd';
 import dayjs from 'dayjs';
 import {
-    EyeOutlined, UserAddOutlined, CheckCircleOutlined, PlusOutlined,
+    UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
-    FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined, EditOutlined,
-    MailOutlined
+    FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined,
+    MailOutlined, RightOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -118,16 +118,7 @@ interface Order {
 export default function CompanyOrdersPage() {
     const { user } = useAuthStore();
     const router = useRouter();
-    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const lastClickedOrderIdRef = useRef<string | null>(null);
 
-    useEffect(() => {
-        return () => {
-            if (clickTimeoutRef.current) {
-                clearTimeout(clickTimeoutRef.current);
-            }
-        };
-    }, []);
     const [activeTab, setActiveTab] = useState('all');
     const [ordersPage, setOrdersPage] = useState(1);
     const [ordersPageSize, setOrdersPageSize] = useState(20);
@@ -1082,12 +1073,11 @@ export default function CompanyOrdersPage() {
             },
         },
         {
-            title: '', key: 'actions', width: 80, fixed: 'right' as const,
+            title: '', key: 'actions', width: 50, fixed: 'right' as const,
             render: (_: any, r: Order) => (
-                <Space size={4}>
-                    <Tooltip title="Подробнее"><Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} style={{ fontSize: 12 }} /></Tooltip>
-                    <Tooltip title="Редактировать"><Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(r)} /></Tooltip>
-                </Space>
+                <Tooltip title="Открыть заявку">
+                    <Button size="small" type="link" icon={<RightOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }} style={{ fontSize: 12, color: '#1890ff' }} />
+                </Tooltip>
             ),
         },
     ];
@@ -1140,10 +1130,10 @@ export default function CompanyOrdersPage() {
                 return cost ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
             },
         },
-        { title: '', key: 'actions', width: 60, render: (_: any, r: Order) => (
-            <Space size={4}>
-                <Tooltip title="Подробнее"><Button size="small" icon={<EyeOutlined />} onClick={() => showOrderDetail(r)} style={{ fontSize: 12 }} /></Tooltip>
-            </Space>
+        { title: '', key: 'actions', width: 50, render: (_: any, r: Order) => (
+            <Tooltip title="Открыть заявку">
+                <Button size="small" type="link" icon={<RightOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }} style={{ fontSize: 12, color: '#1890ff' }} />
+            </Tooltip>
         ) },
     ];
 
@@ -1263,23 +1253,7 @@ export default function CompanyOrdersPage() {
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
                                         onClick: () => {
-                                            if (clickTimeoutRef.current && lastClickedOrderIdRef.current === record.id) {
-                                                clearTimeout(clickTimeoutRef.current);
-                                                clickTimeoutRef.current = null;
-                                                lastClickedOrderIdRef.current = null;
-                                                router.push(`/company/orders/${record.id}`);
-                                            } else {
-                                                if (clickTimeoutRef.current) {
-                                                    clearTimeout(clickTimeoutRef.current);
-                                                }
-                                                lastClickedOrderIdRef.current = record.id;
-                                                clickTimeoutRef.current = setTimeout(() => {
-                                                    setSelectedOrder(record);
-                                                    setDetailDrawerOpen(true);
-                                                    clickTimeoutRef.current = null;
-                                                    lastClickedOrderIdRef.current = null;
-                                                }, 250);
-                                            }
+                                            router.push(`/company/orders/${record.id}`);
                                         }
                                     })}
                                     rowClassName={(record) => {
@@ -1370,23 +1344,7 @@ export default function CompanyOrdersPage() {
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
                                         onClick: () => {
-                                            if (clickTimeoutRef.current && lastClickedOrderIdRef.current === record.id) {
-                                                clearTimeout(clickTimeoutRef.current);
-                                                clickTimeoutRef.current = null;
-                                                lastClickedOrderIdRef.current = null;
-                                                router.push(`/company/orders/${record.id}`);
-                                            } else {
-                                                if (clickTimeoutRef.current) {
-                                                    clearTimeout(clickTimeoutRef.current);
-                                                }
-                                                lastClickedOrderIdRef.current = record.id;
-                                                clickTimeoutRef.current = setTimeout(() => {
-                                                    setSelectedOrder(record);
-                                                    setDetailDrawerOpen(true);
-                                                    clickTimeoutRef.current = null;
-                                                    lastClickedOrderIdRef.current = null;
-                                                }, 250);
-                                            }
+                                            router.push(`/company/orders/${record.id}`);
                                         }
                                     })}
                                     rowClassName={() => 'row-cancelled'}
