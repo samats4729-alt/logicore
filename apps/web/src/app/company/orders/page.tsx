@@ -89,19 +89,22 @@ interface Order {
     customerPriceType?: string;
     driverCost?: number;
     createdAt: string;
-    routePoints?: { pointType: string; sequence: number; location: { id?: string; name: string; address: string; city?: string } }[];
+    routePoints?: { pointType: string; sequence: number; location: { id?: string; name: string; address: string; city?: string; emails?: string } }[];
     customer?: { firstName: string; lastName: string; phone: string; email?: string };
     customerCompany?: { id?: string; name: string; phone?: string; email?: string };
     customerCompanyId?: string;
     assignedDriverName?: string;
     assignedDriverPhone?: string;
     assignedDriverPlate?: string;
+    assignedDriverTrailer?: string;
     assignedAt?: string;
+    driver?: { firstName: string; lastName: string; phone: string; vehiclePlate?: string; vehicleModel?: string; trailerNumber?: string };
     subForwarder?: { name: string; email?: string };
     forwarder?: { id?: string; name: string; email?: string };
     partner?: { name: string; email?: string };
     forwarderId?: string;
     subForwarderId?: string;
+    subForwarderPrice?: number;
     partnerId?: string;
     isConfirmed?: boolean;
     driverId?: string;
@@ -1006,6 +1009,10 @@ export default function CompanyOrdersPage() {
 
     const columns = [
         {
+            title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
+            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
+        },
+        {
             title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60,
             render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span>,
         },
@@ -1014,48 +1021,64 @@ export default function CompanyOrdersPage() {
             render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
+            title: 'Дата погр.', key: 'pickupDate', width: 90,
+            render: (_: any, r: Order) => {
+                const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
+                const date = (pickupPt as any)?.expectedDate;
+                return date
+                    ? <span style={{ fontSize: 11, color: '#333' }}>{dayjs(date).format('DD.MM.YY')}</span>
+                    : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+            },
+        },
+        {
             title: 'Заказчик', key: 'customer', width: 130, ellipsis: true,
             render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{r.customerCompany?.name || '—'}</span>,
         },
         {
-            title: 'Исполнитель', key: 'forwarder', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{r.forwarder?.name || '—'}</span>,
+            title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—'}</span>,
         },
         {
-            title: 'Экспедитор', key: 'expeditor', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: (r.subForwarderId === user?.companyId || r.partnerId === user?.companyId) ? 600 : undefined }}>{r.subForwarder?.name || r.partner?.name || '—'}</span>,
-        },
-        {
-            title: 'Груз', key: 'cargo', ellipsis: true, width: 120,
-            render: (_: any, r: Order) => {
-                const parts = [];
-                if (r.natureOfCargo) parts.push(r.natureOfCargo);
-                if (r.cargoDescription) parts.push(r.cargoDescription);
-                return <span style={{ fontSize: 12 }}>{parts.join(' / ') || '—'}</span>;
-            }
-        },
-        {
-            title: 'Откуда', key: 'from', width: 100, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(r, 'pickup') || '—'}</span>,
-        },
-        {
-            title: 'Куда', key: 'to', width: 100, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(r, 'delivery') || '—'}</span>,
-        },
-        {
-            title: 'Статус', dataIndex: 'status', key: 'status', width: 100,
-            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
-        },
-        {
-            title: 'Водитель', key: 'drv', width: 110, ellipsis: true,
+            title: 'Водитель', key: 'drv', width: 120, ellipsis: true,
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span>,
         },
         {
-            title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
+            title: 'Транспорт', key: 'vehicle', width: 100, ellipsis: true,
+            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverPlate || r.driver?.vehiclePlate || '—'}</span>,
+        },
+        {
+            title: 'Маршрут', key: 'route', width: 160, ellipsis: true,
             render: (_: any, r: Order) => {
-                const isExecutor = r.forwarderId === user?.companyId;
-                const price = (isExecutor && r.driverCost) ? r.driverCost : r.customerPrice;
-                return price ? <span style={{ fontSize: 12, fontWeight: 600 }}>{price.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                const from = extractCity(r, 'pickup');
+                const to = extractCity(r, 'delivery');
+                if (!from && !to) return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                return <span style={{ fontSize: 12, fontWeight: 500 }}>{from || '?'} → {to || '?'}</span>;
+            },
+        },
+        {
+            title: 'Менеджер', key: 'manager', width: 110, ellipsis: true,
+            render: (_: any, r: Order) => {
+                if (r.responsibleManager) {
+                    return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
+                }
+                return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+            },
+        },
+        {
+            title: 'Ставка зак.', key: 'customerPrice', width: 100, align: 'right' as const,
+            render: (_: any, r: Order) => {
+                return r.customerPrice
+                    ? <span style={{ fontSize: 12, fontWeight: 600, color: '#389e0d' }}>{r.customerPrice.toLocaleString('ru-RU')}</span>
+                    : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+            },
+        },
+        {
+            title: 'Ставка перев.', key: 'carrierPrice', width: 100, align: 'right' as const,
+            render: (_: any, r: Order) => {
+                const cost = r.driverCost || (r as any).subForwarderPrice;
+                return cost
+                    ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span>
+                    : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1070,36 +1093,52 @@ export default function CompanyOrdersPage() {
     ];
 
     const archiveColumns = [
+        {
+            title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
+            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag>,
+        },
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
+        {
+            title: 'Дата погр.', key: 'pickupDate', width: 90,
+            render: (_: any, r: Order) => {
+                const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
+                const date = (pickupPt as any)?.expectedDate;
+                return date ? <span style={{ fontSize: 11, color: '#333' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+            },
+        },
         { title: 'Заказчик', key: 'customer', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{r.customerCompany?.name || '—'}</span> },
-        { title: 'Исполнитель', key: 'forwarder', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{r.forwarder?.name || '—'}</span> },
-        { title: 'Экспедитор', key: 'expeditor', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: (r.subForwarderId === user?.companyId || r.partnerId === user?.companyId) ? 600 : undefined }}>{r.subForwarder?.name || r.partner?.name || '—'}</span> },
+        { title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—'}</span> },
+        { title: 'Водитель', key: 'drv', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
+        { title: 'Транспорт', key: 'vehicle', width: 100, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverPlate || r.driver?.vehiclePlate || '—'}</span> },
         {
-            title: 'Груз', key: 'cargo', ellipsis: true, width: 120,
+            title: 'Маршрут', key: 'route', width: 160, ellipsis: true,
             render: (_: any, r: Order) => {
-                const parts = [];
-                if (r.natureOfCargo) parts.push(r.natureOfCargo);
-                if (r.cargoDescription) parts.push(r.cargoDescription);
-                return <span style={{ fontSize: 12 }}>{parts.join(' / ') || '—'}</span>;
-            }
+                const from = extractCity(r, 'pickup');
+                const to = extractCity(r, 'delivery');
+                if (!from && !to) return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                return <span style={{ fontSize: 12, fontWeight: 500 }}>{from || '?'} → {to || '?'}</span>;
+            },
         },
         {
-            title: 'Откуда', key: 'from', width: 100,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'pickup') || '—'}</span>,
-        },
-        {
-            title: 'Куда', key: 'to', width: 100,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{extractCity(r, 'delivery') || '—'}</span>,
-        },
-        { title: 'Статус', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag> },
-        { title: 'Водитель', key: 'drv', width: 110, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
-        {
-            title: 'Сумма ₸', key: 'price', width: 90, align: 'right' as const,
+            title: 'Менеджер', key: 'manager', width: 110, ellipsis: true,
             render: (_: any, r: Order) => {
-                const price = r.customerPrice;
-                return price ? <span style={{ fontSize: 12, fontWeight: 600 }}>{price.toLocaleString('ru-RU')}</span> : '—';
-            }
+                if (r.responsibleManager) {
+                    return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
+                }
+                return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+            },
+        },
+        {
+            title: 'Ставка зак.', key: 'customerPrice', width: 100, align: 'right' as const,
+            render: (_: any, r: Order) => r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600, color: '#389e0d' }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>,
+        },
+        {
+            title: 'Ставка перев.', key: 'carrierPrice', width: 100, align: 'right' as const,
+            render: (_: any, r: Order) => {
+                const cost = r.driverCost || (r as any).subForwarderPrice;
+                return cost ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+            },
         },
         { title: '', key: 'actions', width: 60, render: (_: any, r: Order) => (
             <Space size={4}>
@@ -1209,7 +1248,7 @@ export default function CompanyOrdersPage() {
                                     rowKey="id"
                                     loading={loading}
                                     size="small"
-                                    scroll={{ x: 1400 }}
+                                    scroll={{ x: 1600 }}
                                     pagination={{
                                         current: ordersPage,
                                         pageSize: ordersPageSize,
@@ -1317,7 +1356,7 @@ export default function CompanyOrdersPage() {
                                     rowKey="id"
                                     loading={archiveLoading}
                                     size="small"
-                                    scroll={{ x: 1000 }}
+                                    scroll={{ x: 1500 }}
                                     pagination={{
                                         current: archivePage,
                                         pageSize: archivePageSize,
