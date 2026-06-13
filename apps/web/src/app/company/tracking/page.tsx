@@ -89,7 +89,7 @@ export default function CompanyTrackingPage() {
         // Use user's custom styles
         setMapStyle(newMode === 'night'
             ? 'mapbox://styles/pontipilat/cmkrnybo6006c01qxdlo18v6e'
-            : 'mapbox://styles/pontipilat/cmkro81vk005m01s55aem6mcy'
+            : 'mapbox://styles/pontipilat/cmqcu0om5000q01r66lm81p25'
         );
         // Always 3d
         setViewState(prev => ({ ...prev, pitch: 50, bearing: -17, zoom: 16 }));
