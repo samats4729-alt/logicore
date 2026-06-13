@@ -286,3 +286,144 @@ body {
   /* Zinc-100 */
   color: #09090b;
 }
+
+/* ==========================================
+   TRACKING PAGE GLASSMORPHISM & TRANSPARENCY
+   ========================================== */
+
+/* General Tracking Header */
+.tracking-header {
+  transition: background 0.3s, border-color 0.3s !important;
+}
+
+/* Night theme styling (when dark map is active) */
+[data-map-theme="night"] .tracking-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+[data-map-theme="night"] .tracking-header .logo-text {
+  color: #ffffff !important;
+}
+[data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-item,
+[data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+[data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-item:hover,
+[data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu:hover,
+[data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu-active,
+[data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title,
+[data-map-theme="night"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+[data-map-theme="night"] .tracking-header .user-profile-trigger {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+[data-map-theme="night"] .tracking-header .user-profile-trigger:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+[data-map-theme="night"] .tracking-header .user-profile-trigger .ant-typography {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+[data-map-theme="night"] .tracking-header .ant-btn-text {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+[data-map-theme="night"] .tracking-header .ant-btn-text:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+[data-map-theme="night"] .tracking-header .sidebar-toggle-btn {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+[data-map-theme="night"] .tracking-header .sidebar-toggle-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+/* Sidebar Card styling under night theme */
+[data-map-theme="night"] .tracking-card {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+[data-map-theme="night"] .tracking-card .ant-card-head,
+[data-map-theme="night"] .tracking-card .ant-card-head-title {
+  color: #ffffff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+[data-map-theme="night"] .tracking-card .ant-card-extra {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+[data-map-theme="night"] .tracking-card .ant-list-item {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+[data-map-theme="night"] .tracking-card .ant-list-item-meta-title {
+  color: #ffffff !important;
+}
+[data-map-theme="night"] .tracking-card .ant-list-item-meta-description {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+[data-map-theme="night"] .tracking-card .ant-typography {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+[data-map-theme="night"] .tracking-card .ant-typography-secondary {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+
+/* Day theme styling (when light map is active) */
+[data-map-theme="day"] .tracking-header {
+  border-bottom-color: rgba(9, 9, 11, 0.08) !important;
+}
+[data-map-theme="day"] .tracking-header .logo-text {
+  color: #09090b !important;
+}
+[data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-item,
+[data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
+  color: rgba(9, 9, 11, 0.7) !important;
+}
+[data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-item:hover,
+[data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu:hover,
+[data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu-active,
+[data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title,
+[data-map-theme="day"] .tracking-header .ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title {
+  background-color: rgba(9, 9, 11, 0.05) !important;
+  color: #09090b !important;
+}
+[data-map-theme="day"] .tracking-header .user-profile-trigger {
+  color: rgba(9, 9, 11, 0.9) !important;
+}
+[data-map-theme="day"] .tracking-header .user-profile-trigger:hover {
+  background-color: rgba(9, 9, 11, 0.05) !important;
+}
+[data-map-theme="day"] .tracking-header .user-profile-trigger .ant-typography {
+  color: rgba(9, 9, 11, 0.9) !important;
+}
+[data-map-theme="day"] .tracking-header .ant-btn-text {
+  color: rgba(9, 9, 11, 0.9) !important;
+}
+[data-map-theme="day"] .tracking-header .ant-btn-text:hover {
+  background-color: rgba(9, 9, 11, 0.05) !important;
+}
+[data-map-theme="day"] .tracking-header .sidebar-toggle-btn {
+  color: #09090b !important;
+}
+[data-map-theme="day"] .tracking-header .sidebar-toggle-btn:hover {
+  background-color: rgba(9, 9, 11, 0.05) !important;
+  color: #09090b !important;
+}
+
+/* Sidebar Card styling under day theme */
+[data-map-theme="day"] .tracking-card {
+  color: #09090b !important;
+}
+[data-map-theme="day"] .tracking-card .ant-card-head,
+[data-map-theme="day"] .tracking-card .ant-card-head-title {
+  color: #09090b !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+[data-map-theme="day"] .tracking-card .ant-card-extra {
+  color: rgba(9, 9, 11, 0.65) !important;
+}
+[data-map-theme="day"] .tracking-card .ant-list-item-meta-title {
+  color: #09090b !important;
+}
+[data-map-theme="day"] .tracking-card .ant-list-item-meta-description {
+  color: rgba(9, 9, 11, 0.6) !important;
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined } from '@ant-design/icons';
@@ -63,6 +64,13 @@ export default function TrackingMapPage() {
         checkMobile();
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-map-theme', 'day');
+        return () => {
+            document.documentElement.removeAttribute('data-map-theme');
+        };
     }, []);
 
     const [viewState, setViewState] = useState({
@@ -187,22 +195,23 @@ export default function TrackingMapPage() {
     };
 
     return (
-        <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 64px - 16px)' : 'calc(100vh - 64px)', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 64px - 16px)' : '100vh', overflow: 'hidden' }}>
             {/* Список водителей (Glassmorphism Sidebar) */}
             <Card
                 title="Водители на линии"
+                className="tracking-card"
                 style={{
                     position: isMobile ? 'relative' : 'absolute',
-                    top: isMobile ? 0 : 24,
+                    top: isMobile ? 0 : 88,
                     left: isMobile ? 0 : 24,
                     bottom: isMobile ? 0 : 24,
                     width: isMobile ? '100%' : 320,
                     zIndex: 10,
-                    background: 'rgba(255, 255, 255, 0.6)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(228, 228, 231, 0.7)',
-                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.08)',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: 'none',
                     borderRadius: isMobile ? 0 : 16,
                     display: isMobile ? 'none' : 'flex',
                     flexDirection: 'column',
@@ -270,7 +279,7 @@ export default function TrackingMapPage() {
 
                 {/* Легенда */}
                 {orderColorMap.size > 0 && (
-                    <div style={{ marginTop: 16, padding: '8px 0', borderTop: '1px solid rgba(228, 228, 231, 0.8)' }}>
+                    <div style={{ marginTop: 16, padding: '8px 0', borderTop: '1px solid rgba(0, 0, 0, 0.08)' }}>
                         <Text type="secondary" style={{ fontSize: 11 }}>Рейсы:</Text>
                         <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                             {(Array.from(orderColorMap.entries()) as any[]).map(([order, color]) => (
@@ -282,14 +291,14 @@ export default function TrackingMapPage() {
             </Card>
 
             {/* Панель кнопок управления */}
-            <div style={{ position: 'absolute', top: isMobile ? 12 : 24, right: isMobile ? 12 : 24, zIndex: 10 }}>
+            <div style={{ position: 'absolute', top: isMobile ? 12 : 88, right: isMobile ? 12 : 24, zIndex: 10 }}>
                 <Button
                     type="primary"
                     icon={<AimOutlined />}
                     onClick={centerOnMyLocation}
                     style={{
                         borderRadius: 8,
-                        boxShadow: '0 4px 12px rgba(22, 119, 255, 0.2)',
+                        boxShadow: 'none',
                     }}
                 >
                     Моё место
@@ -300,22 +309,22 @@ export default function TrackingMapPage() {
             {!isMobile && (
                 <>
                     {/* Верхняя рамка с размытием */}
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 64, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.02)', pointerEvents: 'none' }} />
                     
                     {/* Нижиняя рамка с размытием */}
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.02)', pointerEvents: 'none' }} />
                     
                     {/* Левая внешняя рамка (до сайдбара) */}
-                    <div style={{ position: 'absolute', top: 24, bottom: 24, left: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 88, bottom: 24, left: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.02)', pointerEvents: 'none' }} />
                     
                     {/* Правая внешняя рамка */}
-                    <div style={{ position: 'absolute', top: 24, bottom: 24, right: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 88, bottom: 24, right: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.02)', pointerEvents: 'none' }} />
                     
                     {/* Промежуточная рамка (между сайдбаром и окном карты) */}
-                    <div style={{ position: 'absolute', top: 24, bottom: 24, left: 344, width: 16, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 88, bottom: 24, left: 344, width: 16, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.02)', pointerEvents: 'none' }} />
                     
                     {/* Физическая рамка оригинального окна карты с тенью */}
-                    <div style={{ position: 'absolute', top: 24, left: 360, right: 24, bottom: 24, zIndex: 7, border: '1px solid rgba(228, 228, 231, 0.8)', borderRadius: 24, pointerEvents: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} />
+                    <div style={{ position: 'absolute', top: 88, left: 360, right: 24, bottom: 24, zIndex: 7, border: '1px solid rgba(0, 0, 0, 0.08)', borderRadius: 24, pointerEvents: 'none', boxShadow: 'none' }} />
                 </>
             )}
 

@@ -279,17 +279,22 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
             {/* Top Header Navigation */}
             <Header
+                className={isTrackingPage ? 'tracking-header' : ''}
                 style={{
-                    background: '#ffffff',
+                    background: isTrackingPage ? 'rgba(255, 255, 255, 0.02)' : '#ffffff',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
                     height: 56,
-                    borderBottom: '1px solid #e4e4e7',
-                    position: 'sticky',
+                    borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e4e4e7',
+                    position: isTrackingPage ? 'absolute' : 'sticky',
+                    left: 0,
+                    right: 0,
                     top: 0,
                     zIndex: 100,
-                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    boxShadow: isTrackingPage ? 'none' : '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    backdropFilter: isTrackingPage ? 'blur(12px)' : 'none',
+                    WebkitBackdropFilter: isTrackingPage ? 'blur(12px)' : 'none',
                 }}
             >
                 {/* Mobile: burger button */}
@@ -315,7 +320,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>L</span>
                     </div>
                     {!isMobile && (
-                        <Text strong style={{ fontSize: 16, color: '#09090b', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                        <Text strong className="logo-text" style={{ fontSize: 16, color: isTrackingPage ? undefined : '#09090b', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
                             {user.company?.name || 'LogiCore'}
                         </Text>
                     )}
@@ -367,7 +372,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             style={{ background: '#ffffff', color: '#09090b', border: '1px solid #e4e4e7', flexShrink: 0 }}
                         />
                         {!isMobile && (
-                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: isTrackingPage ? 'inherit' : undefined }}>
                                 {user.firstName} {user.lastName}
                             </Text>
                         )}
@@ -384,7 +389,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         background: isTrackingPage ? 'transparent' : '#ffffff',
                         borderRadius: isTrackingPage ? 0 : 24,
                         border: isTrackingPage ? 'none' : '1px solid #e4e4e7',
-                        minHeight: isTrackingPage ? 'calc(100vh - 56px)' : 'calc(100vh - 56px - 48px)',
+                        minHeight: isTrackingPage ? '100vh' : 'calc(100vh - 56px - 48px)',
                         boxShadow: isTrackingPage ? 'none' : '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
                         overflow: isTrackingPage ? 'hidden' : 'auto',
                     }}

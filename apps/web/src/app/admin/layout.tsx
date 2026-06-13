@@ -196,30 +196,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             <Layout style={{
                 marginLeft: isMobile ? 0 : (collapsed ? 80 : 200),
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                position: 'relative'
             }}>
-                <Header style={{
-                    padding: isMobile ? '0 12px' : '0 24px',
-                    background: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 99,
-                }}>
+                <Header
+                    className={isTrackingPage ? 'tracking-header' : ''}
+                    style={{
+                        padding: isMobile ? '0 12px' : '0 24px',
+                        background: isTrackingPage ? 'rgba(255, 255, 255, 0.02)' : '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.08)' : 'none',
+                        boxShadow: isTrackingPage ? 'none' : '0 1px 4px rgba(0,0,0,0.05)',
+                        position: isTrackingPage ? 'absolute' : 'sticky',
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        zIndex: 99,
+                        backdropFilter: isTrackingPage ? 'blur(12px)' : 'none',
+                        WebkitBackdropFilter: isTrackingPage ? 'blur(12px)' : 'none',
+                    }}
+                >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         {isMobile ? (
                             <Button
                                 type="text"
                                 icon={<MenuOutlined />}
                                 onClick={() => setMobileMenuOpen(true)}
+                                style={{ color: isTrackingPage ? 'inherit' : undefined }}
                             />
                         ) : (
                             <div
                                 onClick={() => setCollapsed(!collapsed)}
-                                style={{ fontSize: 18, cursor: 'pointer' }}
+                                className="sidebar-toggle-btn"
+                                style={{ fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8 }}
                             >
                                 {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
                             </div>
@@ -230,9 +241,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </div>
 
                     <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                        <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }} className="user-profile-trigger">
                             <Avatar icon={<UserOutlined />} size={isMobile ? 'small' : 'default'} />
-                            {!isMobile && <Text>{user?.firstName} {user?.lastName}</Text>}
+                            {!isMobile && <Text style={{ color: isTrackingPage ? 'inherit' : undefined }}>{user?.firstName} {user?.lastName}</Text>}
                         </div>
                     </Dropdown>
                 </Header>
@@ -242,7 +253,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     padding: isTrackingPage ? 0 : (isMobile ? 12 : 24),
                     background: isTrackingPage ? 'transparent' : '#fff',
                     borderRadius: isTrackingPage ? 0 : 8,
-                    minHeight: isTrackingPage ? 'calc(100vh - 64px)' : 'calc(100vh - 64px - 48px)',
+                    minHeight: isTrackingPage ? '100vh' : 'calc(100vh - 64px - 48px)',
                     overflow: isTrackingPage ? 'hidden' : 'auto',
                 }}>
                     {children}
