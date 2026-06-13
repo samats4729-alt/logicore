@@ -30,12 +30,22 @@ export class PowerOfAttorneyService {
 
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        // Определяем компанию-эмитента доверенности (Заказчик)
-        const issuerCompany = order.customerCompany || await this.prisma.company.findUnique({ where: { id: companyId } });
-        if (!issuerCompany) throw new NotFoundException('Компания-отправитель не найдена');
+        // Определяем компанию-эмитента (кто выписывает доверенность) и исполнителя (кто везет груз)
+        let issuerCompany;
+        let executorCompany;
 
-        // Определяем компанию-исполнителя (кто везет груз)
-        const executorCompany = order.subForwarder || order.forwarder || order.partner || issuerCompany;
+        if (companyId && order.forwarderId === companyId) {
+            issuerCompany = order.forwarder || await this.prisma.company.findUnique({ where: { id: companyId } });
+            executorCompany = order.subForwarder || order.partner || issuerCompany;
+        } else if (companyId && order.subForwarderId === companyId) {
+            issuerCompany = order.subForwarder || await this.prisma.company.findUnique({ where: { id: companyId } });
+            executorCompany = order.partner || issuerCompany;
+        } else {
+            issuerCompany = order.customerCompany || await this.prisma.company.findUnique({ where: { id: companyId } });
+            executorCompany = order.subForwarder || order.forwarder || order.partner || issuerCompany;
+        }
+
+        if (!issuerCompany) throw new NotFoundException('Компания-отправитель не найдена');
 
         // Загружаем буферы для печати и подписи компании-эмитента (Заказчика)
         let stampBuffer: Buffer | null = null;
@@ -97,8 +107,12 @@ export class PowerOfAttorneyService {
 
             // ============ ШАПКА ============
             const issuerClean = this.stripCompanyPrefix(issuerCompany.name);
+            const isCustomerIssuer = (issuerCompany.id === order.customerCompanyId);
+            const headerText = isCustomerIssuer ? 'ФИРМЕННЫЙ БЛАНК КОМПАНИИ-ЗАКАЗЧИКА' : 'ФИРМЕННЫЙ БЛАНК КОМПАНИИ-ОТПРАВИТЕЛЯ ДОВЕРЕННОСТИ';
+            const companyLabel = isCustomerIssuer ? 'Наименование компании-заказчика' : 'Наименование компании';
+
             doc.fontSize(12).font('Roboto-Bold');
-            doc.text('ФИРМЕННЫЙ БЛАНК КОМПАНИИ-ЗАКАЗЧИКА', { align: 'center' });
+            doc.text(headerText, { align: 'center' });
             doc.moveDown(1.5);
 
             // Номер доверенности
@@ -203,7 +217,7 @@ export class PowerOfAttorneyService {
 
             doc.font('Roboto').fontSize(10);
             doc.text('Директор', leftM, signY);
-            doc.text(`Наименование компании-заказчика ТОО "${issuerClean}"`, leftM, signY + 15);
+            doc.text(`${companyLabel} ТОО "${issuerClean}"`, leftM, signY + 15);
             doc.text(`ФИО ${directorName}`, leftM, signY + 30);
             doc.text('/___________________/', leftM + 300, signY + 30);
 
