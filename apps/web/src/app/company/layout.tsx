@@ -279,24 +279,19 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
             {/* Top Header Navigation */}
             <Header
-                className={isTrackingPage ? 'tracking-header' : ''}
                 style={{
-                    background: isTrackingPage ? 'rgba(255, 255, 255, 0.35)' : '#ffffff',
+                    background: '#ffffff',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
                     height: 56,
-                    borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.4)' : '1px solid #e4e4e7',
-                    position: isTrackingPage ? 'absolute' : 'sticky',
+                    borderBottom: '1px solid #e4e4e7',
+                    position: 'sticky',
                     left: 0,
                     right: 0,
                     top: 0,
                     zIndex: 100,
-                    boxShadow: isTrackingPage
-                        ? '0 4px 30px rgba(0, 0, 0, 0.06), inset 0 -1px 0 rgba(255,255,255,0.2)'
-                        : '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
-                    backdropFilter: isTrackingPage ? 'blur(40px) saturate(1.6)' : 'none',
-                    WebkitBackdropFilter: isTrackingPage ? 'blur(40px) saturate(1.6)' : 'none',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
                     transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
             >
@@ -392,7 +387,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         background: isTrackingPage ? 'transparent' : '#ffffff',
                         borderRadius: isTrackingPage ? 0 : 24,
                         border: isTrackingPage ? 'none' : '1px solid #e4e4e7',
-                        minHeight: isTrackingPage ? '100vh' : 'calc(100vh - 56px - 48px)',
+                        minHeight: isTrackingPage ? 'calc(100vh - 56px)' : 'calc(100vh - 56px - 48px)',
                         boxShadow: isTrackingPage ? 'none' : '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
                         overflow: isTrackingPage ? 'hidden' : 'auto',
                     }}

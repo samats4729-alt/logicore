@@ -70,7 +70,7 @@ export default function CompanyTrackingPage() {
     const [drivers, setDrivers] = useState<DriverPosition[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [mapStyle, setMapStyle] = useState('mapbox://styles/pontipilat/cmkrnybo6006c01qxdlo18v6e');
+    const [mapStyle, setMapStyle] = useState('mapbox://styles/pontipilat/cmqcu0om5000q01r66lm81p25');
     const [viewState, setViewState] = useState({
         latitude: 43.238949,
         longitude: 76.945780,
@@ -81,7 +81,7 @@ export default function CompanyTrackingPage() {
     const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [popupInfo, setPopupInfo] = useState<DriverPosition | null>(null);
 
-    const [mapMode, setMapMode] = useState<'day' | 'night'>('night');
+    const [mapMode, setMapMode] = useState<'day' | 'night'>('day');
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -99,18 +99,6 @@ export default function CompanyTrackingPage() {
             document.documentElement.removeAttribute('data-map-theme');
         };
     }, [mapMode]);
-
-    const toggleMapTheme = () => {
-        const newMode = mapMode === 'night' ? 'day' : 'night';
-        setMapMode(newMode);
-        // Use user's custom styles
-        setMapStyle(newMode === 'night'
-            ? 'mapbox://styles/pontipilat/cmkrnybo6006c01qxdlo18v6e'
-            : 'mapbox://styles/pontipilat/cmqcu0om5000q01r66lm81p25'
-        );
-        // Always 3d
-        setViewState(prev => ({ ...prev, pitch: 50, bearing: -17, zoom: 16 }));
-    };
 
     // Сопоставление рейсов и цветов
     const orderColorMap = useMemo(() => {
@@ -219,7 +207,7 @@ export default function CompanyTrackingPage() {
     const isDark = mapMode === 'night';
 
     return (
-        <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 56px - 16px)' : '100vh', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 56px - 16px)' : 'calc(100vh - 56px)', overflow: 'hidden' }}>
             {/* ═══════════════════════════════════════════
                 SIDEBAR — Frosted Glass Panel
                 ═══════════════════════════════════════════ */}
@@ -227,7 +215,7 @@ export default function CompanyTrackingPage() {
                 className="tracking-sidebar"
                 style={{
                     position: isMobile ? 'relative' : 'absolute',
-                    top: isMobile ? 0 : 80,
+                    top: isMobile ? 0 : 24,
                     left: isMobile ? 0 : 24,
                     bottom: isMobile ? 'auto' : 24,
                     width: isMobile ? '100%' : 340,
@@ -458,43 +446,12 @@ export default function CompanyTrackingPage() {
                 ═══════════════════════════════════════════ */}
             <div style={{
                 position: 'absolute',
-                top: isMobile ? 12 : 80,
+                top: isMobile ? 12 : 24,
                 right: isMobile ? 12 : 24,
                 zIndex: 10,
                 display: 'flex',
                 gap: 8,
             }}>
-                <button
-                    onClick={toggleMapTheme}
-                    className="tracking-control-btn"
-                    style={{
-                        height: 40,
-                        padding: '0 16px',
-                        borderRadius: 20,
-                        border: isDark
-                            ? '1px solid rgba(255, 255, 255, 0.12)'
-                            : '1px solid rgba(255, 255, 255, 0.7)',
-                        background: isDark
-                            ? 'linear-gradient(135deg, rgba(25, 25, 35, 0.8), rgba(15, 15, 22, 0.7))'
-                            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(245, 245, 250, 0.55))',
-                        color: isDark ? '#fff' : '#09090b',
-                        backdropFilter: 'blur(30px) saturate(1.6)',
-                        WebkitBackdropFilter: 'blur(30px) saturate(1.6)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        boxShadow: isDark
-                            ? '0 8px 32px rgba(0, 0, 0, 0.4)'
-                            : '0 8px 32px rgba(0, 0, 0, 0.1)',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
-                >
-                    <span style={{ fontSize: 15 }}>{isDark ? '🌙' : '☀️'}</span>
-                    {isDark ? 'Ночь' : 'День'}
-                </button>
                 <button
                     onClick={centerOnMyLocation}
                     className="tracking-control-btn"
@@ -527,7 +484,7 @@ export default function CompanyTrackingPage() {
                 <>
                     {/* Top edge fade */}
                     <div style={{
-                        position: 'absolute', top: 56, left: 0, right: 0, height: 32, zIndex: 5,
+                        position: 'absolute', top: 0, left: 0, right: 0, height: 32, zIndex: 5,
                         background: isDark
                             ? 'linear-gradient(to bottom, rgba(8, 8, 12, 0.5) 0%, transparent 100%)'
                             : 'linear-gradient(to bottom, rgba(245, 245, 248, 0.7) 0%, transparent 100%)',
@@ -547,7 +504,7 @@ export default function CompanyTrackingPage() {
 
                     {/* Left edge fade */}
                     <div style={{
-                        position: 'absolute', top: 88, bottom: 32, left: 0, width: 24, zIndex: 5,
+                        position: 'absolute', top: 32, bottom: 32, left: 0, width: 24, zIndex: 5,
                         background: isDark
                             ? 'linear-gradient(to right, rgba(8, 8, 12, 0.4) 0%, transparent 100%)'
                             : 'linear-gradient(to right, rgba(245, 245, 248, 0.6) 0%, transparent 100%)',
@@ -557,7 +514,7 @@ export default function CompanyTrackingPage() {
 
                     {/* Right edge fade */}
                     <div style={{
-                        position: 'absolute', top: 88, bottom: 32, right: 0, width: 24, zIndex: 5,
+                        position: 'absolute', top: 32, bottom: 32, right: 0, width: 24, zIndex: 5,
                         background: isDark
                             ? 'linear-gradient(to left, rgba(8, 8, 12, 0.4) 0%, transparent 100%)'
                             : 'linear-gradient(to left, rgba(245, 245, 248, 0.6) 0%, transparent 100%)',
@@ -567,7 +524,7 @@ export default function CompanyTrackingPage() {
 
                     {/* Map viewport frame — subtle inset glow */}
                     <div style={{
-                        position: 'absolute', top: 80, left: 380, right: 24, bottom: 24, zIndex: 6,
+                        position: 'absolute', top: 24, left: 380, right: 24, bottom: 24, zIndex: 6,
                         borderRadius: 24,
                         pointerEvents: 'none',
                         border: isDark
