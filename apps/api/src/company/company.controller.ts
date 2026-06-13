@@ -406,7 +406,7 @@ export class CompanyController {
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Привязать/отвязать сотрудника к отделу' })
     async assignUserToDepartment(@Request() req: any, @Body() dto: AssignUserDepartmentDto) {
-        return this.companyService.assignUserToDepartment(req.user.companyId, dto.userId, dto.departmentId);
+        return this.companyService.assignUserToDepartment(req.user.companyId, dto.userId, dto.departmentId ?? null);
     }
 
 }
