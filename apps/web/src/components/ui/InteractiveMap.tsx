@@ -62,51 +62,38 @@ export default function InteractiveMap({
         const map = event.target;
         if (!map) return;
 
-        const point = event.point ? [event.point.x, event.point.y] : null;
-        if (!point) return;
+        // Создаем небольшой bounding box вокруг точки клика (8x8 пикселей) для надежного попадания по 3D-зданиям
+        const width = 8;
+        const height = 8;
+        const bbox = [
+            [event.point.x - width / 2, event.point.y - height / 2],
+            [event.point.x + width / 2, event.point.y + height / 2]
+        ];
 
-        const features = map.queryRenderedFeatures(point);
-        console.log('Map clicked. Features under click:', features);
+        const features = map.queryRenderedFeatures(bbox);
+        console.log('Map clicked. Features under click (bbox):', features);
         
-        // Находим здание по ID слоя или sourceLayer
+        // Находим здание по ID слоя, sourceLayer или типу слоя (fill-extrusion)
         const building = features.find((f: any) => {
             const layerId = (f.layer?.id || '').toLowerCase();
             const sourceLayer = (f.sourceLayer || '').toLowerCase();
+            const type = (f.layer?.type || '').toLowerCase();
             return layerId.includes('building') || 
                    layerId.includes('structure') || 
                    layerId.includes('roof') ||
                    sourceLayer.includes('building') || 
-                   sourceLayer.includes('structure');
+                   sourceLayer.includes('structure') ||
+                   type === 'fill-extrusion';
         });
         
         console.log('Selected building feature:', building);
         
         if (building) {
             setSelectedBuilding(building);
-            
-            // Если в стиле заданы состояния фич
-            if (building.id !== undefined) {
-                if (selectedBuilding && selectedBuilding.id !== undefined) {
-                    map.setFeatureState(
-                        { source: selectedBuilding.source, sourceLayer: selectedBuilding.sourceLayer, id: selectedBuilding.id },
-                        { selected: false }
-                    );
-                }
-                map.setFeatureState(
-                    { source: building.source, sourceLayer: building.sourceLayer, id: building.id },
-                    { selected: true }
-                );
-            }
         } else {
-            if (selectedBuilding && selectedBuilding.id !== undefined) {
-                map.setFeatureState(
-                    { source: selectedBuilding.source, sourceLayer: selectedBuilding.sourceLayer, id: selectedBuilding.id },
-                    { selected: false }
-                );
-            }
             setSelectedBuilding(null);
         }
-    }, [selectedBuilding]);
+    }, []);
 
     return (
         <ReactMap
@@ -120,19 +107,23 @@ export default function InteractiveMap({
         >
             <NavigationControl position="bottom-right" />
 
-            {/* Подсветка выбранного здания (3D объём + 2D контур + 2D полигон) */}
+            {/* Подсветка выбранного здания на основе GeoJSON кликнутого здания */}
             {selectedBuilding && (
-                <Source id="selected-building" type="geojson" data={selectedBuilding}>
+                <Source id="selected-building-geojson" type="geojson" data={selectedBuilding}>
                     <Layer
-                        id="selected-building-3d"
+                        id="selected-building-highlight-3d"
                         type="fill-extrusion"
                         paint={{
                             'fill-extrusion-color': '#1677ff',
                             'fill-extrusion-height': [
-                                'coalesce',
-                                ['get', 'height'],
-                                ['get', 'render_height'],
-                                20
+                                '+',
+                                [
+                                    'coalesce',
+                                    ['get', 'height'],
+                                    ['get', 'render_height'],
+                                    20
+                                ],
+                                0.5
                             ],
                             'fill-extrusion-base': [
                                 'coalesce',
@@ -140,15 +131,7 @@ export default function InteractiveMap({
                                 ['get', 'render_min_height'],
                                 0
                             ],
-                            'fill-extrusion-opacity': 0.75
-                        }}
-                    />
-                    <Layer
-                        id="selected-building-2d-fill"
-                        type="fill"
-                        paint={{
-                            'fill-color': '#1677ff',
-                            'fill-opacity': 0.5
+                            'fill-extrusion-opacity': 0.8
                         }}
                     />
                     <Layer
@@ -157,7 +140,7 @@ export default function InteractiveMap({
                         paint={{
                             'line-color': '#1677ff',
                             'line-width': 3,
-                            'line-opacity': 0.9
+                            'line-opacity': 0.95
                         }}
                     />
                 </Source>
