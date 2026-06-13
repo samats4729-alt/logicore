@@ -18,6 +18,7 @@ import {
     DollarOutlined,
     CarOutlined,
     SearchOutlined,
+    ApartmentOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -85,8 +86,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     };
 
     const handleMenuClick = (key: string) => {
-        router.push(key);
-        setMobileMenuOpen(false);
+        if (key.startsWith('/')) {
+            router.push(key);
+            setMobileMenuOpen(false);
+        }
     };
 
     // Меню в зависимости от роли
@@ -107,82 +110,105 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 icon: <FileTextOutlined />,
                 label: 'Заявки',
             });
-            items.push({
+        }
+
+        // --- ЛОГИСТИКА ---
+        const logisticsChildren: any[] = [];
+        if (hasPerm('orders')) {
+            logisticsChildren.push({
                 key: '/company/search',
                 icon: <SearchOutlined />,
                 label: 'Биржа грузов',
             });
         }
-
-
-
-        if (hasPerm('partners')) {
-            items.push({
-                key: '/company/partners',
-                icon: <TeamOutlined />,
-                label: 'Контрагенты',
-            });
-            // Договоры обычно идут с партнерами или заявками
-            items.push({
-                key: '/company/contracts',
-                icon: <FileTextOutlined />,
-                label: 'Договоры',
-            });
-        }
-
-        items.push({
-            key: '/company/locations',
-            icon: <PushpinOutlined />,
-            label: 'Адреса',
-        });
-
-        // Для завсклада — очередь на погрузку
-        if (user.role === 'WAREHOUSE_MANAGER' || ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            items.push({
-                key: '/company/warehouse',
-                icon: <InboxOutlined />,
-                label: 'Очередь погрузки',
-            });
-        }
-
         if (hasPerm('tracking')) {
-            items.push({
+            logisticsChildren.push({
                 key: '/company/tracking',
                 icon: <EnvironmentOutlined />,
                 label: 'Карта',
             });
         }
-
-        // Управление пользователями — только для админа компании
-        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+        if (user.role === 'WAREHOUSE_MANAGER' || ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            logisticsChildren.push({
+                key: '/company/warehouse',
+                icon: <InboxOutlined />,
+                label: 'Очередь погрузки',
+            });
+        }
+        if (logisticsChildren.length > 0) {
             items.push({
-                key: '/company/users',
-                icon: <TeamOutlined />,
-                label: 'Сотрудники',
+                key: 'logistics_group',
+                icon: <ApartmentOutlined />,
+                label: 'Логистика',
+                children: logisticsChildren,
             });
         }
 
+        // --- ПАРТНЁРЫ ---
+        const partnersChildren: any[] = [];
+        if (hasPerm('partners')) {
+            partnersChildren.push({
+                key: '/company/partners',
+                icon: <TeamOutlined />,
+                label: 'Контрагенты',
+            });
+            partnersChildren.push({
+                key: '/company/contracts',
+                icon: <FileTextOutlined />,
+                label: 'Договоры',
+            });
+        }
         if (hasPerm('drivers')) {
-            items.push({
+            partnersChildren.push({
                 key: '/company/drivers',
                 icon: <CarOutlined />,
                 label: 'Водители',
             });
         }
+        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            partnersChildren.push({
+                key: '/company/users',
+                icon: <TeamOutlined />,
+                label: 'Сотрудники',
+            });
+        }
+        partnersChildren.push({
+            key: '/company/locations',
+            icon: <PushpinOutlined />,
+            label: 'Адреса',
+        });
 
-        if (hasPerm('documents')) {
+        if (partnersChildren.length > 0) {
             items.push({
+                key: 'partners_group',
+                icon: <TeamOutlined />,
+                label: 'Партнёры',
+                children: partnersChildren,
+            });
+        }
+
+        // --- ФИНАНСЫ ---
+        const financeChildren: any[] = [];
+        if (hasPerm('documents')) {
+            financeChildren.push({
                 key: '/company/documents',
                 icon: <FileOutlined />,
                 label: 'Документы',
             });
         }
-
         if (hasPerm('accounting')) {
-            items.push({
+            financeChildren.push({
                 key: '/company/accounting',
                 icon: <DollarOutlined />,
                 label: 'Бухгалтерия',
+            });
+        }
+        if (financeChildren.length > 0) {
+            items.push({
+                key: 'finance_group',
+                icon: <DollarOutlined />,
+                label: 'Финансы',
+                children: financeChildren,
             });
         }
 
@@ -300,7 +326,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         mode="horizontal"
                         selectedKeys={[pathname]}
                         items={getMenuItems()}
-                        onClick={({ key }) => router.push(key)}
+                        onClick={({ key }) => {
+                            if (key.startsWith('/')) {
+                                router.push(key);
+                            }
+                        }}
                         style={{
                             flex: 1,
                             border: 'none',
