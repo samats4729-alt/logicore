@@ -58,6 +58,16 @@ export default function CreateOrderPage() {
     const [selectedCustomer, setSelectedCustomer] = useState<string>(MY_COMPANY_VALUE);
     const [selectedCarrier, setSelectedCarrier] = useState<string>('');
 
+    const isMeCustomer = selectedCustomer === MY_COMPANY_VALUE;
+    const isMeCarrier = selectedCarrier === MY_COMPANY_VALUE;
+    const isMarketplace = selectedCarrier === MARKETPLACE_VALUE;
+
+    const showCustomerPriceField = !isMeCustomer || (isMeCustomer && isMeCarrier);
+    const showDriverCostField = (isMeCustomer && !isMeCarrier) || (!isMeCustomer && !isMeCarrier);
+
+    const customerPriceLabel = (isMeCustomer && isMeCarrier) ? "Ставка (₸)" : "Ставка от заказчика (₸)";
+    const driverCostLabel = isMarketplace ? "Ставка для биржи (₸)" : "Ставка перевозчику (₸)";
+
     // Tariff
     const [appliedTariff, setAppliedTariff] = useState<any>(null);
 
@@ -143,7 +153,11 @@ export default function CreateOrderPage() {
             });
             if (response.data?.price) {
                 setAppliedTariff(response.data);
-                form.setFieldsValue({ customerPrice: response.data.price });
+                if (showCustomerPriceField) {
+                    form.setFieldsValue({ customerPrice: response.data.price });
+                } else {
+                    form.setFieldsValue({ driverCost: response.data.price });
+                }
                 message.success(`Тариф найден: ${response.data.price.toLocaleString('ru-RU')} ₸`);
             } else { setAppliedTariff(null); }
         } catch { setAppliedTariff(null); }
@@ -171,9 +185,6 @@ export default function CreateOrderPage() {
 
     // Determine role description for the user
     const getRoleDescription = () => {
-        const isMeCustomer = selectedCustomer === MY_COMPANY_VALUE;
-        const isMeCarrier = selectedCarrier === MY_COMPANY_VALUE;
-        const isMarketplace = selectedCarrier === MARKETPLACE_VALUE;
 
         if (isMeCustomer && isMeCarrier) return { text: 'Вы и заказчик, и перевозчик — перевозка своими силами', color: '#1890ff' };
         if (isMeCustomer && isMarketplace) return { text: 'Вы — заказчик. Заявка будет опубликована на бирже', color: '#722ed1' };
@@ -256,9 +267,8 @@ export default function CreateOrderPage() {
             }
 
             // Build order payload based on selected parties
-            const isMeCustomer = selectedCustomer === MY_COMPANY_VALUE;
-            const isMeCarrier = selectedCarrier === MY_COMPANY_VALUE;
-            const isMarketplace = selectedCarrier === MARKETPLACE_VALUE;
+            const finalCustomerPrice = showCustomerPriceField ? values.customerPrice : values.driverCost;
+            const finalDriverCost = showDriverCostField ? values.driverCost : null;
 
             const orderData: any = {
                 cargoDescription: values.cargoDescription,
@@ -267,7 +277,7 @@ export default function CreateOrderPage() {
                 cargoVolume: values.cargoVolume,
                 cargoType: values.cargoType,
                 requirements: values.requirements,
-                customerPrice: values.customerPrice,
+                customerPrice: finalCustomerPrice,
                 customerPriceType: values.customerPriceType || 'FIXED',
                 routePoints,
                 customerId: user?.id,
@@ -279,14 +289,14 @@ export default function CreateOrderPage() {
                 orderData.customerCompanyId = user?.companyId;
                 if (isMarketplace) {
                     // On marketplace — no forwarder assigned
-                    orderData.driverCost = values.driverCost || null;
+                    orderData.driverCost = finalDriverCost || null;
                 } else if (isMeCarrier) {
                     // Self-delivery
                     orderData.forwarderId = user?.companyId;
                 } else {
                     // External carrier
                     orderData.forwarderId = selectedCarrier;
-                    orderData.driverCost = values.driverCost || null;
+                    orderData.driverCost = finalDriverCost || null;
                 }
             } else if (isMeCarrier) {
                 // I am the carrier, customer is external
@@ -296,7 +306,7 @@ export default function CreateOrderPage() {
                 // I am a middleman — customer and carrier are both external
                 orderData.customerCompanyId = selectedCustomer;
                 orderData.subForwarderId = user?.companyId;
-                orderData.subForwarderPrice = values.driverCost || null;
+                orderData.subForwarderPrice = finalDriverCost || null;
                 if (!isMarketplace) {
                     orderData.forwarderId = selectedCarrier;
                 }
@@ -533,22 +543,26 @@ export default function CreateOrderPage() {
             <Divider style={{ margin: '8px 0 16px' }}>Ставки</Divider>
 
             <Row gutter={24}>
-                <Col xs={24} md={8}>
-                    <Form.Item name="customerPrice" label="Ставка от заказчика (₸)">
-                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
-                    </Form.Item>
-                    {appliedTariff && (
-                        <div style={{ marginTop: -12, marginBottom: 8, padding: '4px 8px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>
-                            ✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
-                        </div>
-                    )}
-                </Col>
-                <Col xs={24} md={8}>
-                    <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
-                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
-                    </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
+                {showCustomerPriceField && (
+                    <Col xs={24} md={showDriverCostField ? 8 : 12}>
+                        <Form.Item name="customerPrice" label={customerPriceLabel}>
+                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                        </Form.Item>
+                        {appliedTariff && (
+                            <div style={{ marginTop: -12, marginBottom: 8, padding: '4px 8px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>
+                                ✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
+                            </div>
+                        )}
+                    </Col>
+                )}
+                {showDriverCostField && (
+                    <Col xs={24} md={showCustomerPriceField ? 8 : 12}>
+                        <Form.Item name="driverCost" label={driverCostLabel}>
+                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                        </Form.Item>
+                    </Col>
+                )}
+                <Col xs={24} md={(showCustomerPriceField && showDriverCostField) ? 8 : 12}>
                     <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
                         <Select style={{ width: '100%' }} size="large">
                             <Select.Option value="FIXED">За рейс</Select.Option>
@@ -560,28 +574,31 @@ export default function CreateOrderPage() {
             </Row>
 
             {/* Margin preview */}
-            {(() => {
-                const cp = form.getFieldValue('customerPrice');
-                const dc = form.getFieldValue('driverCost');
-                if (cp && dc) {
-                    const margin = cp - dc;
-                    return (
-                        <div style={{
-                            padding: '8px 16px',
-                            background: margin >= 0 ? '#f6ffed' : '#fff2f0',
-                            border: `1px solid ${margin >= 0 ? '#b7eb8f' : '#ffa39e'}`,
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 500,
-                        }}>
-                            Маржа: <span style={{ color: margin >= 0 ? '#389e0d' : '#cf1322', fontWeight: 700 }}>
-                                {margin.toLocaleString('ru-RU')} ₸
-                            </span>
-                        </div>
-                    );
-                }
-                return null;
-            })()}
+            <Form.Item noStyle dependencies={['customerPrice', 'driverCost']}>
+                {({ getFieldValue }) => {
+                    const cp = getFieldValue('customerPrice');
+                    const dc = getFieldValue('driverCost');
+                    if (cp && dc && showCustomerPriceField && showDriverCostField) {
+                        const margin = cp - dc;
+                        return (
+                            <div style={{
+                                padding: '8px 16px',
+                                background: margin >= 0 ? '#f6ffed' : '#fff2f0',
+                                border: `1px solid ${margin >= 0 ? '#b7eb8f' : '#ffa39e'}`,
+                                borderRadius: 8,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                marginTop: 12,
+                            }}>
+                                Маржа: <span style={{ color: margin >= 0 ? '#389e0d' : '#cf1322', fontWeight: 700 }}>
+                                    {margin.toLocaleString('ru-RU')} ₸
+                                </span>
+                            </div>
+                        );
+                    }
+                    return null;
+                }}
+            </Form.Item>
         </Card>
     );
 
