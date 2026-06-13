@@ -293,12 +293,14 @@ body {
 
 /* General Tracking Header */
 .tracking-header {
-  transition: background 0.3s, border-color 0.3s !important;
+  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease !important;
 }
 
 /* Night theme styling (when dark map is active) */
 [data-map-theme="night"] .tracking-header {
-  border-bottom-color: rgba(255, 255, 255, 0.04) !important;
+  background: rgba(15, 15, 20, 0.72) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
 }
 [data-map-theme="night"] .tracking-header .logo-text {
   color: #ffffff !important;
@@ -341,11 +343,14 @@ body {
 /* Sidebar Card styling under night theme */
 [data-map-theme="night"] .tracking-card {
   color: rgba(255, 255, 255, 0.85) !important;
+  background: rgba(15, 15, 20, 0.72) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
 [data-map-theme="night"] .tracking-card .ant-card-head,
 [data-map-theme="night"] .tracking-card .ant-card-head-title {
   color: #ffffff !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 [data-map-theme="night"] .tracking-card .ant-card-extra {
   color: rgba(255, 255, 255, 0.65) !important;
@@ -369,7 +374,9 @@ body {
 
 /* Day theme styling (when light map is active) */
 [data-map-theme="day"] .tracking-header {
-  border-bottom-color: rgba(9, 9, 11, 0.04) !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-bottom-color: rgba(9, 9, 11, 0.08) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06) !important;
 }
 [data-map-theme="day"] .tracking-header .logo-text {
   color: #09090b !important;
@@ -412,11 +419,14 @@ body {
 /* Sidebar Card styling under day theme */
 [data-map-theme="day"] .tracking-card {
   color: #09090b !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
 }
 [data-map-theme="day"] .tracking-card .ant-card-head,
 [data-map-theme="day"] .tracking-card .ant-card-head-title {
   color: #09090b !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
 }
 [data-map-theme="day"] .tracking-card .ant-card-extra {
   color: rgba(9, 9, 11, 0.65) !important;

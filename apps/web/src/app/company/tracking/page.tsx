@@ -229,14 +229,21 @@ export default function CompanyTrackingPage() {
                     bottom: isMobile ? 0 : 24,
                     width: isMobile ? '100%' : 320,
                     zIndex: 10,
-                    background: 'rgba(255, 255, 255, 0.005)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255, 255, 255, 0.04)',
-                    boxShadow: 'none',
+                    background: mapMode === 'night'
+                        ? 'rgba(15, 15, 20, 0.72)'
+                        : 'rgba(255, 255, 255, 0.78)',
+                    backdropFilter: 'blur(24px) saturate(1.8)',
+                    WebkitBackdropFilter: 'blur(24px) saturate(1.8)',
+                    border: mapMode === 'night'
+                        ? '1px solid rgba(255, 255, 255, 0.12)'
+                        : '1px solid rgba(0, 0, 0, 0.08)',
+                    boxShadow: mapMode === 'night'
+                        ? '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
+                        : '0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
                     borderRadius: isMobile ? 0 : 16,
-                    display: isMobile ? 'none' : 'flex', // Скрываем на мобилках, там управление на карте или drawer
+                    display: isMobile ? 'none' : 'flex',
                     flexDirection: 'column',
+                    transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
                 }}
                 bodyStyle={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}
                 extra={<ReloadOutlined onClick={fetchDrivers} style={{ cursor: 'pointer' }} />}
@@ -321,16 +328,20 @@ export default function CompanyTrackingPage() {
                 <Button
                     onClick={toggleMapTheme}
                     style={{
-                        background: mapMode === 'night' ? 'rgba(30, 30, 30, 0.02)' : 'rgba(255, 255, 255, 0.02)',
-                        color: mapMode === 'night' ? '#fff' : '#000',
-                        border: mapMode === 'night' ? '1px solid rgba(255, 255, 255, 0.04)' : '1px solid rgba(0, 0, 0, 0.04)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
+                        background: mapMode === 'night' ? 'rgba(15, 15, 20, 0.65)' : 'rgba(255, 255, 255, 0.82)',
+                        color: mapMode === 'night' ? '#fff' : '#09090b',
+                        border: mapMode === 'night' ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(0, 0, 0, 0.1)',
+                        backdropFilter: 'blur(20px) saturate(1.8)',
+                        WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        borderRadius: 8,
-                        boxShadow: 'none',
+                        borderRadius: 12,
+                        boxShadow: mapMode === 'night'
+                            ? '0 4px 16px rgba(0, 0, 0, 0.3)'
+                            : '0 4px 16px rgba(0, 0, 0, 0.08)',
+                        fontWeight: 500,
+                        transition: 'all 0.3s ease',
                     }}
                     icon={mapMode === 'night' ? '🌙' : '☀️'}
                 >
@@ -341,8 +352,10 @@ export default function CompanyTrackingPage() {
                     icon={<AimOutlined />}
                     onClick={centerOnMyLocation}
                     style={{
-                        borderRadius: 8,
-                        boxShadow: 'none',
+                        borderRadius: 12,
+                        boxShadow: '0 4px 16px rgba(22, 119, 255, 0.3)',
+                        fontWeight: 500,
+                        transition: 'all 0.3s ease',
                     }}
                 >
                     Моё место
@@ -352,23 +365,74 @@ export default function CompanyTrackingPage() {
             {/* Десктопные заблюренные границы и рамки поверх карты */}
             {!isMobile && (
                 <>
-                    {/* Верхняя рамка с размытием */}
-                    <div style={{ position: 'absolute', top: 56, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    {/* Верхняя рамка с размытием — виньетка сверху */}
+                    <div style={{
+                        position: 'absolute', top: 56, left: 0, right: 0, height: 24, zIndex: 6,
+                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                        background: mapMode === 'night'
+                            ? 'linear-gradient(to bottom, rgba(10, 10, 15, 0.4), transparent)'
+                            : 'linear-gradient(to bottom, rgba(248, 248, 248, 0.6), transparent)',
+                        pointerEvents: 'none',
+                        transition: 'background 0.4s ease',
+                    }} />
                     
                     {/* Нижиняя рамка с размытием */}
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{
+                        position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6,
+                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                        background: mapMode === 'night'
+                            ? 'linear-gradient(to top, rgba(10, 10, 15, 0.4), transparent)'
+                            : 'linear-gradient(to top, rgba(248, 248, 248, 0.6), transparent)',
+                        pointerEvents: 'none',
+                        transition: 'background 0.4s ease',
+                    }} />
                     
                     {/* Левая внешняя рамка (до сайдбара) */}
-                    <div style={{ position: 'absolute', top: 80, bottom: 24, left: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{
+                        position: 'absolute', top: 80, bottom: 24, left: 0, width: 24, zIndex: 6,
+                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                        background: mapMode === 'night'
+                            ? 'linear-gradient(to right, rgba(10, 10, 15, 0.3), transparent)'
+                            : 'linear-gradient(to right, rgba(248, 248, 248, 0.5), transparent)',
+                        pointerEvents: 'none',
+                        transition: 'background 0.4s ease',
+                    }} />
                     
                     {/* Правая внешняя рамка */}
-                    <div style={{ position: 'absolute', top: 80, bottom: 24, right: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{
+                        position: 'absolute', top: 80, bottom: 24, right: 0, width: 24, zIndex: 6,
+                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                        background: mapMode === 'night'
+                            ? 'linear-gradient(to left, rgba(10, 10, 15, 0.3), transparent)'
+                            : 'linear-gradient(to left, rgba(248, 248, 248, 0.5), transparent)',
+                        pointerEvents: 'none',
+                        transition: 'background 0.4s ease',
+                    }} />
                     
                     {/* Промежуточная рамка (между сайдбаром и окном карты) */}
-                    <div style={{ position: 'absolute', top: 80, bottom: 24, left: 344, width: 16, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{
+                        position: 'absolute', top: 80, bottom: 24, left: 344, width: 16, zIndex: 6,
+                        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                        background: mapMode === 'night'
+                            ? 'rgba(10, 10, 15, 0.2)'
+                            : 'rgba(248, 248, 248, 0.3)',
+                        pointerEvents: 'none',
+                        transition: 'background 0.4s ease',
+                    }} />
                     
                     {/* Физическая рамка оригинального окна карты с тенью */}
-                    <div style={{ position: 'absolute', top: 80, left: 360, right: 24, bottom: 24, zIndex: 7, border: '1px solid rgba(228, 228, 231, 0.06)', borderRadius: 24, pointerEvents: 'none', boxShadow: 'none' }} />
+                    <div style={{
+                        position: 'absolute', top: 80, left: 360, right: 24, bottom: 24, zIndex: 7,
+                        border: mapMode === 'night'
+                            ? '1px solid rgba(255, 255, 255, 0.08)'
+                            : '1px solid rgba(0, 0, 0, 0.06)',
+                        borderRadius: 24,
+                        pointerEvents: 'none',
+                        boxShadow: mapMode === 'night'
+                            ? 'inset 0 0 60px rgba(0, 0, 0, 0.15), 0 0 40px rgba(0, 0, 0, 0.1)'
+                            : 'inset 0 0 60px rgba(0, 0, 0, 0.03), 0 0 40px rgba(0, 0, 0, 0.04)',
+                        transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
+                    }} />
                 </>
             )}
 
