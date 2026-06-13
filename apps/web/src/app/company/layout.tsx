@@ -28,6 +28,7 @@ const { Text } = Typography;
 export default function CompanyLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
+    const isTrackingPage = pathname === '/company/tracking';
     const { user, logout, checkAuth, isLoading } = useAuthStore();
 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -375,17 +376,17 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             </Header>
 
             {/* Content */}
-            <Layout style={{ background: '#f8f8f8', padding: isMobile ? 0 : 24 }}>
+            <Layout style={{ background: isTrackingPage ? '#f8f8f8' : '#f8f8f8', padding: isTrackingPage ? 0 : (isMobile ? 0 : 24) }}>
                 <Content
                     style={{
-                        margin: isMobile ? 16 : 0,
-                        padding: isMobile ? 16 : 32,
-                        background: '#ffffff',
-                        borderRadius: 24,
-                        border: '1px solid #e4e4e7',
-                        minHeight: 'calc(100vh - 56px - 48px)',
-                        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
-                        overflow: 'auto',
+                        margin: isTrackingPage ? 0 : (isMobile ? 16 : 0),
+                        padding: isTrackingPage ? 0 : (isMobile ? 16 : 32),
+                        background: isTrackingPage ? 'transparent' : '#ffffff',
+                        borderRadius: isTrackingPage ? 0 : 24,
+                        border: isTrackingPage ? 'none' : '1px solid #e4e4e7',
+                        minHeight: isTrackingPage ? 'calc(100vh - 56px)' : 'calc(100vh - 56px - 48px)',
+                        boxShadow: isTrackingPage ? 'none' : '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
+                        overflow: isTrackingPage ? 'hidden' : 'auto',
                     }}
                 >
                     {children}

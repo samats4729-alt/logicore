@@ -82,6 +82,16 @@ export default function CompanyTrackingPage() {
     const [popupInfo, setPopupInfo] = useState<DriverPosition | null>(null);
 
     const [mapMode, setMapMode] = useState<'day' | 'night'>('night');
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const toggleMapTheme = () => {
         const newMode = mapMode === 'night' ? 'day' : 'night';
@@ -200,24 +210,24 @@ export default function CompanyTrackingPage() {
     };
 
     return (
-        <div style={{ position: 'relative', height: 'calc(100vh - 180px)', borderRadius: 24, overflow: 'hidden', border: '1px solid #e4e4e7' }}>
+        <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 56px - 16px)' : 'calc(100vh - 56px)', overflow: 'hidden' }}>
             {/* Список водителей (Glassmorphism Sidebar) */}
             <Card
                 title="Отслеживание грузов"
                 style={{
-                    position: 'absolute',
-                    top: 16,
-                    left: 16,
-                    bottom: 16,
-                    width: 320,
+                    position: isMobile ? 'relative' : 'absolute',
+                    top: isMobile ? 0 : 24,
+                    left: isMobile ? 0 : 24,
+                    bottom: isMobile ? 0 : 24,
+                    width: isMobile ? '100%' : 320,
                     zIndex: 10,
                     background: 'rgba(255, 255, 255, 0.75)',
                     backdropFilter: 'blur(16px)',
                     WebkitBackdropFilter: 'blur(16px)',
                     border: '1px solid rgba(228, 228, 231, 0.7)',
                     boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.08)',
-                    borderRadius: 16,
-                    display: 'flex',
+                    borderRadius: isMobile ? 0 : 16,
+                    display: isMobile ? 'none' : 'flex', // Скрываем на мобилках, там управление на карте или drawer
                     flexDirection: 'column',
                 }}
                 bodyStyle={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}
@@ -299,7 +309,7 @@ export default function CompanyTrackingPage() {
             </Card>
 
             {/* Панель кнопок управления */}
-            <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 10, display: 'flex', gap: 8 }}>
+            <div style={{ position: 'absolute', top: isMobile ? 12 : 24, right: isMobile ? 12 : 24, zIndex: 10, display: 'flex', gap: 8 }}>
                 <Button
                     onClick={toggleMapTheme}
                     style={{
@@ -331,8 +341,31 @@ export default function CompanyTrackingPage() {
                 </Button>
             </div>
 
-            {/* Карта */}
-            <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
+            {/* Десктопные заблюренные границы и рамки поверх карты */}
+            {!isMobile && (
+                <>
+                    {/* Верхняя рамка с размытием */}
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    
+                    {/* Нижиняя рамка с размытием */}
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    
+                    {/* Левая внешняя рамка (до сайдбара) */}
+                    <div style={{ position: 'absolute', top: 24, bottom: 24, left: 0, width: 24, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    
+                    {/* Правая внешняя рамка */}
+                    <div style={{ position: 'absolute', top: 24, bottom: 24, right: 0, width: 24, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    
+                    {/* Промежуточная рамка (между сайдбаром и окном карты) */}
+                    <div style={{ position: 'absolute', top: 24, bottom: 24, left: 344, width: 16, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    
+                    {/* Физическая рамка оригинального окна карты с тенью */}
+                    <div style={{ position: 'absolute', top: 24, left: 360, right: 24, bottom: 24, zIndex: 7, border: '1px solid rgba(228, 228, 231, 0.8)', borderRadius: 24, pointerEvents: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} />
+                </>
+            )}
+
+            {/* Карта (На весь экран в фоне) */}
+            <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 0 }}>
                 <InteractiveMap
                     viewState={viewState}
                     onViewStateChange={setViewState}

@@ -43,6 +43,7 @@ const menuItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
+    const isTrackingPage = pathname === '/admin/tracking';
     const { user, isAuthenticated, logout, checkAuth } = useAuthStore();
     const [collapsed, setCollapsed] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -237,12 +238,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </Header>
 
                 <Content style={{
-                    margin: isMobile ? 8 : 24,
-                    padding: isMobile ? 12 : 24,
-                    background: '#fff',
-                    borderRadius: 8,
-                    minHeight: 'calc(100vh - 64px - 48px)',
-                    overflow: 'auto',
+                    margin: isTrackingPage ? 0 : (isMobile ? 8 : 24),
+                    padding: isTrackingPage ? 0 : (isMobile ? 12 : 24),
+                    background: isTrackingPage ? 'transparent' : '#fff',
+                    borderRadius: isTrackingPage ? 0 : 8,
+                    minHeight: isTrackingPage ? 'calc(100vh - 64px)' : 'calc(100vh - 64px - 48px)',
+                    overflow: isTrackingPage ? 'hidden' : 'auto',
                 }}>
                     {children}
                 </Content>
