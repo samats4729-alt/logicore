@@ -136,10 +136,29 @@ export class PowerOfAttorneyService {
             // ============ ПРЕАМБУЛА ============
             const directorName = issuerCompany.directorName || '_______________';
 
+            // Склонение ФИО директора в родительный падеж
+            const declinedDirectorName = directorName !== '_______________'
+                ? this.declineNameToGenitive(directorName)
+                : '_______________';
+
+            // Определение пола директора для правильного окончания слова "действующий"
+            let isFemaleDirector = false;
+            if (directorName && directorName !== '_______________') {
+                const parts = directorName.trim().split(/\s+/);
+                for (const part of parts) {
+                    const lowerPart = part.toLowerCase();
+                    if (lowerPart.endsWith('на') || lowerPart.endsWith('кызы')) {
+                        isFemaleDirector = true;
+                        break;
+                    }
+                }
+            }
+            const actingWord = isFemaleDirector ? 'действующей' : 'действующего';
+
             doc.fontSize(10).font('Roboto');
             doc.text('Настоящей доверенностью, ', { continued: true, align: 'justify', lineGap: 2 });
-            doc.font('Roboto-Bold').text(`ТОО "${issuerClean}"`, { continued: true });
-            doc.font('Roboto').text(` в лице ${directorName}, действующего на основании Устава`, { align: 'justify', lineGap: 2 });
+            doc.font('Roboto-Bold').text(`ТОО "${issuerClean}" `, { continued: true });
+            doc.font('Roboto').text(`в лице ${declinedDirectorName}, ${actingWord} на основании Устава`, { align: 'justify', lineGap: 2 });
             doc.moveDown(0.3);
             doc.text('доверяет водителю:', { align: 'left' });
             doc.moveDown(0.5);
@@ -404,5 +423,137 @@ export class PowerOfAttorneyService {
             this.logger.warn(`[PoA] Local file not found at: ${localPath}`);
         }
         return null;
+    }
+
+    private declineNameToGenitive(fullName: string): string {
+        if (!fullName || fullName.trim() === '') return '_______________';
+        
+        const parts = fullName.trim().split(/\s+/);
+        if (parts.length === 0) return '_______________';
+
+        // Определение пола по отчеству или имени
+        let isFemale = false;
+        for (const part of parts) {
+            const lowerPart = part.toLowerCase();
+            if (lowerPart.endsWith('на') || lowerPart.endsWith('кызы')) {
+                isFemale = true;
+                break;
+            }
+        }
+
+        const declinedParts = parts.map((part, index) => {
+            const cleanPart = part.replace(/[^a-zA-Zа-яА-ЯёЁ\-]/g, '');
+            if (!cleanPart) return part;
+
+            const declined = this.declineWord(cleanPart, isFemale, index, parts.length);
+            return part.replace(cleanPart, declined);
+        });
+
+        return declinedParts.join(' ');
+    }
+
+    private declineWord(word: string, isFemale: boolean, partIndex: number, totalParts: number): string {
+        const lower = word.toLowerCase();
+        
+        if (lower.endsWith('ич')) {
+            return word + 'а';
+        }
+        if (lower.endsWith('на')) {
+            return word.slice(0, -1) + 'ы';
+        }
+        if (lower.endsWith('кызы')) {
+            return word;
+        }
+        if (lower.endsWith('улы') || lower.endsWith('уулу')) {
+            return word;
+        }
+
+        let isLastName = false;
+        let isFirstName = false;
+
+        if (totalParts === 3) {
+            if (partIndex === 0) isLastName = true;
+            if (partIndex === 1) isFirstName = true;
+        } else if (totalParts === 2) {
+            if (partIndex === 1) {
+                isLastName = true;
+            } else {
+                isFirstName = true;
+            }
+        } else {
+            isLastName = lower.endsWith('ов') || lower.endsWith('ев') || lower.endsWith('ин') || lower.endsWith('ий') || lower.endsWith('ая') || lower.endsWith('ова') || lower.endsWith('ева') || lower.endsWith('ина');
+            isFirstName = !isLastName;
+        }
+
+        if (isFemale) {
+            if (isLastName) {
+                if (lower.endsWith('ая')) {
+                    return word.slice(0, -2) + 'ой';
+                }
+                if (lower.endsWith('ова') || lower.endsWith('ева')) {
+                    return word.slice(0, -1) + 'ой';
+                }
+                if (lower.endsWith('ина') || lower.endsWith('ына')) {
+                    return word.slice(0, -1) + 'ой';
+                }
+                return word;
+            } else {
+                if (lower.endsWith('ия')) {
+                    return word.slice(0, -2) + 'ии';
+                }
+                if (lower.endsWith('я')) {
+                    return word.slice(0, -1) + 'и';
+                }
+                if (lower.endsWith('а')) {
+                    const beforeA = lower.slice(-2, -1);
+                    if (['г', 'к', 'х', 'ж', 'ч', 'ш', 'щ'].includes(beforeA)) {
+                        return word.slice(0, -1) + 'и';
+                    }
+                    return word.slice(0, -1) + 'ы';
+                }
+                if (lower.endsWith('ь')) {
+                    return word.slice(0, -1) + 'и';
+                }
+                return word;
+            }
+        } else {
+            if (isLastName) {
+                if (lower.endsWith('ий') || lower.endsWith('ый')) {
+                    return word.slice(0, -2) + 'ого';
+                }
+                if (lower.endsWith('ов') || lower.endsWith('ев')) {
+                    return word + 'а';
+                }
+                if (lower.endsWith('ин') || lower.endsWith('ын')) {
+                    return word + 'а';
+                }
+                if (this.isConsonant(lower.slice(-1))) {
+                    return word + 'а';
+                }
+                return word;
+            } else {
+                if (lower.endsWith('ий')) {
+                    return word.slice(0, -2) + 'ия';
+                }
+                if (lower.endsWith('й')) {
+                    return word.slice(0, -1) + 'я';
+                }
+                if (lower.endsWith('ь')) {
+                    return word.slice(0, -1) + 'я';
+                }
+                if (lower.endsWith('а') || lower.endsWith('я')) {
+                    if (lower.endsWith('я')) return word.slice(0, -1) + 'и';
+                    return word.slice(0, -1) + 'ы';
+                }
+                if (this.isConsonant(lower.slice(-1))) {
+                    return word + 'а';
+                }
+                return word;
+            }
+        }
+    }
+
+    private isConsonant(char: string): boolean {
+        return 'бвгджзйклмнпрстфхцчшщ'.includes(char);
     }
 }
