@@ -672,7 +672,7 @@ export class CompanyService {
     /**
      * Создать отдел
      */
-    async createDepartment(companyId: string, name: string, parentDepartmentId?: string) {
+    async createDepartment(companyId: string, name: string, parentDepartmentId?: string, icon?: string) {
         if (parentDepartmentId) {
             const parent = await this.prisma.department.findFirst({
                 where: { id: parentDepartmentId, companyId },
@@ -687,6 +687,7 @@ export class CompanyService {
                 name,
                 companyId,
                 parentDepartmentId: parentDepartmentId || null,
+                icon: icon || 'FolderOpenOutlined',
             },
         });
     }
@@ -694,7 +695,7 @@ export class CompanyService {
     /**
      * Обновить название отдела
      */
-    async updateDepartment(companyId: string, id: string, name: string) {
+    async updateDepartment(companyId: string, id: string, name: string, icon?: string) {
         const dept = await this.prisma.department.findFirst({
             where: { id, companyId },
         });
@@ -704,7 +705,10 @@ export class CompanyService {
 
         return this.prisma.department.update({
             where: { id },
-            data: { name },
+            data: { 
+                name,
+                icon: icon || undefined
+            },
         });
     }
 

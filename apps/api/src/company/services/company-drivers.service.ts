@@ -69,12 +69,28 @@ export class CompanyDriversService {
             throw new BadRequestException('Водитель с таким телефоном уже зарегистрирован');
         }
 
+        // Автоматически создаем отдел "Водители" при регистрации водителя, если его нет
+        let driversDept = await this.prisma.department.findFirst({
+            where: { companyId, name: 'Водители' }
+        });
+
+        if (!driversDept) {
+            driversDept = await this.prisma.department.create({
+                data: {
+                    name: 'Водители',
+                    companyId,
+                    icon: 'TruckOutlined'
+                }
+            });
+        }
+
         // Создаём водителя без пароля (авторизация по SMS)
         return this.prisma.user.create({
             data: {
                 ...data,
                 role: UserRole.DRIVER,
                 companyId,
+                departmentId: driversDept.id,
                 isActive: true,
             },
             select: this.driverSelect,

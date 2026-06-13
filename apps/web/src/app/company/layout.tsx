@@ -114,11 +114,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        items.push({
-            key: '/company/drivers',
-            icon: <CarOutlined />,
-            label: 'Водители',
-        });
+
 
         if (hasPerm('partners')) {
             items.push({

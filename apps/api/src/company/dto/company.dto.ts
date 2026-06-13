@@ -272,6 +272,11 @@ export class CreateDepartmentDto {
     @IsString()
     @IsOptional()
     parentDepartmentId?: string;
+
+    @ApiProperty({ description: 'Иконка отдела', example: 'TruckOutlined', required: false })
+    @IsString()
+    @IsOptional()
+    icon?: string;
 }
 
 export class UpdateDepartmentDto {
@@ -279,6 +284,11 @@ export class UpdateDepartmentDto {
     @IsString()
     @IsNotEmpty()
     name: string;
+
+    @ApiProperty({ description: 'Иконка отдела', example: 'DollarOutlined', required: false })
+    @IsString()
+    @IsOptional()
+    icon?: string;
 }
 
 export class AssignUserDepartmentDto {

@@ -792,6 +792,7 @@ model OrderChangeLog {
 model Department {
   id                 String       @id @default(cuid())
   name               String
+  icon               String?      // Иконка отдела (например, "TruckOutlined")
   companyId          String
   company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   

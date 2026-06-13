@@ -381,7 +381,7 @@ export class CompanyController {
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Создать новый отдел' })
     async createDepartment(@Request() req: any, @Body() dto: CreateDepartmentDto) {
-        return this.companyService.createDepartment(req.user.companyId, dto.name, dto.parentDepartmentId);
+        return this.companyService.createDepartment(req.user.companyId, dto.name, dto.parentDepartmentId, dto.icon);
     }
 
     @Put('departments/:id')
@@ -392,7 +392,7 @@ export class CompanyController {
         @Param('id') id: string,
         @Body() dto: UpdateDepartmentDto,
     ) {
-        return this.companyService.updateDepartment(req.user.companyId, id, dto.name);
+        return this.companyService.updateDepartment(req.user.companyId, id, dto.name, dto.icon);
     }
 
     @Delete('departments/:id')

@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col } from 'antd';
-import { MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, ApartmentOutlined, FolderOpenOutlined, PlusOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons';
+import { 
+    MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, 
+    ApartmentOutlined, FolderOpenOutlined, PlusOutlined, UnorderedListOutlined, UserOutlined,
+    DollarOutlined, CalculatorOutlined, TruckOutlined, TeamOutlined, CarryOutlined,
+    NotificationOutlined, ShopOutlined, CoffeeOutlined
+} from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
@@ -57,6 +62,30 @@ const roleColors: Record<string, string> = {
     FORWARDER: 'orange',
     DRIVER: 'purple',
 };
+
+const deptIcons: Record<string, React.ReactNode> = {
+    FolderOpenOutlined: <FolderOpenOutlined />,
+    DollarOutlined: <DollarOutlined />,
+    CalculatorOutlined: <CalculatorOutlined />,
+    TruckOutlined: <TruckOutlined />,
+    TeamOutlined: <TeamOutlined />,
+    CarryOutlined: <CarryOutlined />,
+    NotificationOutlined: <NotificationOutlined />,
+    ShopOutlined: <ShopOutlined />,
+    CoffeeOutlined: <CoffeeOutlined />,
+};
+
+const iconOptions = [
+    { value: 'FolderOpenOutlined', label: '📁 Папка' },
+    { value: 'DollarOutlined', label: '💵 Финансы (Доллар)' },
+    { value: 'CalculatorOutlined', label: '🧮 Бухгалтерия (Калькулятор)' },
+    { value: 'TruckOutlined', label: '🚚 Логистика / Водители (Грузовик)' },
+    { value: 'TeamOutlined', label: '👥 Сотрудники (Группа)' },
+    { value: 'CarryOutlined', label: '💼 Менеджмент (Портфель)' },
+    { value: 'NotificationOutlined', label: '📣 Оповещения / Продажи' },
+    { value: 'ShopOutlined', label: '🏢 Склад (Офис)' },
+    { value: 'CoffeeOutlined', label: '☕ Разное (Кофе)' },
+];
 
 export default function CompanyUsersPage() {
     const { user: currentUser } = useAuthStore();
@@ -121,6 +150,7 @@ export default function CompanyUsersPage() {
             await api.post('/company/departments', {
                 name: values.name,
                 parentDepartmentId: selectedParentDeptId || undefined,
+                icon: values.icon || 'FolderOpenOutlined',
             });
             message.success('Отдел успешно создан');
             setDeptModalOpen(false);
@@ -136,13 +166,14 @@ export default function CompanyUsersPage() {
             if (!renamingDept) return;
             await api.put(`/company/departments/${renamingDept.id}`, {
                 name: values.name,
+                icon: values.icon || 'FolderOpenOutlined',
             });
-            message.success('Название отдела обновлено');
+            message.success('Отдел обновлен');
             setRenameModalOpen(false);
             renameForm.resetFields();
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка переименования отдела');
+            message.error(error.response?.data?.message || 'Ошибка обновления отдела');
         }
     };
 
@@ -187,12 +218,13 @@ export default function CompanyUsersPage() {
     const handleAddSubDeptClick = (parentId: string | null) => {
         setSelectedParentDeptId(parentId);
         deptForm.resetFields();
+        deptForm.setFieldsValue({ icon: 'FolderOpenOutlined' });
         setDeptModalOpen(true);
     };
 
     const handleRenameDeptClick = (dept: any) => {
         setRenamingDept(dept);
-        renameForm.setFieldsValue({ name: dept.name });
+        renameForm.setFieldsValue({ name: dept.name, icon: dept.icon || 'FolderOpenOutlined' });
         setRenameModalOpen(true);
     };
 
@@ -273,6 +305,7 @@ export default function CompanyUsersPage() {
     const renderDeptNode = (dept: any) => {
         const subDepts = getSubDepartments(dept.id);
         const deptUsers = dept.users || [];
+        const currentIcon = deptIcons[dept.icon] || <FolderOpenOutlined />;
 
         return (
             <div className="org-tree-child-wrapper" key={dept.id}>
@@ -285,8 +318,10 @@ export default function CompanyUsersPage() {
                     className="dept-node-card"
                     title={
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 600, fontSize: 13, color: '#1f2937' }}>
-                                <FolderOpenOutlined style={{ marginRight: 6, color: '#3b82f6' }} />
+                            <span style={{ fontWeight: 600, fontSize: 13, color: '#1f2937', display: 'inline-flex', alignItems: 'center' }}>
+                                <span style={{ marginRight: 6, display: 'inline-flex', fontSize: 15, color: '#3b82f6' }}>
+                                    {currentIcon}
+                                </span>
                                 {dept.name}
                             </span>
                             <Space size={2}>
@@ -301,7 +336,7 @@ export default function CompanyUsersPage() {
                                     type="text"
                                     size="small"
                                     icon={<EditOutlined style={{ fontSize: 10, color: '#4b5563' }} />}
-                                    title="Переименовать"
+                                    title="Редактировать отдел"
                                     onClick={() => handleRenameDeptClick(dept)}
                                 />
                                 <Popconfirm
@@ -315,7 +350,7 @@ export default function CompanyUsersPage() {
                                         danger
                                         size="small"
                                         icon={<DeleteOutlined style={{ fontSize: 10 }} />}
-                                        title="Удалить"
+                                        title="Удалить отдел"
                                     />
                                 </Popconfirm>
                             </Space>
@@ -324,7 +359,7 @@ export default function CompanyUsersPage() {
                     style={{ 
                         width: 280, 
                         borderRadius: 12, 
-                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
+                        boxShadow: '0 4px 15px rgba(0, 0, 0, 0.03)',
                         border: '1px solid #e5e7eb'
                     }}
                 >
@@ -341,22 +376,22 @@ export default function CompanyUsersPage() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        padding: '6px 8px',
+                                        padding: '4px 8px',
                                         marginBottom: 4,
-                                        background: '#f9fafb',
-                                        borderRadius: 8,
+                                        background: '#ffffff',
+                                        borderRadius: 6,
                                         border: '1px solid #f3f4f6'
                                     }}
                                 >
                                     <Space size={6}>
                                         <div
                                             style={{
-                                                width: 20,
-                                                height: 20,
+                                                width: 18,
+                                                height: 18,
                                                 borderRadius: '50%',
                                                 background: roleColors[u.role] || '#9ca3af',
                                                 color: '#fff',
-                                                fontSize: 9,
+                                                fontSize: 8,
                                                 fontWeight: 'bold',
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -365,20 +400,20 @@ export default function CompanyUsersPage() {
                                         >
                                             {u.firstName[0]}
                                         </div>
-                                        <div style={{ fontSize: 12, fontWeight: 500, color: '#374151', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 500, color: '#374151', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {u.lastName} {u.firstName[0]}.
                                         </div>
                                     </Space>
                                     <Space size={2}>
-                                        <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 4px', lineHeight: '14px', borderRadius: 4 }}>
+                                        <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 3px', lineHeight: '12px', height: '14px', borderRadius: 4 }}>
                                             {roleLabels[u.role] || u.role}
                                         </Tag>
                                         <Button
                                             type="text"
                                             danger
                                             size="small"
-                                            style={{ padding: 0, width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                            icon={<span style={{ fontSize: 12, lineHeight: 1 }}>×</span>}
+                                            style={{ padding: 0, width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            icon={<span style={{ fontSize: 10, lineHeight: 1 }}>×</span>}
                                             title="Убрать из отдела"
                                             onClick={() => handleUnassignUser(u.id)}
                                         />
@@ -387,12 +422,12 @@ export default function CompanyUsersPage() {
                             ))
                         )}
                     </div>
-                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 8, marginTop: 8 }}>
+                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 6, marginTop: 6 }}>
                         <Button
                             type="dashed"
                             size="small"
-                            icon={<PlusOutlined />}
-                            style={{ width: '100%', fontSize: 11, borderRadius: 6, color: '#4b5563' }}
+                            icon={<PlusOutlined style={{ fontSize: 9 }} />}
+                            style={{ width: '100%', fontSize: 10, borderRadius: 6, color: '#6b7280', height: 24, padding: '0 8px' }}
                             onClick={() => handleAssignUserClick(dept.id)}
                         >
                             Назначить сотрудника
@@ -422,15 +457,15 @@ export default function CompanyUsersPage() {
                     className="company-root-card"
                     title={
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>
-                                <ApartmentOutlined style={{ marginRight: 8, color: '#ef4444' }} />
+                            <span style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>
+                                <ApartmentOutlined style={{ marginRight: 6, color: '#ef4444' }} />
                                 {companyName}
                             </span>
                             <Button
                                 type="primary"
                                 size="small"
                                 icon={<PlusOutlined />}
-                                style={{ borderRadius: 6, fontSize: 12, height: 24 }}
+                                style={{ borderRadius: 6, fontSize: 11, height: 22, padding: '0 8px' }}
                                 onClick={() => handleAddSubDeptClick(null)}
                             >
                                 Отдел
@@ -440,16 +475,16 @@ export default function CompanyUsersPage() {
                     style={{ 
                         width: 320, 
                         borderRadius: 12, 
-                        border: '2px solid #fecaca', 
-                        boxShadow: '0 10px 25px rgba(239, 68, 68, 0.05)' 
+                        border: '1px solid #fca5a5', 
+                        boxShadow: '0 4px 15px rgba(239, 68, 68, 0.03)' 
                     }}
                 >
-                    <div style={{ padding: '4px 0' }}>
-                        <div style={{ fontSize: 9, color: '#9ca3af', marginBottom: 6, fontWeight: 700, letterSpacing: '0.05em' }}>
-                            АДМИНИСТРАЦИЯ
+                    <div style={{ padding: '2px 0' }}>
+                        <div style={{ fontSize: 8, color: '#9ca3af', marginBottom: 4, fontWeight: 700, letterSpacing: '0.05em' }}>
+                            РУКОВОДСТВО
                         </div>
                         {adminUsers.length === 0 ? (
-                            <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, padding: '10px 0' }}>
+                            <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 11, padding: '8px 0' }}>
                                 Нет назначенных админов
                             </div>
                         ) : (
@@ -460,22 +495,22 @@ export default function CompanyUsersPage() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        padding: '6px 10px',
+                                        padding: '4px 8px',
                                         marginBottom: 4,
                                         background: '#fef2f2',
                                         borderRadius: 8,
                                         border: '1px solid #fee2e2'
                                     }}
                                 >
-                                    <Space size={8}>
+                                    <Space size={6}>
                                         <div
                                             style={{
-                                                width: 24,
-                                                height: 24,
+                                                width: 20,
+                                                height: 20,
                                                 borderRadius: '50%',
                                                 background: '#ef4444',
                                                 color: '#fff',
-                                                fontSize: 10,
+                                                fontSize: 9,
                                                 fontWeight: 'bold',
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -485,11 +520,11 @@ export default function CompanyUsersPage() {
                                             {u.firstName[0]}
                                         </div>
                                         <div>
-                                            <div style={{ fontSize: 12, fontWeight: 600, color: '#991b1b' }}>{u.lastName} {u.firstName}</div>
-                                            <div style={{ fontSize: 10, color: '#7f1d1d', opacity: 0.7 }}>{u.phone || u.email}</div>
+                                            <div style={{ fontSize: 11, fontWeight: 600, color: '#991b1b' }}>{u.lastName} {u.firstName}</div>
+                                            <div style={{ fontSize: 9, color: '#b91c1c', opacity: 0.7 }}>{u.phone || u.email}</div>
                                         </div>
                                     </Space>
-                                    <Tag color="red" style={{ fontSize: 8, margin: 0, borderRadius: 4 }}>Админ</Tag>
+                                    <Tag color="red" style={{ fontSize: 8, margin: 0, borderRadius: 4, padding: '0 4px', lineHeight: '14px' }}>Админ</Tag>
                                 </div>
                             ))
                         )}
@@ -621,7 +656,7 @@ export default function CompanyUsersPage() {
 
     return (
         <div className="company-structure-page">
-            {/* Inline CSS styling for the family tree lines */}
+            {/* Elegant Background Dot Grid Pattern for modern aesthetics */}
             <style>{`
                 .org-tree-container {
                     display: flex;
@@ -630,9 +665,11 @@ export default function CompanyUsersPage() {
                     width: 100%;
                     overflow-x: auto;
                     padding: 40px 10px;
-                    background: #fdfdfd;
-                    border-radius: 12px;
-                    border: 1px dashed #e5e7eb;
+                    background-color: #fafafa;
+                    background-image: radial-gradient(#e5e7eb 1.5px, transparent 1.5px);
+                    background-size: 20px 20px;
+                    border-radius: 16px;
+                    border: 1px solid #e5e7eb;
                     min-height: 480px;
                 }
                 
@@ -699,23 +736,23 @@ export default function CompanyUsersPage() {
                 }
                 
                 .dept-node-card {
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                 }
                 
                 .dept-node-card:hover {
-                    transform: translateY(-4px);
-                    box-shadow: 0 12px 30px rgba(59, 130, 246, 0.08) !important;
-                    border-color: #93c5fd !important;
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.05) !important;
+                    border-color: #cbd5e1 !important;
                 }
 
                 .company-root-card {
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                 }
 
                 .company-root-card:hover {
-                    transform: translateY(-4px);
-                    box-shadow: 0 12px 30px rgba(239, 68, 68, 0.08) !important;
-                    border-color: #fca5a5 !important;
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.05) !important;
+                    border-color: #f87171 !important;
                 }
             `}</style>
 
@@ -766,7 +803,7 @@ export default function CompanyUsersPage() {
                     <Col xs={24} lg={6}>
                         <Card 
                             title={
-                                <span style={{ fontWeight: 600, color: '#374151' }}>
+                                <span style={{ fontWeight: 600, color: '#374151', fontSize: 13 }}>
                                     <UserOutlined style={{ marginRight: 6, color: '#6b7280' }} />
                                     Нераспределенные ({unassignedUsers.length})
                                 </span>
@@ -790,7 +827,7 @@ export default function CompanyUsersPage() {
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'space-between',
-                                                padding: '8px 10px',
+                                                padding: '6px 8px',
                                                 background: '#f9fafb',
                                                 border: '1px solid #e5e7eb',
                                                 borderRadius: 8,
@@ -800,12 +837,12 @@ export default function CompanyUsersPage() {
                                             <Space size={8}>
                                                 <div
                                                     style={{
-                                                        width: 24,
-                                                        height: 24,
+                                                        width: 20,
+                                                        height: 20,
                                                         borderRadius: '50%',
                                                         background: roleColors[u.role] || '#6b7280',
                                                         color: '#fff',
-                                                        fontSize: 10,
+                                                        fontSize: 9,
                                                         fontWeight: 'bold',
                                                         display: 'flex',
                                                         alignItems: 'center',
@@ -815,10 +852,10 @@ export default function CompanyUsersPage() {
                                                     {u.firstName[0]}
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937' }}>
+                                                    <div style={{ fontSize: 11, fontWeight: 600, color: '#1f2937' }}>
                                                         {u.lastName} {u.firstName}
                                                     </div>
-                                                    <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 4px', lineHeight: '14px', borderRadius: 4 }}>
+                                                    <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 4px', lineHeight: '12px', height: '14px', borderRadius: 4 }}>
                                                         {roleLabels[u.role] || u.role}
                                                     </Tag>
                                                 </div>
@@ -871,12 +908,19 @@ export default function CompanyUsersPage() {
                         label="Название отдела"
                         rules={[{ required: true, message: 'Введите название отдела' }]}
                     >
-                        <Input placeholder="Например: Отдел логистики" maxLength={100} />
+                        <Input placeholder="Например: Бухгалтерия" maxLength={100} />
+                    </Form.Item>
+                    <Form.Item
+                        name="icon"
+                        label="Иконка отдела"
+                        initialValue="FolderOpenOutlined"
+                    >
+                        <Select options={iconOptions} dropdownMatchSelectWidth={false} />
                     </Form.Item>
                 </Form>
             </Modal>
 
-            {/* Modal: Rename Department */}
+            {/* Modal: Rename/Edit Department */}
             <Modal
                 title="Редактирование отдела"
                 open={renameModalOpen}
@@ -892,7 +936,13 @@ export default function CompanyUsersPage() {
                         label="Название отдела"
                         rules={[{ required: true, message: 'Введите название отдела' }]}
                     >
-                        <Input placeholder="Например: Бухгалтерия" maxLength={100} />
+                        <Input placeholder="Например: Отдел логистики" maxLength={100} />
+                    </Form.Item>
+                    <Form.Item
+                        name="icon"
+                        label="Иконка отдела"
+                    >
+                        <Select options={iconOptions} dropdownMatchSelectWidth={false} />
                     </Form.Item>
                 </Form>
             </Modal>
