@@ -176,11 +176,27 @@ export default function TrackingMapPage() {
     };
 
     return (
-        <div style={{ display: 'flex', height: 'calc(100vh - 180px)', gap: 16 }}>
-            {/* Список водителей */}
+        <div style={{ position: 'relative', height: 'calc(100vh - 180px)', borderRadius: 24, overflow: 'hidden', border: '1px solid #e4e4e7' }}>
+            {/* Список водителей (Glassmorphism Sidebar) */}
             <Card
                 title="Водители на линии"
-                style={{ width: 320, overflow: 'auto' }}
+                style={{
+                    position: 'absolute',
+                    top: 16,
+                    left: 16,
+                    bottom: 16,
+                    width: 320,
+                    zIndex: 10,
+                    background: 'rgba(255, 255, 255, 0.75)',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(228, 228, 231, 0.7)',
+                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.08)',
+                    borderRadius: 16,
+                    display: 'flex',
+                    flexDirection: 'column',
+                }}
+                bodyStyle={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}
                 extra={<ReloadOutlined onClick={fetchDrivers} style={{ cursor: 'pointer' }} />}
             >
                 {loading ? (
@@ -194,10 +210,12 @@ export default function TrackingMapPage() {
                             <List.Item
                                 style={{
                                     cursor: 'pointer',
-                                    background: selectedDriver === driver.driverId ? '#e6f4ff' : 'transparent',
+                                    background: selectedDriver === driver.driverId ? 'rgba(22, 119, 255, 0.15)' : 'transparent',
                                     borderRadius: 8,
                                     padding: '8px 12px',
                                     marginBottom: 4,
+                                    border: 'none',
+                                    transition: 'background 0.2s',
                                 }}
                                 onClick={() => centerOnDriver(driver)}
                             >
@@ -211,27 +229,27 @@ export default function TrackingMapPage() {
                                         </Badge>
                                     }
                                     title={
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span>{driver.driverName}</span>
-                                            <Tag>{driver.vehiclePlate}</Tag>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 600, fontSize: 13 }}>{driver.driverName}</span>
+                                            <Tag style={{ margin: 0, fontSize: 11 }}>{driver.vehiclePlate}</Tag>
                                         </div>
                                     }
                                     description={
-                                        <>
+                                        <div style={{ marginTop: 4 }}>
                                             {driver.orderNumber && (
                                                 <Tag
                                                     color={getDriverColor(driver)}
-                                                    style={{ marginBottom: 4 }}
+                                                    style={{ marginBottom: 4, fontSize: 10 }}
                                                 >
                                                     {driver.orderNumber}
                                                 </Tag>
                                             )}
-                                            <div style={{ fontSize: 12, color: '#999' }}>
+                                            <div style={{ fontSize: 11, color: '#666' }}>
                                                 {driver.speed ? `${Math.round(driver.speed * 3.6)} км/ч` : 'Стоит'}
                                                 {' • '}
                                                 {new Date(driver.updatedAt).toLocaleTimeString('ru-RU')}
                                             </div>
-                                        </>
+                                        </div>
                                     }
                                 />
                             </List.Item>
@@ -241,34 +259,34 @@ export default function TrackingMapPage() {
 
                 {/* Легенда */}
                 {orderColorMap.size > 0 && (
-                    <div style={{ marginTop: 16, padding: '8px 0', borderTop: '1px solid #f0f0f0' }}>
-                        <Text type="secondary" style={{ fontSize: 12 }}>Рейсы:</Text>
+                    <div style={{ marginTop: 16, padding: '8px 0', borderTop: '1px solid rgba(228, 228, 231, 0.8)' }}>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Рейсы:</Text>
                         <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                             {(Array.from(orderColorMap.entries()) as any[]).map(([order, color]) => (
-                                <Tag key={order} color={color}>{order}</Tag>
+                                <Tag key={order} color={color} style={{ fontSize: 10, margin: 0 }}>{order}</Tag>
                             ))}
                         </div>
                     </div>
                 )}
             </Card>
 
-            {/* Карта */}
-            <Card style={{ flex: 1, padding: 0, position: 'relative', overflow: 'hidden' }} bodyStyle={{ padding: 0, height: '100%' }}>
-                {/* Кнопка центрирования на себя */}
+            {/* Панель кнопок управления */}
+            <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
                 <Button
                     type="primary"
                     icon={<AimOutlined />}
                     onClick={centerOnMyLocation}
                     style={{
-                        position: 'absolute',
-                        top: 16,
-                        right: 16,
-                        zIndex: 1,
+                        borderRadius: 8,
+                        boxShadow: '0 4px 12px rgba(22, 119, 255, 0.2)',
                     }}
                 >
                     Моё место
                 </Button>
+            </div>
 
+            {/* Карта */}
+            <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
                 <InteractiveAdminMap
                     viewState={viewState}
                     onViewStateChange={setViewState}
@@ -281,7 +299,7 @@ export default function TrackingMapPage() {
                     myLocation={myLocation}
                     getDriverColor={getDriverColor}
                 />
-            </Card>
+            </div>
         </div>
     );
 }
