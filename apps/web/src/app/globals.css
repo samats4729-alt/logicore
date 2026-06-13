@@ -198,34 +198,80 @@ body {
   background: transparent !important;
 }
 
-.ant-menu-item {
+/* Убираем нижнюю линию у пунктов меню */
+.ant-menu-horizontal {
+  border-bottom: none !important;
+}
+.ant-menu-horizontal > .ant-menu-item::after,
+.ant-menu-horizontal > .ant-menu-submenu::after {
+  display: none !important;
+}
+
+/* Выравниваем все пункты (и обычные, и раскрывающиеся) в одну линию */
+.ant-menu-horizontal > .ant-menu-item,
+.ant-menu-horizontal > .ant-menu-submenu {
+  margin: 4px 2px !important;
+  height: 48px !important;
+  line-height: 48px !important;
   border-radius: 6px !important;
-  margin: 4px 0 !important;
-  font-weight: 500 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  transition: all 0.2s ease !important;
+}
+
+/* Настройки высоты и выравнивания заголовка подменю */
+.ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
+  height: 100% !important;
+  line-height: 48px !important;
+  padding: 0 16px !important;
+  display: flex !important;
+  align-items: center !important;
   color: #71717a !important;
-  /* Zinc-500 */
 }
 
-.ant-menu-item:hover {
-  color: #18181b !important;
-  /* Zinc-900 */
+.ant-menu-horizontal > .ant-menu-item {
+  color: #71717a !important;
+  padding: 0 16px !important;
+  font-weight: 500 !important;
+}
+
+/* Эффекты наведения */
+.ant-menu-horizontal > .ant-menu-item:hover,
+.ant-menu-horizontal > .ant-menu-submenu:hover,
+.ant-menu-horizontal > .ant-menu-submenu-active {
   background-color: #f4f4f5 !important;
-  /* Zinc-100 */
+  color: #18181b !important;
 }
 
-.ant-menu-item-selected {
+.ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title,
+.ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title {
+  color: #18181b !important;
+}
+
+/* Выбранные пункты */
+.ant-menu-horizontal > .ant-menu-item-selected {
   background-color: #1677ff !important;
-  /* Primary Blue */
   color: #ffffff !important;
 }
-
-.ant-menu-item-selected:hover {
+.ant-menu-horizontal > .ant-menu-item-selected:hover {
   background-color: #0958d9 !important;
-  /* Blue-700 */
   color: #ffffff !important;
 }
 
-/* Fix ant-menu icon color in selected state */
+/* Подсвечивание родительских категорий при выборе их подпунктов */
+.ant-menu-horizontal > .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: #1677ff !important;
+  font-weight: 600 !important;
+}
+
+/* Поддержка иконок */
+.ant-menu-item .anticon,
+.ant-menu-submenu-title .anticon {
+  font-size: 16px !important;
+  margin-right: 8px !important;
+}
+
+/* Цвет иконок для активного пункта */
 .ant-menu-item-selected .anticon {
   color: #ffffff !important;
 }
