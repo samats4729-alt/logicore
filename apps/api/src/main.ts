@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { execSync } from 'child_process';
+import * as compression from 'compression';
 
 // Force rebuild 2026-02-02
 
@@ -42,6 +43,9 @@ async function bootstrap() {
     }
 
     const app = await NestFactory.create(AppModule);
+
+    // Включение сжатия ответов (gzip/brotli) для ускорения загрузки данных
+    app.use(compression());
 
     // CORS - allow production domains
     const corsOrigins = process.env.CORS_ORIGINS

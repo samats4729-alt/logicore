@@ -18,6 +18,7 @@
         "prisma:seed": "npx ts-node --transpile-only prisma/seed.ts"
     },
     "dependencies": {
+        "compression": "^1.7.4",
         "@aws-sdk/client-s3": "^3.1061.0",
         "@nestjs/common": "^10.3.0",
         "@nestjs/config": "^3.1.0",
@@ -53,6 +54,7 @@
         "xlsx": "^0.18.5"
     },
     "devDependencies": {
+        "@types/compression": "^1.7.5",
         "@nestjs/cli": "^10.3.0",
         "@nestjs/testing": "^10.3.0",
         "@types/bcryptjs": "^2.4.6",

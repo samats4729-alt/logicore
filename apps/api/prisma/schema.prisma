@@ -137,6 +137,7 @@ model User {
   
   @@index([phone])
   @@index([role])
+  @@index([departmentId])
 }
 
 model Company {
@@ -439,6 +440,7 @@ model OrderRoutePoint {
   notes       String?
   
   @@index([orderId])
+  @@index([locationId])
 }
 
 model OrderStatusHistory {
