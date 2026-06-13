@@ -410,32 +410,92 @@ body {
     right: 44px !important;
     bottom: 44px !important;
   }
+}/* Apple-style Liquid Glass Buttons & Controls */
+.liquid-glass-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15)) !important;
+  backdrop-filter: blur(25px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(25px) saturate(1.8) !important;
+  color: #1677ff !important;
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.04),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -1.5px 1px rgba(0, 0, 0, 0.03) !important;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  overflow: hidden;
+  user-select: none;
 }
 
-/* Premium Glassmorphic Frame for Zoom/Compass Controls */
+.liquid-glass-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  transition: all 0.6s ease;
+}
+
+.liquid-glass-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 
+    0 8px 24px rgba(22, 119, 255, 0.15),
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.95),
+    inset 0 -1.5px 1px rgba(0, 0, 0, 0.02) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.25)) !important;
+}
+
+.liquid-glass-btn:hover::before {
+  left: 100%;
+}
+
+.liquid-glass-btn:active {
+  transform: translateY(0);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.1)) !important;
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Premium Liquid Glass Frame for Mapbox Controls */
 .mapboxgl-ctrl-group {
   width: 40px !important;
   border-radius: 14px !important;
-  border: 1px solid rgba(255, 255, 255, 0.7) !important;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(245, 245, 250, 0.55)) !important;
-  backdrop-filter: blur(30px) saturate(1.6) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(1.6) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15)) !important;
+  backdrop-filter: blur(25px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(25px) saturate(1.8) !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.05),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -1.5px 1px rgba(0, 0, 0, 0.03) !important;
   overflow: hidden !important;
   transition: all 0.5s ease !important;
-}
-
-[data-map-theme="night"] .mapboxgl-ctrl-group {
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  background: linear-gradient(135deg, rgba(25, 25, 35, 0.8), rgba(15, 15, 22, 0.7)) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
 }
 
 /* Individual buttons within the group */
 .mapboxgl-ctrl-group button {
   background-color: transparent !important;
   border: none !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04) !important;
   width: 40px !important;
   height: 40px !important;
   transition: all 0.3s ease !important;
@@ -444,47 +504,27 @@ body {
   justify-content: center !important;
 }
 
-[data-map-theme="night"] .mapboxgl-ctrl-group button {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
 .mapboxgl-ctrl-group button:last-child {
   border-bottom: none !important;
 }
 
-/* Hover and active effects */
+/* Hover and active states */
 .mapboxgl-ctrl-group button:hover {
-  background-color: rgba(0, 0, 0, 0.05) !important;
-}
-
-[data-map-theme="night"] .mapboxgl-ctrl-group button:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.25) !important;
 }
 
 .mapboxgl-ctrl-group button:active {
-  background-color: rgba(0, 0, 0, 0.1) !important;
+  background-color: rgba(255, 255, 255, 0.4) !important;
 }
 
-[data-map-theme="night"] .mapboxgl-ctrl-group button:active {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-/* Ensure mapbox control icons look great and are color-inverted in dark mode */
+/* Ensure mapbox control icons look great */
 .mapboxgl-ctrl-icon {
-  filter: opacity(0.75) !important;
+  filter: opacity(0.8) !important;
   transition: all 0.3s ease !important;
 }
 
 .mapboxgl-ctrl-group button:hover .mapboxgl-ctrl-icon {
   filter: opacity(1) !important;
-}
-
-[data-map-theme="night"] .mapboxgl-ctrl-icon {
-  filter: invert(1) opacity(0.8) !important;
-}
-
-[data-map-theme="night"] .mapboxgl-ctrl-group button:hover .mapboxgl-ctrl-icon {
-  filter: invert(1) opacity(1) !important;
 }
 
 

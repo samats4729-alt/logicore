@@ -454,23 +454,7 @@ export default function CompanyTrackingPage() {
             }}>
                 <button
                     onClick={centerOnMyLocation}
-                    className="tracking-control-btn"
-                    style={{
-                        height: 40,
-                        padding: '0 16px',
-                        borderRadius: 20,
-                        border: '1px solid rgba(22, 119, 255, 0.3)',
-                        background: 'linear-gradient(135deg, #1677ff, #0958d9)',
-                        color: '#fff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        boxShadow: '0 8px 32px rgba(22, 119, 255, 0.35)',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
+                    className="liquid-glass-btn"
                 >
                     <AimOutlined style={{ fontSize: 14 }} />
                     Моё место

@@ -195,14 +195,14 @@ export default function TrackingMapPage() {
     };
 
     return (
-        <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 64px - 16px)' : '100vh', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 56px - 16px)' : 'calc(100vh - 56px)', overflow: 'hidden' }}>
             {/* Список водителей (Glassmorphism Sidebar) */}
             <Card
                 title="Водители на линии"
                 className="tracking-card"
                 style={{
                     position: isMobile ? 'relative' : 'absolute',
-                    top: isMobile ? 0 : 88,
+                    top: isMobile ? 0 : 24,
                     left: isMobile ? 0 : 24,
                     bottom: isMobile ? 0 : 24,
                     width: isMobile ? '100%' : 320,
@@ -290,41 +290,36 @@ export default function TrackingMapPage() {
                 )}
             </Card>
 
-            {/* Панель кнопок управления */}
-            <div style={{ position: 'absolute', top: isMobile ? 12 : 88, right: isMobile ? 12 : 24, zIndex: 10 }}>
-                <Button
-                    type="primary"
-                    icon={<AimOutlined />}
+            <div style={{ position: 'absolute', top: isMobile ? 12 : 24, right: isMobile ? 12 : 24, zIndex: 10 }}>
+                <button
                     onClick={centerOnMyLocation}
-                    style={{
-                        borderRadius: 8,
-                        boxShadow: 'none',
-                    }}
+                    className="liquid-glass-btn"
                 >
+                    <AimOutlined style={{ fontSize: 14 }} />
                     Моё место
-                </Button>
+                </button>
             </div>
 
             {/* Десктопные заблюренные границы и рамки поверх карты */}
             {!isMobile && (
                 <>
                     {/* Верхняя рамка с размытием */}
-                    <div style={{ position: 'absolute', top: 64, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 32, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
                     
                     {/* Нижиняя рамка с размытием */}
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 32, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
                     
                     {/* Левая внешняя рамка (до сайдбара) */}
-                    <div style={{ position: 'absolute', top: 88, bottom: 24, left: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 32, bottom: 32, left: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
                     
                     {/* Правая внешняя рамка */}
-                    <div style={{ position: 'absolute', top: 88, bottom: 24, right: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 32, bottom: 32, right: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
                     
                     {/* Промежуточная рамка (между сайдбаром и окном карты) */}
-                    <div style={{ position: 'absolute', top: 88, bottom: 24, left: 344, width: 16, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 32, bottom: 32, left: 344, width: 16, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.005)', pointerEvents: 'none' }} />
                     
                     {/* Физическая рамка оригинального окна карты с тенью */}
-                    <div style={{ position: 'absolute', top: 88, left: 360, right: 24, bottom: 24, zIndex: 7, border: '1px solid rgba(0, 0, 0, 0.04)', borderRadius: 24, pointerEvents: 'none', boxShadow: 'none' }} />
+                    <div style={{ position: 'absolute', top: 24, left: 360, right: 24, bottom: 24, zIndex: 7, border: '1px solid rgba(0, 0, 0, 0.04)', borderRadius: 24, pointerEvents: 'none', boxShadow: 'none' }} />
                 </>
             )}
 

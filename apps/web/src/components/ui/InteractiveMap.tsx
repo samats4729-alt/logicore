@@ -60,10 +60,26 @@ export default function InteractiveMap({
 
     const handleMapClick = useCallback((event: any) => {
         const map = event.target;
-        const features = map.queryRenderedFeatures(event.point);
+        if (!map) return;
+
+        const point = event.point ? [event.point.x, event.point.y] : null;
+        if (!point) return;
+
+        const features = map.queryRenderedFeatures(point);
+        console.log('Map clicked. Features under click:', features);
         
-        // Находим здание по ID слоя
-        const building = features.find((f: any) => f.layer.id.includes('building') || f.layer.id.includes('structure'));
+        // Находим здание по ID слоя или sourceLayer
+        const building = features.find((f: any) => {
+            const layerId = (f.layer?.id || '').toLowerCase();
+            const sourceLayer = (f.sourceLayer || '').toLowerCase();
+            return layerId.includes('building') || 
+                   layerId.includes('structure') || 
+                   layerId.includes('roof') ||
+                   sourceLayer.includes('building') || 
+                   sourceLayer.includes('structure');
+        });
+        
+        console.log('Selected building feature:', building);
         
         if (building) {
             setSelectedBuilding(building);
@@ -104,7 +120,7 @@ export default function InteractiveMap({
         >
             <NavigationControl position="bottom-right" />
 
-            {/* Подсветка выбранного здания (3D объём + 2D контур) */}
+            {/* Подсветка выбранного здания (3D объём + 2D контур + 2D полигон) */}
             {selectedBuilding && (
                 <Source id="selected-building" type="geojson" data={selectedBuilding}>
                     <Layer
@@ -116,7 +132,7 @@ export default function InteractiveMap({
                                 'coalesce',
                                 ['get', 'height'],
                                 ['get', 'render_height'],
-                                15
+                                20
                             ],
                             'fill-extrusion-base': [
                                 'coalesce',
@@ -125,6 +141,14 @@ export default function InteractiveMap({
                                 0
                             ],
                             'fill-extrusion-opacity': 0.75
+                        }}
+                    />
+                    <Layer
+                        id="selected-building-2d-fill"
+                        type="fill"
+                        paint={{
+                            'fill-color': '#1677ff',
+                            'fill-opacity': 0.5
                         }}
                     />
                     <Layer
