@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col } from 'antd';
 import { 
     MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, 
     ApartmentOutlined, FolderOpenOutlined, PlusOutlined, UnorderedListOutlined, UserOutlined,
     DollarOutlined, CalculatorOutlined, TruckOutlined, TeamOutlined, CarryOutlined,
     NotificationOutlined, ShopOutlined, CoffeeOutlined, UserAddOutlined, DisconnectOutlined,
-    CarOutlined, InboxOutlined, PushpinOutlined, FileTextOutlined, EnvironmentOutlined, DashboardOutlined
+    CarOutlined, InboxOutlined, PushpinOutlined, FileTextOutlined, EnvironmentOutlined, DashboardOutlined,
+    AimOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -142,6 +143,21 @@ export default function CompanyUsersPage() {
     const [companyName, setCompanyName] = useState<string>('Наша Компания');
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');
+    
+    const treeContainerRef = useRef<HTMLDivElement>(null);
+
+    const handleCenterView = () => {
+        if (treeContainerRef.current) {
+            const container = treeContainerRef.current;
+            const scrollWidth = container.scrollWidth;
+            const clientWidth = container.clientWidth;
+            container.scrollTo({
+                left: (scrollWidth - clientWidth) / 2,
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+    };
     
     // Original modals state
     const [modalOpen, setModalOpen] = useState(false);
@@ -400,7 +416,7 @@ export default function CompanyUsersPage() {
                                 onClick={() => handleUnassignUser(u.id)}
                             />
                         )}
-                        {u.id !== currentUser?.id && (
+                        {u.id !== currentUser?.id && u.role !== 'COMPANY_ADMIN' && (
                             <Popconfirm
                                 title="Удалить сотрудника из компании?"
                                 onConfirm={() => handleDeleteUser(u.id)}
@@ -536,15 +552,6 @@ export default function CompanyUsersPage() {
 
         return (
             <div className="org-tree">
-                {/* Elegant Company Badge */}
-                <div className="company-badge-container">
-                    <div className="company-badge">
-                        <ApartmentOutlined className="company-badge-icon" />
-                        <span className="company-badge-text">{companyName}</span>
-                    </div>
-                    <div className="company-badge-line"></div>
-                </div>
-
                 {/* Root Administrators Row */}
                 <div className="org-tree-root-row">
                     {adminUsers.length === 0 ? (
@@ -692,24 +699,40 @@ export default function CompanyUsersPage() {
             {/* Elegant Background Dot Grid Pattern for modern aesthetics */}
             <style>{`
                 .org-tree-container {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
+                    position: relative;
                     width: 100%;
-                    overflow-x: auto;
-                    padding: 40px 10px;
-                    background-color: #fafafa;
-                    background-image: radial-gradient(#e5e7eb 1.5px, transparent 1.5px);
-                    background-size: 20px 20px;
-                    border-radius: 16px;
-                    border: 1px solid #e5e7eb;
+                    height: 600px;
+                    overflow: auto;
+                    padding: 60px 40px;
+                    background-color: #ffffff;
+                    border: none;
                     min-height: 480px;
                 }
                 
+                .org-tree-container-bg {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    pointer-events: none;
+                    background-image: radial-gradient(#000000 1.2px, transparent 1.2px);
+                    background-size: 20px 20px;
+                    opacity: 0.12;
+                    mask-image: radial-gradient(circle, black 30%, transparent 80%);
+                    -webkit-mask-image: radial-gradient(circle, black 30%, transparent 80%);
+                    z-index: 1;
+                }
+                
                 .org-tree {
+                    position: relative;
+                    z-index: 2;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
+                    margin: 0 auto;
+                    width: max-content;
+                    min-width: 100%;
                 }
                 
                 /* Company Badge at top */
@@ -773,6 +796,7 @@ export default function CompanyUsersPage() {
                     justify-content: center;
                     position: relative;
                     padding-bottom: 24px;
+                    width: max-content;
                 }
                 
                 .org-tree-root-card-wrapper {
@@ -831,6 +855,7 @@ export default function CompanyUsersPage() {
                     display: flex;
                     padding-top: 24px;
                     position: relative;
+                    width: max-content;
                 }
                 
                 .org-tree-children-container::before {
@@ -1062,23 +1087,45 @@ export default function CompanyUsersPage() {
             {viewMode === 'tree' ? (
                 <Row gutter={20}>
                     <Col xs={24} lg={18}>
-                        <div className="org-tree-container">
-                            {departments.length === 0 && getSubDepartments(null).length === 0 ? (
-                                <Empty
-                                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                    description="Структура отделов еще не создана"
-                                >
-                                    <Button 
-                                        type="primary" 
-                                        icon={<PlusOutlined />} 
-                                        onClick={() => handleAddSubDeptClick(null)}
+                        <div style={{ position: 'relative', width: '100%', border: 'none' }}>
+                            <div className="org-tree-container" ref={treeContainerRef}>
+                                <div className="org-tree-container-bg"></div>
+                                {departments.length === 0 && getSubDepartments(null).length === 0 ? (
+                                    <Empty
+                                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                        description="Структура отделов еще не создана"
                                     >
-                                        Создать первый отдел
-                                    </Button>
-                                </Empty>
-                            ) : (
-                                renderRootNode()
-                            )}
+                                        <Button 
+                                            type="primary" 
+                                            icon={<PlusOutlined />} 
+                                            onClick={() => handleAddSubDeptClick(null)}
+                                        >
+                                            Создать первый отдел
+                                        </Button>
+                                    </Empty>
+                                ) : (
+                                    renderRootNode()
+                                )}
+                            </div>
+                            <Button
+                                type="default"
+                                shape="circle"
+                                icon={<AimOutlined />}
+                                onClick={handleCenterView}
+                                style={{
+                                    position: 'absolute',
+                                    bottom: 20,
+                                    right: 20,
+                                    zIndex: 10,
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: 36,
+                                    height: 36,
+                                }}
+                                title="Центрировать схему"
+                            />
                         </div>
                     </Col>
                     <Col xs={24} lg={6}>
