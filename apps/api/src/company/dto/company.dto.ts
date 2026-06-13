@@ -322,6 +322,11 @@ export class CreateInvitationDto {
     @IsString()
     @IsOptional()
     departmentId?: string;
+
+    @ApiProperty({ description: 'Должность / Роль', example: 'Старший логист', required: false })
+    @IsString()
+    @IsOptional()
+    position?: string;
 }
 
 

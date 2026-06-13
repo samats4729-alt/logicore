@@ -876,6 +876,7 @@ export class AuthService {
         return {
             email: invitation.email,
             role: invitation.role,
+            position: invitation.position,
             companyName: invitation.company.name,
         };
     }
@@ -910,6 +911,7 @@ export class AuthService {
                     permissions: invitation.permissions,
                     companyId: invitation.companyId,
                     departmentId: invitation.departmentId,
+                    position: invitation.position,
                 },
             });
 

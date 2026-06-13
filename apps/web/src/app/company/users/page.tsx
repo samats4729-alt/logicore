@@ -50,6 +50,7 @@ interface CompanyUser {
     docIssuedAt?: string;
     docExpiresAt?: string;
     docIssuedBy?: string;
+    position?: string | null;
 }
 
 interface Invitation {
@@ -59,6 +60,7 @@ interface Invitation {
     token: string;
     permissions: string[];
     createdAt: string;
+    position?: string | null;
 }
 
 const roleLabels: Record<string, string> = {
@@ -415,6 +417,17 @@ export default function CompanyUsersPage() {
         }
     };
 
+    const handlePositionChange = (value: string) => {
+        const lower = value.toLowerCase();
+        if (lower.includes('бух') || lower.includes('финанс') || lower.includes('касс')) {
+            form.setFieldsValue({ role: 'ACCOUNTANT' });
+        } else if (lower.includes('склад') || lower.includes('кладов')) {
+            form.setFieldsValue({ role: 'WAREHOUSE_MANAGER' });
+        } else if (lower.trim() !== '') {
+            form.setFieldsValue({ role: 'LOGISTICIAN' });
+        }
+    };
+
     // ==================== Original employee handlers ====================
 
     const handleInvite = async (values: any) => {
@@ -541,7 +554,7 @@ export default function CompanyUsersPage() {
     };
 
     const renderEmployeeNode = (u: CompanyUser, isRoot: boolean = false) => {
-        const roleLabel = roleLabels[u.role] || u.role;
+        const roleLabel = u.position || roleLabels[u.role] || u.role;
         const roleColor = roleColors[u.role] || '#6b7280';
         const initials = formatNameInitials(u);
         const firstLetter = u.firstName ? u.firstName[0].toUpperCase() : '?';
@@ -815,13 +828,15 @@ export default function CompanyUsersPage() {
             key: 'phone',
         },
         {
-            title: 'Роль',
-            dataIndex: 'role',
+            title: 'Должность / Роль',
             key: 'role',
-            render: (role: string) => (
-                <Tag color={roleColors[role] || 'default'}>
-                    {roleLabels[role] || role}
-                </Tag>
+            render: (_: any, record: CompanyUser) => (
+                <Space>
+                    <span>{record.position || '—'}</span>
+                    <Tag color={roleColors[record.role] || 'default'} style={{ fontSize: '11px', borderRadius: '4px' }}>
+                        {roleLabels[record.role] || record.role}
+                    </Tag>
+                </Space>
             ),
         },
         {
@@ -889,13 +904,15 @@ export default function CompanyUsersPage() {
             key: 'email',
         },
         {
-            title: 'Роль',
-            dataIndex: 'role',
+            title: 'Должность / Роль',
             key: 'role',
-            render: (role: string) => (
-                <Tag color={roleColors[role] || 'default'}>
-                    {roleLabels[role] || role}
-                </Tag>
+            render: (_: any, record: Invitation) => (
+                <Space>
+                    <span>{record.position || '—'}</span>
+                    <Tag color={roleColors[record.role] || 'default'} style={{ fontSize: '11px', borderRadius: '4px' }}>
+                        {roleLabels[record.role] || record.role}
+                    </Tag>
+                </Space>
             ),
         },
         {
@@ -922,7 +939,7 @@ export default function CompanyUsersPage() {
 
     // Unassigned users list
     const unassignedUsers = users.filter(
-        u => !u.departmentId && u.role !== 'COMPANY_ADMIN' && u.role !== 'ADMIN'
+        u => !u.departmentId && u.role !== 'COMPANY_ADMIN' && u.role !== 'ADMIN' && u.role !== 'DRIVER'
     );
 
     return (
@@ -1564,12 +1581,25 @@ export default function CompanyUsersPage() {
                         <Form.Item name="email" label="Email сотрудника" rules={[{ required: true, type: 'email' }]}>
                             <Input placeholder="employee@company.kz" />
                         </Form.Item>
-                        <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
-                            <Select placeholder="Выберите роль">
-                                <Select.Option value="LOGISTICIAN">Менеджер</Select.Option>
-                                <Select.Option value="ACCOUNTANT">Бухгалтер</Select.Option>
-                                <Select.Option value="WAREHOUSE_MANAGER">Завсклад</Select.Option>
-                                <Select.Option value="DRIVER">Водитель</Select.Option>
+                        <Form.Item 
+                            name="position" 
+                            label="Должность" 
+                            rules={[{ required: true, message: 'Введите название должности' }]}
+                        >
+                            <Input 
+                                placeholder="Например: Старший логист, Помощник бухгалтера" 
+                                onChange={(e) => handlePositionChange(e.target.value)}
+                            />
+                        </Form.Item>
+                        <Form.Item 
+                            name="role" 
+                            label="Права доступа (Системная роль)" 
+                            rules={[{ required: true, message: 'Выберите права доступа' }]}
+                        >
+                            <Select placeholder="Выберите права доступа">
+                                <Select.Option value="LOGISTICIAN">Менеджер (заявки, водители)</Select.Option>
+                                <Select.Option value="ACCOUNTANT">Бухгалтер (бухгалтерия)</Select.Option>
+                                <Select.Option value="WAREHOUSE_MANAGER">Завсклад (очередь склада)</Select.Option>
                             </Select>
                         </Form.Item>
                         <Form.Item name="departmentId" label="Отдел (опционально)">

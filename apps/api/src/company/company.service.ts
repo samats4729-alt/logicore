@@ -31,6 +31,7 @@ export class CompanyService {
                     lastName: true,
                     middleName: true,
                     role: true,
+                    position: true,
                     permissions: true,
                     createdAt: true,
                     departmentId: true,
@@ -68,7 +69,7 @@ export class CompanyService {
     /**
      * Создать приглашение для сотрудника
      */
-    async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = [], departmentId?: string) {
+    async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = [], departmentId?: string, position?: string) {
         // Создаем случайный токен, например, 32 символа
         const crypto = require('crypto');
         const token = crypto.randomBytes(16).toString('hex');
@@ -91,6 +92,7 @@ export class CompanyService {
             data: {
                 email,
                 role,
+                position: position || null,
                 companyId,
                 token,
                 permissions,
@@ -682,6 +684,7 @@ export class CompanyService {
                         lastName: true,
                         middleName: true,
                         role: true,
+                        position: true,
                         email: true,
                         phone: true,
                         iin: true,

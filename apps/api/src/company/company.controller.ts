@@ -97,7 +97,7 @@ export class CompanyController {
         @Request() req: any,
         @Body() dto: CreateInvitationDto,
     ) {
-        return this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions, dto.departmentId);
+        return this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions, dto.departmentId, dto.position);
     }
 
     @Delete('invitations/:id')
