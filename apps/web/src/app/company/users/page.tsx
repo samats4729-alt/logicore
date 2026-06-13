@@ -71,42 +71,67 @@ const formatNameInitials = (user: { firstName: string; lastName: string; middleN
     return `${last} ${firstI}${middleI}`.trim();
 };
 
-const deptIcons: Record<string, React.ReactNode> = {
-    FolderOpenOutlined: <FolderOpenOutlined />,
-    DollarOutlined: <DollarOutlined />,
-    CalculatorOutlined: <CalculatorOutlined />,
-    TruckOutlined: <TruckOutlined />,
-    TeamOutlined: <TeamOutlined />,
-    CarryOutlined: <CarryOutlined />,
-    NotificationOutlined: <NotificationOutlined />,
-    ShopOutlined: <ShopOutlined />,
-    CoffeeOutlined: <CoffeeOutlined />,
-    CarOutlined: <CarOutlined />,
-    InboxOutlined: <InboxOutlined />,
-    PushpinOutlined: <PushpinOutlined />,
-    FileTextOutlined: <FileTextOutlined />,
-    EnvironmentOutlined: <EnvironmentOutlined />,
-    SettingOutlined: <SettingOutlined />,
-    DashboardOutlined: <DashboardOutlined />,
+const deptIconComponents: Record<string, any> = {
+    FolderOpenOutlined,
+    DollarOutlined,
+    CalculatorOutlined,
+    TruckOutlined,
+    TeamOutlined,
+    CarryOutlined,
+    NotificationOutlined,
+    ShopOutlined,
+    CoffeeOutlined,
+    CarOutlined,
+    InboxOutlined,
+    PushpinOutlined,
+    FileTextOutlined,
+    EnvironmentOutlined,
+    SettingOutlined,
+    DashboardOutlined,
+};
+
+const deptIconColors: Record<string, string> = {
+    FolderOpenOutlined: '#3b82f6',
+    DollarOutlined: '#eab308',
+    CarOutlined: '#3b82f6',
+    TruckOutlined: '#10b981',
+    TeamOutlined: '#6366f1',
+    InboxOutlined: '#f97316',
+    PushpinOutlined: '#ef4444',
+    FileTextOutlined: '#6b7280',
+    EnvironmentOutlined: '#06b6d4',
+    SettingOutlined: '#4b5563',
+    DashboardOutlined: '#8b5cf6',
+    CalculatorOutlined: '#ec4899',
+    CarryOutlined: '#0d9488',
+    NotificationOutlined: '#ea580c',
+    ShopOutlined: '#4f46e5',
+    CoffeeOutlined: '#b45309',
+};
+
+const renderDeptIcon = (iconName: string, fontSize: number = 14) => {
+    const IconComp = deptIconComponents[iconName] || FolderOpenOutlined;
+    const color = deptIconColors[iconName] || '#3b82f6';
+    return <IconComp style={{ fontSize, color }} />;
 };
 
 const iconOptions = [
-    { value: 'FolderOpenOutlined', label: <Space><FolderOpenOutlined style={{ color: '#3b82f6' }} /><span>Папка</span></Space> },
-    { value: 'DollarOutlined', label: <Space><DollarOutlined style={{ color: '#eab308' }} /><span>Бухгалтерия / Финансы</span></Space> },
-    { value: 'CarOutlined', label: <Space><CarOutlined style={{ color: '#3b82f6' }} /><span>Водители / Транспорт</span></Space> },
-    { value: 'TruckOutlined', label: <Space><TruckOutlined style={{ color: '#10b981' }} /><span>Логистика / Доставка</span></Space> },
-    { value: 'TeamOutlined', label: <Space><TeamOutlined style={{ color: '#6366f1' }} /><span>Сотрудники / Отдел</span></Space> },
-    { value: 'InboxOutlined', label: <Space><InboxOutlined style={{ color: '#f97316' }} /><span>Склад / Хранение</span></Space> },
-    { value: 'PushpinOutlined', label: <Space><PushpinOutlined style={{ color: '#ef4444' }} /><span>Адреса / Локации</span></Space> },
-    { value: 'FileTextOutlined', label: <Space><FileTextOutlined style={{ color: '#6b7280' }} /><span>Документы / Договоры</span></Space> },
-    { value: 'EnvironmentOutlined', label: <Space><EnvironmentOutlined style={{ color: '#06b6d4' }} /><span>Карта / Трекинг</span></Space> },
-    { value: 'SettingOutlined', label: <Space><SettingOutlined style={{ color: '#4b5563' }} /><span>Настройки / Админ</span></Space> },
-    { value: 'DashboardOutlined', label: <Space><DashboardOutlined style={{ color: '#8b5cf6' }} /><span>Дашборд / Аналитика</span></Space> },
-    { value: 'CalculatorOutlined', label: <Space><CalculatorOutlined style={{ color: '#ec4899' }} /><span>Калькулятор</span></Space> },
-    { value: 'CarryOutlined', label: <Space><CarryOutlined style={{ color: '#0d9488' }} /><span>Портфель / Менеджмент</span></Space> },
-    { value: 'NotificationOutlined', label: <Space><NotificationOutlined style={{ color: '#ea580c' }} /><span>Оповещения</span></Space> },
-    { value: 'ShopOutlined', label: <Space><ShopOutlined style={{ color: '#4f46e5' }} /><span>Офис / Магазин</span></Space> },
-    { value: 'CoffeeOutlined', label: <Space><CoffeeOutlined style={{ color: '#b45309' }} /><span>Разное (Кофе)</span></Space> },
+    { value: 'FolderOpenOutlined', label: 'Папка' },
+    { value: 'DollarOutlined', label: 'Бухгалтерия / Финансы' },
+    { value: 'CarOutlined', label: 'Водители / Транспорт' },
+    { value: 'TruckOutlined', label: 'Логистика / Доставка' },
+    { value: 'TeamOutlined', label: 'Сотрудники / Отдел' },
+    { value: 'InboxOutlined', label: 'Склад / Хранение' },
+    { value: 'PushpinOutlined', label: 'Адреса / Локации' },
+    { value: 'FileTextOutlined', label: 'Документы / Договоры' },
+    { value: 'EnvironmentOutlined', label: 'Карта / Трекинг' },
+    { value: 'SettingOutlined', label: 'Настройки / Admin' },
+    { value: 'DashboardOutlined', label: 'Дашборд / Аналитика' },
+    { value: 'CalculatorOutlined', label: 'Калькулятор' },
+    { value: 'CarryOutlined', label: 'Портфель / Менеджмент' },
+    { value: 'NotificationOutlined', label: 'Оповещения' },
+    { value: 'ShopOutlined', label: 'Офис / Магазин' },
+    { value: 'CoffeeOutlined', label: 'Разное (Кофе)' },
 ];
 
 export default function CompanyUsersPage() {
@@ -335,6 +360,24 @@ export default function CompanyUsersPage() {
                 {/* Actions Toolbar on Hover */}
                 <div className="node-actions-toolbar">
                     <Space size={4}>
+                        {isRoot && (
+                            <>
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<PlusOutlined style={{ fontSize: 12 }} />}
+                                    title="Добавить отдел"
+                                    onClick={() => handleAddSubDeptClick(null)}
+                                />
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<UserAddOutlined style={{ fontSize: 12 }} />}
+                                    title="Пригласить сотрудника"
+                                    onClick={() => openInviteModal()}
+                                />
+                            </>
+                        )}
                         {u.id !== currentUser?.id && (
                             <Button
                                 type="text"
@@ -396,8 +439,10 @@ export default function CompanyUsersPage() {
     const renderDeptNode = (dept: any) => {
         const subDepts = getSubDepartments(dept.id);
         const deptUsers = dept.users || [];
-        const currentIcon = deptIcons[dept.icon] || <FolderOpenOutlined />;
         const hasChildren = subDepts.length > 0 || deptUsers.length > 0;
+        const iconColor = deptIconColors[dept.icon] || '#3b82f6';
+        const avatarBgColor = `${iconColor}12`; // ~7% opacity
+        const avatarBorderColor = `${iconColor}24`; // ~14% opacity
 
         return (
             <div className="org-tree-child-wrapper" key={dept.id}>
@@ -449,11 +494,18 @@ export default function CompanyUsersPage() {
 
                     {/* Node Card UI */}
                     <div className="node-card dept-card">
-                        <div className="node-avatar dept-icon-avatar">
-                            {currentIcon}
+                        <div 
+                            className="node-avatar dept-icon-avatar"
+                            style={{
+                                backgroundColor: avatarBgColor,
+                                borderColor: avatarBorderColor,
+                                color: iconColor
+                            }}
+                        >
+                            {renderDeptIcon(dept.icon, 18)}
                         </div>
                         <div className="node-info">
-                            <span className="node-role-label dept-role-label">Отдел</span>
+                            <span className="node-role-label dept-role-label" style={{ color: iconColor }}>Отдел</span>
                             <span className="node-name-label">{dept.name}</span>
                         </div>
                     </div>
@@ -489,16 +541,6 @@ export default function CompanyUsersPage() {
                     <div className="company-badge">
                         <ApartmentOutlined className="company-badge-icon" />
                         <span className="company-badge-text">{companyName}</span>
-                        <Button
-                            type="primary"
-                            size="small"
-                            icon={<PlusOutlined />}
-                            className="company-add-dept-btn"
-                            title="Создать отдел"
-                            onClick={() => handleAddSubDeptClick(null)}
-                        >
-                            Отдел
-                        </Button>
                     </div>
                     <div className="company-badge-line"></div>
                 </div>
@@ -857,40 +899,39 @@ export default function CompanyUsersPage() {
                     width: 220px;
                     height: 60px;
                     padding: 8px 14px;
-                    background: #ffffff;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 30px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+                    background: transparent;
+                    border: none;
+                    box-shadow: none;
                     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                     cursor: default;
                 }
                 
                 .node-card-container:hover .node-card {
                     transform: translateY(-2px);
-                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
-                    border-color: #cbd5e1;
                 }
                 
                 /* Root Admin node specific styling */
                 .root-admin-card {
-                    border: 1px solid #fca5a5;
-                    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.03);
+                    border: none;
+                    box-shadow: none;
+                    background: transparent;
                 }
                 
                 .node-card-container:hover .root-admin-card {
-                    border-color: #f87171;
-                    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.08);
+                    border: none;
+                    box-shadow: none;
                 }
                 
                 /* Department node specific styling */
                 .dept-card {
-                    border: 1px solid #bfdbfe;
-                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.03);
+                    border: none;
+                    box-shadow: none;
+                    background: transparent;
                 }
                 
                 .node-card-container:hover .dept-card {
-                    border-color: #3b82f6;
-                    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.08);
+                    border: none;
+                    box-shadow: none;
                 }
                 
                 /* Node Avatars */
@@ -1155,7 +1196,18 @@ export default function CompanyUsersPage() {
                         label="Иконка отдела"
                         initialValue="FolderOpenOutlined"
                     >
-                        <Select options={iconOptions} dropdownMatchSelectWidth={false} />
+                        <Select dropdownMatchSelectWidth={false}>
+                            {iconOptions.map(opt => (
+                                <Select.Option key={opt.value} value={opt.value}>
+                                    <Space>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {renderDeptIcon(opt.value, 16)}
+                                        </span>
+                                        <span>{opt.label}</span>
+                                    </Space>
+                                </Select.Option>
+                            ))}
+                        </Select>
                     </Form.Item>
                 </Form>
             </Modal>
@@ -1182,7 +1234,18 @@ export default function CompanyUsersPage() {
                         name="icon"
                         label="Иконка отдела"
                     >
-                        <Select options={iconOptions} dropdownMatchSelectWidth={false} />
+                        <Select dropdownMatchSelectWidth={false}>
+                            {iconOptions.map(opt => (
+                                <Select.Option key={opt.value} value={opt.value}>
+                                    <Space>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {renderDeptIcon(opt.value, 16)}
+                                        </span>
+                                        <span>{opt.label}</span>
+                                    </Space>
+                                </Select.Option>
+                            ))}
+                        </Select>
                     </Form.Item>
                 </Form>
             </Modal>
