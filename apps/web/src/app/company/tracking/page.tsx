@@ -221,9 +221,9 @@ export default function CompanyTrackingPage() {
                     bottom: isMobile ? 0 : 24,
                     width: isMobile ? '100%' : 320,
                     zIndex: 10,
-                    background: 'rgba(255, 255, 255, 0.75)',
-                    backdropFilter: 'blur(16px)',
-                    WebkitBackdropFilter: 'blur(16px)',
+                    background: 'rgba(255, 255, 255, 0.6)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
                     border: '1px solid rgba(228, 228, 231, 0.7)',
                     boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.08)',
                     borderRadius: isMobile ? 0 : 16,
@@ -345,19 +345,19 @@ export default function CompanyTrackingPage() {
             {!isMobile && (
                 <>
                     {/* Верхняя рамка с размытием */}
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
                     
                     {/* Нижиняя рамка с размытием */}
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
                     
                     {/* Левая внешняя рамка (до сайдбара) */}
-                    <div style={{ position: 'absolute', top: 24, bottom: 24, left: 0, width: 24, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 24, bottom: 24, left: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
                     
                     {/* Правая внешняя рамка */}
-                    <div style={{ position: 'absolute', top: 24, bottom: 24, right: 0, width: 24, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 24, bottom: 24, right: 0, width: 24, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
                     
                     {/* Промежуточная рамка (между сайдбаром и окном карты) */}
-                    <div style={{ position: 'absolute', top: 24, bottom: 24, left: 344, width: 16, zIndex: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(248, 248, 248, 0.4)', pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 24, bottom: 24, left: 344, width: 16, zIndex: 6, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(248, 248, 248, 0.25)', pointerEvents: 'none' }} />
                     
                     {/* Физическая рамка оригинального окна карты с тенью */}
                     <div style={{ position: 'absolute', top: 24, left: 360, right: 24, bottom: 24, zIndex: 7, border: '1px solid rgba(228, 228, 231, 0.8)', borderRadius: 24, pointerEvents: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} />
