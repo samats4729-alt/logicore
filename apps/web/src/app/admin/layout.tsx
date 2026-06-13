@@ -203,11 +203,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     className={isTrackingPage ? 'tracking-header' : ''}
                     style={{
                         padding: isMobile ? '0 12px' : '0 24px',
-                        background: isTrackingPage ? 'rgba(255, 255, 255, 0.02)' : '#fff',
+                        background: isTrackingPage ? 'rgba(255, 255, 255, 0.005)' : '#fff',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.08)' : 'none',
+                        borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.04)' : 'none',
                         boxShadow: isTrackingPage ? 'none' : '0 1px 4px rgba(0,0,0,0.05)',
                         position: isTrackingPage ? 'absolute' : 'sticky',
                         left: 0,

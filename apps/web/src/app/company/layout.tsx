@@ -281,12 +281,12 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Header
                 className={isTrackingPage ? 'tracking-header' : ''}
                 style={{
-                    background: isTrackingPage ? 'rgba(255, 255, 255, 0.02)' : '#ffffff',
+                    background: isTrackingPage ? 'rgba(255, 255, 255, 0.005)' : '#ffffff',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
                     height: 56,
-                    borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e4e4e7',
+                    borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.04)' : '1px solid #e4e4e7',
                     position: isTrackingPage ? 'absolute' : 'sticky',
                     left: 0,
                     right: 0,
