@@ -587,7 +587,7 @@ export default function OrderDetailPage() {
             requirements: order.requirements,
             customerPrice: order.customerPrice,
             customerPriceType: order.customerPriceType || 'FIXED',
-            driverCost: order.driverCost,
+            driverCost: order.driverCost || order.subForwarderPrice,
             pickupDate: order.routePoints?.find((p: any) => p.pointType === 'PICKUP')?.expectedDate
                 ? dayjs(order.routePoints.find((p: any) => p.pointType === 'PICKUP').expectedDate)
                 : undefined,

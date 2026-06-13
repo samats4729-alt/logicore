@@ -728,7 +728,7 @@ export default function CompanyOrdersPage() {
             requirements: order.requirements,
             customerPrice: order.customerPrice,
             customerPriceType: order.customerPriceType || 'FIXED',
-            driverCost: order.driverCost,
+            driverCost: order.driverCost || order.subForwarderPrice,
             pickupDate: (order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate ? dayjs((order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate) : undefined,
             forwarderId: order.forwarderId || order.forwarder?.id || undefined,
             customerCompanyId: order.customerCompanyId || order.customerCompany?.id || undefined,
