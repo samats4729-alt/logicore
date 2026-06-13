@@ -62,9 +62,17 @@ interface Driver {
     lastName: string;
     middleName?: string;
     phone: string;
+    iin?: string;
+    companyId?: string;
+    vehicleType?: string;
     vehiclePlate?: string;
     vehicleModel?: string;
     trailerNumber?: string;
+    docType?: string;
+    docNumber?: string;
+    docIssuedAt?: string;
+    docExpiresAt?: string;
+    docIssuedBy?: string;
 }
 
 interface Partner {
@@ -125,8 +133,9 @@ export default function OrderDetailPage() {
     const [assignModalOpen, setAssignModalOpen] = useState(false);
     const [assignForm] = Form.useForm();
     const [assignLoading, setAssignLoading] = useState(false);
-    const [assignType, setAssignType] = useState<'driver' | 'partner' | 'partner_manual'>('driver');
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+    const [selectedAssignCompanyId, setSelectedAssignCompanyId] = useState<string>('');
+    const [selectedAssignDriverId, setSelectedAssignDriverId] = useState<string>('');
 
     // Status modal
     const [statusModalOpen, setStatusModalOpen] = useState(false);
@@ -198,7 +207,7 @@ export default function OrderDetailPage() {
     const fetchDrivers = async () => {
         setDriversLoading(true);
         try {
-            const response = await api.get('/company/drivers');
+            const response = await api.get('/users/drivers');
             setDrivers(response.data);
         } catch { } finally { setDriversLoading(false); }
     };
@@ -349,64 +358,157 @@ export default function OrderDetailPage() {
     const openAssignModal = () => {
         const order = data?.order;
         if (!order) return;
-        setSelectedDriverId(order.driverId || null);
         assignForm.resetFields();
-        const initialAssignType = order.assignedDriverName ? 'partner_manual' : 'driver';
-        setAssignType(initialAssignType as any);
+
+        // 1. Determine initial companyId
+        const initialCompanyId = order.partnerId || order.forwarderId || order.subForwarderId || user?.companyId || '';
+        setSelectedAssignCompanyId(initialCompanyId);
+
+        // 2. Determine initial driverId
+        setSelectedAssignDriverId(order.driverId || '');
+
+        // 3. Populate form values
         assignForm.setFieldsValue({
+            companyId: initialCompanyId,
             driverId: order.driverId || undefined,
-            driverPhone: order.driver?.phone || undefined,
-            driverPlate: order.driver?.vehiclePlate || undefined,
-            trailerNumber: order.trailerNumber || undefined,
-            partnerId: order.partnerId || order.forwarderId || order.subForwarderId || undefined,
-            assignedDriverName: order.assignedDriverName || undefined,
-            assignedDriverPhone: order.assignedDriverPhone || undefined,
-            assignedDriverPlate: order.assignedDriverPlate || undefined,
-            assignedDriverTrailer: order.assignedDriverTrailer || undefined,
+            firstName: order.driver?.firstName || order.assignedDriverName || undefined,
+            lastName: order.driver?.lastName || undefined,
+            middleName: order.driver?.middleName || undefined,
+            phone: order.driver?.phone || order.assignedDriverPhone || undefined,
+            iin: order.driver?.iin || undefined,
+            vehicleType: order.driver?.vehicleType || undefined,
+            vehicleModel: order.driver?.vehicleModel || undefined,
+            vehiclePlate: order.driver?.vehiclePlate || order.assignedDriverPlate || undefined,
+            trailerNumber: order.driver?.trailerNumber || order.assignedDriverTrailer || undefined,
+            docType: order.driver?.docType || undefined,
+            docNumber: order.driver?.docNumber || undefined,
+            docIssuedAt: order.driver?.docIssuedAt ? dayjs(order.driver.docIssuedAt) : undefined,
+            docExpiresAt: order.driver?.docExpiresAt ? dayjs(order.driver.docExpiresAt) : undefined,
+            docIssuedBy: order.driver?.docIssuedBy || undefined,
         });
+
+        // If manual driver is currently assigned (but no driverId), set selectedAssignDriverId to '__NEW_DRIVER__'
+        if (!order.driverId && order.assignedDriverName) {
+            setSelectedAssignDriverId('__NEW_DRIVER__');
+            const nameParts = (order.assignedDriverName || '').split(' ');
+            assignForm.setFieldsValue({
+                driverId: '__NEW_DRIVER__',
+                lastName: nameParts[0] || '',
+                firstName: nameParts[1] || '',
+                middleName: nameParts.slice(2).join(' ') || undefined,
+            });
+        }
+
         fetchDrivers();
         setAssignModalOpen(true);
     };
 
     const handleDriverSelect = (driverId: string) => {
-        setSelectedDriverId(driverId);
-        const driver = drivers.find(d => d.id === driverId);
-        if (driver) {
+        setSelectedAssignDriverId(driverId);
+        if (driverId === '__NEW_DRIVER__') {
             assignForm.setFieldsValue({
-                driverName: `${driver.lastName} ${driver.firstName} ${driver.middleName || ''}`.trim(),
-                driverPhone: driver.phone,
-                driverPlate: driver.vehiclePlate || '',
-                trailerNumber: driver.trailerNumber || '',
+                firstName: undefined,
+                lastName: undefined,
+                middleName: undefined,
+                phone: undefined,
+                iin: undefined,
+                vehicleType: undefined,
+                vehicleModel: undefined,
+                vehiclePlate: undefined,
+                trailerNumber: undefined,
+                docType: undefined,
+                docNumber: undefined,
+                docIssuedAt: undefined,
+                docExpiresAt: undefined,
+                docIssuedBy: undefined,
             });
+        } else {
+            const driver = drivers.find(d => d.id === driverId);
+            if (driver) {
+                assignForm.setFieldsValue({
+                    firstName: driver.firstName,
+                    lastName: driver.lastName,
+                    middleName: driver.middleName,
+                    phone: driver.phone,
+                    iin: driver.iin,
+                    vehicleType: driver.vehicleType,
+                    vehicleModel: driver.vehicleModel,
+                    vehiclePlate: driver.vehiclePlate,
+                    trailerNumber: driver.trailerNumber,
+                    docType: driver.docType,
+                    docNumber: driver.docNumber,
+                    docIssuedAt: driver.docIssuedAt ? dayjs(driver.docIssuedAt) : undefined,
+                    docExpiresAt: driver.docExpiresAt ? dayjs(driver.docExpiresAt) : undefined,
+                    docIssuedBy: driver.docIssuedBy,
+                });
+            }
         }
     };
 
     const handleAssign = async (values: any) => {
         setAssignLoading(true);
         try {
-            if (assignType === 'driver') {
-                await api.put(`/company/orders/${orderId}/assign-driver`, { driverId: selectedDriverId || values.driverId });
-                message.success('Водитель назначен');
-            } else if (assignType === 'partner_manual') {
-                await api.put(`/company/orders/${orderId}/assign-driver`, {
-                    partnerId: values.partnerId,
-                    assignedDriverName: values.assignedDriverName,
-                    assignedDriverPhone: values.assignedDriverPhone,
-                    assignedDriverPlate: values.assignedDriverPlate,
-                    assignedDriverTrailer: values.assignedDriverTrailer,
+            const companyId = values.companyId || selectedAssignCompanyId;
+            let finalDriverId = selectedAssignDriverId;
+
+            const driverData: any = {
+                firstName: values.firstName,
+                lastName: values.lastName,
+                middleName: values.middleName,
+                phone: values.phone,
+                iin: values.iin,
+                vehicleType: values.vehicleType,
+                vehicleModel: values.vehicleModel,
+                vehiclePlate: values.vehiclePlate,
+                trailerNumber: values.trailerNumber,
+                docType: values.docType,
+                docNumber: values.docNumber,
+                docIssuedAt: values.docIssuedAt ? values.docIssuedAt.toISOString() : undefined,
+                docExpiresAt: values.docExpiresAt ? values.docExpiresAt.toISOString() : undefined,
+                docIssuedBy: values.docIssuedBy,
+            };
+
+            if (selectedAssignDriverId === '__NEW_DRIVER__' || !selectedAssignDriverId) {
+                // 1. Create the new driver for the selected company
+                const newDriverRes = await api.post('/company/drivers', {
+                    ...driverData,
+                    companyId: companyId,
                 });
-                message.success('Водитель контрагента назначен');
+                finalDriverId = newDriverRes.data.id;
             } else {
-                await api.put(`/company/orders/${orderId}/assign-forwarder`, { partnerId: values.partnerId, price: values.price });
-                message.success('Заявка передана партнеру');
+                // 2. Update existing driver details (if belonging to our own company)
+                try {
+                    await api.put(`/company/drivers/${selectedAssignDriverId}`, driverData);
+                } catch (err) {
+                    // Silent fail if updating a partner's driver yields Forbidden
+                }
             }
+
+            // 3. Assign to the order
+            const isOurCompany = companyId === user?.companyId;
+            const assignPayload: any = {
+                driverId: finalDriverId,
+                partnerId: isOurCompany ? null : companyId,
+                assignedDriverName: `${values.lastName} ${values.firstName} ${values.middleName || ''}`.trim(),
+                assignedDriverPhone: values.phone,
+                assignedDriverPlate: values.vehiclePlate,
+                assignedDriverTrailer: values.trailerNumber,
+            };
+
+            await api.put(`/company/orders/${orderId}/assign-driver`, assignPayload);
+            message.success('Водитель успешно назначен');
+
             setAssignModalOpen(false);
             assignForm.resetFields();
+            setSelectedAssignCompanyId('');
+            setSelectedAssignDriverId('');
             setSelectedDriverId(null);
             fetchData();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка назначения');
-        } finally { setAssignLoading(false); }
+        } finally {
+            setAssignLoading(false);
+        }
     };
 
     // =================== STATUS CHANGE ===================
@@ -1426,100 +1528,191 @@ export default function OrderDetailPage() {
             />
 
             {/* =================== ASSIGN DRIVER MODAL =================== */}
-            <Modal title="Назначить водителя" open={assignModalOpen} onCancel={() => { setAssignModalOpen(false); setSelectedDriverId(null); assignForm.resetFields(); }} onOk={() => assignForm.submit()} okText="Назначить" cancelText="Отмена" confirmLoading={assignLoading}>
+            <Modal 
+                title="Назначить водителя" 
+                open={assignModalOpen} 
+                onCancel={() => { 
+                    setAssignModalOpen(false); 
+                    setSelectedDriverId(null); 
+                    assignForm.resetFields(); 
+                    setSelectedAssignCompanyId('');
+                    setSelectedAssignDriverId('');
+                }} 
+                onOk={() => assignForm.submit()} 
+                okText="Назначить" 
+                cancelText="Отмена" 
+                confirmLoading={assignLoading}
+                width={650}
+            >
                 <Form form={assignForm} layout="vertical" onFinish={handleAssign}>
-                    <Tabs activeKey={assignType} onChange={(k) => setAssignType(k as any)} items={[
-                        {
-                            key: 'driver',
-                            label: 'Собственный транспорт',
-                            children: (
-                                <div style={{ marginTop: 12 }}>
-                                    <div style={{ marginBottom: 16, padding: '8px 12px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 6, fontSize: 12 }}>
-                                        💡 Назначьте водителя и транспортное средство из штата вашей собственной компании.
-                                    </div>
-                                    <Form.Item name="driverId" label="Водитель" rules={[{ required: assignType === 'driver', message: 'Выберите водителя' }]}>
-                                        <Select placeholder="Выберите водителя" size="large" loading={driversLoading} onChange={handleDriverSelect} value={selectedDriverId}
-                                            showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
-                                            options={drivers.map(d => ({ value: d.id, label: `${d.lastName} ${d.firstName} ${d.middleName || ''}`.trim() }))}
+                    <Form.Item 
+                        name="companyId" 
+                        label="Компания-перевозчик (контрагент)" 
+                        rules={[{ required: true, message: 'Выберите компанию' }]}
+                        help={
+                            <Button
+                                type="link"
+                                size="small"
+                                style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 2 }}
+                                onClick={() => setQuickPartnerModalOpen(true)}
+                            >
+                                + Добавить нового контрагента
+                            </Button>
+                        }
+                    >
+                        <Select 
+                            placeholder="Выберите компанию" 
+                            size="large" 
+                            loading={partnersLoading} 
+                            onChange={(value) => {
+                                setSelectedAssignCompanyId(value);
+                                setSelectedAssignDriverId('');
+                                assignForm.setFieldsValue({
+                                    driverId: undefined,
+                                    firstName: undefined,
+                                    lastName: undefined,
+                                    middleName: undefined,
+                                    phone: undefined,
+                                    iin: undefined,
+                                    vehicleType: undefined,
+                                    vehicleModel: undefined,
+                                    vehiclePlate: undefined,
+                                    trailerNumber: undefined,
+                                    docType: undefined,
+                                    docNumber: undefined,
+                                    docIssuedAt: undefined,
+                                    docExpiresAt: undefined,
+                                    docIssuedBy: undefined,
+                                });
+                            }}
+                            options={partners.map(p => ({ label: p.name, value: p.id }))} 
+                            showSearch 
+                            filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} 
+                        />
+                    </Form.Item>
+
+                    <Form.Item 
+                        name="driverId" 
+                        label="Водитель" 
+                        rules={[{ required: true, message: 'Выберите водителя' }]}
+                    >
+                        <Select 
+                            placeholder={selectedAssignCompanyId ? "Выберите водителя" : "Сначала выберите компанию"} 
+                            size="large" 
+                            disabled={!selectedAssignCompanyId}
+                            loading={driversLoading} 
+                            onChange={handleDriverSelect} 
+                            showSearch 
+                            filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} 
+                            options={[
+                                ...drivers
+                                    .filter(d => d.companyId === selectedAssignCompanyId)
+                                    .map(d => ({ value: d.id, label: `${d.lastName} ${d.firstName} ${d.middleName || ''}`.trim() })),
+                                { value: '__NEW_DRIVER__', label: '+ Добавить нового водителя' }
+                            ]}
+                        />
+                    </Form.Item>
+
+                    {selectedAssignDriverId && (
+                        <div style={{ marginTop: 16 }}>
+                            <Divider orientation="left" style={{ margin: '12px 0', fontSize: 13, color: '#1890ff' }}>Данные водителя</Divider>
+                            <Row gutter={16}>
+                                <Col span={8}>
+                                    <Form.Item name="lastName" label="Фамилия" rules={[{ required: true, message: 'Введите фамилию' }]}>
+                                        <Input size="large" placeholder="Иванов" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="firstName" label="Имя" rules={[{ required: true, message: 'Введите имя' }]}>
+                                        <Input size="large" placeholder="Иван" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="middleName" label="Отчество">
+                                        <Input size="large" placeholder="Иванович" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="phone" label="Телефон" rules={[{ required: true, message: 'Введите телефон' }]}>
+                                        <Input size="large" placeholder="+7 (700) 123-45-67" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="iin" label="ИИН">
+                                        <Input size="large" placeholder="123456789012" maxLength={12} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            
+                            <Divider orientation="left" style={{ margin: '12px 0', fontSize: 13, color: '#1890ff' }}>Транспорт</Divider>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="vehicleType" label="Тип транспорта">
+                                        <Select 
+                                            placeholder="Выберите тип" 
+                                            size="large" 
+                                            showSearch 
+                                            filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} 
+                                            options={VEHICLE_TYPES.map(t => ({ label: t, value: t }))} 
                                         />
                                     </Form.Item>
-                                    {selectedDriverId && (
-                                        <>
-                                            <Form.Item name="driverName" hidden><Input /></Form.Item>
-                                            <Form.Item name="driverPhone" label="Телефон"><Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} /></Form.Item>
-                                            <Form.Item name="driverPlate" label="Госномер"><Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} /></Form.Item>
-                                            <Form.Item name="trailerNumber" label="Прицеп"><Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} placeholder="—" /></Form.Item>
-                                        </>
-                                    )}
-                                </div>
-                            )
-                        },
-                        {
-                            key: 'partner_manual',
-                            label: 'Привлечённый (вне платформы)',
-                            children: (
-                                <div style={{ marginTop: 12 }}>
-                                    <div style={{ marginBottom: 16, padding: '8px 12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 6, fontSize: 12 }}>
-                                        💡 Используйте этот вариант, если вы наняли стороннюю компанию/водителя вне платформы Logicore и хотите вручную вписать их данные.
-                                    </div>
-                                    <Form.Item
-                                        name="partnerId"
-                                        label="Компания-перевозчик (контрагент)"
-                                        rules={[{ required: assignType === 'partner_manual', message: 'Выберите компанию' }]}
-                                        help={
-                                            <Button
-                                                type="link"
-                                                size="small"
-                                                style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 2 }}
-                                                onClick={() => setQuickPartnerModalOpen(true)}
-                                            >
-                                                + Добавить нового контрагента
-                                            </Button>
-                                        }
-                                    >
-                                        <Select placeholder="Выберите контрагента" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="vehicleModel" label="Модель автомобиля">
+                                        <Input size="large" placeholder="Volvo FH16" />
                                     </Form.Item>
-                                    <Form.Item name="assignedDriverName" label="ФИО водителя" rules={[{ required: assignType === 'partner_manual', message: 'Введите ФИО' }]}>
-                                        <Input placeholder="Иванов Иван Иванович" size="large" />
+                                </Col>
+                            </Row>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: true, message: 'Введите госномер' }]}>
+                                        <Input size="large" placeholder="123 ABC 01" />
                                     </Form.Item>
-                                    <Form.Item name="assignedDriverPhone" label="Телефон водителя"><Input placeholder="+7 (700) 123-45-67" size="large" /></Form.Item>
-                                    <Form.Item name="assignedDriverPlate" label="Госномер авто"><Input placeholder="123 ABC 01" size="large" /></Form.Item>
-                                    <Form.Item name="assignedDriverTrailer" label="Госномер прицепа"><Input placeholder="1234 XX 01" size="large" /></Form.Item>
-                                </div>
-                            )
-                        },
-                        {
-                            key: 'partner',
-                            label: 'Субподряд на платформе',
-                            children: (
-                                <div style={{ marginTop: 12 }}>
-                                    <div style={{ marginBottom: 16, padding: '8px 12px', background: '#f9f0ff', border: '1px solid #d3adf7', borderRadius: 6, fontSize: 12 }}>
-                                        💡 Передайте выполнение заказа компании-партнеру на платформе Logicore. Они получат заявку и сами назначат водителя.
-                                    </div>
-                                    <Form.Item
-                                        name="partnerId"
-                                        label="Компания-партнер"
-                                        rules={[{ required: assignType === 'partner', message: 'Выберите компанию' }]}
-                                        help={
-                                            <Button
-                                                type="link"
-                                                size="small"
-                                                style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 2 }}
-                                                onClick={() => setQuickPartnerModalOpen(true)}
-                                            >
-                                                + Добавить нового контрагента
-                                            </Button>
-                                        }
-                                    >
-                                        <Select placeholder="Компания-партнер" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="trailerNumber" label="Госномер прицепа">
+                                        <Input size="large" placeholder="1234 XX 01" />
                                     </Form.Item>
-                                    <Form.Item name="price" label="Стоимость для партнера (₸)" rules={[{ required: assignType === 'partner', message: 'Укажите стоимость' }]}>
-                                        <InputNumber style={{ width: '100%' }} size="large" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} parser={v => v!.replace(/\s/g, '')} />
+                                </Col>
+                            </Row>
+
+                            <Divider orientation="left" style={{ margin: '12px 0', fontSize: 13, color: '#1890ff' }}>Документы</Divider>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="docType" label="Тип документа">
+                                        <Select placeholder="Выберите тип" size="large">
+                                            <Select.Option value="ID_CARD">Удостоверение личности</Select.Option>
+                                            <Select.Option value="PASSPORT">Паспорт</Select.Option>
+                                        </Select>
                                     </Form.Item>
-                                </div>
-                            )
-                        }
-                    ]} />
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="docNumber" label="Номер документа">
+                                        <Input size="large" placeholder="012345678" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Row gutter={16}>
+                                <Col span={8}>
+                                    <Form.Item name="docIssuedAt" label="Дата выдачи">
+                                        <DatePicker style={{ width: '100%' }} size="large" format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="docExpiresAt" label="Срок действия">
+                                        <DatePicker style={{ width: '100%' }} size="large" format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="docIssuedBy" label="Кем выдан">
+                                        <Input size="large" placeholder="МВД РК" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                        </div>
+                    )}
                 </Form>
             </Modal>
 

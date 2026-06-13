@@ -119,6 +119,11 @@ export class UpdateCompanyProfileDto {
 }
 
 export class CreateDriverDto {
+    @ApiProperty({ description: 'ID компании', example: 'cuid...', required: false })
+    @IsString()
+    @IsOptional()
+    companyId?: string;
+
     @ApiProperty({ description: 'Имя', example: 'Иван' })
     @IsString()
     @IsNotEmpty()

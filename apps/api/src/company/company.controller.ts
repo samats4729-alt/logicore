@@ -335,12 +335,14 @@ export class CompanyController {
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Создать водителя в своей компании' })
     async createDriver(@Request() req: any, @Body() dto: CreateDriverDto) {
+        const { companyId, ...restDto } = dto;
         const createData = {
-            ...dto,
+            ...restDto,
             docIssuedAt: dto.docIssuedAt ? new Date(dto.docIssuedAt) : undefined,
             docExpiresAt: dto.docExpiresAt ? new Date(dto.docExpiresAt) : undefined,
         };
-        return this.companyDriversService.createDriver(req.user.companyId, createData);
+        const targetCompanyId = companyId || req.user.companyId;
+        return this.companyDriversService.createDriver(targetCompanyId, createData);
     }
 
     @Put('drivers/:id')
