@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional } from 'class-validator';
+import { UserRole } from '@prisma/client';
 
 export enum CompanyUserRole {
     LOGISTICIAN = 'LOGISTICIAN',
@@ -300,6 +301,27 @@ export class AssignUserDepartmentDto {
     @ApiProperty({ description: 'ID отдела (null для удаления из всех отделов)', example: 'cuid...', required: false })
     @IsOptional()
     departmentId?: string | null;
+}
+
+export class CreateInvitationDto {
+    @ApiProperty({ description: 'Email сотрудника', example: 'employee@company.kz' })
+    @IsEmail()
+    @IsNotEmpty()
+    email: string;
+
+    @ApiProperty({ description: 'Роль', enum: UserRole, example: 'LOGISTICIAN' })
+    @IsEnum(UserRole)
+    @IsNotEmpty()
+    role: UserRole;
+
+    @ApiProperty({ description: 'Права доступа', type: [String], required: false })
+    @IsOptional()
+    permissions?: string[];
+
+    @ApiProperty({ description: 'ID отдела', required: false })
+    @IsString()
+    @IsOptional()
+    departmentId?: string;
 }
 
 

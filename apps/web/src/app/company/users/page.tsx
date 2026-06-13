@@ -194,6 +194,10 @@ export default function CompanyUsersPage() {
     const [assignForm] = Form.useForm();
     const [assignDeptId, setAssignDeptId] = useState<string | null>(null);
 
+    // Inline department creation states for invite modal
+    const [newDeptName, setNewDeptName] = useState('');
+    const [addingDeptLoading, setAddingDeptLoading] = useState(false);
+
     // Driver creation/editing modal state
     const [driverModalOpen, setDriverModalOpen] = useState(false);
     const [editingDriver, setEditingDriver] = useState<CompanyUser | null>(null);
@@ -387,6 +391,28 @@ export default function CompanyUsersPage() {
         setAssignDeptId(deptId);
         assignForm.resetFields();
         setAssignModalOpen(true);
+    };
+
+    const handleInlineCreateDept = async () => {
+        if (!newDeptName.trim()) {
+            message.warning('Введите название отдела');
+            return;
+        }
+        setAddingDeptLoading(true);
+        try {
+            const res = await api.post('/company/departments', {
+                name: newDeptName.trim(),
+                icon: 'FolderOpenOutlined',
+            });
+            message.success('Отдел успешно создан');
+            setNewDeptName('');
+            await fetchData();
+            form.setFieldsValue({ departmentId: res.data.id });
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка создания отдела');
+        } finally {
+            setAddingDeptLoading(false);
+        }
     };
 
     // ==================== Original employee handlers ====================
@@ -1544,6 +1570,48 @@ export default function CompanyUsersPage() {
                                 <Select.Option value="ACCOUNTANT">Бухгалтер</Select.Option>
                                 <Select.Option value="WAREHOUSE_MANAGER">Завсклад</Select.Option>
                                 <Select.Option value="DRIVER">Водитель</Select.Option>
+                            </Select>
+                        </Form.Item>
+                        <Form.Item name="departmentId" label="Отдел (опционально)">
+                            <Select 
+                                placeholder="Выберите отдел или создайте новый"
+                                allowClear
+                                dropdownMatchSelectWidth={false}
+                                dropdownRender={(menu) => (
+                                    <>
+                                        {menu}
+                                        <Divider style={{ margin: '8px 0' }} />
+                                        <div style={{ display: 'flex', gap: 8, padding: '0 8px 4px' }}>
+                                            <Input
+                                                placeholder="Новый отдел"
+                                                value={newDeptName}
+                                                onChange={e => setNewDeptName(e.target.value)}
+                                                onKeyDown={e => e.stopPropagation()}
+                                                style={{ flex: 1 }}
+                                            />
+                                            <Button 
+                                                type="text" 
+                                                icon={<PlusOutlined />} 
+                                                onClick={handleInlineCreateDept}
+                                                loading={addingDeptLoading}
+                                                style={{ color: '#4f46e5', fontWeight: 500 }}
+                                            >
+                                                Создать
+                                            </Button>
+                                        </div>
+                                    </>
+                                )}
+                            >
+                                {departments.map(dept => (
+                                    <Select.Option key={dept.id} value={dept.id}>
+                                        <Space>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                {renderDeptIcon(dept.icon || 'FolderOpenOutlined', 14)}
+                                            </span>
+                                            <span>{dept.name}</span>
+                                        </Space>
+                                    </Select.Option>
+                                ))}
                             </Select>
                         </Form.Item>
                         <Form.Item name="permissions" label="Права доступа (для левого меню)">

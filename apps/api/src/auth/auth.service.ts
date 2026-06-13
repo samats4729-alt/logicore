@@ -909,6 +909,7 @@ export class AuthService {
                     role: invitation.role,
                     permissions: invitation.permissions,
                     companyId: invitation.companyId,
+                    departmentId: invitation.departmentId,
                 },
             });
 

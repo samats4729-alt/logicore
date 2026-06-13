@@ -68,7 +68,7 @@ export class CompanyService {
     /**
      * Создать приглашение для сотрудника
      */
-    async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = []) {
+    async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = [], departmentId?: string) {
         // Создаем случайный токен, например, 32 символа
         const crypto = require('crypto');
         const token = crypto.randomBytes(16).toString('hex');
@@ -76,6 +76,16 @@ export class CompanyService {
         // Срок годности - 3 дня
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 3);
+
+        // Если передан отдел, проверим, принадлежит ли он компании
+        if (departmentId) {
+            const department = await this.prisma.department.findFirst({
+                where: { id: departmentId, companyId },
+            });
+            if (!department) {
+                throw new NotFoundException('Указанный отдел не найден');
+            }
+        }
 
         const invitation = await this.prisma.invitation.create({
             data: {
@@ -85,6 +95,7 @@ export class CompanyService {
                 token,
                 permissions,
                 expiresAt,
+                departmentId: departmentId || null,
             },
         });
         

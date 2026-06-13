@@ -9,7 +9,7 @@ import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
-import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto } from './dto/company.dto';
+import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { AssignDriverDto } from '../orders/dto/order.dto';
 import * as path from 'path';
@@ -95,9 +95,9 @@ export class CompanyController {
     @ApiOperation({ summary: 'Создать приглашение для нового сотрудника' })
     async createInvitation(
         @Request() req: any,
-        @Body() dto: { email: string; role: UserRole; permissions: string[] },
+        @Body() dto: CreateInvitationDto,
     ) {
-        return this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions);
+        return this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions, dto.departmentId);
     }
 
     @Delete('invitations/:id')
