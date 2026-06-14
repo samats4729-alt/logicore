@@ -26,7 +26,6 @@ import styles from './page.module.css';
 const HeroGlobe = dynamic(() => import('@/components/ui/HeroGlobe'), { ssr: false });
 
 // Direct imports of lightweight client components
-import AnimatedCounter from '@/components/ui/AnimatedCounter';
 import Reveal from '@/components/ui/Reveal';
 
 export default function HomePage() {
@@ -273,38 +272,6 @@ export default function HomePage() {
                 </div>
             </section>
 
-            {/* Stats Section */}
-            <section className={styles.statsSection}>
-                <div className={styles.statsGrid}>
-                    <Reveal delay={0} className={styles.statCard}>
-                        <div className={styles.statValue}>
-                            <AnimatedCounter value={99} suffix="%" />
-                        </div>
-                        <div className={styles.statLabel}>Доставок вовремя</div>
-                    </Reveal>
-
-                    <Reveal delay={100} className={styles.statCard}>
-                        <div className={styles.statValue}>
-                            <AnimatedCounter value={24} suffix="/7" />
-                        </div>
-                        <div className={styles.statLabel}>Мониторинг в реальном времени</div>
-                    </Reveal>
-
-                    <Reveal delay={200} className={styles.statCard}>
-                        <div className={styles.statValue}>
-                            <AnimatedCounter value={35} prefix="+" suffix="%" />
-                        </div>
-                        <div className={styles.statLabel}>Рост рентабельности рейсов</div>
-                    </Reveal>
-
-                    <Reveal delay={300} className={styles.statCard}>
-                        <div className={styles.statValue}>
-                            <AnimatedCounter value={7} />
-                        </div>
-                        <div className={styles.statLabel}>Ролей в единой экосистеме</div>
-                    </Reveal>
-                </div>
-            </section>
 
             {/* Features Section */}
             <section className={styles.featuresSection}>
