@@ -406,10 +406,10 @@ export default function CounterpartyReportPage() {
                                 body: { padding: 0 },
                             }}
                             style={{
+                                ...cardStyle,
                                 border: `1px solid ${token.colorBorderSecondary}`,
                                 borderRadius: 10,
                                 overflow: 'hidden',
-                                ...cardStyle,
                             }}
                         >
                             {/* Header */}
