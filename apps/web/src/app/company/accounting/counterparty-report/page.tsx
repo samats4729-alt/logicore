@@ -6,6 +6,7 @@ import {
     SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined,
     CheckCircleOutlined, CloseCircleOutlined, TeamOutlined,
     RightOutlined, DownOutlined, ShareAltOutlined, CopyOutlined, SendOutlined, LinkOutlined,
+    FileExcelOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -87,6 +88,7 @@ export default function CounterpartyReportPage() {
     const [paymentFilter, setPaymentFilter] = useState<string>('all');
     const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
     const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+    const [exporting, setExporting] = useState(false);
 
     // Share modal state
     const [shareModal, setShareModal] = useState<{ open: boolean; counterpartyId: string; ourRole: string; counterpartyName: string }>({ open: false, counterpartyId: '', ourRole: '', counterpartyName: '' });
@@ -130,6 +132,28 @@ export default function CounterpartyReportPage() {
             message.error('Ошибка отправки');
         } finally {
             setEmailSending(false);
+        }
+    };
+
+    const handleExportExcel = async () => {
+        setExporting(true);
+        try {
+            const res = await api.get('/accounting/counterparty-report/export', {
+                responseType: 'blob',
+            });
+            const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `counterparty-report_${dayjs().format('YYYY-MM-DD')}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+            message.success('Отчет экспортирован успешно');
+        } catch {
+            message.error('Ошибка при экспорте в Excel');
+        } finally {
+            setExporting(false);
         }
     };
 
@@ -247,10 +271,28 @@ export default function CounterpartyReportPage() {
 
     return (
         <div style={{ height: '100%' }}>
-            <Title level={4} style={{ margin: '0 0 4px' }}>Взаиморасчёты с контрагентами</Title>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: 13 }}>
-                Финансовая отчётность по всем контрагентам — как заказчик, экспедитор или суб-экспедитор
-            </Text>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 16 }}>
+                <div>
+                    <Title level={4} style={{ margin: 0 }}>Взаиморасчёты с контрагентами</Title>
+                    <Text type="secondary" style={{ display: 'block', fontSize: 13 }}>
+                        Финансовая отчётность по всем контрагентам — как заказчик, экспедитор или суб-экспедитор
+                    </Text>
+                </div>
+                <Button
+                    type="default"
+                    icon={<FileExcelOutlined />}
+                    onClick={handleExportExcel}
+                    loading={exporting}
+                    style={{
+                        borderColor: '#10b981',
+                        color: '#10b981',
+                        fontWeight: 600,
+                        boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)',
+                    }}
+                >
+                    Экспорт в Excel
+                </Button>
+            </div>
 
             {/* SUMMARY CARDS */}
             <Row gutter={12} style={{ marginBottom: 16 }}>

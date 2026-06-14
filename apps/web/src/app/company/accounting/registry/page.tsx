@@ -1,15 +1,18 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker, Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm } from 'antd';
+import {
+    Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker,
+    Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress,
+    Modal, Form, InputNumber, App
+} from 'antd';
 import {
     ArrowUpOutlined, ArrowDownOutlined, DollarOutlined,
-    SearchOutlined, CheckCircleOutlined, CloseCircleOutlined,
-    EyeOutlined,
+    SearchOutlined, EyeOutlined, PlusOutlined, FileExcelOutlined,
+    CalendarOutlined, DeleteOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
-import { message, Switch } from 'antd';
 import { useAuthStore } from '@/store/auth';
 
 const { Title, Text } = Typography;
@@ -50,13 +53,28 @@ interface RegistryOrder {
     forwarder?: { id: string; name: string };
     assignedDriverName?: string;
     driver?: { firstName: string; lastName: string };
-    partner?: { name: string };
-    subForwarder?: { name: string };
-    pickupLocation?: { address: string; city?: string };
-    deliveryPoints?: { location: { address: string; city?: string } }[];
+    partner?: { id: string; name: string };
+    subForwarder?: { id: string; name: string };
+    routePoints?: { pointType: string; sequence: number; location?: { city?: string; address?: string } }[];
+    margin: number;
+    customerDebt: number;
+    executorDebt: number;
+    paidIn: number;
+    paidOut: number;
+}
+
+interface OrderPayment {
+    id: string;
+    direction: 'IN' | 'OUT';
+    amount: number;
+    date: string;
+    method: string;
+    note?: string;
+    counterparty?: { name: string };
 }
 
 export default function FinancialRegistryPage() {
+    const { message } = App.useApp();
     const { user } = useAuthStore();
     const [orders, setOrders] = useState<RegistryOrder[]>([]);
     const [loading, setLoading] = useState(true);
@@ -64,6 +82,20 @@ export default function FinancialRegistryPage() {
     const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
     const [paymentFilter, setPaymentFilter] = useState<string>('all');
     const [selectedOrder, setSelectedOrder] = useState<RegistryOrder | null>(null);
+    const [selectedOrderPayments, setSelectedOrderPayments] = useState<OrderPayment[]>([]);
+    const [loadingPayments, setLoadingPayments] = useState(false);
+    const [exporting, setExporting] = useState(false);
+
+    // Payment Modal State
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [paymentForm] = Form.useForm();
+    const [paymentModalData, setPaymentModalData] = useState<{
+        orderId: string;
+        direction: 'IN' | 'OUT';
+        counterpartyId?: string;
+        counterpartyName: string;
+        maxAmount: number;
+    } | null>(null);
 
     const fetchData = async () => {
         try {
@@ -71,40 +103,44 @@ export default function FinancialRegistryPage() {
             const res = await api.get('/accounting/financial-registry');
             setOrders(res.data);
         } catch {
-            console.error('Ошибка загрузки реестра');
+            message.error('Ошибка загрузки финансового реестра');
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => {
+        fetchData();
+    }, []);
 
-    // Helpers
-    const getExpense = (o: RegistryOrder) => {
-        if (o.customerCompany?.id === user?.companyId) {
-            return o.customerPrice || 0;
+    // Load payments for selected order when drawer opens
+    useEffect(() => {
+        if (selectedOrder) {
+            fetchOrderPayments(selectedOrder.id);
+        } else {
+            setSelectedOrderPayments([]);
         }
+    }, [selectedOrder]);
+
+    const fetchOrderPayments = async (orderId: string) => {
+        setLoadingPayments(true);
+        try {
+            const res = await api.get(`/accounting/payments/order/${orderId}`);
+            setSelectedOrderPayments(res.data);
+        } catch {
+            message.error('Ошибка загрузки платежей по заявке');
+        } finally {
+            setLoadingPayments(false);
+        }
+    };
+
+    const getExecutorCost = (o: RegistryOrder) => {
         return o.subForwarderId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
     };
-    const getIncome = (o: RegistryOrder) => {
-        if (o.customerCompany?.id === user?.companyId) {
-            return 0;
-        }
-        return o.customerPrice || 0;
-    };
-    const getMargin = (o: RegistryOrder) => {
-        return getIncome(o) - getExpense(o);
-    };
-    const getMarginPercent = (o: RegistryOrder) => {
-        const inc = getIncome(o);
-        if (!inc) return 0;
-        return Math.round((getMargin(o) / inc) * 100);
-    };
-    const isCreditorPaid = (o: RegistryOrder) => {
-        if (o.customerCompany?.id === user?.companyId) {
-            return !!o.isCustomerPaid;
-        }
-        return o.subForwarderId ? !!o.isSubForwarderPaid : !!o.isDriverPaid;
+
+    const isOverdue = (completedAt?: string, isPaid?: boolean) => {
+        if (isPaid || !completedAt) return false;
+        return dayjs(completedAt).add(5, 'day').isBefore(dayjs());
     };
 
     // Filters
@@ -130,179 +166,262 @@ export default function FinancialRegistryPage() {
             });
         }
 
-        if (paymentFilter === 'debtor') result = result.filter(o => !o.isCustomerPaid && getIncome(o) > 0);
-        if (paymentFilter === 'creditor') result = result.filter(o => !isCreditorPaid(o) && getExpense(o) > 0);
-        if (paymentFilter === 'all_paid') result = result.filter(o => o.isCustomerPaid && isCreditorPaid(o));
+        if (paymentFilter === 'debtor') result = result.filter(o => o.customerDebt > 0);
+        if (paymentFilter === 'creditor') result = result.filter(o => o.executorDebt > 0);
+        if (paymentFilter === 'all_paid') result = result.filter(o => o.customerDebt === 0 && o.executorDebt === 0);
 
         return result;
-    }, [orders, search, dateRange, paymentFilter, user?.companyId]);
+    }, [orders, search, dateRange, paymentFilter]);
 
     // Totals
     const totals = useMemo(() => {
-        const totalIncome = filtered.reduce((s, o) => s + getIncome(o), 0);
-        const totalExpense = filtered.reduce((s, o) => s + getExpense(o), 0);
-        const totalMargin = filtered.reduce((s, o) => s + getMargin(o), 0);
-        const debtorSum = filtered.filter(o => !o.isCustomerPaid).reduce((s, o) => s + getIncome(o), 0);
-        const creditorSum = filtered.filter(o => !isCreditorPaid(o)).reduce((s, o) => s + getExpense(o), 0);
+        const totalIncome = filtered.reduce((s, o) => s + (o.customerPrice || 0), 0);
+        const totalExpense = filtered.reduce((s, o) => s + getExecutorCost(o), 0);
+        const totalMargin = filtered.reduce((s, o) => s + o.margin, 0);
+        const debtorSum = filtered.reduce((s, o) => s + o.customerDebt, 0);
+        const creditorSum = filtered.reduce((s, o) => s + o.executorDebt, 0);
         return { totalIncome, totalExpense, totalMargin, debtorSum, creditorSum };
-    }, [filtered, user?.companyId]);
+    }, [filtered]);
 
-    const fmt = (n: number) => n.toLocaleString('ru-RU');
+    const fmt = (n: number) => {
+        return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(n);
+    };
+
+    const handleExportExcel = async () => {
+        setExporting(true);
+        try {
+            const res = await api.get('/accounting/financial-registry/export', {
+                responseType: 'blob',
+            });
+            const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `financial-registry_${dayjs().format('YYYY-MM-DD')}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+            message.success('Реестр экспортирован успешно');
+        } catch {
+            message.error('Ошибка при экспорте в Excel');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleAddPaymentClick = (e: React.MouseEvent, record: RegistryOrder, direction: 'IN' | 'OUT') => {
+        e.stopPropagation();
+        const maxAmt = direction === 'IN' ? record.customerDebt : record.executorDebt;
+        let cPartyName = '—';
+        let cPartyId: string | undefined;
+
+        if (direction === 'IN') {
+            cPartyName = record.customerCompany?.name || 'Заказчик';
+            cPartyId = record.customerCompany?.id;
+        } else {
+            if (record.subForwarder) {
+                cPartyName = record.subForwarder.name;
+                cPartyId = record.subForwarder.id;
+            } else if (record.partner) {
+                cPartyName = record.partner.name;
+                cPartyId = record.partner.id;
+            } else {
+                cPartyName = record.assignedDriverName || 'Водитель';
+            }
+        }
+
+        setPaymentModalData({
+            orderId: record.id,
+            direction,
+            counterpartyId: cPartyId,
+            counterpartyName: cPartyName,
+            maxAmount: maxAmt
+        });
+
+        paymentForm.setFieldsValue({
+            amount: maxAmt,
+            date: dayjs(),
+            method: 'BANK',
+            note: direction === 'IN' ? 'Оплата от заказчика' : 'Оплата исполнителю'
+        });
+
+        setPaymentModalOpen(true);
+    };
+
+    const handleSavePayment = async (values: any) => {
+        if (!paymentModalData) return;
+        try {
+            await api.post('/accounting/payments', {
+                orderId: paymentModalData.orderId,
+                counterpartyId: paymentModalData.counterpartyId,
+                direction: paymentModalData.direction,
+                amount: values.amount,
+                date: values.date.toISOString(),
+                method: values.method,
+                note: values.note
+            });
+            message.success('Платёж успешно добавлен');
+            setPaymentModalOpen(false);
+            fetchData();
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка сохранения платежа');
+        }
+    };
+
+    const handleDeletePayment = async (paymentId: string) => {
+        try {
+            await api.delete(`/accounting/payments/${paymentId}`);
+            message.success('Платёж успешно удален');
+            if (selectedOrder) {
+                fetchOrderPayments(selectedOrder.id);
+            }
+            fetchData();
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка удаления платежа');
+        }
+    };
 
     const columns = [
         {
-            title: '№', dataIndex: 'orderNumber', key: 'num', width: 80, fixed: 'left' as const,
-            sorter: (a: RegistryOrder, b: RegistryOrder) => a.orderNumber.localeCompare(b.orderNumber),
-            render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span>,
+            title: '№', dataIndex: 'orderNumber', key: 'num', width: 75, fixed: 'left' as const,
+            render: (t: string) => <span style={{ fontWeight: 600 }}>{t}</span>,
         },
         {
-            title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
-            sorter: (a: RegistryOrder, b: RegistryOrder) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-            render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{dayjs(d).format('DD.MM.YY')}</span>,
+            title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 85,
+            render: (d: string) => <span style={{ fontSize: 11, color: '#64748b' }}>{dayjs(d).format('DD.MM.YY')}</span>,
         },
         {
-            title: 'Заказчик', key: 'customer', width: 140, ellipsis: true,
+            title: 'Заказчик / Выручка', key: 'customer', width: 200,
             render: (_: any, r: RegistryOrder) => {
+                const total = r.customerPrice || 0;
+                const paid = r.paidIn || 0;
+                const percent = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
                 const name = r.customerCompany?.name || '—';
+
                 return (
-                    <span style={{ fontSize: 12, color: !r.isCustomerPaid && getIncome(r) > 0 ? '#cf1322' : undefined, fontWeight: !r.isCustomerPaid && getIncome(r) > 0 ? 600 : 400 }}>
-                        {name}
-                    </span>
-                );
-            },
-        },
-        {
-            title: 'Исполнитель', key: 'executor', width: 130, ellipsis: true,
-            render: (_: any, r: RegistryOrder) => {
-                const name = (r.customerCompany?.id === user?.companyId || r.forwarder?.id !== user?.companyId)
-                    ? (r.forwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—'))
-                    : (r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—'));
-                return (
-                    <Space size={4}>
-                        <span style={{ fontSize: 12, color: !isCreditorPaid(r) && getExpense(r) > 0 ? '#cf1322' : undefined, fontWeight: !isCreditorPaid(r) && getExpense(r) > 0 ? 600 : 400 }}>
-                            {name}
-                        </span>
-                        {r.subForwarderId && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: 0 }}>Суб</Tag>}
-                    </Space>
-                );
-            },
-        },
-        {
-            title: 'Статус', dataIndex: 'status', key: 'status', width: 100,
-            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag>,
-        },
-        {
-            title: <Tooltip title="Дебиторская задолженность — сколько должны нам"><span>Должны нам ₸</span></Tooltip>,
-            key: 'debit', width: 140, align: 'right' as const,
-            sorter: (a: RegistryOrder, b: RegistryOrder) => getIncome(a) - getIncome(b),
-            render: (_: any, r: RegistryOrder) => {
-                const v = getIncome(r);
-                if (!v) return <span style={{ color: '#ccc' }}>—</span>;
-                return (
-                    <Space size={4}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: r.isCustomerPaid ? '#389e0d' : '#cf1322' }}>{fmt(v)}</span>
-                        <Popconfirm
-                            title="Подтвердите действие"
-                            description={r.isCustomerPaid ? "Отменить оплату от заказчика?" : "Подтвердить оплату от заказчика?"}
-                            okText="Да"
-                            cancelText="Нет"
-                            onConfirm={async (e) => {
-                                e?.stopPropagation();
-                                try {
-                                    await api.put(`/accounting/orders/${r.id}/customer-paid`, { paid: !r.isCustomerPaid });
-                                    message.success(!r.isCustomerPaid ? 'Оплата от заказчика получена' : 'Оплата от заказчика отменена');
-                                    fetchData();
-                                } catch {
-                                    message.error('Ошибка сохранения');
-                                }
-                            }}
-                            onCancel={(e) => e?.stopPropagation()}
-                        >
-                            <div onClick={(e) => e.stopPropagation()} style={{ cursor: 'pointer', display: 'inline-block' }}>
-                                <Switch 
-                                    size="small" 
-                                    checked={r.isCustomerPaid} 
-                                    checkedChildren={<CheckCircleOutlined />} 
-                                    unCheckedChildren={<CloseCircleOutlined />} 
-                                    style={{ background: r.isCustomerPaid ? '#52c41a' : '#ff4d4f', marginLeft: 4, pointerEvents: 'none' }}
-                                />
-                            </div>
-                        </Popconfirm>
-                    </Space>
-                );
-            },
-        },
-        {
-            title: <Tooltip title="Кредиторская задолженность — сколько должны мы"><span>Должны мы ₸</span></Tooltip>,
-            key: 'credit', width: 140, align: 'right' as const,
-            sorter: (a: RegistryOrder, b: RegistryOrder) => getExpense(a) - getExpense(b),
-            render: (_: any, r: RegistryOrder) => {
-                const v = getExpense(r);
-                if (!v) return <span style={{ color: '#ccc' }}>—</span>;
-                const isPaid = isCreditorPaid(r);
-                return (
-                    <Space size={4}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: isPaid ? '#389e0d' : '#cf1322' }}>{fmt(v)}</span>
-                        <Popconfirm
-                            title="Подтвердите действие"
-                            description={isPaid ? "Отменить оплату исполнителю?" : "Подтвердить оплату исполнителю?"}
-                            okText="Да"
-                            cancelText="Нет"
-                            onConfirm={async (e) => {
-                                e?.stopPropagation();
-                                try {
-                                    if (r.customerCompany?.id === user?.companyId) {
-                                        await api.put(`/accounting/orders/${r.id}/customer-paid`, { paid: !isPaid });
-                                    } else if (r.subForwarderId) {
-                                        await api.put(`/accounting/orders/${r.id}/subforwarder-paid`, { paid: !isPaid });
-                                    } else {
-                                        await api.put(`/accounting/orders/${r.id}/driver-paid`, { paid: !isPaid });
-                                    }
-                                    message.success(!isPaid ? 'Оплата исполнителю проведена' : 'Оплата исполнителю отменена');
-                                    fetchData();
-                                } catch {
-                                    message.error('Ошибка сохранения');
-                                }
-                            }}
-                            onCancel={(e) => e?.stopPropagation()}
-                        >
-                            <div onClick={(e) => e.stopPropagation()} style={{ cursor: 'pointer', display: 'inline-block' }}>
-                                <Switch 
-                                    size="small" 
-                                    checked={isPaid} 
-                                    checkedChildren={<CheckCircleOutlined />} 
-                                    unCheckedChildren={<CloseCircleOutlined />} 
-                                    style={{ background: isPaid ? '#52c41a' : '#ff4d4f', marginLeft: 4, pointerEvents: 'none' }}
-                                />
-                            </div>
-                        </Popconfirm>
-                    </Space>
-                );
-            },
-        },
-        {
-            title: 'Маржа ₸', key: 'margin', width: 120, align: 'right' as const,
-            sorter: (a: RegistryOrder, b: RegistryOrder) => getMargin(a) - getMargin(b),
-            render: (_: any, r: RegistryOrder) => {
-                const m = getMargin(r);
-                const pct = getMarginPercent(r);
-                if (!getIncome(r) && !getExpense(r)) return <span style={{ color: '#ccc' }}>—</span>;
-                return (
-                    <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: m >= 0 ? '#389e0d' : '#cf1322' }}>
-                            {m >= 0 ? '+' : ''}{fmt(m)}
-                        </span>
-                        {pct !== 0 && (
-                            <div style={{ fontSize: 10, color: m >= 0 ? '#52c41a' : '#ff4d4f' }}>
-                                {pct >= 0 ? '+' : ''}{pct}%
-                            </div>
-                        )}
+                    <div style={{ padding: '2px 0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>{name}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600 }}>{fmt(total)} ₸</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? '#10b981' : '#3b82f6'} style={{ flex: 1, margin: 0 }} />
+                            <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{percent}%</span>
+                        </div>
                     </div>
                 );
             },
         },
         {
-            title: '', key: 'actions', width: 40, fixed: 'right' as const,
+            title: 'Исполнитель / Затраты', key: 'executor', width: 200,
+            render: (_: any, r: RegistryOrder) => {
+                const total = getExecutorCost(r);
+                const paid = r.paidOut || 0;
+                const percent = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
+
+                const name = r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—');
+
+                return (
+                    <div style={{ padding: '2px 0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                                🚚 {name}
+                                {r.subForwarderId && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px' }}>Суб</Tag>}
+                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>{fmt(total)} ₸</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? '#10b981' : '#a855f7'} style={{ flex: 1, margin: 0 }} />
+                            <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{percent}%</span>
+                        </div>
+                    </div>
+                );
+            },
+        },
+        {
+            title: 'Статус рейса', dataIndex: 'status', key: 'status', width: 110,
+            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag>,
+        },
+        {
+            title: 'Долг заказчика', key: 'customerDebt', width: 140, align: 'right' as const,
+            render: (_: any, r: RegistryOrder) => {
+                const debt = r.customerDebt;
+                const paid = r.isCustomerPaid;
+                const isLate = isOverdue(r.completedAt, paid);
+
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                        <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: paid ? '#10b981' : '#ef4444' }}>
+                                {debt === 0 ? 'Оплачен' : `${fmt(debt)} ₸`}
+                            </span>
+                            {isLate && (
+                                <div style={{ fontSize: 9, color: '#ef4444', fontWeight: 600 }}>Просрочка 5д+</div>
+                            )}
+                        </div>
+                        {debt > 0 && (
+                            <Tooltip title="Зарегистрировать платеж">
+                                <Button
+                                    size="small"
+                                    type="primary"
+                                    shape="circle"
+                                    icon={<PlusOutlined />}
+                                    onClick={(e) => handleAddPaymentClick(e, r, 'IN')}
+                                    style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                />
+                            </Tooltip>
+                        )}
+                    </div>
+                );
+            }
+        },
+        {
+            title: 'Наш долг', key: 'executorDebt', width: 140, align: 'right' as const,
+            render: (_: any, r: RegistryOrder) => {
+                const debt = r.executorDebt;
+                const paid = debt === 0;
+
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                        <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: paid ? '#10b981' : '#f59e0b' }}>
+                                {paid ? 'Оплачен' : `${fmt(debt)} ₸`}
+                            </span>
+                        </div>
+                        {debt > 0 && (
+                            <Tooltip title="Выплатить исполнителю">
+                                <Button
+                                    size="small"
+                                    type="primary"
+                                    shape="circle"
+                                    icon={<PlusOutlined />}
+                                    onClick={(e) => handleAddPaymentClick(e, r, 'OUT')}
+                                    style={{ background: '#f59e0b', borderColor: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                />
+                            </Tooltip>
+                        )}
+                    </div>
+                );
+            }
+        },
+        {
+            title: 'Маржа ₸', key: 'margin', width: 100, align: 'right' as const,
+            render: (_: any, r: RegistryOrder) => {
+                const m = r.margin || 0;
+                const revenue = r.customerPrice || 0;
+                const percent = revenue > 0 ? Math.round((m / revenue) * 100) : 0;
+                return (
+                    <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: m >= 0 ? '#10b981' : '#ef4444' }}>
+                            {m >= 0 ? '+' : ''}{fmt(m)}
+                        </span>
+                        <div style={{ fontSize: 10, color: '#64748b' }}>{percent}%</div>
+                    </div>
+                );
+            },
+        },
+        {
+            title: '', key: 'actions', width: 50, fixed: 'right' as const,
             render: (_: any, r: RegistryOrder) => (
                 <Button size="small" type="text" icon={<EyeOutlined />} onClick={() => setSelectedOrder(r)} />
             ),
@@ -310,91 +429,107 @@ export default function FinancialRegistryPage() {
     ];
 
     return (
-        <div style={{ height: '100%' }}>
-            <Title level={4} style={{ margin: '0 0 16px' }}>Реестр заявок — Финансы</Title>
+        <div style={{ height: '100%', padding: '4px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+                <div>
+                    <Title level={3} style={{ margin: 0, fontWeight: 700 }}>Финансовый реестр заявок</Title>
+                    <Text type="secondary">Маржа, учет оплат и сверка взаиморасчетов по рейсам</Text>
+                </div>
+                <Button
+                    type="default"
+                    icon={<FileExcelOutlined />}
+                    onClick={handleExportExcel}
+                    loading={exporting}
+                    style={{
+                        borderColor: '#10b981',
+                        color: '#10b981',
+                        fontWeight: 600,
+                        boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)',
+                    }}
+                >
+                    Экспорт в Excel
+                </Button>
+            </div>
 
             {/* SUMMARY CARDS */}
-            <Row gutter={12} style={{ marginBottom: 16 }}>
-                <Col span={5}>
-                    <Card size="small" styles={{ body: { padding: '12px 16px' } }}>
+            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                <Col xs={12} sm={8} md={4}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10 }}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#8c8c8c' }}>Доход (всего)</span>}
+                            title={<span style={{ fontSize: 11, color: '#64748b' }}>Выручка (всего)</span>}
                             value={totals.totalIncome}
-                            prefix={<ArrowUpOutlined />}
-                            valueStyle={{ fontSize: 18, color: '#389e0d', fontWeight: 700 }}
-                            suffix="₸"
+                            valueStyle={{ fontSize: 15, color: '#0f172a', fontWeight: 700 }}
+                            formatter={(val) => `${fmt(val as number)} ₸`}
                         />
                     </Card>
                 </Col>
-                <Col span={5}>
-                    <Card size="small" styles={{ body: { padding: '12px 16px' } }}>
+                <Col xs={12} sm={8} md={4}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10 }}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#8c8c8c' }}>Расход (всего)</span>}
+                            title={<span style={{ fontSize: 11, color: '#64748b' }}>Затраты (всего)</span>}
                             value={totals.totalExpense}
-                            prefix={<ArrowDownOutlined />}
-                            valueStyle={{ fontSize: 18, color: '#cf1322', fontWeight: 700 }}
-                            suffix="₸"
+                            valueStyle={{ fontSize: 15, color: '#475569', fontWeight: 700 }}
+                            formatter={(val) => `${fmt(val as number)} ₸`}
                         />
                     </Card>
                 </Col>
-                <Col span={5}>
-                    <Card size="small" styles={{ body: { padding: '12px 16px' } }}>
+                <Col xs={12} sm={8} md={4}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10 }}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#8c8c8c' }}>Маржа</span>}
+                            title={<span style={{ fontSize: 11, color: '#64748b' }}>Маржа (всего)</span>}
                             value={totals.totalMargin}
-                            prefix={<DollarOutlined />}
-                            valueStyle={{ fontSize: 18, color: totals.totalMargin >= 0 ? '#389e0d' : '#cf1322', fontWeight: 700 }}
-                            suffix="₸"
+                            valueStyle={{ fontSize: 15, color: totals.totalMargin >= 0 ? '#10b981' : '#ef4444', fontWeight: 700 }}
+                            formatter={(val) => `${totals.totalMargin >= 0 ? '+' : ''}${fmt(val as number)} ₸`}
                         />
                     </Card>
                 </Col>
-                <Col span={5}>
-                    <Card size="small" styles={{ body: { padding: '12px 16px' } }}>
+                <Col xs={12} sm={8} md={6}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10, background: '#fffbeb', border: '1px solid #fef3c7' }}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#cf1322' }}>Дебиторка (нам должны)</span>}
+                            title={<span style={{ fontSize: 11, color: '#b45309', fontWeight: 500 }}>Дебиторка (не выплачено нам)</span>}
                             value={totals.debtorSum}
-                            valueStyle={{ fontSize: 18, color: '#cf1322', fontWeight: 700 }}
-                            suffix="₸"
+                            valueStyle={{ fontSize: 15, color: '#d97706', fontWeight: 700 }}
+                            formatter={(val) => `${fmt(val as number)} ₸`}
                         />
                     </Card>
                 </Col>
-                <Col span={4}>
-                    <Card size="small" styles={{ body: { padding: '12px 16px' } }}>
+                <Col xs={12} sm={8} md={6}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10, background: '#fff1f2', border: '1px solid #ffe4e6' }}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#fa8c16' }}>Кредиторка (мы должны)</span>}
+                            title={<span style={{ fontSize: 11, color: '#be123c', fontWeight: 500 }}>Кредиторка (наш долг)</span>}
                             value={totals.creditorSum}
-                            valueStyle={{ fontSize: 18, color: '#fa8c16', fontWeight: 700 }}
-                            suffix="₸"
+                            valueStyle={{ fontSize: 15, color: '#e11d48', fontWeight: 700 }}
+                            formatter={(val) => `${fmt(val as number)} ₸`}
                         />
                     </Card>
                 </Col>
             </Row>
 
             {/* FILTERS */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                 <Input
                     placeholder="Поиск по №, грузу, заказчику..."
-                    prefix={<SearchOutlined style={{ color: '#bbb' }} />}
+                    prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
                     value={search} onChange={e => setSearch(e.target.value)}
-                    style={{ width: 260 }} allowClear size="small"
+                    style={{ width: 240 }} allowClear size="middle"
                 />
                 <RangePicker
-                    size="small" format="DD.MM.YYYY"
+                    size="middle" format="DD.MM.YYYY"
                     onChange={(dates) => setDateRange(dates as any)}
                     placeholder={['От', 'До']}
                 />
                 <Select
-                    size="small" value={paymentFilter} onChange={setPaymentFilter}
-                    style={{ width: 200 }}
+                    size="middle" value={paymentFilter} onChange={setPaymentFilter}
+                    style={{ width: 210 }}
                     options={[
                         { value: 'all', label: 'Все заявки' },
-                        { value: 'debtor', label: '🔴 Нам должны (не оплачено)' },
-                        { value: 'creditor', label: '🟠 Мы должны (не оплачено)' },
-                        { value: 'all_paid', label: '✅ Все оплачены' },
+                        { value: 'debtor', label: '🔴 Долг заказчика (не оплачено)' },
+                        { value: 'creditor', label: '🟠 Наш долг перед ТК (не оплачено)' },
+                        { value: 'all_paid', label: '✅ Все расчеты завершены' },
                     ]}
                 />
-                <span style={{ fontSize: 11, color: '#999', marginLeft: 'auto', lineHeight: '24px' }}>
-                    Всего: {filtered.length} из {orders.length}
+                <span style={{ fontSize: 12, color: '#64748b', marginLeft: 'auto' }}>
+                    Показано: <strong>{filtered.length}</strong> заявок
                 </span>
             </div>
 
@@ -406,7 +541,7 @@ export default function FinancialRegistryPage() {
                 loading={loading}
                 size="small"
                 scroll={{ x: 1000 }}
-                pagination={{ pageSize: 50, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100', '200'], showTotal: (t) => `Всего: ${t}` }}
+                pagination={{ pageSize: 25, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100'], showTotal: (t) => `Всего: ${t}` }}
                 onRow={(record) => ({
                     style: { cursor: 'pointer' },
                     onDoubleClick: () => setSelectedOrder(record),
@@ -416,122 +551,222 @@ export default function FinancialRegistryPage() {
                     if (record.status === 'PROBLEM') return 'row-problem';
                     return '';
                 }}
-                summary={() => {
-                    if (!filtered.length) return null;
-                    return (
-                        <Table.Summary fixed>
-                            <Table.Summary.Row>
-                                <Table.Summary.Cell index={0} colSpan={5}><Text strong style={{ fontSize: 12 }}>ИТОГО</Text></Table.Summary.Cell>
-                                <Table.Summary.Cell index={5} align="right"><Text strong style={{ fontSize: 12, color: '#389e0d' }}>{fmt(totals.totalIncome)}</Text></Table.Summary.Cell>
-                                <Table.Summary.Cell index={6} align="right"><Text strong style={{ fontSize: 12, color: '#cf1322' }}>{fmt(totals.totalExpense)}</Text></Table.Summary.Cell>
-                                <Table.Summary.Cell index={7} align="right"><Text strong style={{ fontSize: 12, color: totals.totalMargin >= 0 ? '#389e0d' : '#cf1322' }}>{totals.totalMargin >= 0 ? '+' : ''}{fmt(totals.totalMargin)}</Text></Table.Summary.Cell>
-                                <Table.Summary.Cell index={8} />
-                            </Table.Summary.Row>
-                        </Table.Summary>
-                    );
-                }}
             />
 
-            {/* COMPACT TABLE STYLES */}
+            {/* CSS FOR COMPACT PREMIUM GRID */}
             <style jsx global>{`
-                .ant-table-small .ant-table-thead > tr > th {
-                    padding: 6px 8px !important;
+                .ant-table-thead > tr > th {
+                    padding: 8px 10px !important;
                     font-size: 11px !important;
                     font-weight: 600 !important;
-                    background: #fafafa !important;
+                    background: #f8fafc !important;
                     text-transform: uppercase;
-                    letter-spacing: 0.3px;
-                    color: #666 !important;
-                    white-space: nowrap;
+                    letter-spacing: 0.5px;
+                    color: #475569 !important;
+                    border-bottom: 2px solid #e2e8f0 !important;
                 }
-                .ant-table-small .ant-table-tbody > tr > td {
-                    padding: 4px 8px !important;
+                .ant-table-tbody > tr > td {
+                    padding: 6px 10px !important;
                     font-size: 12px !important;
-                    border-bottom: 1px solid #f5f5f5 !important;
+                    border-bottom: 1px solid #f1f5f9 !important;
                 }
-                .ant-table-small .ant-table-tbody > tr:hover > td {
-                    background: #e6f7ff !important;
+                .ant-table-tbody > tr:hover > td {
+                    background: #f1f5f9 !important;
                 }
-                .ant-table-small .ant-table-tbody > tr.row-completed > td {
-                    background: #f6ffed !important;
+                .row-completed td {
+                    background: #f0fdf4 !important;
                 }
-                .ant-table-small .ant-table-tbody > tr.row-problem > td {
-                    background: #fff2f0 !important;
+                .row-problem td {
+                    background: #fef2f2 !important;
                 }
             `}</style>
 
             {/* DETAIL DRAWER */}
             <Drawer
-                title={selectedOrder ? `Заявка ${selectedOrder.orderNumber}` : ''}
+                title={selectedOrder ? `Детали финансов: Заявка №${selectedOrder.orderNumber}` : ''}
                 open={!!selectedOrder}
                 onClose={() => setSelectedOrder(null)}
-                width={480}
+                width={540}
             >
                 {selectedOrder && (() => {
                     const o = selectedOrder;
-                    const income = getIncome(o);
-                    const expense = getExpense(o);
-                    const margin = getMargin(o);
-                    const marginPct = getMarginPercent(o);
-                    const executor = (o.customerCompany?.id === user?.companyId || o.forwarder?.id !== user?.companyId)
-                        ? (o.forwarder?.name || o.partner?.name || o.assignedDriverName || (o.driver ? `${o.driver.lastName} ${o.driver.firstName}` : '—'))
-                        : (o.subForwarder?.name || o.partner?.name || o.assignedDriverName || (o.driver ? `${o.driver.lastName} ${o.driver.firstName}` : '—'));
-                    const pickupCity = o.pickupLocation?.city || o.pickupLocation?.address || '—';
-                    const deliveryCity = o.deliveryPoints?.[0]?.location?.city || o.deliveryPoints?.[0]?.location?.address || '—';
+                    const executor = o.subForwarder?.name || o.partner?.name || o.assignedDriverName || (o.driver ? `${o.driver.lastName} ${o.driver.firstName}` : '—');
+                    const pickupCity = o.routePoints?.[0]?.location?.city || '—';
+                    const deliveryCity = o.routePoints?.[o.routePoints.length - 1]?.location?.city || '—';
 
                     return (
-                        <div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                             <Descriptions column={1} size="small" bordered>
-                                <Descriptions.Item label="Дата создания">{dayjs(o.createdAt).format('DD.MM.YYYY HH:mm')}</Descriptions.Item>
-                                <Descriptions.Item label="Статус"><Tag color={statusColors[o.status]}>{statusLabels[o.status] || o.status}</Tag></Descriptions.Item>
                                 <Descriptions.Item label="Маршрут">{pickupCity} → {deliveryCity}</Descriptions.Item>
-                                {o.cargoDescription && <Descriptions.Item label="Груз">{o.cargoDescription}</Descriptions.Item>}
+                                <Descriptions.Item label="Статус рейса"><Tag color={statusColors[o.status]}>{statusLabels[o.status] || o.status}</Tag></Descriptions.Item>
+                                <Descriptions.Item label="Груз">{o.cargoDescription || '—'}</Descriptions.Item>
                                 <Descriptions.Item label="Заказчик">{o.customerCompany?.name || '—'}</Descriptions.Item>
                                 <Descriptions.Item label="Исполнитель">{executor}</Descriptions.Item>
                             </Descriptions>
 
-                            <div style={{ marginTop: 20 }}>
-                                <Title level={5}>💰 Финансы</Title>
-                                <Card size="small" style={{ background: '#f6ffed', marginBottom: 8 }}>
+                            <div>
+                                <Title level={5} style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 8, marginBottom: 12 }}>💰 Расчетные данные</Title>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: '#f8fafc', marginBottom: 8 }}>
+                                            <div style={{ fontSize: 11, color: '#64748b' }}>Ставка заказчика (Гросс)</div>
+                                            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{fmt(o.customerPrice || 0)} ₸</div>
+                                        </Card>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: '#f8fafc', marginBottom: 8 }}>
+                                            <div style={{ fontSize: 11, color: '#64748b' }}>Ставка перевозчика (Гросс)</div>
+                                            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{fmt(getExecutorCost(o))} ₸</div>
+                                        </Card>
+                                    </Col>
+                                </Row>
+
+                                <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: o.margin >= 0 ? '#ecfdf5' : '#fef2f2', border: `1px solid ${o.margin >= 0 ? '#a7f3d0' : '#fca5a5'}` }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
-                                            <div style={{ fontSize: 11, color: '#8c8c8c' }}>Дебиторская задолженность (нам должны)</div>
-                                            <div style={{ fontSize: 22, fontWeight: 700, color: '#389e0d' }}>{fmt(income)} ₸</div>
+                                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', display: 'block' }}>Маржинальность</span>
+                                            <span style={{ fontSize: 20, fontWeight: 800, color: o.margin >= 0 ? '#059669' : '#dc2626' }}>
+                                                {o.margin >= 0 ? '+' : ''}{fmt(o.margin)} ₸
+                                            </span>
                                         </div>
-                                        <Tag color={o.isCustomerPaid ? 'green' : 'red'} style={{ fontSize: 12 }}>
-                                            {o.isCustomerPaid ? '✅ Оплачено' : '❌ Не оплачено'}
+                                        <Tag color={o.margin >= 0 ? 'green' : 'red'} style={{ fontSize: 13, padding: '4px 8px', fontWeight: 600 }}>
+                                            {o.customerPrice ? Math.round((o.margin / o.customerPrice) * 100) : 0}%
                                         </Tag>
                                     </div>
-                                    {o.customerPaidAt && <div style={{ fontSize: 11, color: '#52c41a', marginTop: 4 }}>Оплачено: {dayjs(o.customerPaidAt).format('DD.MM.YYYY')}</div>}
                                 </Card>
+                            </div>
 
-                                <Card size="small" style={{ background: '#fff2f0', marginBottom: 8 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ fontSize: 11, color: '#8c8c8c' }}>Кредиторская задолженность (мы должны)</div>
-                                            <div style={{ fontSize: 22, fontWeight: 700, color: '#cf1322' }}>{fmt(expense)} ₸</div>
-                                        </div>
-                                        <Tag color={isCreditorPaid(o) ? 'green' : 'red'} style={{ fontSize: 12 }}>
-                                            {isCreditorPaid(o) ? '✅ Оплачено' : '❌ Не оплачено'}
-                                        </Tag>
-                                    </div>
-                                    {isCreditorPaid(o) && (o.driverPaidAt || o.subForwarderPaidAt) && <div style={{ fontSize: 11, color: '#52c41a', marginTop: 4 }}>Оплачено: {dayjs(o.subForwarderId ? o.subForwarderPaidAt : o.driverPaidAt).format('DD.MM.YYYY')}</div>}
-                                </Card>
+                            {/* PAYMENTS HISTORY */}
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: 8, marginBottom: 12 }}>
+                                    <Title level={5} style={{ margin: 0 }}>📜 История платежей по заявке</Title>
+                                    <Space>
+                                        <Button size="small" type="primary" style={{ background: '#10b981', borderColor: '#10b981' }} onClick={(e) => handleAddPaymentClick(e, o, 'IN')}>+ Входящий</Button>
+                                        <Button size="small" type="primary" style={{ background: '#f59e0b', borderColor: '#f59e0b' }} onClick={(e) => handleAddPaymentClick(e, o, 'OUT')}>+ Исходящий</Button>
+                                    </Space>
+                                </div>
 
-                                <Card size="small" style={{ background: margin >= 0 ? '#f6ffed' : '#fff2f0', border: `2px solid ${margin >= 0 ? '#b7eb8f' : '#ffa39e'}` }}>
-                                    <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: 11, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: 1 }}>Маржа (прибыль)</div>
-                                        <div style={{ fontSize: 28, fontWeight: 800, color: margin >= 0 ? '#389e0d' : '#cf1322' }}>
-                                            {margin >= 0 ? '+' : ''}{fmt(margin)} ₸
-                                        </div>
-                                        {marginPct !== 0 && <div style={{ fontSize: 14, color: margin >= 0 ? '#52c41a' : '#ff4d4f' }}>{marginPct >= 0 ? '+' : ''}{marginPct}%</div>}
+                                {loadingPayments ? (
+                                    <div style={{ textAlign: 'center', padding: '12px 0' }}><Spin size="small" /></div>
+                                ) : selectedOrderPayments.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '16px 0', background: '#f8fafc', borderRadius: 8, color: '#64748b' }}>
+                                        Платежей по этой заявке еще не зарегистрировано
                                     </div>
-                                </Card>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                        {selectedOrderPayments.map((p) => (
+                                            <div
+                                                key={p.id}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    padding: '10px 12px',
+                                                    background: '#fff',
+                                                    border: '1px solid #f1f5f9',
+                                                    borderRadius: 8,
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                                                }}
+                                            >
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <Tag color={p.direction === 'IN' ? 'green' : 'orange'} style={{ fontSize: 10 }}>
+                                                            {p.direction === 'IN' ? 'Входящий' : 'Исходящий'}
+                                                        </Tag>
+                                                        <strong style={{ fontSize: 13 }}>{fmt(p.amount)} ₸</strong>
+                                                        <span style={{ fontSize: 11, color: '#64748b' }}>({p.method === 'BANK' ? 'Банк' : p.method === 'CASH' ? 'Наличные' : p.method === 'CARD' ? 'Карта' : 'Другое'})</span>
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                                                        От: {dayjs(p.date).format('DD.MM.YYYY')} | {p.note || 'без примечания'}
+                                                    </div>
+                                                </div>
+                                                <Popconfirm
+                                                    title="Удалить платёж?"
+                                                    description="Сумма долга по заявке будет пересчитана."
+                                                    okText="Да, удалить"
+                                                    cancelText="Отмена"
+                                                    okButtonProps={{ danger: true }}
+                                                    onConfirm={() => handleDeletePayment(p.id)}
+                                                >
+                                                    <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                                                </Popconfirm>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );
                 })()}
             </Drawer>
+
+            {/* PARTIAL PAYMENT MODAL */}
+            <Modal
+                title={paymentModalData ? `Регистрация платежа: ${paymentModalData.direction === 'IN' ? 'Поступление средств' : 'Расход средств'}` : ''}
+                open={paymentModalOpen}
+                onCancel={() => setPaymentModalOpen(false)}
+                onOk={() => paymentForm.submit()}
+                destroyOnClose
+                centered
+            >
+                {paymentModalData && (
+                    <Form form={paymentForm} layout="vertical" onFinish={handleSavePayment}>
+                        <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                            <Descriptions column={1} size="small">
+                                <Descriptions.Item label="Контрагент"><strong>{paymentModalData.counterpartyName}</strong></Descriptions.Item>
+                                <Descriptions.Item label="Остаток долга"><strong>{fmt(paymentModalData.maxAmount)} ₸</strong></Descriptions.Item>
+                            </Descriptions>
+                        </div>
+
+                        <Form.Item
+                            name="amount"
+                            label="Сумма платежа (₸)"
+                            rules={[
+                                { required: true, message: 'Укажите сумму' },
+                                { type: 'number', min: 0.01, message: 'Сумма должна быть больше нуля' },
+                                {
+                                    validator: (_, value) => {
+                                        if (value > paymentModalData.maxAmount) {
+                                            return Promise.reject(`Сумма превышает долг (${fmt(paymentModalData.maxAmount)} ₸)`);
+                                        }
+                                        return Promise.resolve();
+                                    }
+                                }
+                            ]}
+                        >
+                            <InputNumber style={{ width: '100%' }} size="large" formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
+                        </Form.Item>
+
+                        <Form.Item
+                            name="date"
+                            label="Дата платежа"
+                            rules={[{ required: true, message: 'Укажите дату' }]}
+                        >
+                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" size="large" />
+                        </Form.Item>
+
+                        <Form.Item
+                            name="method"
+                            label="Способ оплаты"
+                            rules={[{ required: true, message: 'Выберите способ' }]}
+                        >
+                            <Select size="large">
+                                <Select.Option value="BANK">🏛️ Безналичный (Банк)</Select.Option>
+                                <Select.Option value="CASH">💵 Наличные</Select.Option>
+                                <Select.Option value="CARD">💳 Карта</Select.Option>
+                                <Select.Option value="OTHER">📁 Другой способ</Select.Option>
+                            </Select>
+                        </Form.Item>
+
+                        <Form.Item
+                            name="note"
+                            label="Примечание"
+                        >
+                            <Input placeholder="Например: Оплата по счету №..." size="large" />
+                        </Form.Item>
+                    </Form>
+                )}
+            </Modal>
         </div>
     );
 }

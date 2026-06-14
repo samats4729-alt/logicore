@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
+import { PaymentDirection, PaymentMethod } from '@prisma/client';
+import { money } from '../common/utils/money';
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class AccountingService {
@@ -11,6 +14,116 @@ export class AccountingService {
         private redisService: RedisService,
         private configService: ConfigService,
     ) { }
+
+    // ==================== FINANCIAL CALCULATOR ====================
+
+    computeOrderFinance(params: {
+        order: {
+            customerPrice?: number | null;
+            driverCost?: number | null;
+            subForwarderPrice?: number | null;
+            customerCompanyId?: string | null;
+            forwarderId?: string | null;
+            subForwarderId?: string | null;
+            partnerId?: string | null;
+            vatRate?: number | null;
+            hasVat?: boolean | null;
+            executorVatRate?: number | null;
+            executorHasVat?: boolean | null;
+        };
+        payments: Array<{ direction: PaymentDirection; amount: number; companyId: string }>;
+        incomes: Array<{ category: string; amount: number; isDeleted?: boolean }>;
+        expenses: Array<{ category: string; amount: number; isDeleted?: boolean }>;
+        companyId: string;
+    }) {
+        const { order, payments, incomes, expenses, companyId } = params;
+
+        const isCustomer = order.customerCompanyId === companyId;
+        const isForwarder = order.forwarderId === companyId || order.partnerId === companyId;
+        const isSubForwarder = order.subForwarderId === companyId;
+
+        const vatRate = order.vatRate ?? 0;
+        const hasVat = order.hasVat ?? false;
+        const executorVatRate = order.executorVatRate ?? 0;
+        const executorHasVat = order.executorHasVat ?? false;
+
+        let revenueGross = 0;
+        let executorCostGross = 0;
+
+        if (isCustomer) {
+            revenueGross = 0;
+            executorCostGross = order.customerPrice || 0;
+        } else if (isForwarder) {
+            revenueGross = order.customerPrice || 0;
+            executorCostGross = order.subForwarderId ? (order.subForwarderPrice || 0) : (order.driverCost || 0);
+        } else if (isSubForwarder) {
+            revenueGross = order.subForwarderPrice || 0;
+            executorCostGross = 0;
+        } else {
+            revenueGross = order.customerPrice || 0;
+            executorCostGross = order.subForwarderId ? (order.subForwarderPrice || 0) : (order.driverCost || 0);
+        }
+
+        revenueGross = money(revenueGross);
+        executorCostGross = money(executorCostGross);
+
+        // Revenue Net/VAT/Gross
+        let revenueNet = revenueGross;
+        let revenueVat = 0;
+        if (!isCustomer && hasVat && vatRate > 0) {
+            revenueNet = money(revenueGross / (1 + vatRate / 100));
+            revenueVat = money(revenueGross - revenueNet);
+        }
+
+        // Executor Cost Net/VAT/Gross
+        let executorCostNet = executorCostGross;
+        let executorCostVat = 0;
+        if (isCustomer) {
+            // For customer, their cost is customerPrice, so they use the customer-side VAT settings
+            if (hasVat && vatRate > 0) {
+                executorCostNet = money(executorCostGross / (1 + vatRate / 100));
+                executorCostVat = money(executorCostGross - executorCostNet);
+            }
+        } else {
+            if (executorHasVat && executorVatRate > 0) {
+                executorCostNet = money(executorCostGross / (1 + executorVatRate / 100));
+                executorCostVat = money(executorCostGross - executorCostNet);
+            }
+        }
+
+        const companyPayments = payments.filter(p => p.companyId === companyId);
+        const paidIn = money(companyPayments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0));
+        const paidOut = money(companyPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0));
+
+        const extraIncomes = money(incomes.filter(i => i.category !== 'order_payment' && i.category !== 'prepayment' && !i.isDeleted).reduce((sum, i) => sum + i.amount, 0));
+        const otherExpenses = money(expenses.filter(e => e.category !== 'driver_payment' && !e.isDeleted).reduce((sum, e) => sum + e.amount, 0));
+
+        const margin = money(revenueNet + extraIncomes - executorCostNet - otherExpenses);
+        const customerDebt = money(Math.max(revenueGross - paidIn, 0));
+        const executorDebt = money(Math.max(executorCostGross - paidOut, 0));
+
+        const isCustomerPaid = paidIn >= revenueGross && revenueGross > 0;
+        const isExecutorPaid = paidOut >= executorCostGross && executorCostGross > 0;
+
+        return {
+            revenue: revenueGross,
+            revenueNet,
+            revenueVat,
+            executorCost: executorCostGross,
+            executorCostNet,
+            executorCostVat,
+            extraIncomes,
+            otherExpenses,
+            paidIn,
+            paidOut,
+            margin,
+            customerDebt,
+            executorDebt,
+            isCustomerPaid,
+            isExecutorPaid,
+            isCustomer,
+        };
+    }
 
     // ==================== ORDER FINANCIALS ====================
 
@@ -69,39 +182,33 @@ export class AccountingService {
 
         const isCustomer = order.customerCompanyId === companyId;
 
-        const [incomes, expenses] = await Promise.all([
+        const [payments, incomes, expenses] = await Promise.all([
+            this.prisma.payment.findMany({
+                where: { orderId, companyId, isDeleted: false },
+                orderBy: { date: 'desc' },
+                include: { counterparty: { select: { name: true } } },
+            }),
             this.prisma.income.findMany({
                 where: { orderId, companyId },
                 orderBy: { date: 'desc' },
             }),
             isCustomer
-                ? [] // Customer should not see any carrier expenses
+                ? []
                 : this.prisma.expense.findMany({
                     where: { orderId, companyId },
                     orderBy: { date: 'desc' },
                 }),
         ]);
 
-        const totalIncomes = incomes.filter((i: any) => !i.isDeleted).reduce((s: number, i: any) => s + i.amount, 0);
-        const totalExpenses = expenses.filter((e: any) => !e.isDeleted).reduce((s: number, e: any) => s + e.amount, 0);
-
-        // Находим только выплаты исполнителю (категория driver_payment)
-        const executorPayments = expenses
-            .filter((e: any) => !e.isDeleted && e.category === 'driver_payment')
-            .reduce((s: number, e: any) => s + e.amount, 0);
-
-        // Другие расходы по заказу (топливо, ремонт и т.д.)
-        const otherExpenses = totalExpenses - executorPayments;
-
-        // Exclude main customer payment category ('order_payment' and 'prepayment') from margins to prevent double-counting
-        const extraIncomes = incomes
-            .filter((i: any) => !i.isDeleted && i.category !== 'order_payment' && i.category !== 'prepayment')
-            .reduce((s: number, i: any) => s + i.amount, 0);
-
-        const executorCost = order.subForwarderId ? (order.subForwarderPrice || 0) : (order.driverCost || 0);
+        const fin = this.computeOrderFinance({
+            order,
+            payments,
+            incomes,
+            expenses,
+            companyId,
+        });
 
         if (isCustomer) {
-            // Safe redacted response for customer
             return {
                 order: {
                     ...order,
@@ -115,6 +222,7 @@ export class AccountingService {
                     partner: null,
                     subForwarder: null,
                 },
+                payments,
                 incomes,
                 expenses: [],
                 summary: {
@@ -123,13 +231,13 @@ export class AccountingService {
                     subForwarderPrice: 0,
                     executorCost: 0,
                     margin: 0,
-                    totalIncomes,
+                    totalIncomes: fin.paidIn,
                     totalExpenses: 0,
-                    balance: totalIncomes,
-                    isCustomerPaid: order.isCustomerPaid,
+                    balance: fin.paidIn,
+                    isCustomerPaid: fin.isCustomerPaid,
                     isDriverPaid: false,
                     isSubForwarderPaid: false,
-                    customerDebt: order.isCustomerPaid ? 0 : (order.customerPrice || 0) - totalIncomes,
+                    customerDebt: fin.customerDebt,
                     driverDebt: 0,
                     subForwarderDebt: 0,
                     executorDebt: 0,
@@ -137,30 +245,27 @@ export class AccountingService {
             };
         }
 
-        const executorDebt = order.subForwarderId
-            ? (order.isSubForwarderPaid ? 0 : (order.subForwarderPrice || 0) - executorPayments)
-            : (order.isDriverPaid ? 0 : (order.driverCost || 0) - executorPayments);
-
         return {
             order,
+            payments,
             incomes,
             expenses,
             summary: {
                 customerPrice: order.customerPrice || 0,
                 driverCost: order.driverCost || 0,
                 subForwarderPrice: order.subForwarderPrice || 0,
-                executorCost,  
-                margin: (order.customerPrice || 0) + extraIncomes - executorCost - otherExpenses,
-                totalIncomes,
-                totalExpenses,
-                balance: totalIncomes - totalExpenses,
-                isCustomerPaid: order.isCustomerPaid,
-                isDriverPaid: order.isDriverPaid,
-                isSubForwarderPaid: order.isSubForwarderPaid,
-                customerDebt: order.isCustomerPaid ? 0 : (order.customerPrice || 0) - totalIncomes,
-                driverDebt: order.isDriverPaid ? 0 : (order.driverCost || 0) - executorPayments,
-                subForwarderDebt: order.isSubForwarderPaid ? 0 : (order.subForwarderPrice || 0) - executorPayments,
-                executorDebt,
+                executorCost: fin.executorCost,
+                margin: fin.margin,
+                totalIncomes: money(fin.paidIn + fin.extraIncomes),
+                totalExpenses: money(fin.paidOut + fin.otherExpenses),
+                balance: money((fin.paidIn + fin.extraIncomes) - (fin.paidOut + fin.otherExpenses)),
+                isCustomerPaid: fin.isCustomerPaid,
+                isDriverPaid: order.subForwarderId ? false : fin.isExecutorPaid,
+                isSubForwarderPaid: order.subForwarderId ? fin.isExecutorPaid : false,
+                customerDebt: fin.customerDebt,
+                driverDebt: order.subForwarderId ? 0 : fin.executorDebt,
+                subForwarderDebt: order.subForwarderId ? fin.executorDebt : 0,
+                executorDebt: fin.executorDebt,
             },
         };
     }
@@ -189,64 +294,83 @@ export class AccountingService {
                 ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
-            select: {
-                id: true,
-                orderNumber: true,
-                createdAt: true,
-                status: true,
-                cargoDescription: true,
-                completedAt: true,
-                // Доходная часть
-                customerPrice: true,
-                customerPriceType: true,
-                isCustomerPaid: true,
-                customerPaidAt: true,
-                // Расходная часть
-                driverCost: true,
-                subForwarderPrice: true,
-                subForwarderId: true,
-                isDriverPaid: true,
-                driverPaidAt: true,
-                isSubForwarderPaid: true,
-                subForwarderPaidAt: true,
-                // Связи
-                customerCompanyId: true,
+            include: {
                 customerCompany: { select: { id: true, name: true } },
                 forwarder: { select: { id: true, name: true } },
-                assignedDriverName: true,
                 driver: { select: { id: true, firstName: true, lastName: true } },
                 partner: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
                 routePoints: { select: { pointType: true, sequence: true, location: { select: { address: true, city: true } } }, orderBy: { sequence: 'asc' } },
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
             },
             orderBy: { createdAt: 'desc' },
         });
 
-        // Safe redaction for Customer company to prevent price leakage
         return orders.map(order => {
-            if (order.customerCompanyId === companyId) {
-                return {
-                    ...order,
-                    driverCost: null,
-                    subForwarderPrice: null,
-                    subForwarderId: null,
-                    isDriverPaid: false,
-                    driverPaidAt: null,
-                    isSubForwarderPaid: false,
-                    subForwarderPaidAt: null,
-                    partner: null,
-                    subForwarder: null,
-                };
+            const isCustomer = order.customerCompanyId === companyId;
+            const fin = this.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+
+            const mapped = {
+                id: order.id,
+                orderNumber: order.orderNumber,
+                createdAt: order.createdAt,
+                status: order.status,
+                cargoDescription: order.cargoDescription,
+                completedAt: order.completedAt,
+                customerPrice: order.customerPrice,
+                customerPriceType: order.customerPriceType,
+                isCustomerPaid: fin.isCustomerPaid,
+                customerPaidAt: order.customerPaidAt,
+                driverCost: isCustomer ? null : order.driverCost,
+                subForwarderPrice: isCustomer ? null : order.subForwarderPrice,
+                subForwarderId: isCustomer ? null : order.subForwarderId,
+                isDriverPaid: isCustomer ? false : (order.subForwarderId ? false : fin.isExecutorPaid),
+                driverPaidAt: order.driverPaidAt,
+                isSubForwarderPaid: isCustomer ? false : (order.subForwarderId ? fin.isExecutorPaid : false),
+                subForwarderPaidAt: order.subForwarderPaidAt,
+                customerCompanyId: order.customerCompanyId,
+                customerCompany: order.customerCompany,
+                forwarder: order.forwarder,
+                assignedDriverName: order.assignedDriverName,
+                driver: order.driver,
+                partner: order.partner,
+                subForwarder: order.subForwarder,
+                routePoints: order.routePoints,
+                margin: fin.margin,
+                customerDebt: fin.customerDebt,
+                executorDebt: fin.executorDebt,
+                paidIn: fin.paidIn,
+                paidOut: fin.paidOut,
+            };
+
+            if (isCustomer) {
+                mapped.driverCost = null;
+                mapped.subForwarderPrice = null;
+                mapped.subForwarderId = null;
+                mapped.isDriverPaid = false;
+                mapped.driverPaidAt = null;
+                mapped.isSubForwarderPaid = false;
+                mapped.subForwarderPaidAt = null;
+                mapped.partner = null;
+                mapped.subForwarder = null;
             }
-            return order;
+
+            return mapped;
         });
     }
 
     // ==================== PAYMENT JOURNAL ====================
 
     async getIncomesJournal(companyId: string) {
-        // Заявки где мы экспедитор или заказчик/посредник — ждём оплату от заказчика
-        return this.prisma.order.findMany({
+        const orders = await this.prisma.order.findMany({
             where: {
                 AND: [
                     {
@@ -257,9 +381,7 @@ export class AccountingService {
                             { responsibleManager: { companyId: companyId } },
                         ]
                     },
-                    {
-                        customerCompanyId: { not: companyId }
-                    },
+                    { customerCompanyId: { not: companyId } },
                     {
                         OR: [
                             { isConfirmed: true },
@@ -270,33 +392,46 @@ export class AccountingService {
                 customerPrice: { not: null },
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
-            select: {
-                id: true,
-                orderNumber: true,
-                createdAt: true,
-                status: true,
-                cargoDescription: true,
-                customerPrice: true,
-                customerPriceType: true,
-                isCustomerPaid: true,
-                customerPaidAt: true,
-                customerPaymentCondition: true,
-                customerPaymentForm: true,
-                completedAt: true,
-                customerCompany: {
-                    select: { id: true, name: true },
-                },
-                customer: {
-                    select: { id: true, firstName: true, lastName: true },
-                },
+            include: {
+                customerCompany: { select: { id: true, name: true } },
+                customer: { select: { id: true, firstName: true, lastName: true } },
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
             },
             orderBy: { createdAt: 'desc' },
+        });
+
+        return orders.map(order => {
+            const fin = this.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+
+            return {
+                id: order.id,
+                orderNumber: order.orderNumber,
+                createdAt: order.createdAt,
+                status: order.status,
+                cargoDescription: order.cargoDescription,
+                customerPrice: order.customerPrice,
+                customerPriceType: order.customerPriceType,
+                isCustomerPaid: fin.isCustomerPaid,
+                customerPaidAt: order.customerPaidAt,
+                customerPaymentCondition: order.customerPaymentCondition,
+                customerPaymentForm: order.customerPaymentForm,
+                completedAt: order.completedAt,
+                customerCompany: order.customerCompany,
+                customer: order.customer,
+            };
         });
     }
 
     async getExpensesJournal(companyId: string) {
-        // Заявки где мы экспедитор/исполнитель — должны оплатить перевозчику (исключаем заказы, где мы заказчик)
-        return this.prisma.order.findMany({
+        const orders = await this.prisma.order.findMany({
             where: {
                 AND: [
                     {
@@ -307,9 +442,7 @@ export class AccountingService {
                             { responsibleManager: { companyId: companyId } },
                         ]
                     },
-                    {
-                        customerCompanyId: { not: companyId }
-                    },
+                    { customerCompanyId: { not: companyId } },
                     {
                         OR: [
                             { driverCost: { not: null } },
@@ -325,62 +458,139 @@ export class AccountingService {
                 ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
-            select: {
-                id: true,
-                orderNumber: true,
-                createdAt: true,
-                status: true,
-                cargoDescription: true,
-                driverCost: true,
-                subForwarderPrice: true,
-                subForwarderId: true,
-                isDriverPaid: true,
-                driverPaidAt: true,
-                isSubForwarderPaid: true,
-                subForwarderPaidAt: true,
-                driverPaymentCondition: true,
-                driverPaymentForm: true,
-                completedAt: true,
-                assignedDriverName: true,
-                assignedDriverPhone: true,
-                driver: {
-                    select: { id: true, firstName: true, lastName: true, phone: true },
-                },
-                partner: {
-                    select: { id: true, name: true },
-                },
-                subForwarder: {
-                    select: { id: true, name: true },
-                },
+            include: {
+                driver: { select: { id: true, firstName: true, lastName: true, phone: true } },
+                partner: { select: { id: true, name: true } },
+                subForwarder: { select: { id: true, name: true } },
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
             },
             orderBy: { createdAt: 'desc' },
+        });
+
+        return orders.map(order => {
+            const fin = this.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+
+            return {
+                id: order.id,
+                orderNumber: order.orderNumber,
+                createdAt: order.createdAt,
+                status: order.status,
+                cargoDescription: order.cargoDescription,
+                driverCost: order.driverCost,
+                subForwarderPrice: order.subForwarderPrice,
+                subForwarderId: order.subForwarderId,
+                isDriverPaid: order.subForwarderId ? false : fin.isExecutorPaid,
+                driverPaidAt: order.driverPaidAt,
+                isSubForwarderPaid: order.subForwarderId ? fin.isExecutorPaid : false,
+                subForwarderPaidAt: order.subForwarderPaidAt,
+                driverPaymentCondition: order.driverPaymentCondition,
+                driverPaymentForm: order.driverPaymentForm,
+                completedAt: order.completedAt,
+                assignedDriverName: order.assignedDriverName,
+                assignedDriverPhone: order.assignedDriverPhone,
+                driver: order.driver,
+                partner: order.partner,
+                subForwarder: order.subForwarder,
+            };
         });
     }
 
     async getCustomerExpensesJournal(companyId: string) {
-        // Заявки где мы заказчик — должны оплатить экспедитору
-        return this.prisma.order.findMany({
+        const orders = await this.prisma.order.findMany({
             where: {
                 customerCompanyId: companyId,
                 customerPrice: { not: null },
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
-            select: {
-                id: true,
-                orderNumber: true,
-                createdAt: true,
-                status: true,
-                cargoDescription: true,
-                customerPrice: true,
-                isCustomerPaid: true,
-                customerPaidAt: true,
+            include: {
                 forwarder: { select: { id: true, name: true } },
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
             },
             orderBy: { createdAt: 'desc' },
         });
+
+        return orders.map(order => {
+            const fin = this.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+
+            return {
+                id: order.id,
+                orderNumber: order.orderNumber,
+                createdAt: order.createdAt,
+                status: order.status,
+                cargoDescription: order.cargoDescription || '',
+                customerPrice: order.customerPrice,
+                isCustomerPaid: fin.isCustomerPaid,
+                customerPaidAt: order.customerPaidAt,
+                forwarder: order.forwarder,
+            };
+        });
     }
 
-    async markCustomerPaid(companyId: string, orderId: string, paid: boolean) {
+    async syncOrderPaymentFlags(orderId: string) {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+        });
+        if (!order) return;
+
+        // Sync Customer Paid Flag
+        const customerPayments = await this.prisma.payment.findMany({
+            where: { orderId, direction: PaymentDirection.IN, isDeleted: false },
+        });
+        const paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
+        const revenue = order.customerPrice || 0;
+        const isCustomerPaid = paidIn >= revenue && revenue > 0;
+
+        // Sync Driver / Sub-forwarder Paid Flag
+        const executorPayments = await this.prisma.payment.findMany({
+            where: { orderId, direction: PaymentDirection.OUT, isDeleted: false },
+        });
+        const paidOut = executorPayments.reduce((sum, p) => sum + p.amount, 0);
+
+        let isDriverPaid = order.isDriverPaid;
+        let driverPaidAt = order.driverPaidAt;
+        let isSubForwarderPaid = order.isSubForwarderPaid;
+        let subForwarderPaidAt = order.subForwarderPaidAt;
+
+        if (order.subForwarderId) {
+            const subForwarderPrice = order.subForwarderPrice || 0;
+            isSubForwarderPaid = paidOut >= subForwarderPrice && subForwarderPrice > 0;
+            subForwarderPaidAt = isSubForwarderPaid ? (order.subForwarderPaidAt || new Date()) : null;
+        } else {
+            const driverCost = order.driverCost || 0;
+            isDriverPaid = paidOut >= driverCost && driverCost > 0;
+            driverPaidAt = isDriverPaid ? (order.driverPaidAt || new Date()) : null;
+        }
+
+        await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                isCustomerPaid,
+                customerPaidAt: isCustomerPaid ? (order.customerPaidAt || new Date()) : null,
+                isDriverPaid,
+                driverPaidAt,
+                isSubForwarderPaid,
+                subForwarderPaidAt,
+            },
+        });
+    }
+
+    async markCustomerPaid(companyId: string, orderId: string, paid: boolean, userId: string) {
         const order = await this.prisma.order.findFirst({
             where: {
                 id: orderId,
@@ -393,16 +603,36 @@ export class AccountingService {
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        return this.prisma.order.update({
-            where: { id: orderId },
-            data: {
-                isCustomerPaid: paid,
-                customerPaidAt: paid ? new Date() : null,
-            },
-        });
+        if (paid) {
+            const payments = await this.prisma.payment.findMany({
+                where: { orderId, direction: PaymentDirection.IN, isDeleted: false, companyId }
+            });
+            const paidIn = payments.reduce((sum, p) => sum + p.amount, 0);
+            const balance = money((order.customerPrice || 0) - paidIn);
+            if (balance > 0) {
+                await this.createPayment(companyId, userId, {
+                    orderId,
+                    counterpartyId: order.customerCompanyId || undefined,
+                    direction: PaymentDirection.IN,
+                    amount: balance,
+                    date: new Date().toISOString(),
+                    note: 'Проведение оплаты заказчика (на остаток)',
+                });
+            }
+        } else {
+            const payments = await this.prisma.payment.findMany({
+                where: { orderId, direction: PaymentDirection.IN, isDeleted: false, companyId }
+            });
+            for (const p of payments) {
+                await this.deletePayment(companyId, p.id, userId);
+            }
+            await this.syncOrderPaymentFlags(orderId);
+        }
+
+        return this.prisma.order.findUnique({ where: { id: orderId } });
     }
 
-    async markDriverPaid(companyId: string, orderId: string, paid: boolean) {
+    async markDriverPaid(companyId: string, orderId: string, paid: boolean, userId: string) {
         const order = await this.prisma.order.findFirst({
             where: {
                 id: orderId,
@@ -416,16 +646,35 @@ export class AccountingService {
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        return this.prisma.order.update({
-            where: { id: orderId },
-            data: {
-                isDriverPaid: paid,
-                driverPaidAt: paid ? new Date() : null,
-            },
-        });
+        if (paid) {
+            const payments = await this.prisma.payment.findMany({
+                where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
+            });
+            const paidOut = payments.reduce((sum, p) => sum + p.amount, 0);
+            const balance = money((order.driverCost || 0) - paidOut);
+            if (balance > 0) {
+                await this.createPayment(companyId, userId, {
+                    orderId,
+                    direction: PaymentDirection.OUT,
+                    amount: balance,
+                    date: new Date().toISOString(),
+                    note: 'Оплата водителю (на остаток)',
+                });
+            }
+        } else {
+            const payments = await this.prisma.payment.findMany({
+                where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
+            });
+            for (const p of payments) {
+                await this.deletePayment(companyId, p.id, userId);
+            }
+            await this.syncOrderPaymentFlags(orderId);
+        }
+
+        return this.prisma.order.findUnique({ where: { id: orderId } });
     }
 
-    async markSubForwarderPaid(companyId: string, orderId: string, paid: boolean) {
+    async markSubForwarderPaid(companyId: string, orderId: string, paid: boolean, userId: string) {
         const order = await this.prisma.order.findFirst({
             where: {
                 id: orderId,
@@ -438,13 +687,33 @@ export class AccountingService {
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        return this.prisma.order.update({
-            where: { id: orderId },
-            data: {
-                isSubForwarderPaid: paid,
-                subForwarderPaidAt: paid ? new Date() : null,
-            },
-        });
+        if (paid) {
+            const payments = await this.prisma.payment.findMany({
+                where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
+            });
+            const paidOut = payments.reduce((sum, p) => sum + p.amount, 0);
+            const balance = money((order.subForwarderPrice || 0) - paidOut);
+            if (balance > 0) {
+                await this.createPayment(companyId, userId, {
+                    orderId,
+                    counterpartyId: order.subForwarderId || undefined,
+                    direction: PaymentDirection.OUT,
+                    amount: balance,
+                    date: new Date().toISOString(),
+                    note: 'Оплата суб-экспедитору (на остаток)',
+                });
+            }
+        } else {
+            const payments = await this.prisma.payment.findMany({
+                where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
+            });
+            for (const p of payments) {
+                await this.deletePayment(companyId, p.id, userId);
+            }
+            await this.syncOrderPaymentFlags(orderId);
+        }
+
+        return this.prisma.order.findUnique({ where: { id: orderId } });
     }
 
     async updateOrderFinance(companyId: string, orderId: string, data: {
@@ -455,7 +724,11 @@ export class AccountingService {
         customerPaymentForm?: string;
         driverPaymentCondition?: string;
         driverPaymentForm?: string;
-    }) {
+        vatRate?: number;
+        hasVat?: boolean;
+        executorVatRate?: number;
+        executorHasVat?: boolean;
+    }, userId: string) {
         const order = await this.prisma.order.findFirst({
             where: {
                 id: orderId,
@@ -470,7 +743,33 @@ export class AccountingService {
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        return this.prisma.order.update({
+        const orderDate = order.completedAt || order.createdAt;
+        await this.checkPeriodNotClosed(companyId, orderDate);
+
+        const detailsParts: string[] = [];
+        if (data.customerPrice !== undefined && data.customerPrice !== order.customerPrice) {
+            detailsParts.push(`Ставка заказчика: ${order.customerPrice || 0} -> ${data.customerPrice}`);
+        }
+        if (data.driverCost !== undefined && data.driverCost !== order.driverCost) {
+            detailsParts.push(`Ставка перевозчика: ${order.driverCost || 0} -> ${data.driverCost}`);
+        }
+        if (data.subForwarderPrice !== undefined && data.subForwarderPrice !== order.subForwarderPrice) {
+            detailsParts.push(`Ставка суб-экспедитора: ${order.subForwarderPrice || 0} -> ${data.subForwarderPrice}`);
+        }
+        if (data.vatRate !== undefined && data.vatRate !== order.vatRate) {
+            detailsParts.push(`Ставка НДС: ${order.vatRate || 0}% -> ${data.vatRate}%`);
+        }
+        if (data.hasVat !== undefined && data.hasVat !== order.hasVat) {
+            detailsParts.push(`НДС заказчика: ${order.hasVat ? 'Да' : 'Нет'} -> ${data.hasVat ? 'Да' : 'Нет'}`);
+        }
+        if (data.executorVatRate !== undefined && data.executorVatRate !== order.executorVatRate) {
+            detailsParts.push(`Ставка НДС исполнителя: ${order.executorVatRate || 0}% -> ${data.executorVatRate}%`);
+        }
+        if (data.executorHasVat !== undefined && data.executorHasVat !== order.executorHasVat) {
+            detailsParts.push(`НДС исполнителя: ${order.executorHasVat ? 'Да' : 'Нет'} -> ${data.executorHasVat ? 'Да' : 'Нет'}`);
+        }
+
+        const updated = await this.prisma.order.update({
             where: { id: orderId },
             data: {
                 ...(data.customerPrice !== undefined && { customerPrice: data.customerPrice }),
@@ -480,8 +779,25 @@ export class AccountingService {
                 ...(data.customerPaymentForm !== undefined && { customerPaymentForm: data.customerPaymentForm }),
                 ...(data.driverPaymentCondition !== undefined && { driverPaymentCondition: data.driverPaymentCondition }),
                 ...(data.driverPaymentForm !== undefined && { driverPaymentForm: data.driverPaymentForm }),
+                ...(data.vatRate !== undefined && { vatRate: data.vatRate }),
+                ...(data.hasVat !== undefined && { hasVat: data.hasVat }),
+                ...(data.executorVatRate !== undefined && { executorVatRate: data.executorVatRate }),
+                ...(data.executorHasVat !== undefined && { executorHasVat: data.executorHasVat }),
             },
         });
+
+        if (detailsParts.length > 0) {
+            await this.prisma.orderChangeLog.create({
+                data: {
+                    orderId,
+                    userId,
+                    action: 'finance_updated',
+                    details: `Обновлены финансовые параметры: ${detailsParts.join(', ')}`
+                }
+            });
+        }
+
+        return updated;
     }
 
     // ==================== EXPENSES (manual) ====================
@@ -502,6 +818,7 @@ export class AccountingService {
         note?: string;
         orderId?: string;
     }) {
+        await this.checkPeriodNotClosed(companyId, data.date);
         return this.prisma.expense.create({
             data: {
                 companyId,
@@ -529,6 +846,11 @@ export class AccountingService {
 
         if (!expense) throw new NotFoundException('Расход не найден');
 
+        await this.checkPeriodNotClosed(companyId, expense.date);
+        if (data.date && new Date(data.date).getTime() !== new Date(expense.date).getTime()) {
+            await this.checkPeriodNotClosed(companyId, data.date);
+        }
+
         return this.prisma.expense.update({
             where: { id: expenseId },
             data: {
@@ -547,6 +869,8 @@ export class AccountingService {
         });
 
         if (!expense) throw new NotFoundException('Расход не найден');
+
+        await this.checkPeriodNotClosed(companyId, expense.date);
 
         return this.prisma.expense.update({
             where: { id: expenseId },
@@ -581,6 +905,7 @@ export class AccountingService {
         note?: string;
         orderId?: string;
     }) {
+        await this.checkPeriodNotClosed(companyId, data.date);
         return this.prisma.income.create({
             data: {
                 companyId,
@@ -608,6 +933,11 @@ export class AccountingService {
 
         if (!income) throw new NotFoundException('Поступление не найдено');
 
+        await this.checkPeriodNotClosed(companyId, income.date);
+        if (data.date && new Date(data.date).getTime() !== new Date(income.date).getTime()) {
+            await this.checkPeriodNotClosed(companyId, data.date);
+        }
+
         return this.prisma.income.update({
             where: { id: incomeId },
             data: {
@@ -627,6 +957,8 @@ export class AccountingService {
 
         if (!income) throw new NotFoundException('Поступление не найдено');
 
+        await this.checkPeriodNotClosed(companyId, income.date);
+
         return this.prisma.income.update({
             where: { id: incomeId },
             data: { isDeleted: true },
@@ -636,7 +968,6 @@ export class AccountingService {
     // ==================== COUNTERPARTY REPORT (Взаиморасчёты) ====================
 
     async getCounterpartyReport(companyId: string) {
-        // Загружаем все заявки, где наша компания участвует в любой роли
         const orders = await this.prisma.order.findMany({
             where: {
                 AND: [
@@ -657,34 +988,11 @@ export class AccountingService {
                 ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
-            select: {
-                id: true,
-                orderNumber: true,
-                createdAt: true,
-                completedAt: true,
-                status: true,
-                cargoDescription: true,
-                // Финансы
-                customerPrice: true,
-                driverCost: true,
-                subForwarderPrice: true,
-                isCustomerPaid: true,
-                customerPaidAt: true,
-                isDriverPaid: true,
-                driverPaidAt: true,
-                isSubForwarderPaid: true,
-                subForwarderPaidAt: true,
-                // Роли
-                customerCompanyId: true,
-                forwarderId: true,
-                subForwarderId: true,
-                partnerId: true,
-                // Связи
+            include: {
                 customerCompany: { select: { id: true, name: true } },
                 forwarder: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
                 partner: { select: { id: true, name: true } },
-                // Маршрут
                 routePoints: {
                     select: {
                         pointType: true,
@@ -693,20 +1001,21 @@ export class AccountingService {
                     },
                     orderBy: { sequence: 'asc' },
                 },
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
             },
             orderBy: { createdAt: 'desc' },
         });
 
-        // Группировка по контрагентам
-        // Для каждой заявки определяем пары "наша роль ↔ контрагент" и финансовое направление
         const counterpartyMap = new Map<string, {
             counterparty: { id: string; name: string };
             ourRole: string;
             orders: any[];
-            theyOweUs: number;       // Дебиторка (нам должны)
-            theyOweUsPaid: number;   // Из дебиторки — оплачено
-            weOweThem: number;       // Кредиторка (мы должны)
-            weOweThemPaid: number;   // Из кредиторки — оплачено
+            theyOweUs: number;
+            theyOweUsPaid: number;
+            weOweThem: number;
+            weOweThemPaid: number;
         }>();
 
         const getOrCreateEntry = (counterpartyId: string, counterpartyName: string, ourRole: string) => {
@@ -727,10 +1036,17 @@ export class AccountingService {
 
         for (const order of orders) {
             const isCustomer = order.customerCompanyId === companyId;
-            const isForwarder = order.forwarderId === companyId;
+            const isForwarder = order.forwarderId === companyId || order.partnerId === companyId;
             const isSubForwarder = order.subForwarderId === companyId;
 
-            // Базовый объект заявки для ответа (без лишних внутренних полей)
+            const fin = this.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+
             const orderData = {
                 id: order.id,
                 orderNumber: order.orderNumber,
@@ -739,95 +1055,92 @@ export class AccountingService {
                 status: order.status,
                 cargoDescription: order.cargoDescription,
                 customerPrice: order.customerPrice,
-                isCustomerPaid: order.isCustomerPaid,
+                isCustomerPaid: fin.isCustomerPaid,
                 customerPaidAt: order.customerPaidAt,
                 routePoints: order.routePoints,
             };
 
             if (isCustomer && order.forwarder) {
-                // Мы заказчик → контрагент = экспедитор → мы ДОЛЖНЫ ему (кредиторка)
                 const entry = getOrCreateEntry(order.forwarder.id, order.forwarder.name, 'Заказчик');
-                const amount = order.customerPrice || 0;
+                const amount = fin.executorCost;
+                const paid = fin.paidOut;
                 entry.weOweThem += amount;
-                if (order.isCustomerPaid) entry.weOweThemPaid += amount;
+                entry.weOweThemPaid += paid;
                 entry.orders.push({
                     ...orderData,
                     amount,
-                    isPaid: order.isCustomerPaid,
+                    isPaid: fin.isExecutorPaid,
                     paidAt: order.customerPaidAt,
-                    direction: 'weOwe', // мы должны
+                    direction: 'weOwe',
                 });
             }
 
             if (isForwarder && order.customerCompany) {
-                // Мы экспедитор → контрагент = заказчик → он ДОЛЖЕН нам (дебиторка)
                 const entry = getOrCreateEntry(order.customerCompany.id, order.customerCompany.name, 'Экспедитор');
-                const amount = order.customerPrice || 0;
+                const amount = fin.revenue;
+                const paid = fin.paidIn;
                 entry.theyOweUs += amount;
-                if (order.isCustomerPaid) entry.theyOweUsPaid += amount;
+                entry.theyOweUsPaid += paid;
                 entry.orders.push({
                     ...orderData,
                     amount,
-                    isPaid: order.isCustomerPaid,
+                    isPaid: fin.isCustomerPaid,
                     paidAt: order.customerPaidAt,
-                    direction: 'theyOwe', // нам должны
+                    direction: 'theyOwe',
                 });
             }
 
             if (isForwarder && order.subForwarder) {
-                // Мы экспедитор, но назначили суб → мы ДОЛЖНЫ суб-экспедитору (кредиторка)
                 const entry = getOrCreateEntry(order.subForwarder.id, order.subForwarder.name, 'Экспедитор');
-                const amount = order.subForwarderPrice || 0;
+                const amount = fin.executorCost;
+                const paid = fin.paidOut;
                 entry.weOweThem += amount;
-                if (order.isSubForwarderPaid) entry.weOweThemPaid += amount;
+                entry.weOweThemPaid += paid;
                 entry.orders.push({
                     ...orderData,
                     amount,
-                    isPaid: order.isSubForwarderPaid,
-                    paidAt: order.subForwarderPaidAt,
+                    isPaid: fin.isExecutorPaid,
+                    paidAt: order.subForwarderPaidAt || order.driverPaidAt,
                     direction: 'weOwe',
                 });
             }
 
             if (isSubForwarder && order.forwarder) {
-                // Мы суб-экспедитор → контрагент = основной экспедитор → он ДОЛЖЕН нам (дебиторка)
                 const entry = getOrCreateEntry(order.forwarder.id, order.forwarder.name, 'Суб-экспедитор');
-                const amount = order.subForwarderPrice || 0;
+                const amount = fin.revenue;
+                const paid = fin.paidIn;
                 entry.theyOweUs += amount;
-                if (order.isSubForwarderPaid) entry.theyOweUsPaid += amount;
+                entry.theyOweUsPaid += paid;
                 entry.orders.push({
                     ...orderData,
                     amount,
-                    isPaid: order.isSubForwarderPaid,
+                    isPaid: fin.isCustomerPaid,
                     paidAt: order.subForwarderPaidAt,
                     direction: 'theyOwe',
                 });
             }
         }
 
-        // Формируем массив контрагентов
         const counterparties = Array.from(counterpartyMap.values()).map(entry => ({
             ...entry,
-            balance: entry.theyOweUs - entry.weOweThem,
-            unpaidTheyOweUs: entry.theyOweUs - entry.theyOweUsPaid,
-            unpaidWeOweThem: entry.weOweThem - entry.weOweThemPaid,
+            balance: money(entry.theyOweUs - entry.weOweThem),
+            unpaidTheyOweUs: money(Math.max(entry.theyOweUs - entry.theyOweUsPaid, 0)),
+            unpaidWeOweThem: money(Math.max(entry.weOweThem - entry.weOweThemPaid, 0)),
             totalOrders: entry.orders.length,
         }));
 
-        // Сортируем: сначала с бо́льшим балансом неоплаченных
         counterparties.sort((a, b) => {
             const aUnpaid = a.unpaidTheyOweUs + a.unpaidWeOweThem;
             const bUnpaid = b.unpaidTheyOweUs + b.unpaidWeOweThem;
             return bUnpaid - aUnpaid;
         });
 
-        // Общие итоги
         const totals = {
-            totalTheyOweUs: counterparties.reduce((s, c) => s + c.theyOweUs, 0),
-            totalWeOweThem: counterparties.reduce((s, c) => s + c.weOweThem, 0),
-            unpaidTheyOweUs: counterparties.reduce((s, c) => s + c.unpaidTheyOweUs, 0),
-            unpaidWeOweThem: counterparties.reduce((s, c) => s + c.unpaidWeOweThem, 0),
-            balance: counterparties.reduce((s, c) => s + c.balance, 0),
+            totalTheyOweUs: money(counterparties.reduce((s, c) => s + c.theyOweUs, 0)),
+            totalWeOweThem: money(counterparties.reduce((s, c) => s + c.weOweThem, 0)),
+            unpaidTheyOweUs: money(counterparties.reduce((s, c) => s + c.unpaidTheyOweUs, 0)),
+            unpaidWeOweThem: money(counterparties.reduce((s, c) => s + c.unpaidWeOweThem, 0)),
+            balance: money(counterparties.reduce((s, c) => s + c.balance, 0)),
             totalCounterparties: counterparties.length,
             totalOrders: counterparties.reduce((s, c) => s + c.totalOrders, 0),
         };
@@ -924,5 +1237,451 @@ export class AccountingService {
                 totalOrders: counterparty.totalOrders,
             },
         };
+    }
+
+    // ==================== PAYMENTS CRUD ====================
+
+    async getPayments(companyId: string, query: { startDate?: string; endDate?: string; direction?: PaymentDirection }) {
+        return this.prisma.payment.findMany({
+            where: {
+                companyId,
+                isDeleted: false,
+                ...(query.direction && { direction: query.direction }),
+                ...(query.startDate && query.endDate && {
+                    date: {
+                        gte: new Date(query.startDate),
+                        lte: new Date(query.endDate),
+                    }
+                }),
+            },
+            include: {
+                order: { select: { orderNumber: true } },
+                counterparty: { select: { name: true } },
+            },
+            orderBy: { date: 'desc' },
+        });
+    }
+
+    async getPaymentsByOrder(companyId: string, orderId: string) {
+        return this.prisma.payment.findMany({
+            where: {
+                companyId,
+                orderId,
+                isDeleted: false,
+            },
+            include: {
+                counterparty: { select: { name: true } },
+            },
+            orderBy: { date: 'desc' },
+        });
+    }
+
+    async createPayment(companyId: string, userId: string, data: {
+        orderId?: string;
+        counterpartyId?: string;
+        direction: PaymentDirection;
+        amount: number;
+        date: string;
+        method?: PaymentMethod;
+        note?: string;
+    }) {
+        const amt = money(data.amount);
+        await this.checkPeriodNotClosed(companyId, data.date);
+
+        const payment = await this.prisma.payment.create({
+            data: {
+                companyId,
+                orderId: data.orderId || null,
+                counterpartyId: data.counterpartyId || null,
+                direction: data.direction,
+                amount: amt,
+                date: new Date(data.date),
+                method: data.method || PaymentMethod.BANK,
+                note: data.note || null,
+                createdById: userId,
+            },
+            include: {
+                order: { select: { orderNumber: true } },
+            }
+        });
+
+        if (payment.orderId) {
+            await this.syncOrderPaymentFlags(payment.orderId);
+            await this.prisma.orderChangeLog.create({
+                data: {
+                    orderId: payment.orderId,
+                    userId,
+                    action: 'payment_added',
+                    details: `Добавлен платеж: ${payment.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${payment.amount} ₸ (${payment.note || 'без примечания'}).`
+                }
+            });
+        }
+
+        return payment;
+    }
+
+    async deletePayment(companyId: string, paymentId: string, userId: string) {
+        const payment = await this.prisma.payment.findFirst({
+            where: { id: paymentId, companyId, isDeleted: false },
+        });
+        if (!payment) throw new NotFoundException('Платеж не найден');
+
+        await this.checkPeriodNotClosed(companyId, payment.date);
+
+        const updated = await this.prisma.payment.update({
+            where: { id: paymentId },
+            data: { isDeleted: true }
+        });
+
+        if (updated.orderId) {
+            await this.syncOrderPaymentFlags(updated.orderId);
+            await this.prisma.orderChangeLog.create({
+                data: {
+                    orderId: updated.orderId,
+                    userId,
+                    action: 'payment_deleted',
+                    details: `Удален платеж: ${updated.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${updated.amount} ₸ (${updated.note || 'без примечания'}).`
+                }
+            });
+        }
+
+        return updated;
+    }
+
+    // ==================== PERIOD CLOSING logic & CRUD ====================
+
+    async checkPeriodNotClosed(companyId: string, date: Date | string) {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = d.getMonth() + 1;
+
+        const closed = await this.prisma.closedPeriod.findUnique({
+            where: {
+                companyId_year_month: {
+                    companyId,
+                    year,
+                    month,
+                },
+            },
+        });
+
+        if (closed) {
+            throw new BadRequestException(`Период за ${month.toString().padStart(2, '0')}/${year} закрыт для финансовых операций.`);
+        }
+    }
+
+    async getClosedPeriods(companyId: string) {
+        return this.prisma.closedPeriod.findMany({
+            where: { companyId },
+            orderBy: [{ year: 'desc' }, { month: 'desc' }],
+            include: {
+                closedBy: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                    },
+                },
+            },
+        });
+    }
+
+    async closePeriod(companyId: string, userId: string, year: number, month: number) {
+        if (month < 1 || month > 12) {
+            throw new BadRequestException('Неверный месяц');
+        }
+
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { role: true },
+        });
+        if (!user || (user.role !== 'COMPANY_ADMIN' && user.role !== 'ACCOUNTANT')) {
+            throw new ForbiddenException('У вас нет прав для закрытия периода');
+        }
+
+        try {
+            return await this.prisma.closedPeriod.create({
+                data: {
+                    companyId,
+                    year,
+                    month,
+                    closedById: userId,
+                },
+            });
+        } catch (error) {
+            throw new BadRequestException('Этот период уже закрыт');
+        }
+    }
+
+    async openPeriod(companyId: string, userId: string, year: number, month: number) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { role: true },
+        });
+        if (!user || (user.role !== 'COMPANY_ADMIN' && user.role !== 'ACCOUNTANT')) {
+            throw new ForbiddenException('У вас нет прав для открытия периода');
+        }
+
+        const period = await this.prisma.closedPeriod.findUnique({
+            where: {
+                companyId_year_month: {
+                    companyId,
+                    year,
+                    month,
+                },
+            },
+        });
+
+        if (!period) {
+            throw new NotFoundException('Закрытый период не найден');
+        }
+
+        await this.prisma.closedPeriod.delete({
+            where: {
+                id: period.id,
+            },
+        });
+
+        return { success: true };
+    }
+
+    // ==================== DASHBOARD KPI SUMMARY ====================
+
+    async getDashboardSummary(companyId: string, query: { startDate?: string; endDate?: string }) {
+        const { startDate, endDate } = query;
+
+        const dateFilter = startDate && endDate ? {
+            createdAt: {
+                gte: new Date(startDate),
+                lte: new Date(endDate),
+            }
+        } : {};
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            { responsibleManager: { companyId: companyId } },
+                        ]
+                    },
+                    {
+                        OR: [
+                            { isConfirmed: true },
+                            { status: { not: 'PENDING' } }
+                        ]
+                    },
+                    dateFilter,
+                ],
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+            },
+            include: {
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
+            }
+        });
+
+        let totalRevenue = 0;
+        let totalMargin = 0;
+        let debtorSum = 0;
+        let creditorSum = 0;
+        let unpaidOrdersCount = 0;
+
+        for (const order of orders) {
+            const fin = this.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+
+            totalRevenue += fin.revenue;
+            totalMargin += fin.margin;
+            debtorSum += fin.customerDebt;
+            creditorSum += fin.executorDebt;
+
+            const hasUnpaid = (!fin.isCustomerPaid && fin.revenue > 0) || (!fin.isExecutorPaid && fin.executorCost > 0);
+            if (hasUnpaid) {
+                unpaidOrdersCount++;
+            }
+        }
+
+        const payments = await this.prisma.payment.findMany({
+            where: {
+                companyId,
+                isDeleted: false,
+                ...(startDate && endDate && {
+                    date: {
+                        gte: new Date(startDate),
+                        lte: new Date(endDate),
+                    }
+                })
+            }
+        });
+
+        const cashIn = payments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0);
+        const cashOut = payments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
+
+        const manualIncomes = await this.prisma.income.findMany({
+            where: {
+                companyId,
+                isDeleted: false,
+                ...(startDate && endDate && {
+                    date: {
+                        gte: new Date(startDate),
+                        lte: new Date(endDate),
+                    }
+                })
+            }
+        });
+
+        const manualExpenses = await this.prisma.expense.findMany({
+            where: {
+                companyId,
+                isDeleted: false,
+                ...(startDate && endDate && {
+                    date: {
+                        gte: new Date(startDate),
+                        lte: new Date(endDate),
+                    }
+                })
+            }
+        });
+
+        const totalManualIncomes = manualIncomes.filter(i => i.category !== 'order_payment' && i.category !== 'prepayment').reduce((sum, i) => sum + i.amount, 0);
+        const totalManualExpenses = manualExpenses.filter(e => e.category !== 'driver_payment').reduce((sum, e) => sum + e.amount, 0);
+
+        const totalCashIn = cashIn + totalManualIncomes;
+        const totalCashOut = cashOut + totalManualExpenses;
+        const cashBalance = money(totalCashIn - totalCashOut);
+
+        totalRevenue = money(totalRevenue);
+        totalMargin = money(totalMargin);
+        debtorSum = money(debtorSum);
+        creditorSum = money(creditorSum);
+
+        const marginPercentage = totalRevenue > 0 ? money((totalMargin / totalRevenue) * 100) : 0;
+
+        return {
+            revenue: totalRevenue,
+            margin: totalMargin,
+            marginPercentage,
+            debtorSum,
+            creditorSum,
+            cashBalance,
+            unpaidOrdersCount,
+        };
+    }
+
+    // ==================== EXCEL EXPORT GENERATORS ====================
+
+    async exportFinancialRegistry(companyId: string): Promise<Buffer> {
+        const registry = await this.getFinancialRegistry(companyId);
+
+        const STATUS_RU = {
+            DRAFT: 'Черновик',
+            PENDING: 'Ожидает назначения',
+            ASSIGNED: 'Назначен водитель',
+            EN_ROUTE_PICKUP: 'В пути на погрузку',
+            AT_PICKUP: 'На погрузке',
+            LOADING: 'Идет погрузка',
+            IN_TRANSIT: 'В пути',
+            AT_DELIVERY: 'Прибыл на выгрузку',
+            UNLOADING: 'Идет разгрузка',
+            COMPLETED: 'Завершен',
+            CANCELLED: 'Отменен',
+            PROBLEM: 'Проблема',
+        };
+
+        const rows = registry.map(item => {
+            let carrierName = '';
+            if (item.subForwarder) carrierName = item.subForwarder.name;
+            else if (item.partner) carrierName = item.partner.name;
+            else if (item.assignedDriverName) carrierName = item.assignedDriverName;
+            else if (item.driver) carrierName = `${item.driver.lastName} ${item.driver.firstName}`;
+
+            const route = (item.routePoints || [])
+                .map((p: any) => `${p.location?.city || ''} (${p.pointType === 'PICKUP' ? 'П' : 'В'})`)
+                .join(' -> ');
+
+            return {
+                'Номер заявки': item.orderNumber,
+                'Дата создания': item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '',
+                'Статус': STATUS_RU[item.status] || item.status,
+                'Груз': item.cargoDescription || '',
+                'Маршрут': route,
+                'Заказчик': item.customerCompany?.name || '',
+                'Стоимость для заказчика (KZT)': item.customerPrice || 0,
+                'Оплачено заказчиком (KZT)': item.paidIn || 0,
+                'Долг заказчика (KZT)': item.customerDebt || 0,
+                'Статус оплаты заказчика': item.isCustomerPaid ? 'Оплачено' : 'Не оплачено',
+                'Перевозчик': carrierName,
+                'Стоимость перевозчика (KZT)': item.executorCost || 0,
+                'Оплачено перевозчению (KZT)': item.paidOut || 0,
+                'Долг перед перевозчиком (KZT)': item.executorDebt || 0,
+                'Статус оплаты перевозчика': item.isDriverPaid || item.isSubForwarderPaid ? 'Оплачено' : 'Не оплачено',
+                'Маржа (KZT)': item.margin || 0,
+            };
+        });
+
+        const wb = XLSX.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+
+        const maxLen = rows.reduce((widths, row) => {
+            Object.keys(row).forEach((key, i) => {
+                const val = String(row[key] ?? '');
+                widths[i] = Math.max(widths[i] || 10, val.length, key.length);
+            });
+            return widths;
+        }, [] as number[]);
+        ws['!cols'] = maxLen.map(w => ({ w: w + 2 }));
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Реестр');
+        return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    }
+
+    async exportCounterpartyReport(companyId: string): Promise<Buffer> {
+        const report = await this.getCounterpartyReport(companyId);
+
+        const rows = report.counterparties.map(item => {
+            let balanceText = 'В расчете';
+            if (item.balance > 0) balanceText = 'Они нам должны';
+            else if (item.balance < 0) balanceText = 'Мы им должны';
+
+            return {
+                'Контрагент': item.counterparty.name,
+                'Наша роль': item.ourRole,
+                'Всего сделок': item.totalOrders,
+                'Всего они нам должны (KZT)': item.theyOweUs,
+                'Оплачено ими нам (KZT)': item.theyOweUsPaid,
+                'Долг за ними (KZT)': item.unpaidTheyOweUs,
+                'Всего мы им должны (KZT)': item.weOweThem,
+                'Оплачено нами им (KZT)': item.weOweThemPaid,
+                'Долг за нами (KZT)': item.unpaidWeOweThem,
+                'Баланс взаиморасчетов (KZT)': item.balance,
+                'Статус': balanceText,
+            };
+        });
+
+        const wb = XLSX.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+
+        const maxLen = rows.reduce((widths, row) => {
+            Object.keys(row).forEach((key, i) => {
+                const val = String(row[key] ?? '');
+                widths[i] = Math.max(widths[i] || 10, val.length, key.length);
+            });
+            return widths;
+        }, [] as number[]);
+        ws['!cols'] = maxLen.map(w => ({ w: w + 2 }));
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Взаиморасчеты');
+        return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     }
 }

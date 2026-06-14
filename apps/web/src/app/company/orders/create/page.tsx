@@ -286,6 +286,10 @@ export default function CreateOrderPage() {
                 routePoints,
                 customerId: user?.id,
                 appliedTariffId: appliedTariff?.id || undefined,
+                vatRate: values.vatRate ?? 0,
+                hasVat: values.hasVat ?? false,
+                executorVatRate: values.executorVatRate ?? 0,
+                executorHasVat: values.executorHasVat ?? false,
             };
 
             if (isMeCustomer) {
@@ -544,29 +548,71 @@ export default function CreateOrderPage() {
                 </Col>
             </Row>
 
-            <Divider style={{ margin: '8px 0 16px' }}>Ставки</Divider>
+            <Divider style={{ margin: '8px 0 16px' }}>Ставки и НДС</Divider>
 
             <Row gutter={24}>
                 {showCustomerPriceField && (
-                    <Col xs={24} md={showDriverCostField ? 8 : 12}>
-                        <Form.Item name="customerPrice" label={customerPriceLabel}>
-                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
-                        </Form.Item>
-                        {appliedTariff && (
-                            <div style={{ marginTop: -12, marginBottom: 8, padding: '4px 8px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>
-                                ✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
-                            </div>
-                        )}
-                    </Col>
+                    <>
+                        <Col xs={24} md={8}>
+                            <Form.Item name="customerPrice" label={customerPriceLabel}>
+                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                            </Form.Item>
+                            {appliedTariff && (
+                                <div style={{ marginTop: -12, marginBottom: 8, padding: '4px 8px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>
+                                    ✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
+                                </div>
+                            )}
+                        </Col>
+                        <Col xs={12} md={8}>
+                            <Form.Item name="hasVat" label="НДС заказчика" initialValue={false}>
+                                <Select size="large">
+                                    <Select.Option value={false}>Без НДС</Select.Option>
+                                    <Select.Option value={true}>С НДС</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col xs={12} md={8}>
+                            <Form.Item name="vatRate" label="Ставка НДС" initialValue={12}>
+                                <Select size="large">
+                                    <Select.Option value={0}>0%</Select.Option>
+                                    <Select.Option value={12}>12%</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </>
                 )}
+            </Row>
+
+            <Row gutter={24}>
                 {showDriverCostField && (
-                    <Col xs={24} md={showCustomerPriceField ? 8 : 12}>
-                        <Form.Item name="driverCost" label={driverCostLabel}>
-                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
-                        </Form.Item>
-                    </Col>
+                    <>
+                        <Col xs={24} md={8}>
+                            <Form.Item name="driverCost" label={driverCostLabel}>
+                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={12} md={8}>
+                            <Form.Item name="executorHasVat" label="НДС перевозчика" initialValue={false}>
+                                <Select size="large">
+                                    <Select.Option value={false}>Без НДС</Select.Option>
+                                    <Select.Option value={true}>С НДС</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col xs={12} md={8}>
+                            <Form.Item name="executorVatRate" label="Ставка НДС" initialValue={12}>
+                                <Select size="large">
+                                    <Select.Option value={0}>0%</Select.Option>
+                                    <Select.Option value={12}>12%</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </>
                 )}
-                <Col xs={24} md={(showCustomerPriceField && showDriverCostField) ? 8 : 12}>
+            </Row>
+
+            <Row gutter={24}>
+                <Col xs={24} md={12}>
                     <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
                         <Select style={{ width: '100%' }} size="large">
                             <Select.Option value="FIXED">За рейс</Select.Option>
@@ -578,25 +624,36 @@ export default function CreateOrderPage() {
             </Row>
 
             {/* Margin preview */}
-            <Form.Item noStyle dependencies={['customerPrice', 'driverCost']}>
+            <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'hasVat', 'vatRate', 'executorHasVat', 'executorVatRate']}>
                 {({ getFieldValue }) => {
-                    const cp = getFieldValue('customerPrice');
-                    const dc = getFieldValue('driverCost');
+                    const cp = getFieldValue('customerPrice') || 0;
+                    const dc = getFieldValue('driverCost') || 0;
+                    const hasVat = getFieldValue('hasVat') ?? false;
+                    const vatRate = getFieldValue('vatRate') ?? 0;
+                    const executorHasVat = getFieldValue('executorHasVat') ?? false;
+                    const executorVatRate = getFieldValue('executorVatRate') ?? 0;
+
                     if (cp && dc && showCustomerPriceField && showDriverCostField) {
-                        const margin = cp - dc;
+                        const cpNet = hasVat ? (cp / (1 + vatRate / 100)) : cp;
+                        const dcNet = executorHasVat ? (dc / (1 + executorVatRate / 100)) : dc;
+                        const margin = Math.round((cpNet - dcNet) * 100) / 100;
+                        const marginPercent = cpNet > 0 ? Math.round((margin / cpNet) * 100) : 0;
+
                         return (
                             <div style={{
-                                padding: '8px 16px',
-                                background: margin >= 0 ? '#f6ffed' : '#fff2f0',
-                                border: `1px solid ${margin >= 0 ? '#b7eb8f' : '#ffa39e'}`,
-                                borderRadius: 8,
+                                padding: '10px 16px',
+                                background: margin >= 0 ? '#ecfdf5' : '#fef2f2',
+                                border: `1px solid ${margin >= 0 ? '#a7f3d0' : '#fca5a5'}`,
+                                borderRadius: 10,
                                 fontSize: 13,
                                 fontWeight: 500,
                                 marginTop: 12,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
                             }}>
-                                Маржа: <span style={{ color: margin >= 0 ? '#389e0d' : '#cf1322', fontWeight: 700 }}>
-                                    {margin.toLocaleString('ru-RU')} ₸
-                                </span>
+                                <span>Чистая маржа (без НДС): <strong style={{ color: margin >= 0 ? '#059669' : '#dc2626', fontSize: 15 }}>{margin.toLocaleString('ru-RU')} ₸</strong></span>
+                                <Tag color={margin >= 0 ? 'green' : 'red'}>{marginPercent}%</Tag>
                             </div>
                         );
                     }

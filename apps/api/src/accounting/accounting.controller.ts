@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Query, Res } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EmailService } from '../email/email.service';
+import { Response } from 'express';
 
 @Controller('accounting')
 @UseGuards(JwtAuthGuard)
@@ -44,22 +45,22 @@ export class AccountingController {
 
     @Put('orders/:id/customer-paid')
     async markCustomerPaid(@Request() req: any, @Param('id') id: string, @Body() body: { paid: boolean }) {
-        return this.accountingService.markCustomerPaid(req.user.companyId, id, body.paid);
+        return this.accountingService.markCustomerPaid(req.user.companyId, id, body.paid, req.user.id);
     }
 
     @Put('orders/:id/driver-paid')
     async markDriverPaid(@Request() req: any, @Param('id') id: string, @Body() body: { paid: boolean }) {
-        return this.accountingService.markDriverPaid(req.user.companyId, id, body.paid);
+        return this.accountingService.markDriverPaid(req.user.companyId, id, body.paid, req.user.id);
     }
 
     @Put('orders/:id/subforwarder-paid')
     async markSubForwarderPaid(@Request() req: any, @Param('id') id: string, @Body() body: { paid: boolean }) {
-        return this.accountingService.markSubForwarderPaid(req.user.companyId, id, body.paid);
+        return this.accountingService.markSubForwarderPaid(req.user.companyId, id, body.paid, req.user.id);
     }
 
     @Put('orders/:id/update-finance')
     async updateOrderFinance(@Request() req: any, @Param('id') id: string, @Body() body: any) {
-        return this.accountingService.updateOrderFinance(req.user.companyId, id, body);
+        return this.accountingService.updateOrderFinance(req.user.companyId, id, body, req.user.id);
     }
 
     // ==================== EXPENSES (manual) ====================
@@ -146,5 +147,90 @@ export class AccountingController {
         }
 
         return result;
+    }
+
+    // ==================== PAYMENTS CRUD ====================
+
+    @Get('payments')
+    async getPayments(
+        @Request() req: any,
+        @Query() query: { startDate?: string; endDate?: string; direction?: any },
+    ) {
+        return this.accountingService.getPayments(req.user.companyId, query);
+    }
+
+    @Get('payments/order/:orderId')
+    async getPaymentsByOrder(@Request() req: any, @Param('orderId') orderId: string) {
+        return this.accountingService.getPaymentsByOrder(req.user.companyId, orderId);
+    }
+
+    @Post('payments')
+    async createPayment(@Request() req: any, @Body() body: any) {
+        return this.accountingService.createPayment(req.user.companyId, req.user.id, body);
+    }
+
+    @Delete('payments/:id')
+    async deletePayment(@Request() req: any, @Param('id') id: string) {
+        return this.accountingService.deletePayment(req.user.companyId, id, req.user.id);
+    }
+
+    // ==================== DASHBOARD KPI SUMMARY ====================
+
+    @Get('dashboard-summary')
+    async getDashboardSummary(
+        @Request() req: any,
+        @Query() query: { startDate?: string; endDate?: string },
+    ) {
+        return this.accountingService.getDashboardSummary(req.user.companyId, query);
+    }
+
+    // ==================== PERIOD CLOSING ENDPOINTS ====================
+
+    @Get('closed-periods')
+    async getClosedPeriods(@Request() req: any) {
+        return this.accountingService.getClosedPeriods(req.user.companyId);
+    }
+
+    @Post('closed-periods')
+    async closePeriod(@Request() req: any, @Body() body: { year: number; month: number }) {
+        return this.accountingService.closePeriod(req.user.companyId, req.user.id, body.year, body.month);
+    }
+
+    @Delete('closed-periods/:year/:month')
+    async openPeriod(
+        @Request() req: any,
+        @Param('year') year: string,
+        @Param('month') month: string,
+    ) {
+        return this.accountingService.openPeriod(
+            req.user.companyId,
+            req.user.id,
+            parseInt(year, 10),
+            parseInt(month, 10),
+        );
+    }
+
+    // ==================== EXCEL EXPORTS ====================
+
+    @Get('financial-registry/export')
+    async exportFinancialRegistry(@Request() req: any, @Res() res: Response) {
+        const buffer = await this.accountingService.exportFinancialRegistry(req.user.companyId);
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': 'attachment; filename="financial-registry.xlsx"',
+            'Content-Length': buffer.length,
+        });
+        res.end(buffer);
+    }
+
+    @Get('counterparty-report/export')
+    async exportCounterpartyReport(@Request() req: any, @Res() res: Response) {
+        const buffer = await this.accountingService.exportCounterpartyReport(req.user.companyId);
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': 'attachment; filename="counterparty-report.xlsx"',
+            'Content-Length': buffer.length,
+        });
+        res.end(buffer);
     }
 }
