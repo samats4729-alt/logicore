@@ -794,6 +794,7 @@ model FinanceAccount {
   updatedAt   DateTime    @updatedAt
   payments    Payment[]   @relation("AccountPayments")
 
+  @@unique([companyId, name, kind])
   @@index([companyId])
 }
 
@@ -809,6 +810,7 @@ model FinanceCategory {
   updatedAt   DateTime         @updatedAt
   payments    Payment[]        @relation("CategoryPayments")
 
+  @@unique([companyId, name, direction])
   @@index([companyId])
 }
 
