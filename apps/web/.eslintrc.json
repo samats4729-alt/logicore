@@ -8,6 +8,7 @@
     "@typescript-eslint/no-explicit-any": "off",
     "react/no-unescaped-entities": "warn",
     "react/jsx-no-undef": "warn",
-    "react-hooks/exhaustive-deps": "off"
+    "react-hooks/exhaustive-deps": "off",
+    "prefer-const": "off"
   }
 }
