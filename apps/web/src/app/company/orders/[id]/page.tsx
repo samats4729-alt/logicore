@@ -110,6 +110,31 @@ export default function OrderDetailPage() {
     const [documents, setDocuments] = useState<any[]>([]);
     const [uploadingDoc, setUploadingDoc] = useState(false);
 
+    // Unified payment states & role checks
+    const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
+    const [accounts, setAccounts] = useState<any[]>([]);
+    const [categories, setCategories] = useState<any[]>([]);
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [editingPayment, setEditingPayment] = useState<any>(null);
+    const [paymentForm] = Form.useForm();
+    const [paymentLoading, setPaymentLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchFinanceSettings = async () => {
+            try {
+                const [accRes, catRes] = await Promise.all([
+                    api.get('/accounting/finance-accounts'),
+                    api.get('/accounting/finance-categories'),
+                ]);
+                setAccounts(accRes.data || []);
+                setCategories(catRes.data || []);
+            } catch (err) {
+                console.error('Failed to load accounts/categories', err);
+            }
+        };
+        fetchFinanceSettings();
+    }, []);
+
     // Reference data
     const [drivers, setDrivers] = useState<Driver[]>([]);
     const [driversLoading, setDriversLoading] = useState(false);
@@ -327,6 +352,70 @@ export default function OrderDetailPage() {
             link.click();
             link.parentNode?.removeChild(link);
         } catch { message.error('Ошибка при скачивании файла'); }
+    };
+
+    // =================== UNIFIED PAYMENT HANDLERS ===================
+
+    const handleAddPaymentClick = () => {
+        setEditingPayment(null);
+        paymentForm.resetFields();
+        paymentForm.setFieldsValue({
+            direction: 'IN',
+            date: dayjs(),
+            method: 'BANK',
+            counterpartyId: data?.order?.customerCompanyId || undefined,
+        });
+        setPaymentModalOpen(true);
+    };
+
+    const handleEditPaymentClick = (record: any) => {
+        setEditingPayment(record);
+        paymentForm.resetFields();
+        paymentForm.setFieldsValue({
+            direction: record.direction,
+            amount: record.amount,
+            date: dayjs(record.date),
+            method: record.method,
+            accountId: record.accountId || undefined,
+            categoryId: record.categoryId || undefined,
+            counterpartyId: record.counterpartyId || undefined,
+            note: record.note,
+        });
+        setPaymentModalOpen(true);
+    };
+
+    const handleSavePayment = async (values: any) => {
+        setPaymentLoading(true);
+        try {
+            const payload = {
+                ...values,
+                date: values.date.toISOString(),
+                orderId,
+            };
+            if (editingPayment) {
+                await api.put(`/accounting/payments/${editingPayment.id}`, payload);
+                message.success('Платеж обновлен');
+            } else {
+                await api.post('/accounting/payments', payload);
+                message.success('Платеж добавлен');
+            }
+            setPaymentModalOpen(false);
+            fetchData();
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка сохранения платежа');
+        } finally {
+            setPaymentLoading(false);
+        }
+    };
+
+    const handleDeletePayment = async (id: string) => {
+        try {
+            await api.delete(`/accounting/payments/${id}`);
+            message.success('Платеж удален');
+            fetchData();
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка удаления платежа');
+        }
     };
 
     // =================== INCOME / EXPENSE HANDLERS ===================
@@ -824,8 +913,94 @@ export default function OrderDetailPage() {
     if (loading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>;
     if (!data) return <div style={{ textAlign: 'center', padding: 80 }}>Заявка не найдена</div>;
 
-    const { order, incomes, expenses, summary } = data;
+    const { order, incomes, expenses, payments = [], summary } = data;
     const fmt = (n: number) => n.toLocaleString('ru-RU');
+
+    const paymentColumns = [
+        { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, render: (d: string) => dayjs(d).format('DD.MM.YY') },
+        {
+            title: 'Направление',
+            dataIndex: 'direction',
+            key: 'direction',
+            width: 120,
+            render: (dir: string) => (
+                dir === 'IN' ? (
+                    <Tag color="green">Поступление</Tag>
+                ) : (
+                    <Tag color="volcano">Расход</Tag>
+                )
+            ),
+        },
+        {
+            title: 'Сумма ₸',
+            dataIndex: 'amount',
+            key: 'amount',
+            width: 120,
+            align: 'right' as const,
+            render: (a: number, r: any) => (
+                <Text strong style={{ color: r.direction === 'IN' ? '#389e0d' : '#cf1322' }}>
+                    {fmt(a)}
+                </Text>
+            ),
+        },
+        {
+            title: 'Способ',
+            dataIndex: 'method',
+            key: 'method',
+            width: 100,
+            render: (m: string) => {
+                const labels: Record<string, string> = {
+                    CASH: 'Наличные',
+                    BANK: 'Банк',
+                    CARD: 'Карта',
+                    OTHER: 'Прочее',
+                };
+                return labels[m] || m;
+            },
+        },
+        {
+            title: 'Счет / Касса',
+            dataIndex: 'account',
+            key: 'account',
+            width: 140,
+            render: (_: any, r: any) => r.account?.name || (r.method === 'CASH' ? 'Наличные' : 'Расчетный счет'),
+        },
+        {
+            title: 'Статья',
+            dataIndex: 'category',
+            key: 'category',
+            width: 140,
+            render: (_: any, r: any) => r.category?.name || '—',
+        },
+        {
+            title: 'Контрагент',
+            dataIndex: 'counterparty',
+            key: 'counterparty',
+            width: 140,
+            render: (_: any, r: any) => r.counterparty?.name || '—',
+        },
+        {
+            title: 'Примечание',
+            dataIndex: 'note',
+            key: 'note',
+            ellipsis: true,
+        },
+        {
+            title: '',
+            key: 'actions',
+            width: 100,
+            render: (_: any, r: any) => (
+                canEditFinance && (
+                    <Space size={4}>
+                        <Button size="small" icon={<EditOutlined />} onClick={() => handleEditPaymentClick(r)} />
+                        <Popconfirm title="Удалить платеж?" onConfirm={() => handleDeletePayment(r.id)} okText="Да" cancelText="Нет">
+                            <Button size="small" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                    </Space>
+                )
+            ),
+        },
+    ];
 
     const hasDriver = !!(order.assignedDriverName || order.driverId || order.driver);
     const driverName = order.assignedDriverName || (order.driver ? `${order.driver.lastName} ${order.driver.firstName} ${order.driver.middleName || ''}`.trim() : null);
@@ -1153,12 +1328,12 @@ export default function OrderDetailPage() {
                                                     <Row gutter={12}>
                                                         <Col span={12}>
                                                             <Form.Item name="customerPrice" label={customerPriceLabel}>
-                                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" disabled={!canEditFinance} />
                                                             </Form.Item>
                                                         </Col>
                                                         <Col span={6}>
                                                             <Form.Item name="hasVat" label="НДС" initialValue={false}>
-                                                                <Select size="large">
+                                                                <Select size="large" disabled={!canEditFinance}>
                                                                     <Select.Option value={false}>Без</Select.Option>
                                                                     <Select.Option value={true}>С НДС</Select.Option>
                                                                 </Select>
@@ -1166,7 +1341,7 @@ export default function OrderDetailPage() {
                                                         </Col>
                                                         <Col span={6}>
                                                             <Form.Item name="vatRate" label="Ставка" initialValue={12}>
-                                                                <Select size="large">
+                                                                <Select size="large" disabled={!canEditFinance}>
                                                                     <Select.Option value={0}>0%</Select.Option>
                                                                     <Select.Option value={12}>12%</Select.Option>
                                                                 </Select>
@@ -1179,12 +1354,12 @@ export default function OrderDetailPage() {
                                                     <Row gutter={12}>
                                                         <Col span={12}>
                                                             <Form.Item name="driverCost" label={driverCostLabel}>
-                                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" disabled={!canEditFinance} />
                                                             </Form.Item>
                                                         </Col>
                                                         <Col span={6}>
                                                             <Form.Item name="executorHasVat" label="НДС" initialValue={false}>
-                                                                <Select size="large">
+                                                                <Select size="large" disabled={!canEditFinance}>
                                                                     <Select.Option value={false}>Без</Select.Option>
                                                                     <Select.Option value={true}>С НДС</Select.Option>
                                                                 </Select>
@@ -1192,7 +1367,7 @@ export default function OrderDetailPage() {
                                                         </Col>
                                                         <Col span={6}>
                                                             <Form.Item name="executorVatRate" label="Ставка" initialValue={12}>
-                                                                <Select size="large">
+                                                                <Select size="large" disabled={!canEditFinance}>
                                                                     <Select.Option value={0}>0%</Select.Option>
                                                                     <Select.Option value={12}>12%</Select.Option>
                                                                 </Select>
@@ -1454,51 +1629,116 @@ export default function OrderDetailPage() {
 
                                         if (isClient) {
                                             return (
-                                                <Row gutter={[16, 16]}>
-                                                    <Col xs={12} sm={6}>
-                                                        <Statistic title="Стоимость перевозки" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
-                                                        <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                                            {order.isCustomerPaid ? 'Оплачено экспедитору' : 'Не оплачено экспедитору'}
-                                                        </Tag>
-                                                    </Col>
-                                                    <Col xs={12} sm={6}>
-                                                        <Statistic title="Ваши Поступления" value={summary.totalIncomes} suffix="₸" valueStyle={{ fontSize: 18, color: '#389e0d' }} prefix={<WalletOutlined />} />
-                                                    </Col>
-                                                    <Col xs={12} sm={6}>
-                                                        <Statistic title="Ваши Расходы" value={summary.totalExpenses} suffix="₸" valueStyle={{ fontSize: 18, color: '#cf1322' }} prefix={<DollarOutlined />} />
-                                                    </Col>
-                                                    <Col xs={12} sm={6}>
-                                                        <Statistic title="Долг экспедитору" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#faad14' : '#389e0d' }} />
-                                                    </Col>
-                                                </Row>
+                                                <div>
+                                                    <Row gutter={[16, 16]}>
+                                                        <Col xs={12} sm={6}>
+                                                            <Statistic title="Стоимость перевозки" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
+                                                            <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                                                {order.isCustomerPaid ? 'Оплачено экспедитору' : 'Не оплачено экспедитору'}
+                                                            </Tag>
+                                                        </Col>
+                                                        <Col xs={12} sm={6}>
+                                                            <Statistic title="Ваши Поступления" value={summary.totalIncomes} suffix="₸" valueStyle={{ fontSize: 18, color: '#389e0d' }} prefix={<WalletOutlined />} />
+                                                        </Col>
+                                                        <Col xs={12} sm={6}>
+                                                            <Statistic title="Ваши Расходы" value={summary.totalExpenses} suffix="₸" valueStyle={{ fontSize: 18, color: '#cf1322' }} prefix={<DollarOutlined />} />
+                                                        </Col>
+                                                        <Col xs={12} sm={6}>
+                                                            <Statistic title="Долг экспедитору" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#faad14' : '#389e0d' }} />
+                                                        </Col>
+                                                    </Row>
+                                                    <Row gutter={[16, 16]} style={{ marginTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 16 }}>
+                                                        <Col xs={24} md={12}>
+                                                            <div style={{ padding: 12, borderRadius: 8, background: '#f6ffed', border: `1px solid ${token.colorSuccessBorder}` }}>
+                                                                <div style={{ fontWeight: 600, marginBottom: 8, color: token.colorSuccess }}>Расчеты с экспедитором</div>
+                                                                <Row gutter={[8, 8]}>
+                                                                    <Col span={12}><Text type="secondary">Всего (Gross):</Text></Col>
+                                                                    <Col span={12} style={{ textAlign: 'right' }}><Text strong>{fmt(summary.customerPrice)} ₸</Text></Col>
+                                                                    <Col span={12}><Text type="secondary">Без НДС (Net):</Text></Col>
+                                                                    <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.revenueNet || 0)} ₸</Text></Col>
+                                                                    <Col span={12}><Text type="secondary">НДС ({order.vatRate || 0}%):</Text></Col>
+                                                                    <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.revenueVat || 0)} ₸</Text></Col>
+                                                                    <Col span={12}><Text strong style={{ color: token.colorError }}>Оставшийся долг:</Text></Col>
+                                                                    <Col span={12} style={{ textAlign: 'right' }}><Text strong style={{ color: token.colorError }}>{fmt(summary.customerDebt || 0)} ₸</Text></Col>
+                                                                </Row>
+                                                            </div>
+                                                        </Col>
+                                                    </Row>
+                                                </div>
                                             );
                                         }
                                         return (
-                                            <Row gutter={[16, 16]}>
-                                                <Col xs={12} md={5}>
-                                                    <Statistic title="Стоимость от заказчика" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
-                                                    <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                                        {order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено заказчиком'}
-                                                    </Tag>
-                                                </Col>
-                                                <Col xs={12} md={5}>
-                                                    <Statistic title="Ставка исполнителю" value={summary.executorCost} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
-                                                    <Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                                        {isExecutorPaid ? 'Оплачено исполнителю' : 'Не оплачено исполнителю'}
-                                                    </Tag>
-                                                </Col>
-                                                <Col xs={12} md={5}>
-                                                    <Statistic title="Долг заказчика" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#cf1322' : '#389e0d' }} />
-                                                </Col>
-                                                <Col xs={12} md={5}>
-                                                    <Statistic title="Наш долг исполнителю" value={executorDebt} suffix="₸" valueStyle={{ fontSize: 18, color: executorDebt > 0 ? '#cf1322' : '#389e0d' }} />
-                                                </Col>
-                                                <Col xs={12} md={4}>
-                                                    <Statistic title="Ожидаемая маржа" value={summary.margin} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 700, color: summary.margin >= 0 ? '#389e0d' : '#cf1322' }} prefix={<DollarOutlined />} />
-                                                </Col>
-                                            </Row>
+                                            <div>
+                                                <Row gutter={[16, 16]}>
+                                                    <Col xs={12} md={5}>
+                                                        <Statistic title="Стоимость от заказчика" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
+                                                        <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                                            {order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено заказчиком'}
+                                                        </Tag>
+                                                    </Col>
+                                                    <Col xs={12} md={5}>
+                                                        <Statistic title="Ставка исполнителю" value={summary.executorCost} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
+                                                        <Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
+                                                            {isExecutorPaid ? 'Оплачено исполнителю' : 'Не оплачено исполнителю'}
+                                                        </Tag>
+                                                    </Col>
+                                                    <Col xs={12} md={5}>
+                                                        <Statistic title="Долг заказчика" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#cf1322' : '#389e0d' }} />
+                                                    </Col>
+                                                    <Col xs={12} md={5}>
+                                                        <Statistic title="Наш долг исполнителю" value={executorDebt} suffix="₸" valueStyle={{ fontSize: 18, color: executorDebt > 0 ? '#cf1322' : '#389e0d' }} />
+                                                    </Col>
+                                                    <Col xs={12} md={4}>
+                                                        <Statistic title="Ожидаемая маржа" value={summary.margin} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 700, color: summary.margin >= 0 ? '#389e0d' : '#cf1322' }} prefix={<DollarOutlined />} />
+                                                    </Col>
+                                                </Row>
+                                                <Row gutter={[16, 16]} style={{ marginTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 16 }}>
+                                                    <Col xs={24} md={12}>
+                                                        <div style={{ padding: 12, borderRadius: 8, background: '#f6ffed', border: `1px solid ${token.colorSuccessBorder}` }}>
+                                                            <div style={{ fontWeight: 600, marginBottom: 8, color: token.colorSuccess }}>Расчеты с Заказчиком</div>
+                                                            <Row gutter={[8, 8]}>
+                                                                <Col span={12}><Text type="secondary">Всего (Gross):</Text></Col>
+                                                                <Col span={12} style={{ textAlign: 'right' }}><Text strong>{fmt(summary.customerPrice)} ₸</Text></Col>
+                                                                <Col span={12}><Text type="secondary">Без НДС (Net):</Text></Col>
+                                                                <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.revenueNet || 0)} ₸</Text></Col>
+                                                                <Col span={12}><Text type="secondary">НДС ({order.vatRate || 0}%):</Text></Col>
+                                                                <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.revenueVat || 0)} ₸</Text></Col>
+                                                                <Col span={12}><Text strong style={{ color: token.colorError }}>Оставшийся долг:</Text></Col>
+                                                                <Col span={12} style={{ textAlign: 'right' }}><Text strong style={{ color: token.colorError }}>{fmt(summary.customerDebt || 0)} ₸</Text></Col>
+                                                            </Row>
+                                                        </div>
+                                                    </Col>
+                                                    <Col xs={24} md={12}>
+                                                        <div style={{ padding: 12, borderRadius: 8, background: '#fff7e6', border: `1px solid ${token.colorWarningBorder}` }}>
+                                                            <div style={{ fontWeight: 600, marginBottom: 8, color: token.colorWarning }}>Расчеты с Исполнителем</div>
+                                                            <Row gutter={[8, 8]}>
+                                                                <Col span={12}><Text type="secondary">Всего (Gross):</Text></Col>
+                                                                <Col span={12} style={{ textAlign: 'right' }}><Text strong>{fmt(summary.executorCost)} ₸</Text></Col>
+                                                                <Col span={12}><Text type="secondary">Без НДС (Net):</Text></Col>
+                                                                <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.executorCostNet || 0)} ₸</Text></Col>
+                                                                <Col span={12}><Text type="secondary">НДС ({order.executorVatRate || 0}%):</Text></Col>
+                                                                <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.executorCostVat || 0)} ₸</Text></Col>
+                                                                <Col span={12}><Text strong style={{ color: token.colorError }}>Оставшийся долг:</Text></Col>
+                                                                <Col span={12} style={{ textAlign: 'right' }}><Text strong style={{ color: token.colorError }}>{fmt(executorDebt || 0)} ₸</Text></Col>
+                                                            </Row>
+                                                        </div>
+                                                    </Col>
+                                                </Row>
+                                            </div>
                                         );
                                     })()}
+                                </Card>
+
+                                {/* Unified Payments Card */}
+                                <Card
+                                    size="small"
+                                    title={<span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: token.colorPrimary, marginRight: 6 }} />Платежи по заявке ({payments.length})</span>}
+                                    extra={canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={handleAddPaymentClick}>Зарегистрировать платеж</Button>}
+                                    bordered={false}
+                                    className="premium-card"
+                                    style={{ marginBottom: 20 }}
+                                >
+                                    <Table columns={paymentColumns} dataSource={payments} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет зарегистрированных платежей' }} scroll={{ x: true }} />
                                 </Card>
 
                                 <Row gutter={[24, 24]}>
@@ -1507,7 +1747,7 @@ export default function OrderDetailPage() {
                                         <Card
                                             size="small"
                                             title={<span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: '#389e0d', marginRight: 6 }} />Поступления ({incomes.length})</span>}
-                                            extra={<Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); setIncomeModalOpen(true); }}>Добавить</Button>}
+                                            extra={canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); setIncomeModalOpen(true); }}>Добавить</Button>}
                                             bordered={false}
                                             className="premium-card"
                                         >
@@ -1519,7 +1759,7 @@ export default function OrderDetailPage() {
                                         <Card
                                             size="small"
                                             title={<span style={{ fontWeight: 600 }}><DollarOutlined style={{ color: '#cf1322', marginRight: 6 }} />Расходы ({expenses.length})</span>}
-                                            extra={<Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); setExpenseModalOpen(true); }}>Добавить</Button>}
+                                            extra={canEditFinance && <Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); setExpenseModalOpen(true); }}>Добавить</Button>}
                                             bordered={false}
                                             className="premium-card"
                                         >
@@ -1867,6 +2107,84 @@ export default function OrderDetailPage() {
                     <Form.Item name="description" label="Описание" rules={[{ required: true }]}><Input placeholder="Описание" /></Form.Item>
                     <Form.Item name="amount" label="Сумма ₸" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
                     <Form.Item name="note" label="Примечание"><TextArea rows={2} /></Form.Item>
+                </Form>
+            </Modal>
+
+            {/* =================== UNIFIED PAYMENT MODAL =================== */}
+            <Modal
+                title={editingPayment ? "Редактировать платеж" : "Зарегистрировать платеж"}
+                open={paymentModalOpen}
+                onCancel={() => setPaymentModalOpen(false)}
+                onOk={() => paymentForm.submit()}
+                okText={editingPayment ? "Сохранить" : "Добавить"}
+                cancelText="Отмена"
+                confirmLoading={paymentLoading}
+                destroyOnClose
+            >
+                <Form form={paymentForm} layout="vertical" onFinish={handleSavePayment}>
+                    <Form.Item name="direction" label="Направление платежа" rules={[{ required: true }]}>
+                        <Select disabled={!!editingPayment}>
+                            <Select.Option value="IN">Поступление (IN)</Select.Option>
+                            <Select.Option value="OUT">Расход (OUT)</Select.Option>
+                        </Select>
+                    </Form.Item>
+
+                    <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>
+                        <InputNumber min={0.01} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+
+                    <Form.Item name="date" label="Дата платежа" rules={[{ required: true }]}>
+                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                    </Form.Item>
+
+                    <Form.Item name="method" label="Способ оплаты" rules={[{ required: true }]}>
+                        <Select>
+                            <Select.Option value="BANK">Безналичный (Банк)</Select.Option>
+                            <Select.Option value="CASH">Наличные</Select.Option>
+                            <Select.Option value="CARD">Карта</Select.Option>
+                            <Select.Option value="OTHER">Другой способ</Select.Option>
+                        </Select>
+                    </Form.Item>
+
+                    <Form.Item name="accountId" label="Счет / Касса">
+                        <Select placeholder="По умолчанию" allowClear>
+                            {accounts.map(acc => (
+                                <Select.Option key={acc.id} value={acc.id}>
+                                    {acc.name} ({acc.kind === 'CASH' ? 'Касса' : 'Банк'})
+                                </Select.Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
+
+                    <Form.Item noStyle dependencies={['direction']}>
+                        {({ getFieldValue }) => {
+                            const dir = getFieldValue('direction') || 'IN';
+                            const filteredCats = categories.filter(c => c.direction === dir && c.isActive);
+                            return (
+                                <Form.Item name="categoryId" label="Статья расходов/доходов">
+                                    <Select placeholder="По умолчанию" allowClear>
+                                        {filteredCats.map(cat => (
+                                            <Select.Option key={cat.id} value={cat.id}>
+                                                {cat.name}
+                                            </Select.Option>
+                                        ))}
+                                    </Select>
+                                </Form.Item>
+                            );
+                        }}
+                    </Form.Item>
+
+                    <Form.Item name="counterpartyId" label="Контрагент">
+                        <Select placeholder="Выберите контрагента" allowClear>
+                            {partners.map(p => (
+                                <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
+
+                    <Form.Item name="note" label="Примечание">
+                        <TextArea rows={2} placeholder="Примечание или детали платежа" />
+                    </Form.Item>
                 </Form>
             </Modal>
 

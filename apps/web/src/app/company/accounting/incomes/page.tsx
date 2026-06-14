@@ -6,6 +6,7 @@ import { SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOu
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
+import { useAuthStore } from '@/store/auth';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -17,6 +18,8 @@ const categoryColors: Record<string, string> = { order_payment: 'green', prepaym
 
 export default function CompanyIncomesPage() {
     const { token } = theme.useToken();
+    const { user } = useAuthStore();
+    const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
     const cardStyle = {
         borderRadius: 8,
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
@@ -65,7 +68,7 @@ export default function CompanyIncomesPage() {
         ) },
         { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <Text strong style={{ fontSize: 13, color: token.colorSuccess }}>+{val.toLocaleString('ru-RU')} ₸</Text> },
         { title: 'Примечание', dataIndex: 'note', key: 'note', width: 180, ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val || '—'}</Text> },
-        { title: '', key: 'actions', width: 80, render: (_: any, r: ManualIncome) => <Space><Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditingIncome(r); form.setFieldsValue({ ...r, date: dayjs(r.date) }); setModalOpen(true); }} /><Popconfirm title="Удалить?" onConfirm={() => handleDeleteManual(r.id)} okText="Да" cancelText="Нет"><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
+        { title: '', key: 'actions', width: 80, render: (_: any, r: ManualIncome) => canEditFinance ? <Space><Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditingIncome(r); form.setFieldsValue({ ...r, date: dayjs(r.date) }); setModalOpen(true); }} /><Popconfirm title="Удалить?" onConfirm={() => handleDeleteManual(r.id)} okText="Да" cancelText="Нет"><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> : null },
     ];
 
     return (
@@ -114,7 +117,9 @@ export default function CompanyIncomesPage() {
                                 <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{otherIncomes.length}</Text></div></div>
                             </Space>
                         </Card>
-                        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIncome(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }}>Добавить поступление</Button>
+                        {canEditFinance && (
+                            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIncome(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }}>Добавить поступление</Button>
+                        )}
                     </div>
                     <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
                         <Space wrap>

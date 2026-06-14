@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentDirection, PaymentMethod, Prisma } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, Prisma, AccountKind } from '@prisma/client';
 import { money } from '../common/utils/money';
 import * as XLSX from 'xlsx';
 
@@ -245,6 +245,10 @@ export class AccountingService {
                     driverDebt: 0,
                     subForwarderDebt: 0,
                     executorDebt: 0,
+                    revenueNet: 0,
+                    revenueVat: 0,
+                    executorCostNet: fin.executorCostNet,
+                    executorCostVat: fin.executorCostVat,
                 },
             };
         }
@@ -270,6 +274,10 @@ export class AccountingService {
                 driverDebt: order.subForwarderId ? 0 : fin.executorDebt,
                 subForwarderDebt: order.subForwarderId ? fin.executorDebt : 0,
                 executorDebt: fin.executorDebt,
+                revenueNet: fin.revenueNet,
+                revenueVat: fin.revenueVat,
+                executorCostNet: fin.executorCostNet,
+                executorCostVat: fin.executorCostVat,
             },
         };
     }
@@ -1289,6 +1297,8 @@ export class AccountingService {
             include: {
                 order: { select: { orderNumber: true } },
                 counterparty: { select: { name: true } },
+                account: true,
+                category: true,
             },
             orderBy: { date: 'desc' },
         });
@@ -1303,6 +1313,8 @@ export class AccountingService {
             },
             include: {
                 counterparty: { select: { name: true } },
+                account: true,
+                category: true,
             },
             orderBy: { date: 'desc' },
         });
@@ -1316,9 +1328,31 @@ export class AccountingService {
         date: string;
         method?: PaymentMethod;
         note?: string;
+        accountId?: string;
+        categoryId?: string;
     }) {
+        await this.ensureCompanyFinanceSettings(companyId);
         const amt = money(data.amount);
         await this.checkPeriodNotClosed(companyId, data.date);
+
+        let accountId = data.accountId;
+        let categoryId = data.categoryId;
+
+        if (!accountId) {
+            const kind = data.method === PaymentMethod.CASH ? AccountKind.CASH : AccountKind.BANK;
+            const defaultAcc = await this.prisma.financeAccount.findFirst({
+                where: { companyId, kind, isDefault: true, isActive: true },
+            });
+            accountId = defaultAcc?.id;
+        }
+
+        if (!categoryId) {
+            const defaultCatName = data.direction === PaymentDirection.IN ? 'Оплата за рейс' : 'Оплата исполнителю';
+            const defaultCat = await this.prisma.financeCategory.findFirst({
+                where: { companyId, name: defaultCatName, direction: data.direction, isSystem: true, isActive: true },
+            });
+            categoryId = defaultCat?.id;
+        }
 
         const payment = await this.prisma.payment.create({
             data: {
@@ -1331,6 +1365,8 @@ export class AccountingService {
                 method: data.method || PaymentMethod.BANK,
                 note: data.note || null,
                 createdById: userId,
+                accountId: accountId || null,
+                categoryId: categoryId || null,
             },
             include: {
                 order: { select: { orderNumber: true } },
@@ -1717,6 +1753,569 @@ export class AccountingService {
         ws['!cols'] = maxLen.map(w => ({ wch: w + 2 }));
 
         XLSX.utils.book_append_sheet(wb, ws, 'Взаиморасчеты');
+        return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    }
+
+    async updatePayment(companyId: string, paymentId: string, userId: string, data: {
+        amount?: number;
+        date?: string;
+        method?: PaymentMethod;
+        note?: string;
+        counterpartyId?: string;
+        accountId?: string;
+        categoryId?: string;
+    }) {
+        const payment = await this.prisma.payment.findFirst({
+            where: { id: paymentId, companyId, isDeleted: false },
+        });
+        if (!payment) throw new NotFoundException('Платеж не найден');
+
+        await this.checkPeriodNotClosed(companyId, payment.date);
+        if (data.date && new Date(data.date).getTime() !== new Date(payment.date).getTime()) {
+            await this.checkPeriodNotClosed(companyId, data.date);
+        }
+
+        const amt = data.amount !== undefined ? money(data.amount) : payment.amount;
+
+        const updated = await this.prisma.payment.update({
+            where: { id: paymentId },
+            data: {
+                ...(data.amount !== undefined && { amount: amt }),
+                ...(data.date && { date: new Date(data.date) }),
+                ...(data.method && { method: data.method }),
+                ...(data.note !== undefined && { note: data.note || null }),
+                ...(data.counterpartyId !== undefined && { counterpartyId: data.counterpartyId || null }),
+                ...(data.accountId !== undefined && { accountId: data.accountId || null }),
+                ...(data.categoryId !== undefined && { categoryId: data.categoryId || null }),
+            },
+            include: {
+                order: { select: { orderNumber: true } },
+            }
+        });
+
+        if (updated.orderId) {
+            await this.syncOrderPaymentFlags(updated.orderId);
+            await this.prisma.orderChangeLog.create({
+                data: {
+                    orderId: updated.orderId,
+                    userId,
+                    action: 'payment_updated',
+                    details: `Обновлен платеж: ${updated.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${updated.amount} ₸ (${updated.note || 'без примечания'}).`
+                }
+            });
+        }
+
+        return updated;
+    }
+
+    async ensureCompanyFinanceSettings(companyId: string) {
+        const count = await this.prisma.financeAccount.count({ where: { companyId } });
+        if (count === 0) {
+            await this.prisma.financeAccount.createMany({
+                data: [
+                    { companyId, name: 'Наличные', kind: AccountKind.CASH, isDefault: true, isActive: true },
+                    { companyId, name: 'Расчетный счет', kind: AccountKind.BANK, isDefault: true, isActive: true },
+                ],
+            });
+
+            await this.prisma.financeCategory.createMany({
+                data: [
+                    { companyId, name: 'Оплата за рейс', direction: PaymentDirection.IN, isSystem: true, isActive: true },
+                    { companyId, name: 'Прочие поступления', direction: PaymentDirection.IN, isSystem: true, isActive: true },
+                    { companyId, name: 'ГСМ', direction: PaymentDirection.OUT, isSystem: true, isActive: true },
+                    { companyId, name: 'Ремонт', direction: PaymentDirection.OUT, isSystem: true, isActive: true },
+                    { companyId, name: 'Зарплата', direction: PaymentDirection.OUT, isSystem: true, isActive: true },
+                    { companyId, name: 'Аренда', direction: PaymentDirection.OUT, isSystem: true, isActive: true },
+                    { companyId, name: 'Налоги', direction: PaymentDirection.OUT, isSystem: true, isActive: true },
+                    { companyId, name: 'Прочие расходы', direction: PaymentDirection.OUT, isSystem: true, isActive: true },
+                    { companyId, name: 'Оплата исполнителю', direction: PaymentDirection.OUT, isSystem: true, isActive: true },
+                ],
+            });
+        }
+    }
+
+    async getFinanceAccounts(companyId: string) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        return this.prisma.financeAccount.findMany({
+            where: { companyId },
+            orderBy: { kind: 'asc' },
+        });
+    }
+
+    async updateFinanceAccount(companyId: string, id: string, data: { name: string }) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const account = await this.prisma.financeAccount.findFirst({
+            where: { id, companyId },
+        });
+        if (!account) throw new NotFoundException('Счет/касса не найден');
+
+        return this.prisma.financeAccount.update({
+            where: { id },
+            data: { name: data.name },
+        });
+    }
+
+    async getFinanceCategories(companyId: string) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        return this.prisma.financeCategory.findMany({
+            where: { companyId },
+            orderBy: [{ direction: 'asc' }, { isSystem: 'desc' }, { name: 'asc' }],
+        });
+    }
+
+    async createFinanceCategory(companyId: string, data: { name: string; direction: PaymentDirection }) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const existing = await this.prisma.financeCategory.findFirst({
+            where: { companyId, name: data.name, direction: data.direction },
+        });
+        if (existing) {
+            if (!existing.isActive) {
+                return this.prisma.financeCategory.update({
+                    where: { id: existing.id },
+                    data: { isActive: true },
+                });
+            }
+            throw new BadRequestException('Статья с таким названием уже существует');
+        }
+
+        return this.prisma.financeCategory.create({
+            data: {
+                companyId,
+                name: data.name,
+                direction: data.direction,
+                isSystem: false,
+                isActive: true,
+            },
+        });
+    }
+
+    async updateFinanceCategory(companyId: string, id: string, data: { name: string }) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const category = await this.prisma.financeCategory.findFirst({
+            where: { id, companyId },
+        });
+        if (!category) throw new NotFoundException('Статья не найдена');
+        if (category.isSystem) throw new BadRequestException('Системные статьи нельзя редактировать');
+
+        return this.prisma.financeCategory.update({
+            where: { id },
+            data: { name: data.name },
+        });
+    }
+
+    async deactivateFinanceCategory(companyId: string, id: string, active: boolean) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const category = await this.prisma.financeCategory.findFirst({
+            where: { id, companyId },
+        });
+        if (!category) throw new NotFoundException('Статья не найдена');
+        if (category.isSystem) throw new BadRequestException('Системные статьи нельзя деактивировать');
+
+        return this.prisma.financeCategory.update({
+            where: { id },
+            data: { isActive: active },
+        });
+    }
+
+    async getCashflowReport(companyId: string, query: { startDate?: string; endDate?: string }) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const { startDate, endDate } = query;
+
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+
+        const defaultBank = await this.prisma.financeAccount.findFirst({
+            where: { companyId, kind: AccountKind.BANK, isDefault: true }
+        });
+        const defaultCash = await this.prisma.financeAccount.findFirst({
+            where: { companyId, kind: AccountKind.CASH, isDefault: true }
+        });
+
+        let startBalance = 0;
+        if (start) {
+            const prevPayments = await this.prisma.payment.findMany({
+                where: { companyId, isDeleted: false, date: { lt: start } }
+            });
+            const prevIncomes = await this.prisma.income.findMany({
+                where: { companyId, isDeleted: false, date: { lt: start } }
+            });
+            const prevExpenses = await this.prisma.expense.findMany({
+                where: { companyId, isDeleted: false, date: { lt: start } }
+            });
+
+            const pIn = money(prevPayments.filter(p => p.direction === PaymentDirection.IN).reduce((s, p) => s + p.amount, 0));
+            const pOut = money(prevPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((s, p) => s + p.amount, 0));
+            const inc = money(prevIncomes.reduce((s, i) => s + i.amount, 0));
+            const exp = money(prevExpenses.reduce((s, e) => s + e.amount, 0));
+
+            startBalance = money(pIn + inc - pOut - exp);
+        }
+
+        const dateFilter = start && end ? {
+            date: { gte: start, lte: end }
+        } : {};
+
+        const payments = await this.prisma.payment.findMany({
+            where: { companyId, isDeleted: false, ...dateFilter },
+            include: { account: true, category: true, counterparty: { select: { name: true } }, order: { select: { orderNumber: true } } },
+            orderBy: { date: 'desc' },
+        });
+
+        const incomes = await this.prisma.income.findMany({
+            where: { companyId, isDeleted: false, ...dateFilter },
+            orderBy: { date: 'desc' },
+        });
+
+        const expenses = await this.prisma.expense.findMany({
+            where: { companyId, isDeleted: false, ...dateFilter },
+            orderBy: { date: 'desc' },
+        });
+
+        const flowItems: Array<{
+            id: string;
+            date: Date;
+            direction: PaymentDirection;
+            amount: number;
+            method: PaymentMethod;
+            accountName: string;
+            categoryName: string;
+            counterpartyName: string;
+            note: string;
+            source: 'payment' | 'income' | 'expense';
+        }> = [];
+
+        payments.forEach(p => {
+            flowItems.push({
+                id: p.id,
+                date: p.date,
+                direction: p.direction,
+                amount: money(p.amount),
+                method: p.method,
+                accountName: p.account?.name || (p.method === 'CASH' ? defaultCash?.name : defaultBank?.name) || 'Банк',
+                categoryName: p.category?.name || (p.direction === PaymentDirection.IN ? 'Оплата за рейс' : 'Оплата исполнителю'),
+                counterpartyName: p.counterparty?.name || '—',
+                note: p.note || (p.order ? `По заявке ${p.order.orderNumber}` : ''),
+                source: 'payment',
+            });
+        });
+
+        incomes.forEach(i => {
+            flowItems.push({
+                id: i.id,
+                date: i.date,
+                direction: PaymentDirection.IN,
+                amount: money(i.amount),
+                method: PaymentMethod.BANK,
+                accountName: defaultBank?.name || 'Банк',
+                categoryName: i.category === 'order_payment' ? 'Оплата за рейс' : i.category === 'prepayment' ? 'Предоплата' : i.category,
+                counterpartyName: '—',
+                note: i.description + (i.note ? ` (${i.note})` : ''),
+                source: 'income',
+            });
+        });
+
+        expenses.forEach(e => {
+            flowItems.push({
+                id: e.id,
+                date: e.date,
+                direction: PaymentDirection.OUT,
+                amount: money(e.amount),
+                method: PaymentMethod.BANK,
+                accountName: defaultBank?.name || 'Банк',
+                categoryName: e.category,
+                counterpartyName: '—',
+                note: e.description + (e.note ? ` (${e.note})` : ''),
+                source: 'expense',
+            });
+        });
+
+        flowItems.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+        const accountsMap = new Map<string, { name: string; in: number; out: number; balance: number }>();
+        const getAcc = (name: string) => {
+            if (!accountsMap.has(name)) {
+                accountsMap.set(name, { name, in: 0, out: 0, balance: 0 });
+            }
+            return accountsMap.get(name)!;
+        };
+
+        if (defaultBank) getAcc(defaultBank.name);
+        if (defaultCash) getAcc(defaultCash.name);
+
+        const methodsMap = new Map<string, { name: string; in: number; out: number; balance: number }>();
+        const getMethodGroup = (method: string) => {
+            const labels: Record<string, string> = {
+                CASH: 'Наличные',
+                BANK: 'Банк',
+                CARD: 'Карта',
+                OTHER: 'Прочее',
+            };
+            const label = labels[method] || method;
+            if (!methodsMap.has(method)) {
+                methodsMap.set(method, { name: label, in: 0, out: 0, balance: 0 });
+            }
+            return methodsMap.get(method)!;
+        };
+
+        const categoriesMap = new Map<string, { name: string; direction: PaymentDirection; amount: number }>();
+        const getCatGroup = (name: string, dir: PaymentDirection) => {
+            const key = `${name}__${dir}`;
+            if (!categoriesMap.has(key)) {
+                categoriesMap.set(key, { name, direction: dir, amount: 0 });
+            }
+            return categoriesMap.get(key)!;
+        };
+
+        let totalIn = 0;
+        let totalOut = 0;
+
+        flowItems.forEach(item => {
+            const amt = item.amount;
+            const isCopy = item.direction === PaymentDirection.IN;
+
+            if (isCopy) {
+                totalIn = money(totalIn + amt);
+            } else {
+                totalOut = money(totalOut + amt);
+            }
+
+            const acc = getAcc(item.accountName);
+            if (isCopy) acc.in = money(acc.in + amt);
+            else acc.out = money(acc.out + amt);
+
+            const met = getMethodGroup(item.method);
+            if (isCopy) met.in = money(met.in + amt);
+            else met.out = money(met.out + amt);
+
+            const cat = getCatGroup(item.categoryName, item.direction);
+            cat.amount = money(cat.amount + amt);
+        });
+
+        totalIn = money(totalIn);
+        totalOut = money(totalOut);
+        const netChange = money(totalIn - totalOut);
+        const endBalance = money(startBalance + netChange);
+
+        const accounts = Array.from(accountsMap.values()).map(a => ({
+            ...a,
+            in: money(a.in),
+            out: money(a.out),
+            balance: money(a.in - a.out),
+        }));
+
+        const methods = Array.from(methodsMap.values()).map(m => ({
+            ...m,
+            in: money(m.in),
+            out: money(m.out),
+            balance: money(m.in - m.out),
+        }));
+
+        const categories = Array.from(categoriesMap.values()).map(c => ({
+            ...c,
+            amount: money(c.amount),
+        }));
+
+        return {
+            startBalance,
+            totalIn,
+            totalOut,
+            netChange,
+            endBalance,
+            accounts,
+            methods,
+            categories,
+            flows: flowItems.map(item => ({
+                ...item,
+                date: item.date.toISOString(),
+            })),
+        };
+    }
+
+    async getPnLReport(companyId: string, query: { startDate?: string; endDate?: string }) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const { startDate, endDate } = query;
+
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+
+        const dateFilter = start && end ? {
+            createdAt: { gte: start, lte: end }
+        } : {};
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            { responsibleManager: { companyId: companyId } },
+                        ]
+                    },
+                    {
+                        OR: [
+                            { isConfirmed: true },
+                            { status: { not: 'PENDING' } }
+                        ]
+                    },
+                    dateFilter,
+                ],
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+            },
+            include: {
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
+            }
+        });
+
+        let totalRevenueNet = 0;
+        let totalExecutorCostNet = 0;
+
+        for (const order of orders) {
+            const fin = this.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+
+            totalRevenueNet = money(totalRevenueNet + fin.revenueNet);
+            totalExecutorCostNet = money(totalExecutorCostNet + fin.executorCostNet);
+        }
+
+        totalRevenueNet = money(totalRevenueNet);
+        totalExecutorCostNet = money(totalExecutorCostNet);
+
+        const manualIncomes = await this.prisma.income.findMany({
+            where: {
+                companyId,
+                isDeleted: false,
+                ...(start && end && {
+                    date: { gte: start, lte: end }
+                })
+            }
+        });
+
+        const manualExpenses = await this.prisma.expense.findMany({
+            where: {
+                companyId,
+                isDeleted: false,
+                ...(start && end && {
+                    date: { gte: start, lte: end }
+                })
+            }
+        });
+
+        const otherIncomesMap = new Map<string, number>();
+        const otherExpensesMap = new Map<string, number>();
+
+        manualIncomes
+            .filter(i => i.category !== 'order_payment' && i.category !== 'prepayment')
+            .forEach(i => {
+                otherIncomesMap.set(i.category, money((otherIncomesMap.get(i.category) || 0) + i.amount));
+            });
+
+        manualExpenses
+            .filter(e => e.category !== 'driver_payment')
+            .forEach(e => {
+                otherExpensesMap.set(e.category, money((otherExpensesMap.get(e.category) || 0) + e.amount));
+            });
+
+        const otherIncomes = Array.from(otherIncomesMap.entries()).map(([name, amount]) => ({
+            name,
+            amount: money(amount),
+        }));
+
+        const otherExpenses = Array.from(otherExpensesMap.entries()).map(([name, amount]) => ({
+            name,
+            amount: money(amount),
+        }));
+
+        const totalOtherIncomes = money(otherIncomes.reduce((s, i) => s + i.amount, 0));
+        const totalOtherExpenses = money(otherExpenses.reduce((s, e) => s + e.amount, 0));
+
+        const grossProfit = money(totalRevenueNet - totalExecutorCostNet);
+        const netProfit = money(grossProfit + totalOtherIncomes - totalOtherExpenses);
+        const marginPercentage = totalRevenueNet > 0 ? money((netProfit / totalRevenueNet) * 100) : 0;
+
+        return {
+            revenueNet: totalRevenueNet,
+            executorCostNet: totalExecutorCostNet,
+            grossProfit,
+            otherIncomes,
+            otherExpenses,
+            totalOtherIncomes,
+            totalOtherExpenses,
+            netProfit,
+            marginPercentage,
+        };
+    }
+
+    async exportCashflowReport(companyId: string, query: { startDate?: string; endDate?: string }): Promise<Buffer> {
+        const report = await this.getCashflowReport(companyId, query);
+
+        const rows = report.flows.map(item => ({
+            'Дата': new Date(item.date).toLocaleDateString(),
+            'Направление': item.direction === 'IN' ? 'Поступление' : 'Расход',
+            'Сумма (₸)': item.amount,
+            'Способ оплаты': item.method === 'CASH' ? 'Наличные' : item.method === 'BANK' ? 'Банк' : item.method === 'CARD' ? 'Карта' : 'Прочее',
+            'Счет / Касса': item.accountName,
+            'Статья': item.categoryName,
+            'Контрагент': item.counterpartyName,
+            'Примечание': item.note,
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+
+        const maxLen = rows.reduce((widths, row) => {
+            Object.keys(row).forEach((key, i) => {
+                const val = String((row as any)[key] ?? '');
+                widths[i] = Math.max(widths[i] || 10, val.length, key.length);
+            });
+            return widths;
+        }, [] as number[]);
+        ws['!cols'] = maxLen.map(w => ({ wch: w + 2 }));
+
+        XLSX.utils.book_append_sheet(wb, ws, 'ДДС');
+        return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    }
+
+    async exportPnLReport(companyId: string, query: { startDate?: string; endDate?: string }): Promise<Buffer> {
+        const report = await this.getPnLReport(companyId, query);
+
+        const rows = [
+            { 'Показатель': 'Выручка (Net)', 'Сумма (₸)': report.revenueNet },
+            { 'Показатель': 'Себестоимость исполнителя (Net)', 'Сумма (₸)': report.executorCostNet },
+            { 'Показатель': 'Валовая прибыль (Gross Profit)', 'Сумма (₸)': report.grossProfit },
+            { 'Показатель': '—', 'Сумма (₸)': '—' },
+            ...report.otherIncomes.map(i => ({ 'Показатель': `Прочие доходы: ${i.name}`, 'Сумма (₸)': i.amount })),
+            { 'Показатель': 'Всего прочих доходов', 'Сумма (₸)': report.totalOtherIncomes },
+            { 'Показатель': '—', 'Сумма (₸)': '—' },
+            ...report.otherExpenses.map(e => ({ 'Показатель': `Прочие расходы: ${e.name}`, 'Сумма (₸)': e.amount })),
+            { 'Показатель': 'Всего прочих расходов', 'Сумма (₸)': report.totalOtherExpenses },
+            { 'Показатель': '—', 'Сумма (₸)': '—' },
+            { 'Показатель': 'Чистая прибыль (Net Profit)', 'Сумма (₸)': report.netProfit },
+            { 'Показатель': 'Рентабельность (%)', 'Сумма (₸)': `${report.marginPercentage}%` }
+        ];
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+
+        const maxLen = rows.reduce((widths, row) => {
+            Object.keys(row).forEach((key, i) => {
+                const val = String((row as any)[key] ?? '');
+                widths[i] = Math.max(widths[i] || 10, val.length, key.length);
+            });
+            return widths;
+        }, [] as number[]);
+        ws['!cols'] = maxLen.map(w => ({ wch: w + 2 }));
+
+        XLSX.utils.book_append_sheet(wb, ws, 'P&L');
         return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     }
 }

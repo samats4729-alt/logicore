@@ -12,7 +12,10 @@ import {
     ArrowUpOutlined,
     ArrowDownOutlined,
     FileTextOutlined,
-    CalendarOutlined
+    CalendarOutlined,
+    SwapOutlined,
+    LineChartOutlined,
+    SettingOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -84,6 +87,35 @@ const sections: MenuSection[] = [
                 icon: <TeamOutlined />,
                 color: '#8b5cf6',
                 href: '/company/accounting/counterparty-report',
+            },
+            {
+                key: 'cashflow',
+                label: 'Движение денежных средств (ДДС)',
+                description: 'Отчет о фактических денежных потоках по счетам и статьям',
+                icon: <SwapOutlined />,
+                color: '#10b981',
+                href: '/company/accounting/cashflow',
+            },
+            {
+                key: 'pnl',
+                label: 'Доходы и расходы (P&L)',
+                description: 'Операционная прибыль, прочая деятельность и рентабельность',
+                icon: <LineChartOutlined />,
+                color: '#f59e0b',
+                href: '/company/accounting/pnl',
+            },
+        ],
+    },
+    {
+        title: 'Настройки',
+        items: [
+            {
+                key: 'settings',
+                label: 'Счета и статьи',
+                description: 'Настройка расчетных счетов, касс и статей доходов/расходов',
+                icon: <SettingOutlined />,
+                color: '#64748b',
+                href: '/company/accounting/settings',
             },
         ],
     },

@@ -83,8 +83,27 @@ export default function FinancialRegistryPage() {
     };
     const { message } = App.useApp();
     const { user } = useAuthStore();
+    const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
     const [orders, setOrders] = useState<RegistryOrder[]>([]);
     const [loading, setLoading] = useState(true);
+    const [accounts, setAccounts] = useState<any[]>([]);
+    const [categories, setCategories] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchFinanceSettings = async () => {
+            try {
+                const [accRes, catRes] = await Promise.all([
+                    api.get('/accounting/finance-accounts'),
+                    api.get('/accounting/finance-categories'),
+                ]);
+                setAccounts(accRes.data || []);
+                setCategories(catRes.data || []);
+            } catch (err) {
+                console.error('Failed to load accounts/categories', err);
+            }
+        };
+        fetchFinanceSettings();
+    }, []);
     const [search, setSearch] = useState('');
     const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
     const [paymentFilter, setPaymentFilter] = useState<string>('all');
@@ -265,6 +284,8 @@ export default function FinancialRegistryPage() {
                 amount: values.amount,
                 date: values.date.toISOString(),
                 method: values.method,
+                accountId: values.accountId || undefined,
+                categoryId: values.categoryId || undefined,
                 note: values.note
             });
             message.success('Платёж успешно добавлен');
@@ -366,7 +387,7 @@ export default function FinancialRegistryPage() {
                                 <div style={{ fontSize: 9, color: token.colorError, fontWeight: 600 }}>Просрочка 5д+</div>
                             )}
                         </div>
-                        {debt > 0 && (
+                        {debt > 0 && canEditFinance && (
                             <Tooltip title="Зарегистрировать платеж">
                                 <Button
                                     size="small"
@@ -395,7 +416,7 @@ export default function FinancialRegistryPage() {
                                 {paid ? 'Оплачено' : `${fmt(debt)} ₸`}
                             </span>
                         </div>
-                        {debt > 0 && (
+                        {debt > 0 && canEditFinance && (
                             <Tooltip title="Выплатить исполнителю">
                                 <Button
                                     size="small"
@@ -653,10 +674,12 @@ export default function FinancialRegistryPage() {
                                     <Title level={5} style={{ margin: 0 }}>
                                         <DollarOutlined style={{ marginRight: 8, color: token.colorPrimary }} /> История платежей по заявке
                                     </Title>
-                                    <Space>
-                                        <Button size="small" type="primary" style={{ background: token.colorSuccess, borderColor: token.colorSuccess }} onClick={(e) => handleAddPaymentClick(e, o, 'IN')}>+ Входящий</Button>
-                                        <Button size="small" type="primary" style={{ background: token.colorWarning, borderColor: token.colorWarning }} onClick={(e) => handleAddPaymentClick(e, o, 'OUT')}>+ Исходящий</Button>
-                                    </Space>
+                                    {canEditFinance && (
+                                        <Space>
+                                            <Button size="small" type="primary" style={{ background: token.colorSuccess, borderColor: token.colorSuccess }} onClick={(e) => handleAddPaymentClick(e, o, 'IN')}>+ Входящий</Button>
+                                            <Button size="small" type="primary" style={{ background: token.colorWarning, borderColor: token.colorWarning }} onClick={(e) => handleAddPaymentClick(e, o, 'OUT')}>+ Исходящий</Button>
+                                        </Space>
+                                    )}
                                 </div>
 
                                 {loadingPayments ? (
@@ -693,16 +716,18 @@ export default function FinancialRegistryPage() {
                                                         От: {dayjs(p.date).format('DD.MM.YYYY')} | {p.note || 'без примечания'}
                                                     </div>
                                                 </div>
-                                                <Popconfirm
-                                                    title="Удалить платёж?"
-                                                    description="Сумма долга по заявке будет пересчитана."
-                                                    okText="Да, удалить"
-                                                    cancelText="Отмена"
-                                                    okButtonProps={{ danger: true }}
-                                                    onConfirm={() => handleDeletePayment(p.id)}
-                                                >
-                                                    <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                                                </Popconfirm>
+                                                {canEditFinance ? (
+                                                    <Popconfirm
+                                                        title="Удалить платёж?"
+                                                        description="Сумма долга по заявке будет пересчитана."
+                                                        okText="Да, удалить"
+                                                        cancelText="Отмена"
+                                                        okButtonProps={{ danger: true }}
+                                                        onConfirm={() => handleDeletePayment(p.id)}
+                                                    >
+                                                        <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                                                    </Popconfirm>
+                                                ) : null}
                                             </div>
                                         ))}
                                     </div>
@@ -768,6 +793,32 @@ export default function FinancialRegistryPage() {
                                 <Select.Option value="CASH">Наличные</Select.Option>
                                 <Select.Option value="CARD">Карта</Select.Option>
                                 <Select.Option value="OTHER">Другой способ</Select.Option>
+                            </Select>
+                        </Form.Item>
+
+                        <Form.Item
+                            name="accountId"
+                            label="Счет / Касса"
+                        >
+                            <Select size="large" placeholder="По умолчанию" allowClear>
+                                {accounts.map(acc => (
+                                    <Select.Option key={acc.id} value={acc.id}>
+                                        {acc.name} ({acc.kind === 'CASH' ? 'Касса' : 'Банк'})
+                                    </Select.Option>
+                                ))}
+                            </Select>
+                        </Form.Item>
+
+                        <Form.Item
+                            name="categoryId"
+                            label="Статья"
+                        >
+                            <Select size="large" placeholder="По умолчанию" allowClear>
+                                {categories.filter(c => c.direction === paymentModalData.direction && c.isActive).map(cat => (
+                                    <Select.Option key={cat.id} value={cat.id}>
+                                        {cat.name}
+                                    </Select.Option>
+                                ))}
                             </Select>
                         </Form.Item>
 

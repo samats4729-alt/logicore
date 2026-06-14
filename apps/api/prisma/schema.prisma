@@ -191,6 +191,8 @@ model Company {
   payments           Payment[] @relation("CompanyPayments")
   counterpartyPayments Payment[] @relation("CounterpartyPayments")
   closedPeriods      ClosedPeriod[]
+  financeAccounts     FinanceAccount[] @relation("CompanyFinanceAccounts")
+  financeCategories   FinanceCategory[] @relation("CompanyFinanceCategories")
   
   @@index([bin])
 }
@@ -763,10 +765,51 @@ model Payment {
   isDeleted      Boolean          @default(false)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
+  accountId      String?
+  account        FinanceAccount?  @relation("AccountPayments", fields: [accountId], references: [id], onDelete: SetNull)
+  categoryId     String?
+  category       FinanceCategory? @relation("CategoryPayments", fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([companyId, date])
   @@index([orderId])
   @@index([direction])
+  @@index([accountId])
+  @@index([categoryId])
+}
+
+enum AccountKind {
+  CASH
+  BANK
+}
+
+model FinanceAccount {
+  id          String      @id @default(cuid())
+  companyId   String
+  company     Company     @relation("CompanyFinanceAccounts", fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  kind        AccountKind
+  isDefault   Boolean     @default(false)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  payments    Payment[]   @relation("AccountPayments")
+
+  @@index([companyId])
+}
+
+model FinanceCategory {
+  id          String           @id @default(cuid())
+  companyId   String
+  company     Company          @relation("CompanyFinanceCategories", fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  direction   PaymentDirection
+  isSystem    Boolean          @default(false)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  payments    Payment[]        @relation("CategoryPayments")
+
+  @@index([companyId])
 }
 
 model ClosedPeriod {
