@@ -49,26 +49,47 @@ async function main() {
     });
     console.log(`✅ Admin created: ${admin.email}`);
 
-    // Тестовый водитель
-    const driver = await prisma.user.upsert({
-        where: { phone: '+77771234567' },
-        update: {},
-        create: {
-            phone: '+77771234567',
-            firstName: 'Тест',
-            lastName: 'Водитель',
-            role: UserRole.DRIVER,
-            vehiclePlate: '123ABC01',
-            vehicleModel: 'MAN TGX',
-        },
+    // Тестовая компания
+    let testCompany = await prisma.company.findFirst({
+        where: { bin: '123456789012' }
     });
+    if (!testCompany) {
+        testCompany = await prisma.company.create({
+            data: {
+                name: 'Тестовая логистическая компания',
+                bin: '123456789012',
+                address: 'г. Алматы, ул. Тестовая, 1',
+                phone: '+77271234567',
+                email: 'info@test.kz',
+            },
+        });
+    }
+    console.log(`✅ Test Company created: ${testCompany.name}`);
+
+    // Тестовый водитель
+    let driver = await prisma.user.findFirst({
+        where: { phone: '+77771234567', companyId: testCompany.id }
+    });
+    if (!driver) {
+        driver = await prisma.user.create({
+            data: {
+                phone: '+77771234567',
+                firstName: 'Тест',
+                lastName: 'Водитель',
+                role: UserRole.DRIVER,
+                vehiclePlate: '123ABC01',
+                vehicleModel: 'MAN TGX',
+                companyId: testCompany.id,
+            },
+        });
+    }
     console.log(`✅ Driver created: ${driver.phone}`);
 
     // Тестовый заказчик
     const customerPassword = await bcrypt.hash('customer123', 10);
     const customer = await prisma.user.upsert({
         where: { email: 'customer@test.kz' },
-        update: {},
+        update: { companyId: testCompany.id },
         create: {
             email: 'customer@test.kz',
             phone: '+77051234567',
@@ -76,6 +97,7 @@ async function main() {
             firstName: 'Тест',
             lastName: 'Заказчик',
             role: UserRole.LOGISTICIAN,
+            companyId: testCompany.id,
         },
     });
     console.log(`✅ Customer created: ${customer.email}`);
