@@ -87,7 +87,7 @@ model User {
   id            String    @id @default(cuid())
   email         String?   @unique
   googleId      String?   @unique  // Google OAuth ID
-  phone         String    @unique
+  phone         String
   passwordHash  String?   // null для водителей (SMS auth)
   firstName     String
   lastName      String
@@ -96,6 +96,7 @@ model User {
   position      String?   // Должность/роль
   permissions   String[]  @default([])
   isActive      Boolean   @default(true)
+  isTrackable   Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -559,19 +560,6 @@ model WarehouseQueueItem {
   @@index([gateId])
 }
 
-// ==================== SMS VERIFICATION ====================
-
-model SmsCode {
-  id          String    @id @default(cuid())
-  phone       String
-  code        String
-  expiresAt   DateTime
-  attempts    Int       @default(0)
-  verified    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  
-  @@index([phone, code])
-}
 
 // ==================== CARGO TYPES ====================
 

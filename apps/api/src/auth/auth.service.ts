@@ -5,7 +5,6 @@ import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { SmsService } from './sms.service';
 import { EmailService } from '../email/email.service';
 import { UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,120 +16,8 @@ export class AuthService {
         private jwtService: JwtService,
         private configService: ConfigService,
         private redisService: RedisService,
-        private smsService: SmsService,
         private emailService: EmailService,
     ) { }
-
-    // ==================== SMS AUTH (для водителей) ====================
-
-    /**
-     * Шаг 1: Запрос SMS кода
-     */
-    async requestSmsCode(phone: string): Promise<{ message: string }> {
-        // ТЕСТОВЫЙ РЕЖИМ: для +77771234567 код всегда 1234
-        const TEST_PHONE = '+77771234567';
-        const TEST_CODE = '1234';
-
-        if (phone === TEST_PHONE || phone === '77771234567') {
-            await this.redisService.setSmsCode(phone, TEST_CODE, 3600);
-            console.log(`📱 [TEST MODE] Phone: ${phone}, Code: ${TEST_CODE}`);
-            return { message: 'Тестовый код: 1234' };
-        }
-
-        // Проверяем существует ли пользователь
-        const user = await this.prisma.user.findUnique({
-            where: { phone },
-        });
-
-        if (!user) {
-            throw new BadRequestException('Пользователь с таким номером не найден');
-        }
-
-        if (!user.isActive) {
-            throw new UnauthorizedException('Аккаунт деактивирован');
-        }
-
-        // Генерируем и сохраняем код
-        const code = this.smsService.generateCode();
-        await this.redisService.setSmsCode(phone, code, 300); // 5 минут
-
-        // Отправляем SMS
-        await this.smsService.sendVerificationCode(phone, code);
-
-        return { message: 'Код отправлен на указанный номер' };
-    }
-
-    /**
-     * Шаг 2: Проверка SMS кода и выдача токена
-     */
-    async verifySmsCode(
-        phone: string,
-        code: string,
-        deviceId: string,
-    ): Promise<{ accessToken: string; user: any }> {
-        console.log(`🔍 Verifying SMS: Phone=${phone}, Code=${code}, Device=${deviceId}`);
-
-        // Проверяем код
-        // Проверяем код
-        const savedCode = await this.redisService.getSmsCode(phone);
-
-        console.log(`🔍 Retrieved from Redis: ${savedCode}`);
-
-        if (!savedCode || savedCode !== code) {
-            console.warn(`❌ Verification failed: Expected '${savedCode}', got '${code}'`);
-            throw new UnauthorizedException('Неверный код подтверждения');
-        }
-
-        // Удаляем использованный код
-        await this.redisService.deleteSmsCode(phone);
-
-        // Получаем пользователя
-        const user = await this.prisma.user.findUnique({
-            where: { phone },
-        });
-
-        if (!user) {
-            throw new UnauthorizedException('Пользователь не найден');
-        }
-
-        // Single Session Policy: проверяем активную сессию
-        const existingSession = await this.redisService.getSession(user.id);
-        if (existingSession && existingSession.deviceId !== deviceId) {
-            // Завершаем старую сессию
-            await this.prisma.session.deleteMany({
-                where: { userId: user.id },
-            });
-        }
-
-        // Создаем токен
-        const payload = { sub: user.id, phone: user.phone, role: user.role, companyId: user.companyId };
-        const accessToken = this.jwtService.sign(payload);
-
-        // Сохраняем сессию
-        const expiresIn = 60 * 60 * 24 * 7; // 7 дней
-        await this.redisService.setSession(user.id, deviceId, accessToken, expiresIn);
-
-        // Сохраняем в БД
-        await this.prisma.session.create({
-            data: {
-                userId: user.id,
-                deviceId,
-                token: accessToken,
-                expiresAt: new Date(Date.now() + expiresIn * 1000),
-            },
-        });
-
-        return {
-            accessToken,
-            user: {
-                id: user.id,
-                phone: user.phone,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: user.role,
-            },
-        };
-    }
 
     // ==================== EMAIL AUTH (для остальных ролей) ====================
 

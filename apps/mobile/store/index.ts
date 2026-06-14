@@ -39,8 +39,6 @@ interface AppState {
     currentOrder: Order | null;
 
     // Auth actions
-    requestSmsCode: (phone: string) => Promise<void>;
-    verifySmsCode: (phone: string, code: string) => Promise<void>;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
 
@@ -58,21 +56,6 @@ export const useStore = create<AppState>((set, get) => ({
     isAuthenticated: false,
     isLoading: true,
     currentOrder: null,
-
-    requestSmsCode: async (phone: string) => {
-        await api.post('/auth/sms/request', { phone });
-    },
-
-    verifySmsCode: async (phone: string, code: string) => {
-        const deviceId = Device.deviceName || 'unknown-device';
-        const response = await api.post('/auth/sms/verify', { phone, code, deviceId });
-        const { user, accessToken } = response.data;
-
-        await setAuthToken(accessToken);
-        await SecureStore.setItemAsync('user', JSON.stringify(user));
-
-        set({ user, isAuthenticated: true });
-    },
 
     logout: async () => {
         try {

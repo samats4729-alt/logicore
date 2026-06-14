@@ -36,7 +36,7 @@ api.interceptors.response.use(
         if (error.response?.status === 401) {
             // Исключаем запросы авторизации, чтобы некорректный пароль или код не вызывали перезагрузку страницы
             const url = error.config?.url || '';
-            const isAuthRequest = url.includes('/auth/login') || url.includes('/auth/sms/verify');
+            const isAuthRequest = url.includes('/auth/login');
             
             if (!isAuthRequest) {
                 // Токен невалидный — очищаем

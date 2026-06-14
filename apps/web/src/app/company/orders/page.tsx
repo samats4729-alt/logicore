@@ -19,6 +19,7 @@ import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
+import AssignDriverModal from '@/components/AssignDriverModal';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -827,80 +828,7 @@ export default function CompanyOrdersPage() {
 
     const openAssignModal = (order: Order) => {
         setSelectedOrder(order);
-        setSelectedDriverId(order.driverId || null);
-        form.resetFields();
         setAssignModalOpen(true);
-
-        const initialAssignType = order.assignedDriverName ? 'partner_manual' : 'driver';
-        setAssignType(initialAssignType as any);
-
-        form.setFieldsValue({
-            driverId: order.driverId || undefined,
-            driverPhone: order.driver?.phone || undefined,
-            driverPlate: order.driver?.vehiclePlate || undefined,
-            trailerNumber: order.trailerNumber || undefined,
-            partnerId: order.partnerId || order.forwarderId || order.subForwarderId || undefined,
-            assignedDriverName: order.assignedDriverName || undefined,
-            assignedDriverPhone: order.assignedDriverPhone || undefined,
-            assignedDriverPlate: order.assignedDriverPlate || undefined,
-            assignedDriverTrailer: order.assignedDriverTrailer || undefined,
-        });
-
-        fetchDrivers();
-        fetchPartners();
-        fetchVehicles();
-    };
-
-    const handleVehicleSelect = (vehicleId: string) => {
-        const vehicle = vehicles.find(v => v.id === vehicleId);
-        if (vehicle) {
-            form.setFieldsValue({
-                assignedDriverPlate: vehicle.plate,
-                assignedDriverTrailer: vehicle.trailerNumber,
-                driverPlate: vehicle.plate,
-                trailerNumber: vehicle.trailerNumber,
-            });
-        }
-    };
-
-    const handleDriverSelect = (driverId: string) => {
-        setSelectedDriverId(driverId);
-        const driver = drivers.find(d => d.id === driverId);
-        if (driver) {
-            form.setFieldsValue({
-                driverName: `${driver.lastName} ${driver.firstName} ${driver.middleName || ''}`.trim(),
-                driverPhone: driver.phone,
-                driverPlate: driver.vehiclePlate || '',
-                trailerNumber: driver.trailerNumber || '',
-            });
-        }
-    };
-
-    const handleAssign = async (values: any) => {
-        if (!selectedOrder) return;
-        setAssignLoading(true);
-        try {
-            if (assignType === 'driver') {
-                await api.put(`/company/orders/${selectedOrder.id}/assign-driver`, { driverId: selectedDriverId || values.driverId });
-                message.success('Водитель назначен');
-            } else if (assignType === 'partner_manual') {
-                await api.put(`/company/orders/${selectedOrder.id}/assign-driver`, {
-                    partnerId: values.partnerId,
-                    assignedDriverName: values.assignedDriverName,
-                    assignedDriverPhone: values.assignedDriverPhone,
-                    assignedDriverPlate: values.assignedDriverPlate,
-                    assignedDriverTrailer: values.assignedDriverTrailer,
-                });
-                message.success('Водитель контрагента назначен');
-            } else {
-                await api.put(`/company/orders/${selectedOrder.id}/assign-forwarder`, { partnerId: values.partnerId, price: values.price });
-                message.success('Заявка передана партнеру');
-            }
-            mutateAll();
-            setAssignModalOpen(false); form.resetFields(); setSelectedDriverId(null);
-        } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка назначения');
-        } finally { setAssignLoading(false); }
     };
 
     const getNextStatuses = (s: string) => {
@@ -1432,80 +1360,25 @@ export default function CompanyOrdersPage() {
 
 
             {/* ========== ASSIGN DRIVER MODAL ========== */}
-            <Modal title="Назначить водителя" open={assignModalOpen} onCancel={() => { setAssignModalOpen(false); setSelectedDriverId(null); form.resetFields(); }} onOk={() => form.submit()} okText="Назначить" cancelText="Отмена" confirmLoading={assignLoading}>
-                <Form form={form} layout="vertical" onFinish={handleAssign}>
-                    <Tabs activeKey={assignType} onChange={(k) => setAssignType(k as any)} items={[
-                        {
-                            key: 'driver', label: 'Свой водитель',
-                            children: (
-                                <>
-                                    <Form.Item name="driverId" label="Водитель" rules={[{ required: assignType === 'driver', message: 'Выберите' }]}>
-                                        <Select placeholder="Выберите водителя" size="large" loading={driversLoading} onChange={handleDriverSelect} value={selectedDriverId}
-                                            showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
-                                            options={drivers.map(d => ({ value: d.id, label: `${d.lastName} ${d.firstName} ${d.middleName || ''}`.trim() }))}
-                                        />
-                                    </Form.Item>
-                                    {selectedDriverId && (
-                                        <>
-                                            <Form.Item name="driverName" hidden><Input /></Form.Item>
-                                            <Form.Item name="driverPhone" label="Телефон"><Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} /></Form.Item>
-                                            <Form.Item name="driverPlate" label="Госномер"><Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} /></Form.Item>
-                                            <Form.Item name="trailerNumber" label="Прицеп"><Input size="large" disabled style={{ backgroundColor: '#f5f5f5' }} placeholder="—" /></Form.Item>
-                                        </>
-                                    )}
-                                </>
-                            )
-                        },
-                        {
-                            key: 'partner_manual', label: 'Водитель контрагента (вручную)',
-                            children: (
-                                <>
-                                    <Form.Item name="partnerId" label="Компания-контрагент (перевозчик)" rules={[{ required: assignType === 'partner_manual', message: 'Выберите контрагента' }]}>
-                                        <Select placeholder="Выберите контрагента" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
-                                    </Form.Item>
-                                    <Form.Item label="Выбрать ТС из автопарка (опционально)">
-                                        <Select 
-                                            placeholder="Выберите ТС" 
-                                            size="large" 
-                                            loading={vehiclesLoading} 
-                                            onChange={handleVehicleSelect} 
-                                            allowClear
-                                            showSearch 
-                                            filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
-                                            options={vehicles.map(v => ({ value: v.id, label: `${v.model} (${v.plate})` }))}
-                                        />
-                                    </Form.Item>
-                                    <Form.Item name="assignedDriverName" label="ФИО водителя" rules={[{ required: assignType === 'partner_manual', message: 'Введите ФИО водителя' }]}>
-                                        <Input placeholder="Иванов Иван Иванович" size="large" />
-                                    </Form.Item>
-                                    <Form.Item name="assignedDriverPhone" label="Телефон водителя">
-                                        <Input placeholder="+7 (700) 123-45-67" size="large" />
-                                    </Form.Item>
-                                    <Form.Item name="assignedDriverPlate" label="Госномер авто">
-                                        <Input placeholder="123 ABC 01" size="large" />
-                                    </Form.Item>
-                                    <Form.Item name="assignedDriverTrailer" label="Госномер прицепа">
-                                        <Input placeholder="1234 XX 01" size="large" />
-                                    </Form.Item>
-                                </>
-                            )
-                        },
-                        {
-                            key: 'partner', label: 'Партнёру',
-                            children: (
-                                <>
-                                    <Form.Item name="partnerId" label="Партнер" rules={[{ required: assignType === 'partner', message: 'Выберите' }]}>
-                                        <Select placeholder="Компания-партнер" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} />
-                                    </Form.Item>
-                                    <Form.Item name="price" label="Стоимость (₸)" rules={[{ required: assignType === 'partner', message: 'Укажите' }]}>
-                                        <InputNumber style={{ width: '100%' }} size="large" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} parser={v => v!.replace(/\s/g, '')} />
-                                    </Form.Item>
-                                </>
-                            )
-                        }
-                    ]} />
-                </Form>
-            </Modal>
+            {selectedOrder && (
+                <AssignDriverModal
+                    open={assignModalOpen}
+                    onCancel={() => {
+                        setAssignModalOpen(false);
+                        setSelectedOrder(null);
+                    }}
+                    orderId={selectedOrder.id}
+                    onSuccess={() => mutateAll()}
+                    initialValues={{
+                        driverId: selectedOrder.driverId || undefined,
+                        partnerId: selectedOrder.partnerId || undefined,
+                        assignedDriverName: selectedOrder.assignedDriverName || undefined,
+                        assignedDriverPhone: selectedOrder.assignedDriverPhone || undefined,
+                        assignedDriverPlate: selectedOrder.assignedDriverPlate || undefined,
+                        assignedDriverTrailer: selectedOrder.assignedDriverTrailer || undefined,
+                    }}
+                />
+            )}
 
             {/* ========== SHARE POWER OF ATTORNEY MODAL ========== */}
             <Modal

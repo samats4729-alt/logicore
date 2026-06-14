@@ -154,6 +154,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Контрагенты',
             });
             partnersChildren.push({
+                key: '/company/carriers',
+                icon: <CarOutlined />,
+                label: 'Перевозчики',
+            });
+            partnersChildren.push({
                 key: '/company/contracts',
                 icon: <FileTextOutlined />,
                 label: 'Договоры',

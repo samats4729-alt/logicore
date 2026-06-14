@@ -327,8 +327,13 @@ export class CompanyController {
     @Get('drivers')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Получить список водителей' })
-    async getDrivers(@Request() req: any) {
-        return this.companyDriversService.getDrivers(req.user.companyId);
+    async getDrivers(
+        @Request() req: any,
+        @Query('companyId') companyIdQuery?: string,
+        @Query('partnerId') partnerIdQuery?: string,
+    ) {
+        const targetCompanyId = companyIdQuery || partnerIdQuery;
+        return this.companyDriversService.getDriversFiltered(req.user.companyId, targetCompanyId);
     }
 
     @Post('drivers')

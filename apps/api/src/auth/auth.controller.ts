@@ -1,33 +1,13 @@
 import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { RequestSmsCodeDto, VerifySmsCodeDto, LoginEmailDto, RegisterCompanyDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
+import { LoginEmailDto, RegisterCompanyDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
     constructor(private authService: AuthService) { }
-
-    // ==================== SMS Auth (Водители) ====================
-
-    @Post('sms/request')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Запросить SMS код для входа' })
-    @ApiResponse({ status: 200, description: 'Код отправлен' })
-    @ApiResponse({ status: 400, description: 'Пользователь не найден' })
-    async requestSmsCode(@Body() dto: RequestSmsCodeDto) {
-        return this.authService.requestSmsCode(dto.phone);
-    }
-
-    @Post('sms/verify')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Проверить SMS код и получить токен' })
-    @ApiResponse({ status: 200, description: 'Успешная авторизация' })
-    @ApiResponse({ status: 401, description: 'Неверный код' })
-    async verifySmsCode(@Body() dto: VerifySmsCodeDto) {
-        return this.authService.verifySmsCode(dto.phone, dto.code, dto.deviceId);
-    }
 
     // ==================== Email Auth (Остальные роли) ====================
 

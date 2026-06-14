@@ -27,12 +27,31 @@ export class CompanyDriversService {
     };
 
     /**
-     * Получить список водителей компании-экспедитора
+     * Получить список водителей компании-экспедитора или внешнего перевозчика с проверкой прав
      */
-    async getDrivers(companyId: string) {
+    async getDriversFiltered(myCompanyId: string, queryCompanyId?: string) {
+        const targetCompanyId = queryCompanyId || myCompanyId;
+
+        // Если запрашиваем чужих водителей (targetCompanyId != myCompanyId),
+        // проверяем права: эта внешняя компания должна иметь createdByCompanyId == myCompanyId
+        if (targetCompanyId !== myCompanyId) {
+            const externalCompany = await this.prisma.company.findUnique({
+                where: { id: targetCompanyId },
+                select: { isExternal: true, createdByCompanyId: true },
+            });
+
+            if (!externalCompany) {
+                throw new NotFoundException('Компания перевозчика не найдена');
+            }
+
+            if (!externalCompany.isExternal || externalCompany.createdByCompanyId !== myCompanyId) {
+                throw new ForbiddenException('У вас нет доступа к водителям этой компании');
+            }
+        }
+
         return this.prisma.user.findMany({
             where: {
-                companyId,
+                companyId: targetCompanyId,
                 role: UserRole.DRIVER,
                 isActive: true,
             },
@@ -60,13 +79,35 @@ export class CompanyDriversService {
         docExpiresAt?: Date;
         docIssuedBy?: string;
     }) {
-        // Проверяем что телефон уникален
-        const existing = await this.prisma.user.findUnique({
-            where: { phone: data.phone },
+        // Проверяем, существует ли водитель с таким телефоном или ИИН в рамках данной компании
+        const orConditions: any[] = [{ phone: data.phone }];
+        if (data.iin) {
+            orConditions.push({ iin: data.iin });
+        }
+
+        const existing = await this.prisma.user.findFirst({
+            where: {
+                companyId,
+                role: UserRole.DRIVER,
+                OR: orConditions,
+            },
         });
 
         if (existing) {
-            throw new BadRequestException('Водитель с таким телефоном уже зарегистрирован');
+            // Если найден существующий водитель - обновляем его данные и активируем
+            const updated = await this.prisma.user.update({
+                where: { id: existing.id },
+                data: {
+                    ...data,
+                    isActive: true,
+                },
+                select: this.driverSelect,
+            });
+
+            return {
+                ...updated,
+                alreadyExists: true,
+            };
         }
 
         // Автоматически создаем отдел "Водители" при регистрации водителя, если его нет
@@ -84,7 +125,7 @@ export class CompanyDriversService {
             });
         }
 
-        // Создаём водителя без пароля (авторизация по SMS)
+        // Создаём водителя
         return this.prisma.user.create({
             data: {
                 ...data,
@@ -119,26 +160,37 @@ export class CompanyDriversService {
             docIssuedBy?: string;
         }
     ) {
-        // Проверяем что водитель принадлежит компании
+        // Проверяем что водитель принадлежит компании или её внешнему перевозчику
         const driver = await this.prisma.user.findUnique({
             where: { id: driverId },
         });
-
+ 
         if (!driver) {
             throw new NotFoundException('Водитель не найден');
         }
-
-        if (driver.companyId !== companyId) {
+ 
+        let hasAccess = driver.companyId === companyId;
+        if (!hasAccess && driver.companyId) {
+            const driverCompany = await this.prisma.company.findUnique({
+                where: { id: driver.companyId },
+                select: { isExternal: true, createdByCompanyId: true },
+            });
+            if (driverCompany?.isExternal && driverCompany.createdByCompanyId === companyId) {
+                hasAccess = true;
+            }
+        }
+ 
+        if (!hasAccess) {
             throw new ForbiddenException('У вас нет доступа к этому водителю');
         }
-
+ 
         return this.prisma.user.update({
             where: { id: driverId },
             data,
             select: this.driverSelect,
         });
     }
-
+ 
     /**
      * Деактивировать водителя
      */
@@ -146,15 +198,26 @@ export class CompanyDriversService {
         const driver = await this.prisma.user.findUnique({
             where: { id: driverId },
         });
-
+ 
         if (!driver) {
             throw new NotFoundException('Водитель не найден');
         }
-
-        if (driver.companyId !== companyId) {
+ 
+        let hasAccess = driver.companyId === companyId;
+        if (!hasAccess && driver.companyId) {
+            const driverCompany = await this.prisma.company.findUnique({
+                where: { id: driver.companyId },
+                select: { isExternal: true, createdByCompanyId: true },
+            });
+            if (driverCompany?.isExternal && driverCompany.createdByCompanyId === companyId) {
+                hasAccess = true;
+            }
+        }
+ 
+        if (!hasAccess) {
             throw new ForbiddenException('У вас нет доступа к этому водителю');
         }
-
+ 
         return this.prisma.user.update({
             where: { id: driverId },
             data: { isActive: false },

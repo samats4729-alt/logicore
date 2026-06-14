@@ -66,21 +66,6 @@ export class RedisService implements OnModuleDestroy {
         await this.client!.del(`session:${userId}`);
     }
 
-    // SMS code storage
-    async setSmsCode(phone: string, code: string, ttl: number = 300): Promise<void> {
-        if (!this.canUseRedis()) return;
-        await this.client!.set(`sms:${phone}`, code, 'EX', ttl);
-    }
-
-    async getSmsCode(phone: string): Promise<string | null> {
-        if (!this.canUseRedis()) return null;
-        return this.client!.get(`sms:${phone}`);
-    }
-
-    async deleteSmsCode(phone: string): Promise<void> {
-        if (!this.canUseRedis()) return;
-        await this.client!.del(`sms:${phone}`);
-    }
 
     // Generic methods
     async set(key: string, value: string, ttl?: number): Promise<void> {

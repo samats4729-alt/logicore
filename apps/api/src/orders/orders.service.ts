@@ -117,6 +117,23 @@ export class OrdersService implements OnModuleInit {
             data.forwarderId === (data.customerCompanyId || customer?.companyId)
         ) ? true : false;
 
+        let driverName = null;
+        let driverPhone = null;
+        let driverPlate = null;
+        let driverTrailer = null;
+
+        if (data.driverId) {
+            const driverUser = await this.prisma.user.findUnique({
+                where: { id: data.driverId },
+            });
+            if (driverUser) {
+                driverName = `${driverUser.lastName || ''} ${driverUser.firstName || ''} ${driverUser.middleName || ''}`.trim();
+                driverPhone = driverUser.phone;
+                driverPlate = driverUser.vehiclePlate;
+                driverTrailer = driverUser.trailerNumber;
+            }
+        }
+
         const order = await this.prisma.order.create({
             data: {
                 orderNumber,
@@ -130,6 +147,11 @@ export class OrdersService implements OnModuleInit {
                 customerPrice: data.customerPrice,
                 driverCost: data.driverCost,
                 driverId: data.driverId,
+                assignedDriverName: driverName,
+                assignedDriverPhone: driverPhone,
+                assignedDriverPlate: driverPlate,
+                assignedDriverTrailer: driverTrailer,
+                assignedAt: data.driverId ? new Date() : null,
                 forwarderId: data.forwarderId, // Связь с экспедитором
                 subForwarderId: data.subForwarderId, // Связь с суб-экспедитором
                 subForwarderPrice: data.subForwarderPrice,

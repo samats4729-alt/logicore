@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import {
     Typography, Button, Form, Input, InputNumber, Select, DatePicker,
-    message, Row, Col, Card, Modal, Steps, Divider, theme
+    message, Row, Col, Card, Modal, Steps, Divider, theme, Tag
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
@@ -49,6 +49,89 @@ export default function CreateOrderPage() {
     const [profileComplete, setProfileComplete] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [myCompanyName, setMyCompanyName] = useState('');
+
+    // Driver & vehicle selection
+    const [drivers, setDrivers] = useState<any[]>([]);
+    const [driversLoading, setDriversLoading] = useState(false);
+    const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+    const [vehicles, setVehicles] = useState<any[]>([]);
+    const [vehiclesLoading, setVehiclesLoading] = useState(false);
+
+    const isOwnOrExternalCarrier = selectedCarrier === MY_COMPANY_VALUE || 
+        (selectedCarrier && partners.find(p => p.id === selectedCarrier)?.isExternal === true);
+
+    const isCarrierOnPlatform = selectedCarrier && selectedCarrier !== MY_COMPANY_VALUE && selectedCarrier !== MARKETPLACE_VALUE && !partners.find(p => p.id === selectedCarrier)?.isExternal;
+
+    useEffect(() => {
+        const targetCompanyId = selectedCarrier === MY_COMPANY_VALUE 
+            ? user?.companyId 
+            : partners.find(p => p.id === selectedCarrier)?.isExternal 
+                ? selectedCarrier 
+                : null;
+
+        if (targetCompanyId) {
+            setDriversLoading(true);
+            api.get('/company/drivers', { params: { companyId: targetCompanyId } })
+                .then(res => setDrivers(res.data))
+                .catch(() => message.error('Ошибка загрузки водителей'))
+                .finally(() => setDriversLoading(false));
+        } else {
+            setDrivers([]);
+        }
+
+        if (selectedCarrier === MY_COMPANY_VALUE) {
+            setVehiclesLoading(true);
+            api.get('/company/vehicles')
+                .then(res => setVehicles(res.data))
+                .catch(() => message.error('Ошибка загрузки автопарка'))
+                .finally(() => setVehiclesLoading(false));
+        } else {
+            setVehicles([]);
+        }
+    }, [selectedCarrier, partners, user]);
+
+    const handleDriverSelect = (value: string) => {
+        setSelectedDriverId(value);
+        if (value === '__NEW_DRIVER__') {
+            form.setFieldsValue({
+                firstName: '', lastName: '', middleName: '', phone: '', iin: '',
+                vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
+                docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: ''
+            });
+        } else {
+            const d = drivers.find(drv => drv.id === value);
+            if (d) {
+                form.setFieldsValue({
+                    firstName: d.firstName,
+                    lastName: d.lastName,
+                    middleName: d.middleName || '',
+                    phone: d.phone,
+                    iin: d.iin || '',
+                    vehicleType: d.vehicleType || undefined,
+                    vehicleModel: d.vehicleModel || '',
+                    vehiclePlate: d.vehiclePlate || '',
+                    trailerNumber: d.trailerNumber || '',
+                    docType: d.docType || undefined,
+                    docNumber: d.docNumber || '',
+                    docIssuedAt: d.docIssuedAt ? dayjs(d.docIssuedAt) : null,
+                    docExpiresAt: d.docExpiresAt ? dayjs(d.docExpiresAt) : null,
+                    docIssuedBy: d.docIssuedBy || '',
+                });
+            }
+        }
+    };
+
+    const handleVehicleSelect = (value: string) => {
+        const v = vehicles.find(veh => veh.id === value);
+        if (v) {
+            form.setFieldsValue({
+                vehicleType: v.type,
+                vehicleModel: v.model,
+                vehiclePlate: v.plate,
+                trailerNumber: v.trailerNumber || '',
+            });
+        }
+    };
 
     // Route points
     const [routePointsState, setRoutePointsState] = useState<Array<LocationState & { pointType: string }>>([
@@ -107,10 +190,10 @@ export default function CreateOrderPage() {
                 api.get('/external-companies'),
                 api.get('/company/profile'),
             ]);
-            const partnersList = partnersRes.data.filter((p: any) => p.isCarrier);
+            const partnersList = partnersRes.data.filter((p: any) => p.isCarrier).map((p: any) => ({ ...p, isExternal: false }));
             const externalList = externalRes.data
                 .filter((e: any) => e.isCarrier)
-                .map((e: any) => ({ id: e.id, name: e.name }));
+                .map((e: any) => ({ id: e.id, name: e.name, isExternal: true }));
             const combined = [...partnersList, ...externalList];
             setPartners(combined);
             if (profileRes.data?.name) {
@@ -236,10 +319,71 @@ export default function CreateOrderPage() {
 
         setSubmitting(true);
         try {
-            const values = form.getFieldsValue();
+            const values = await form.validateFields();
             const pickupDateStr = values.pickupDate 
                 ? (dayjs.isDayjs(values.pickupDate) ? values.pickupDate.toISOString() : new Date(values.pickupDate).toISOString()) 
                 : undefined;
+
+            let finalDriverId = selectedDriverId;
+
+            if (isOwnOrExternalCarrier) {
+                const targetCompanyId = selectedCarrier === MY_COMPANY_VALUE 
+                    ? user?.companyId 
+                    : selectedCarrier;
+
+                if (selectedDriverId === '__NEW_DRIVER__' || !selectedDriverId) {
+                    const driverData = {
+                        firstName: values.firstName,
+                        lastName: values.lastName,
+                        middleName: values.middleName,
+                        phone: values.phone,
+                        iin: values.iin,
+                        vehicleType: values.vehicleType,
+                        vehicleModel: values.vehicleModel,
+                        vehiclePlate: values.vehiclePlate,
+                        trailerNumber: values.trailerNumber,
+                        docType: values.docType,
+                        docNumber: values.docNumber,
+                        docIssuedAt: values.docIssuedAt ? values.docIssuedAt.toISOString() : undefined,
+                        docExpiresAt: values.docExpiresAt ? values.docExpiresAt.toISOString() : undefined,
+                        docIssuedBy: values.docIssuedBy,
+                    };
+
+                    const res = await api.post('/company/drivers', {
+                        ...driverData,
+                        companyId: targetCompanyId,
+                    });
+                    finalDriverId = res.data.id;
+                    if (res.data.alreadyExists) {
+                        message.info('Использован существующий водитель');
+                    }
+                } else {
+                    // Update details for our own drivers
+                    if (selectedCarrier === MY_COMPANY_VALUE) {
+                        const driverData = {
+                            firstName: values.firstName,
+                            lastName: values.lastName,
+                            middleName: values.middleName,
+                            phone: values.phone,
+                            iin: values.iin,
+                            vehicleType: values.vehicleType,
+                            vehicleModel: values.vehicleModel,
+                            vehiclePlate: values.vehiclePlate,
+                            trailerNumber: values.trailerNumber,
+                            docType: values.docType,
+                            docNumber: values.docNumber,
+                            docIssuedAt: values.docIssuedAt ? values.docIssuedAt.toISOString() : undefined,
+                            docExpiresAt: values.docExpiresAt ? values.docExpiresAt.toISOString() : undefined,
+                            docIssuedBy: values.docIssuedBy,
+                        };
+                        try {
+                            await api.put(`/company/drivers/${selectedDriverId}`, driverData);
+                        } catch (err) {
+                            // Non-critical update failure
+                        }
+                    }
+                }
+            }
 
             const getLocId = async (loc: LocationState) => {
                 if (loc.id) return loc.id;
@@ -291,6 +435,7 @@ export default function CreateOrderPage() {
                 hasVat: values.hasVat ?? false,
                 executorVatRate: values.executorVatRate ?? 0,
                 executorHasVat: values.executorHasVat ?? false,
+                driverId: isOwnOrExternalCarrier ? finalDriverId : undefined,
             };
 
             if (isMeCustomer) {
@@ -524,7 +669,16 @@ export default function CreateOrderPage() {
                             style={{ width: '100%' }}
                             size="large"
                             value={selectedCarrier || undefined}
-                            onChange={setSelectedCarrier}
+                            onChange={(val) => {
+                                setSelectedCarrier(val);
+                                setSelectedDriverId('');
+                                form.setFieldsValue({
+                                    driverId: undefined,
+                                    lastName: '', firstName: '', middleName: '', phone: '', iin: '',
+                                    vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
+                                    docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: ''
+                                });
+                            }}
                             showSearch
                             optionFilterProp="children"
                         >
@@ -661,6 +815,166 @@ export default function CreateOrderPage() {
                     return null;
                 }}
             </Form.Item>
+
+            {isOwnOrExternalCarrier && (
+                <>
+                    <Divider style={{ margin: '16px 0 12px' }}>Назначение водителя и ТС</Divider>
+                    {selectedCarrier === MY_COMPANY_VALUE && vehicles.length > 0 && (
+                        <Form.Item label="Выбрать ТС из автопарка (опционально)">
+                            <Select
+                                placeholder="Выберите транспортное средство"
+                                size="large"
+                                loading={vehiclesLoading}
+                                onChange={handleVehicleSelect}
+                                allowClear
+                                showSearch
+                                filterOption={(input, option) =>
+                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                options={vehicles.map(v => ({ value: v.id, label: `${v.model} (${v.plate})` }))}
+                            />
+                        </Form.Item>
+                    )}
+
+                    <Form.Item name="driverId" label="Водитель" rules={[{ required: true, message: 'Выберите водителя' }]}>
+                        <Select
+                            placeholder="Выберите водителя из списка"
+                            size="large"
+                            loading={driversLoading}
+                            onChange={handleDriverSelect}
+                            showSearch
+                            filterOption={(input, option) =>
+                                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                            }
+                            options={[
+                                ...drivers.map(d => ({
+                                    value: d.id,
+                                    label: `${d.lastName} ${d.firstName} ${d.middleName || ''} (${d.phone})`.trim()
+                                })),
+                                { value: '__NEW_DRIVER__', label: '+ Добавить нового водителя' }
+                            ]}
+                        />
+                    </Form.Item>
+
+                    {selectedDriverId && (
+                        <div>
+                            <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Данные водителя</Divider>
+                            <Row gutter={16}>
+                                <Col span={8}>
+                                    <Form.Item name="lastName" label="Фамилия" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите фамилию' }]}>
+                                        <Input size="large" placeholder="Иванов" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="firstName" label="Имя" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите имя' }]}>
+                                        <Input size="large" placeholder="Иван" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="middleName" label="Отчество">
+                                        <Input size="large" placeholder="Иванович" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите телефон' }]}>
+                                        <Input size="large" placeholder="+77001234567" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="iin" label="ИИН">
+                                        <Input size="large" placeholder="123456789012" maxLength={12} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+
+                            <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Транспортное средство</Divider>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="vehicleType" label="Тип транспорта">
+                                        <Select
+                                            placeholder="Выберите тип кузова"
+                                            size="large"
+                                            options={VEHICLE_TYPES.map(t => ({ label: t, value: t }))}
+                                            showSearch
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="vehicleModel" label="Модель автомобиля">
+                                        <Input size="large" placeholder="Volvo FH12" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите госномер' }]}>
+                                        <Input size="large" placeholder="123 ABC 01" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="trailerNumber" label="Госномер прицепа">
+                                        <Input size="large" placeholder="1234 XX 01" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+
+                            <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Документы</Divider>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="docType" label="Тип документа">
+                                        <Select placeholder="Выберите документ" size="large">
+                                            <Select.Option value="ID_CARD">Удостоверение личности</Select.Option>
+                                            <Select.Option value="PASSPORT">Паспорт</Select.Option>
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="docNumber" label="Номер документа">
+                                        <Input size="large" placeholder="012345678" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Row gutter={16}>
+                                <Col span={8}>
+                                    <Form.Item name="docIssuedAt" label="Дата выдачи">
+                                        <DatePicker style={{ width: '100%' }} size="large" format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="docExpiresAt" label="Срок действия">
+                                        <DatePicker style={{ width: '100%' }} size="large" format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="docIssuedBy" label="Кем выдан">
+                                        <Input size="large" placeholder="МВД РК" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                        </div>
+                    )}
+                </>
+            )}
+
+            {isCarrierOnPlatform && (
+                <div style={{
+                    padding: '16px 20px',
+                    background: `${token.colorSuccessBg}`,
+                    border: `1px solid ${token.colorSuccessBorder}`,
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    marginTop: 16
+                }}>
+                    <CheckCircleOutlined style={{ color: token.colorSuccess, fontSize: 20 }} />
+                    <div style={{ color: token.colorSuccessText, fontSize: 13, fontWeight: 500 }}>
+                        Перевозчик зарегистрирован на платформе. Он самостоятельно назначит водителя на эту заявку. Дальнейший ввод водителя не требуется.
+                    </div>
+                </div>
+            )}
         </Card>
     );
 
