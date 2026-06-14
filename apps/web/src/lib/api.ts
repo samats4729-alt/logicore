@@ -63,6 +63,8 @@ export interface Location {
     contactName?: string;
     contactPhone?: string;
     city?: string;
+    companyId?: string;
+    emails?: string;
 }
 
 export interface Country {
