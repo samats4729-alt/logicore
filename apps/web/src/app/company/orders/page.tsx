@@ -12,7 +12,7 @@ import {
     UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
     FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined,
-    MailOutlined, RightOutlined
+    MailOutlined, RightOutlined, EditOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
