@@ -19,6 +19,8 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import quarterOfYear from 'dayjs/plugin/quarterOfYear';
+dayjs.extend(quarterOfYear);
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
