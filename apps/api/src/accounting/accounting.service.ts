@@ -3,12 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentDirection, PaymentMethod } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, Prisma } from '@prisma/client';
 import { money } from '../common/utils/money';
 import * as XLSX from 'xlsx';
 
 @Injectable()
 export class AccountingService {
+    private static readonly AUTO_NOTE_CUSTOMER = 'Проведение оплаты заказчика (на остаток)';
+    private static readonly AUTO_NOTE_DRIVER = 'Оплата водителю (на остаток)';
+    private static readonly AUTO_NOTE_SUBFORWARDER = 'Оплата суб-экспедитору (на остаток)';
+
     constructor(
         private prisma: PrismaService,
         private redisService: RedisService,
@@ -616,12 +620,18 @@ export class AccountingService {
                     direction: PaymentDirection.IN,
                     amount: balance,
                     date: new Date().toISOString(),
-                    note: 'Проведение оплаты заказчика (на остаток)',
+                    note: AccountingService.AUTO_NOTE_CUSTOMER,
                 });
             }
         } else {
             const payments = await this.prisma.payment.findMany({
-                where: { orderId, direction: PaymentDirection.IN, isDeleted: false, companyId }
+                where: {
+                    orderId,
+                    direction: PaymentDirection.IN,
+                    isDeleted: false,
+                    companyId,
+                    note: AccountingService.AUTO_NOTE_CUSTOMER,
+                }
             });
             for (const p of payments) {
                 await this.deletePayment(companyId, p.id, userId);
@@ -646,6 +656,10 @@ export class AccountingService {
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
+        if (order.subForwarderId) {
+            throw new BadRequestException('На заявке назначен суб-экспедитор, используйте оплату суб-экспедитору');
+        }
+
         if (paid) {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
@@ -658,12 +672,18 @@ export class AccountingService {
                     direction: PaymentDirection.OUT,
                     amount: balance,
                     date: new Date().toISOString(),
-                    note: 'Оплата водителю (на остаток)',
+                    note: AccountingService.AUTO_NOTE_DRIVER,
                 });
             }
         } else {
             const payments = await this.prisma.payment.findMany({
-                where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
+                where: {
+                    orderId,
+                    direction: PaymentDirection.OUT,
+                    isDeleted: false,
+                    companyId,
+                    note: AccountingService.AUTO_NOTE_DRIVER,
+                }
             });
             for (const p of payments) {
                 await this.deletePayment(companyId, p.id, userId);
@@ -687,6 +707,10 @@ export class AccountingService {
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
+        if (!order.subForwarderId) {
+            throw new BadRequestException('На заявке нет суб-экспедитора, используйте оплату водителю');
+        }
+
         if (paid) {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
@@ -700,12 +724,18 @@ export class AccountingService {
                     direction: PaymentDirection.OUT,
                     amount: balance,
                     date: new Date().toISOString(),
-                    note: 'Оплата суб-экспедитору (на остаток)',
+                    note: AccountingService.AUTO_NOTE_SUBFORWARDER,
                 });
             }
         } else {
             const payments = await this.prisma.payment.findMany({
-                where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
+                where: {
+                    orderId,
+                    direction: PaymentDirection.OUT,
+                    isDeleted: false,
+                    companyId,
+                    note: AccountingService.AUTO_NOTE_SUBFORWARDER,
+                }
             });
             for (const p of payments) {
                 await this.deletePayment(companyId, p.id, userId);
@@ -1409,7 +1439,10 @@ export class AccountingService {
                 },
             });
         } catch (error) {
-            throw new BadRequestException('Этот период уже закрыт');
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                throw new BadRequestException('Этот период уже закрыт');
+            }
+            throw error;
         }
     }
 
@@ -1630,7 +1663,7 @@ export class AccountingService {
             };
         });
 
-        const wb = XLSX.book_new();
+        const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(rows);
 
         const maxLen = rows.reduce((widths, row) => {
@@ -1669,7 +1702,7 @@ export class AccountingService {
             };
         });
 
-        const wb = XLSX.book_new();
+        const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(rows);
 
         const maxLen = rows.reduce((widths, row) => {

@@ -1,16 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional, IsIn } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 export class GetCompanyUsersQueryDto extends PaginationQueryDto {
-    @ApiProperty({ required: false })
-    @IsString()
+    @ApiProperty({ required: false, enum: UserRole })
+    @IsEnum(UserRole)
     @IsOptional()
-    role?: string;
+    role?: UserRole;
 
     @ApiProperty({ required: false })
-    @IsString()
+    @IsIn(['drivers', 'office'])
     @IsOptional()
     segment?: string;
 }
