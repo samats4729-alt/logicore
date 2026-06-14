@@ -190,6 +190,7 @@ model Company {
   vehicles          Vehicle[]
   payments           Payment[] @relation("CompanyPayments")
   counterpartyPayments Payment[] @relation("CounterpartyPayments")
+  closedPeriods      ClosedPeriod[]
   
   @@index([bin])
 }
