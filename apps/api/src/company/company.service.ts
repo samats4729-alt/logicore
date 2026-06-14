@@ -158,7 +158,7 @@ export class CompanyService {
             throw new BadRequestException('Email уже занят');
         }
 
-        const existingPhone = await this.prisma.user.findUnique({
+        const existingPhone = await this.prisma.user.findFirst({
             where: { phone: data.phone },
         });
         if (existingPhone) {

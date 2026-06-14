@@ -232,7 +232,7 @@ export class AuthService {
         }
 
         // Проверяем телефон
-        const existingPhone = await this.prisma.user.findUnique({
+        const existingPhone = await this.prisma.user.findFirst({
             where: { phone: data.phone },
         });
         if (existingPhone) {
@@ -564,7 +564,7 @@ export class AuthService {
         }
 
         // Проверяем телефон
-        const existingPhone = await this.prisma.user.findUnique({
+        const existingPhone = await this.prisma.user.findFirst({
             where: { phone: data.phone },
         });
         if (existingPhone) {
@@ -779,7 +779,7 @@ export class AuthService {
             throw new BadRequestException('Приглашение недействительно или просрочено');
         }
 
-        const existingPhone = await this.prisma.user.findUnique({ where: { phone } });
+        const existingPhone = await this.prisma.user.findFirst({ where: { phone } });
         if (existingPhone) {
             throw new BadRequestException('Пользователь с таким телефоном уже существует');
         }
