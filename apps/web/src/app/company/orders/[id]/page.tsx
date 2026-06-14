@@ -489,10 +489,6 @@ export default function OrderDetailPage() {
             const assignPayload: any = {
                 driverId: finalDriverId,
                 partnerId: isOurCompany ? null : companyId,
-                assignedDriverName: `${values.lastName} ${values.firstName} ${values.middleName || ''}`.trim(),
-                assignedDriverPhone: values.phone,
-                assignedDriverPlate: values.vehiclePlate,
-                assignedDriverTrailer: values.trailerNumber,
             };
 
             await api.put(`/company/orders/${orderId}/assign-driver`, assignPayload);

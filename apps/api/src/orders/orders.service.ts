@@ -259,9 +259,6 @@ export class OrdersService implements OnModuleInit {
         return order;
     }
 
-    /**
-     * Назначение водителя на заявку
-     */
     async assignDriver(
         orderId: string,
         driverId?: string,
@@ -279,24 +276,67 @@ export class OrdersService implements OnModuleInit {
             throw new BadRequestException('Нельзя назначить водителя на эту заявку');
         }
 
+        let driverName = null;
+        let driverPhone = null;
+        let driverPlate = null;
+        let driverTrailer = null;
+
+        const hasManual = manualDriverData && (
+            manualDriverData.assignedDriverName ||
+            manualDriverData.assignedDriverPhone ||
+            manualDriverData.assignedDriverPlate ||
+            manualDriverData.assignedDriverTrailer
+        );
+
+        if (driverId) {
+            if (hasManual) {
+                throw new BadRequestException('Нельзя одновременно передавать ID водителя и заполнять данные вручную');
+            }
+
+            const driverUser = await this.prisma.user.findUnique({
+                where: { id: driverId },
+            });
+
+            if (!driverUser) {
+                throw new NotFoundException('Водитель не найден');
+            }
+
+            if (driverUser.role !== UserRole.DRIVER) {
+                throw new BadRequestException('Пользователь не является водителем');
+            }
+
+            driverName = `${driverUser.lastName || ''} ${driverUser.firstName || ''} ${driverUser.middleName || ''}`.trim();
+            driverPhone = driverUser.phone;
+            driverPlate = driverUser.vehiclePlate;
+            driverTrailer = driverUser.trailerNumber;
+        } else if (hasManual) {
+            driverName = manualDriverData.assignedDriverName || null;
+            driverPhone = manualDriverData.assignedDriverPhone || null;
+            driverPlate = manualDriverData.assignedDriverPlate || null;
+            driverTrailer = manualDriverData.assignedDriverTrailer || null;
+        } else {
+            throw new BadRequestException('Необходимо указать водителя (ID или заполнить вручную)');
+        }
+
         return this.prisma.order.update({
             where: { id: orderId },
             data: {
                 driverId: driverId || null,
                 partnerId: partnerId || null,
                 forwarderId: partnerId || order.forwarderId || null,
-                assignedDriverName: manualDriverData?.assignedDriverName || null,
-                assignedDriverPhone: manualDriverData?.assignedDriverPhone || null,
-                assignedDriverPlate: manualDriverData?.assignedDriverPlate || null,
-                assignedDriverTrailer: manualDriverData?.assignedDriverTrailer || null,
+                assignedDriverName: driverName,
+                assignedDriverPhone: driverPhone,
+                assignedDriverPlate: driverPlate,
+                assignedDriverTrailer: driverTrailer,
+                assignedAt: new Date(),
                 status: OrderStatus.ASSIGNED,
                 isConfirmed: true,
                 statusHistory: {
                     create: {
                         status: OrderStatus.ASSIGNED,
-                        comment: manualDriverData?.assignedDriverName 
-                            ? `Назначен водитель вручную: ${manualDriverData.assignedDriverName}`
-                            : 'Назначен водитель',
+                        comment: hasManual
+                            ? `Назначен водитель вручную: ${driverName}`
+                            : `Назначен водитель: ${driverName}`,
                     },
                 },
             },

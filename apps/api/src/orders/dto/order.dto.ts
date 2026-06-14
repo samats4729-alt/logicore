@@ -1,6 +1,26 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
 import { OrderStatus } from '@prisma/client';
+
+@ValidatorConstraint({ name: 'IsAssignDriverValid', async: false })
+export class IsAssignDriverValidConstraint implements ValidatorConstraintInterface {
+    validate(_value: any, args: ValidationArguments) {
+        const dto = args.object as any;
+        const hasDriverId = !!dto.driverId;
+        const hasManual = !!(dto.assignedDriverName || dto.assignedDriverPhone || dto.assignedDriverPlate || dto.assignedDriverTrailer);
+        return (hasDriverId && !hasManual) || (!hasDriverId && hasManual);
+    }
+
+    defaultMessage(args: ValidationArguments) {
+        const dto = args.object as any;
+        const hasDriverId = !!dto.driverId;
+        const hasManual = !!(dto.assignedDriverName || dto.assignedDriverPhone || dto.assignedDriverPlate || dto.assignedDriverTrailer);
+        if (hasDriverId && hasManual) {
+            return 'Нельзя одновременно передавать ID водителя и заполнять данные вручную';
+        }
+        return 'Необходимо указать водителя (ID или заполнить вручную)';
+    }
+}
 
 export class CreateOrderDto {
     @ApiProperty({ required: false, description: 'ID заказчика (если не указан - берется из токена)' })
@@ -167,6 +187,7 @@ export class AssignDriverDto {
     @ApiProperty({ required: false, example: 'driver-id-123' })
     @IsString()
     @IsOptional()
+    @Validate(IsAssignDriverValidConstraint)
     driverId?: string;
 
     @ApiProperty({ required: false, description: 'ID компании-субподрядчика' })
