@@ -63,7 +63,9 @@ export class UsersController {
             throw new BadRequestException('Пользователь не найден');
         }
 
-        const isPasswordValid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+        const isPasswordValid = user.passwordHash
+            ? await bcrypt.compare(dto.currentPassword, user.passwordHash)
+            : false;
         if (!isPasswordValid) {
             throw new BadRequestException('Неверный текущий пароль');
         }
