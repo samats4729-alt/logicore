@@ -353,6 +353,7 @@ export class AccountingService {
                 executorDebt: fin.executorDebt,
                 paidIn: fin.paidIn,
                 paidOut: fin.paidOut,
+                executorCost: isCustomer ? null : fin.executorCost,
             };
 
             if (isCustomer) {
@@ -365,6 +366,7 @@ export class AccountingService {
                 mapped.subForwarderPaidAt = null;
                 mapped.partner = null;
                 mapped.subForwarder = null;
+                mapped.executorCost = null;
             }
 
             return mapped;
@@ -1668,12 +1670,12 @@ export class AccountingService {
 
         const maxLen = rows.reduce((widths, row) => {
             Object.keys(row).forEach((key, i) => {
-                const val = String(row[key] ?? '');
+                const val = String((row as any)[key] ?? '');
                 widths[i] = Math.max(widths[i] || 10, val.length, key.length);
             });
             return widths;
         }, [] as number[]);
-        ws['!cols'] = maxLen.map(w => ({ w: w + 2 }));
+        ws['!cols'] = maxLen.map(w => ({ wch: w + 2 }));
 
         XLSX.utils.book_append_sheet(wb, ws, 'Реестр');
         return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
@@ -1707,12 +1709,12 @@ export class AccountingService {
 
         const maxLen = rows.reduce((widths, row) => {
             Object.keys(row).forEach((key, i) => {
-                const val = String(row[key] ?? '');
+                const val = String((row as any)[key] ?? '');
                 widths[i] = Math.max(widths[i] || 10, val.length, key.length);
             });
             return widths;
         }, [] as number[]);
-        ws['!cols'] = maxLen.map(w => ({ w: w + 2 }));
+        ws['!cols'] = maxLen.map(w => ({ wch: w + 2 }));
 
         XLSX.utils.book_append_sheet(wb, ws, 'Взаиморасчеты');
         return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
