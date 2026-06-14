@@ -313,7 +313,7 @@ export default function CounterpartyReportPage() {
                 <Col xs={24} sm={8}>
                     <Card size="small" styles={{ body: { padding: '12px 16px' } }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Нам должны (дебиторка)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Нам должны</span>}
                             value={filteredTotals.unpaidTheyOweUs}
                             prefix={<ArrowUpOutlined style={{ color: token.colorWarning, marginRight: 4 }} />}
                             valueStyle={{ fontSize: 20, color: token.colorText, fontWeight: 700 }}
@@ -329,7 +329,7 @@ export default function CounterpartyReportPage() {
                 <Col xs={24} sm={8}>
                     <Card size="small" styles={{ body: { padding: '12px 16px' } }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Мы должны (кредиторка)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Мы должны</span>}
                             value={filteredTotals.unpaidWeOweThem}
                             prefix={<ArrowDownOutlined style={{ color: token.colorError, marginRight: 4 }} />}
                             valueStyle={{ fontSize: 20, color: token.colorText, fontWeight: 700 }}
@@ -381,8 +381,8 @@ export default function CounterpartyReportPage() {
                     style={{ width: 220 }}
                     options={[
                         { value: 'all', label: 'Все контрагенты' },
-                        { value: 'unpaid_them', label: 'Нам должны (не оплачено)' },
-                        { value: 'unpaid_us', label: 'Мы должны (не оплачено)' },
+                        { value: 'unpaid_them', label: 'Нам должны' },
+                        { value: 'unpaid_us', label: 'Мы должны' },
                         { value: 'settled', label: 'Все оплачено' },
                     ]}
                 />

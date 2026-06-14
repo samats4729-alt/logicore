@@ -257,7 +257,7 @@ export default function FinanceSettingsPage() {
                                 <Tabs defaultActiveKey="IN" size="small" type="card" items={[
                                     {
                                         key: 'IN',
-                                        label: 'Поступления (Доходы)',
+                                        label: 'Поступления',
                                         children: (
                                             <Table
                                                 columns={categoryColumns}
@@ -270,7 +270,7 @@ export default function FinanceSettingsPage() {
                                     },
                                     {
                                         key: 'OUT',
-                                        label: 'Списания (Расходы)',
+                                        label: 'Списания',
                                         children: (
                                             <Table
                                                 columns={categoryColumns}
@@ -325,8 +325,8 @@ export default function FinanceSettingsPage() {
                     {!editingCategory && (
                         <Form.Item name="direction" label="Направление" rules={[{ required: true, message: 'Укажите направление' }]}>
                             <Select size="large">
-                                <Select.Option value="IN">Поступление (Доход)</Select.Option>
-                                <Select.Option value="OUT">Расход (Списание)</Select.Option>
+                                <Select.Option value="IN">Поступление</Select.Option>
+                                <Select.Option value="OUT">Расход</Select.Option>
                             </Select>
                         </Form.Item>
                     )}

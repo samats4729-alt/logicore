@@ -252,7 +252,7 @@ export default function CompanyAccountingPage() {
                                     <Col xs={24} sm={12} md={8}>
                                         <Card bordered={false} style={cardStyle} styles={{ body: { padding: 20 } }}>
                                             <Statistic
-                                                title={<span style={{ color: token.colorTextSecondary, fontSize: 13, fontWeight: 500 }}>Дебиторка (нам должны)</span>}
+                                                title={<span style={{ color: token.colorTextSecondary, fontSize: 13, fontWeight: 500 }}>Дебиторка</span>}
                                                 value={summary.debtorSum}
                                                 valueStyle={{ color: token.colorText, fontWeight: 700, fontSize: 20 }}
                                                 formatter={(val) => formatMoney(val as number)}
@@ -267,7 +267,7 @@ export default function CompanyAccountingPage() {
                                     <Col xs={24} sm={12} md={8}>
                                         <Card bordered={false} style={cardStyle} styles={{ body: { padding: 20 } }}>
                                             <Statistic
-                                                title={<span style={{ color: token.colorTextSecondary, fontSize: 13, fontWeight: 500 }}>Кредиторка (мы должны)</span>}
+                                                title={<span style={{ color: token.colorTextSecondary, fontSize: 13, fontWeight: 500 }}>Кредиторка</span>}
                                                 value={summary.creditorSum}
                                                 valueStyle={{ color: token.colorText, fontWeight: 700, fontSize: 20 }}
                                                 formatter={(val) => formatMoney(val as number)}

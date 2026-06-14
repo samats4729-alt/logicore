@@ -192,14 +192,14 @@ export default function CashflowReportPage() {
             render: (val: number) => <Text style={{ color: '#389e0d' }}>{formatMoney(val)}</Text>
         },
         {
-            title: 'Списания (-)',
+            title: 'Списания',
             dataIndex: 'out',
             key: 'out',
             align: 'right' as const,
             render: (val: number) => <Text style={{ color: '#cf1322' }}>{formatMoney(val)}</Text>
         },
         {
-            title: 'Сальдо (Чистый поток)',
+            title: 'Сальдо',
             dataIndex: 'balance',
             key: 'balance',
             align: 'right' as const,
@@ -298,7 +298,7 @@ export default function CashflowReportPage() {
                         <Col xs={24} sm={12} md={5}>
                             <Card size="small" style={cardStyle}>
                                 <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Списания (-)</span>}
+                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Списания</span>}
                                     value={report.totalOut}
                                     valueStyle={{ fontSize: 16, fontWeight: 700, color: '#cf1322' }}
                                     formatter={(v) => formatMoney(v as number)}
@@ -309,7 +309,7 @@ export default function CashflowReportPage() {
                         <Col xs={24} sm={12} md={4}>
                             <Card size="small" style={cardStyle}>
                                 <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Чистый поток (Net)</span>}
+                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Чистый поток</span>}
                                     value={report.netChange}
                                     valueStyle={{ fontSize: 16, fontWeight: 800, color: report.netChange >= 0 ? '#389e0d' : '#cf1322' }}
                                     formatter={(v) => formatMoney(v as number)}

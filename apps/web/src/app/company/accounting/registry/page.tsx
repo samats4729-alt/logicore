@@ -484,7 +484,7 @@ export default function FinancialRegistryPage() {
                 <Col xs={12} sm={8} md={4}>
                     <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Выручка (всего)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Выручка</span>}
                             value={totals.totalIncome}
                             valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
                             formatter={(val) => `${fmt(val as number)} ₸`}
@@ -494,7 +494,7 @@ export default function FinancialRegistryPage() {
                 <Col xs={12} sm={8} md={4}>
                     <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Затраты (всего)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Затраты</span>}
                             value={totals.totalExpense}
                             valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
                             formatter={(val) => `${fmt(val as number)} ₸`}
@@ -504,7 +504,7 @@ export default function FinancialRegistryPage() {
                 <Col xs={12} sm={8} md={4}>
                     <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Маржа (всего)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Маржа</span>}
                             value={totals.totalMargin}
                             valueStyle={{ fontSize: 15, color: totals.totalMargin >= 0 ? token.colorSuccess : token.colorError, fontWeight: 700 }}
                             formatter={(val) => `${totals.totalMargin >= 0 ? '+' : ''}${fmt(val as number)} ₸`}
@@ -514,7 +514,7 @@ export default function FinancialRegistryPage() {
                 <Col xs={12} sm={8} md={6}>
                     <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 500 }}>Дебиторка (не выплачено нам)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 500 }}>Дебиторка</span>}
                             value={totals.debtorSum}
                             valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
                             formatter={(val) => `${fmt(val as number)} ₸`}
@@ -525,7 +525,7 @@ export default function FinancialRegistryPage() {
                 <Col xs={12} sm={8} md={6}>
                     <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 500 }}>Кредиторка (наш долг)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 500 }}>Кредиторка</span>}
                             value={totals.creditorSum}
                             valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
                             formatter={(val) => `${fmt(val as number)} ₸`}
@@ -553,8 +553,8 @@ export default function FinancialRegistryPage() {
                     style={{ width: 210 }}
                     options={[
                         { value: 'all', label: 'Все заявки' },
-                        { value: 'debtor', label: 'Долг заказчика (не оплачено)' },
-                        { value: 'creditor', label: 'Наш долг перед ТК (не оплачено)' },
+                        { value: 'debtor', label: 'Долг заказчика' },
+                        { value: 'creditor', label: 'Наш долг перед ТК' },
                         { value: 'all_paid', label: 'Все расчеты завершены' },
                     ]}
                 />

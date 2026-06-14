@@ -653,7 +653,7 @@ export default function CreateOrderPage() {
                                 justifyContent: 'space-between',
                                 alignItems: 'center'
                             }}>
-                                <span>Чистая маржа (без НДС): <strong style={{ color: margin >= 0 ? '#059669' : '#dc2626', fontSize: 15 }}>{margin.toLocaleString('ru-RU')} ₸</strong></span>
+                                <span>Чистая маржа: <strong style={{ color: margin >= 0 ? '#059669' : '#dc2626', fontSize: 15 }}>{margin.toLocaleString('ru-RU')} ₸</strong></span>
                                 <Tag color={margin >= 0 ? 'green' : 'red'}>{marginPercent}%</Tag>
                             </div>
                         );

@@ -102,11 +102,11 @@ export default function PnLReportPage() {
     const getReportRows = () => {
         if (!report) return [];
         const rows = [
-            { key: 'rev', label: '1. Выручка (Revenue Net)', val: report.revenueNet, type: 'header_main' },
-            { key: 'cost', label: '2. Себестоимость исполнителя (Net)', val: report.executorCostNet, type: 'header_main' },
-            { key: 'gross', label: 'Валовая прибыль (Gross Profit)', val: report.grossProfit, type: 'total_accent' },
+            { key: 'rev', label: '1. Выручка', val: report.revenueNet, type: 'header_main' },
+            { key: 'cost', label: '2. Себестоимость исполнителя', val: report.executorCostNet, type: 'header_main' },
+            { key: 'gross', label: 'Валовая прибыль', val: report.grossProfit, type: 'total_accent' },
             { key: 'spacer1', label: '', val: null, type: 'spacer' },
-            { key: 'other_in', label: '3. Прочие операционные доходы (Всего)', val: report.totalOtherIncomes, type: 'header_sub' },
+            { key: 'other_in', label: '3. Прочие операционные доходы', val: report.totalOtherIncomes, type: 'header_sub' },
             ...report.otherIncomes.map((i, idx) => ({
                 key: `in_${idx}`,
                 label: `   └ ${i.name}`,
@@ -114,7 +114,7 @@ export default function PnLReportPage() {
                 type: 'detail'
             })),
             { key: 'spacer2', label: '', val: null, type: 'spacer' },
-            { key: 'other_ex', label: '4. Прочие операционные расходы (Всего)', val: report.totalOtherExpenses, type: 'header_sub' },
+            { key: 'other_ex', label: '4. Прочие операционные расходы', val: report.totalOtherExpenses, type: 'header_sub' },
             ...report.otherExpenses.map((e, idx) => ({
                 key: `ex_${idx}`,
                 label: `   └ ${e.name}`,
@@ -122,8 +122,8 @@ export default function PnLReportPage() {
                 type: 'detail'
             })),
             { key: 'spacer3', label: '', val: null, type: 'spacer' },
-            { key: 'net_profit', label: 'Чистая прибыль (Net Profit)', val: report.netProfit, type: 'final_accent' },
-            { key: 'margin', label: 'Рентабельность чистой прибыли (%)', val: `${report.marginPercentage}%`, type: 'final_info' }
+            { key: 'net_profit', label: 'Чистая прибыль', val: report.netProfit, type: 'final_accent' },
+            { key: 'margin', label: 'Рентабельность чистой прибыли', val: `${report.marginPercentage}%`, type: 'final_info' }
         ];
         return rows;
     };
@@ -177,7 +177,7 @@ export default function PnLReportPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px' }} />
                     <div>
-                        <Title level={4} style={{ margin: 0 }}>Прибыли и убытки (P&L / Доходы и расходы)</Title>
+                        <Title level={4} style={{ margin: 0 }}>Прибыли и убытки (P&L)</Title>
                         <Text type="secondary">Финансовые результаты на основе начислений по закрытым сделкам</Text>
                     </div>
                 </div>
@@ -211,7 +211,7 @@ export default function PnLReportPage() {
                         <Col xs={24} sm={12} md={5}>
                             <Card size="small" style={cardStyle}>
                                 <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Выручка (Net)</span>}
+                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Выручка</span>}
                                     value={report.revenueNet}
                                     valueStyle={{ fontSize: 16, fontWeight: 700 }}
                                     formatter={(v) => formatMoney(v as number)}
@@ -222,7 +222,7 @@ export default function PnLReportPage() {
                         <Col xs={24} sm={12} md={5}>
                             <Card size="small" style={cardStyle}>
                                 <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Себестоимость (Net)</span>}
+                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Себестоимость</span>}
                                     value={report.executorCostNet}
                                     valueStyle={{ fontSize: 16, fontWeight: 700, color: token.colorTextSecondary }}
                                     formatter={(v) => formatMoney(v as number)}
