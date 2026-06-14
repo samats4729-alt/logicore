@@ -92,7 +92,7 @@ async function bootstrap() {
     try {
         const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
         if (!existingAdmin) {
-            const hashedPassword = await bcrypt.hash(adminPassword, 10);
+            const hashedPassword = await bcrypt.hash(adminPassword, 12);
             await prisma.user.create({
                 data: {
                     email: adminEmail,

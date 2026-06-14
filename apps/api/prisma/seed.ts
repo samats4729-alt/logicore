@@ -33,7 +33,7 @@ async function main() {
     console.log('🌱 Seeding database...');
 
     // Создаём тестового админа
-    const adminPassword = await bcrypt.hash('admin123', 10);
+    const adminPassword = await bcrypt.hash('admin123', 12);
 
     const admin = await prisma.user.upsert({
         where: { email: 'admin@logcomp.kz' },
@@ -86,7 +86,7 @@ async function main() {
     console.log(`✅ Driver created: ${driver.phone}`);
 
     // Тестовый заказчик
-    const customerPassword = await bcrypt.hash('customer123', 10);
+    const customerPassword = await bcrypt.hash('customer123', 12);
     const customer = await prisma.user.upsert({
         where: { email: 'customer@test.kz' },
         update: { companyId: testCompany.id },

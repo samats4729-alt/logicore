@@ -56,7 +56,6 @@ export class OrdersController {
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Мои заявки (для водителя)' })
     async myOrders(@Request() req: any) {
-        console.log(`🔍 [DEBUG] GET /orders/my called by user:`, req.user);
         try {
             const result = await this.ordersService.findDriverOrders(req.user.sub);
             console.log(`🔍 [DEBUG] Sending response to client. Items count: ${result.length}`);

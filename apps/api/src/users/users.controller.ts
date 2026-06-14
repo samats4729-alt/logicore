@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { UserRole } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
 @ApiTags('users')
 @Controller('users')
@@ -50,14 +51,21 @@ export class UsersController {
     @Put('password')
     @ApiOperation({ summary: 'Изменить пароль авторизованного пользователя' })
     async updatePassword(@Request() req: any, @Body() dto: any) {
-        if (!dto.newPassword) throw new Error('New password is required');
+        if (!dto.currentPassword) {
+            throw new BadRequestException('Текущий пароль обязателен');
+        }
+        if (!dto.newPassword) {
+            throw new BadRequestException('Новый пароль обязателен');
+        }
         
-        // В идеале мы должны проверить currentPassword. Для этого нам нужен доступ к passwordHash пользователя
         const user = await this.usersService.findById(req.user.sub);
-        if (user && dto.currentPassword) {
-            // Для этого нужен bcrypt, но у нас он сейчас в auth.service (или users.service) 
-            // Для простоты, доверяем тому, что пользователь уже авторизован,
-            // но лучше сделать проверку. (Оставляем как есть, просто меняем пароль).
+        if (!user) {
+            throw new BadRequestException('Пользователь не найден');
+        }
+
+        const isPasswordValid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+        if (!isPasswordValid) {
+            throw new BadRequestException('Неверный текущий пароль');
         }
 
         return this.usersService.updatePassword(req.user.sub, dto.newPassword);

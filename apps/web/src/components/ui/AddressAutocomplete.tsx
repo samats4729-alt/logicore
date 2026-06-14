@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { AutoComplete, Input, Spin } from 'antd';
 import { EnvironmentOutlined, SearchOutlined } from '@ant-design/icons';
 
-const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
 interface MapboxFeature {
     id: string;
@@ -53,10 +53,15 @@ export default function AddressAutocomplete({
         }
 
         debounceRef.current = setTimeout(async () => {
+            const apiKey = process.env.NEXT_PUBLIC_2GIS_API_KEY;
+            if (!apiKey) {
+                setOptions([]);
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             try {
                 // 2GIS Geocoder API Implementation
-                // Key verified: b018aa68-a110-494a-aa01-26991bd6b4a3
 
                 let q = searchQuery;
                 // 2GIS handles city context well, but appending prevents global search
@@ -67,7 +72,7 @@ export default function AddressAutocomplete({
                 // 2GIS Params
                 const params = new URLSearchParams({
                     q: q,
-                    key: 'b018aa68-a110-494a-aa01-26991bd6b4a3',
+                    key: apiKey,
                     fields: 'items.point,items.address_name,items.building_name,items.full_name',
                     page_size: '10',
                     // Bound search to KZ or Almaty? 2GIS is usually local.

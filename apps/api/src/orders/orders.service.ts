@@ -531,7 +531,6 @@ export class OrdersService implements OnModuleInit {
      * Заявки для водителя (текущие)
      */
     async findDriverOrders(driverId: string) {
-        console.log(`🔍 [DEBUG] findDriverOrders for driverId: ${driverId}`);
         const orders = await this.prisma.order.findMany({
             where: {
                 driverId,
@@ -560,6 +559,9 @@ export class OrdersService implements OnModuleInit {
      */
     async acceptOrder(orderId: string, companyId: string) {
         const order = await this.findById(orderId);
+        if (order.forwarderId !== companyId && order.subForwarderId !== companyId) {
+            throw new ForbiddenException('Вы не можете принять эту заявку');
+        }
         return this.prisma.order.update({
             where: { id: orderId },
             data: {
@@ -579,6 +581,9 @@ export class OrdersService implements OnModuleInit {
      */
     async rejectOrder(orderId: string, companyId: string) {
         const order = await this.findById(orderId);
+        if (order.forwarderId !== companyId && order.subForwarderId !== companyId) {
+            throw new ForbiddenException('Вы не можете отклонить эту заявку');
+        }
         return this.prisma.order.update({
             where: { id: orderId },
             data: {

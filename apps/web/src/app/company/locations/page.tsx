@@ -21,7 +21,7 @@ const MapPicker = dynamic(() => import('@/components/ui/MapPicker'), {
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
 export default function CompanyLocationsPage() {
     const { message } = App.useApp();
@@ -287,11 +287,16 @@ export default function CompanyLocationsPage() {
     // ФУНКЦИЯ РУЧНОГО ОПРЕДЕЛЕНИЯ (Тратит 1 запрос 2GIS)
     const handleManualGeocode = async () => {
         if (!lat || !lng) return;
+        const apiKey = process.env.NEXT_PUBLIC_2GIS_API_KEY;
+        if (!apiKey) {
+            message.warning('2GIS API key не сконфигурирован');
+            return;
+        }
 
         setIsFetchingAddress(true);
         try {
             const params = new URLSearchParams({
-                key: 'b018aa68-a110-494a-aa01-26991bd6b4a3',
+                key: apiKey,
                 fields: 'items.point,items.address_name,items.building_name,items.full_name,items.adm_div',
                 lon: lng.toString(),
                 lat: lat.toString(),

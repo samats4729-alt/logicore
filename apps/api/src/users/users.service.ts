@@ -20,7 +20,7 @@ export class UsersService {
         companyId?: string;
     }) {
         const passwordHash = data.password
-            ? await bcrypt.hash(data.password, 10)
+            ? await bcrypt.hash(data.password, 12)
             : null;
 
         return this.prisma.user.create({
@@ -87,7 +87,7 @@ export class UsersService {
     }
 
     async updatePassword(id: string, newPassword: string) {
-        const passwordHash = await bcrypt.hash(newPassword, 10);
+        const passwordHash = await bcrypt.hash(newPassword, 12);
         return this.prisma.user.update({
             where: { id },
             data: { passwordHash },

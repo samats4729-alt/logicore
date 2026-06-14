@@ -189,7 +189,7 @@ export class AuthService {
             throw new BadRequestException('Пользователь не найден');
         }
 
-        const passwordHash = await bcrypt.hash(newPassword, 10);
+        const passwordHash = await bcrypt.hash(newPassword, 12);
 
         await this.prisma.user.update({
             where: { id: userId },
@@ -379,7 +379,7 @@ export class AuthService {
             }
 
             // Хешируем пароль
-            const passwordHash = await bcrypt.hash(data.adminPassword, 10);
+            const passwordHash = await bcrypt.hash(data.adminPassword, 12);
 
             // Создаём админа компании
             const admin = await tx.user.create({
@@ -425,7 +425,10 @@ export class AuthService {
      * Верификация Google ID Token
      */
     private async verifyGoogleToken(token: string): Promise<{ googleId: string; email: string; firstName: string; lastName: string }> {
-        const clientId = this.configService.get('GOOGLE_CLIENT_ID') || '5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com';
+        const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+        if (!clientId) {
+            throw new Error('GOOGLE_CLIENT_ID environment variable is not configured');
+        }
         const client = new OAuth2Client(clientId);
 
         try {
@@ -784,7 +787,7 @@ export class AuthService {
             throw new BadRequestException('Пользователь с таким телефоном уже существует');
         }
 
-        const passwordHash = await bcrypt.hash(password, 10);
+        const passwordHash = await bcrypt.hash(password, 12);
 
         const result = await this.prisma.$transaction(async (tx) => {
             const user = await tx.user.create({
@@ -869,7 +872,7 @@ export class AuthService {
                 }
             }
             if (!phone) {
-                phone = '+77000000000'; // Дефолтный телефон для автозаполнения, если не найден
+                phone = null;
             }
 
             // Пытаемся вытащить email

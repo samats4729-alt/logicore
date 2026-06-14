@@ -165,7 +165,7 @@ export class CompanyService {
             throw new BadRequestException('Телефон уже занят');
         }
 
-        const passwordHash = await bcrypt.hash(data.password, 10);
+        const passwordHash = await bcrypt.hash(data.password, 12);
 
         return this.prisma.user.create({
             data: {
@@ -243,7 +243,7 @@ export class CompanyService {
 
         const updateData: any = { ...data };
         if (data.password) {
-            updateData.passwordHash = await bcrypt.hash(data.password, 10);
+            updateData.passwordHash = await bcrypt.hash(data.password, 12);
             delete updateData.password;
         }
 
