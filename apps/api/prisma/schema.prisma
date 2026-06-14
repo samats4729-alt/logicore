@@ -186,7 +186,8 @@ model Company {
   invitations       Invitation[]
   locations         Location[]  @relation("CompanyLocations")
   departments       Department[]
-
+  vehicles          Vehicle[]
+  
   @@index([bin])
 }
 
@@ -815,4 +816,21 @@ model Department {
 
   @@index([companyId])
   @@index([parentDepartmentId])
+}
+
+// ==================== VEHICLES ====================
+
+model Vehicle {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type          String   // body type e.g., Tent, Ref
+  plate         String   // license plate
+  model         String   // model details
+  trailerNumber String?  // optional trailer plate
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([companyId])
 }

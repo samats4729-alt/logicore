@@ -165,6 +165,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 icon: <TeamOutlined />,
                 label: 'Сотрудники',
             });
+            partnersChildren.push({
+                key: '/company/vehicles',
+                icon: <CarOutlined />,
+                label: 'Автопарк',
+            });
         }
         partnersChildren.push({
             key: '/company/locations',

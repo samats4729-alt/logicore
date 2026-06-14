@@ -113,6 +113,8 @@ export default function OrderDetailPage() {
     // Reference data
     const [drivers, setDrivers] = useState<Driver[]>([]);
     const [driversLoading, setDriversLoading] = useState(false);
+    const [vehicles, setVehicles] = useState<any[]>([]);
+    const [vehiclesLoading, setVehiclesLoading] = useState(false);
     const [partners, setPartners] = useState<Partner[]>([]);
     const [partnersLoading, setPartnersLoading] = useState(false);
     const [forwarders, setForwarders] = useState<{ id: string; name: string }[]>([]);
@@ -210,6 +212,14 @@ export default function OrderDetailPage() {
             const response = await api.get('/users/drivers');
             setDrivers(response.data);
         } catch { } finally { setDriversLoading(false); }
+    };
+
+    const fetchVehicles = async () => {
+        setVehiclesLoading(true);
+        try {
+            const response = await api.get('/company/vehicles');
+            setVehicles(response.data || []);
+        } catch { } finally { setVehiclesLoading(false); }
     };
 
     const fetchPartners = async () => {
@@ -400,7 +410,20 @@ export default function OrderDetailPage() {
         }
 
         fetchDrivers();
+        fetchVehicles();
         setAssignModalOpen(true);
+    };
+
+    const handleVehicleSelect = (vehicleId: string) => {
+        const vehicle = vehicles.find(v => v.id === vehicleId);
+        if (vehicle) {
+            assignForm.setFieldsValue({
+                vehiclePlate: vehicle.plate,
+                vehicleModel: vehicle.model,
+                vehicleType: vehicle.type,
+                trailerNumber: vehicle.trailerNumber,
+            });
+        }
     };
 
     const handleDriverSelect = (driverId: string) => {
@@ -1602,6 +1625,20 @@ export default function OrderDetailPage() {
                     {selectedAssignDriverId && (
                         <div style={{ marginTop: 16 }}>
                             <Divider orientation="left" style={{ margin: '12px 0', fontSize: 13, color: '#1890ff' }}>Данные водителя</Divider>
+                            {selectedAssignCompanyId === user?.companyId && (
+                                <Form.Item label="Выбрать ТС из автопарка (опционально)">
+                                    <Select 
+                                        placeholder="Выберите ТС" 
+                                        size="large" 
+                                        loading={vehiclesLoading} 
+                                        onChange={handleVehicleSelect} 
+                                        allowClear
+                                        showSearch 
+                                        filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+                                        options={vehicles.map(v => ({ value: v.id, label: `${v.model} (${v.plate})` }))}
+                                    />
+                                </Form.Item>
+                            )}
                             <Row gutter={16}>
                                 <Col span={8}>
                                     <Form.Item name="lastName" label="Фамилия" rules={[{ required: true, message: 'Введите фамилию' }]}>

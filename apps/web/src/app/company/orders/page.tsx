@@ -149,6 +149,8 @@ export default function CompanyOrdersPage() {
     // Common
     const [drivers, setDrivers] = useState<Driver[]>([]);
     const [driversLoading, setDriversLoading] = useState(false);
+    const [vehicles, setVehicles] = useState<any[]>([]);
+    const [vehiclesLoading, setVehiclesLoading] = useState(false);
     const [partners, setPartners] = useState<Partner[]>([]);
     const [partnersLoading, setPartnersLoading] = useState(false);
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
@@ -426,6 +428,18 @@ export default function CompanyOrdersPage() {
             message.error('Ошибка загрузки водителей');
         } finally {
             setDriversLoading(false);
+        }
+    };
+
+    const fetchVehicles = async () => {
+        setVehiclesLoading(true);
+        try {
+            const response = await api.get('/company/vehicles');
+            setVehicles(response.data || []);
+        } catch {
+            // silent fail
+        } finally {
+            setVehiclesLoading(false);
         }
     };
 
@@ -834,6 +848,19 @@ export default function CompanyOrdersPage() {
 
         fetchDrivers();
         fetchPartners();
+        fetchVehicles();
+    };
+
+    const handleVehicleSelect = (vehicleId: string) => {
+        const vehicle = vehicles.find(v => v.id === vehicleId);
+        if (vehicle) {
+            form.setFieldsValue({
+                assignedDriverPlate: vehicle.plate,
+                assignedDriverTrailer: vehicle.trailerNumber,
+                driverPlate: vehicle.plate,
+                trailerNumber: vehicle.trailerNumber,
+            });
+        }
     };
 
     const handleDriverSelect = (driverId: string) => {
@@ -1435,6 +1462,18 @@ export default function CompanyOrdersPage() {
                                 <>
                                     <Form.Item name="partnerId" label="Компания-контрагент (перевозчик)" rules={[{ required: assignType === 'partner_manual', message: 'Выберите контрагента' }]}>
                                         <Select placeholder="Выберите контрагента" size="large" loading={partnersLoading} options={partners.map(p => ({ label: p.name, value: p.id }))} showSearch filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
+                                    </Form.Item>
+                                    <Form.Item label="Выбрать ТС из автопарка (опционально)">
+                                        <Select 
+                                            placeholder="Выберите ТС" 
+                                            size="large" 
+                                            loading={vehiclesLoading} 
+                                            onChange={handleVehicleSelect} 
+                                            allowClear
+                                            showSearch 
+                                            filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+                                            options={vehicles.map(v => ({ value: v.id, label: `${v.model} (${v.plate})` }))}
+                                        />
                                     </Form.Item>
                                     <Form.Item name="assignedDriverName" label="ФИО водителя" rules={[{ required: assignType === 'partner_manual', message: 'Введите ФИО водителя' }]}>
                                         <Input placeholder="Иванов Иван Иванович" size="large" />

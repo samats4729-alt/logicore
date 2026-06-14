@@ -343,4 +343,48 @@ export class CreateInvitationDto {
     position?: string;
 }
 
+export class CreateVehicleDto {
+    @ApiProperty({ description: 'Тип транспорта (Тент, Реф и др.)', example: 'Тент' })
+    @IsString()
+    @IsNotEmpty()
+    type: string;
+
+    @ApiProperty({ description: 'Госномер автомобиля', example: '123ABC01' })
+    @IsString()
+    @IsNotEmpty()
+    plate: string;
+
+    @ApiProperty({ description: 'Модель автомобиля', example: 'Volvo FH16' })
+    @IsString()
+    @IsNotEmpty()
+    model: string;
+
+    @ApiProperty({ description: 'Номер прицепа (опционально)', required: false, example: 'AB1234' })
+    @IsString()
+    @IsOptional()
+    trailerNumber?: string;
+}
+
+export class UpdateVehicleDto {
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    type?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    plate?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    model?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    trailerNumber?: string;
+}
+
 

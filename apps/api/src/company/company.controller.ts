@@ -9,7 +9,7 @@ import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
-import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto, GetCompanyUsersQueryDto } from './dto/company.dto';
+import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto, GetCompanyUsersQueryDto, CreateVehicleDto, UpdateVehicleDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { AssignDriverDto } from '../orders/dto/order.dto';
 import * as path from 'path';
@@ -409,4 +409,37 @@ export class CompanyController {
         return this.companyService.assignUserToDepartment(req.user.companyId, dto.userId, dto.departmentId ?? null);
     }
 
+    // ==================== Транспорт компании (Автопарк) ====================
+
+    @Get('vehicles')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Получить список транспорта компании' })
+    async getVehicles(@Request() req: any) {
+        return this.companyService.getVehicles(req.user.companyId);
+    }
+
+    @Post('vehicles')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Создать новый транспорт' })
+    async createVehicle(@Request() req: any, @Body() dto: CreateVehicleDto) {
+        return this.companyService.createVehicle(req.user.companyId, dto);
+    }
+
+    @Put('vehicles/:id')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Обновить данные транспорта' })
+    async updateVehicle(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() dto: UpdateVehicleDto,
+    ) {
+        return this.companyService.updateVehicle(req.user.companyId, id, dto);
+    }
+
+    @Delete('vehicles/:id')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Удалить транспорт' })
+    async deleteVehicle(@Request() req: any, @Param('id') id: string) {
+        return this.companyService.deleteVehicle(req.user.companyId, id);
+    }
 }

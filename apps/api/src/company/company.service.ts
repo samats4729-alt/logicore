@@ -811,4 +811,61 @@ export class CompanyService {
             },
         });
     }
+
+    /**
+     * Получить список транспорта компании
+     */
+    async getVehicles(companyId: string) {
+        return this.prisma.vehicle.findMany({
+            where: { companyId, isActive: true },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+
+    /**
+     * Создать транспорт
+     */
+    async createVehicle(companyId: string, data: { type: string; plate: string; model: string; trailerNumber?: string }) {
+        return this.prisma.vehicle.create({
+            data: {
+                ...data,
+                companyId,
+                isActive: true,
+            },
+        });
+    }
+
+    /**
+     * Обновить транспорт
+     */
+    async updateVehicle(companyId: string, id: string, data: Partial<{ type: string; plate: string; model: string; trailerNumber?: string }>) {
+        const vehicle = await this.prisma.vehicle.findFirst({
+            where: { id, companyId },
+        });
+        if (!vehicle) {
+            throw new NotFoundException('Транспорт не найден');
+        }
+
+        return this.prisma.vehicle.update({
+            where: { id },
+            data,
+        });
+    }
+
+    /**
+     * Удалить/деактивировать транспорт
+     */
+    async deleteVehicle(companyId: string, id: string) {
+        const vehicle = await this.prisma.vehicle.findFirst({
+            where: { id, companyId },
+        });
+        if (!vehicle) {
+            throw new NotFoundException('Транспорт не найден');
+        }
+
+        return this.prisma.vehicle.update({
+            where: { id },
+            data: { isActive: false },
+        });
+    }
 }
