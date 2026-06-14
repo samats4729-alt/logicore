@@ -159,13 +159,6 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Договоры',
             });
         }
-        if (hasPerm('drivers')) {
-            partnersChildren.push({
-                key: '/company/drivers',
-                icon: <CarOutlined />,
-                label: 'Водители',
-            });
-        }
         if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
             partnersChildren.push({
                 key: '/company/users',

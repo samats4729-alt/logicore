@@ -11,12 +11,19 @@ import { S3Service } from '../s3/s3.service';
 export class CompanyService {
     constructor(private prisma: PrismaService, private s3Service: S3Service) { }
 
-    /**
-     * Получить пользователей компании
-     */
-    async getCompanyUsers(companyId: string, query: PaginationQueryDto = {}) {
+    async getCompanyUsers(companyId: string, query: any = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
-        const where = { companyId, isActive: true };
+        const where: any = { companyId, isActive: true };
+
+        if (query.role) {
+            where.role = query.role;
+        } else if (query.segment) {
+            if (query.segment === 'drivers') {
+                where.role = UserRole.DRIVER;
+            } else if (query.segment === 'office') {
+                where.role = { not: UserRole.DRIVER };
+            }
+        }
 
         const [data, total] = await Promise.all([
             this.prisma.user.findMany({

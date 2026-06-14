@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip } from 'antd';
+import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip, Segmented } from 'antd';
 import dayjs from 'dayjs';
 import { 
     MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, 
@@ -14,6 +14,15 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { VEHICLE_TYPES } from '@/lib/constants';
+
+const ROLE_OPTIONS = [
+    { label: 'Менеджер', value: 'LOGISTICIAN' },
+    { label: 'Бухгалтер', value: 'ACCOUNTANT' },
+    { label: 'Завсклад', value: 'WAREHOUSE_MANAGER' },
+    { label: 'Водитель', value: 'DRIVER' },
+    { label: 'Экспедитор', value: 'FORWARDER' },
+    { label: 'Администратор', value: 'COMPANY_ADMIN' },
+];
 
 const MODULE_PERMISSIONS = [
     { label: 'Заявки', value: 'orders' },
@@ -159,6 +168,7 @@ export default function CompanyUsersPage() {
     const [companyName, setCompanyName] = useState<string>('Наша Компания');
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');
+    const [activeSegment, setActiveSegment] = useState<'office' | 'drivers'>('office');
     
     const treeContainerRef = useRef<HTMLDivElement>(null);
 
@@ -175,12 +185,16 @@ export default function CompanyUsersPage() {
         }
     };
     
+    // Unified Modal state
+    const [unifiedModalOpen, setUnifiedModalOpen] = useState(false);
+    const [selectedRole, setSelectedRole] = useState<string>('LOGISTICIAN');
+    const [editingRecord, setEditingRecord] = useState<CompanyUser | null>(null);
+    const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+    const [unifiedForm] = Form.useForm();
+
     // Original modals state
-    const [modalOpen, setModalOpen] = useState(false);
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<CompanyUser | null>(null);
-    const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-    const [form] = Form.useForm();
     const [editForm] = Form.useForm();
 
     // Department modals state
@@ -199,11 +213,6 @@ export default function CompanyUsersPage() {
     // Inline department creation states for invite modal
     const [newDeptName, setNewDeptName] = useState('');
     const [addingDeptLoading, setAddingDeptLoading] = useState(false);
-
-    // Driver creation/editing modal state
-    const [driverModalOpen, setDriverModalOpen] = useState(false);
-    const [editingDriver, setEditingDriver] = useState<CompanyUser | null>(null);
-    const [driverForm] = Form.useForm();
 
     const fetchData = async () => {
         setLoading(true);
@@ -229,6 +238,16 @@ export default function CompanyUsersPage() {
 
     useEffect(() => {
         fetchData();
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const seg = params.get('segment');
+            if (seg === 'drivers') {
+                setActiveSegment('drivers');
+                setViewMode('list');
+            } else if (seg === 'office') {
+                setActiveSegment('office');
+            }
+        }
     }, []);
 
     // Figma/Miro style drag-to-scroll panning
@@ -417,34 +436,84 @@ export default function CompanyUsersPage() {
         }
     };
 
-    // ==================== Original employee handlers ====================
+    // ==================== Unified Employee/Driver handlers ====================
 
-    const handleInvite = async (values: any) => {
-        // Automatically determine system role from custom position and permissions
-        const lower = (values.position || '').toLowerCase();
-        const perms = values.permissions || [];
-        let systemRole = 'LOGISTICIAN';
-        if (lower.includes('бух') || lower.includes('финанс') || lower.includes('касс') || perms.includes('accounting')) {
-            systemRole = 'ACCOUNTANT';
-        } else if (lower.includes('склад') || lower.includes('кладов')) {
-            systemRole = 'WAREHOUSE_MANAGER';
+    const handleUnifiedSubmit = async (values: any) => {
+        if (selectedRole === 'DRIVER') {
+            try {
+                const payload = {
+                    ...values,
+                    docIssuedAt: values.docIssuedAt ? values.docIssuedAt.toISOString() : undefined,
+                    docExpiresAt: values.docExpiresAt ? values.docExpiresAt.toISOString() : undefined,
+                };
+
+                if (editingRecord) {
+                    await api.put(`/company/drivers/${editingRecord.id}`, payload);
+                    message.success('Данные водителя обновлены');
+                } else {
+                    await api.post('/company/drivers', payload);
+                    message.success('Водитель добавлен');
+                }
+                setUnifiedModalOpen(false);
+                setEditingRecord(null);
+                unifiedForm.resetFields();
+                fetchData();
+            } catch (error: any) {
+                message.error(error.response?.data?.message || 'Ошибка');
+            }
+        } else {
+            // Office employee invite
+            // Automatically determine system role from custom position and permissions
+            const lower = (values.position || '').toLowerCase();
+            const perms = values.permissions || [];
+            let systemRole = selectedRole;
+
+            const payload = {
+                email: values.email,
+                role: systemRole,
+                position: values.position,
+                departmentId: values.departmentId,
+                permissions: perms,
+            };
+
+            try {
+                const res = await api.post('/company/invitations', payload);
+                message.success('Приглашение создано');
+                const link = `${window.location.origin}/invite?token=${res.data.token}`;
+                setGeneratedLink(link);
+                // Reset standard fields but keep generated link
+                unifiedForm.resetFields(['email', 'position', 'departmentId', 'permissions']);
+                fetchData();
+            } catch (error: any) {
+                message.error(error.response?.data?.message || 'Ошибка');
+            }
         }
+    };
 
-        const payload = {
-            ...values,
-            role: systemRole,
-        };
-
-        try {
-            const res = await api.post('/company/invitations', payload);
-            message.success('Приглашение создано');
-            const link = `${window.location.origin}/invite?token=${res.data.token}`;
-            setGeneratedLink(link);
-            form.resetFields();
-            fetchData();
-        } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка');
+    const handleOpenUnifiedModal = (record?: CompanyUser) => {
+        setGeneratedLink(null);
+        if (record) {
+            // Edit driver
+            setEditingRecord(record);
+            setSelectedRole(record.role);
+            unifiedForm.resetFields();
+            unifiedForm.setFieldsValue({
+                ...record,
+                docIssuedAt: record.docIssuedAt ? dayjs(record.docIssuedAt) : undefined,
+                docExpiresAt: record.docExpiresAt ? dayjs(record.docExpiresAt) : undefined,
+            });
+        } else {
+            // Add new
+            setEditingRecord(null);
+            const defaultRole = activeSegment === 'drivers' ? 'DRIVER' : 'LOGISTICIAN';
+            setSelectedRole(defaultRole);
+            unifiedForm.resetFields();
+            unifiedForm.setFieldsValue({
+                role: defaultRole,
+                permissions: ['orders'],
+            });
         }
+        setUnifiedModalOpen(true);
     };
 
     const handleCancelInvitation = async (id: string) => {
@@ -479,38 +548,6 @@ export default function CompanyUsersPage() {
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка');
         }
-    };
-
-    // ==================== Driver creation/editing handler ====================
-
-    const handleCreateDriver = async (values: any) => {
-        try {
-            const payload = {
-                ...values,
-                docIssuedAt: values.docIssuedAt ? values.docIssuedAt.toISOString() : undefined,
-                docExpiresAt: values.docExpiresAt ? values.docExpiresAt.toISOString() : undefined,
-            };
-
-            if (editingDriver) {
-                await api.put(`/company/drivers/${editingDriver.id}`, payload);
-                message.success('Данные водителя обновлены');
-            } else {
-                await api.post('/company/drivers', payload);
-                message.success('Водитель добавлен');
-            }
-            setDriverModalOpen(false);
-            setEditingDriver(null);
-            driverForm.resetFields();
-            fetchData();
-        } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка');
-        }
-    };
-
-    const openInviteModal = () => {
-        setGeneratedLink(null);
-        form.resetFields();
-        setModalOpen(true);
     };
 
     const copyToClipboard = () => {
@@ -593,15 +630,7 @@ export default function CompanyUsersPage() {
                                     size="small"
                                     icon={<EditOutlined style={{ fontSize: 12 }} />}
                                     title="Редактировать водителя"
-                                    onClick={() => {
-                                        setEditingDriver(u);
-                                        driverForm.setFieldsValue({
-                                            ...u,
-                                            docIssuedAt: u.docIssuedAt ? dayjs(u.docIssuedAt) : undefined,
-                                            docExpiresAt: u.docExpiresAt ? dayjs(u.docExpiresAt) : undefined,
-                                        });
-                                        setDriverModalOpen(true);
-                                    }}
+                                    onClick={() => handleOpenUnifiedModal(u)}
                                 />
                             ) : (
                                 <Button
@@ -815,6 +844,78 @@ export default function CompanyUsersPage() {
 
     // ==================== Active Tables config ====================
 
+    // ==================== Active Tables config ====================
+
+    const driverColumns = [
+        {
+            title: 'ФИО',
+            key: 'name',
+            render: (_: any, record: CompanyUser) => `${record.lastName || ''} ${record.firstName || ''} ${record.middleName || ''}`.trim(),
+        },
+        {
+            title: 'Телефон',
+            dataIndex: 'phone',
+            key: 'phone',
+        },
+        {
+            title: 'Госномер авто',
+            dataIndex: 'vehiclePlate',
+            key: 'vehiclePlate',
+            render: (val: string) => val || <Text type="secondary">—</Text>,
+        },
+        {
+            title: 'Тип ТС',
+            dataIndex: 'vehicleType',
+            key: 'vehicleType',
+            render: (val: string) => val || <Text type="secondary">—</Text>,
+        },
+        {
+            title: 'Прицеп',
+            dataIndex: 'trailerNumber',
+            key: 'trailerNumber',
+            render: (val: string) => val || <Text type="secondary">—</Text>,
+        },
+        {
+            title: 'ИИН',
+            dataIndex: 'iin',
+            key: 'iin',
+            render: (val: string) => val || <Text type="secondary">—</Text>,
+        },
+        {
+            title: 'Документы',
+            key: 'docs',
+            render: (_: any, record: CompanyUser) => {
+                if (!record.docNumber) return <Text type="secondary">—</Text>;
+                return (
+                    <span>
+                        {record.docType === 'ID_CARD' ? 'Уд. личн.' : 'Паспорт'} №{record.docNumber}
+                        {record.docExpiresAt && ` (до ${dayjs(record.docExpiresAt).format('DD.MM.YYYY')})`}
+                    </span>
+                );
+            }
+        },
+        {
+            title: 'Действия',
+            key: 'actions',
+            render: (_: any, record: CompanyUser) => (
+                <Space>
+                    <Button
+                        icon={<EditOutlined />}
+                        onClick={() => handleOpenUnifiedModal(record)}
+                    />
+                    <Popconfirm
+                        title="Удалить водителя?"
+                        onConfirm={() => handleDeleteUser(record.id)}
+                        okText="Да"
+                        cancelText="Нет"
+                    >
+                        <Button icon={<DeleteOutlined />} danger />
+                    </Popconfirm>
+                </Space>
+            )
+        }
+    ];
+
     const userColumns = [
         {
             title: 'Имя',
@@ -855,29 +956,14 @@ export default function CompanyUsersPage() {
             render: (_: any, record: CompanyUser) => (
                 <Space>
                     {record.id !== currentUser?.id && (
-                        record.role === 'DRIVER' ? (
-                            <Button
-                                icon={<EditOutlined />}
-                                onClick={() => {
-                                    setEditingDriver(record);
-                                    driverForm.setFieldsValue({
-                                        ...record,
-                                        docIssuedAt: record.docIssuedAt ? dayjs(record.docIssuedAt) : undefined,
-                                        docExpiresAt: record.docExpiresAt ? dayjs(record.docExpiresAt) : undefined,
-                                    });
-                                    setDriverModalOpen(true);
-                                }}
-                            />
-                        ) : (
-                            <Button
-                                icon={<SettingOutlined />}
-                                onClick={() => {
-                                    setEditingUser(record);
-                                    editForm.setFieldsValue({ permissions: record.permissions || [] });
-                                    setEditModalOpen(true);
-                                }}
-                            />
-                        )
+                        <Button
+                            icon={<SettingOutlined />}
+                            onClick={() => {
+                                setEditingUser(record);
+                                editForm.setFieldsValue({ permissions: record.permissions || [] });
+                                setEditModalOpen(true);
+                            }}
+                        />
                     )}
                     {record.id !== currentUser?.id && record.role !== 'COMPANY_ADMIN' && (
                         <Popconfirm
@@ -1272,33 +1358,46 @@ export default function CompanyUsersPage() {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
-                    <Title level={3} style={{ margin: 0 }}>Сотрудники</Title>
-                    <Text type="secondary">Управление отделами, структурой и правами сотрудников</Text>
+                    <Title level={3} style={{ margin: 0 }}>Персонал</Title>
+                    <Text type="secondary">Управление структурой, сотрудниками и водителями</Text>
                 </div>
                 <Space>
-                    <Radio.Group value={viewMode} onChange={e => setViewMode(e.target.value)} buttonStyle="solid">
-                        <Radio.Button value="tree">
-                            <ApartmentOutlined style={{ marginRight: 6 }} />
-                            Схема
-                        </Radio.Button>
-                        <Radio.Button value="list">
-                            <UnorderedListOutlined style={{ marginRight: 6 }} />
-                            Список
-                        </Radio.Button>
-                    </Radio.Group>
-                    <Button
-                        icon={<CarOutlined />}
-                        onClick={() => {
-                            setEditingDriver(null);
-                            driverForm.resetFields();
-                            setDriverModalOpen(true);
+                    <Segmented
+                        value={activeSegment}
+                        onChange={(value) => {
+                            setActiveSegment(value as 'office' | 'drivers');
+                            if (value === 'drivers') {
+                                setViewMode('list');
+                            }
                         }}
-                    >
-                        + Водитель
-                    </Button>
-                    <Button type="primary" icon={<MailOutlined />} onClick={openInviteModal}>
-                        Пригласить
-                    </Button>
+                        options={[
+                            { label: 'Офис', value: 'office' },
+                            { label: 'Водители', value: 'drivers' }
+                        ]}
+                        size="middle"
+                        style={{ marginRight: 8 }}
+                    />
+                    {activeSegment === 'office' && (
+                        <Radio.Group value={viewMode} onChange={e => setViewMode(e.target.value)} buttonStyle="solid">
+                            <Radio.Button value="tree">
+                                <ApartmentOutlined style={{ marginRight: 6 }} />
+                                Схема
+                            </Radio.Button>
+                            <Radio.Button value="list">
+                                <UnorderedListOutlined style={{ marginRight: 6 }} />
+                                Список
+                            </Radio.Button>
+                        </Radio.Group>
+                    )}
+                    {activeSegment === 'drivers' ? (
+                        <Button type="primary" icon={<CarOutlined />} onClick={() => handleOpenUnifiedModal()}>
+                            Добавить водителя
+                        </Button>
+                    ) : (
+                        <Button type="primary" icon={<MailOutlined />} onClick={() => handleOpenUnifiedModal()}>
+                            Пригласить
+                        </Button>
+                    )}
                 </Space>
             </div>
 
@@ -1409,24 +1508,26 @@ export default function CompanyUsersPage() {
             ) : (
                 <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.01)' }}>
                     <Tabs defaultActiveKey="1">
-                        <Tabs.TabPane tab={`Активные (${users.length})`} key="1">
+                        <Tabs.TabPane tab={activeSegment === 'drivers' ? `Водители (${filteredUsers.length})` : `Активные (${filteredUsers.length})`} key="1">
                             <Table
-                                columns={userColumns}
-                                dataSource={users}
+                                columns={activeSegment === 'drivers' ? driverColumns : userColumns}
+                                dataSource={filteredUsers}
                                 rowKey="id"
                                 loading={loading}
                                 pagination={{ pageSize: 10 }}
                             />
                         </Tabs.TabPane>
-                        <Tabs.TabPane tab={`Приглашения (${invitations.length})`} key="2">
-                            <Table
-                                columns={invitationColumns}
-                                dataSource={invitations}
-                                rowKey="id"
-                                loading={loading}
-                                pagination={{ pageSize: 10 }}
-                            />
-                        </Tabs.TabPane>
+                        {activeSegment === 'office' && (
+                            <Tabs.TabPane tab={`Приглашения (${invitations.length})`} key="2">
+                                <Table
+                                    columns={invitationColumns}
+                                    dataSource={invitations}
+                                    rowKey="id"
+                                    loading={loading}
+                                    pagination={{ pageSize: 10 }}
+                                />
+                            </Tabs.TabPane>
+                        )}
                     </Tabs>
                 </Card>
             )}
@@ -1535,19 +1636,61 @@ export default function CompanyUsersPage() {
                 </Form>
             </Modal>
 
-            {/* Modal: Invite Employee (Original) */}
+            {/* Modal: Unified Invite / Create / Edit Modal */}
             <Modal
-                title="Приглашение сотрудника"
-                open={modalOpen}
-                onCancel={() => setModalOpen(false)}
-                footer={generatedLink ? [
-                    <Button key="close" type="primary" onClick={() => setModalOpen(false)}>
-                        Готово
-                    </Button>
-                ] : [
-                    <Button key="cancel" onClick={() => setModalOpen(false)}>Отмена</Button>,
-                    <Button key="submit" type="primary" onClick={() => form.submit()}>Создать ссылку</Button>
-                ]}
+                title={
+                    editingRecord
+                        ? "Редактирование водителя"
+                        : selectedRole === 'DRIVER'
+                            ? "Добавление водителя"
+                            : "Приглашение сотрудника"
+                }
+                open={unifiedModalOpen}
+                onCancel={() => {
+                    setUnifiedModalOpen(false);
+                    setEditingRecord(null);
+                    unifiedForm.resetFields();
+                }}
+                footer={
+                    generatedLink
+                        ? [
+                              <Button
+                                  key="close"
+                                  type="primary"
+                                  onClick={() => {
+                                      setUnifiedModalOpen(false);
+                                      setGeneratedLink(null);
+                                  }}
+                              >
+                                  Готово
+                              </Button>
+                          ]
+                        : [
+                              <Button
+                                  key="cancel"
+                                  onClick={() => {
+                                      setUnifiedModalOpen(false);
+                                      setEditingRecord(null);
+                                      unifiedForm.resetFields();
+                                  }}
+                              >
+                                  Отмена
+                              </Button>,
+                              <Button
+                                  key="submit"
+                                  type="primary"
+                                  onClick={() => unifiedForm.submit()}
+                              >
+                                  {editingRecord
+                                      ? "Сохранить"
+                                      : selectedRole === 'DRIVER'
+                                          ? "Создать"
+                                          : "Создать ссылку"}
+                              </Button>
+                          ]
+                }
+                width={selectedRole === 'DRIVER' ? 650 : 500}
+                destroyOnClose
             >
                 {generatedLink ? (
                     <div style={{ padding: '20px 0', textAlign: 'center' }}>
@@ -1558,78 +1701,248 @@ export default function CompanyUsersPage() {
                         </Text>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                             <Input value={generatedLink} readOnly />
-                            <Button 
-                                type="primary" 
-                                icon={<CopyOutlined />} 
+                            <Button
+                                type="primary"
+                                icon={<CopyOutlined />}
                                 onClick={copyToClipboard}
                                 style={{ marginLeft: 8 }}
                             />
                         </div>
                     </div>
                 ) : (
-                    <Form form={form} layout="vertical" onFinish={handleInvite}>
-                        <Form.Item name="email" label="Email сотрудника" rules={[{ required: true, type: 'email' }]}>
-                            <Input placeholder="employee@company.kz" />
-                        </Form.Item>
-                        <Form.Item 
-                            name="position" 
-                            label="Роль / Должность" 
-                            rules={[{ required: true, message: 'Введите название роли/должности' }]}
-                        >
-                            <Input placeholder="Например: Менеджер, Бухгалтер, Завсклад" />
-                        </Form.Item>
-                        <Form.Item name="departmentId" label="Отдел (опционально)">
-                            <Select 
-                                placeholder="Выберите отдел или создайте новый"
-                                allowClear
-                                dropdownMatchSelectWidth={false}
-                                dropdownRender={(menu) => (
-                                    <>
-                                        {menu}
-                                        <Divider style={{ margin: '8px 0' }} />
-                                        <div style={{ display: 'flex', gap: 8, padding: '0 8px 4px' }}>
-                                            <Input
-                                                placeholder="Новый отдел"
-                                                value={newDeptName}
-                                                onChange={e => setNewDeptName(e.target.value)}
-                                                onKeyDown={e => e.stopPropagation()}
-                                                style={{ flex: 1 }}
-                                            />
-                                            <Button 
-                                                type="text" 
-                                                icon={<PlusOutlined />} 
-                                                onClick={handleInlineCreateDept}
-                                                loading={addingDeptLoading}
-                                                style={{ color: '#4f46e5', fontWeight: 500 }}
-                                            >
-                                                Создать
-                                            </Button>
-                                        </div>
-                                    </>
-                                )}
+                    <Form
+                        form={unifiedForm}
+                        layout="vertical"
+                        onFinish={handleUnifiedSubmit}
+                    >
+                        {!editingRecord && (
+                            <Form.Item
+                                name="role"
+                                label="Роль / Тип"
+                                rules={[{ required: true, message: 'Выберите роль' }]}
                             >
-                                {departments.map(dept => (
-                                    <Select.Option key={dept.id} value={dept.id}>
-                                        <Space>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                                                {renderDeptIcon(dept.icon || 'FolderOpenOutlined', 14)}
-                                            </span>
-                                            <span>{dept.name}</span>
-                                        </Space>
-                                    </Select.Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
-                        <Form.Item name="permissions" label="Права доступа (для левого меню)">
-                            <Checkbox.Group options={MODULE_PERMISSIONS} />
-                        </Form.Item>
-                        <Alert 
-                            message="Сотрудник сам введёт свои данные" 
-                            description="По этой ссылке сотрудник сможет сам задать себе ФИО, телефон и пароль для входа." 
-                            type="info" 
-                            showIcon 
-                            style={{ marginTop: 16 }}
-                        />
+                                <Select
+                                    onChange={(val) => setSelectedRole(val)}
+                                    placeholder="Выберите роль"
+                                >
+                                    {ROLE_OPTIONS.map(opt => (
+                                        <Select.Option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </Select.Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        )}
+
+                        {selectedRole === 'DRIVER' ? (
+                            <>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="lastName"
+                                            label="Фамилия"
+                                            rules={[{ required: true, message: 'Обязательное поле' }]}
+                                        >
+                                            <Input placeholder="Иванов" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="firstName"
+                                            label="Имя"
+                                            rules={[{ required: true, message: 'Обязательное поле' }]}
+                                        >
+                                            <Input placeholder="Иван" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                                <Form.Item name="middleName" label="Отчество">
+                                    <Input placeholder="Иванович" />
+                                </Form.Item>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="phone"
+                                            label="Телефон"
+                                            rules={[
+                                                { required: true, message: 'Обязательное поле' },
+                                                { pattern: /^(\+7|8)\d{10}$/, message: 'Формат: +7XXXXXXXXXX' }
+                                            ]}
+                                        >
+                                            <Input placeholder="+77001234567" disabled={!!editingRecord} />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="iin"
+                                            label="ИИН"
+                                            rules={[
+                                                { required: true, message: 'Введите ИИН' },
+                                                { pattern: /^\d{12}$/, message: 'ИИН должен содержать 12 цифр' }
+                                            ]}
+                                        >
+                                            <Input placeholder="123456789012" maxLength={12} />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+
+                                <Divider><CarOutlined style={{ marginRight: 6 }} />Транспорт</Divider>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item name="vehicleType" label="Тип транспорта">
+                                            <Select
+                                                placeholder="Тент, Реф..."
+                                                allowClear
+                                                showSearch
+                                                optionFilterProp="children"
+                                            >
+                                                {VEHICLE_TYPES.map(t => (
+                                                    <Select.Option key={t} value={t}>{t}</Select.Option>
+                                                ))}
+                                            </Select>
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="vehicleModel" label="Модель автомобиля">
+                                            <Input placeholder="Volvo FH16" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="vehiclePlate"
+                                            label="Гос. номер авто"
+                                            rules={[{ required: true, message: 'Введите гос. номер' }]}
+                                        >
+                                            <Input placeholder="A123BC01" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="trailerNumber"
+                                            label="Номер прицепа"
+                                        >
+                                            <Input placeholder="AB1234" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+
+                                <Divider><IdcardOutlined style={{ marginRight: 6 }} />Документ, удостоверяющий личность</Divider>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="docType"
+                                            label="Вид документа"
+                                            rules={[{ required: true, message: 'Выберите тип документа' }]}
+                                        >
+                                            <Select placeholder="Выберите тип" allowClear>
+                                                <Select.Option value="ID_CARD">Удостоверение личности</Select.Option>
+                                                <Select.Option value="PASSPORT">Паспорт</Select.Option>
+                                            </Select>
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="docNumber"
+                                            label="Номер документа"
+                                            rules={[{ required: true, message: 'Введите номер' }]}
+                                        >
+                                            <Input placeholder="012345678" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="docIssuedAt"
+                                            label="Дата выдачи"
+                                        >
+                                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2020" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="docExpiresAt"
+                                            label="Действителен до"
+                                        >
+                                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2030" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                                <Form.Item
+                                    name="docIssuedBy"
+                                    label="Кем выдан"
+                                >
+                                    <Input placeholder="МВД РК / РОВД г. Алматы" />
+                                </Form.Item>
+                            </>
+                        ) : (
+                            <>
+                                <Form.Item name="email" label="Email сотрудника" rules={[{ required: true, type: 'email' }]}>
+                                    <Input placeholder="employee@company.kz" />
+                                </Form.Item>
+                                <Form.Item
+                                    name="position"
+                                    label="Должность"
+                                    rules={[{ required: true, message: 'Введите название роли/должности' }]}
+                                >
+                                    <Input placeholder="Например: Менеджер, Бухгалтер, Завсклад" />
+                                </Form.Item>
+                                <Form.Item name="departmentId" label="Отдел (опционально)">
+                                    <Select
+                                        placeholder="Выберите отдел или создайте новый"
+                                        allowClear
+                                        dropdownMatchSelectWidth={false}
+                                        dropdownRender={(menu) => (
+                                            <>
+                                                {menu}
+                                                <Divider style={{ margin: '8px 0' }} />
+                                                <div style={{ display: 'flex', gap: 8, padding: '0 8px 4px' }}>
+                                                    <Input
+                                                        placeholder="Новый отдел"
+                                                        value={newDeptName}
+                                                        onChange={e => setNewDeptName(e.target.value)}
+                                                        onKeyDown={e => e.stopPropagation()}
+                                                        style={{ flex: 1 }}
+                                                    />
+                                                    <Button
+                                                        type="text"
+                                                        icon={<PlusOutlined />}
+                                                        onClick={handleInlineCreateDept}
+                                                        loading={addingDeptLoading}
+                                                        style={{ color: '#4f46e5', fontWeight: 500 }}
+                                                    >
+                                                        Создать
+                                                    </Button>
+                                                </div>
+                                            </>
+                                        )}
+                                    >
+                                        {departments.map(dept => (
+                                            <Select.Option key={dept.id} value={dept.id}>
+                                                <Space>
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                        {renderDeptIcon(dept.icon || 'FolderOpenOutlined', 14)}
+                                                    </span>
+                                                    <span>{dept.name}</span>
+                                                </Space>
+                                            </Select.Option>
+                                        ))}
+                                    </Select>
+                                </Form.Item>
+                                <Form.Item name="permissions" label="Права доступа (для левого меню)">
+                                    <Checkbox.Group options={MODULE_PERMISSIONS} />
+                                </Form.Item>
+                                <Alert
+                                    message="Сотрудник сам введёт свои данные"
+                                    description="По этой ссылке сотрудник сможет сам задать себе ФИО, телефон и пароль для входа."
+                                    type="info"
+                                    showIcon
+                                    style={{ marginTop: 16 }}
+                                />
+                            </>
+                        )}
                     </Form>
                 )}
             </Modal>
@@ -1646,165 +1959,6 @@ export default function CompanyUsersPage() {
                 <Form form={editForm} layout="vertical" onFinish={handleEditPermissions}>
                     <Form.Item name="permissions" label="Доступ к разделам">
                         <Checkbox.Group options={MODULE_PERMISSIONS} />
-                    </Form.Item>
-                </Form>
-            </Modal>
-
-            {/* Modal: Create/Edit Driver */}
-            <Modal
-                title={editingDriver ? "Редактирование водителя" : "Добавление водителя"}
-                open={driverModalOpen}
-                onCancel={() => {
-                    setDriverModalOpen(false);
-                    setEditingDriver(null);
-                    driverForm.resetFields();
-                }}
-                onOk={() => driverForm.submit()}
-                okText={editingDriver ? "Сохранить" : "Создать"}
-                cancelText="Отмена"
-                width={650}
-                destroyOnClose
-            >
-                <Form form={driverForm} layout="vertical" onFinish={handleCreateDriver}>
-                    <Row gutter={12}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="lastName"
-                                label="Фамилия"
-                                rules={[{ required: true, message: 'Обязательное поле' }]}
-                            >
-                                <Input placeholder="Иванов" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="firstName"
-                                label="Имя"
-                                rules={[{ required: true, message: 'Обязательное поле' }]}
-                            >
-                                <Input placeholder="Иван" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    <Form.Item name="middleName" label="Отчество">
-                        <Input placeholder="Иванович" />
-                    </Form.Item>
-                    <Row gutter={12}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="phone"
-                                label="Телефон"
-                                rules={[
-                                    { required: true, message: 'Обязательное поле' },
-                                    { pattern: /^(\+7|8)\d{10}$/, message: 'Формат: +7XXXXXXXXXX' }
-                                ]}
-                            >
-                                <Input placeholder="+77001234567" disabled={!!editingDriver} />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="iin"
-                                label="ИИН"
-                                rules={[
-                                    { required: true, message: 'Введите ИИН' },
-                                    { pattern: /^\d{12}$/, message: 'ИИН должен содержать 12 цифр' }
-                                ]}
-                            >
-                                <Input placeholder="123456789012" maxLength={12} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    
-                    <Divider><CarOutlined style={{ marginRight: 6 }} />Транспорт</Divider>
-                    <Row gutter={12}>
-                        <Col span={12}>
-                            <Form.Item name="vehicleType" label="Тип транспорта">
-                                <Select
-                                    placeholder="Тент, Реф..."
-                                    allowClear
-                                    showSearch
-                                    optionFilterProp="children"
-                                >
-                                    {VEHICLE_TYPES.map(t => (
-                                        <Select.Option key={t} value={t}>{t}</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="vehicleModel" label="Модель автомобиля">
-                                <Input placeholder="Volvo FH16" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    <Row gutter={12}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="vehiclePlate"
-                                label="Гос. номер авто"
-                                rules={[{ required: true, message: 'Введите гос. номер' }]}
-                            >
-                                <Input placeholder="A123BC01" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="trailerNumber"
-                                label="Номер прицепа"
-                            >
-                                <Input placeholder="AB1234" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Divider><IdcardOutlined style={{ marginRight: 6 }} />Документ, удостоверяющий личность</Divider>
-                    <Row gutter={12}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="docType"
-                                label="Вид документа"
-                                rules={[{ required: true, message: 'Выберите тип документа' }]}
-                            >
-                                <Select placeholder="Выберите тип" allowClear>
-                                    <Select.Option value="ID_CARD">Удостоверение личности</Select.Option>
-                                    <Select.Option value="PASSPORT">Паспорт</Select.Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="docNumber"
-                                label="Номер документа"
-                                rules={[{ required: true, message: 'Введите номер' }]}
-                            >
-                                <Input placeholder="012345678" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    <Row gutter={12}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="docIssuedAt"
-                                label="Дата выдачи"
-                            >
-                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2020" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="docExpiresAt"
-                                label="Действителен до"
-                            >
-                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2030" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    <Form.Item
-                        name="docIssuedBy"
-                        label="Кем выдан"
-                    >
-                        <Input placeholder="МВД РК / РОВД г. Алматы" />
                     </Form.Item>
                 </Form>
             </Modal>

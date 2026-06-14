@@ -9,7 +9,7 @@ import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
-import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto } from './dto/company.dto';
+import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto, GetCompanyUsersQueryDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { AssignDriverDto } from '../orders/dto/order.dto';
 import * as path from 'path';
@@ -41,7 +41,7 @@ export class CompanyController {
     @Get('users')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Получить пользователей своей компании' })
-    async getCompanyUsers(@Request() req: any, @Query() query: PaginationQueryDto) {
+    async getCompanyUsers(@Request() req: any, @Query() query: GetCompanyUsersQueryDto) {
         return this.companyService.getCompanyUsers(req.user.companyId, query);
     }
 
