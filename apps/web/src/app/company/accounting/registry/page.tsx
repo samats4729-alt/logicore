@@ -4,12 +4,12 @@ import { useEffect, useState, useMemo } from 'react';
 import {
     Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker,
     Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress,
-    Modal, Form, InputNumber, App
+    Modal, Form, InputNumber, App, theme
 } from 'antd';
 import {
     ArrowUpOutlined, ArrowDownOutlined, DollarOutlined,
     SearchOutlined, EyeOutlined, PlusOutlined, FileExcelOutlined,
-    CalendarOutlined, DeleteOutlined
+    CalendarOutlined, DeleteOutlined, CarOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -74,6 +74,13 @@ interface OrderPayment {
 }
 
 export default function FinancialRegistryPage() {
+    const { token } = theme.useToken();
+    const cardStyle = {
+        borderRadius: 8,
+        background: token.colorBgContainer,
+        border: `1px solid ${token.colorBorderSecondary}`,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    };
     const { message } = App.useApp();
     const { user } = useAuthStore();
     const [orders, setOrders] = useState<RegistryOrder[]>([]);
@@ -305,8 +312,8 @@ export default function FinancialRegistryPage() {
                             <span style={{ fontSize: 12, fontWeight: 600 }}>{fmt(total)} ₸</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? '#10b981' : '#3b82f6'} style={{ flex: 1, margin: 0 }} />
-                            <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{percent}%</span>
+                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? token.colorSuccess : token.colorPrimary} style={{ flex: 1, margin: 0 }} />
+                            <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
                         </div>
                     </div>
                 );
@@ -325,14 +332,14 @@ export default function FinancialRegistryPage() {
                     <div style={{ padding: '2px 0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                             <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>
-                                🚚 {name}
+                                <CarOutlined style={{ marginRight: 4, color: token.colorTextSecondary }} /> {name}
                                 {r.subForwarderId && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px' }}>Суб</Tag>}
                             </span>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>{fmt(total)} ₸</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{fmt(total)} ₸</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? '#10b981' : '#a855f7'} style={{ flex: 1, margin: 0 }} />
-                            <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{percent}%</span>
+                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? token.colorSuccess : token.colorPrimary} style={{ flex: 1, margin: 0 }} />
+                            <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
                         </div>
                     </div>
                 );
@@ -352,11 +359,11 @@ export default function FinancialRegistryPage() {
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: paid ? '#10b981' : '#ef4444' }}>
-                                {debt === 0 ? 'Оплачен' : `${fmt(debt)} ₸`}
+                            <span style={{ fontSize: 12, fontWeight: 700, color: paid ? token.colorSuccess : token.colorError }}>
+                                {debt === 0 ? 'Оплачено' : `${fmt(debt)} ₸`}
                             </span>
                             {isLate && (
-                                <div style={{ fontSize: 9, color: '#ef4444', fontWeight: 600 }}>Просрочка 5д+</div>
+                                <div style={{ fontSize: 9, color: token.colorError, fontWeight: 600 }}>Просрочка 5д+</div>
                             )}
                         </div>
                         {debt > 0 && (
@@ -367,7 +374,7 @@ export default function FinancialRegistryPage() {
                                     shape="circle"
                                     icon={<PlusOutlined />}
                                     onClick={(e) => handleAddPaymentClick(e, r, 'IN')}
-                                    style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{ background: token.colorSuccess, borderColor: token.colorSuccess, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 />
                             </Tooltip>
                         )}
@@ -384,8 +391,8 @@ export default function FinancialRegistryPage() {
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: paid ? '#10b981' : '#f59e0b' }}>
-                                {paid ? 'Оплачен' : `${fmt(debt)} ₸`}
+                            <span style={{ fontSize: 12, fontWeight: 700, color: paid ? token.colorSuccess : token.colorWarning }}>
+                                {paid ? 'Оплачено' : `${fmt(debt)} ₸`}
                             </span>
                         </div>
                         {debt > 0 && (
@@ -396,7 +403,7 @@ export default function FinancialRegistryPage() {
                                     shape="circle"
                                     icon={<PlusOutlined />}
                                     onClick={(e) => handleAddPaymentClick(e, r, 'OUT')}
-                                    style={{ background: '#f59e0b', borderColor: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{ background: token.colorWarning, borderColor: token.colorWarning, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 />
                             </Tooltip>
                         )}
@@ -412,10 +419,10 @@ export default function FinancialRegistryPage() {
                 const percent = revenue > 0 ? Math.round((m / revenue) * 100) : 0;
                 return (
                     <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: m >= 0 ? '#10b981' : '#ef4444' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: m >= 0 ? token.colorSuccess : token.colorError }}>
                             {m >= 0 ? '+' : ''}{fmt(m)}
                         </span>
-                        <div style={{ fontSize: 10, color: '#64748b' }}>{percent}%</div>
+                        <div style={{ fontSize: 10, color: token.colorTextSecondary }}>{percent}%</div>
                     </div>
                 );
             },
@@ -441,10 +448,10 @@ export default function FinancialRegistryPage() {
                     onClick={handleExportExcel}
                     loading={exporting}
                     style={{
-                        borderColor: '#10b981',
-                        color: '#10b981',
+                        borderColor: token.colorSuccess,
+                        color: token.colorSuccess,
                         fontWeight: 600,
-                        boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)',
+                        boxShadow: `0 2px 4px ${token.colorSuccess}20`,
                     }}
                 >
                     Экспорт в Excel
@@ -454,52 +461,54 @@ export default function FinancialRegistryPage() {
             {/* SUMMARY CARDS */}
             <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
                 <Col xs={12} sm={8} md={4}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10 }}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#64748b' }}>Выручка (всего)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Выручка (всего)</span>}
                             value={totals.totalIncome}
-                            valueStyle={{ fontSize: 15, color: '#0f172a', fontWeight: 700 }}
+                            valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
                             formatter={(val) => `${fmt(val as number)} ₸`}
                         />
                     </Card>
                 </Col>
                 <Col xs={12} sm={8} md={4}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10 }}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#64748b' }}>Затраты (всего)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Затраты (всего)</span>}
                             value={totals.totalExpense}
-                            valueStyle={{ fontSize: 15, color: '#475569', fontWeight: 700 }}
+                            valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
                             formatter={(val) => `${fmt(val as number)} ₸`}
                         />
                     </Card>
                 </Col>
                 <Col xs={12} sm={8} md={4}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10 }}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#64748b' }}>Маржа (всего)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Маржа (всего)</span>}
                             value={totals.totalMargin}
-                            valueStyle={{ fontSize: 15, color: totals.totalMargin >= 0 ? '#10b981' : '#ef4444', fontWeight: 700 }}
+                            valueStyle={{ fontSize: 15, color: totals.totalMargin >= 0 ? token.colorSuccess : token.colorError, fontWeight: 700 }}
                             formatter={(val) => `${totals.totalMargin >= 0 ? '+' : ''}${fmt(val as number)} ₸`}
                         />
                     </Card>
                 </Col>
                 <Col xs={12} sm={8} md={6}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10, background: '#fffbeb', border: '1px solid #fef3c7' }}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#b45309', fontWeight: 500 }}>Дебиторка (не выплачено нам)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 500 }}>Дебиторка (не выплачено нам)</span>}
                             value={totals.debtorSum}
-                            valueStyle={{ fontSize: 15, color: '#d97706', fontWeight: 700 }}
+                            valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
                             formatter={(val) => `${fmt(val as number)} ₸`}
+                            prefix={<ArrowUpOutlined style={{ color: token.colorWarning, fontSize: 13 }} />}
                         />
                     </Card>
                 </Col>
                 <Col xs={12} sm={8} md={6}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={{ borderRadius: 10, background: '#fff1f2', border: '1px solid #ffe4e6' }}>
+                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
                         <Statistic
-                            title={<span style={{ fontSize: 11, color: '#be123c', fontWeight: 500 }}>Кредиторка (наш долг)</span>}
+                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 500 }}>Кредиторка (наш долг)</span>}
                             value={totals.creditorSum}
-                            valueStyle={{ fontSize: 15, color: '#e11d48', fontWeight: 700 }}
+                            valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
                             formatter={(val) => `${fmt(val as number)} ₸`}
+                            prefix={<ArrowDownOutlined style={{ color: token.colorError, fontSize: 13 }} />}
                         />
                     </Card>
                 </Col>
@@ -523,12 +532,12 @@ export default function FinancialRegistryPage() {
                     style={{ width: 210 }}
                     options={[
                         { value: 'all', label: 'Все заявки' },
-                        { value: 'debtor', label: '🔴 Долг заказчика (не оплачено)' },
-                        { value: 'creditor', label: '🟠 Наш долг перед ТК (не оплачено)' },
-                        { value: 'all_paid', label: '✅ Все расчеты завершены' },
+                        { value: 'debtor', label: 'Долг заказчика (не оплачено)' },
+                        { value: 'creditor', label: 'Наш долг перед ТК (не оплачено)' },
+                        { value: 'all_paid', label: 'Все расчеты завершены' },
                     ]}
                 />
-                <span style={{ fontSize: 12, color: '#64748b', marginLeft: 'auto' }}>
+                <span style={{ fontSize: 12, color: token.colorTextSecondary, marginLeft: 'auto' }}>
                     Показано: <strong>{filtered.length}</strong> заявок
                 </span>
             </div>
@@ -559,25 +568,25 @@ export default function FinancialRegistryPage() {
                     padding: 8px 10px !important;
                     font-size: 11px !important;
                     font-weight: 600 !important;
-                    background: #f8fafc !important;
+                    background: ${token.colorBgLayout} !important;
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
-                    color: #475569 !important;
-                    border-bottom: 2px solid #e2e8f0 !important;
+                    color: ${token.colorTextSecondary} !important;
+                    border-bottom: 2px solid ${token.colorBorderSecondary} !important;
                 }
                 .ant-table-tbody > tr > td {
                     padding: 6px 10px !important;
                     font-size: 12px !important;
-                    border-bottom: 1px solid #f1f5f9 !important;
+                    border-bottom: 1px solid ${token.colorBorderSecondary} !important;
                 }
                 .ant-table-tbody > tr:hover > td {
-                    background: #f1f5f9 !important;
+                    background: ${token.colorPrimaryBg} !important;
                 }
                 .row-completed td {
-                    background: #f0fdf4 !important;
+                    background: ${token.colorSuccessBg} !important;
                 }
                 .row-problem td {
-                    background: #fef2f2 !important;
+                    background: ${token.colorErrorBg} !important;
                 }
             `}</style>
 
@@ -605,27 +614,29 @@ export default function FinancialRegistryPage() {
                             </Descriptions>
 
                             <div>
-                                <Title level={5} style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 8, marginBottom: 12 }}>💰 Расчетные данные</Title>
+                                <Title level={5} style={{ borderBottom: `1px solid ${token.colorBorderSecondary}`, paddingBottom: 8, marginBottom: 12 }}>
+                                    <DollarOutlined style={{ marginRight: 8, color: token.colorPrimary }} /> Расчетные данные
+                                </Title>
                                 <Row gutter={12}>
                                     <Col span={12}>
-                                        <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: '#f8fafc', marginBottom: 8 }}>
-                                            <div style={{ fontSize: 11, color: '#64748b' }}>Ставка заказчика (Гросс)</div>
-                                            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{fmt(o.customerPrice || 0)} ₸</div>
+                                        <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: token.colorBgLayout, marginBottom: 8, border: 'none' }}>
+                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>Ставка заказчика (Гросс)</div>
+                                            <div style={{ fontSize: 16, fontWeight: 700, color: token.colorText }}>{fmt(o.customerPrice || 0)} ₸</div>
                                         </Card>
                                     </Col>
                                     <Col span={12}>
-                                        <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: '#f8fafc', marginBottom: 8 }}>
-                                            <div style={{ fontSize: 11, color: '#64748b' }}>Ставка перевозчика (Гросс)</div>
-                                            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{fmt(getExecutorCost(o))} ₸</div>
+                                        <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: token.colorBgLayout, marginBottom: 8, border: 'none' }}>
+                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>Ставка перевозчика (Гросс)</div>
+                                            <div style={{ fontSize: 16, fontWeight: 700, color: token.colorText }}>{fmt(getExecutorCost(o))} ₸</div>
                                         </Card>
                                     </Col>
                                 </Row>
 
-                                <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: o.margin >= 0 ? '#ecfdf5' : '#fef2f2', border: `1px solid ${o.margin >= 0 ? '#a7f3d0' : '#fca5a5'}` }}>
+                                <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: o.margin >= 0 ? token.colorSuccessBg : token.colorErrorBg, border: `1px solid ${o.margin >= 0 ? token.colorSuccessBorder : token.colorErrorBorder}` }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
-                                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', display: 'block' }}>Маржинальность</span>
-                                            <span style={{ fontSize: 20, fontWeight: 800, color: o.margin >= 0 ? '#059669' : '#dc2626' }}>
+                                            <span style={{ fontSize: 11, color: token.colorTextSecondary, textTransform: 'uppercase', display: 'block' }}>Маржинальность</span>
+                                            <span style={{ fontSize: 20, fontWeight: 800, color: o.margin >= 0 ? token.colorSuccess : token.colorError }}>
                                                 {o.margin >= 0 ? '+' : ''}{fmt(o.margin)} ₸
                                             </span>
                                         </div>
@@ -638,18 +649,20 @@ export default function FinancialRegistryPage() {
 
                             {/* PAYMENTS HISTORY */}
                             <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: 8, marginBottom: 12 }}>
-                                    <Title level={5} style={{ margin: 0 }}>📜 История платежей по заявке</Title>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${token.colorBorderSecondary}`, paddingBottom: 8, marginBottom: 12 }}>
+                                    <Title level={5} style={{ margin: 0 }}>
+                                        <DollarOutlined style={{ marginRight: 8, color: token.colorPrimary }} /> История платежей по заявке
+                                    </Title>
                                     <Space>
-                                        <Button size="small" type="primary" style={{ background: '#10b981', borderColor: '#10b981' }} onClick={(e) => handleAddPaymentClick(e, o, 'IN')}>+ Входящий</Button>
-                                        <Button size="small" type="primary" style={{ background: '#f59e0b', borderColor: '#f59e0b' }} onClick={(e) => handleAddPaymentClick(e, o, 'OUT')}>+ Исходящий</Button>
+                                        <Button size="small" type="primary" style={{ background: token.colorSuccess, borderColor: token.colorSuccess }} onClick={(e) => handleAddPaymentClick(e, o, 'IN')}>+ Входящий</Button>
+                                        <Button size="small" type="primary" style={{ background: token.colorWarning, borderColor: token.colorWarning }} onClick={(e) => handleAddPaymentClick(e, o, 'OUT')}>+ Исходящий</Button>
                                     </Space>
                                 </div>
 
                                 {loadingPayments ? (
                                     <div style={{ textAlign: 'center', padding: '12px 0' }}><Spin size="small" /></div>
                                 ) : selectedOrderPayments.length === 0 ? (
-                                    <div style={{ textAlign: 'center', padding: '16px 0', background: '#f8fafc', borderRadius: 8, color: '#64748b' }}>
+                                    <div style={{ textAlign: 'center', padding: '16px 0', background: token.colorBgLayout, borderRadius: 8, color: token.colorTextSecondary }}>
                                         Платежей по этой заявке еще не зарегистрировано
                                     </div>
                                 ) : (
@@ -662,8 +675,8 @@ export default function FinancialRegistryPage() {
                                                     alignItems: 'center',
                                                     justifyContent: 'space-between',
                                                     padding: '10px 12px',
-                                                    background: '#fff',
-                                                    border: '1px solid #f1f5f9',
+                                                    background: token.colorBgContainer,
+                                                    border: `1px solid ${token.colorBorderSecondary}`,
                                                     borderRadius: 8,
                                                     boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                                                 }}
@@ -674,9 +687,9 @@ export default function FinancialRegistryPage() {
                                                             {p.direction === 'IN' ? 'Входящий' : 'Исходящий'}
                                                         </Tag>
                                                         <strong style={{ fontSize: 13 }}>{fmt(p.amount)} ₸</strong>
-                                                        <span style={{ fontSize: 11, color: '#64748b' }}>({p.method === 'BANK' ? 'Банк' : p.method === 'CASH' ? 'Наличные' : p.method === 'CARD' ? 'Карта' : 'Другое'})</span>
+                                                        <span style={{ fontSize: 11, color: token.colorTextSecondary }}>({p.method === 'BANK' ? 'Банк' : p.method === 'CASH' ? 'Наличные' : p.method === 'CARD' ? 'Карта' : 'Другое'})</span>
                                                     </div>
-                                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                                                    <div style={{ fontSize: 11, color: token.colorTextDescription, marginTop: 3 }}>
                                                         От: {dayjs(p.date).format('DD.MM.YYYY')} | {p.note || 'без примечания'}
                                                     </div>
                                                 </div>
@@ -751,10 +764,10 @@ export default function FinancialRegistryPage() {
                             rules={[{ required: true, message: 'Выберите способ' }]}
                         >
                             <Select size="large">
-                                <Select.Option value="BANK">🏛️ Безналичный (Банк)</Select.Option>
-                                <Select.Option value="CASH">💵 Наличные</Select.Option>
-                                <Select.Option value="CARD">💳 Карта</Select.Option>
-                                <Select.Option value="OTHER">📁 Другой способ</Select.Option>
+                                <Select.Option value="BANK">Безналичный (Банк)</Select.Option>
+                                <Select.Option value="CASH">Наличные</Select.Option>
+                                <Select.Option value="CARD">Карта</Select.Option>
+                                <Select.Option value="OTHER">Другой способ</Select.Option>
                             </Select>
                         </Form.Item>
 

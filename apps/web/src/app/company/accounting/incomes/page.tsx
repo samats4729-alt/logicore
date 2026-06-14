@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Typography, Space, Tag, DatePicker, Input, Select, message, Statistic, Row, Col, Segmented, Modal, Form, InputNumber, Popconfirm } from 'antd';
+import { Table, Card, Button, Typography, Space, Tag, DatePicker, Input, Select, message, Statistic, Row, Col, Segmented, Modal, Form, InputNumber, Popconfirm, theme } from 'antd';
 import { SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -16,6 +16,12 @@ const INCOME_CATEGORIES = [{ value: 'order_payment', label: 'Оплата за �
 const categoryColors: Record<string, string> = { order_payment: 'green', prepayment: 'blue', refund: 'orange', bonus: 'purple', insurance_payout: 'cyan', corporate: 'geekblue', other: 'default' };
 
 export default function CompanyIncomesPage() {
+    const { token } = theme.useToken();
+    const cardStyle = {
+        borderRadius: 8,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        border: `1px solid ${token.colorBorderSecondary}`,
+    };
     const [tab, setTab] = useState<string>('order_incomes');
     const [manualIncomes, setManualIncomes] = useState<ManualIncome[]>([]);
     const [loading, setLoading] = useState(false);
@@ -57,7 +63,7 @@ export default function CompanyIncomesPage() {
                 {r.order && <Tag color="blue" style={{ marginTop: 4 }}>Заявка {r.order.orderNumber}</Tag>}
             </Space>
         ) },
-        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <Text strong style={{ fontSize: 13, color: '#389e0d' }}>+{val.toLocaleString('ru-RU')} ₸</Text> },
+        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <Text strong style={{ fontSize: 13, color: token.colorSuccess }}>+{val.toLocaleString('ru-RU')} ₸</Text> },
         { title: 'Примечание', dataIndex: 'note', key: 'note', width: 180, ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val || '—'}</Text> },
         { title: '', key: 'actions', width: 80, render: (_: any, r: ManualIncome) => <Space><Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditingIncome(r); form.setFieldsValue({ ...r, date: dayjs(r.date) }); setModalOpen(true); }} /><Popconfirm title="Удалить?" onConfirm={() => handleDeleteManual(r.id)} okText="Да" cancelText="Нет"><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
     ];
@@ -82,41 +88,41 @@ export default function CompanyIncomesPage() {
             {tab === 'order_incomes' ? (
                 <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Card size="small" style={{ flex: 1, marginRight: 12 }}>
+                        <Card size="small" style={{ flex: 1, marginRight: 12, ...cardStyle }}>
                             <Space size="large">
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого поступлений по заявкам</Text><div><Text strong style={{ fontSize: 20, color: '#389e0d' }}>{orderIncomesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
+                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого поступлений по заявкам</Text><div><Text strong style={{ fontSize: 20, color: token.colorSuccess }}>{orderIncomesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
                                 <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{orderIncomes.length}</Text></div></div>
                             </Space>
                         </Card>
                     </div>
-                    <Card size="small" style={{ marginBottom: 12 }}>
+                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
                         <Space wrap>
                             <Input placeholder="Поиск по описанию..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear size="small" />
                             <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
                         </Space>
                     </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }}>
+                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
                         <Table columns={manualColumns} dataSource={orderIncomes} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }} />
                     </Card>
                 </>
             ) : (
                 <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Card size="small" style={{ flex: 1, marginRight: 12 }}>
+                        <Card size="small" style={{ flex: 1, marginRight: 12, ...cardStyle }}>
                             <Space size="large">
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого прочих поступлений</Text><div><Text strong style={{ fontSize: 20, color: '#389e0d' }}>{otherIncomesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
+                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого прочих поступлений</Text><div><Text strong style={{ fontSize: 20, color: token.colorSuccess }}>{otherIncomesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
                                 <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{otherIncomes.length}</Text></div></div>
                             </Space>
                         </Card>
                         <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIncome(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }}>Добавить поступление</Button>
                     </div>
-                    <Card size="small" style={{ marginBottom: 12 }}>
+                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
                         <Space wrap>
                             <Input placeholder="Поиск по описанию..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear size="small" />
                             <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
                         </Space>
                     </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }}>
+                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
                         <Table columns={manualColumns} dataSource={otherIncomes} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }} />
                     </Card>
                 </>

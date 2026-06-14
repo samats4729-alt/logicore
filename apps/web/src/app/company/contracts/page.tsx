@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
     Card, Button, Tag, Space, Modal, message, Typography,
     Collapse, Table, Empty, Badge, Input, Tooltip, Tabs,
-    Form, Select, DatePicker, InputNumber, Row, Col, Popconfirm, Divider
+    Form, Select, DatePicker, InputNumber, Row, Col, Popconfirm, Divider, theme
 } from 'antd';
 import {
     CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined,
@@ -81,6 +81,7 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function CompanyContractsPage() {
+    const { token } = theme.useToken();
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [pendingAgreements, setPendingAgreements] = useState<Agreement[]>([]);
     const [loading, setLoading] = useState(true);
@@ -425,7 +426,7 @@ export default function CompanyContractsPage() {
                                                 key={agreement.id}
                                                 title={
                                                     <Space>
-                                                        <ExclamationCircleOutlined style={{ color: '#faad14' }} />
+                                                        <ExclamationCircleOutlined style={{ color: token.colorWarning }} />
                                                         <span>ДС №{agreement.agreementNumber}</span>
                                                         <Tag color="orange">На согласовании</Tag>
                                                         <Tag>{agreement.proposedBy === 'CUSTOMER' ? 'От заказчика' : 'От экспедитора'}</Tag>
@@ -469,7 +470,7 @@ export default function CompanyContractsPage() {
                                                         type="primary"
                                                         icon={<CheckCircleOutlined />}
                                                         onClick={() => handleApprove(agreement.id)}
-                                                        style={{ background: '#52c41a', borderColor: '#52c41a' }}
+                                                        style={{ background: token.colorSuccess, borderColor: token.colorSuccess }}
                                                     >
                                                         Утвердить
                                                     </Button>
@@ -563,7 +564,7 @@ export default function CompanyContractsPage() {
                                                                         )}
                                                                         <Badge
                                                                             count={agreement.tariffs?.length || 0}
-                                                                            style={{ backgroundColor: '#52c41a' }}
+                                                                            style={{ backgroundColor: token.colorSuccess }}
                                                                         />
                                                                     </Space>
                                                                 }
@@ -573,7 +574,7 @@ export default function CompanyContractsPage() {
                                                                             <>
                                                                                 <Button
                                                                                     size="small" type="primary"
-                                                                                    style={{ background: '#52c41a', borderColor: '#52c41a' }}
+                                                                                    style={{ background: token.colorSuccess, borderColor: token.colorSuccess }}
                                                                                     onClick={() => handleApprove(agreement.id)}
                                                                                 >
                                                                                     Утвердить
@@ -747,16 +748,17 @@ export default function CompanyContractsPage() {
                 <Form form={tariffForm} layout="vertical" onFinish={handleAddTariff}>
                     {selectedAgreementStatus === 'APPROVED' && (
                         <div style={{
-                            background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 8,
-                            padding: '8px 12px', marginBottom: 16, fontSize: 13
+                            background: token.colorWarningBg, border: `1px solid ${token.colorWarningBorder}`, borderRadius: 8,
+                            padding: '8px 12px', marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
                         }}>
-                            ⚠️ Это ДС уже утверждено. После добавления тарифа оно будет отправлено на повторное согласование.
+                            <ExclamationCircleOutlined style={{ color: token.colorWarning }} />
+                            <span>Это ДС уже утверждено. После добавления тарифа оно будет отправлено на повторное согласование.</span>
                         </div>
                     )}
 
                     {/* ОТКУДА */}
-                    <div style={{ background: '#f0f5ff', padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
-                        <Text strong style={{ display: 'block', marginBottom: 8, color: '#1677ff' }}>📍 Откуда</Text>
+                    <div style={{ background: token.colorPrimaryBg, padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8, color: token.colorPrimary }}>Откуда</Text>
                         <Row gutter={12}>
                             <Col span={8}>
                                 <Form.Item name="originCountryId" label="Страна" rules={[{ required: true, message: 'Выберите' }]} style={{ marginBottom: 8 }}>
@@ -777,8 +779,8 @@ export default function CompanyContractsPage() {
                     </div>
 
                     {/* КУДА */}
-                    <div style={{ background: '#f6ffed', padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
-                        <Text strong style={{ display: 'block', marginBottom: 8, color: '#52c41a' }}>📍 Куда</Text>
+                    <div style={{ background: token.colorSuccessBg, padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8, color: token.colorSuccess }}>Куда</Text>
                         <Row gutter={12}>
                             <Col span={8}>
                                 <Form.Item name="destCountryId" label="Страна" rules={[{ required: true, message: 'Выберите' }]} style={{ marginBottom: 8 }}>

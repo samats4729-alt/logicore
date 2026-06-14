@@ -9,7 +9,7 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-    console.log('🏁 Starting Stage A Payment Data Migration...');
+    console.log('Starting Stage A Payment Data Migration...');
 
     // 1. Migrate Order boolean flags
     const orders = await prisma.order.findMany({
@@ -248,7 +248,7 @@ async function main() {
     }
     console.log(`Migrated ${migratedExpensesCount} manual expenses.`);
 
-    console.log('🎉 Migration completed successfully!');
+    console.log('Migration completed successfully!');
 }
 
 main()

@@ -261,16 +261,16 @@ async function main() {
             });
         }
     }
-    console.log('✅ Cargo types seeded!');
+    console.log('Cargo types seeded!');
 
-    console.log('🎉 Seeding completed!');
+    console.log('Seeding completed!');
     console.log('');
-    console.log('📋 Test credentials:');
+    console.log('Test credentials:');
     console.log('   Admin: admin@logcomp.kz / admin123');
     console.log('   Customer: customer@test.kz / customer123');
     console.log('   Driver: +77771234567 (SMS auth, code: 1234)');
     console.log('');
-    console.log('📦 Test order TEST-001 assigned to test driver');
+    console.log('Test order TEST-001 assigned to test driver');
 }
 
 main()

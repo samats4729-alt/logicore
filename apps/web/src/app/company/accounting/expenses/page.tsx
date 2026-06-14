@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Typography, Space, Tag, DatePicker, Input, Select, Switch, message, Tooltip, Statistic, Row, Col, Segmented, Modal, Form, InputNumber, Popconfirm, Drawer, Descriptions, Divider } from 'antd';
+import { Table, Card, Button, Typography, Space, Tag, DatePicker, Input, Select, Switch, message, Tooltip, Statistic, Row, Col, Segmented, Modal, Form, InputNumber, Popconfirm, Drawer, Descriptions, Divider, theme } from 'antd';
 import {
     SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, ArrowLeftOutlined,
     PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, SaveOutlined,
@@ -49,6 +49,12 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function CompanyExpensesPage() {
+    const { token } = theme.useToken();
+    const cardStyle = {
+        borderRadius: 8,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        border: `1px solid ${token.colorBorderSecondary}`,
+    };
     const [tab, setTab] = useState<string>('journal');
     const [entries, setEntries] = useState<JournalEntry[]>([]);
     const [manualExpenses, setManualExpenses] = useState<ManualExpense[]>([]);
@@ -125,11 +131,11 @@ export default function CompanyExpensesPage() {
     const journalColumns = [
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 100, render: (val: string) => <Text strong style={{ fontSize: 13 }}>{val}</Text> },
         { title: 'Дата', dataIndex: 'createdAt', key: 'createdAt', width: 100, sorter: (a: JournalEntry, b: JournalEntry) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <Text style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</Text> },
-        { title: 'Экспедитор', key: 'carrier', width: 220, render: (_: any, r: JournalEntry) => <Text strong={!r.isCustomerPaid} style={{ fontSize: 13, color: r.isCustomerPaid ? undefined : '#cf1322' }}>{getCarrierName(r)}</Text> },
+        { title: 'Экспедитор', key: 'carrier', width: 220, render: (_: any, r: JournalEntry) => <Text strong={!r.isCustomerPaid} style={{ fontSize: 13, color: r.isCustomerPaid ? undefined : token.colorError }}>{getCarrierName(r)}</Text> },
         { title: 'Описание', dataIndex: 'cargoDescription', key: 'cargoDescription', ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val}</Text> },
         { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, render: (val: string) => <Tag color={val === 'COMPLETED' ? 'green' : val === 'PROBLEM' ? 'red' : 'blue'} style={{ fontSize: 12 }}>{STATUS_LABELS[val] || val}</Tag> },
         { title: 'Сумма', key: 'customerPrice', width: 130, align: 'right' as const, sorter: (a: JournalEntry, b: JournalEntry) => (a.customerPrice || 0) - (b.customerPrice || 0), render: (_: any, r: JournalEntry) => <Text strong style={{ fontSize: 13 }}>{(r.customerPrice || 0).toLocaleString('ru-RU')} ₸</Text> },
-        { title: 'Оплата', key: 'paid', width: 90, align: 'center' as const, render: (_: any, r: JournalEntry) => <Tooltip title={r.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}>{r.isCustomerPaid ? <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} /> : <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 16 }} />}</Tooltip> },
+        { title: 'Оплата', key: 'paid', width: 90, align: 'center' as const, render: (_: any, r: JournalEntry) => <Tooltip title={r.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}>{r.isCustomerPaid ? <CheckCircleOutlined style={{ color: token.colorSuccess, fontSize: 16 }} /> : <CloseCircleOutlined style={{ color: token.colorError, fontSize: 16 }} />}</Tooltip> },
     ];
 
     const manualColumns = [
@@ -141,7 +147,7 @@ export default function CompanyExpensesPage() {
                 {r.order && <Tag color="blue" style={{ marginTop: 4 }}>Заявка {r.order.orderNumber}</Tag>}
             </Space>
         ) },
-        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <Text strong style={{ fontSize: 13, color: '#cf1322' }}>−{val.toLocaleString('ru-RU')} ₸</Text> },
+        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <Text strong style={{ fontSize: 13, color: token.colorError }}>−{val.toLocaleString('ru-RU')} ₸</Text> },
         { title: 'Примечание', dataIndex: 'note', key: 'note', width: 180, ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val || '—'}</Text> },
         { title: '', key: 'actions', width: 80, render: (_: any, r: ManualExpense) => <Space><Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditingExpense(r); form.setFieldsValue({ ...r, date: dayjs(r.date) }); setModalOpen(true); }} /><Popconfirm title="Удалить?" onConfirm={() => handleDeleteManual(r.id)} okText="Да" cancelText="Нет"><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
     ];
@@ -167,18 +173,18 @@ export default function CompanyExpensesPage() {
             {tab === 'journal' ? (
                 <>
                     <Row gutter={16} style={{ marginBottom: 16 }}>
-                        <Col xs={24} sm={8}><Card size="small"><Statistic title="Общая сумма" value={totalSum} suffix="₸" valueStyle={{ fontSize: 20 }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
-                        <Col xs={24} sm={8}><Card size="small"><Statistic title="Оплачено" value={paidSum} suffix="₸" valueStyle={{ fontSize: 20, color: '#389e0d' }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
-                        <Col xs={24} sm={8}><Card size="small"><Statistic title="Наш долг" value={debtSum} suffix="₸" valueStyle={{ fontSize: 20, color: debtSum > 0 ? '#cf1322' : '#389e0d' }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
+                        <Col xs={24} sm={8}><Card size="small" style={cardStyle}><Statistic title="Общая сумма" value={totalSum} suffix="₸" valueStyle={{ fontSize: 20 }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
+                        <Col xs={24} sm={8}><Card size="small" style={cardStyle}><Statistic title="Оплачено" value={paidSum} suffix="₸" valueStyle={{ fontSize: 20, color: token.colorSuccess }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
+                        <Col xs={24} sm={8}><Card size="small" style={cardStyle}><Statistic title="Наш долг" value={debtSum} suffix="₸" valueStyle={{ fontSize: 20, color: debtSum > 0 ? token.colorError : token.colorSuccess }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
                     </Row>
-                    <Card size="small" style={{ marginBottom: 12 }}>
+                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
                         <Space wrap>
                             <Input placeholder="Поиск..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 280 }} allowClear size="small" />
                             <Select placeholder="Статус оплаты" value={paymentFilter} onChange={setPaymentFilter} allowClear style={{ width: 160 }} size="small" options={[{ value: 'paid', label: 'Оплачено' }, { value: 'unpaid', label: 'Не оплачено' }]} />
                             <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
                         </Space>
                     </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }}>
+                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
                         <Table columns={journalColumns} dataSource={filtered} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет данных' }}
                             pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }}
                             rowClassName={(r) => `${r.isCustomerPaid ? '' : 'unpaid-row'} clickable-row`}
@@ -189,41 +195,41 @@ export default function CompanyExpensesPage() {
             ) : tab === 'order_expenses' ? (
                 <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Card size="small" style={{ flex: 1, marginRight: 12 }}>
+                        <Card size="small" style={{ flex: 1, marginRight: 12, ...cardStyle }}>
                             <Space size="large">
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого расходов по заявкам</Text><div><Text strong style={{ fontSize: 20, color: '#cf1322' }}>{orderExpensesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
+                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого расходов по заявкам</Text><div><Text strong style={{ fontSize: 20, color: token.colorError }}>{orderExpensesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
                                 <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{orderExpenses.length}</Text></div></div>
                             </Space>
                         </Card>
                     </div>
-                    <Card size="small" style={{ marginBottom: 12 }}>
+                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
                         <Space wrap>
                             <Input placeholder="Поиск..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear size="small" />
                             <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
                         </Space>
                     </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }}>
+                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
                         <Table columns={manualColumns} dataSource={orderExpenses} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }} />
                     </Card>
                 </>
             ) : (
                 <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Card size="small" style={{ flex: 1, marginRight: 12 }}>
+                        <Card size="small" style={{ flex: 1, marginRight: 12, ...cardStyle }}>
                             <Space size="large">
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого прочих расходов</Text><div><Text strong style={{ fontSize: 20, color: '#cf1322' }}>{otherExpensesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
+                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого прочих расходов</Text><div><Text strong style={{ fontSize: 20, color: token.colorError }}>{otherExpensesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
                                 <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{otherExpenses.length}</Text></div></div>
                             </Space>
                         </Card>
                         <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingExpense(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }}>Добавить расход</Button>
                     </div>
-                    <Card size="small" style={{ marginBottom: 12 }}>
+                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
                         <Space wrap>
                             <Input placeholder="Поиск..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear size="small" />
                             <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
                         </Space>
                     </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }}>
+                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
                         <Table columns={manualColumns} dataSource={otherExpenses} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }} />
                     </Card>
                 </>
@@ -242,7 +248,7 @@ export default function CompanyExpensesPage() {
                             <Descriptions.Item label="Номер">{selectedEntry.orderNumber}</Descriptions.Item>
                             <Descriptions.Item label="Дата создания">{dayjs(selectedEntry.createdAt).format('DD.MM.YYYY HH:mm')}</Descriptions.Item>
                             <Descriptions.Item label="Контрагент">
-                                <Text strong style={{ color: selectedEntry.isCustomerPaid ? undefined : '#cf1322' }}>
+                                <Text strong style={{ color: selectedEntry.isCustomerPaid ? undefined : token.colorError }}>
                                     {getCarrierName(selectedEntry)}
                                 </Text>
                             </Descriptions.Item>
@@ -260,7 +266,7 @@ export default function CompanyExpensesPage() {
 
                         <Divider style={{ margin: '16px 0' }}>Сделка</Divider>
 
-                        <Card size="small" style={{ background: '#fafafa' }}>
+                        <Card size="small" style={{ background: token.colorBgLayout, borderRadius: 8, border: 'none' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
                                     <Text type="secondary" style={{ fontSize: 12 }}>Заявка</Text>
@@ -290,11 +296,11 @@ export default function CompanyExpensesPage() {
             </Modal>
 
             <style jsx global>{`
-                .unpaid-row { background: #fff2f0 !important; }
-                .unpaid-row:hover > td { background: #ffebe8 !important; }
+                .unpaid-row { background: ${token.colorErrorBg} !important; }
+                .unpaid-row:hover > td { background: ${token.colorErrorBgActive || token.colorErrorBgHover || token.colorErrorBg} !important; }
                 .clickable-row { cursor: pointer; }
-                .clickable-row:hover > td { background: #e6f7ff !important; }
-                .unpaid-row.clickable-row:hover > td { background: #ffebe8 !important; }
+                .clickable-row:hover > td { background: ${token.colorPrimaryBg} !important; }
+                .unpaid-row.clickable-row:hover > td { background: ${token.colorErrorBgActive || token.colorErrorBgHover || token.colorErrorBg} !important; }
             `}</style>
         </div>
     );

@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import {
     Typography, Button, Form, Input, InputNumber, Select, DatePicker,
-    message, Row, Col, Card, Modal, Steps, Divider
+    message, Row, Col, Card, Modal, Steps, Divider, theme
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
-    DeleteOutlined, SendOutlined, CheckCircleOutlined
+    DeleteOutlined, SendOutlined, CheckCircleOutlined, ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -33,6 +33,7 @@ const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
 
 export default function CreateOrderPage() {
+    const { token } = theme.useToken();
     const { user } = useAuthStore();
     const router = useRouter();
     const [form] = Form.useForm();
@@ -558,8 +559,8 @@ export default function CreateOrderPage() {
                                 <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
                             </Form.Item>
                             {appliedTariff && (
-                                <div style={{ marginTop: -12, marginBottom: 8, padding: '4px 8px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, fontSize: 11 }}>
-                                    ✅ Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
+                                <div style={{ marginTop: -12, marginBottom: 8, padding: '4px 8px', background: token.colorSuccessBg, border: `1px solid ${token.colorSuccessBorder}`, borderRadius: 6, fontSize: 11 }}>
+                                    <CheckCircleOutlined style={{ color: token.colorSuccess, marginRight: 4 }} /> Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
                                 </div>
                             )}
                         </Col>
@@ -678,8 +679,13 @@ export default function CreateOrderPage() {
             </div>
 
             {!profileComplete && (
-                <div style={{ marginBottom: 16, padding: '12px 16px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 8, fontSize: 13 }}>
-                    ⚠️ Заполните профиль компании перед созданием заявок
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px',
+                    background: token.colorWarningBg, border: `1px solid ${token.colorWarningBorder}`,
+                    borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
+                }}>
+                    <ExclamationCircleOutlined style={{ color: token.colorWarning }} />
+                    <span>Заполните профиль компании перед созданием заявок</span>
                 </div>
             )}
 
