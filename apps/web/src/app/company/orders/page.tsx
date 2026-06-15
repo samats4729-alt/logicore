@@ -99,7 +99,7 @@ interface Order {
     assignedDriverPlate?: string;
     assignedDriverTrailer?: string;
     assignedAt?: string;
-    driver?: { firstName: string; lastName: string; phone: string; vehiclePlate?: string; vehicleModel?: string; trailerNumber?: string };
+    driver?: { firstName: string; lastName: string; middleName?: string; phone: string; vehiclePlate?: string; vehicleModel?: string; trailerNumber?: string };
     subForwarder?: { name: string; email?: string };
     forwarder?: { id?: string; name: string; email?: string };
     partner?: { name: string; email?: string };
