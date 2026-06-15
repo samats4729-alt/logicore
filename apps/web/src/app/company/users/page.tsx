@@ -1013,6 +1013,11 @@ export default function CompanyUsersPage() {
         },
     ];
 
+    // Filtered users list for tables
+    const filteredUsers = activeSegment === 'drivers'
+        ? users.filter(u => u.role === 'DRIVER')
+        : users.filter(u => u.role !== 'DRIVER');
+
     // Unassigned users list
     const unassignedUsers = users.filter(
         u => !u.departmentId && u.role !== 'COMPANY_ADMIN' && u.role !== 'ADMIN' && u.role !== 'DRIVER'
