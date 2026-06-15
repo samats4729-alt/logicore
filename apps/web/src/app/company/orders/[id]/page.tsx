@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import {
     Typography, Tag, Button, Descriptions, Card, Row, Col, Statistic, Table,
     Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline,
-    Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip
+    Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip,
+    theme
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
@@ -101,6 +102,7 @@ const getNextStatuses = (s: string) => {
 };
 
 export default function OrderDetailPage() {
+    const { token } = theme.useToken();
     const { user } = useAuthStore();
     const params = useParams();
     const router = useRouter();
