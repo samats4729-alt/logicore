@@ -265,6 +265,24 @@ importers:
       '@types/leaflet':
         specifier: ^1.9.8
         version: 1.9.21
+      '@types/mapbox-gl':
+        specifier: ^3.4.1
+        version: 3.4.1
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.27
+      '@types/react':
+        specifier: ^18.2.0
+        version: 18.3.27
+      '@types/react-dom':
+        specifier: ^18.2.0
+        version: 18.3.7(@types/react@18.3.27)
+      '@types/three':
+        specifier: ^0.160.0
+        version: 0.160.0
+      '@types/uuid':
+        specifier: ^9.0.0
+        version: 9.0.8
       antd:
         specifier: ^5.13.0
         version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -311,24 +329,6 @@ importers:
         specifier: ^4.5.0
         version: 4.5.7(@types/react@18.3.27)(react@18.3.1)
     devDependencies:
-      '@types/mapbox-gl':
-        specifier: ^3.4.1
-        version: 3.4.1
-      '@types/node':
-        specifier: ^20.10.0
-        version: 20.19.27
-      '@types/react':
-        specifier: ^18.2.0
-        version: 18.3.27
-      '@types/react-dom':
-        specifier: ^18.2.0
-        version: 18.3.7(@types/react@18.3.27)
-      '@types/three':
-        specifier: ^0.160.0
-        version: 0.160.0
-      '@types/uuid':
-        specifier: ^9.0.0
-        version: 9.0.8
       eslint:
         specifier: ^8.56.0
         version: 8.57.1

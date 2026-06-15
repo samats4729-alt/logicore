@@ -649,7 +649,7 @@ export default function CreateOrderPage() {
                             optionFilterProp="children"
                         >
                             <Select.Option value={MY_COMPANY_VALUE}>
-                                <span style={{ fontWeight: 600 }}>🏢 {myCompanyName || 'Моя компания'}</span>
+                                <span style={{ fontWeight: 600 }}>{myCompanyName || 'Моя компания'}</span>
                             </Select.Option>
                             <Select.OptGroup label="Контрагенты">
                                 {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
@@ -686,7 +686,7 @@ export default function CreateOrderPage() {
                             optionFilterProp="children"
                         >
                             <Select.Option value={MY_COMPANY_VALUE}>
-                                <span style={{ fontWeight: 600 }}>🏢 {myCompanyName || 'Моя компания'}</span>
+                                <span style={{ fontWeight: 600 }}>{myCompanyName || 'Моя компания'}</span>
                             </Select.Option>
                             <Select.Option value={MARKETPLACE_VALUE}>
                                 <span style={{ color: '#722ed1', fontWeight: 500 }}>📢 Опубликовать на бирже</span>

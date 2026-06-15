@@ -384,7 +384,7 @@ export default function CompanyLocationsPage() {
                 return (
                     <Tooltip title={company.name}>
                         <Tag color="geekblue" style={{ fontWeight: 500, margin: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            🏢 {company.name}
+                            {company.name}
                         </Tag>
                     </Tooltip>
                 );
@@ -517,7 +517,7 @@ export default function CompanyLocationsPage() {
                     >
                         <Option value="global">📍 Общие адреса (без контрагента)</Option>
                         {companies.map(c => (
-                            <Option key={c.id} value={c.id}>🏢 {c.name}</Option>
+                            <Option key={c.id} value={c.id}>{c.name}</Option>
                         ))}
                     </Select>
                     {(searchText || filterCompanyId !== undefined) && (
