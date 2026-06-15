@@ -21,6 +21,7 @@ const { TextArea } = Input;
 interface Partner {
     id: string;
     name: string;
+    isExternal?: boolean;
 }
 
 interface LocationState {
