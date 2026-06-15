@@ -57,6 +57,10 @@ export default function CreateOrderPage() {
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [vehiclesLoading, setVehiclesLoading] = useState(false);
 
+    // Parties
+    const [selectedCustomer, setSelectedCustomer] = useState<string>(MY_COMPANY_VALUE);
+    const [selectedCarrier, setSelectedCarrier] = useState<string>('');
+
     const isOwnOrExternalCarrier = selectedCarrier === MY_COMPANY_VALUE || 
         (selectedCarrier && partners.find(p => p.id === selectedCarrier)?.isExternal === true);
 
@@ -139,9 +143,7 @@ export default function CreateOrderPage() {
         { city: '', address: '', pointType: 'DELIVERY' }
     ]);
 
-    // Parties
-    const [selectedCustomer, setSelectedCustomer] = useState<string>(MY_COMPANY_VALUE);
-    const [selectedCarrier, setSelectedCarrier] = useState<string>('');
+
 
     const isMeCustomer = selectedCustomer === MY_COMPANY_VALUE;
     const isMeCarrier = selectedCarrier === MY_COMPANY_VALUE;
