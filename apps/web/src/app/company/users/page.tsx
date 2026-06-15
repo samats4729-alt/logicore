@@ -619,7 +619,7 @@ export default function CompanyUsersPage() {
                                     size="small"
                                     icon={<UserAddOutlined style={{ fontSize: 12 }} />}
                                     title="Пригласить сотрудника"
-                                    onClick={() => openInviteModal()}
+                                    onClick={() => handleOpenUnifiedModal()}
                                 />
                             </>
                         )}
