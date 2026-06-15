@@ -428,7 +428,7 @@ export default function CompanyUsersPage() {
             message.success('Отдел успешно создан');
             setNewDeptName('');
             await fetchData();
-            form.setFieldsValue({ departmentId: res.data.id });
+            unifiedForm.setFieldsValue({ departmentId: res.data.id });
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка создания отдела');
         } finally {
