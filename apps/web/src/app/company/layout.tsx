@@ -145,27 +145,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // --- КОНТРАГЕНТЫ (верхний уровень) ---
+        // --- ОРГАНИЗАЦИЯ ---
+        const orgChildren: any[] = [];
         if (hasPerm('partners')) {
-            items.push({
+            orgChildren.push({
                 key: '/company/partners',
                 icon: <TeamOutlined />,
                 label: 'Контрагенты',
             });
-        }
-
-        // --- ТРАНСПОРТ (верхний уровень) ---
-        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            items.push({
-                key: '/company/vehicles',
-                icon: <CarOutlined />,
-                label: 'Транспорт',
-            });
-        }
-
-        // --- ОРГАНИЗАЦИЯ ---
-        const orgChildren: any[] = [];
-        if (hasPerm('partners')) {
             orgChildren.push({
                 key: '/company/contracts',
                 icon: <FileTextOutlined />,
@@ -173,6 +160,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
         if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            orgChildren.push({
+                key: '/company/vehicles',
+                icon: <CarOutlined />,
+                label: 'Транспорт',
+            });
             orgChildren.push({
                 key: '/company/users',
                 icon: <TeamOutlined />,
