@@ -327,14 +327,14 @@ export default function CreateOrderPage() {
                 ? (dayjs.isDayjs(values.pickupDate) ? values.pickupDate.toISOString() : new Date(values.pickupDate).toISOString()) 
                 : undefined;
 
-            let finalDriverId = selectedDriverId;
+            let finalDriverId: string | undefined = selectedDriverId || undefined;
 
             if (isOwnOrExternalCarrier) {
                 const targetCompanyId = selectedCarrier === MY_COMPANY_VALUE 
                     ? user?.companyId 
                     : selectedCarrier;
 
-                if (selectedDriverId === '__NEW_DRIVER__' || !selectedDriverId) {
+                if (selectedDriverId === '__NEW_DRIVER__') {
                     const driverData = {
                         firstName: values.firstName,
                         lastName: values.lastName,
@@ -360,7 +360,7 @@ export default function CreateOrderPage() {
                     if (res.data.alreadyExists) {
                         message.info('Использован существующий водитель');
                     }
-                } else {
+                } else if (selectedDriverId) {
                     // Update details for our own drivers
                     if (selectedCarrier === MY_COMPANY_VALUE) {
                         const driverData = {
@@ -385,6 +385,8 @@ export default function CreateOrderPage() {
                             // Non-critical update failure
                         }
                     }
+                } else {
+                    finalDriverId = undefined;
                 }
             }
 
@@ -839,7 +841,7 @@ export default function CreateOrderPage() {
                         </Form.Item>
                     )}
 
-                    <Form.Item name="driverId" label="Водитель" rules={[{ required: true, message: 'Выберите водителя' }]}>
+                    <Form.Item name="driverId" label="Водитель (не обязательно)">
                         <Select
                             placeholder="Выберите водителя из списка"
                             size="large"
