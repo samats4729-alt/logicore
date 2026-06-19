@@ -19,11 +19,14 @@ interface Vehicle {
     source?: 'own' | 'carrier';
     carrierName?: string;
     driverName?: string;
+    driverPhone?: string;
+    driverId?: string;
 }
 
 export default function VehiclesPage() {
     const [ownVehicles, setOwnVehicles] = useState<Vehicle[]>([]);
     const [carrierVehicles, setCarrierVehicles] = useState<Vehicle[]>([]);
+    const [ownDrivers, setOwnDrivers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
@@ -59,6 +62,7 @@ export default function VehiclesPage() {
                                 source: 'carrier',
                                 carrierName: carrier.name,
                                 driverName: `${driver.lastName} ${driver.firstName}`.trim(),
+                                driverPhone: driver.phone || '',
                             });
                         }
                     }
@@ -72,15 +76,35 @@ export default function VehiclesPage() {
         }
     };
 
+    const fetchDrivers = async () => {
+        try {
+            const res = await api.get('/company/drivers');
+            setOwnDrivers(res.data || []);
+        } catch (error) {
+            console.error('Ошибка загрузки водителей', error);
+        }
+    };
+
     useEffect(() => {
         fetchVehicles();
+        fetchDrivers();
     }, []);
 
     const handleCreateOrUpdate = async (values: any) => {
         try {
             if (editingVehicle) {
-                await api.put(`/company/vehicles/${editingVehicle.id}`, values);
-                message.success('Транспорт успешно обновлен');
+                if (editingVehicle.source === 'carrier') {
+                    await api.put(`/company/drivers/${editingVehicle.id}`, {
+                        vehicleModel: values.model,
+                        vehiclePlate: values.plate,
+                        vehicleType: values.type,
+                        trailerNumber: values.trailerNumber || null,
+                    });
+                    message.success('Транспорт перевозчика успешно обновлен');
+                } else {
+                    await api.put(`/company/vehicles/${editingVehicle.id}`, values);
+                    message.success('Транспорт успешно обновлен');
+                }
             } else {
                 await api.post('/company/vehicles', values);
                 message.success('Транспорт успешно добавлен');
@@ -89,6 +113,7 @@ export default function VehiclesPage() {
             setEditingVehicle(null);
             form.resetFields();
             fetchVehicles();
+            fetchDrivers();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка сохранения');
         }
@@ -96,15 +121,32 @@ export default function VehiclesPage() {
 
     const handleEdit = (vehicle: Vehicle) => {
         setEditingVehicle(vehicle);
-        form.setFieldsValue(vehicle);
+        form.setFieldsValue({
+            model: vehicle.model,
+            plate: vehicle.plate,
+            trailerNumber: vehicle.trailerNumber || '',
+            type: vehicle.type,
+            driverId: vehicle.driverId || undefined,
+        });
         setModalOpen(true);
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (vehicle: Vehicle) => {
         try {
-            await api.delete(`/company/vehicles/${id}`);
-            message.success('Транспорт удален');
+            if (vehicle.source === 'carrier') {
+                await api.put(`/company/drivers/${vehicle.id}`, {
+                    vehicleModel: null,
+                    vehiclePlate: null,
+                    vehicleType: null,
+                    trailerNumber: null,
+                });
+                message.success('Транспорт перевозчика удален');
+            } else {
+                await api.delete(`/company/vehicles/${vehicle.id}`);
+                message.success('Транспорт удален');
+            }
             fetchVehicles();
+            fetchDrivers();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка удаления');
         }
@@ -151,6 +193,21 @@ export default function VehiclesPage() {
             key: 'type',
         },
         {
+            title: 'Водитель',
+            key: 'driver',
+            render: (_: any, record: Vehicle) => {
+                if (record.driverName) {
+                    return (
+                        <Space direction="vertical" size={0}>
+                            <Text strong>{record.driverName}</Text>
+                            {record.driverPhone && <Text type="secondary" style={{ fontSize: 12 }}>{record.driverPhone}</Text>}
+                        </Space>
+                    );
+                }
+                return <Text type="secondary">—</Text>;
+            },
+        },
+        {
             title: 'Принадлежность',
             key: 'source',
             render: (_: any, record: Vehicle) => {
@@ -158,8 +215,7 @@ export default function VehiclesPage() {
                     return (
                         <Space direction="vertical" size={0}>
                             <Tag color="orange">От перевозчика</Tag>
-                            <Text type="secondary" style={{ fontSize: 12 }}>{record.carrierName}</Text>
-                            {record.driverName && <Text type="secondary" style={{ fontSize: 11 }}>{record.driverName}</Text>}
+                            {record.carrierName && <Text type="secondary" style={{ fontSize: 12 }}>{record.carrierName}</Text>}
                         </Space>
                     );
                 }
@@ -176,7 +232,6 @@ export default function VehiclesPage() {
             title: 'Действия',
             key: 'actions',
             render: (_: any, record: Vehicle) => {
-                if (record.source === 'carrier') return null;
                 return (
                     <Space>
                         <Button
@@ -185,8 +240,10 @@ export default function VehiclesPage() {
                             onClick={() => handleEdit(record)}
                         />
                         <Popconfirm
-                            title="Удалить это транспортное средство?"
-                            onConfirm={() => handleDelete(record.id)}
+                            title={record.source === 'carrier'
+                                ? "Убрать транспорт у этого водителя?"
+                                : "Удалить это транспортное средство?"}
+                            onConfirm={() => handleDelete(record)}
                             okText="Да"
                             cancelText="Нет"
                             okButtonProps={{ danger: true }}
@@ -253,7 +310,9 @@ export default function VehiclesPage() {
             </Card>
 
             <Modal
-                title={editingVehicle ? 'Редактирование транспорта' : 'Добавление транспорта'}
+                title={editingVehicle 
+                    ? (editingVehicle.source === 'carrier' ? 'Редактирование транспорта перевозчика' : 'Редактирование собственного транспорта') 
+                    : 'Добавление собственного транспорта'}
                 open={modalOpen}
                 onCancel={() => {
                     setModalOpen(false);
@@ -300,6 +359,26 @@ export default function VehiclesPage() {
                             ))}
                         </Select>
                     </Form.Item>
+
+                    {(!editingVehicle || editingVehicle.source === 'own') && (
+                        <Form.Item
+                            name="driverId"
+                            label="Назначенный водитель (опционально)"
+                        >
+                            <Select 
+                                placeholder="Выберите водителя" 
+                                allowClear 
+                                showSearch 
+                                optionFilterProp="children"
+                            >
+                                {ownDrivers.map(d => (
+                                    <Select.Option key={d.id} value={d.id}>
+                                        {`${d.lastName} ${d.firstName} ${d.middleName || ''} (${d.phone})`.trim()}
+                                    </Select.Option>
+                                ))}
+                            </Select>
+                        </Form.Item>
+                    )}
                 </Form>
             </Modal>
         </div>

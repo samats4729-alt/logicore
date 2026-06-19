@@ -363,6 +363,11 @@ export class CreateVehicleDto {
     @IsString()
     @IsOptional()
     trailerNumber?: string;
+
+    @ApiProperty({ description: 'ID назначенного водителя (опционально)', required: false })
+    @IsString()
+    @IsOptional()
+    driverId?: string;
 }
 
 export class UpdateVehicleDto {
@@ -385,6 +390,11 @@ export class UpdateVehicleDto {
     @IsString()
     @IsOptional()
     trailerNumber?: string;
+
+    @ApiProperty({ description: 'ID назначенного водителя (опционально)', required: false })
+    @IsString()
+    @IsOptional()
+    driverId?: string;
 }
 
 

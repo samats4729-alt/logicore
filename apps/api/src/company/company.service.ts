@@ -816,29 +816,87 @@ export class CompanyService {
      * Получить список транспорта компании
      */
     async getVehicles(companyId: string) {
-        return this.prisma.vehicle.findMany({
+        const vehicles = await this.prisma.vehicle.findMany({
             where: { companyId, isActive: true },
             orderBy: { createdAt: 'desc' },
+        });
+
+        const drivers = await this.prisma.user.findMany({
+            where: {
+                companyId,
+                role: UserRole.DRIVER,
+                isActive: true,
+                vehiclePlate: { not: null },
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                vehiclePlate: true,
+            },
+        });
+
+        // Map drivers to vehicles
+        return vehicles.map(vehicle => {
+            const driver = drivers.find(d => d.vehiclePlate === vehicle.plate);
+            return {
+                ...vehicle,
+                driverId: driver?.id || null,
+                driverName: driver ? `${driver.lastName} ${driver.firstName}`.trim() : null,
+                driverPhone: driver?.phone || null,
+            };
         });
     }
 
     /**
      * Создать транспорт
      */
-    async createVehicle(companyId: string, data: { type: string; plate: string; model: string; trailerNumber?: string }) {
-        return this.prisma.vehicle.create({
+    async createVehicle(companyId: string, data: { type: string; plate: string; model: string; trailerNumber?: string; driverId?: string }) {
+        const { driverId, ...vehicleData } = data;
+        const vehicle = await this.prisma.vehicle.create({
             data: {
-                ...data,
+                ...vehicleData,
                 companyId,
                 isActive: true,
             },
         });
+
+        if (driverId) {
+            // First, clear vehicle fields for any other driver who might have been assigned to this plate/vehicle
+            await this.prisma.user.updateMany({
+                where: {
+                    companyId,
+                    role: UserRole.DRIVER,
+                    vehiclePlate: vehicle.plate,
+                },
+                data: {
+                    vehicleType: null,
+                    vehiclePlate: null,
+                    vehicleModel: null,
+                    trailerNumber: null,
+                },
+            });
+
+            // Assign this vehicle to the selected driver
+            await this.prisma.user.update({
+                where: { id: driverId },
+                data: {
+                    vehicleType: vehicle.type,
+                    vehiclePlate: vehicle.plate,
+                    vehicleModel: vehicle.model,
+                    trailerNumber: vehicle.trailerNumber || null,
+                },
+            });
+        }
+
+        return vehicle;
     }
 
     /**
      * Обновить транспорт
      */
-    async updateVehicle(companyId: string, id: string, data: Partial<{ type: string; plate: string; model: string; trailerNumber?: string }>) {
+    async updateVehicle(companyId: string, id: string, data: Partial<{ type: string; plate: string; model: string; trailerNumber?: string; driverId?: string | null }>) {
         const vehicle = await this.prisma.vehicle.findFirst({
             where: { id, companyId },
         });
@@ -846,10 +904,66 @@ export class CompanyService {
             throw new NotFoundException('Транспорт не найден');
         }
 
-        return this.prisma.vehicle.update({
+        const { driverId, ...vehicleData } = data;
+        const oldPlate = vehicle.plate;
+
+        const updatedVehicle = await this.prisma.vehicle.update({
             where: { id },
-            data,
+            data: vehicleData,
         });
+
+        if (driverId !== undefined) {
+            // Clear vehicle fields for any driver who was assigned to the old plate or the new plate
+            await this.prisma.user.updateMany({
+                where: {
+                    companyId,
+                    role: UserRole.DRIVER,
+                    OR: [
+                        { vehiclePlate: oldPlate },
+                        { vehiclePlate: updatedVehicle.plate },
+                    ],
+                },
+                data: {
+                    vehicleType: null,
+                    vehiclePlate: null,
+                    vehicleModel: null,
+                    trailerNumber: null,
+                },
+            });
+
+            if (driverId) {
+                // Assign to new driver
+                await this.prisma.user.update({
+                    where: { id: driverId },
+                    data: {
+                        vehicleType: updatedVehicle.type,
+                        vehiclePlate: updatedVehicle.plate,
+                        vehicleModel: updatedVehicle.model,
+                        trailerNumber: updatedVehicle.trailerNumber || null,
+                    },
+                });
+            }
+        } else {
+            // If vehicle details (plate, model, type, trailerNumber) changed,
+            // update the driver currently assigned to this vehicle (matched by oldPlate)
+            if (vehicleData.plate || vehicleData.model || vehicleData.type || vehicleData.trailerNumber !== undefined) {
+                await this.prisma.user.updateMany({
+                    where: {
+                        companyId,
+                        role: UserRole.DRIVER,
+                        vehiclePlate: oldPlate,
+                    },
+                    data: {
+                        vehiclePlate: vehicleData.plate !== undefined ? vehicleData.plate : undefined,
+                        vehicleModel: vehicleData.model !== undefined ? vehicleData.model : undefined,
+                        vehicleType: vehicleData.type !== undefined ? vehicleData.type : undefined,
+                        trailerNumber: vehicleData.trailerNumber !== undefined ? (vehicleData.trailerNumber || null) : undefined,
+                    },
+                });
+            }
+        }
+
+        return updatedVehicle;
     }
 
     /**
@@ -862,6 +976,21 @@ export class CompanyService {
         if (!vehicle) {
             throw new NotFoundException('Транспорт не найден');
         }
+
+        // Clear driver vehicle fields
+        await this.prisma.user.updateMany({
+            where: {
+                companyId,
+                role: UserRole.DRIVER,
+                vehiclePlate: vehicle.plate,
+            },
+            data: {
+                vehicleType: null,
+                vehiclePlate: null,
+                vehicleModel: null,
+                trailerNumber: null,
+            },
+        });
 
         return this.prisma.vehicle.update({
             where: { id },
