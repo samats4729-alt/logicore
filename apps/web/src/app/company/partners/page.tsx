@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, message, List, Modal, Form, Select, Popconfirm, Checkbox } from 'antd';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
@@ -14,7 +15,10 @@ const { Title, Text } = Typography;
 
 export default function PartnersPage() {
     const { user } = useAuthStore();
-    const [activeTab, setActiveTab] = useState('customers');
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialTab = searchParams.get('tab') === 'carriers' ? 'carriers' : 'customers';
+    const [activeTab, setActiveTab] = useState(initialTab);
 
     // Data States
     const [counterparties, setCounterparties] = useState<any[]>([]);
@@ -319,6 +323,10 @@ export default function PartnersPage() {
                     rowKey="id"
                     loading={loading}
                     locale={{ emptyText: tabType === 'customers' ? 'У вас пока нет заказчиков' : 'У вас пока нет перевозчиков' }}
+                    onRow={(record) => ({
+                        onClick: () => router.push(`/company/partners/${record.id}`),
+                        style: { cursor: 'pointer' },
+                    })}
                 />
             </Card>
         );

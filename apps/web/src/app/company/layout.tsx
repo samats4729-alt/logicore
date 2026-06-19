@@ -145,49 +145,52 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // --- ПАРТНЁРЫ ---
-        const partnersChildren: any[] = [];
+        // --- КОНТРАГЕНТЫ (верхний уровень) ---
         if (hasPerm('partners')) {
-            partnersChildren.push({
+            items.push({
                 key: '/company/partners',
                 icon: <TeamOutlined />,
                 label: 'Контрагенты',
             });
-            partnersChildren.push({
-                key: '/company/carriers',
+        }
+
+        // --- ТРАНСПОРТ (верхний уровень) ---
+        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            items.push({
+                key: '/company/vehicles',
                 icon: <CarOutlined />,
-                label: 'Перевозчики',
+                label: 'Транспорт',
             });
-            partnersChildren.push({
+        }
+
+        // --- ОРГАНИЗАЦИЯ ---
+        const orgChildren: any[] = [];
+        if (hasPerm('partners')) {
+            orgChildren.push({
                 key: '/company/contracts',
                 icon: <FileTextOutlined />,
                 label: 'Договоры',
             });
         }
         if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            partnersChildren.push({
+            orgChildren.push({
                 key: '/company/users',
                 icon: <TeamOutlined />,
                 label: 'Сотрудники',
             });
-            partnersChildren.push({
-                key: '/company/vehicles',
-                icon: <CarOutlined />,
-                label: 'Автопарк',
-            });
         }
-        partnersChildren.push({
+        orgChildren.push({
             key: '/company/locations',
             icon: <PushpinOutlined />,
             label: 'Адреса',
         });
 
-        if (partnersChildren.length > 0) {
+        if (orgChildren.length > 0) {
             items.push({
-                key: 'partners_group',
-                icon: <TeamOutlined />,
+                key: 'org_group',
+                icon: <ApartmentOutlined />,
                 label: 'Организация',
-                children: partnersChildren,
+                children: orgChildren,
             });
         }
 

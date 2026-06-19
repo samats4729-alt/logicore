@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Input, Modal, Form, Select, message, Typography, Space, Popconfirm } from 'antd';
+import { Table, Card, Button, Input, Modal, Form, Select, message, Typography, Space, Popconfirm, Segmented, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, CarOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -15,23 +15,58 @@ interface Vehicle {
     model: string;
     trailerNumber?: string;
     createdAt: string;
+    // For carrier vehicles
+    source?: 'own' | 'carrier';
+    carrierName?: string;
+    driverName?: string;
 }
 
 export default function VehiclesPage() {
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+    const [ownVehicles, setOwnVehicles] = useState<Vehicle[]>([]);
+    const [carrierVehicles, setCarrierVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [filter, setFilter] = useState<string>('all');
     const [form] = Form.useForm();
 
     const fetchVehicles = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/company/vehicles');
-            setVehicles(res.data || []);
+            // Fetch own vehicles
+            const ownRes = await api.get('/company/vehicles');
+            const own = (ownRes.data || []).map((v: any) => ({ ...v, source: 'own' as const }));
+            setOwnVehicles(own);
+
+            // Fetch carrier vehicles (from drivers of external carrier companies)
+            const externalRes = await api.get('/external-companies');
+            const carriers = externalRes.data.filter((e: any) => e.isCarrier);
+
+            const carrierVehiclesList: Vehicle[] = [];
+            for (const carrier of carriers) {
+                try {
+                    const driversRes = await api.get('/company/drivers', { params: { companyId: carrier.id } });
+                    for (const driver of driversRes.data) {
+                        if (driver.vehiclePlate || driver.vehicleModel) {
+                            carrierVehiclesList.push({
+                                id: driver.id,
+                                type: driver.vehicleType || '—',
+                                plate: driver.vehiclePlate || '—',
+                                model: driver.vehicleModel || '—',
+                                trailerNumber: driver.trailerNumber,
+                                createdAt: driver.createdAt,
+                                source: 'carrier',
+                                carrierName: carrier.name,
+                                driverName: `${driver.lastName} ${driver.firstName}`.trim(),
+                            });
+                        }
+                    }
+                } catch {}
+            }
+            setCarrierVehicles(carrierVehiclesList);
         } catch (error) {
-            message.error('Ошибка загрузки автопарка');
+            message.error('Ошибка загрузки транспорта');
         } finally {
             setLoading(false);
         }
@@ -75,10 +110,20 @@ export default function VehiclesPage() {
         }
     };
 
-    const filteredVehicles = vehicles.filter(v => 
+    // Combine and filter
+    const allVehicles = [...ownVehicles, ...carrierVehicles];
+    const filteredBySource = filter === 'own'
+        ? ownVehicles
+        : filter === 'carrier'
+            ? carrierVehicles
+            : allVehicles;
+
+    const filteredVehicles = filteredBySource.filter(v =>
         (v.model || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (v.plate || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (v.trailerNumber || '').toLowerCase().includes(searchQuery.toLowerCase())
+        (v.trailerNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (v.carrierName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (v.driverName || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const columns = [
@@ -106,32 +151,51 @@ export default function VehiclesPage() {
             key: 'type',
         },
         {
+            title: 'Принадлежность',
+            key: 'source',
+            render: (_: any, record: Vehicle) => {
+                if (record.source === 'carrier') {
+                    return (
+                        <Space direction="vertical" size={0}>
+                            <Tag color="orange">От перевозчика</Tag>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{record.carrierName}</Text>
+                            {record.driverName && <Text type="secondary" style={{ fontSize: 11 }}>{record.driverName}</Text>}
+                        </Space>
+                    );
+                }
+                return <Tag color="blue">Свой</Tag>;
+            },
+        },
+        {
             title: 'Дата добавления',
             dataIndex: 'createdAt',
             key: 'createdAt',
-            render: (date: string) => new Date(date).toLocaleDateString('ru-RU'),
+            render: (date: string) => date ? new Date(date).toLocaleDateString('ru-RU') : '—',
         },
         {
             title: 'Действия',
             key: 'actions',
-            render: (_: any, record: Vehicle) => (
-                <Space>
-                    <Button
-                        type="text"
-                        icon={<EditOutlined />}
-                        onClick={() => handleEdit(record)}
-                    />
-                    <Popconfirm
-                        title="Удалить это транспортное средство из автопарка?"
-                        onConfirm={() => handleDelete(record.id)}
-                        okText="Да"
-                        cancelText="Нет"
-                        okButtonProps={{ danger: true }}
-                    >
-                        <Button type="text" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                </Space>
-            ),
+            render: (_: any, record: Vehicle) => {
+                if (record.source === 'carrier') return null;
+                return (
+                    <Space>
+                        <Button
+                            type="text"
+                            icon={<EditOutlined />}
+                            onClick={() => handleEdit(record)}
+                        />
+                        <Popconfirm
+                            title="Удалить это транспортное средство?"
+                            onConfirm={() => handleDelete(record.id)}
+                            okText="Да"
+                            cancelText="Нет"
+                            okButtonProps={{ danger: true }}
+                        >
+                            <Button type="text" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                    </Space>
+                );
+            },
         },
     ];
 
@@ -139,12 +203,12 @@ export default function VehiclesPage() {
         <div style={{ padding: '4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
-                    <Title level={3} style={{ margin: 0 }}>Автопарк</Title>
-                    <Text type="secondary">Управление собственным транспортным парком компании</Text>
+                    <Title level={3} style={{ margin: 0 }}>Транспорт</Title>
+                    <Text type="secondary">Собственный транспорт и транспорт от перевозчиков</Text>
                 </div>
-                <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />} 
+                <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
                     size="large"
                     onClick={() => {
                         setEditingVehicle(null);
@@ -152,20 +216,30 @@ export default function VehiclesPage() {
                         setModalOpen(true);
                     }}
                 >
-                    Добавить транспорт
+                    Добавить свой транспорт
                 </Button>
             </div>
 
             <Card bordered={false} style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.01)' }}>
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                     <Input
-                        placeholder="Поиск по модели, госномеру или прицепу..."
+                        placeholder="Поиск по модели, госномеру, перевозчику..."
                         prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{ maxWidth: 400, borderRadius: 8 }}
                         size="large"
                         allowClear
+                    />
+                    <Segmented
+                        value={filter}
+                        onChange={(val) => setFilter(val as string)}
+                        options={[
+                            { label: `Все (${allVehicles.length})`, value: 'all' },
+                            { label: `Свои (${ownVehicles.length})`, value: 'own' },
+                            { label: `От перевозчиков (${carrierVehicles.length})`, value: 'carrier' },
+                        ]}
+                        size="large"
                     />
                 </div>
 
