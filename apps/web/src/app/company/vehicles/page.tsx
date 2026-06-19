@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Input, Modal, Form, Select, message, Typography, Space, Popconfirm, Segmented, Tag } from 'antd';
+import { Table, Card, Button, Input, Modal, Form, Select, message, Typography, Space, Popconfirm, Segmented, Tag, Checkbox, Row, Col, Divider } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, CarOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -21,6 +21,10 @@ interface Vehicle {
     driverName?: string;
     driverPhone?: string;
     driverId?: string;
+    driverLastName?: string;
+    driverFirstName?: string;
+    driverMiddleName?: string;
+    driverIin?: string;
 }
 
 export default function VehiclesPage() {
@@ -33,6 +37,9 @@ export default function VehiclesPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filter, setFilter] = useState<string>('all');
     const [form] = Form.useForm();
+
+    const selectedDriverId = Form.useWatch('driverId', form);
+    const shouldEditDriver = Form.useWatch('editDriverDetails', form);
 
     const fetchVehicles = async () => {
         setLoading(true);
@@ -63,6 +70,10 @@ export default function VehiclesPage() {
                                 carrierName: carrier.name,
                                 driverName: `${driver.lastName} ${driver.firstName}`.trim(),
                                 driverPhone: driver.phone || '',
+                                driverLastName: driver.lastName,
+                                driverFirstName: driver.firstName,
+                                driverMiddleName: driver.middleName,
+                                driverIin: driver.iin,
                             });
                         }
                     }
@@ -95,6 +106,11 @@ export default function VehiclesPage() {
             if (editingVehicle) {
                 if (editingVehicle.source === 'carrier') {
                     await api.put(`/company/drivers/${editingVehicle.id}`, {
+                        lastName: values.driverLastName,
+                        firstName: values.driverFirstName,
+                        middleName: values.driverMiddleName || null,
+                        phone: values.driverPhone,
+                        iin: values.driverIin || null,
                         vehicleModel: values.model,
                         vehiclePlate: values.plate,
                         vehicleType: values.type,
@@ -102,11 +118,57 @@ export default function VehiclesPage() {
                     });
                     message.success('Транспорт перевозчика успешно обновлен');
                 } else {
-                    await api.put(`/company/vehicles/${editingVehicle.id}`, values);
+                    let finalDriverId = values.driverId;
+
+                    if (values.driverId === '__NEW_DRIVER__') {
+                        const driverRes = await api.post('/company/drivers', {
+                            lastName: values.driverLastName,
+                            firstName: values.driverFirstName,
+                            middleName: values.driverMiddleName || null,
+                            phone: values.driverPhone,
+                            iin: values.driverIin || null,
+                        });
+                        finalDriverId = driverRes.data.id;
+                    } else if (values.driverId && values.editDriverDetails) {
+                        await api.put(`/company/drivers/${values.driverId}`, {
+                            lastName: values.driverLastName,
+                            firstName: values.driverFirstName,
+                            middleName: values.driverMiddleName || null,
+                            phone: values.driverPhone,
+                            iin: values.driverIin || null,
+                        });
+                    }
+
+                    await api.put(`/company/vehicles/${editingVehicle.id}`, {
+                        model: values.model,
+                        plate: values.plate,
+                        type: values.type,
+                        trailerNumber: values.trailerNumber || null,
+                        driverId: finalDriverId || null,
+                    });
                     message.success('Транспорт успешно обновлен');
                 }
             } else {
-                await api.post('/company/vehicles', values);
+                let finalDriverId = values.driverId;
+
+                if (values.driverId === '__NEW_DRIVER__') {
+                    const driverRes = await api.post('/company/drivers', {
+                        lastName: values.driverLastName,
+                        firstName: values.driverFirstName,
+                        middleName: values.driverMiddleName || null,
+                        phone: values.driverPhone,
+                        iin: values.driverIin || null,
+                    });
+                    finalDriverId = driverRes.data.id;
+                }
+
+                await api.post('/company/vehicles', {
+                    model: values.model,
+                    plate: values.plate,
+                    type: values.type,
+                    trailerNumber: values.trailerNumber || null,
+                    driverId: finalDriverId || null,
+                });
                 message.success('Транспорт успешно добавлен');
             }
             setModalOpen(false);
@@ -121,12 +183,20 @@ export default function VehiclesPage() {
 
     const handleEdit = (vehicle: Vehicle) => {
         setEditingVehicle(vehicle);
+        const assignedDriver = ownDrivers.find(d => d.id === vehicle.driverId);
+
         form.setFieldsValue({
             model: vehicle.model,
             plate: vehicle.plate,
             trailerNumber: vehicle.trailerNumber || '',
             type: vehicle.type,
             driverId: vehicle.driverId || undefined,
+            editDriverDetails: false,
+            driverLastName: vehicle.source === 'carrier' ? vehicle.driverLastName : (assignedDriver?.lastName || ''),
+            driverFirstName: vehicle.source === 'carrier' ? vehicle.driverFirstName : (assignedDriver?.firstName || ''),
+            driverMiddleName: vehicle.source === 'carrier' ? vehicle.driverMiddleName : (assignedDriver?.middleName || ''),
+            driverPhone: vehicle.source === 'carrier' ? vehicle.driverPhone : (assignedDriver?.phone || ''),
+            driverIin: vehicle.source === 'carrier' ? vehicle.driverIin : (assignedDriver?.iin || ''),
         });
         setModalOpen(true);
     };
@@ -323,6 +393,7 @@ export default function VehiclesPage() {
                 okText={editingVehicle ? 'Сохранить' : 'Добавить'}
                 cancelText="Отмена"
                 destroyOnClose
+                width={700}
             >
                 <Form form={form} layout="vertical" onFinish={handleCreateOrUpdate}>
                     <Form.Item
@@ -361,23 +432,110 @@ export default function VehiclesPage() {
                     </Form.Item>
 
                     {(!editingVehicle || editingVehicle.source === 'own') && (
-                        <Form.Item
-                            name="driverId"
-                            label="Назначенный водитель (опционально)"
-                        >
-                            <Select 
-                                placeholder="Выберите водителя" 
-                                allowClear 
-                                showSearch 
-                                optionFilterProp="children"
+                        <>
+                            <Form.Item
+                                name="driverId"
+                                label="Назначенный водитель (опционально)"
                             >
-                                {ownDrivers.map(d => (
-                                    <Select.Option key={d.id} value={d.id}>
-                                        {`${d.lastName} ${d.firstName} ${d.middleName || ''} (${d.phone})`.trim()}
+                                <Select 
+                                    placeholder="Выберите водителя" 
+                                    allowClear 
+                                    showSearch 
+                                    optionFilterProp="children"
+                                >
+                                    {ownDrivers.map(d => (
+                                        <Select.Option key={d.id} value={d.id}>
+                                            {`${d.lastName} ${d.firstName} ${d.middleName || ''} (${d.phone})`.trim()}
+                                        </Select.Option>
+                                    ))}
+                                    <Select.Option value="__NEW_DRIVER__" style={{ fontWeight: 'bold', color: '#1890ff' }}>
+                                        + Добавить нового водителя
                                     </Select.Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
+                                </Select>
+                            </Form.Item>
+
+                            {selectedDriverId && selectedDriverId !== '__NEW_DRIVER__' && (
+                                <Form.Item
+                                    name="editDriverDetails"
+                                    valuePropName="checked"
+                                    style={{ marginBottom: 12 }}
+                                >
+                                    <Checkbox>Редактировать данные водителя</Checkbox>
+                                </Form.Item>
+                            )}
+
+                            {(selectedDriverId === '__NEW_DRIVER__' || (selectedDriverId && shouldEditDriver)) && (
+                                <div>
+                                    <Divider orientation="left" style={{ fontSize: 13, color: '#1890ff', margin: '12px 0' }}>
+                                        {selectedDriverId === '__NEW_DRIVER__' ? 'Данные нового водителя' : 'Данные назначенного водителя'}
+                                    </Divider>
+                                    <Row gutter={16}>
+                                        <Col span={8}>
+                                            <Form.Item name="driverLastName" label="Фамилия" rules={[{ required: true, message: 'Введите фамилию' }]}>
+                                                <Input placeholder="Иванов" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={8}>
+                                            <Form.Item name="driverFirstName" label="Имя" rules={[{ required: true, message: 'Введите имя' }]}>
+                                                <Input placeholder="Иван" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={8}>
+                                            <Form.Item name="driverMiddleName" label="Отчество">
+                                                <Input placeholder="Иванович" />
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <Row gutter={16}>
+                                        <Col span={12}>
+                                            <Form.Item name="driverPhone" label="Телефон" rules={[{ required: true, message: 'Введите телефон' }]}>
+                                                <Input placeholder="+77001234567" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="driverIin" label="ИИН">
+                                                <Input placeholder="123456789012" maxLength={12} />
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {editingVehicle && editingVehicle.source === 'carrier' && (
+                        <div>
+                            <Divider orientation="left" style={{ fontSize: 13, color: '#1890ff', margin: '12px 0' }}>Данные водителя перевозчика</Divider>
+                            <Row gutter={16}>
+                                <Col span={8}>
+                                    <Form.Item name="driverLastName" label="Фамилия" rules={[{ required: true, message: 'Введите фамилию' }]}>
+                                        <Input placeholder="Иванов" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="driverFirstName" label="Имя" rules={[{ required: true, message: 'Введите имя' }]}>
+                                        <Input placeholder="Иван" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="driverMiddleName" label="Отчество">
+                                        <Input placeholder="Иванович" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item name="driverPhone" label="Телефон" rules={[{ required: true, message: 'Введите телефон' }]}>
+                                        <Input placeholder="+77001234567" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="driverIin" label="ИИН">
+                                        <Input placeholder="123456789012" maxLength={12} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                        </div>
                     )}
                 </Form>
             </Modal>
