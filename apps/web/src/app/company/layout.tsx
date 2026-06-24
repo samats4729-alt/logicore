@@ -19,6 +19,16 @@ import {
     CarOutlined,
     SearchOutlined,
     ApartmentOutlined,
+    CompassOutlined,
+    HomeOutlined,
+    ArrowUpOutlined,
+    ArrowDownOutlined,
+    FileExcelOutlined,
+    RiseOutlined,
+    FileProtectOutlined,
+    UserSwitchOutlined,
+    CalculatorOutlined,
+    BarChartOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -105,101 +115,96 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             },
         ];
 
+        // --- ЗАЯВКИ ---
+        const ordersChildren: any[] = [];
         if (hasPerm('orders')) {
-            items.push({
+            ordersChildren.push({
                 key: '/company/orders',
                 icon: <FileTextOutlined />,
-                label: 'Заявки',
+                label: 'Все заявки',
             });
-        }
-
-        // --- ЛОГИСТИКА ---
-        const logisticsChildren: any[] = [];
-        if (hasPerm('orders')) {
-            logisticsChildren.push({
+            ordersChildren.push({
                 key: '/company/search',
                 icon: <SearchOutlined />,
                 label: 'Биржа грузов',
             });
         }
+        if (ordersChildren.length > 0) {
+            items.push({
+                key: 'orders_group',
+                icon: <FileTextOutlined />,
+                label: 'Заявки',
+                children: ordersChildren,
+            });
+        }
+
+        // --- ЛОГИСТИКА ---
+        const logisticsChildren: any[] = [];
         if (hasPerm('tracking')) {
             logisticsChildren.push({
                 key: '/company/tracking',
                 icon: <EnvironmentOutlined />,
-                label: 'Карта',
+                label: 'GPS / Мониторинг',
             });
         }
         if (user.role === 'WAREHOUSE_MANAGER' || ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
             logisticsChildren.push({
                 key: '/company/warehouse',
-                icon: <InboxOutlined />,
-                label: 'Очередь погрузки',
+                icon: <HomeOutlined />,
+                label: 'Склад',
             });
         }
         if (logisticsChildren.length > 0) {
             items.push({
                 key: 'logistics_group',
-                icon: <ApartmentOutlined />,
+                icon: <CompassOutlined />,
                 label: 'Логистика',
                 children: logisticsChildren,
             });
         }
 
-        // --- ОРГАНИЗАЦИЯ ---
-        const orgChildren: any[] = [];
-        if (hasPerm('partners')) {
-            orgChildren.push({
-                key: '/company/partners',
-                icon: <TeamOutlined />,
-                label: 'Контрагенты',
-            });
-            orgChildren.push({
-                key: '/company/contracts',
-                icon: <FileTextOutlined />,
-                label: 'Договоры',
-            });
-        }
-        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            orgChildren.push({
-                key: '/company/vehicles',
-                icon: <CarOutlined />,
-                label: 'Транспорт',
-            });
-            orgChildren.push({
-                key: '/company/users',
-                icon: <TeamOutlined />,
-                label: 'Сотрудники',
-            });
-        }
-        orgChildren.push({
-            key: '/company/locations',
-            icon: <PushpinOutlined />,
-            label: 'Адреса',
-        });
-
-        if (orgChildren.length > 0) {
-            items.push({
-                key: 'org_group',
-                icon: <ApartmentOutlined />,
-                label: 'Организация',
-                children: orgChildren,
-            });
-        }
-
         // --- ФИНАНСЫ ---
         const financeChildren: any[] = [];
-        if (hasPerm('documents')) {
-            financeChildren.push({
-                key: '/company/documents',
-                icon: <FileOutlined />,
-                label: 'Документы',
-            });
-        }
         if (hasPerm('accounting')) {
             financeChildren.push({
-                key: '/company/accounting',
-                icon: <DollarOutlined />,
-                label: 'Бухгалтерия',
+                key: '/company/accounting/registry',
+                icon: <ArrowUpOutlined />,
+                label: 'Платежи',
+            });
+            financeChildren.push({
+                key: '/company/accounting/incomes',
+                icon: <ArrowUpOutlined />,
+                label: 'Поступления',
+            });
+            financeChildren.push({
+                key: '/company/accounting/expenses',
+                icon: <ArrowDownOutlined />,
+                label: 'Расходы',
+            });
+            financeChildren.push({
+                key: '/company/accounting/cashflow',
+                icon: <FileExcelOutlined />,
+                label: 'ДДС',
+            });
+            financeChildren.push({
+                key: '/company/accounting/pnl',
+                icon: <RiseOutlined />,
+                label: 'P&L',
+            });
+            financeChildren.push({
+                key: '/company/accounting/counterparty-report',
+                icon: <TeamOutlined />,
+                label: 'Взаиморасчеты',
+            });
+            financeChildren.push({
+                key: '/company/accounting/settings',
+                icon: <SettingOutlined />,
+                label: 'Статьи',
+            });
+            financeChildren.push({
+                key: '/company/reports',
+                icon: <BarChartOutlined />,
+                label: 'Отчёты',
             });
         }
         if (financeChildren.length > 0) {
@@ -210,6 +215,59 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 children: financeChildren,
             });
         }
+
+        // --- КОМПАНИЯ ---
+        const companyChildren: any[] = [];
+        if (hasPerm('partners')) {
+            companyChildren.push({
+                key: '/company/partners',
+                icon: <TeamOutlined />,
+                label: 'Контрагенты',
+            });
+            companyChildren.push({
+                key: '/company/contracts',
+                icon: <FileProtectOutlined />,
+                label: 'Договоры',
+            });
+        }
+        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            companyChildren.push({
+                key: '/company/vehicles',
+                icon: <CarOutlined />,
+                label: 'Транспорт',
+            });
+            companyChildren.push({
+                key: '/company/users',
+                icon: <UserSwitchOutlined />,
+                label: 'Сотрудники',
+            });
+        }
+        companyChildren.push({
+            key: '/company/locations',
+            icon: <PushpinOutlined />,
+            label: 'Адреса',
+        });
+        if (hasPerm('documents')) {
+            companyChildren.push({
+                key: '/company/documents',
+                icon: <InboxOutlined />,
+                label: 'Документы',
+            });
+        }
+        if (companyChildren.length > 0) {
+            items.push({
+                key: 'company_group',
+                icon: <TeamOutlined />,
+                label: 'Компания',
+                children: companyChildren,
+            });
+        }
+
+        items.push({
+            key: '/company/calculator',
+            icon: <CalculatorOutlined />,
+            label: 'Калькулятор',
+        });
 
         items.push({
             key: '/company/settings',
