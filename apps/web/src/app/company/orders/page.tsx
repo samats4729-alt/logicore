@@ -985,7 +985,10 @@ export default function CompanyOrdersPage() {
         },
         {
             title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—'}</span>,
+            render: (_: any, r: Order) => {
+                const name = (r.forwarderId === user?.companyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—');
+                return <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{name}</span>;
+            },
         },
         {
             title: 'Водитель', key: 'drv', width: 120, ellipsis: true,
@@ -1056,7 +1059,13 @@ export default function CompanyOrdersPage() {
             },
         },
         { title: 'Заказчик', key: 'customer', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{r.customerCompany?.name || '—'}</span> },
-        { title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—'}</span> },
+        { 
+            title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true, 
+            render: (_: any, r: Order) => {
+                const name = (r.forwarderId === user?.companyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—');
+                return <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{name}</span>;
+            }
+        },
         { title: 'Водитель', key: 'drv', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
         { title: 'Транспорт', key: 'vehicle', width: 100, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverPlate || r.driver?.vehiclePlate || '—'}</span> },
         {
