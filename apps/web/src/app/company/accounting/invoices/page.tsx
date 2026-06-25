@@ -1,0 +1,356 @@
+'use client';
+
+import { useEffect, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+    Typography,
+    Card,
+    Tabs,
+    Table,
+    Tag,
+    Button,
+    Space,
+    Input,
+    Select,
+    message,
+    theme,
+    Tooltip,
+    Modal,
+    Popconfirm
+} from 'antd';
+import {
+    SearchOutlined,
+    PlusOutlined,
+    CopyOutlined,
+    EyeOutlined,
+    DeleteOutlined,
+    CheckCircleOutlined,
+    ExclamationCircleOutlined,
+    LinkOutlined,
+    DollarOutlined
+} from '@ant-design/icons';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
+import dayjs from 'dayjs';
+
+const { Title, Text } = Typography;
+
+const statusLabels: Record<string, string> = {
+    DRAFT: 'Черновик',
+    PENDING: 'Ожидает оплаты',
+    DISPUTED: 'Спор',
+    APPROVED: 'Согласован',
+    PAID: 'Оплачен',
+    CANCELLED: 'Отменен',
+};
+
+const statusColors: Record<string, string> = {
+    DRAFT: 'default',
+    PENDING: 'orange',
+    DISPUTED: 'red',
+    APPROVED: 'blue',
+    PAID: 'green',
+    CANCELLED: 'magenta',
+};
+
+export default function InvoicesPage() {
+    const router = useRouter();
+    const { token } = theme.useToken();
+    const { user } = useAuthStore();
+
+    const [invoices, setInvoices] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [activeTab, setActiveTab] = useState<'INCOMING' | 'OUTGOING'>('OUTGOING');
+
+    const cardStyle = {
+        borderRadius: 8,
+        background: token.colorBgContainer,
+        border: `1px solid ${token.colorBorderSecondary}`,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    };
+
+    const isAccountantOrAdmin = useMemo(() => {
+        return ['ACCOUNTANT', 'FORWARDER', 'COMPANY_ADMIN'].includes(user?.role || '');
+    }, [user]);
+
+    const loadInvoices = async () => {
+        try {
+            setLoading(true);
+            const res = await api.get('/invoices');
+            setInvoices(res.data);
+        } catch (e) {
+            message.error('Ошибка загрузки счетов');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadInvoices();
+    }, []);
+
+    const handleCopyLink = (shareToken: string) => {
+        const url = `${window.location.origin}/shared/invoice/${shareToken}`;
+        navigator.clipboard.writeText(url);
+        message.success('Публичная ссылка скопирована!');
+    };
+
+    const handleDeleteInvoice = async (id: string) => {
+        try {
+            await api.delete(`/invoices/${id}`);
+            message.success('Счет успешно удален');
+            loadInvoices();
+        } catch (e) {
+            message.error('Не удалось удалить счет');
+        }
+    };
+
+    const handleMarkAsPaid = async (id: string) => {
+        try {
+            await api.put(`/invoices/${id}/status`, { status: 'PAID' });
+            message.success('Счет помечен как оплаченный');
+            loadInvoices();
+        } catch (e) {
+            message.error('Не удалось обновить статус счета');
+        }
+    };
+
+    const filteredInvoices = useMemo(() => {
+        return invoices.filter((inv) => {
+            const matchesTab = inv.type === activeTab;
+            const matchesStatus = statusFilter === 'all' || inv.status === statusFilter;
+            const counterpartyName = activeTab === 'OUTGOING' ? (inv.recipient?.name || '') : (inv.issuer?.name || '');
+            const matchesSearch =
+                inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
+                counterpartyName.toLowerCase().includes(search.toLowerCase());
+            return matchesTab && matchesStatus && matchesSearch;
+        });
+    }, [invoices, activeTab, statusFilter, search]);
+
+    const columns = [
+        {
+            title: 'Номер счета',
+            dataIndex: 'invoiceNumber',
+            key: 'invoiceNumber',
+            render: (text: string, record: any) => (
+                <div style={{ fontWeight: 600 }}>
+                    {text}
+                    {record.note && (
+                        <div style={{ fontSize: 11, fontWeight: 400, color: token.colorTextSecondary }}>
+                            {record.note}
+                        </div>
+                    )}
+                </div>
+            ),
+        },
+        {
+            title: activeTab === 'OUTGOING' ? 'Получатель (клиент)' : 'Отправитель (партнер)',
+            key: 'counterparty',
+            render: (_: any, record: any) => {
+                const comp = activeTab === 'OUTGOING' ? record.recipient : record.issuer;
+                return (
+                    <div>
+                        <div style={{ fontWeight: 500 }}>{comp?.name || 'Внешняя компания'}</div>
+                        {comp?.bin && <div style={{ fontSize: 11, color: token.colorTextSecondary }}>БИН: {comp.bin}</div>}
+                    </div>
+                );
+            },
+        },
+        {
+            title: 'Дата выставления',
+            dataIndex: 'date',
+            key: 'date',
+            render: (d: string) => dayjs(d).format('DD.MM.YYYY'),
+        },
+        {
+            title: 'Срок оплаты',
+            dataIndex: 'dueDate',
+            key: 'dueDate',
+            render: (d: string) => d ? dayjs(d).format('DD.MM.YYYY') : '—',
+        },
+        {
+            title: 'Сумма',
+            key: 'amount',
+            align: 'right' as const,
+            render: (_: any, record: any) => {
+                const hasDisputedAmount = record.adjustedAmount !== null && record.adjustedAmount !== undefined;
+                return (
+                    <div style={{ textAlign: 'right' }}>
+                        {hasDisputedAmount ? (
+                            <>
+                                <div style={{ textDecoration: 'line-through', fontSize: 11, color: token.colorTextDisabled }}>
+                                    {record.amount.toLocaleString('ru-RU')} ₸
+                                </div>
+                                <div style={{ fontWeight: 700, color: token.colorError }}>
+                                    {record.adjustedAmount.toLocaleString('ru-RU')} ₸
+                                </div>
+                            </>
+                        ) : (
+                            <div style={{ fontWeight: 700 }}>
+                                {record.amount.toLocaleString('ru-RU')} ₸
+                            </div>
+                        )}
+                    </div>
+                );
+            },
+        },
+        {
+            title: 'Статус',
+            dataIndex: 'status',
+            key: 'status',
+            render: (status: string) => (
+                <Tag color={statusColors[status] || 'default'} style={{ fontWeight: 500 }}>
+                    {statusLabels[status] || status}
+                </Tag>
+            ),
+        },
+        {
+            title: 'Действия',
+            key: 'actions',
+            render: (_: any, record: any) => (
+                <Space size={8}>
+                    <Tooltip title="Открыть детали">
+                        <Button
+                            type="primary"
+                            ghost
+                            size="small"
+                            icon={<EyeOutlined />}
+                            onClick={() => router.push(`/company/accounting/invoices/${record.id}`)}
+                        />
+                    </Tooltip>
+
+                    <Tooltip title="Скопировать ссылку для партнера">
+                        <Button
+                            size="small"
+                            icon={<CopyOutlined />}
+                            onClick={() => handleCopyLink(record.shareToken)}
+                        />
+                    </Tooltip>
+
+                    {isAccountantOrAdmin && record.status !== 'PAID' && record.status !== 'CANCELLED' && (
+                        <Popconfirm
+                            title="Отметить счет как оплаченный?"
+                            description="Связанные рейсы также будут автоматически помечены оплаченными."
+                            onConfirm={() => handleMarkAsPaid(record.id)}
+                            okText="Да"
+                            cancelText="Нет"
+                        >
+                            <Tooltip title="Отметить оплату">
+                                <Button
+                                    size="small"
+                                    type="default"
+                                    style={{ color: token.colorSuccess, borderColor: token.colorSuccess }}
+                                    icon={<DollarOutlined />}
+                                />
+                            </Tooltip>
+                        </Popconfirm>
+                    )}
+
+                    {isAccountantOrAdmin && record.status === 'DRAFT' && (
+                        <Popconfirm
+                            title="Удалить этот счет?"
+                            description="Рейсы будут отвязаны и возвращены в реестр для перевыставления."
+                            onConfirm={() => handleDeleteInvoice(record.id)}
+                            okText="Да"
+                            cancelText="Нет"
+                        >
+                            <Tooltip title="Удалить">
+                                <Button
+                                    danger
+                                    size="small"
+                                    icon={<DeleteOutlined />}
+                                />
+                            </Tooltip>
+                        </Popconfirm>
+                    )}
+                </Space>
+            ),
+        },
+    ];
+
+    return (
+        <div style={{ height: '100%', padding: '0 8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+                <div>
+                    <Title level={3} style={{ margin: 0 }}>Реестр счетов</Title>
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                        Группировка выполненных рейсов и сделок для взаимных расчетов с заказчиками и партнерами
+                    </Text>
+                </div>
+                {isAccountantOrAdmin && (
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => router.push('/company/accounting/invoices/create')}
+                    >
+                        Выставить счет
+                    </Button>
+                )}
+            </div>
+
+            <Card style={cardStyle} styles={{ body: { padding: '16px' } }}>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Input
+                        placeholder="Поиск по номеру счета или контрагенту..."
+                        prefix={<SearchOutlined style={{ color: token.colorTextDescription }} />}
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        style={{ width: 320 }}
+                        allowClear
+                    />
+                    <Select
+                        value={statusFilter}
+                        onChange={setStatusFilter}
+                        style={{ width: 180 }}
+                        options={[
+                            { value: 'all', label: 'Все статусы' },
+                            { value: 'DRAFT', label: 'Черновик' },
+                            { value: 'PENDING', label: 'Ожидает оплаты' },
+                            { value: 'DISPUTED', label: 'Спор' },
+                            { value: 'APPROVED', label: 'Согласован' },
+                            { value: 'PAID', label: 'Оплачен' },
+                            { value: 'CANCELLED', label: 'Отменен' },
+                        ]}
+                    />
+                </div>
+
+                <Tabs
+                    activeKey={activeTab}
+                    onChange={(key: any) => setActiveTab(key)}
+                    items={[
+                        {
+                            key: 'OUTGOING',
+                            label: `Исходящие (Доходы / От нас клиентам)`,
+                        },
+                        {
+                            key: 'INCOMING',
+                            label: `Входящие (Расходы / От партнеров нам)`,
+                        },
+                    ]}
+                />
+
+                <Table
+                    columns={columns}
+                    dataSource={filteredInvoices}
+                    rowKey="id"
+                    loading={loading}
+                    pagination={{ pageSize: 15 }}
+                    scroll={{ x: 1000 }}
+                />
+            </Card>
+
+            <style jsx global>{`
+                .ant-table-thead > tr > th {
+                    font-size: 12px !important;
+                    font-weight: 600 !important;
+                    background: ${token.colorBgLayout} !important;
+                }
+                .ant-table-tbody > tr > td {
+                    font-size: 13px !important;
+                }
+            `}</style>
+        </div>
+    );
+}

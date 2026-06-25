@@ -197,6 +197,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Взаиморасчеты',
             });
             financeChildren.push({
+                key: '/company/accounting/invoices',
+                icon: <FileOutlined />,
+                label: 'Счета',
+            });
+            financeChildren.push({
                 key: '/company/accounting/settings',
                 icon: <SettingOutlined />,
                 label: 'Статьи',

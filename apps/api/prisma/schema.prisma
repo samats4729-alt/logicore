@@ -112,6 +112,7 @@ model User {
   orderAssignments  OrderAssignee[]  @relation("OrderAssignees")
   orderChangeLogs   OrderChangeLog[] @relation("OrderChangeLogs")
   closedPeriods     ClosedPeriod[]
+  createdInvoices   Invoice[]        @relation("InvoiceCreator")
   
   // Компания (для PARTNER и WAREHOUSE)
   companyId     String?
@@ -194,6 +195,8 @@ model Company {
   closedPeriods      ClosedPeriod[]
   financeAccounts     FinanceAccount[] @relation("CompanyFinanceAccounts")
   financeCategories   FinanceCategory[] @relation("CompanyFinanceCategories")
+  issuedInvoices     Invoice[]         @relation("InvoiceIssuer")
+  receivedInvoices   Invoice[]         @relation("InvoiceRecipient")
   
   @@index([bin])
 }
@@ -428,6 +431,13 @@ model Order {
   payments        Payment[]
   assignees       OrderAssignee[]
   changeLog       OrderChangeLog[]
+  incomingInvoiceId String?
+  incomingInvoice   Invoice?    @relation("IncomingInvoiceOrders", fields: [incomingInvoiceId], references: [id])
+  outgoingInvoiceId String?
+  outgoingInvoice   Invoice?    @relation("OutgoingInvoiceOrders", fields: [outgoingInvoiceId], references: [id])
+  proposedCustomerPrice Float?
+  proposedDriverCost    Float?
+  proposedSubForwarderPrice Float?
   
   @@index([status])
   @@index([customerId])
@@ -924,4 +934,60 @@ model Vehicle {
   updatedAt     DateTime @updatedAt
 
   @@index([companyId])
+}
+
+// ==================== INVOICES ====================
+
+enum InvoiceType {
+  INCOMING // Входящий (расход, от перевозчика нам)
+  OUTGOING // Исходящий (доход, от нас заказчику)
+}
+
+enum InvoiceStatus {
+  DRAFT      // Черновик
+  PENDING    // Ожидает согласования
+  DISPUTED   // Спор (корректировки по ссылке)
+  APPROVED   // Согласован
+  PAID       // Оплачен
+  CANCELLED  // Отменен
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceNumber   String        // Номер счета
+  type            InvoiceType
+  status          InvoiceStatus @default(DRAFT)
+  
+  // Эмитент и получатель
+  issuerId        String
+  issuer          Company       @relation("InvoiceIssuer", fields: [issuerId], references: [id], onDelete: Cascade)
+  
+  recipientId     String
+  recipient       Company       @relation("InvoiceRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  
+  date            DateTime      // Дата выставления счета
+  dueDate         DateTime?     // Срок оплаты
+  
+  // Уникальный токен для публичной ссылки
+  shareToken      String        @unique @default(uuid())
+  
+  // Финансовая сводка
+  amount          Float         // Изначальная сумма
+  adjustedAmount  Float?        // Скорректированная сумма (если был спор)
+  
+  note            String?
+  createdById     String
+  createdBy       User          @relation("InvoiceCreator", fields: [createdById], references: [id])
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Связи с заказами
+  incomingOrders  Order[]       @relation("IncomingInvoiceOrders")
+  outgoingOrders  Order[]       @relation("OutgoingInvoiceOrders")
+  
+  @@index([status])
+  @@index([shareToken])
+  @@index([issuerId])
+  @@index([recipientId])
 }
