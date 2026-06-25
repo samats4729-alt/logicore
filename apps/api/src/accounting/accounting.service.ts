@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentDirection, PaymentMethod, Prisma, AccountKind } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus } from '@prisma/client';
 import { money } from '../common/utils/money';
 import * as XLSX from 'xlsx';
 
@@ -1098,6 +1098,11 @@ export class AccountingService {
                 isCustomerPaid: fin.isCustomerPaid,
                 customerPaidAt: order.customerPaidAt,
                 routePoints: order.routePoints,
+                incomingInvoiceId: order.incomingInvoiceId,
+                outgoingInvoiceId: order.outgoingInvoiceId,
+                subForwarderId: order.subForwarderId,
+                subForwarderPrice: order.subForwarderPrice,
+                driverCost: order.driverCost,
             };
 
             if (isCustomer && order.forwarder) {
@@ -1247,6 +1252,21 @@ export class AccountingService {
             (c: any) => `${c.counterparty.id}__${c.ourRole}` === key
         );
 
+        // Получаем счета между компаниями
+        const invoices = await this.prisma.invoice.findMany({
+            where: {
+                OR: [
+                    { issuerId: companyId, recipientId: counterpartyId },
+                    { issuerId: counterpartyId, recipientId: companyId },
+                ],
+            },
+            include: {
+                issuer: { select: { id: true, name: true } },
+                recipient: { select: { id: true, name: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
         if (!counterparty) {
             // Контрагент есть, но по нему пока нет сделок
             const { counterpartyName: cpName } = JSON.parse(raw);
@@ -1258,6 +1278,7 @@ export class AccountingService {
                 expiresIn: '7 дней',
                 counterparty: null,
                 totals: null,
+                invoices,
             };
         }
 
@@ -1276,7 +1297,131 @@ export class AccountingService {
                 balance: counterparty.balance,
                 totalOrders: counterparty.totalOrders,
             },
+            invoices,
         };
+    }
+
+    async createPublicInvoiceFromReport(
+        token: string,
+        dto: {
+            invoiceNumber: string;
+            date: string;
+            dueDate?: string;
+            orderIds: string[];
+            note?: string;
+        },
+    ) {
+        const raw = await this.redisService.get(`share_report:${token}`);
+        if (!raw) {
+            throw new NotFoundException('Ссылка недействительна или истёк срок действия');
+        }
+
+        const { companyId, counterpartyId } = JSON.parse(raw);
+
+        if (!dto.orderIds || dto.orderIds.length === 0) {
+            throw new BadRequestException('Счет должен содержать как минимум один заказ');
+        }
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                id: { in: dto.orderIds },
+            },
+        });
+
+        if (orders.length !== dto.orderIds.length) {
+            throw new BadRequestException('Некоторые заказы не найдены');
+        }
+
+        const firstOrder = orders[0];
+        
+        let type: InvoiceType;
+        let issuerId: string;
+        let recipientId: string;
+        let amount = 0;
+
+        if (firstOrder.customerCompanyId === companyId && firstOrder.forwarderId === counterpartyId) {
+            type = InvoiceType.INCOMING;
+            issuerId = counterpartyId;
+            recipientId = companyId;
+            for (const o of orders) {
+                amount += o.subForwarderId === issuerId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
+            }
+        } else if (firstOrder.forwarderId === companyId && firstOrder.customerCompanyId === counterpartyId) {
+            type = InvoiceType.OUTGOING;
+            issuerId = companyId;
+            recipientId = counterpartyId;
+            for (const o of orders) {
+                amount += o.customerPrice || 0;
+            }
+        } else if (firstOrder.forwarderId === companyId && firstOrder.subForwarderId === counterpartyId) {
+            type = InvoiceType.INCOMING;
+            issuerId = counterpartyId;
+            recipientId = companyId;
+            for (const o of orders) {
+                amount += o.subForwarderId === issuerId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
+            }
+        } else if (firstOrder.subForwarderId === companyId && firstOrder.forwarderId === counterpartyId) {
+            type = InvoiceType.OUTGOING;
+            issuerId = companyId;
+            recipientId = counterpartyId;
+            for (const o of orders) {
+                amount += o.customerPrice || 0;
+            }
+        } else {
+            type = InvoiceType.INCOMING;
+            issuerId = counterpartyId;
+            recipientId = companyId;
+            for (const o of orders) {
+                amount += o.subForwarderId === issuerId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
+            }
+        }
+
+        // Verify that none of these orders are already invoiced for this direction
+        for (const order of orders) {
+            if (type === InvoiceType.OUTGOING && order.outgoingInvoiceId) {
+                throw new BadRequestException(`Заказ №${order.orderNumber} уже добавлен в исходящий счет`);
+            }
+            if (type === InvoiceType.INCOMING && order.incomingInvoiceId) {
+                throw new BadRequestException(`Заказ №${order.orderNumber} уже добавлен во входящий счет`);
+            }
+        }
+
+        const companyUser = await this.prisma.user.findFirst({
+            where: { companyId, role: { in: ['ACCOUNTANT', 'COMPANY_ADMIN', 'FORWARDER'] } },
+        });
+
+        if (!companyUser) {
+            throw new BadRequestException('Не найден ответственный пользователь для привязки к счету');
+        }
+
+        const invoice = await this.prisma.invoice.create({
+            data: {
+                invoiceNumber: dto.invoiceNumber,
+                type,
+                status: InvoiceStatus.PENDING,
+                issuerId,
+                recipientId,
+                date: new Date(dto.date),
+                dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+                amount,
+                note: dto.note,
+                createdById: companyUser.id,
+            },
+        });
+
+        if (type === InvoiceType.OUTGOING) {
+            await this.prisma.order.updateMany({
+                where: { id: { in: dto.orderIds } },
+                data: { outgoingInvoiceId: invoice.id },
+            });
+        } else {
+            await this.prisma.order.updateMany({
+                where: { id: { in: dto.orderIds } },
+                data: { incomingInvoiceId: invoice.id },
+            });
+        }
+
+        return invoice;
     }
 
     // ==================== PAYMENTS CRUD ====================

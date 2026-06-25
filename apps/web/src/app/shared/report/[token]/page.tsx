@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Typography, Table, Tag, Space, Empty, Spin, Row, Col } from 'antd';
+import { Typography, Table, Tag, Space, Empty, Spin, Row, Col, Button, Modal, Form, Input, DatePicker, message } from 'antd';
 import {
     CheckCircleOutlined,
     CloseCircleOutlined,
     ExclamationCircleOutlined,
     FileTextOutlined,
+    PlusOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -64,23 +65,83 @@ export default function SharedReportPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        (async () => {
-            try {
-                setLoading(true);
-                const res = await axios.get(`${API_URL}/public/accounting/report/${token}`);
-                setData(res.data);
-            } catch (err: any) {
-                if (err.response?.status === 404) {
-                    setError('Ссылка недействительна или срок действия истёк');
-                } else {
-                    setError('Ошибка загрузки отчёта');
-                }
-            } finally {
-                setLoading(false);
+    const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [submittingInvoice, setSubmittingInvoice] = useState(false);
+    const [form] = Form.useForm();
+
+    const loadReport = async () => {
+        try {
+            setLoading(true);
+            const res = await axios.get(`${API_URL}/public/accounting/report/${token}`);
+            setData(res.data);
+            setError('');
+        } catch (err: any) {
+            if (err.response?.status === 404) {
+                setError('Ссылка недействительна или срок действия истёк');
+            } else {
+                setError('Ошибка загрузки отчёта');
             }
-        })();
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (token) {
+            loadReport();
+        }
     }, [token]);
+
+    const handleSubmitInvoice = async (values: any) => {
+        try {
+            setSubmittingInvoice(true);
+            await axios.post(`${API_URL}/public/accounting/report/${token}/invoice`, {
+                invoiceNumber: values.invoiceNumber,
+                date: values.date.format('YYYY-MM-DD'),
+                dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : undefined,
+                orderIds: selectedRowKeys,
+                note: values.note,
+            });
+            message.success('Счет успешно сформирован и отправлен в систему!');
+            setModalOpen(false);
+            form.resetFields();
+            setSelectedRowKeys([]);
+            
+            // Reload the report data to show the new invoice
+            const res = await axios.get(`${API_URL}/public/accounting/report/${token}`);
+            setData(res.data);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось сформировать счет');
+        } finally {
+            setSubmittingInvoice(false);
+        }
+    };
+
+    const rowSelection = {
+        selectedRowKeys,
+        onChange: (keys: any[]) => {
+            setSelectedRowKeys(keys);
+        },
+        getCheckboxProps: (record: any) => {
+            const isInvoiced = record.direction === 'weOwe' ? record.incomingInvoiceId : record.outgoingInvoiceId;
+            const isCompleted = record.status === 'COMPLETED';
+            
+            // Lock select option to first selected direction to prevent mixing incoming & outgoing
+            let directionMismatch = false;
+            if (selectedRowKeys.length > 0) {
+                const firstSelected = data?.counterparty?.orders?.find((o: any) => o.id === selectedRowKeys[0]);
+                if (firstSelected && firstSelected.direction !== record.direction) {
+                    directionMismatch = true;
+                }
+            }
+
+            return {
+                disabled: isInvoiced || !isCompleted || directionMismatch,
+                name: record.orderNumber,
+            };
+        },
+    };
 
     const columns = [
         {
@@ -146,6 +207,31 @@ export default function SharedReportPage() {
             align: 'right' as const,
             sorter: (a: any, b: any) => a.amount - b.amount,
             render: (v: number) => v ? <span style={{ fontWeight: 600, color: '#09090b' }}>{fmt(v)}</span> : <span style={{ color: '#d1d5db' }}>—</span>,
+        },
+        {
+            title: 'Счет',
+            key: 'invoiceInfo',
+            width: 140,
+            render: (_: any, r: any) => {
+                const invoiceId = r.direction === 'weOwe' ? r.incomingInvoiceId : r.outgoingInvoiceId;
+                if (invoiceId) {
+                    const inv = data?.invoices?.find((i: any) => i.id === invoiceId);
+                    if (inv) {
+                        return (
+                            <Button 
+                                type="link" 
+                                size="small" 
+                                style={{ padding: 0, fontWeight: 500 }}
+                                onClick={() => window.open(`${window.location.origin}/shared/invoice/${inv.shareToken}`, '_blank')}
+                            >
+                                {inv.invoiceNumber}
+                            </Button>
+                        );
+                    }
+                    return <Tag color="blue" style={{ borderRadius: 6 }}>Выставлен</Tag>;
+                }
+                return <span style={{ color: '#a1a1aa' }}>—</span>;
+            }
         },
         {
             title: 'Оплата',
@@ -313,17 +399,34 @@ export default function SharedReportPage() {
                         <Title level={4} style={{ margin: 0, fontWeight: 700, fontSize: 16, color: '#09090b' }}>
                             Реестр сделок
                         </Title>
-                        <Space size={12} wrap>
-                            <Tag color="success" style={{ borderRadius: 6, fontWeight: 500 }}>
-                                Дебиторская: {fmt(cp.theyOweUs)} ₸
-                            </Tag>
-                            <Tag color="error" style={{ borderRadius: 6, fontWeight: 500 }}>
-                                Кредиторская: {fmt(cp.weOweThem)} ₸
-                            </Tag>
-                        </Space>
+                        {selectedRowKeys.length > 0 ? (
+                            <Button 
+                                type="primary" 
+                                icon={<PlusOutlined />} 
+                                style={{ borderRadius: 6 }}
+                                onClick={() => {
+                                    form.setFieldsValue({
+                                        date: dayjs(),
+                                    });
+                                    setModalOpen(true);
+                                }}
+                            >
+                                Выставить счет ({selectedRowKeys.length})
+                            </Button>
+                        ) : (
+                            <Space size={12} wrap>
+                                <Tag color="success" style={{ borderRadius: 6, fontWeight: 500 }}>
+                                    Дебиторская: {fmt(cp.theyOweUs)} ₸
+                                </Tag>
+                                <Tag color="error" style={{ borderRadius: 6, fontWeight: 500 }}>
+                                    Кредиторская: {fmt(cp.weOweThem)} ₸
+                                </Tag>
+                            </Space>
+                        )}
                     </div>
 
                     <Table
+                        rowSelection={rowSelection}
                         columns={columns}
                         dataSource={cp.orders}
                         rowKey="id"
@@ -353,6 +456,112 @@ export default function SharedReportPage() {
                     />
                 </div>
 
+                {/* Счета компании */}
+                {data.invoices && data.invoices.length > 0 && (
+                    <div className="premium-card" style={{ padding: 24, background: '#ffffff', marginTop: 24 }}>
+                        <div style={{ marginBottom: 20 }}>
+                            <Title level={4} style={{ margin: 0, fontWeight: 700, fontSize: 16, color: '#09090b' }}>
+                                Выставленные счета
+                            </Title>
+                        </div>
+                        <Table
+                            dataSource={data.invoices}
+                            rowKey="id"
+                            size="middle"
+                            pagination={false}
+                            columns={[
+                                {
+                                    title: 'Номер счета',
+                                    dataIndex: 'invoiceNumber',
+                                    key: 'invoiceNumber',
+                                    render: (t: string) => <span style={{ fontWeight: 600, color: '#09090b' }}>{t}</span>,
+                                },
+                                {
+                                    title: 'Дата выставления',
+                                    dataIndex: 'date',
+                                    key: 'date',
+                                    render: (d: string) => dayjs(d).format('DD.MM.YYYY'),
+                                },
+                                {
+                                    title: 'Срок оплаты',
+                                    dataIndex: 'dueDate',
+                                    key: 'dueDate',
+                                    render: (d: string) => d ? dayjs(d).format('DD.MM.YYYY') : '—',
+                                },
+                                {
+                                    title: 'Сумма счета',
+                                    key: 'amount',
+                                    align: 'right' as const,
+                                    render: (_: any, record: any) => {
+                                        const hasDisputedAmount = record.adjustedAmount !== null && record.adjustedAmount !== undefined;
+                                        return (
+                                            <div style={{ textAlign: 'right' }}>
+                                                {hasDisputedAmount ? (
+                                                    <>
+                                                        <div style={{ textDecoration: 'line-through', fontSize: 11, color: '#a1a1aa' }}>
+                                                            {record.amount.toLocaleString('ru-RU')} ₸
+                                                        </div>
+                                                        <div style={{ fontWeight: 700, color: '#dc2626' }}>
+                                                            {record.adjustedAmount.toLocaleString('ru-RU')} ₸
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div style={{ fontWeight: 700, color: '#09090b' }}>
+                                                        {record.amount.toLocaleString('ru-RU')} ₸
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    },
+                                },
+                                {
+                                    title: 'Статус',
+                                    dataIndex: 'status',
+                                    key: 'status',
+                                    render: (status: string) => {
+                                        const invoiceStatusLabels: Record<string, string> = {
+                                            DRAFT: 'Черновик',
+                                            PENDING: 'Ожидает оплаты',
+                                            DISPUTED: 'Спор',
+                                            APPROVED: 'Согласован',
+                                            PAID: 'Оплачен',
+                                            CANCELLED: 'Отменен',
+                                        };
+                                        const invoiceStatusColors: Record<string, string> = {
+                                            DRAFT: 'default',
+                                            PENDING: 'orange',
+                                            DISPUTED: 'red',
+                                            APPROVED: 'blue',
+                                            PAID: 'green',
+                                            CANCELLED: 'magenta',
+                                        };
+                                        return (
+                                            <Tag color={invoiceStatusColors[status] || 'default'} style={{ borderRadius: 6, fontWeight: 500 }}>
+                                                {invoiceStatusLabels[status] || status}
+                                            </Tag>
+                                        );
+                                    },
+                                },
+                                {
+                                    title: 'Действия',
+                                    key: 'actions',
+                                    render: (_: any, record: any) => (
+                                        <Button
+                                            type="primary"
+                                            ghost
+                                            size="small"
+                                            style={{ borderRadius: 6 }}
+                                            onClick={() => window.open(`${window.location.origin}/shared/invoice/${record.shareToken}`, '_blank')}
+                                        >
+                                            Открыть интерактивный счет
+                                        </Button>
+                                    ),
+                                },
+                            ]}
+                        />
+                    </div>
+                )}
+
                 {/* Footer Section */}
                 <div style={{ textAlign: 'center', marginTop: 40, padding: '24px 0 0', borderTop: '1px solid #e4e4e7' }}>
                     <div style={{ color: '#71717a', fontSize: 12, lineHeight: 1.8 }}>
@@ -367,6 +576,58 @@ export default function SharedReportPage() {
                 </div>
 
             </div>
+
+            <Modal
+                title={<span style={{ fontWeight: 700, fontSize: 16 }}><FileTextOutlined style={{ marginRight: 8 }} />Выставление нового счета</span>}
+                open={modalOpen}
+                onCancel={() => {
+                    setModalOpen(false);
+                    form.resetFields();
+                }}
+                onOk={() => form.submit()}
+                confirmLoading={submittingInvoice}
+                okText="Сформировать"
+                cancelText="Отмена"
+                okButtonProps={{ style: { borderRadius: 6 } }}
+                cancelButtonProps={{ style: { borderRadius: 6 } }}
+            >
+                <Form
+                    form={form}
+                    layout="vertical"
+                    onFinish={handleSubmitInvoice}
+                    style={{ marginTop: 20 }}
+                >
+                    <Form.Item
+                        name="invoiceNumber"
+                        label="Номер счета"
+                        rules={[{ required: true, message: 'Введите номер счета' }]}
+                    >
+                        <Input placeholder="Например, СЧ-99" />
+                    </Form.Item>
+
+                    <Form.Item
+                        name="date"
+                        label="Дата счета"
+                        rules={[{ required: true, message: 'Укажите дату счета' }]}
+                    >
+                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                    </Form.Item>
+
+                    <Form.Item
+                        name="dueDate"
+                        label="Срок оплаты (dueDate)"
+                    >
+                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                    </Form.Item>
+
+                    <Form.Item
+                        name="note"
+                        label="Примечание"
+                    >
+                        <Input.TextArea placeholder="Дополнительная информация (например, реквизиты, условия)..." rows={3} />
+                    </Form.Item>
+                </Form>
+            </Modal>
         </div>
     );
 }
