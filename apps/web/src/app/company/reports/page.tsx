@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Table, Card, Statistic, Row, Col, Button, Space, Typography, DatePicker, Tag, Tabs, Spin, Alert, Divider, theme } from 'antd';
-import { PrinterOutlined, ReloadOutlined, InfoCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { PrinterOutlined, ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -150,7 +150,7 @@ export default function ReportsPage() {
         .filter(o => o.status !== 'CANCELLED')
         .map(o => {
             const rev = o.customerPrice || 0;
-            const cost = o.executorCost ?? o.driverCost ?? 0;
+            const cost = o.executorCost ?? o.subForwarderPrice ?? o.driverCost ?? 0;
             const route = o.routePoints?.map((p: any) => p.location?.city || p.location?.name).filter(Boolean).join(' → ') || '—';
             return {
                 key: o.id,
@@ -184,7 +184,7 @@ export default function ReportsPage() {
             const e = map.get(dId)!;
             e.orders++;
             const rev = o.customerPrice || 0;
-            const cost = o.executorCost ?? o.driverCost ?? 0;
+            const cost = o.executorCost ?? o.subForwarderPrice ?? o.driverCost ?? 0;
             e.revenue += rev;
             e.margin += (rev - cost);
             if (o.status === 'COMPLETED') e.completed++;
@@ -193,12 +193,6 @@ export default function ReportsPage() {
         return Array.from(map.values()).filter(d => d.orders > 0);
     }, [filteredOrders, drivers]);
 
-    const cardStyle = {
-        borderRadius: 8,
-        background: token.colorBgContainer,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    };
 
     if (loading && orders.length === 0 && payments.length === 0) {
         return (
@@ -227,17 +221,17 @@ export default function ReportsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company')} style={{ padding: '4px 8px' }} />
                     <div>
-                        <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '8px', color: '#09090b' }}>
+                        <Title level={2} style={{ margin: 0, fontWeight: 600 }}>
                             Конструктор отчётов
-                        </h1>
-                        <p style={{ color: '#71717a', fontSize: '16px' }}>
+                        </Title>
+                        <Text type="secondary" style={{ fontSize: '16px' }}>
                             Аналитика по периодам, контрагентам, водителям и рентабельности
-                        </p>
+                        </Text>
                     </div>
                 </div>
                 <Space wrap>
                     <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchAll}>Обновить</Button>
-                    <RangePicker value={dateRange as any} onChange={(d) => setDateRange(d as any)} format="DD.MM.YYYY" allowClear={false} style={cardStyle} />
+                    <RangePicker value={dateRange as any} onChange={(d) => setDateRange(d as any)} format="DD.MM.YYYY" allowClear={false} style={{ boxShadow: `0 1px 3px ${token.colorBorderSecondary}`, borderRadius: 8 }} />
                     <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Печать</Button>
                 </Space>
             </div>
@@ -245,22 +239,22 @@ export default function ReportsPage() {
             {/* KPI Cards */}
             <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
                 <Col xs={12} md={6}>
-                    <Card size="small" style={cardStyle}>
+                    <Card size="small" className="premium-card" bordered={false}>
                         <Statistic title="Доходы" value={totalIncome} suffix="₸" valueStyle={{ color: '#52c41a', fontSize: 18, fontWeight: 700 }} formatter={(v) => fmt(v as number)} />
                     </Card>
                 </Col>
                 <Col xs={12} md={6}>
-                    <Card size="small" style={cardStyle}>
+                    <Card size="small" className="premium-card" bordered={false}>
                         <Statistic title="Расходы" value={totalExpense} suffix="₸" valueStyle={{ color: '#ff4d4f', fontSize: 18, fontWeight: 700 }} formatter={(v) => fmt(v as number)} />
                     </Card>
                 </Col>
                 <Col xs={12} md={6}>
-                    <Card size="small" style={cardStyle}>
+                    <Card size="small" className="premium-card" bordered={false}>
                         <Statistic title="Маржа" value={totalIncome - totalExpense} suffix="₸" valueStyle={{ color: totalIncome >= totalExpense ? '#52c41a' : '#ff4d4f', fontSize: 18, fontWeight: 700 }} formatter={(v) => fmt(v as number)} />
                     </Card>
                 </Col>
                 <Col xs={12} md={6}>
-                    <Card size="small" style={cardStyle}>
+                    <Card size="small" className="premium-card" bordered={false}>
                         <Statistic title="Рентабельность" value={totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0} suffix="%" valueStyle={{ color: totalIncome >= totalExpense ? '#52c41a' : '#ff4d4f', fontSize: 18, fontWeight: 700 }} />
                     </Card>
                 </Col>
@@ -274,7 +268,7 @@ export default function ReportsPage() {
                 <Tabs.TabPane tab="Сводка" key="summary" />
             </Tabs>
 
-            <Card style={cardStyle} styles={{ body: { padding: 12 } }}>
+            <Card className="premium-card" bordered={false} styles={{ body: { padding: 12 } }}>
                 {reportType === 'pnl' && (
                     <Table 
                         columns={[
@@ -338,7 +332,7 @@ export default function ReportsPage() {
                 {reportType === 'summary' && (
                     <Row gutter={[16, 16]}>
                         <Col xs={24} md={8}>
-                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Заявки</span>} size="small" style={{ border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 8 }}>
+                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Заявки</span>} size="small" className="premium-card" bordered={false}>
                                 <Row gutter={[8, 8]}>
                                     <Col span={12}><Statistic title="Всего" value={filteredOrders.length} valueStyle={{ fontSize: 16 }} /></Col>
                                     <Col span={12}><Statistic title="Завершено" value={filteredOrders.filter(o => o.status === 'COMPLETED').length} valueStyle={{ color: '#52c41a', fontSize: 16 }} /></Col>
@@ -348,7 +342,7 @@ export default function ReportsPage() {
                             </Card>
                         </Col>
                         <Col xs={24} md={8}>
-                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Финансы</span>} size="small" style={{ border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 8 }}>
+                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Финансы</span>} size="small" className="premium-card" bordered={false}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><Text type="secondary" style={{ fontSize: 13 }}>Выручка</Text><Text strong style={{ color: '#52c41a', fontSize: 13 }}>{fmt(totalIncome)} ₸</Text></div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><Text type="secondary" style={{ fontSize: 13 }}>Затраты</Text><Text strong style={{ color: '#ff4d4f', fontSize: 13 }}>{fmt(totalExpense)} ₸</Text></div>
                                 <Divider style={{ margin: '12px 0' }} />
@@ -359,7 +353,7 @@ export default function ReportsPage() {
                             </Card>
                         </Col>
                         <Col xs={24} md={8}>
-                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Автопарк</span>} size="small" style={{ border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 8 }}>
+                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Автопарк</span>} size="small" className="premium-card" bordered={false}>
                                 <Statistic title="Всего водителей" value={drivers.length} valueStyle={{ fontSize: 16 }} />
                                 <div style={{ marginTop: 12 }}>
                                     <Statistic title="Контрагентов" value={uniqueCounterparties} valueStyle={{ fontSize: 16 }} />

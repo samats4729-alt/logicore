@@ -110,7 +110,7 @@ export class CompanyController {
     // ==================== Заявки компании ====================
 
     @Get('orders')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Получить заявки своей компании' })
     async getCompanyOrders(@Request() req: any, @Query() query: PaginationQueryDto & { type?: string }) {
         return this.companyService.getCompanyOrders(req.user.companyId, query);
@@ -325,7 +325,7 @@ export class CompanyController {
     // ==================== Водители компании ====================
 
     @Get('drivers')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Получить список водителей' })
     async getDrivers(
         @Request() req: any,

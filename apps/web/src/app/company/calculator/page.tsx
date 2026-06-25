@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, Space, Typography, Row, Col, Divider, Statistic, InputNumber } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
 
-const { Text } = Typography;
+const { Title, Text } = Typography;
 
 export default function CalculatorPage() {
     const [distance, setDistance] = useState(1200);
@@ -22,12 +22,12 @@ export default function CalculatorPage() {
     return (
         <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
             <div style={{ marginBottom: '32px' }}>
-                <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '8px', color: '#09090b' }}>
+                <Title level={2} style={{ margin: 0, fontWeight: 600 }}>
                     <CalculatorOutlined style={{ marginRight: 12 }} />Калькулятор рентабельности рейса
-                </h1>
-                <p style={{ color: '#71717a', fontSize: '16px' }}>
+                </Title>
+                <Text type="secondary" style={{ fontSize: '16px' }}>
                     Быстрый расчет маржинальности и рентабельности перевозки
-                </p>
+                </Text>
             </div>
 
             <Row gutter={[24, 24]}>
@@ -35,7 +35,9 @@ export default function CalculatorPage() {
                     <Card 
                         size="small" 
                         title={<span style={{ fontWeight: 600 }}>Параметры рейса</span>} 
-                        style={{ marginBottom: 20, borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}
+                        className="premium-card"
+                        bordered={false}
+                        style={{ marginBottom: 20 }}
                     >
                         <Space direction="vertical" style={{ width: '100%' }} size="middle">
                             <div>
@@ -51,7 +53,8 @@ export default function CalculatorPage() {
                     <Card 
                         size="small" 
                         title={<span style={{ fontWeight: 600 }}>Затраты</span>}
-                        style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}
+                        className="premium-card"
+                        bordered={false}
                     >
                         <Space direction="vertical" style={{ width: '100%' }} size="middle">
                             <div>
@@ -73,7 +76,8 @@ export default function CalculatorPage() {
                     <Card 
                         size="small" 
                         title={<span style={{ fontWeight: 600 }}>Результат расчета</span>}
-                        style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}
+                        className="premium-card"
+                        bordered={false}
                     >
                         <div style={{ padding: '8px 0' }}>
                             <Statistic title="Выручка" value={revenue} suffix="₸" valueStyle={{ color: '#52c41a', fontWeight: 700 }} />
