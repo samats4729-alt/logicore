@@ -503,7 +503,9 @@ export default function OrderDetailPage() {
 
         if (isMeCustomer) {
             initCust = MY_COMPANY_VALUE;
-            if (order.forwarderId === user?.companyId) {
+            if (order.subForwarderId) {
+                initCarr = order.subForwarderId;
+            } else if (order.forwarderId === user?.companyId) {
                 initCarr = MY_COMPANY_VALUE;
             } else if (!order.forwarderId) {
                 initCarr = MARKETPLACE_VALUE;
@@ -513,7 +515,11 @@ export default function OrderDetailPage() {
         } else {
             initCust = order.customerCompanyId || '';
             if (order.forwarderId === user?.companyId) {
-                initCarr = MY_COMPANY_VALUE;
+                if (order.subForwarderId) {
+                    initCarr = order.subForwarderId;
+                } else {
+                    initCarr = MY_COMPANY_VALUE;
+                }
             } else if (order.subForwarderId === user?.companyId) {
                 if (!order.forwarderId) {
                     initCarr = MARKETPLACE_VALUE;
@@ -541,7 +547,7 @@ export default function OrderDetailPage() {
             pickupDate: order.routePoints?.find((p: any) => p.pointType === 'PICKUP')?.expectedDate
                 ? dayjs(order.routePoints.find((p: any) => p.pointType === 'PICKUP').expectedDate)
                 : undefined,
-            forwarderId: order.forwarderId || order.forwarder?.id || undefined,
+            forwarderId: order.subForwarderId || (order.forwarderId !== user?.companyId ? order.forwarderId : undefined),
             customerCompanyId: order.customerCompanyId || order.customerCompany?.id || undefined,
             vatRate: order.vatRate ?? 0,
             hasVat: order.hasVat ?? false,
@@ -563,9 +569,10 @@ export default function OrderDetailPage() {
             ]);
         }
 
-        const fwdId = order.forwarderId || order.forwarder?.id;
-        if (fwdId && order.forwarder?.name && !forwarders.some(f => f.id === fwdId)) {
-            setForwarders(prev => [...prev, { id: fwdId, name: order.forwarder!.name }]);
+        const fwdId = order.subForwarderId || order.forwarderId || order.forwarder?.id;
+        const fwdName = order.subForwarder?.name || order.forwarder?.name;
+        if (fwdId && fwdName && !forwarders.some(f => f.id === fwdId)) {
+            setForwarders(prev => [...prev, { id: fwdId, name: fwdName }]);
         }
         setIsEditing(true);
     };
@@ -646,10 +653,13 @@ export default function OrderDetailPage() {
                 updateData.forwarderId = user?.companyId;
             } else {
                 updateData.customerCompanyId = selectedCustomer;
-                updateData.subForwarderId = user?.companyId;
-                updateData.subForwarderPrice = finalDriverCost || null;
-                if (!isMkt) {
-                    updateData.forwarderId = selectedCarrier;
+                if (isMkt) {
+                    updateData.subForwarderId = user?.companyId;
+                    updateData.subForwarderPrice = finalDriverCost || null;
+                } else {
+                    updateData.forwarderId = user?.companyId;
+                    updateData.subForwarderId = selectedCarrier;
+                    updateData.subForwarderPrice = finalDriverCost || null;
                 }
             }
 

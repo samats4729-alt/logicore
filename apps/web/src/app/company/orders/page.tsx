@@ -723,7 +723,7 @@ export default function CompanyOrdersPage() {
         }
         setEditCreatorRole(currentRole);
 
-        const isFwdAssigned = !!(order.forwarderId && order.forwarderId !== user?.companyId);
+        const isFwdAssigned = !!(order.forwarderId && order.forwarderId !== user?.companyId) || !!order.subForwarderId;
         const isMkt = !order.forwarderId && (!!order.driverCost || order.status === 'PENDING');
 
         setShowCustomerField(hasExternalCustomer);
@@ -745,7 +745,7 @@ export default function CompanyOrdersPage() {
             customerPriceType: order.customerPriceType || 'FIXED',
             driverCost: order.driverCost || order.subForwarderPrice,
             pickupDate: (order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate ? dayjs((order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate) : undefined,
-            forwarderId: order.forwarderId || order.forwarder?.id || undefined,
+            forwarderId: order.subForwarderId || (order.forwarderId !== user?.companyId ? order.forwarderId : undefined),
             customerCompanyId: order.customerCompanyId || order.customerCompany?.id || undefined,
         });
         if (order.routePoints && order.routePoints.length > 0) {
@@ -761,9 +761,10 @@ export default function CompanyOrdersPage() {
                  { city: '', address: '', pointType: 'DELIVERY' }
              ]);
         }
-        const fwdId = order.forwarderId || order.forwarder?.id;
-        if (fwdId && order.forwarder?.name && !forwarders.some(f => f.id === fwdId)) {
-            setForwarders(prev => [...prev, { id: fwdId, name: order.forwarder!.name }]);
+        const fwdId = order.subForwarderId || order.forwarderId || order.forwarder?.id;
+        const fwdName = order.subForwarder?.name || order.forwarder?.name;
+        if (fwdId && fwdName && !forwarders.some(f => f.id === fwdId)) {
+            setForwarders(prev => [...prev, { id: fwdId, name: fwdName }]);
         }
         setEditModalOpen(true);
     };
@@ -811,8 +812,10 @@ export default function CompanyOrdersPage() {
                     updateData.subForwarderId = null;
                     updateData.subForwarderPrice = null;
                 } else {
-                    updateData.subForwarderId = user?.companyId;
+                    updateData.forwarderId = user?.companyId;
+                    updateData.subForwarderId = values.forwarderId;
                     updateData.subForwarderPrice = values.driverCost;
+                    updateData.driverCost = null;
                 }
             }
 

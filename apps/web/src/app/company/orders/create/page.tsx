@@ -464,10 +464,13 @@ export default function CreateOrderPage() {
             } else {
                 // I am a middleman — customer and carrier are both external
                 orderData.customerCompanyId = selectedCustomer;
-                orderData.subForwarderId = user?.companyId;
-                orderData.subForwarderPrice = finalDriverCost || null;
-                if (!isMarketplace) {
-                    orderData.forwarderId = selectedCarrier;
+                if (isMarketplace) {
+                    orderData.subForwarderId = user?.companyId;
+                    orderData.subForwarderPrice = finalDriverCost || null;
+                } else {
+                    orderData.forwarderId = user?.companyId;
+                    orderData.subForwarderId = selectedCarrier;
+                    orderData.subForwarderPrice = finalDriverCost || null;
                 }
             }
 
