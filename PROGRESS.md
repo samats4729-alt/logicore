@@ -54,3 +54,6 @@ cd apps/mobile
 pnpm install
 pnpm start
 ```
+
+---
+*Последний триггер деплоя: 25.06.2026*
