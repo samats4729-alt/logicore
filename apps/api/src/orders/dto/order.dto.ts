@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
 import { OrderStatus } from '@prisma/client';
 
 @ValidatorConstraint({ name: 'IsAssignDriverValid', async: false })
@@ -170,6 +170,26 @@ export class CreateOrderDto {
     @IsString()
     @IsOptional()
     appliedTariffId?: string;
+
+    @ApiProperty({ required: false, example: false })
+    @IsBoolean()
+    @IsOptional()
+    hasVat?: boolean;
+
+    @ApiProperty({ required: false, example: 12 })
+    @IsNumber()
+    @IsOptional()
+    vatRate?: number;
+
+    @ApiProperty({ required: false, example: false })
+    @IsBoolean()
+    @IsOptional()
+    executorHasVat?: boolean;
+
+    @ApiProperty({ required: false, example: 12 })
+    @IsNumber()
+    @IsOptional()
+    executorVatRate?: number;
 }
 
 export class UpdateStatusDto {
