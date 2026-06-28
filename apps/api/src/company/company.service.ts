@@ -1125,4 +1125,86 @@ export class CompanyService {
             accessToken,
         };
     }
+
+    /**
+     * Удалить связь с организацией (или саму организацию)
+     */
+    async deleteCompany(userId: string, companyId: string) {
+        // 1. Проверяем количество компаний пользователя
+        const relations = await this.prisma.userCompanyRelation.findMany({
+            where: { userId }
+        });
+        if (relations.length <= 1) {
+            throw new BadRequestException('Нельзя удалить единственную организацию');
+        }
+
+        // 2. Удаляем связь
+        await this.prisma.userCompanyRelation.delete({
+            where: {
+                userId_companyId: { userId, companyId }
+            }
+        });
+
+        // 3. Если удаляемая компания была активной, переключаем на первую оставшуюся
+        let newActiveCompanyId = null;
+        let nextAccessToken = null;
+        let nextUser = null;
+        
+        const currentUser = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (currentUser && currentUser.companyId === companyId) {
+            const remaining = relations.filter(r => r.companyId !== companyId);
+            newActiveCompanyId = remaining[0].companyId;
+            
+            const updatedUser = await this.prisma.user.update({
+                where: { id: userId },
+                data: { companyId: newActiveCompanyId },
+                include: { company: true }
+            });
+
+            const payload = {
+                sub: updatedUser.id,
+                email: updatedUser.email,
+                role: updatedUser.role,
+                companyId: updatedUser.companyId,
+            };
+            nextAccessToken = this.jwtService.sign(payload);
+            nextUser = {
+                id: updatedUser.id,
+                email: updatedUser.email,
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName,
+                role: updatedUser.role,
+                company: updatedUser.company,
+            };
+
+            // Обновляем сессию в БД и Redis
+            const activeSession = await this.prisma.session.findFirst({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+            });
+            const deviceId = activeSession?.deviceId || 'web-browser';
+            await this.prisma.session.deleteMany({ where: { userId } });
+            const expiresIn = 60 * 60 * 24 * 7;
+            await this.prisma.session.create({
+                data: {
+                    userId,
+                    deviceId,
+                    token: nextAccessToken,
+                    expiresAt: new Date(Date.now() + expiresIn * 1000),
+                },
+            });
+            try {
+                await this.redisService.setSession(userId, deviceId, nextAccessToken, expiresIn);
+            } catch (e) {
+                console.warn('Redis setSession failed in deleteCompany:', e);
+            }
+        }
+
+        return {
+            switched: !!newActiveCompanyId,
+            accessToken: nextAccessToken,
+            user: nextUser
+        };
+    }
 }
+

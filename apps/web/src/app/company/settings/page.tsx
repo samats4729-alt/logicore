@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Select } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Select, Popconfirm } from 'antd';
+import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import CompanyFormFields from '@/components/CompanyFormFields';
@@ -79,6 +79,38 @@ export default function SettingsPage() {
             loadCompanies();
         } catch (err: any) {
             message.error(err.response?.data?.message || 'Ошибка добавления организации');
+        } finally {
+            setSubmitLoading(false);
+        }
+    };
+
+    const handleDeleteCompany = async (companyId: string) => {
+        setSubmitLoading(true);
+        try {
+            const res = await api.delete(`/company/my-companies/${companyId}`);
+            message.success('Организация успешно удалена');
+            
+            if (res.data.switched) {
+                // Если переключилась активная организация, обновляем JWT
+                const authState = {
+                    state: {
+                        user: res.data.user,
+                        token: res.data.accessToken,
+                        isAuthenticated: true,
+                    },
+                    version: 0,
+                };
+                localStorage.setItem('logcomp-auth', JSON.stringify(authState));
+                setUser(res.data.user, res.data.accessToken);
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 100);
+            } else {
+                loadCompanies();
+            }
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка удаления организации');
         } finally {
             setSubmitLoading(false);
         }
@@ -323,6 +355,16 @@ export default function SettingsPage() {
                                         options={myCompanies.map(c => ({ value: c.id, label: c.name }))}
                                         loading={myCompaniesLoading}
                                     />
+                                    <Popconfirm
+                                        title="Удалить организацию?"
+                                        description="Вы действительно хотите удалить эту организацию? Доступ к её данным для вас будет закрыт."
+                                        okText="Да, удалить"
+                                        cancelText="Отмена"
+                                        onConfirm={() => user?.companyId && handleDeleteCompany(user.companyId)}
+                                        okButtonProps={{ danger: true, loading: submitLoading }}
+                                    >
+                                        <Button type="primary" danger icon={<DeleteOutlined />} size="large" />
+                                    </Popconfirm>
                                 </Space>
                             ) : (
                                 <Title level={5} style={{ margin: 0 }}>Основная информация</Title>

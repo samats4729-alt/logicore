@@ -467,4 +467,10 @@ export class CompanyController {
     async switchCompany(@Request() req: any, @Param('id') companyId: string) {
         return this.companyService.switchCompany(req.user.sub, companyId);
     }
+
+    @Delete('my-companies/:id')
+    @ApiOperation({ summary: 'Удалить связь с организацией' })
+    async deleteMyCompany(@Request() req: any, @Param('id') companyId: string) {
+        return this.companyService.deleteCompany(req.user.sub, companyId);
+    }
 }
