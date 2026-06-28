@@ -152,20 +152,16 @@ export class AccountingController {
         );
 
         if (body.email) {
-            try {
-                const company = await this.accountingService['prisma'].company.findUnique({
-                    where: { id: req.user.companyId },
-                    select: { name: true },
-                });
-                await this.emailService.sendCounterpartyReportEmail(
-                    body.email,
-                    result.shareUrl,
-                    company?.name || 'Компания',
-                    '',
-                );
-            } catch (err) {
-                console.error('Ошибка отправки email отчёта:', err);
-            }
+            const company = await this.accountingService['prisma'].company.findUnique({
+                where: { id: req.user.companyId },
+                select: { name: true },
+            });
+            await this.emailService.sendCounterpartyReportEmail(
+                body.email,
+                result.shareUrl,
+                company?.name || 'Компания',
+                '',
+            );
         }
 
         return result;

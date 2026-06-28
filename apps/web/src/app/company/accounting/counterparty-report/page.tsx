@@ -142,8 +142,8 @@ export default function CounterpartyReportPage() {
             });
             message.success('Отчёт отправлен на ' + shareEmail);
             setShareEmail('');
-        } catch {
-            message.error('Ошибка отправки');
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Ошибка отправки письма');
         } finally {
             setEmailSending(false);
         }
