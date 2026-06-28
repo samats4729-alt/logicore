@@ -90,7 +90,11 @@ export class OrdersController {
             throw new BadRequestException('Не указаны email-адреса для рассылки');
         }
 
-        const order = await this.ordersService.findById(id);
+        const order = await this.ordersService.findById(id, {
+            userId: req.user.sub,
+            role: req.user.role,
+            companyId: req.user.companyId,
+        });
         if (!order) {
             throw new NotFoundException('Заявка не найдена');
         }

@@ -43,12 +43,16 @@ export class UsersController {
         return this.usersService.findById(id);
     }
 
+    // No @Roles decorator here since any logged-in user (including DRIVER, RECIPIENT, etc.)
+    // is allowed to modify their own personal profile information.
     @Put('profile')
     @ApiOperation({ summary: 'Обновить профиль авторизованного пользователя' })
     async updateProfile(@Request() req: any, @Body() dto: Partial<UpdateUserDto>) {
         return this.usersService.update(req.user.sub, dto);
     }
 
+    // No @Roles decorator here since any logged-in user (including DRIVER, RECIPIENT, etc.)
+    // is allowed to change their own password, provided they supply the correct current password.
     @Put('password')
     @ApiOperation({ summary: 'Изменить пароль авторизованного пользователя' })
     async updatePassword(@Request() req: any, @Body() dto: any) {
