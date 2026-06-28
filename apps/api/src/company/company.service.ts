@@ -1068,17 +1068,19 @@ export class CompanyService {
             throw new ForbiddenException('У вас нет доступа к этой организации');
         }
 
-        const user = await this.prisma.user.update({
+        const user = await this.prisma.user.findUnique({
             where: { id: userId },
-            data: { companyId },
             include: { company: true },
         });
+        if (!user) {
+            throw new NotFoundException('Пользователь не найден');
+        }
 
         const payload = {
             sub: user.id,
             email: user.email,
-            role: user.role,
-            companyId: user.companyId,
+            role: relation.role,      // ← роль в этой конкретной компании
+            companyId: companyId,     // ← активная компания только в JWT
         };
 
         const accessToken = this.jwtService.sign(payload);
@@ -1113,14 +1115,18 @@ export class CompanyService {
             console.warn('Redis setSession failed in switchCompany:', e);
         }
 
+        const activeCompany = await this.prisma.company.findUnique({
+            where: { id: companyId }
+        });
+
         return {
             user: {
                 id: user.id,
                 email: user.email,
                 firstName: user.firstName,
                 lastName: user.lastName,
-                role: user.role,
-                company: user.company,
+                role: relation.role,  // ← роль в этой конкретной компании
+                company: activeCompany,
             },
             accessToken,
         };

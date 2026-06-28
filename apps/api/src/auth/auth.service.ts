@@ -106,7 +106,7 @@ export class AuthService {
     /**
      * Валидация токена и пользователя
      */
-    async validateUser(userId: string): Promise<any> {
+    async validateUser(userId: string, activeCompanyId?: string, activeRole?: string): Promise<any> {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
             include: { company: true },
@@ -116,7 +116,30 @@ export class AuthService {
             throw new UnauthorizedException('Пользователь не найден');
         }
 
-        return user;
+        let company = user.company;
+        let companyId = user.companyId;
+        let role = user.role;
+
+        if (activeCompanyId) {
+            companyId = activeCompanyId;
+            const activeCompany = await this.prisma.company.findUnique({
+                where: { id: activeCompanyId }
+            });
+            if (activeCompany) {
+                company = activeCompany;
+            }
+        }
+
+        if (activeRole) {
+            role = activeRole as any;
+        }
+
+        return {
+            ...user,
+            companyId,
+            role,
+            company
+        };
     }
 
     /**

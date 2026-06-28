@@ -100,7 +100,7 @@ export class AuthController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Получить данные текущего пользователя' })
     async getMe(@Request() req: any) {
-        return this.authService.validateUser(req.user.sub);
+        return this.authService.validateUser(req.user.sub, req.user.companyId, req.user.role);
     }
 
     // ==================== Регистрация по приглашению ====================
