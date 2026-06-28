@@ -21,7 +21,7 @@ export class EmailService {
     }
 
     async sendPasswordResetEmail(to: string, resetToken: string, userName: string): Promise<void> {
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+        const frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
         const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
         const subject = 'Восстановление пароля — LogiCore';

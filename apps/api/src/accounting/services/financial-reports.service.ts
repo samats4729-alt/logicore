@@ -745,7 +745,7 @@ export class FinancialReportsService {
             ttl,
         );
 
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+        const frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
         const shareUrl = `${frontendUrl}/shared/report/${token}`;
 
         return { token, shareUrl };
