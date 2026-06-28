@@ -124,9 +124,19 @@ export default function SharedReportPage() {
             setSelectedRowKeys(keys);
         },
         getCheckboxProps: (record: any) => {
-            const isInvoiced = record.direction === 'weOwe' ? record.incomingInvoiceId : record.outgoingInvoiceId;
+            const isInvoiced = record.direction === 'weOwe' ? record.outgoingInvoiceId : record.incomingInvoiceId;
             const isCompleted = record.status === 'COMPLETED';
             
+            // Временный лог для диагностики
+            console.log(record.orderNumber, {
+                direction: record.direction,
+                isInvoiced,
+                isCompleted,
+                incomingInvoiceId: record.incomingInvoiceId,
+                outgoingInvoiceId: record.outgoingInvoiceId,
+                status: record.status,
+            });
+
             // Lock select option to first selected direction to prevent mixing incoming & outgoing
             let directionMismatch = false;
             if (selectedRowKeys.length > 0) {
@@ -137,7 +147,7 @@ export default function SharedReportPage() {
             }
 
             return {
-                disabled: isInvoiced || !isCompleted || directionMismatch,
+                disabled: !!isInvoiced || !isCompleted || directionMismatch,
                 name: record.orderNumber,
             };
         },
@@ -213,7 +223,7 @@ export default function SharedReportPage() {
             key: 'invoiceInfo',
             width: 140,
             render: (_: any, r: any) => {
-                const invoiceId = r.direction === 'weOwe' ? r.incomingInvoiceId : r.outgoingInvoiceId;
+                const invoiceId = r.direction === 'weOwe' ? r.outgoingInvoiceId : r.incomingInvoiceId;
                 if (invoiceId) {
                     const inv = data?.invoices?.find((i: any) => i.id === invoiceId);
                     if (inv) {
