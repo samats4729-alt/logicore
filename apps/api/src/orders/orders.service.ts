@@ -2,10 +2,39 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, OrderStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
+import { RedisService } from '../redis/redis.service';
+
+const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+    DRAFT: [OrderStatus.PENDING, OrderStatus.CANCELLED],
+    PENDING: [OrderStatus.ASSIGNED, OrderStatus.DRAFT, OrderStatus.CANCELLED],
+    ASSIGNED: [OrderStatus.EN_ROUTE_PICKUP, OrderStatus.PENDING, OrderStatus.CANCELLED],
+    EN_ROUTE_PICKUP: [OrderStatus.AT_PICKUP, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
+    AT_PICKUP: [OrderStatus.LOADING, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
+    LOADING: [OrderStatus.IN_TRANSIT, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
+    IN_TRANSIT: [OrderStatus.AT_DELIVERY, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
+    AT_DELIVERY: [OrderStatus.UNLOADING, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
+    UNLOADING: [OrderStatus.COMPLETED, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
+    COMPLETED: [],
+    CANCELLED: [],
+    PROBLEM: [
+        OrderStatus.ASSIGNED,
+        OrderStatus.EN_ROUTE_PICKUP,
+        OrderStatus.AT_PICKUP,
+        OrderStatus.LOADING,
+        OrderStatus.IN_TRANSIT,
+        OrderStatus.AT_DELIVERY,
+        OrderStatus.UNLOADING,
+        OrderStatus.COMPLETED,
+        OrderStatus.CANCELLED
+    ],
+};
 
 @Injectable()
 export class OrdersService implements OnModuleInit {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private redis: RedisService,
+    ) { }
 
     async onModuleInit() {
         try {
@@ -354,6 +383,13 @@ export class OrdersService implements OnModuleInit {
                 throw new BadRequestException('Пользователь не является водителем');
             }
 
+            if (driverUser.companyId) {
+                const targetCompanyId = partnerId || order.forwarderId;
+                if (targetCompanyId && driverUser.companyId !== targetCompanyId) {
+                    throw new BadRequestException('Назначаемый водитель должен принадлежать компании-исполнителю (экспедитору/партнеру)');
+                }
+            }
+
             driverName = `${driverUser.lastName || ''} ${driverUser.firstName || ''} ${driverUser.middleName || ''}`.trim();
             driverPhone = driverUser.phone;
             driverPlate = driverUser.vehiclePlate;
@@ -372,7 +408,7 @@ export class OrdersService implements OnModuleInit {
             data: {
                 driverId: driverId || null,
                 partnerId: partnerId || null,
-                forwarderId: partnerId || order.forwarderId || null,
+                forwarderId: order.forwarderId || partnerId || null,
                 assignedDriverName: driverName,
                 assignedDriverPhone: driverPhone,
                 assignedDriverPlate: driverPlate,
@@ -397,7 +433,16 @@ export class OrdersService implements OnModuleInit {
      * Обновление статуса заявки
      */
     async updateStatus(orderId: string, status: OrderStatus, comment?: string, changedById?: string) {
-        return this.prisma.order.update({
+        const order = await this.findById(orderId);
+
+        if (order.status !== status) {
+            const allowed = ALLOWED_TRANSITIONS[order.status] || [];
+            if (!allowed.includes(status)) {
+                throw new BadRequestException(`Недопустимый переход статуса из ${order.status} в ${status}`);
+            }
+        }
+
+        const updated = await this.prisma.order.update({
             where: { id: orderId },
             data: {
                 status,
@@ -409,6 +454,60 @@ export class OrdersService implements OnModuleInit {
                         changedById,
                     },
                 },
+            },
+        });
+
+        if (status === OrderStatus.COMPLETED) {
+            await this.syncOrderPaymentFlags(orderId);
+        }
+
+        return updated;
+    }
+
+    private async syncOrderPaymentFlags(orderId: string) {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+        });
+        if (!order) return;
+
+        // Sync Customer Paid Flag
+        const customerPayments = await this.prisma.payment.findMany({
+            where: { orderId, direction: 'IN', isDeleted: false },
+        });
+        const paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
+        const revenue = order.customerPrice || 0;
+        const isCustomerPaid = paidIn >= revenue && revenue > 0;
+
+        // Sync Driver / Sub-forwarder Paid Flag
+        const executorPayments = await this.prisma.payment.findMany({
+            where: { orderId, direction: 'OUT', isDeleted: false },
+        });
+        const paidOut = executorPayments.reduce((sum, p) => sum + p.amount, 0);
+
+        let isDriverPaid = order.isDriverPaid;
+        let driverPaidAt = order.driverPaidAt;
+        let isSubForwarderPaid = order.isSubForwarderPaid;
+        let subForwarderPaidAt = order.subForwarderPaidAt;
+
+        if (order.subForwarderId) {
+            const subForwarderPrice = order.subForwarderPrice || 0;
+            isSubForwarderPaid = paidOut >= subForwarderPrice && subForwarderPrice > 0;
+            subForwarderPaidAt = isSubForwarderPaid ? (order.subForwarderPaidAt || new Date()) : null;
+        } else {
+            const driverCost = order.driverCost || 0;
+            isDriverPaid = paidOut >= driverCost && driverCost > 0;
+            driverPaidAt = isDriverPaid ? (order.driverPaidAt || new Date()) : null;
+        }
+
+        await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                isCustomerPaid,
+                customerPaidAt: isCustomerPaid ? (order.customerPaidAt || new Date()) : null,
+                isDriverPaid,
+                driverPaidAt,
+                isSubForwarderPaid,
+                subForwarderPaidAt,
             },
         });
     }
@@ -542,16 +641,44 @@ export class OrdersService implements OnModuleInit {
     private async generateOrderNumber(): Promise<string> {
         const today = new Date();
         const datePrefix = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const redisKey = `order_counter:${datePrefix}`;
+        
+        let orderSeq: number | null = null;
+        
+        try {
+            const redisClient = this.redis.getClient();
+            if (redisClient) {
+                const exists = await redisClient.exists(redisKey);
+                if (!exists) {
+                    const count = await this.prisma.order.count({
+                        where: {
+                            createdAt: {
+                                gte: new Date(today.setHours(0, 0, 0, 0)),
+                            },
+                        },
+                    });
+                    await redisClient.set(redisKey, String(count), 'EX', 172800, 'NX');
+                }
+                
+                const val = await redisClient.incr(redisKey);
+                orderSeq = val;
+            }
+        } catch (err) {
+            console.warn('Failed to generate order number via Redis, falling back to DB count:', err);
+        }
 
-        const count = await this.prisma.order.count({
-            where: {
-                createdAt: {
-                    gte: new Date(today.setHours(0, 0, 0, 0)),
+        if (orderSeq === null) {
+            const count = await this.prisma.order.count({
+                where: {
+                    createdAt: {
+                        gte: new Date(today.setHours(0, 0, 0, 0)),
+                    },
                 },
-            },
-        });
+            });
+            orderSeq = count + 1;
+        }
 
-        return `LC-${datePrefix}-${String(count + 1).padStart(4, '0')}`;
+        return `LC-${datePrefix}-${String(orderSeq).padStart(4, '0')}`;
     }
 
     /**
