@@ -1,13 +1,19 @@
-import { Controller, Get, Post, Body, Param, Delete, Query, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Query, Patch, UseGuards } from '@nestjs/common';
 import { CitiesService } from './cities.service';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('cities')
 @Controller('cities')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth()
 export class CitiesController {
     constructor(private readonly citiesService: CitiesService) { }
 
     @Post()
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Добавить новый город' })
     create(@Body() createCityDto: { name: string; latitude: number; longitude: number; countryId: string; regionId?: string }) {
         return this.citiesService.create(createCityDto);
@@ -25,32 +31,38 @@ export class CitiesController {
 
     // --- Country Endpoints ---
     @Post('countries')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     createCountry(@Body() dto: { name: string; code: string }) {
         return this.citiesService.createCountry(dto);
     }
 
     @Patch('countries/:id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     updateCountry(@Param('id') id: string, @Body() dto: { name?: string; code?: string }) {
         return this.citiesService.updateCountry(id, dto);
     }
 
     @Delete('countries/:id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     deleteCountry(@Param('id') id: string) {
         return this.citiesService.deleteCountry(id);
     }
 
     // --- Region Endpoints ---
     @Post('regions')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     createRegion(@Body() dto: { name: string; countryId: string }) {
         return this.citiesService.createRegion(dto);
     }
 
     @Patch('regions/:id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     updateRegion(@Param('id') id: string, @Body() dto: { name?: string }) {
         return this.citiesService.updateRegion(id, dto);
     }
 
     @Delete('regions/:id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     deleteRegion(@Param('id') id: string) {
         return this.citiesService.deleteRegion(id);
     }
@@ -65,6 +77,7 @@ export class CitiesController {
     }
 
     @Delete(':id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Удалить город' })
     remove(@Param('id') id: string) {
         return this.citiesService.remove(id);

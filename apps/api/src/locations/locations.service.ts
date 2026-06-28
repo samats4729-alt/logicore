@@ -50,19 +50,37 @@ export class LocationsService {
         }
     }
 
-    async findAll(search?: string) {
+    async findAll(search?: string, companyId?: string) {
+        const cacheKey = companyId ? `locations:${companyId}` : 'locations:all';
         if (!search) {
-            const cached = await this.redis.get('locations:all');
+            const cached = await this.redis.get(cacheKey);
             if (cached) return JSON.parse(cached);
         }
 
-        const data = await this.prisma.location.findMany({
-            where: search ? {
+        const whereConditions: any[] = [];
+        if (search) {
+            whereConditions.push({
                 OR: [
                     { name: { contains: search, mode: 'insensitive' } },
                     { address: { contains: search, mode: 'insensitive' } },
                 ],
-            } : undefined,
+            });
+        }
+        if (companyId) {
+            whereConditions.push({
+                OR: [
+                    { companyId },
+                    { companyId: null }, // Общие адреса без привязки к компании
+                ],
+            });
+        }
+
+        const where = whereConditions.length > 0
+            ? { AND: whereConditions }
+            : undefined;
+
+        const data = await this.prisma.location.findMany({
+            where,
             include: {
                 company: {
                     select: {
@@ -75,7 +93,7 @@ export class LocationsService {
         });
 
         if (!search) {
-            await this.redis.set('locations:all', JSON.stringify(data), 3600); // cache for 1 hour
+            await this.redis.set(cacheKey, JSON.stringify(data), 3600);
         }
         return data;
     }

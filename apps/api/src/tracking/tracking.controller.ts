@@ -44,12 +44,14 @@ export class TrackingController {
     }
 
     @Get('driver/:id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
     @ApiOperation({ summary: 'Получить последнюю позицию водителя' })
     async getDriverPosition(@Param('id') id: string) {
         return this.trackingService.getDriverLastPosition(id);
     }
 
     @Get('order/:id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.RECIPIENT)
     @ApiOperation({ summary: 'Получить трек заявки' })
     async getOrderTrack(@Param('id') id: string) {
         return this.trackingService.getOrderTrack(id);

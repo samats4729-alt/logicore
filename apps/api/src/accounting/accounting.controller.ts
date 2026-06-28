@@ -6,8 +6,8 @@ import { UserRole, PaymentDirection } from '@prisma/client';
 import { EmailService } from '../email/email.service';
 import { Response } from 'express';
 
-const FINANCE_VIEW_ROLES = [UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER];
-const FINANCE_CHANGE_ROLES = [UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT];
+const FINANCE_VIEW_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER];
+const FINANCE_CHANGE_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT];
 
 @Controller('accounting')
 @UseGuards(JwtAuthGuard, RolesGuard)

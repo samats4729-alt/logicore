@@ -48,28 +48,21 @@ export class OrdersController {
         @Query('customerId') customerId?: string,
         @Query('driverId') driverId?: string,
         @Query() pagination?: PaginationQueryDto,
+        @Request() req?: any,
     ) {
-        return this.ordersService.findAll({ status, customerId, driverId }, pagination);
+        const companyId = req?.user?.role === 'ADMIN' ? undefined : req?.user?.companyId;
+        return this.ordersService.findAll({ status, customerId, driverId, companyId }, pagination);
     }
 
     @Get('my')
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Мои заявки (для водителя)' })
     async myOrders(@Request() req: any) {
-        try {
-            const result = await this.ordersService.findDriverOrders(req.user.sub);
-            console.log(`🔍 [DEBUG] Sending response to client. Items count: ${result.length}`);
-            if (result.length > 0) {
-                console.log(`🔍 [DEBUG] First item sample:`, JSON.stringify(result[0]).substring(0, 100));
-            }
-            return result;
-        } catch (e) {
-            console.error(`❌ [DEBUG] Error in myOrders:`, e);
-            throw e;
-        }
+        return this.ordersService.findDriverOrders(req.user.sub);
     }
 
     @Get(':id/power-of-attorney')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Скачать доверенность на водителя (PDF)' })
     async downloadPowerOfAttorney(
         @Param('id') id: string,
@@ -86,6 +79,7 @@ export class OrdersController {
     }
 
     @Post(':id/share-power-of-attorney')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Отправить доверенность по email получателям' })
     async sharePowerOfAttorney(
         @Param('id') id: string,
@@ -139,9 +133,14 @@ export class OrdersController {
     }
 
     @Get(':id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Получить заявку по ID' })
-    async findOne(@Param('id') id: string) {
-        return this.ordersService.findById(id);
+    async findOne(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.findById(id, {
+            userId: req.user.sub,
+            role: req.user.role,
+            companyId: req.user.companyId,
+        });
     }
 
     @Put(':id/assign')
@@ -172,12 +171,14 @@ export class OrdersController {
     }
 
     @Put(':id/status')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Обновить статус заявки' })
     async updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Request() req: any) {
         return this.ordersService.updateStatus(id, dto.status, dto.comment, req.user.sub);
     }
 
     @Post(':id/problem')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Сообщить о проблеме' })
     async reportProblem(
         @Param('id') id: string,

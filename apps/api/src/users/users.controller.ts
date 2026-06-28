@@ -37,6 +37,7 @@ export class UsersController {
     }
 
     @Get(':id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Получить пользователя по ID' })
     async findOne(@Param('id') id: string) {
         return this.usersService.findById(id);

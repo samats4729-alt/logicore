@@ -219,9 +219,10 @@ export class OrdersService implements OnModuleInit {
         driverId?: string;
         fromDate?: Date;
         toDate?: Date;
+        companyId?: string;
     }, query: PaginationQueryDto = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
-        const where = {
+        const where: any = {
             status: filters?.status,
             customerId: filters?.customerId,
             driverId: filters?.driverId,
@@ -230,6 +231,15 @@ export class OrdersService implements OnModuleInit {
                 lte: filters?.toDate,
             },
         };
+
+        // Изоляция по компании: заказ принадлежит компании через customerCompanyId, forwarderId или subForwarderId
+        if (filters?.companyId) {
+            where.OR = [
+                { customerCompanyId: filters.companyId },
+                { forwarderId: filters.companyId },
+                { subForwarderId: filters.companyId },
+            ];
+        }
 
         const [data, total] = await Promise.all([
             this.prisma.order.findMany({
@@ -256,9 +266,9 @@ export class OrdersService implements OnModuleInit {
     }
 
     /**
-     * Получение заявки по ID
+     * Получение заявки по ID с проверкой доступа
      */
-    async findById(id: string) {
+    async findById(id: string, userContext?: { userId: string; role: string; companyId?: string }) {
         const order = await this.prisma.order.findUnique({
             where: { id },
             include: {
@@ -276,6 +286,23 @@ export class OrdersService implements OnModuleInit {
 
         if (!order) {
             throw new NotFoundException('Заявка не найдена');
+        }
+
+        // Проверка принадлежности (если передан user context)
+        if (userContext && userContext.role !== 'ADMIN') {
+            const { userId, companyId } = userContext;
+            const isOwner = order.customerId === userId;
+            const isDriver = order.driverId === userId;
+            const isManager = order.responsibleManagerId === userId;
+            const isCompanyOrder = companyId && (
+                order.customerCompanyId === companyId ||
+                order.forwarderId === companyId ||
+                order.subForwarderId === companyId
+            );
+
+            if (!isOwner && !isDriver && !isManager && !isCompanyOrder) {
+                throw new ForbiddenException('У вас нет доступа к этой заявке');
+            }
         }
 
         return order;

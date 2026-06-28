@@ -1,22 +1,26 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { UserRole } from '@prisma/client';
 import { ExternalCompaniesService } from './external-companies.service';
 
 @ApiTags('external-companies')
 @Controller('external-companies')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class ExternalCompaniesController {
     constructor(private readonly service: ExternalCompaniesService) { }
 
     @Get()
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Список внешних компаний' })
     async getAll(@Req() req: any) {
         return this.service.getExternalCompanies(req.user.companyId);
     }
 
     @Post()
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Создать внешнюю компанию' })
     async create(@Req() req: any, @Body() dto: {
         name: string;
@@ -33,6 +37,7 @@ export class ExternalCompaniesController {
     }
 
     @Patch(':id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Обновить внешнюю компанию' })
     async update(@Req() req: any, @Param('id') id: string, @Body() dto: {
         name?: string;
@@ -48,6 +53,7 @@ export class ExternalCompaniesController {
     }
 
     @Delete(':id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Удалить внешнюю компанию' })
     async delete(@Req() req: any, @Param('id') id: string) {
         return this.service.deleteExternalCompany(req.user.companyId, id);

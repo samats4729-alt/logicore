@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginEmailDto, RegisterCompanyDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -12,6 +13,7 @@ export class AuthController {
     // ==================== Email Auth (Остальные роли) ====================
 
     @Post('login')
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Вход по email и паролю' })
     @ApiResponse({ status: 200, description: 'Успешная авторизация' })
@@ -36,6 +38,7 @@ export class AuthController {
     // ==================== Восстановление пароля ====================
 
     @Post('forgot-password')
+    @Throttle({ default: { limit: 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Запрос на восстановление пароля' })
     @ApiResponse({ status: 200, description: 'Если email существует, отправлено письмо' })
@@ -55,6 +58,7 @@ export class AuthController {
     // ==================== Регистрация компании ====================
 
     @Post('register-company')
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: 'Регистрация новой компании-клиента' })
     @ApiResponse({ status: 201, description: 'Компания зарегистрирована' })
