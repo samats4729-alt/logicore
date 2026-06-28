@@ -210,9 +210,9 @@ body {
 /* Выравниваем все пункты (и обычные, и раскрывающиеся) в одну линию */
 .ant-menu-horizontal > .ant-menu-item,
 .ant-menu-horizontal > .ant-menu-submenu {
-  margin: 4px 2px !important;
-  height: 48px !important;
-  line-height: 48px !important;
+  margin: 4px 1px !important;
+  height: 44px !important;
+  line-height: 44px !important;
   border-radius: 6px !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -223,7 +223,7 @@ body {
 .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
   height: 100% !important;
   line-height: 48px !important;
-  padding: 0 16px !important;
+  padding: 0 10px !important;
   display: flex !important;
   align-items: center !important;
   color: #71717a !important;
@@ -231,7 +231,8 @@ body {
 
 .ant-menu-horizontal > .ant-menu-item {
   color: #71717a !important;
-  padding: 0 16px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
   font-weight: 500 !important;
 }
 
@@ -267,8 +268,8 @@ body {
 /* Поддержка иконок */
 .ant-menu-item .anticon,
 .ant-menu-submenu-title .anticon {
-  font-size: 16px !important;
-  margin-right: 8px !important;
+  font-size: 14px !important;
+  margin-right: 5px !important;
 }
 
 /* Цвет иконок для активного пункта */

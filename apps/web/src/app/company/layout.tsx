@@ -49,7 +49,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     // Определяем мобильное устройство
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768);
+            setIsMobile(window.innerWidth < 1024);
         };
         checkMobile();
         window.addEventListener('resize', checkMobile);
@@ -167,6 +167,12 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         const financeChildren: any[] = [];
         if (hasPerm('accounting')) {
             financeChildren.push({
+                key: '/company/accounting',
+                icon: <BarChartOutlined />,
+                label: 'Бухгалтерия',
+            });
+            financeChildren.push({ type: 'divider' });
+            financeChildren.push({
                 key: '/company/accounting/registry',
                 icon: <ArrowUpOutlined />,
                 label: 'Реестр заявок',
@@ -218,7 +224,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             items.push({
                 key: 'finance_group',
                 icon: <DollarOutlined />,
-                label: <a href="/company/accounting" onClick={(e) => { e.preventDefault(); router.push('/company/accounting'); }}>Финансы</a>,
+                label: 'Финансы',
                 children: financeChildren,
             });
         }
@@ -347,7 +353,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    height: 56,
+                    height: 50,
                     borderBottom: '1px solid #e4e4e7',
                     position: 'sticky',
                     left: 0,
@@ -370,18 +376,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
                 {/* Logo */}
                 <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginRight: 24, flexShrink: 0 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginRight: 14, flexShrink: 0 }}
                     onClick={() => router.push('/company')}
                 >
                     <div style={{
-                        width: 30, height: 30, background: '#09090b', borderRadius: 8,
+                        width: 26, height: 26, background: '#09090b', borderRadius: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                     }}>
-                        <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>L</span>
+                        <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>L</span>
                     </div>
                     {!isMobile && (
-                        <Text strong className="logo-text" style={{ fontSize: 16, color: isTrackingPage ? undefined : '#09090b', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                        <Text strong className="logo-text" style={{ fontSize: 14, color: isTrackingPage ? undefined : '#09090b', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
                             {user.company?.name || 'LogiCore'}
                         </Text>
                     )}
