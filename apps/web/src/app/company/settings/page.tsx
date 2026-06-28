@@ -1,43 +1,51 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, List, Tag, Modal } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, ApartmentOutlined, PlusOutlined, CheckOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Select } from 'antd';
+import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import CompanyFormFields from '@/components/CompanyFormFields';
 
 const { Title, Text } = Typography;
 
-function MyCompaniesSettings() {
+
+
+export default function SettingsPage() {
     const { user, setUser } = useAuthStore();
-    const [companies, setCompanies] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const [passwordLoading, setPasswordLoading] = useState(false);
+    const [companyLoading, setCompanyLoading] = useState(false);
+    const [stampLoading, setStampLoading] = useState(false);
+    const [stampUrl, setStampUrl] = useState<string | null>(null);
+    const [signatureLoading, setSignatureLoading] = useState(false);
+    const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+    const [profileForm] = Form.useForm();
+    const [passwordForm] = Form.useForm();
+    const [companyForm] = Form.useForm();
+
+    const [myCompanies, setMyCompanies] = useState<any[]>([]);
+    const [myCompaniesLoading, setMyCompaniesLoading] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [addForm] = Form.useForm();
     const [submitLoading, setSubmitLoading] = useState(false);
 
     const loadCompanies = async () => {
-        setLoading(true);
+        setMyCompaniesLoading(true);
         try {
             const res = await api.get('/company/my-companies');
-            setCompanies(res.data || []);
+            setMyCompanies(res.data || []);
         } catch (e) {
-            message.error('Не удалось загрузить список организаций');
+            console.error('Не удалось загрузить список организаций', e);
         } finally {
-            setLoading(false);
+            setMyCompaniesLoading(false);
         }
     };
-
-    useEffect(() => {
-        loadCompanies();
-    }, []);
 
     const handleSwitchCompany = async (companyId: string) => {
         try {
             const res = await api.post(`/company/switch-company/${companyId}`);
             
-            // Записываем напрямую в localStorage Zustand хранилища, чтобы Next.js сразу подхватил данные
             const authState = {
                 state: {
                     user: res.data.user,
@@ -76,100 +84,11 @@ function MyCompaniesSettings() {
         }
     };
 
-    return (
-        <Card bordered={false}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <div>
-                    <Title level={5} style={{ margin: 0 }}>Мои организации</Title>
-                    <Text type="secondary">
-                        Здесь вы можете управлять вашими юридическими лицами. 
-                        <strong> Чтобы заполнить реквизиты, загрузить печать или подпись для конкретной организации, сначала сделайте её активной</strong>, а затем перейдите во вкладку «Данные компании».
-                    </Text>
-                </div>
-                <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />} 
-                    onClick={() => setModalVisible(true)}
-                    size="large"
-                >
-                    Добавить организацию
-                </Button>
-            </div>
-
-            <List
-                loading={loading}
-                itemLayout="horizontal"
-                dataSource={companies}
-                renderItem={(item) => {
-                    const isActive = item.id === user?.companyId;
-                    return (
-                        <List.Item
-                            actions={[
-                                isActive ? (
-                                    <Tag color="success" icon={<CheckOutlined />} style={{ padding: '4px 12px', fontSize: '14px' }}>
-                                        Активная
-                                    </Tag>
-                                ) : (
-                                    <Button type="link" onClick={() => handleSwitchCompany(item.id)}>
-                                        Сделать активной
-                                    </Button>
-                                )
-                            ]}
-                        >
-                            <List.Item.Meta
-                                avatar={<BankOutlined style={{ fontSize: 24, color: '#1677ff', marginTop: 8 }} />}
-                                title={<strong>{item.name}</strong>}
-                                description={`БИН: ${item.bin || 'Не указан'} | Роль: ${item.role === 'COMPANY_ADMIN' ? 'Администратор' : item.role}`}
-                            />
-                        </List.Item>
-                    );
-                }}
-            />
-
-            <Modal
-                title="Добавить организацию"
-                open={modalVisible}
-                onCancel={() => {
-                    setModalVisible(false);
-                    addForm.resetFields();
-                }}
-                footer={[
-                    <Button key="cancel" onClick={() => setModalVisible(false)}>
-                        Отмена
-                    </Button>,
-                    <Button key="submit" type="primary" loading={submitLoading} onClick={() => addForm.submit()}>
-                        Добавить
-                    </Button>
-                ]}
-                destroyOnClose
-            >
-                <div style={{ padding: '16px 0' }}>
-                    <Form form={addForm} layout="vertical" onFinish={handleAddCompany}>
-                        <CompanyFormFields form={addForm} />
-                    </Form>
-                </div>
-            </Modal>
-        </Card>
-    );
-}
-
-export default function SettingsPage() {
-    const { user } = useAuthStore();
-    const [loading, setLoading] = useState(false);
-    const [passwordLoading, setPasswordLoading] = useState(false);
-    const [companyLoading, setCompanyLoading] = useState(false);
-    const [stampLoading, setStampLoading] = useState(false);
-    const [stampUrl, setStampUrl] = useState<string | null>(null);
-    const [signatureLoading, setSignatureLoading] = useState(false);
-    const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
-    const [profileForm] = Form.useForm();
-    const [passwordForm] = Form.useForm();
-    const [companyForm] = Form.useForm();
-
     useEffect(() => {
         loadCompanyProfile();
         loadStamp();
         loadSignature();
+        loadCompanies();
     }, []);
 
     const loadCompanyProfile = async () => {
@@ -392,7 +311,31 @@ export default function SettingsPage() {
                             }
                         }}
                     >
-                        <Title level={5} style={{ marginBottom: 16 }}>Основная информация</Title>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                            {myCompanies.length > 1 ? (
+                                <Space align="center" size="middle">
+                                    <Text strong style={{ fontSize: 15 }}>Организация:</Text>
+                                    <Select
+                                        style={{ width: 280 }}
+                                        size="large"
+                                        value={user?.companyId}
+                                        onChange={handleSwitchCompany}
+                                        options={myCompanies.map(c => ({ value: c.id, label: c.name }))}
+                                        loading={myCompaniesLoading}
+                                    />
+                                </Space>
+                            ) : (
+                                <Title level={5} style={{ margin: 0 }}>Основная информация</Title>
+                            )}
+                            <Button 
+                                type="primary" 
+                                icon={<PlusOutlined />} 
+                                onClick={() => setModalVisible(true)}
+                                size="large"
+                            >
+                                Добавить организацию
+                            </Button>
+                        </div>
                         <Row gutter={24}>
                             <Col xs={24} md={12}>
                                 <Form.Item
@@ -550,16 +493,30 @@ export default function SettingsPage() {
                         </div>
                         <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
                     </Space>
+                    <Modal
+                        title="Добавить организацию"
+                        open={modalVisible}
+                        onCancel={() => {
+                            setModalVisible(false);
+                            addForm.resetFields();
+                        }}
+                        footer={[
+                            <Button key="cancel" onClick={() => setModalVisible(false)}>
+                                Отмена
+                            </Button>,
+                            <Button key="submit" type="primary" loading={submitLoading} onClick={() => addForm.submit()}>
+                                Добавить
+                            </Button>
+                        ]}
+                        destroyOnClose
+                    >
+                        <div style={{ padding: '16px 0' }}>
+                            <Form form={addForm} layout="vertical" onFinish={handleAddCompany}>
+                                <CompanyFormFields form={addForm} />
+                            </Form>
+                        </div>
+                    </Modal>
                 </Card>
-            ),
-        }] : []),
-        ...(user?.role === 'COMPANY_ADMIN' || user?.role === 'FORWARDER' ? [{
-            key: 'my_companies',
-            label: (
-                <span><ApartmentOutlined style={{ marginRight: 6 }} />Организации</span>
-            ),
-            children: (
-                <MyCompaniesSettings />
             ),
         }] : []),
         {
