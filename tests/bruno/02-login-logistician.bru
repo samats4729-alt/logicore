@@ -1,0 +1,24 @@
+meta {
+  name: Login Logistician
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "customer@test.kz",
+    "password": "customer123"
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.accessToken) {
+    bru.setVar("logisticianToken", res.body.accessToken);
+  }
+}

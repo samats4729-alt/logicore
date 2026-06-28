@@ -1,0 +1,85 @@
+name: API Integration Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_USER: logcomp
+          POSTGRES_PASSWORD: logcomp_secret
+          POSTGRES_DB: logcomp
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Prisma DB Push & Seed
+        env:
+          DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
+        run: |
+          pnpm --filter api prisma:generate
+          pnpm --filter api prisma:push --accept-data-loss
+          pnpm --filter api prisma:seed
+
+      - name: Start API Server
+        env:
+          DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
+          REDIS_URL: "redis://localhost:6379"
+          JWT_SECRET: "test-secret-key-at-least-64-characters-long-key-for-jwt-security-purposes"
+          JWT_EXPIRES_IN: "7d"
+          PORT: 3001
+          NODE_ENV: development
+        run: |
+          pnpm dev:api &
+          # Wait for API server to respond
+          echo "Waiting for API server to start..."
+          for i in {1..30}; do
+            curl -sI http://localhost:3001/auth/me && break
+            echo "Still waiting..."
+            sleep 2
+          done
+
+      - name: Run Bruno Tests
+        working-directory: tests/bruno
+        run: |
+          npx @usebruno/cli run --env local

@@ -1,0 +1,26 @@
+meta {
+  name: Update Status
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/orders/{{orderId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminToken}}
+}
+
+body:json {
+  {
+    "status": "EN_ROUTE_PICKUP",
+    "comment": "Driver is en route to pickup location - updated via Bruno test"
+  }
+}
+
+script:post-response {
+  // Verify status transition succeeded
+}

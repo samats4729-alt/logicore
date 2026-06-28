@@ -1,0 +1,28 @@
+meta {
+  name: Assign Driver
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/orders/{{orderId}}/assign
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminToken}}
+}
+
+body:json {
+  {
+    "assignedDriverName": "Тестовый Водитель Бруно",
+    "assignedDriverPhone": "+77079998877",
+    "assignedDriverPlate": "999XXX02",
+    "assignedDriverTrailer": "555YYY02"
+  }
+}
+
+script:post-response {
+  // Verify assignment succeeded
+}
