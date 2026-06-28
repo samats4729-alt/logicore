@@ -167,6 +167,25 @@ export class AccountingController {
         return result;
     }
 
+    @Post('send-report-email')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    async sendReportEmail(
+        @Request() req: any,
+        @Body() body: { shareUrl: string; email: string },
+    ) {
+        const company = await this.accountingService['prisma'].company.findUnique({
+            where: { id: req.user.companyId },
+            select: { name: true },
+        });
+        await this.emailService.sendCounterpartyReportEmail(
+            body.email,
+            body.shareUrl,
+            company?.name || 'Компания',
+            '',
+        );
+        return { ok: true };
+    }
+
     // ==================== PAYMENTS CRUD ====================
 
     @Get('payments')

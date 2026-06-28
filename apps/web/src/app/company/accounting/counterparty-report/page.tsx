@@ -133,11 +133,11 @@ export default function CounterpartyReportPage() {
 
     const handleSendEmail = async () => {
         if (!shareEmail) { message.warning('Введите email'); return; }
+        if (!shareUrl) { message.warning('Сначала дождитесь генерации ссылки'); return; }
         setEmailSending(true);
         try {
-            await api.post('/accounting/share-report', {
-                counterpartyId: shareModal.counterpartyId,
-                ourRole: shareModal.ourRole,
+            await api.post('/accounting/send-report-email', {
+                shareUrl,
                 email: shareEmail,
             });
             message.success('Отчёт отправлен на ' + shareEmail);
