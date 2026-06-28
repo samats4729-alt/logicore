@@ -6,10 +6,15 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { S3Service } from '../s3/s3.service';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class CompanyService {
-    constructor(private prisma: PrismaService, private s3Service: S3Service) { }
+    constructor(
+        private prisma: PrismaService,
+        private s3Service: S3Service,
+        private jwtService: JwtService,
+    ) { }
 
     async getCompanyUsers(companyId: string, query: any = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
@@ -996,5 +1001,96 @@ export class CompanyService {
             where: { id },
             data: { isActive: false },
         });
+    }
+
+    /**
+     * Получить все организации пользователя
+     */
+    async getMyCompanies(userId: string) {
+        const relations = await this.prisma.userCompanyRelation.findMany({
+            where: { userId },
+            include: { company: true },
+        });
+        return relations.map(r => ({
+            ...r.company,
+            role: r.role,
+        }));
+    }
+
+    /**
+     * Создать дополнительную организацию и привязать к текущему пользователю
+     */
+    async addMyCompany(userId: string, data: { companyName: string; bin: string }) {
+        const existingCompanies = await this.prisma.company.findMany({
+            where: { bin: data.bin },
+        });
+        const registeredCompany = existingCompanies.find(c => !c.isExternal);
+        if (registeredCompany) {
+            throw new BadRequestException('Компания с таким БИН уже зарегистрирована в системе');
+        }
+
+        const result = await this.prisma.$transaction(async (tx) => {
+            const company = await tx.company.create({
+                data: {
+                    name: data.companyName,
+                    bin: data.bin,
+                    isOurCompany: false,
+                    isExternal: false,
+                },
+            });
+
+            await tx.userCompanyRelation.create({
+                data: {
+                    userId,
+                    companyId: company.id,
+                    role: UserRole.COMPANY_ADMIN,
+                },
+            });
+
+            return company;
+        });
+
+        return result;
+    }
+
+    /**
+     * Переключить текущую активную организацию
+     */
+    async switchCompany(userId: string, companyId: string) {
+        const relation = await this.prisma.userCompanyRelation.findUnique({
+            where: {
+                userId_companyId: { userId, companyId },
+            },
+        });
+        if (!relation) {
+            throw new ForbiddenException('У вас нет доступа к этой организации');
+        }
+
+        const user = await this.prisma.user.update({
+            where: { id: userId },
+            data: { companyId },
+            include: { company: true },
+        });
+
+        const payload = {
+            sub: user.id,
+            email: user.email,
+            role: user.role,
+            companyId: user.companyId,
+        };
+
+        const accessToken = this.jwtService.sign(payload);
+
+        return {
+            user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                company: user.company,
+            },
+            accessToken,
+        };
     }
 }

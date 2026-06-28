@@ -1,12 +1,141 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, List, Tag, Modal } from 'antd';
+import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, ApartmentOutlined, PlusOutlined, CheckOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
+import CompanyFormFields from '@/components/CompanyFormFields';
 
 const { Title, Text } = Typography;
+
+function MyCompaniesSettings() {
+    const { user, setUser } = useAuthStore();
+    const [companies, setCompanies] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [addForm] = Form.useForm();
+    const [submitLoading, setSubmitLoading] = useState(false);
+
+    const loadCompanies = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/company/my-companies');
+            setCompanies(res.data || []);
+        } catch (e) {
+            message.error('Не удалось загрузить список организаций');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadCompanies();
+    }, []);
+
+    const handleSwitchCompany = async (companyId: string) => {
+        try {
+            const res = await api.post(`/company/switch-company/${companyId}`);
+            localStorage.setItem('token', res.data.accessToken);
+            setUser(res.data.user, res.data.accessToken);
+            message.success('Организация успешно переключена');
+            window.location.reload();
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка переключения организации');
+        }
+    };
+
+    const handleAddCompany = async (values: any) => {
+        setSubmitLoading(true);
+        try {
+            await api.post('/company/my-companies', {
+                companyName: values.companyName,
+                bin: values.bin,
+            });
+            message.success('Организация успешно добавлена');
+            setModalVisible(false);
+            addForm.resetFields();
+            loadCompanies();
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка добавления организации');
+        } finally {
+            setSubmitLoading(false);
+        }
+    };
+
+    return (
+        <Card bordered={false}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div>
+                    <Title level={5} style={{ margin: 0 }}>Мои организации</Title>
+                    <Text type="secondary">Здесь вы можете управлять вашими юридическими лицами и переключаться между ними.</Text>
+                </div>
+                <Button 
+                    type="primary" 
+                    icon={<PlusOutlined />} 
+                    onClick={() => setModalVisible(true)}
+                    size="large"
+                >
+                    Добавить организацию
+                </Button>
+            </div>
+
+            <List
+                loading={loading}
+                itemLayout="horizontal"
+                dataSource={companies}
+                renderItem={(item) => {
+                    const isActive = item.id === user?.companyId;
+                    return (
+                        <List.Item
+                            actions={[
+                                isActive ? (
+                                    <Tag color="success" icon={<CheckOutlined />} style={{ padding: '4px 12px', fontSize: '14px' }}>
+                                        Активная
+                                    </Tag>
+                                ) : (
+                                    <Button type="link" onClick={() => handleSwitchCompany(item.id)}>
+                                        Сделать активной
+                                    </Button>
+                                )
+                            ]}
+                        >
+                            <List.Item.Meta
+                                avatar={<BankOutlined style={{ fontSize: 24, color: '#1677ff', marginTop: 8 }} />}
+                                title={<strong>{item.name}</strong>}
+                                description={`БИН: ${item.bin || 'Не указан'} | Роль: ${item.role === 'COMPANY_ADMIN' ? 'Администратор' : item.role}`}
+                            />
+                        </List.Item>
+                    );
+                }}
+            />
+
+            <Modal
+                title="Добавить организацию"
+                open={modalVisible}
+                onCancel={() => {
+                    setModalVisible(false);
+                    addForm.resetFields();
+                }}
+                footer={[
+                    <Button key="cancel" onClick={() => setModalVisible(false)}>
+                        Отмена
+                    </Button>,
+                    <Button key="submit" type="primary" loading={submitLoading} onClick={() => addForm.submit()}>
+                        Добавить
+                    </Button>
+                ]}
+                destroyOnClose
+            >
+                <div style={{ padding: '16px 0' }}>
+                    <Form form={addForm} layout="vertical" onFinish={handleAddCompany}>
+                        <CompanyFormFields form={addForm} />
+                    </Form>
+                </div>
+            </Modal>
+        </Card>
+    );
+}
 
 export default function SettingsPage() {
     const { user } = useAuthStore();
@@ -406,6 +535,15 @@ export default function SettingsPage() {
                         <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
                     </Space>
                 </Card>
+            ),
+        }] : []),
+        ...(user?.role === 'COMPANY_ADMIN' || user?.role === 'FORWARDER' ? [{
+            key: 'my_companies',
+            label: (
+                <span><ApartmentOutlined style={{ marginRight: 6 }} />Организации</span>
+            ),
+            children: (
+                <MyCompaniesSettings />
             ),
         }] : []),
         {

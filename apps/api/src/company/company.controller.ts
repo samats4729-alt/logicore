@@ -447,4 +447,24 @@ export class CompanyController {
     async deleteVehicle(@Request() req: any, @Param('id') id: string) {
         return this.companyService.deleteVehicle(req.user.companyId, id);
     }
+
+    // ==================== Мультикомпания ====================
+
+    @Get('my-companies')
+    @ApiOperation({ summary: 'Получить все организации пользователя' })
+    async getMyCompanies(@Request() req: any) {
+        return this.companyService.getMyCompanies(req.user.sub);
+    }
+
+    @Post('my-companies')
+    @ApiOperation({ summary: 'Создать дополнительную организацию' })
+    async addMyCompany(@Request() req: any, @Body() dto: { companyName: string; bin: string }) {
+        return this.companyService.addMyCompany(req.user.sub, dto);
+    }
+
+    @Post('switch-company/:id')
+    @ApiOperation({ summary: 'Переключить текущую организацию' })
+    async switchCompany(@Request() req: any, @Param('id') companyId: string) {
+        return this.companyService.switchCompany(req.user.sub, companyId);
+    }
 }

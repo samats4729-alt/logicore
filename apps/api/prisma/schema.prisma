@@ -113,6 +113,7 @@ model User {
   orderChangeLogs   OrderChangeLog[] @relation("OrderChangeLogs")
   closedPeriods     ClosedPeriod[]
   createdInvoices   Invoice[]        @relation("InvoiceCreator")
+  userCompanyRelations UserCompanyRelation[]
   
   // Компания (для PARTNER и WAREHOUSE)
   companyId     String?
@@ -197,6 +198,8 @@ model Company {
   financeCategories   FinanceCategory[] @relation("CompanyFinanceCategories")
   issuedInvoices     Invoice[]         @relation("InvoiceIssuer")
   receivedInvoices   Invoice[]         @relation("InvoiceRecipient")
+  userCompanyRelations UserCompanyRelation[]
+  documents          Document[]
   
   @@index([bin])
 }
@@ -506,6 +509,9 @@ model Document {
   
   uploadedById String
   uploadedBy  User         @relation(fields: [uploadedById], references: [id])
+  
+  companyId    String?
+  company      Company?     @relation(fields: [companyId], references: [id])
   
   isVerified  Boolean      @default(false)
   verifiedAt  DateTime?
@@ -990,4 +996,18 @@ model Invoice {
   @@index([shareToken])
   @@index([issuerId])
   @@index([recipientId])
+}
+
+model UserCompanyRelation {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  role      UserRole @default(COMPANY_ADMIN)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, companyId])
+  @@index([userId])
+  @@index([companyId])
 }

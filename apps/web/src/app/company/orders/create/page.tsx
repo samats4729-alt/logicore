@@ -50,6 +50,8 @@ export default function CreateOrderPage() {
     const [profileComplete, setProfileComplete] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [myCompanyName, setMyCompanyName] = useState('');
+    const [myCompanies, setMyCompanies] = useState<any[]>([]);
+    const [selectedMyCompanyId, setSelectedMyCompanyId] = useState<string>('');
 
     // Driver & vehicle selection
     const [drivers, setDrivers] = useState<any[]>([]);
@@ -69,7 +71,7 @@ export default function CreateOrderPage() {
 
     useEffect(() => {
         const targetCompanyId = selectedCarrier === MY_COMPANY_VALUE 
-            ? user?.companyId 
+            ? selectedMyCompanyId 
             : partners.find(p => p.id === selectedCarrier)?.isExternal 
                 ? selectedCarrier 
                 : null;
@@ -86,14 +88,14 @@ export default function CreateOrderPage() {
 
         if (selectedCarrier === MY_COMPANY_VALUE) {
             setVehiclesLoading(true);
-            api.get('/company/vehicles')
+            api.get('/company/vehicles', { params: { companyId: selectedMyCompanyId } })
                 .then(res => setVehicles(res.data))
                 .catch(() => message.error('Ошибка загрузки автопарка'))
                 .finally(() => setVehiclesLoading(false));
         } else {
             setVehicles([]);
         }
-    }, [selectedCarrier, partners, user]);
+    }, [selectedCarrier, partners, user, selectedMyCompanyId]);
 
     const handleDriverSelect = (value: string) => {
         setSelectedDriverId(value);
@@ -167,10 +169,19 @@ export default function CreateOrderPage() {
         api.get('/company/profile-status').then(res => {
             setProfileComplete(res.data.isComplete);
         }).catch(() => {});
+        api.get('/company/my-companies').then(res => {
+            const list = res.data || [];
+            setMyCompanies(list);
+            if (user?.companyId) {
+                setSelectedMyCompanyId(user.companyId);
+            } else if (list.length > 0) {
+                setSelectedMyCompanyId(list[0].id);
+            }
+        }).catch(() => {});
         fetchLocations();
         fetchCargoTypes();
         fetchPartners();
-    }, []);
+    }, [user]);
 
     const fetchLocations = async () => {
         try {
@@ -208,8 +219,8 @@ export default function CreateOrderPage() {
     // Location options grouped by company
     const getLocationOptions = () => {
         if (!locations || locations.length === 0) return [];
-        const customerCompanyId = selectedCustomer === MY_COMPANY_VALUE ? user?.companyId : selectedCustomer;
-        const carrierCompanyId = selectedCarrier === MY_COMPANY_VALUE ? user?.companyId : 
+        const customerCompanyId = selectedCustomer === MY_COMPANY_VALUE ? selectedMyCompanyId : selectedCustomer;
+        const carrierCompanyId = selectedCarrier === MY_COMPANY_VALUE ? selectedMyCompanyId : 
             (selectedCarrier === MARKETPLACE_VALUE || !selectedCarrier) ? undefined : selectedCarrier;
 
         const customerLocs = locations.filter(l => customerCompanyId && (l as any).companyId === customerCompanyId);
@@ -220,7 +231,8 @@ export default function CreateOrderPage() {
         const groups: Array<{ label: string; options: Location[] }> = [];
 
         if (customerLocs.length > 0) {
-            const name = selectedCustomer === MY_COMPANY_VALUE ? myCompanyName : partners.find(p => p.id === selectedCustomer)?.name || 'Заказчик';
+            const currentMyCompanyName = myCompanies.find(c => c.id === selectedMyCompanyId)?.name || myCompanyName;
+            const name = selectedCustomer === MY_COMPANY_VALUE ? currentMyCompanyName : partners.find(p => p.id === selectedCustomer)?.name || 'Заказчик';
             groups.push({ label: `Склады заказчика [${name}]`, options: customerLocs });
         }
         if (carrierLocs.length > 0) {
@@ -331,7 +343,7 @@ export default function CreateOrderPage() {
 
             if (isOwnOrExternalCarrier) {
                 const targetCompanyId = selectedCarrier === MY_COMPANY_VALUE 
-                    ? user?.companyId 
+                    ? selectedMyCompanyId 
                     : selectedCarrier;
 
                 if (selectedDriverId === '__NEW_DRIVER__') {
@@ -445,13 +457,13 @@ export default function CreateOrderPage() {
 
             if (isMeCustomer) {
                 // I am the customer
-                orderData.customerCompanyId = user?.companyId;
+                orderData.customerCompanyId = selectedMyCompanyId;
                 if (isMarketplace) {
                     // On marketplace — no forwarder assigned
                     orderData.driverCost = finalDriverCost || null;
                 } else if (isMeCarrier) {
                     // Self-delivery
-                    orderData.forwarderId = user?.companyId;
+                    orderData.forwarderId = selectedMyCompanyId;
                 } else {
                     // External carrier
                     orderData.forwarderId = selectedCarrier;
@@ -460,15 +472,15 @@ export default function CreateOrderPage() {
             } else if (isMeCarrier) {
                 // I am the carrier, customer is external
                 orderData.customerCompanyId = selectedCustomer;
-                orderData.forwarderId = user?.companyId;
+                orderData.forwarderId = selectedMyCompanyId;
             } else {
                 // I am a middleman — customer and carrier are both external
                 orderData.customerCompanyId = selectedCustomer;
                 if (isMarketplace) {
-                    orderData.subForwarderId = user?.companyId;
+                    orderData.subForwarderId = selectedMyCompanyId;
                     orderData.subForwarderPrice = finalDriverCost || null;
                 } else {
-                    orderData.forwarderId = user?.companyId;
+                    orderData.forwarderId = selectedMyCompanyId;
                     orderData.subForwarderId = selectedCarrier;
                     orderData.subForwarderPrice = finalDriverCost || null;
                 }
@@ -490,6 +502,25 @@ export default function CreateOrderPage() {
 
     const stepRoute = (
         <Card size="small" style={{ marginTop: 16 }}>
+            {myCompanies.length > 1 && (
+                <Form.Item label="Организация" required style={{ marginBottom: 16 }}>
+                    <Select
+                        size="large"
+                        value={selectedMyCompanyId}
+                        onChange={value => {
+                            setSelectedMyCompanyId(value);
+                            setSelectedDriverId('');
+                            form.setFieldsValue({
+                                firstName: '', lastName: '', middleName: '', phone: '', iin: '',
+                                vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
+                                docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: '',
+                                vehicleSelect: undefined, driverSelect: undefined
+                            });
+                        }}
+                        options={myCompanies.map(c => ({ value: c.id, label: c.name }))}
+                    />
+                </Form.Item>
+            )}
             <Form.Item name="pickupDate" label="Дата и время погрузки" rules={[{ required: true, message: 'Укажите дату' }]}>
                 <DatePicker
                     style={{ width: '100%' }}

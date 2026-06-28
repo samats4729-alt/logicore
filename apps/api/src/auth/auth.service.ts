@@ -394,6 +394,15 @@ export class AuthService {
                 },
             });
 
+            // Создаём связь UserCompanyRelation
+            await tx.userCompanyRelation.create({
+                data: {
+                    userId: admin.id,
+                    companyId: company.id,
+                    role: userRole,
+                },
+            });
+
             return { company, admin };
         });
 
@@ -723,6 +732,15 @@ export class AuthService {
                 },
             });
 
+            // Создаём связь UserCompanyRelation
+            await tx.userCompanyRelation.create({
+                data: {
+                    userId: admin.id,
+                    companyId: company.id,
+                    role: userRole,
+                },
+            });
+
             return { company, admin };
         });
 
@@ -808,6 +826,15 @@ export class AuthService {
             await tx.invitation.update({
                 where: { id: invitation.id },
                 data: { isUsed: true },
+            });
+
+            // Создаём связь UserCompanyRelation
+            await tx.userCompanyRelation.create({
+                data: {
+                    userId: user.id,
+                    companyId: invitation.companyId,
+                    role: invitation.role,
+                },
             });
 
             return user;

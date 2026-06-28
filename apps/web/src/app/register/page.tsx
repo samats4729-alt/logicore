@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { GoogleLogin } from '@react-oauth/google';
 import InteractiveBackground from '@/components/ui/InteractiveBackground';
+import CompanyFormFields from '@/components/CompanyFormFields';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -138,47 +139,10 @@ function RegisterContent() {
                         layout="vertical" 
                         onFinish={handleRegister} 
                         preserve={true}
-                        onValuesChange={async (changedValues) => {
-                            if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
-                                try {
-                                    const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
-                                    if (res.data) {
-                                        const updateVals: any = {};
-                                        if (res.data.name) updateVals.companyName = res.data.name;
-                                        if (res.data.phone) updateVals.phone = res.data.phone;
-                                        if (res.data.email) updateVals.adminEmail = res.data.email;
-                                        
-                                        form.setFieldsValue(updateVals);
-                                        message.success(`Данные компании подтянуты: ${res.data.name}`);
-                                    }
-                                } catch (e) {
-                                    // Ignore error to avoid blocking user flow
-                                }
-                            }
-                        }}
                     >
                         {/* Шаг 0: Данные компании */}
                         <div style={{ display: step === 0 ? 'block' : 'none' }}>
-                            <Form.Item
-                                name="companyName"
-                                label="Название компании"
-                                rules={[{ required: true, message: 'Введите название' }]}
-                            >
-                                <Input placeholder="ТОО КазЛогистик" size="large" />
-                            </Form.Item>
-                            <Form.Item
-                                name="bin"
-                                label="БИН компании"
-                                rules={[
-                                    { required: true, message: 'Введите БИН' },
-                                    { len: 12, message: 'БИН должен содержать 12 цифр' },
-                                    { pattern: /^\d{12}$/, message: 'БИН должен состоять только из цифр' },
-                                ]}
-                            >
-                                <Input placeholder="123456789012" size="large" maxLength={12} 
-                                    onKeyPress={(e) => { if (!/\d/.test(e.key)) e.preventDefault(); }}
-                                />
-                            </Form.Item>
+                            <CompanyFormFields form={form} />
                             <Button type="primary" block size="large" onClick={() => {
                                 form.validateFields(['companyName', 'bin']).then(() => setStep(1));
                             }}>

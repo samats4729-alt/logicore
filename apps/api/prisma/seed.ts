@@ -285,6 +285,30 @@ async function main() {
     }
     console.log('Cargo types seeded!');
 
+    // Миграция существующих пользователей в UserCompanyRelation
+    const usersWithCompany = await prisma.user.findMany({
+        where: {
+            companyId: { not: null }
+        }
+    });
+    for (const u of usersWithCompany) {
+        await prisma.userCompanyRelation.upsert({
+            where: {
+                userId_companyId: {
+                    userId: u.id,
+                    companyId: u.companyId!
+                }
+            },
+            update: {},
+            create: {
+                userId: u.id,
+                companyId: u.companyId!,
+                role: u.role
+            }
+        });
+    }
+    console.log('User-company relations migrated!');
+
     console.log('Seeding completed!');
     console.log('');
     console.log('Test credentials:');

@@ -1,0 +1,28 @@
+meta {
+  name: Add My Company
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/company/my-companies
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminToken}}
+}
+
+body:json {
+  {
+    "companyName": "Новое Юр Лицо Тест",
+    "bin": "999888777666"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.name: eq "Новое Юр Лицо Тест"
+  res.body.bin: eq "999888777666"
+}
