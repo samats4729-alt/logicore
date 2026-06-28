@@ -169,7 +169,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             financeChildren.push({
                 key: '/company/accounting/registry',
                 icon: <ArrowUpOutlined />,
-                label: 'Платежи',
+                label: 'Реестр заявок',
             });
             financeChildren.push({
                 key: '/company/accounting/incomes',
@@ -181,6 +181,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 icon: <ArrowDownOutlined />,
                 label: 'Расходы',
             });
+            financeChildren.push({ type: 'divider' });
             financeChildren.push({
                 key: '/company/accounting/cashflow',
                 icon: <FileExcelOutlined />,
@@ -194,8 +195,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             financeChildren.push({
                 key: '/company/accounting/counterparty-report',
                 icon: <TeamOutlined />,
-                label: 'Взаиморасчеты',
+                label: 'Взаиморасчёты',
             });
+            financeChildren.push({ type: 'divider' });
             financeChildren.push({
                 key: '/company/accounting/invoices',
                 icon: <FileOutlined />,
@@ -216,7 +218,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             items.push({
                 key: 'finance_group',
                 icon: <DollarOutlined />,
-                label: 'Финансы',
+                label: <a href="/company/accounting" onClick={(e) => { e.preventDefault(); router.push('/company/accounting'); }}>Финансы</a>,
                 children: financeChildren,
             });
         }
