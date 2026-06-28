@@ -1,0 +1,32 @@
+meta {
+  name: Create Location
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/locations
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminToken}}
+}
+
+body:json {
+  {
+    "name": "Тестовый Склад Bruno",
+    "address": "г. Астана, ул. Бруно, 10",
+    "latitude": 51.169392,
+    "longitude": 71.449074,
+    "contactName": "Тестовый Менеджер",
+    "contactPhone": "+77071112233",
+    "city": "Астана"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+}

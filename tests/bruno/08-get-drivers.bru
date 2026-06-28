@@ -1,0 +1,19 @@
+meta {
+  name: Get Drivers
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/users/drivers
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{logisticianToken}}
+}
+
+assert {
+  res.status: eq 200
+}

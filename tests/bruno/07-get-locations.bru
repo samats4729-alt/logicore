@@ -1,0 +1,19 @@
+meta {
+  name: Get Locations
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/locations
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminToken}}
+}
+
+assert {
+  res.status: eq 200
+}

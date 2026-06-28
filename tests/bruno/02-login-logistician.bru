@@ -13,8 +13,14 @@ post {
 body:json {
   {
     "email": "customer@test.kz",
-    "password": "customer123"
+    "password": "customer123",
+    "deviceId": "bruno-test-client"
   }
+}
+
+assert {
+  res.status: eq 200
+  res.body.accessToken: isDefined
 }
 
 script:post-response {

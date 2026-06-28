@@ -13,8 +13,14 @@ post {
 body:json {
   {
     "email": "admin@logcomp.kz",
-    "password": "admin123"
+    "password": "admin123",
+    "deviceId": "bruno-test-client"
   }
+}
+
+assert {
+  res.status: eq 200
+  res.body.accessToken: isDefined
 }
 
 script:post-response {

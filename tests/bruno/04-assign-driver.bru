@@ -23,6 +23,6 @@ body:json {
   }
 }
 
-script:post-response {
-  // Verify assignment succeeded
+assert {
+  res.status: eq 200
 }

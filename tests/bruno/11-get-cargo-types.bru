@@ -1,0 +1,19 @@
+meta {
+  name: Get Cargo Types
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/cargo-types
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminToken}}
+}
+
+assert {
+  res.status: eq 200
+}
