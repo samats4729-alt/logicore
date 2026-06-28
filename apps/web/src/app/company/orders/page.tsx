@@ -123,6 +123,13 @@ export default function CompanyOrdersPage() {
     const [activeTab, setActiveTab] = useState('all');
     const [ordersPage, setOrdersPage] = useState(1);
     const [ordersPageSize, setOrdersPageSize] = useState(20);
+    
+    const [myCompanies, setMyCompanies] = useState<any[]>([]);
+    useEffect(() => {
+        api.get('/company/my-companies')
+            .then(res => setMyCompanies(res.data || []))
+            .catch(() => {});
+    }, []);
     const [archivePage, setArchivePage] = useState(1);
     const [archivePageSize, setArchivePageSize] = useState(20);
 
@@ -956,6 +963,14 @@ export default function CompanyOrdersPage() {
 
     // =================== COLUMNS ===================
 
+    const orgColumn = myCompanies.length > 1 ? [{
+        title: 'Организация', key: 'ourOrg', width: 120, ellipsis: true,
+        render: (_: any, r: Order) => {
+            const matched = myCompanies.find(c => c.id === r.customerCompanyId || c.id === r.forwarderId || c.id === (r as any).subForwarderId);
+            return <span style={{ fontSize: 12, fontWeight: 500, color: '#1677ff' }}>{matched?.name || '—'}</span>;
+        }
+    }] : [];
+
     const columns = [
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
@@ -965,6 +980,7 @@ export default function CompanyOrdersPage() {
             title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60,
             render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span>,
         },
+        ...orgColumn,
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
             render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
@@ -1049,6 +1065,7 @@ export default function CompanyOrdersPage() {
             render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag>,
         },
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
+        ...orgColumn,
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
         {
             title: 'Дата погр.', key: 'pickupDate', width: 90,

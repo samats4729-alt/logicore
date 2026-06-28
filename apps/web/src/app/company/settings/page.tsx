@@ -36,10 +36,23 @@ function MyCompaniesSettings() {
     const handleSwitchCompany = async (companyId: string) => {
         try {
             const res = await api.post(`/company/switch-company/${companyId}`);
-            localStorage.setItem('token', res.data.accessToken);
+            
+            // Записываем напрямую в localStorage Zustand хранилища, чтобы Next.js сразу подхватил данные
+            const authState = {
+                state: {
+                    user: res.data.user,
+                    token: res.data.accessToken,
+                    isAuthenticated: true,
+                },
+                version: 0,
+            };
+            localStorage.setItem('logcomp-auth', JSON.stringify(authState));
             setUser(res.data.user, res.data.accessToken);
+            
             message.success('Организация успешно переключена');
-            window.location.reload();
+            setTimeout(() => {
+                window.location.reload();
+            }, 100);
         } catch (err: any) {
             message.error(err.response?.data?.message || 'Ошибка переключения организации');
         }
@@ -68,7 +81,10 @@ function MyCompaniesSettings() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
                     <Title level={5} style={{ margin: 0 }}>Мои организации</Title>
-                    <Text type="secondary">Здесь вы можете управлять вашими юридическими лицами и переключаться между ними.</Text>
+                    <Text type="secondary">
+                        Здесь вы можете управлять вашими юридическими лицами. 
+                        <strong> Чтобы заполнить реквизиты, загрузить печать или подпись для конкретной организации, сначала сделайте её активной</strong>, а затем перейдите во вкладку «Данные компании».
+                    </Text>
                 </div>
                 <Button 
                     type="primary" 

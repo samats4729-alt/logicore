@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class CompanyService {
@@ -14,6 +15,7 @@ export class CompanyService {
         private prisma: PrismaService,
         private s3Service: S3Service,
         private jwtService: JwtService,
+        private redisService: RedisService,
     ) { }
 
     async getCompanyUsers(companyId: string, query: any = {}) {
@@ -1080,6 +1082,36 @@ export class CompanyService {
         };
 
         const accessToken = this.jwtService.sign(payload);
+
+        // Находим текущую сессию пользователя в БД, чтобы узнать deviceId
+        const activeSession = await this.prisma.session.findFirst({
+            where: { userId },
+            orderBy: { createdAt: 'desc' },
+        });
+        const deviceId = activeSession?.deviceId || 'web-browser';
+
+        // Удаляем старые сессии пользователя
+        await this.prisma.session.deleteMany({
+            where: { userId },
+        });
+
+        // Создаем новую сессию
+        const expiresIn = 60 * 60 * 24 * 7;
+        await this.prisma.session.create({
+            data: {
+                userId,
+                deviceId,
+                token: accessToken,
+                expiresAt: new Date(Date.now() + expiresIn * 1000),
+            },
+        });
+
+        // Обновляем сессию в Redis
+        try {
+            await this.redisService.setSession(userId, deviceId, accessToken, expiresIn);
+        } catch (e) {
+            console.warn('Redis setSession failed in switchCompany:', e);
+        }
 
         return {
             user: {
