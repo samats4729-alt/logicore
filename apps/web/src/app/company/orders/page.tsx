@@ -12,11 +12,12 @@ import {
     UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
     FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined,
-    MailOutlined, RightOutlined, EditOutlined
+    MailOutlined, RightOutlined, EditOutlined, ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
+import { shortenCompanyName } from '@/lib/company-helper';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import AssignDriverModal from '@/components/AssignDriverModal';
@@ -110,6 +111,8 @@ interface Order {
     isConfirmed?: boolean;
     driverId?: string;
     responsibleManager?: { firstName: string; lastName: string; };
+    pendingStatus?: string;
+    pendingStatusById?: string;
 }
 
 // ============================================================
@@ -842,16 +845,24 @@ export default function CompanyOrdersPage() {
     };
 
     const getNextStatuses = (s: string) => {
-        const t: Record<string, { value: string; label: string }[]> = {
-            ASSIGNED: [{ value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' }, { value: 'AT_PICKUP', label: 'На погрузке' }],
-            EN_ROUTE_PICKUP: [{ value: 'AT_PICKUP', label: 'На погрузке' }],
-            AT_PICKUP: [{ value: 'LOADING', label: 'Загружается' }],
-            LOADING: [{ value: 'IN_TRANSIT', label: 'В пути' }],
-            IN_TRANSIT: [{ value: 'AT_DELIVERY', label: 'На выгрузке' }],
-            AT_DELIVERY: [{ value: 'UNLOADING', label: 'Разгружается' }],
-            UNLOADING: [{ value: 'COMPLETED', label: 'Завершён' }],
-        };
-        return t[s] || [];
+        const chain = [
+            { value: 'ASSIGNED', label: 'Назначен' },
+            { value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' },
+            { value: 'AT_PICKUP', label: 'На погрузке' },
+            { value: 'LOADING', label: 'Загружается' },
+            { value: 'IN_TRANSIT', label: 'В пути' },
+            { value: 'AT_DELIVERY', label: 'На выгрузке' },
+            { value: 'UNLOADING', label: 'Разгружается' },
+            { value: 'COMPLETED', label: 'Завершён' },
+        ];
+        
+        if (s === 'PROBLEM') {
+            return chain;
+        }
+        
+        const idx = chain.findIndex(item => item.value === s);
+        if (idx === -1) return [];
+        return chain.slice(idx + 1);
     };
 
     const handleStatusChange = async (values: { status: string; comment?: string }) => {
@@ -967,14 +978,33 @@ export default function CompanyOrdersPage() {
         title: 'Организация', key: 'ourOrg', width: 120, ellipsis: true,
         render: (_: any, r: Order) => {
             const matched = myCompanies.find(c => c.id === r.customerCompanyId || c.id === r.forwarderId || c.id === (r as any).subForwarderId);
-            return <span style={{ fontSize: 12, fontWeight: 500, color: '#1677ff' }}>{matched?.name || '—'}</span>;
+            const name = matched?.name || '—';
+            return (
+                <Tooltip title={name}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: '#1677ff' }}>{shortenCompanyName(name)}</span>
+                </Tooltip>
+            );
         }
     }] : [];
 
     const columns = [
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
-            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
+            render: (s: string, r: Order) => (
+                <div>
+                    <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>
+                    {r.pendingStatus === 'COMPLETED' && r.pendingStatusById !== user?.companyId && (
+                        <Tooltip title="Ожидает вашего подтверждения завершения">
+                            <ExclamationCircleOutlined style={{ color: '#faad14', marginLeft: 4, fontSize: 13 }} />
+                        </Tooltip>
+                    )}
+                    {r.pendingStatus === 'COMPLETED' && r.pendingStatusById === user?.companyId && (
+                        <Tooltip title="Вы запросили завершение, ожидаем подтверждения">
+                            <ExclamationCircleOutlined style={{ color: '#1890ff', marginLeft: 4, fontSize: 13 }} />
+                        </Tooltip>
+                    )}
+                </div>
+            ),
         },
         {
             title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60,
@@ -997,13 +1027,24 @@ export default function CompanyOrdersPage() {
         },
         {
             title: 'Заказчик', key: 'customer', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{r.customerCompany?.name || '—'}</span>,
+            render: (_: any, r: Order) => {
+                const name = r.customerCompany?.name || '—';
+                return (
+                    <Tooltip title={name}>
+                        <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{shortenCompanyName(name)}</span>
+                    </Tooltip>
+                );
+            },
         },
         {
             title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true,
             render: (_: any, r: Order) => {
                 const name = (r.forwarderId === user?.companyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—');
-                return <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{name}</span>;
+                return (
+                    <Tooltip title={name}>
+                        <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{shortenCompanyName(name)}</span>
+                    </Tooltip>
+                );
             },
         },
         {
@@ -1075,12 +1116,26 @@ export default function CompanyOrdersPage() {
                 return date ? <span style={{ fontSize: 11, color: '#333' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
             },
         },
-        { title: 'Заказчик', key: 'customer', width: 130, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{r.customerCompany?.name || '—'}</span> },
+        {
+            title: 'Заказчик', key: 'customer', width: 130, ellipsis: true,
+            render: (_: any, r: Order) => {
+                const name = r.customerCompany?.name || '—';
+                return (
+                    <Tooltip title={name}>
+                        <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{shortenCompanyName(name)}</span>
+                    </Tooltip>
+                );
+            }
+        },
         { 
             title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true, 
             render: (_: any, r: Order) => {
                 const name = (r.forwarderId === user?.companyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—');
-                return <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{name}</span>;
+                return (
+                    <Tooltip title={name}>
+                        <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{shortenCompanyName(name)}</span>
+                    </Tooltip>
+                );
             }
         },
         { title: 'Водитель', key: 'drv', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },

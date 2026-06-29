@@ -174,25 +174,38 @@ export class CompanyService {
 
         const passwordHash = await bcrypt.hash(data.password, 12);
 
-        return this.prisma.user.create({
-            data: {
-                email: data.email,
-                phone: data.phone,
-                passwordHash,
-                firstName: data.firstName,
-                lastName: data.lastName,
-                role: data.role as UserRole,
-                companyId,
-            },
-            select: {
-                id: true,
-                email: true,
-                phone: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-            },
+        const result = await this.prisma.$transaction(async (tx) => {
+            const user = await tx.user.create({
+                data: {
+                    email: data.email,
+                    phone: data.phone,
+                    passwordHash,
+                    firstName: data.firstName,
+                    lastName: data.lastName,
+                    role: data.role as UserRole,
+                    companyId,
+                },
+            });
+
+            await tx.userCompanyRelation.create({
+                data: {
+                    userId: user.id,
+                    companyId,
+                    role: data.role as UserRole,
+                },
+            });
+
+            return user;
         });
+
+        return {
+            id: result.id,
+            email: result.email,
+            phone: result.phone,
+            firstName: result.firstName,
+            lastName: result.lastName,
+            role: result.role,
+        };
     }
 
     /**
@@ -1008,15 +1021,37 @@ export class CompanyService {
     /**
      * Получить все организации пользователя
      */
-    async getMyCompanies(userId: string) {
+    async getMyCompanies(userId: string, activeCompanyId?: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: { company: true },
+        });
+
         const relations = await this.prisma.userCompanyRelation.findMany({
             where: { userId },
             include: { company: true },
         });
-        return relations.map(r => ({
+        
+        const companies = relations.map(r => ({
             ...r.company,
             role: r.role,
         }));
+
+        const ensureCompanyId = activeCompanyId || user?.companyId;
+
+        if (ensureCompanyId && !companies.some(c => c.id === ensureCompanyId)) {
+            const activeCompany = await this.prisma.company.findUnique({
+                where: { id: ensureCompanyId }
+            });
+            if (activeCompany) {
+                companies.push({
+                    ...activeCompany,
+                    role: user?.role || 'COMPANY_ADMIN',
+                });
+            }
+        }
+
+        return companies;
     }
 
     /**
@@ -1119,12 +1154,11 @@ export class CompanyService {
             where: { id: companyId }
         });
 
+        const { passwordHash, ...userWithoutPassword } = user;
         return {
             user: {
-                id: user.id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
+                ...userWithoutPassword,
+                companyId: companyId,
                 role: relation.role,  // ← роль в этой конкретной компании
                 company: activeCompany,
             },
@@ -1174,11 +1208,10 @@ export class CompanyService {
                 companyId: updatedUser.companyId,
             };
             nextAccessToken = this.jwtService.sign(payload);
+            const { passwordHash, ...userWithoutPassword } = updatedUser;
             nextUser = {
-                id: updatedUser.id,
-                email: updatedUser.email,
-                firstName: updatedUser.firstName,
-                lastName: updatedUser.lastName,
+                ...userWithoutPassword,
+                companyId: updatedUser.companyId,
                 role: updatedUser.role,
                 company: updatedUser.company,
             };

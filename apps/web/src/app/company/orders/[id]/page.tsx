@@ -6,19 +6,21 @@ import {
     Typography, Tag, Button, Descriptions, Card, Row, Col, Statistic, Table,
     Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline,
     Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip,
-    theme
+    Alert, theme
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
     DollarOutlined, WalletOutlined, CheckCircleOutlined, ClockCircleOutlined,
     EditOutlined, DeleteOutlined, FilePdfOutlined, UploadOutlined,
     UserAddOutlined, MailOutlined, FileTextOutlined, SwapOutlined,
-    CloseCircleOutlined, CarOutlined, InboxOutlined, TeamOutlined
+    CloseCircleOutlined, CarOutlined, InboxOutlined, TeamOutlined,
+    ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
+import { resolveCompanyName, prepareCompanyOptions } from '@/lib/company-helper';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -89,16 +91,24 @@ interface LocationState {
 }
 
 const getNextStatuses = (s: string) => {
-    const t: Record<string, { value: string; label: string }[]> = {
-        ASSIGNED: [{ value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' }, { value: 'AT_PICKUP', label: 'На погрузке' }],
-        EN_ROUTE_PICKUP: [{ value: 'AT_PICKUP', label: 'На погрузке' }],
-        AT_PICKUP: [{ value: 'LOADING', label: 'Загружается' }],
-        LOADING: [{ value: 'IN_TRANSIT', label: 'В пути' }],
-        IN_TRANSIT: [{ value: 'AT_DELIVERY', label: 'На выгрузке' }],
-        AT_DELIVERY: [{ value: 'UNLOADING', label: 'Разгружается' }],
-        UNLOADING: [{ value: 'COMPLETED', label: 'Завершён' }],
-    };
-    return t[s] || [];
+    const chain = [
+        { value: 'ASSIGNED', label: 'Назначен' },
+        { value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' },
+        { value: 'AT_PICKUP', label: 'На погрузке' },
+        { value: 'LOADING', label: 'Загружается' },
+        { value: 'IN_TRANSIT', label: 'В пути' },
+        { value: 'AT_DELIVERY', label: 'На выгрузке' },
+        { value: 'UNLOADING', label: 'Разгружается' },
+        { value: 'COMPLETED', label: 'Завершён' },
+    ];
+    
+    if (s === 'PROBLEM') {
+        return chain;
+    }
+    
+    const idx = chain.findIndex(item => item.value === s);
+    if (idx === -1) return [];
+    return chain.slice(idx + 1);
 };
 
 export default function OrderDetailPage() {
@@ -172,6 +182,12 @@ export default function OrderDetailPage() {
     const [statusForm] = Form.useForm();
     const [statusLoading, setStatusLoading] = useState(false);
 
+    // Completion confirmation
+    const [completionActionLoading, setCompletionActionLoading] = useState(false);
+    const [rejectReasonModalOpen, setRejectReasonModalOpen] = useState(false);
+    const [rejectReason, setRejectReason] = useState('');
+    const [selectedStatusInModal, setSelectedStatusInModal] = useState<string | null>(null);
+
     // Edit order inline
     const [isEditing, setIsEditing] = useState(false);
     const [editForm] = Form.useForm();
@@ -202,6 +218,25 @@ export default function OrderDetailPage() {
     };
 
     const roleInfo = getRoleDescription();
+
+    const getCustomerOptions = () => {
+        const list = [...partners];
+        const order = data?.order;
+        if (order) {
+            const candidates = [
+                { id: order.customerCompanyId, name: order.customerCompany?.name },
+                { id: order.forwarderId, name: order.forwarder?.name },
+                { id: order.subForwarderId, name: order.subForwarder?.name },
+                { id: order.partnerId, name: order.partner?.name }
+            ].filter(c => c.id);
+            for (const c of candidates) {
+                if (c.id && !list.some(p => p.id === c.id)) {
+                    list.push({ id: c.id, name: c.name || `Компания (${c.id.substring(0, 8)})` });
+                }
+            }
+        }
+        return list;
+    };
 
     // Share PoA modal
     const [sharePoAModalOpen, setSharePoAModalOpen] = useState(false);
@@ -253,17 +288,30 @@ export default function OrderDetailPage() {
     const fetchPartners = async () => {
         setPartnersLoading(true);
         try {
-            const [partnersRes, externalRes, profileRes] = await Promise.all([
+            const [partnersRes, externalRes, profileRes, myCompaniesRes] = await Promise.all([
                 api.get('/partners'),
                 api.get('/external-companies'),
                 api.get('/company/profile'),
+                api.get('/company/my-companies'),
             ]);
             const partnersList = partnersRes.data.filter((p: any) => p.isCarrier);
             const externalList = externalRes.data
                 .filter((e: any) => e.isCarrier)
                 .map((e: any) => ({ id: e.id, name: e.name }));
-            const ownCompany = profileRes.data ? [{ id: profileRes.data.id, name: `${profileRes.data.name} (Моя компания)` }] : [];
-            const combined = [...ownCompany, ...partnersList, ...externalList];
+            
+            const ownCompanies = (myCompaniesRes.data || []).map((c: any) => ({
+                id: c.id,
+                name: `${c.name} (Моя компания)`
+            }));
+
+            if (profileRes.data && !ownCompanies.some((c: any) => c.id === profileRes.data.id)) {
+                ownCompanies.push({
+                    id: profileRes.data.id,
+                    name: `${profileRes.data.name} (Моя компания)`
+                });
+            }
+
+            const combined = [...ownCompanies, ...partnersList, ...externalList];
             setPartners(combined);
             setForwarders(combined);
             if (profileRes.data?.name) {
@@ -473,6 +521,43 @@ export default function OrderDetailPage() {
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка');
         } finally { setStatusLoading(false); }
+    };
+
+    // =================== COMPLETION CONFIRMATION ===================
+
+    const handleConfirmCompletion = async () => {
+        setCompletionActionLoading(true);
+        try {
+            await api.put(`/company/orders/${orderId}/confirm-completion`);
+            message.success('Завершение рейса подтверждено');
+            fetchData();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка подтверждения');
+        } finally { setCompletionActionLoading(false); }
+    };
+
+    const handleRejectCompletion = async () => {
+        setCompletionActionLoading(true);
+        try {
+            await api.put(`/company/orders/${orderId}/reject-completion`, { reason: rejectReason || undefined });
+            message.success('Запрос на завершение отклонён');
+            setRejectReasonModalOpen(false);
+            setRejectReason('');
+            fetchData();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка отклонения');
+        } finally { setCompletionActionLoading(false); }
+    };
+
+    const handleCancelCompletionRequest = async () => {
+        setCompletionActionLoading(true);
+        try {
+            await api.put(`/company/orders/${orderId}/cancel-completion`);
+            message.success('Запрос на завершение отменён');
+            fetchData();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка отмены');
+        } finally { setCompletionActionLoading(false); }
     };
 
     const handleCancelOrder = async () => {
@@ -862,6 +947,23 @@ export default function OrderDetailPage() {
     const canChangeStatus = getNextStatuses(order.status).length > 0;
     const isNotFinished = order.status !== 'CANCELLED' && order.status !== 'COMPLETED';
 
+    // Completion confirmation helpers
+    const hasPendingCompletion = order.pendingStatus === 'COMPLETED';
+    const isCompletionInitiator = hasPendingCompletion && order.pendingStatusById === user?.companyId;
+    const isCompletionApprover = hasPendingCompletion && order.pendingStatusById !== user?.companyId;
+
+    const getCompanyNameById = (companyId: string | null | undefined) => {
+        if (!companyId) return '—';
+        const candidates = [
+            { id: order.customerCompanyId, name: order.customerCompany?.name },
+            { id: order.forwarderId, name: order.forwarder?.name },
+            { id: order.subForwarderId, name: order.subForwarder?.name },
+            { id: order.partnerId, name: order.partner?.name }
+        ];
+        const found = candidates.find(c => c.id === companyId);
+        return found?.name || `Организация (${companyId.substring(0, 8)})`;
+    };
+
     const pickupPt = order.routePoints?.find((p: any) => p.pointType === 'PICKUP');
 
     const incomeColumns = [
@@ -952,6 +1054,81 @@ export default function OrderDetailPage() {
                     </Space>
                 )}
             </div>
+
+            {/* =================== PENDING COMPLETION BANNER =================== */}
+            {hasPendingCompletion && isCompletionApprover && (
+                <Alert
+                    type="warning"
+                    showIcon
+                    icon={<ExclamationCircleOutlined />}
+                    style={{ marginBottom: 20, borderRadius: 8 }}
+                    message={
+                        <span style={{ fontWeight: 600 }}>
+                            Компания «{getCompanyNameById(order.pendingStatusById)}» запросила завершение рейса
+                        </span>
+                    }
+                    description={
+                        <div style={{ marginTop: 8 }}>
+                            <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                                Запрос создан {order.pendingStatusAt ? dayjs(order.pendingStatusAt).format('DD.MM.YYYY в HH:mm') : ''}.
+                                Подтвердите или отклоните завершение рейса.
+                            </Text>
+                            <Space>
+                                <Button
+                                    type="primary"
+                                    icon={<CheckCircleOutlined />}
+                                    loading={completionActionLoading}
+                                    onClick={handleConfirmCompletion}
+                                >
+                                    Подтвердить завершение
+                                </Button>
+                                <Button
+                                    danger
+                                    icon={<CloseCircleOutlined />}
+                                    loading={completionActionLoading}
+                                    onClick={() => setRejectReasonModalOpen(true)}
+                                >
+                                    Отклонить
+                                </Button>
+                            </Space>
+                        </div>
+                    }
+                />
+            )}
+            {hasPendingCompletion && isCompletionInitiator && (
+                <Alert
+                    type="info"
+                    showIcon
+                    icon={<ClockCircleOutlined />}
+                    style={{ marginBottom: 20, borderRadius: 8 }}
+                    message={
+                        <span style={{ fontWeight: 600 }}>
+                            Ожидается подтверждение завершения рейса
+                        </span>
+                    }
+                    description={
+                        <div style={{ marginTop: 8 }}>
+                            <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                                Запрос на завершение отправлен {order.pendingStatusAt ? dayjs(order.pendingStatusAt).format('DD.MM.YYYY в HH:mm') : ''}.
+                                Ожидаем подтверждения от другой стороны.
+                            </Text>
+                            <Popconfirm
+                                title="Отменить запрос на завершение?"
+                                onConfirm={handleCancelCompletionRequest}
+                                okText="Да, отменить"
+                                cancelText="Нет"
+                            >
+                                <Button
+                                    icon={<CloseCircleOutlined />}
+                                    loading={completionActionLoading}
+                                >
+                                    Отменить запрос
+                                </Button>
+                            </Popconfirm>
+                        </div>
+                    }
+                />
+            )}
 
             {/* =================== MAIN TABS =================== */}
             <Tabs
@@ -1126,15 +1303,12 @@ export default function OrderDetailPage() {
                                                         value={selectedCustomer || undefined}
                                                         onChange={setSelectedCustomer}
                                                         showSearch
-                                                        optionFilterProp="children"
-                                                    >
-                                                        <Select.Option value={MY_COMPANY_VALUE}>
-                                                            <span style={{ fontWeight: 600 }}>{myCompanyName || 'Моя компания'}</span>
-                                                        </Select.Option>
-                                                        <Select.OptGroup label="Контрагенты">
-                                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                                                        </Select.OptGroup>
-                                                    </Select>
+                                                        optionLabelProp="label"
+                                                        options={[
+                                                            { value: MY_COMPANY_VALUE, label: `${myCompanyName || 'Моя компания'} (Моя компания)` },
+                                                            ...prepareCompanyOptions(getCustomerOptions(), selectedCustomer)
+                                                        ]}
+                                                    />
                                                     <Button
                                                         type="link" size="small"
                                                         style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 4 }}
@@ -1153,18 +1327,13 @@ export default function OrderDetailPage() {
                                                         value={selectedCarrier || undefined}
                                                         onChange={setSelectedCarrier}
                                                         showSearch
-                                                        optionFilterProp="children"
-                                                    >
-                                                        <Select.Option value={MY_COMPANY_VALUE}>
-                                                            <span style={{ fontWeight: 600 }}>{myCompanyName || 'Моя компания'}</span>
-                                                        </Select.Option>
-                                                        <Select.Option value={MARKETPLACE_VALUE}>
-                                                            <span style={{ color: '#722ed1', fontWeight: 500 }}>📢 Опубликовать на бирже</span>
-                                                        </Select.Option>
-                                                        <Select.OptGroup label="Контрагенты">
-                                                            {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                                                        </Select.OptGroup>
-                                                    </Select>
+                                                        optionLabelProp="label"
+                                                        options={[
+                                                            { value: MY_COMPANY_VALUE, label: `${myCompanyName || 'Моя компания'} (Моя компания)` },
+                                                            { value: MARKETPLACE_VALUE, label: '📢 Опубликовать на бирже' },
+                                                            ...prepareCompanyOptions(getCustomerOptions(), selectedCarrier)
+                                                        ]}
+                                                    />
                                                     <Button
                                                         type="link" size="small"
                                                         style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 4 }}
@@ -1425,7 +1594,7 @@ export default function OrderDetailPage() {
                                         >
                                             <Descriptions column={1} size="small">
                                                 <Descriptions.Item label="Заказчик">
-                                                    <Text strong>{order.customerCompany?.name || '—'}</Text>
+                                                    <Text strong>{resolveCompanyName(order.customerCompanyId, partners, order.customerCompany?.name)}</Text>
                                                 </Descriptions.Item>
                                                 <Descriptions.Item label="Контактное лицо">
                                                     {order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : '—'}
@@ -1439,11 +1608,11 @@ export default function OrderDetailPage() {
                                                 <Divider style={{ margin: '8px 0' }} />
                                                 
                                                 <Descriptions.Item label="Экспедитор">
-                                                    <Text strong>{order.forwarder?.name || order.partner?.name || '—'}</Text>
+                                                    <Text strong>{resolveCompanyName(order.forwarderId || order.partnerId, partners, order.forwarder?.name || order.partner?.name)}</Text>
                                                 </Descriptions.Item>
                                                 {order.subForwarder && (
                                                     <Descriptions.Item label="Суб-экспедитор">
-                                                        <Text strong>{order.subForwarder.name}</Text>
+                                                        <Text strong>{resolveCompanyName(order.subForwarderId, partners, order.subForwarder.name)}</Text>
                                                     </Descriptions.Item>
                                                 )}
                                                 {order.responsibleManager && (
@@ -1716,18 +1885,58 @@ export default function OrderDetailPage() {
             )}
 
             {/* =================== STATUS MODAL =================== */}
-            <Modal title="Изменить статус" open={statusModalOpen} onCancel={() => setStatusModalOpen(false)} onOk={() => statusForm.submit()} okText="Обновить" cancelText="Отмена" confirmLoading={statusLoading}>
+            <Modal title="Изменить статус" open={statusModalOpen} onCancel={() => { setStatusModalOpen(false); setSelectedStatusInModal(null); }} onOk={() => statusForm.submit()} okText="Обновить" cancelText="Отмена" confirmLoading={statusLoading}>
                 <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
                     <div style={{ marginBottom: 16 }}>Текущий: <Tag color={statusColors[order.status]}>{statusLabels[order.status]}</Tag></div>
                     <Form.Item name="status" label="Новый статус" rules={[{ required: true }]}>
-                        <Select placeholder="Статус" size="large">
+                        <Select placeholder="Статус" size="large" onChange={(val: string) => setSelectedStatusInModal(val)}>
                             {getNextStatuses(order.status).map(s => <Select.Option key={s.value} value={s.value}>{s.label}</Select.Option>)}
                         </Select>
                     </Form.Item>
+                    {selectedStatusInModal === 'COMPLETED' && (() => {
+                        const participantIds = [order.customerCompanyId, order.forwarderId, order.partnerId, order.subForwarderId].filter(Boolean);
+                        const uniqueIds = Array.from(new Set(participantIds));
+                        const hasOtherRegistered = uniqueIds.some((id: string) => {
+                            if (id === user?.companyId) return false;
+                            const c = [order.customerCompany, order.forwarder, order.subForwarder, order.partner].find((comp: any) => comp?.id === id);
+                            return c && c.isExternal === false;
+                        });
+                        return hasOtherRegistered ? (
+                            <Alert
+                                type="info"
+                                showIcon
+                                style={{ marginBottom: 16 }}
+                                message="Будет отправлен запрос на подтверждение завершения второй стороне"
+                                description="Статус не изменится сразу — потребуется подтверждение от другого зарегистрированного участника."
+                            />
+                        ) : null;
+                    })()}
                     <Form.Item name="comment" label="Комментарий">
                         <TextArea rows={3} placeholder="Причина..." />
                     </Form.Item>
                 </Form>
+            </Modal>
+
+            {/* =================== REJECT COMPLETION MODAL =================== */}
+            <Modal
+                title="Отклонить завершение рейса"
+                open={rejectReasonModalOpen}
+                onCancel={() => { setRejectReasonModalOpen(false); setRejectReason(''); }}
+                onOk={handleRejectCompletion}
+                okText="Отклонить"
+                cancelText="Отмена"
+                okButtonProps={{ danger: true }}
+                confirmLoading={completionActionLoading}
+            >
+                <div style={{ marginBottom: 12 }}>
+                    <Text>Укажите причину отклонения (необязательно):</Text>
+                </div>
+                <TextArea
+                    rows={3}
+                    placeholder="Причина отклонения..."
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                />
             </Modal>
 
 

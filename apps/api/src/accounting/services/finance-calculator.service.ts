@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentDirection } from '@prisma/client';
 import { money } from '../../common/utils/money';
+import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
 
 @Injectable()
 export class FinanceCalculatorService {
@@ -17,6 +18,9 @@ export class FinanceCalculatorService {
             hasVat?: boolean | null;
             executorVatRate?: number | null;
             executorHasVat?: boolean | null;
+            isCustomerPaid?: boolean | null;
+            isDriverPaid?: boolean | null;
+            isSubForwarderPaid?: boolean | null;
         };
         payments: Array<{ direction: PaymentDirection; amount: number; companyId: string }>;
         incomes: Array<{ category: string; amount: number; isDeleted?: boolean }>;
@@ -78,19 +82,69 @@ export class FinanceCalculatorService {
             }
         }
 
-        const companyPayments = payments.filter(p => p.companyId === companyId);
-        const paidIn = money(companyPayments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0));
-        const paidOut = money(companyPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0));
+        // Determine the forwarder company ID
+        let forwarderCompId = order.forwarderId || order.partnerId;
+        if (!forwarderCompId) {
+            const nonForwarderIds = [order.customerCompanyId, order.subForwarderId].filter(Boolean);
+            const found = payments.find(p => !nonForwarderIds.includes(p.companyId));
+            if (found) {
+                forwarderCompId = found.companyId;
+            }
+        }
 
-        const extraIncomes = money(incomes.filter(i => i.category !== 'order_payment' && i.category !== 'prepayment' && !i.isDeleted).reduce((sum, i) => sum + i.amount, 0));
-        const otherExpenses = money(expenses.filter(e => e.category !== 'driver_payment' && !e.isDeleted).reduce((sum, e) => sum + e.amount, 0));
+        let paidIn = 0;
+        let paidOut = 0;
+
+        if (isCustomer) {
+            // For Customer, their payments to Forwarder are recorded as IN payments by the Forwarder
+            const customerPayments = forwarderCompId
+                ? payments.filter(p => p.companyId === forwarderCompId && p.direction === PaymentDirection.IN)
+                : [];
+            paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
+            paidOut = paidIn; // Customer paid this out
+        } else if (isSubForwarder) {
+            // For Sub-Forwarder, they only look at their own payments
+            const subForwarderPayments = payments.filter(p => p.companyId === companyId);
+            paidIn = subForwarderPayments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0);
+            paidOut = subForwarderPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
+        } else {
+            // For Forwarder or main company/admin
+            const targetCompId = companyId || forwarderCompId;
+            const forwarderPayments = targetCompId
+                ? payments.filter(p => p.companyId === targetCompId)
+                : payments;
+            
+            paidIn = forwarderPayments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0);
+            paidOut = forwarderPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
+        }
+
+        paidIn = money(paidIn);
+        paidOut = money(paidOut);
+
+        const extraIncomes = money(incomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category) && !i.isDeleted).reduce((sum, i) => sum + i.amount, 0));
+        const otherExpenses = money(expenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category) && !e.isDeleted).reduce((sum, e) => sum + e.amount, 0));
 
         const margin = money(revenueNet + extraIncomes - executorCostNet - otherExpenses);
         const customerDebt = money(Math.max(revenueGross - paidIn, 0));
         const executorDebt = money(Math.max(executorCostGross - paidOut, 0));
 
-        const isCustomerPaid = paidIn >= revenueGross && revenueGross > 0;
-        const isExecutorPaid = paidOut >= executorCostGross && executorCostGross > 0;
+        let isCustomerPaid = false;
+        if (isCustomer) {
+            isCustomerPaid = (paidOut >= executorCostGross && executorCostGross > 0) || !!order.isCustomerPaid;
+        } else if (isSubForwarder) {
+            isCustomerPaid = (paidIn >= revenueGross && revenueGross > 0) || !!order.isSubForwarderPaid;
+        } else {
+            isCustomerPaid = (paidIn >= revenueGross && revenueGross > 0) || !!order.isCustomerPaid;
+        }
+
+        let isExecutorPaid = false;
+        if (isCustomer) {
+            isExecutorPaid = (paidOut >= executorCostGross && executorCostGross > 0) || !!order.isCustomerPaid;
+        } else if (isSubForwarder) {
+            isExecutorPaid = false;
+        } else {
+            isExecutorPaid = (paidOut >= executorCostGross && executorCostGross > 0) || (order.subForwarderId ? !!order.isSubForwarderPaid : !!order.isDriverPaid);
+        }
 
         return {
             revenue: revenueGross,

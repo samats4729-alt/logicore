@@ -517,7 +517,8 @@ export default function CreateOrderPage() {
                                 vehicleSelect: undefined, driverSelect: undefined
                             });
                         }}
-                        options={myCompanies.map(c => ({ value: c.id, label: c.name }))}
+                        optionLabelProp="label"
+                        options={myCompanies.map(c => ({ value: c.id, label: c.name?.trim() || 'Без названия' }))}
                     />
                 </Form.Item>
             )}

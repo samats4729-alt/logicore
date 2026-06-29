@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class NotificationsService {
-    constructor(private configService: ConfigService) { }
+    constructor(
+        private prisma: PrismaService,
+        private configService: ConfigService
+    ) { }
 
     /**
      * Отправка Push-уведомления (через Firebase)
@@ -80,5 +84,45 @@ export class NotificationsService {
             body: `Заявка ${orderNumber} скоро прибудет${eta ? `. Ожидаемое время: ${eta}` : ''}`,
             data: { type: 'APPROACHING', orderNumber },
         });
+    }
+
+    /**
+     * Отправка Push-уведомлений всем сотрудникам компании (за исключением DRIVER и RECIPIENT)
+     */
+    async notifyCompany(companyId: string, data: { title: string; body: string; data?: Record<string, any> }) {
+        try {
+            const relations = await this.prisma.userCompanyRelation.findMany({
+                where: { companyId },
+                select: { userId: true }
+            });
+            const userIdsFromRelations = relations.map(r => r.userId);
+
+            const directUsers = await this.prisma.user.findMany({
+                where: { companyId },
+                select: { id: true }
+            });
+            const directUserIds = directUsers.map(u => u.id);
+
+            const allUserIds = Array.from(new Set([...userIdsFromRelations, ...directUserIds]));
+
+            const usersToNotify = await this.prisma.user.findMany({
+                where: {
+                    id: { in: allUserIds },
+                    role: { notIn: ['DRIVER', 'RECIPIENT'] }
+                },
+                select: { id: true }
+            });
+
+            for (const user of usersToNotify) {
+                await this.sendPush({
+                    userId: user.id,
+                    title: data.title,
+                    body: data.body,
+                    data: data.data
+                });
+            }
+        } catch (err) {
+            console.warn(`Failed to notify company ${companyId}:`, err);
+        }
     }
 }

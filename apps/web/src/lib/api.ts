@@ -34,11 +34,23 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Исключаем запросы авторизации, чтобы некорректный пароль или код не вызывали перезагрузку страницы
+            // Исключаем публичные запросы авторизации/регистрации, чтобы некорректные данные или ошибки не вызывали логаут
             const url = error.config?.url || '';
-            const isAuthRequest = url.includes('/auth/login');
+            const publicAuthPatterns = [
+                /\/auth\/login\b/,
+                /\/auth\/forgot-password\b/,
+                /\/auth\/reset-password\b/,
+                /\/auth\/register-company\b/,
+                /\/auth\/google\b/,
+                /\/auth\/invitation\//,
+                /\/auth\/register\/invited\b/,
+                /\/auth\/company-lookup\//,
+                /\/auth\/refresh\b/
+            ];
             
-            if (!isAuthRequest) {
+            const isPublicAuthRequest = publicAuthPatterns.some(pattern => pattern.test(url));
+            
+            if (!isPublicAuthRequest) {
                 // Токен невалидный — очищаем
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('logcomp-auth');

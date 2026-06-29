@@ -23,19 +23,33 @@ export class UsersService {
             ? await bcrypt.hash(data.password, 12)
             : null;
 
-        return this.prisma.user.create({
-            data: {
-                phone: data.phone,
-                email: data.email,
-                passwordHash,
-                firstName: data.firstName,
-                lastName: data.lastName,
-                middleName: data.middleName,
-                role: data.role,
-                vehiclePlate: data.vehiclePlate,
-                vehicleModel: data.vehicleModel,
-                companyId: data.companyId,
-            },
+        return this.prisma.$transaction(async (tx) => {
+            const user = await tx.user.create({
+                data: {
+                    phone: data.phone,
+                    email: data.email,
+                    passwordHash,
+                    firstName: data.firstName,
+                    lastName: data.lastName,
+                    middleName: data.middleName,
+                    role: data.role,
+                    vehiclePlate: data.vehiclePlate,
+                    vehicleModel: data.vehicleModel,
+                    companyId: data.companyId,
+                },
+            });
+
+            if (data.companyId) {
+                await tx.userCompanyRelation.create({
+                    data: {
+                        userId: user.id,
+                        companyId: data.companyId,
+                        role: data.role,
+                    },
+                });
+            }
+
+            return user;
         });
     }
 

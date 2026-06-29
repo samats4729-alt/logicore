@@ -69,7 +69,7 @@ export class InvoiceController {
         @Body() dto: { status: InvoiceStatus },
         @Request() req: any,
     ) {
-        return this.invoiceService.updateInvoiceStatus(id, req.user.companyId, dto.status);
+        return this.invoiceService.updateInvoiceStatus(id, req.user.companyId, dto.status, req.user.id);
     }
 
     @Post(':id/accept-dispute')

@@ -6,6 +6,7 @@ import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import CompanyFormFields from '@/components/CompanyFormFields';
+import { prepareCompanyOptions } from '@/lib/company-helper';
 
 const { Title, Text } = Typography;
 
@@ -344,7 +345,7 @@ export default function SettingsPage() {
                         }}
                     >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                            {myCompanies.length > 1 ? (
+                            {prepareCompanyOptions(myCompanies, user?.companyId, user?.company?.name).length > 1 ? (
                                 <Space align="center" size="middle">
                                     <Text strong style={{ fontSize: 15 }}>Организация:</Text>
                                     <Select
@@ -352,7 +353,8 @@ export default function SettingsPage() {
                                         size="large"
                                         value={user?.companyId}
                                         onChange={handleSwitchCompany}
-                                        options={myCompanies.map(c => ({ value: c.id, label: c.name }))}
+                                        optionLabelProp="label"
+                                        options={prepareCompanyOptions(myCompanies, user?.companyId, user?.company?.name)}
                                         loading={myCompaniesLoading}
                                     />
                                     <Popconfirm

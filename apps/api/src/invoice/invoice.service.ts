@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoiceType, InvoiceStatus } from '@prisma/client';
+import { PaymentsService } from '../accounting/services/payments.service';
 
 @Injectable()
 export class InvoiceService {
-    constructor(private prisma: PrismaService) {}
+    constructor(
+        private prisma: PrismaService,
+        private paymentsService: PaymentsService,
+    ) {}
 
     async createInvoice(
         companyId: string,
@@ -134,6 +138,18 @@ export class InvoiceService {
                         email: true,
                     },
                 },
+                incomingOrders: {
+                    select: {
+                        id: true,
+                        orderNumber: true,
+                    },
+                },
+                outgoingOrders: {
+                    select: {
+                        id: true,
+                        orderNumber: true,
+                    },
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -187,7 +203,7 @@ export class InvoiceService {
         return invoice;
     }
 
-    async updateInvoiceStatus(id: string, companyId: string, status: InvoiceStatus) {
+    async updateInvoiceStatus(id: string, companyId: string, status: InvoiceStatus, userId: string) {
         const invoice = await this.prisma.invoice.findUnique({
             where: { id },
             include: {
@@ -204,41 +220,44 @@ export class InvoiceService {
             throw new BadRequestException('У вас нет доступа к этому счету');
         }
 
+        const oldStatus = invoice.status;
+
         const updatedInvoice = await this.prisma.invoice.update({
             where: { id },
             data: { status },
         });
 
-        // Если перевели в PAID, синхронизируем статус оплаты в заказах
-        if (status === InvoiceStatus.PAID) {
-            const now = new Date();
+        // Если перевели в PAID, проводим платежи по заказам
+        if (status === InvoiceStatus.PAID && oldStatus !== InvoiceStatus.PAID) {
+            const dateStr = invoice.date ? invoice.date.toISOString() : undefined;
             if (invoice.type === InvoiceType.OUTGOING) {
-                const orderIds = invoice.outgoingOrders.map((o) => o.id);
-                if (orderIds.length > 0) {
-                    await this.prisma.order.updateMany({
-                        where: { id: { in: orderIds } },
-                        data: {
-                            isCustomerPaid: true,
-                            customerPaidAt: now,
-                        },
-                    });
+                for (const order of invoice.outgoingOrders) {
+                    await this.paymentsService.markCustomerPaid(invoice.issuerId, order.id, true, userId, dateStr);
                 }
             } else {
-                // INCOMING: Мы оплатили перевозчикам/партнерам
-                const orderIds = invoice.incomingOrders.map((o) => o.id);
                 for (const order of invoice.incomingOrders) {
-                    const dataToUpdate: any = {};
                     if (order.subForwarderId) {
-                        dataToUpdate.isSubForwarderPaid = true;
-                        dataToUpdate.subForwarderPaidAt = now;
+                        await this.paymentsService.markSubForwarderPaid(invoice.recipientId, order.id, true, userId, dateStr);
+                    } else {
+                        await this.paymentsService.markDriverPaid(invoice.recipientId, order.id, true, userId, dateStr);
                     }
-                    dataToUpdate.isDriverPaid = true;
-                    dataToUpdate.driverPaidAt = now;
+                }
+            }
+        }
 
-                    await this.prisma.order.update({
-                        where: { id: order.id },
-                        data: dataToUpdate,
-                    });
+        // Если отменили PAID, удаляем автоматически созданные платежи
+        if (oldStatus === InvoiceStatus.PAID && status !== InvoiceStatus.PAID) {
+            if (invoice.type === InvoiceType.OUTGOING) {
+                for (const order of invoice.outgoingOrders) {
+                    await this.paymentsService.markCustomerPaid(invoice.issuerId, order.id, false, userId);
+                }
+            } else {
+                for (const order of invoice.incomingOrders) {
+                    if (order.subForwarderId) {
+                        await this.paymentsService.markSubForwarderPaid(invoice.recipientId, order.id, false, userId);
+                    } else {
+                        await this.paymentsService.markDriverPaid(invoice.recipientId, order.id, false, userId);
+                    }
                 }
             }
         }
@@ -499,12 +518,28 @@ export class InvoiceService {
         if (type === InvoiceType.OUTGOING) {
             whereClause.customerCompanyId = counterpartyId;
             whereClause.outgoingInvoiceId = null;
-        } else {
             whereClause.OR = [
-                { partnerId: counterpartyId },
-                { subForwarderId: counterpartyId },
+                { forwarderId: companyId },
+                { partnerId: companyId },
+                { subForwarderId: companyId },
+                { responsibleManager: { companyId: companyId } },
             ];
+        } else {
             whereClause.incomingInvoiceId = null;
+            whereClause.AND = [
+                {
+                    OR: [
+                        { partnerId: counterpartyId },
+                        { subForwarderId: counterpartyId },
+                    ],
+                },
+                {
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                    ],
+                },
+            ];
         }
 
         return this.prisma.order.findMany({

@@ -272,7 +272,32 @@ export class CompanyController {
         @Body() dto: { status: string; comment?: string },
         @Request() req: any
     ) {
-        return this.ordersService.updateStatus(id, dto.status as any, dto.comment, req.user.sub);
+        return this.ordersService.updateStatus(id, dto.status as any, dto.comment, req.user.sub, req.user.companyId);
+    }
+
+    @Put('orders/:id/confirm-completion')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Подтвердить завершение рейса' })
+    async confirmOrderStatusCompletion(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.confirmCompletion(id, req.user.companyId, req.user.sub);
+    }
+
+    @Put('orders/:id/reject-completion')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Отклонить завершение рейса' })
+    async rejectOrderStatusCompletion(
+        @Param('id') id: string,
+        @Body() body: { reason?: string },
+        @Request() req: any
+    ) {
+        return this.ordersService.rejectCompletion(id, req.user.companyId, req.user.sub, body.reason);
+    }
+
+    @Put('orders/:id/cancel-completion')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Отменить запрос на завершение рейса' })
+    async cancelOrderStatusCompletionRequest(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.cancelCompletionRequest(id, req.user.companyId, req.user.sub);
     }
 
     @Put('orders/:id/accept')
@@ -453,7 +478,7 @@ export class CompanyController {
     @Get('my-companies')
     @ApiOperation({ summary: 'Получить все организации пользователя' })
     async getMyCompanies(@Request() req: any) {
-        return this.companyService.getMyCompanies(req.user.sub);
+        return this.companyService.getMyCompanies(req.user.sub, req.user.companyId);
     }
 
     @Post('my-companies')

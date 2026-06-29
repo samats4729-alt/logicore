@@ -14,6 +14,7 @@ import {
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
+import { shortenCompanyName } from '@/lib/company-helper';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -329,7 +330,9 @@ export default function FinancialRegistryPage() {
                 return (
                     <div style={{ padding: '2px 0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                            <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>{name}</span>
+                            <Tooltip title={name}>
+                                <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>{shortenCompanyName(name)}</span>
+                            </Tooltip>
                             <span style={{ fontSize: 12, fontWeight: 600 }}>{fmt(total)} ₸</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -352,10 +355,12 @@ export default function FinancialRegistryPage() {
                 return (
                     <div style={{ padding: '2px 0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                            <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>
-                                <CarOutlined style={{ marginRight: 4, color: token.colorTextSecondary }} /> {name}
-                                {r.subForwarderId && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px' }}>Суб</Tag>}
-                            </span>
+                            <Tooltip title={name}>
+                                <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                                    <CarOutlined style={{ marginRight: 4, color: token.colorTextSecondary }} /> {shortenCompanyName(name)}
+                                    {r.subForwarderId && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px' }}>Суб</Tag>}
+                                </span>
+                            </Tooltip>
                             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{fmt(total)} ₸</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

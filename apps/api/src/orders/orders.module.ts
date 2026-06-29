@@ -3,9 +3,10 @@ import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { EmailModule } from '../email/email.module';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
-    imports: [EmailModule],
+    imports: [EmailModule, AccountingModule],
     controllers: [OrdersController],
     providers: [OrdersService, PowerOfAttorneyService],
     exports: [OrdersService],

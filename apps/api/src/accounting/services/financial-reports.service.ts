@@ -7,6 +7,8 @@ import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
 import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus } from '@prisma/client';
 import { money } from '../../common/utils/money';
+import { PaymentsService } from './payments.service';
+import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
 import * as XLSX from 'xlsx';
 
 @Injectable()
@@ -17,6 +19,7 @@ export class FinancialReportsService {
         private configService: ConfigService,
         private calculator: FinanceCalculatorService,
         private periodClosing: PeriodClosingService,
+        private paymentsService: PaymentsService,
     ) { }
 
     // ==================== ORDER FINANCIALS ====================
@@ -252,6 +255,8 @@ export class FinancialReportsService {
                 }
             });
         }
+
+        await this.paymentsService.syncOrderPaymentFlags(orderId);
 
         return updated;
     }
@@ -630,7 +635,7 @@ export class FinancialReportsService {
                 driverCost: order.driverCost,
             };
 
-            if (isCustomer && order.forwarder) {
+            if (isCustomer && order.forwarder && order.forwarder.id !== companyId) {
                 const entry = getOrCreateEntry(order.forwarder.id, order.forwarder.name, 'Заказчик');
                 const amount = fin.executorCost;
                 const paid = fin.paidOut;
@@ -645,7 +650,7 @@ export class FinancialReportsService {
                 });
             }
 
-            if (isForwarder && order.customerCompany) {
+            if (isForwarder && order.customerCompany && order.customerCompany.id !== companyId) {
                 const entry = getOrCreateEntry(order.customerCompany.id, order.customerCompany.name, 'Экспедитор');
                 const amount = fin.revenue;
                 const paid = fin.paidIn;
@@ -660,7 +665,7 @@ export class FinancialReportsService {
                 });
             }
 
-            if (isForwarder && order.subForwarder) {
+            if (isForwarder && order.subForwarder && order.subForwarder.id !== companyId) {
                 const entry = getOrCreateEntry(order.subForwarder.id, order.subForwarder.name, 'Экспедитор');
                 const amount = fin.executorCost;
                 const paid = fin.paidOut;
@@ -675,7 +680,7 @@ export class FinancialReportsService {
                 });
             }
 
-            if (isSubForwarder && order.forwarder) {
+            if (isSubForwarder && order.forwarder && order.forwarder.id !== companyId) {
                 const entry = getOrCreateEntry(order.forwarder.id, order.forwarder.name, 'Суб-экспедитор');
                 const amount = fin.revenue;
                 const paid = fin.paidIn;
@@ -775,6 +780,18 @@ export class FinancialReportsService {
             include: {
                 issuer: { select: { id: true, name: true } },
                 recipient: { select: { id: true, name: true } },
+                incomingOrders: {
+                    select: {
+                        id: true,
+                        orderNumber: true,
+                    },
+                },
+                outgoingOrders: {
+                    select: {
+                        id: true,
+                        orderNumber: true,
+                    },
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -1044,8 +1061,8 @@ export class FinancialReportsService {
             }
         });
 
-        const totalManualIncomes = manualIncomes.filter(i => i.category !== 'order_payment' && i.category !== 'prepayment').reduce((sum, i) => sum + i.amount, 0);
-        const totalManualExpenses = manualExpenses.filter(e => e.category !== 'driver_payment').reduce((sum, e) => sum + e.amount, 0);
+        const totalManualIncomes = manualIncomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category)).reduce((sum, i) => sum + i.amount, 0);
+        const totalManualExpenses = manualExpenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)).reduce((sum, e) => sum + e.amount, 0);
 
         const totalCashIn = cashIn + totalManualIncomes;
         const totalCashOut = cashOut + totalManualExpenses;
@@ -1098,8 +1115,8 @@ export class FinancialReportsService {
 
             const pIn = money(prevPayments.filter(p => p.direction === PaymentDirection.IN).reduce((s, p) => s + p.amount, 0));
             const pOut = money(prevPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((s, p) => s + p.amount, 0));
-            const inc = money(prevIncomes.reduce((s, i) => s + i.amount, 0));
-            const exp = money(prevExpenses.reduce((s, e) => s + e.amount, 0));
+            const inc = money(prevIncomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category)).reduce((s, i) => s + i.amount, 0));
+            const exp = money(prevExpenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)).reduce((s, e) => s + e.amount, 0));
 
             startBalance = money(pIn + inc - pOut - exp);
         }
@@ -1152,7 +1169,7 @@ export class FinancialReportsService {
             });
         });
 
-        incomes.forEach(i => {
+        incomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category)).forEach(i => {
             flowItems.push({
                 id: i.id,
                 date: i.date,
@@ -1167,7 +1184,7 @@ export class FinancialReportsService {
             });
         });
 
-        expenses.forEach(e => {
+        expenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)).forEach(e => {
             flowItems.push({
                 id: e.id,
                 date: e.date,
@@ -1368,13 +1385,13 @@ export class FinancialReportsService {
         const otherExpensesMap = new Map<string, number>();
 
         manualIncomes
-            .filter(i => i.category !== 'order_payment' && i.category !== 'prepayment')
+            .filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category))
             .forEach(i => {
                 otherIncomesMap.set(i.category, money((otherIncomesMap.get(i.category) || 0) + i.amount));
             });
 
         manualExpenses
-            .filter(e => e.category !== 'driver_payment')
+            .filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category))
             .forEach(e => {
                 otherExpensesMap.set(e.category, money((otherExpensesMap.get(e.category) || 0) + e.amount));
             });

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { PeriodClosingService } from './period-closing.service';
 import { FinancialSettingsService } from './financial-settings.service';
-import { PaymentDirection, PaymentMethod, AccountKind, Payment } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus } from '@prisma/client';
 import { money } from '../../common/utils/money';
 
 @Injectable()
@@ -376,35 +376,58 @@ export class PaymentsService {
     async syncOrderPaymentFlags(orderId: string) {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
+            include: {
+                outgoingInvoice: true,
+                incomingInvoice: true,
+                responsibleManager: {
+                    select: {
+                        companyId: true,
+                    },
+                },
+            },
         });
         if (!order) return;
 
+        const forwarderCompanyId = order.forwarderId || order.partnerId || order.responsibleManager?.companyId || order.customerCompanyId || null;
+
         // Sync Customer Paid Flag
+        const hasPaidOutgoingInvoice = order.outgoingInvoice?.status === InvoiceStatus.PAID;
         const customerPayments = await this.prisma.payment.findMany({
-            where: { orderId, direction: PaymentDirection.IN, isDeleted: false },
+            where: {
+                orderId,
+                direction: PaymentDirection.IN,
+                isDeleted: false,
+                ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
+            },
         });
         const paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
         const revenue = order.customerPrice || 0;
-        const isCustomerPaid = paidIn >= revenue && revenue > 0;
+        const isCustomerPaid = hasPaidOutgoingInvoice || (paidIn >= revenue && revenue > 0);
 
         // Sync Driver / Sub-forwarder Paid Flag
+        const hasPaidIncomingInvoice = order.incomingInvoice?.status === InvoiceStatus.PAID;
         const executorPayments = await this.prisma.payment.findMany({
-            where: { orderId, direction: PaymentDirection.OUT, isDeleted: false },
+            where: {
+                orderId,
+                direction: PaymentDirection.OUT,
+                isDeleted: false,
+                ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
+            },
         });
         const paidOut = executorPayments.reduce((sum, p) => sum + p.amount, 0);
 
-        let isDriverPaid = order.isDriverPaid;
-        let driverPaidAt = order.driverPaidAt;
-        let isSubForwarderPaid = order.isSubForwarderPaid;
-        let subForwarderPaidAt = order.subForwarderPaidAt;
+        let isDriverPaid = false;
+        let driverPaidAt = null;
+        let isSubForwarderPaid = false;
+        let subForwarderPaidAt = null;
 
         if (order.subForwarderId) {
             const subForwarderPrice = order.subForwarderPrice || 0;
-            isSubForwarderPaid = paidOut >= subForwarderPrice && subForwarderPrice > 0;
+            isSubForwarderPaid = hasPaidIncomingInvoice || (paidOut >= subForwarderPrice && subForwarderPrice > 0);
             subForwarderPaidAt = isSubForwarderPaid ? (order.subForwarderPaidAt || new Date()) : null;
         } else {
             const driverCost = order.driverCost || 0;
-            isDriverPaid = paidOut >= driverCost && driverCost > 0;
+            isDriverPaid = hasPaidIncomingInvoice || (paidOut >= driverCost && driverCost > 0);
             driverPaidAt = isDriverPaid ? (order.driverPaidAt || new Date()) : null;
         }
 
@@ -421,7 +444,7 @@ export class PaymentsService {
         });
     }
 
-    async markCustomerPaid(companyId: string, orderId: string, paid: boolean, userId: string) {
+    async markCustomerPaid(companyId: string, orderId: string, paid: boolean, userId: string, date?: string) {
         const order = await this.prisma.order.findFirst({
             where: {
                 id: orderId,
@@ -446,7 +469,7 @@ export class PaymentsService {
                     counterpartyId: order.customerCompanyId || undefined,
                     direction: PaymentDirection.IN,
                     amount: balance,
-                    date: new Date().toISOString(),
+                    date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_CUSTOMER,
                 });
             }
@@ -469,7 +492,7 @@ export class PaymentsService {
         return this.prisma.order.findUnique({ where: { id: orderId } });
     }
 
-    async markDriverPaid(companyId: string, orderId: string, paid: boolean, userId: string) {
+    async markDriverPaid(companyId: string, orderId: string, paid: boolean, userId: string, date?: string) {
         const order = await this.prisma.order.findFirst({
             where: {
                 id: orderId,
@@ -498,7 +521,7 @@ export class PaymentsService {
                     orderId,
                     direction: PaymentDirection.OUT,
                     amount: balance,
-                    date: new Date().toISOString(),
+                    date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_DRIVER,
                 });
             }
@@ -521,7 +544,7 @@ export class PaymentsService {
         return this.prisma.order.findUnique({ where: { id: orderId } });
     }
 
-    async markSubForwarderPaid(companyId: string, orderId: string, paid: boolean, userId: string) {
+    async markSubForwarderPaid(companyId: string, orderId: string, paid: boolean, userId: string, date?: string) {
         const order = await this.prisma.order.findFirst({
             where: {
                 id: orderId,
@@ -550,7 +573,7 @@ export class PaymentsService {
                     counterpartyId: order.subForwarderId || undefined,
                     direction: PaymentDirection.OUT,
                     amount: balance,
-                    date: new Date().toISOString(),
+                    date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_SUBFORWARDER,
                 });
             }

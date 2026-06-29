@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Typography, Table, Tag, Space, Empty, Spin, Row, Col, Button, Modal, Form, Input, DatePicker, message } from 'antd';
+import { Typography, Table, Tag, Space, Empty, Spin, Row, Col, Button, Modal, Form, Input, DatePicker, message, Tooltip } from 'antd';
 import {
     CheckCircleOutlined,
     CloseCircleOutlined,
@@ -497,6 +497,31 @@ export default function SharedReportPage() {
                                     dataIndex: 'dueDate',
                                     key: 'dueDate',
                                     render: (d: string) => d ? dayjs(d).format('DD.MM.YYYY') : '—',
+                                },
+                                {
+                                    title: 'Рейсы',
+                                    key: 'orders',
+                                    width: 140,
+                                    render: (_: any, record: any) => {
+                                        const orders = [...(record.incomingOrders || []), ...(record.outgoingOrders || [])];
+                                        if (orders.length === 0) return '—';
+                                        const listContent = (
+                                            <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                                                {orders.map((o: any) => (
+                                                    <div key={o.id} style={{ fontSize: 11, padding: '2px 0', color: '#09090b' }}>
+                                                        Рейс №{o.orderNumber}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                        return (
+                                            <Tooltip title={listContent} overlayInnerStyle={{ padding: '8px 12px' }}>
+                                                <span style={{ cursor: 'pointer', color: '#1677ff', fontWeight: 500, borderBottom: '1px dashed #1677ff' }}>
+                                                    {orders.length === 1 ? '1 рейс' : `${orders.length} рейса(ов)`}
+                                                </span>
+                                            </Tooltip>
+                                        );
+                                    },
                                 },
                                 {
                                     title: 'Сумма счета',

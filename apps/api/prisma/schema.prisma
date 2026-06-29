@@ -313,12 +313,13 @@ model City {
 
   @@unique([countryId, regionId, name]) // Unique name per region/country
 }
-
 model Order {
   id              String      @id @default(cuid())
   orderNumber     String      @unique // Номер заявки
   status          OrderStatus @default(DRAFT)
-  
+  pendingStatus     OrderStatus?
+  pendingStatusById String?
+  pendingStatusAt   DateTime?
   // Груз
   cargoDescription String?
   cargoWeight     Float?      // кг

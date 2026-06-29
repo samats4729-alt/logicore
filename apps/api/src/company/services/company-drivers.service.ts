@@ -126,15 +126,27 @@ export class CompanyDriversService {
         }
 
         // Создаём водителя
-        return this.prisma.user.create({
-            data: {
-                ...data,
-                role: UserRole.DRIVER,
-                companyId,
-                departmentId: driversDept.id,
-                isActive: true,
-            },
-            select: this.driverSelect,
+        return this.prisma.$transaction(async (tx) => {
+            const user = await tx.user.create({
+                data: {
+                    ...data,
+                    role: UserRole.DRIVER,
+                    companyId,
+                    departmentId: driversDept.id,
+                    isActive: true,
+                },
+                select: this.driverSelect,
+            });
+
+            await tx.userCompanyRelation.create({
+                data: {
+                    userId: user.id,
+                    companyId,
+                    role: UserRole.DRIVER,
+                },
+            });
+
+            return user;
         });
     }
 

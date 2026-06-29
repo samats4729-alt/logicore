@@ -3,17 +3,59 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, OrderStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { RedisService } from '../redis/redis.service';
+import { PaymentsService } from '../accounting/services/payments.service';
+import { NotificationsService } from '../notifications/notifications.service';
+
+const STATUS_CHAIN = [
+    OrderStatus.ASSIGNED,
+    OrderStatus.EN_ROUTE_PICKUP,
+    OrderStatus.AT_PICKUP,
+    OrderStatus.LOADING,
+    OrderStatus.IN_TRANSIT,
+    OrderStatus.AT_DELIVERY,
+    OrderStatus.UNLOADING,
+    OrderStatus.COMPLETED
+];
 
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     DRAFT: [OrderStatus.PENDING, OrderStatus.CANCELLED],
     PENDING: [OrderStatus.ASSIGNED, OrderStatus.DRAFT, OrderStatus.CANCELLED],
-    ASSIGNED: [OrderStatus.EN_ROUTE_PICKUP, OrderStatus.PENDING, OrderStatus.CANCELLED],
-    EN_ROUTE_PICKUP: [OrderStatus.AT_PICKUP, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
-    AT_PICKUP: [OrderStatus.LOADING, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
-    LOADING: [OrderStatus.IN_TRANSIT, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
-    IN_TRANSIT: [OrderStatus.AT_DELIVERY, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
-    AT_DELIVERY: [OrderStatus.UNLOADING, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
-    UNLOADING: [OrderStatus.COMPLETED, OrderStatus.PROBLEM, OrderStatus.CANCELLED],
+    ASSIGNED: [
+        OrderStatus.PENDING,
+        OrderStatus.CANCELLED,
+        OrderStatus.PROBLEM,
+        ...STATUS_CHAIN.slice(STATUS_CHAIN.indexOf(OrderStatus.ASSIGNED) + 1)
+    ],
+    EN_ROUTE_PICKUP: [
+        OrderStatus.CANCELLED,
+        OrderStatus.PROBLEM,
+        ...STATUS_CHAIN.slice(STATUS_CHAIN.indexOf(OrderStatus.EN_ROUTE_PICKUP) + 1)
+    ],
+    AT_PICKUP: [
+        OrderStatus.CANCELLED,
+        OrderStatus.PROBLEM,
+        ...STATUS_CHAIN.slice(STATUS_CHAIN.indexOf(OrderStatus.AT_PICKUP) + 1)
+    ],
+    LOADING: [
+        OrderStatus.CANCELLED,
+        OrderStatus.PROBLEM,
+        ...STATUS_CHAIN.slice(STATUS_CHAIN.indexOf(OrderStatus.LOADING) + 1)
+    ],
+    IN_TRANSIT: [
+        OrderStatus.CANCELLED,
+        OrderStatus.PROBLEM,
+        ...STATUS_CHAIN.slice(STATUS_CHAIN.indexOf(OrderStatus.IN_TRANSIT) + 1)
+    ],
+    AT_DELIVERY: [
+        OrderStatus.CANCELLED,
+        OrderStatus.PROBLEM,
+        ...STATUS_CHAIN.slice(STATUS_CHAIN.indexOf(OrderStatus.AT_DELIVERY) + 1)
+    ],
+    UNLOADING: [
+        OrderStatus.CANCELLED,
+        OrderStatus.PROBLEM,
+        ...STATUS_CHAIN.slice(STATUS_CHAIN.indexOf(OrderStatus.UNLOADING) + 1)
+    ],
     COMPLETED: [],
     CANCELLED: [],
     PROBLEM: [
@@ -34,6 +76,8 @@ export class OrdersService implements OnModuleInit {
     constructor(
         private prisma: PrismaService,
         private redis: RedisService,
+        private paymentsService: PaymentsService,
+        private notificationsService: NotificationsService,
     ) { }
 
     async onModuleInit() {
@@ -137,14 +181,15 @@ export class OrdersService implements OnModuleInit {
         // Иначе → PENDING
         const status = data.driverId ? OrderStatus.ASSIGNED : OrderStatus.PENDING;
 
-        const isConfirmed = (
+        const creatorCompanyId = data.customerCompanyId || customer?.companyId;
+        const isCreatorForwarder = !!(data.forwarderId && creatorCompanyId && data.forwarderId === creatorCompanyId);
+
+        const isConfirmed = !!(
             data.driverId ||
             isForwarderExternal ||
             isCustomerExternal ||
-            !data.forwarderId ||
-            data.forwarderId === customer?.companyId ||
-            data.forwarderId === (data.customerCompanyId || customer?.companyId)
-        ) ? true : false;
+            isCreatorForwarder
+        );
 
         let driverName = null;
         let driverPhone = null;
@@ -430,9 +475,33 @@ export class OrdersService implements OnModuleInit {
     }
 
     /**
+     * Получить зарегистрированных участников заказа (isExternal = false)
+     */
+    private async getRegisteredParticipants(order: any): Promise<string[]> {
+        const participantIds = [
+            order.customerCompanyId,
+            order.forwarderId,
+            order.partnerId,
+            order.subForwarderId
+        ].filter((id): id is string => !!id);
+
+        const uniqueParticipantIds = Array.from(new Set(participantIds));
+
+        const companies = await this.prisma.company.findMany({
+            where: {
+                id: { in: uniqueParticipantIds },
+                isExternal: false
+            },
+            select: { id: true }
+        });
+
+        return companies.map(c => c.id);
+    }
+
+    /**
      * Обновление статуса заявки
      */
-    async updateStatus(orderId: string, status: OrderStatus, comment?: string, changedById?: string) {
+    async updateStatus(orderId: string, status: OrderStatus, comment?: string, changedById?: string, companyId?: string) {
         const order = await this.findById(orderId);
 
         if (order.status !== status) {
@@ -442,11 +511,65 @@ export class OrdersService implements OnModuleInit {
             }
         }
 
+        // Если целевой статус COMPLETED, проверяем необходимость подтверждения второй зарегистрированной стороной
+        if (status === OrderStatus.COMPLETED) {
+            let initiatorCompanyId = companyId;
+            if (!initiatorCompanyId && changedById) {
+                const userObj = await this.prisma.user.findUnique({
+                    where: { id: changedById },
+                    select: { companyId: true }
+                });
+                initiatorCompanyId = userObj?.companyId || undefined;
+            }
+
+            if (initiatorCompanyId) {
+                const registeredParticipants = await this.getRegisteredParticipants(order);
+                const otherSide = registeredParticipants.filter(id => id !== initiatorCompanyId);
+
+                if (otherSide.length > 0) {
+                    // Есть другие зарегистрированные участники -> требуется подтверждение
+                    const updated = await this.prisma.order.update({
+                        where: { id: orderId },
+                        data: {
+                            pendingStatus: OrderStatus.COMPLETED,
+                            pendingStatusById: initiatorCompanyId,
+                            pendingStatusAt: new Date(),
+                            statusHistory: {
+                                create: {
+                                    status: order.status, // Оставляем текущий статус
+                                    comment: `Запрошено подтверждение завершения рейса`,
+                                    changedById,
+                                }
+                            }
+                        }
+                    });
+
+                    // Уведомляем сотрудников другой стороны
+                    try {
+                        for (const targetCompanyId of otherSide) {
+                            await this.notificationsService.notifyCompany(targetCompanyId, {
+                                title: 'Запрос завершения рейса',
+                                body: `Инициатор запросил подтверждение завершения рейса по заявке №${order.orderNumber}`,
+                                data: { type: 'COMPLETION_REQUESTED', orderId }
+                            });
+                        }
+                    } catch (err) {
+                        console.warn('Completion request notification failed:', err);
+                    }
+
+                    return updated;
+                }
+            }
+        }
+
         const updated = await this.prisma.order.update({
             where: { id: orderId },
             data: {
                 status,
                 completedAt: status === OrderStatus.COMPLETED ? new Date() : undefined,
+                pendingStatus: null,
+                pendingStatusById: null,
+                pendingStatusAt: null,
                 statusHistory: {
                     create: {
                         status,
@@ -458,58 +581,158 @@ export class OrdersService implements OnModuleInit {
         });
 
         if (status === OrderStatus.COMPLETED) {
-            await this.syncOrderPaymentFlags(orderId);
+            await this.paymentsService.syncOrderPaymentFlags(orderId);
         }
 
         return updated;
     }
 
-    private async syncOrderPaymentFlags(orderId: string) {
-        const order = await this.prisma.order.findUnique({
-            where: { id: orderId },
-        });
-        if (!order) return;
-
-        // Sync Customer Paid Flag
-        const customerPayments = await this.prisma.payment.findMany({
-            where: { orderId, direction: 'IN', isDeleted: false },
-        });
-        const paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
-        const revenue = order.customerPrice || 0;
-        const isCustomerPaid = paidIn >= revenue && revenue > 0;
-
-        // Sync Driver / Sub-forwarder Paid Flag
-        const executorPayments = await this.prisma.payment.findMany({
-            where: { orderId, direction: 'OUT', isDeleted: false },
-        });
-        const paidOut = executorPayments.reduce((sum, p) => sum + p.amount, 0);
-
-        let isDriverPaid = order.isDriverPaid;
-        let driverPaidAt = order.driverPaidAt;
-        let isSubForwarderPaid = order.isSubForwarderPaid;
-        let subForwarderPaidAt = order.subForwarderPaidAt;
-
-        if (order.subForwarderId) {
-            const subForwarderPrice = order.subForwarderPrice || 0;
-            isSubForwarderPaid = paidOut >= subForwarderPrice && subForwarderPrice > 0;
-            subForwarderPaidAt = isSubForwarderPaid ? (order.subForwarderPaidAt || new Date()) : null;
-        } else {
-            const driverCost = order.driverCost || 0;
-            isDriverPaid = paidOut >= driverCost && driverCost > 0;
-            driverPaidAt = isDriverPaid ? (order.driverPaidAt || new Date()) : null;
+    async confirmCompletion(orderId: string, companyId: string, userId: string) {
+        const order = await this.findById(orderId);
+        if (!order) {
+            throw new NotFoundException('Заявка не найдена');
         }
 
-        await this.prisma.order.update({
+        if (order.pendingStatus !== OrderStatus.COMPLETED) {
+            throw new BadRequestException('Заявка не ожидает подтверждения завершения');
+        }
+
+        const registeredParticipants = await this.getRegisteredParticipants(order);
+        if (!registeredParticipants.includes(companyId) || order.pendingStatusById === companyId) {
+            throw new ForbiddenException('У вас нет прав на подтверждение завершения этой заявки');
+        }
+
+        const updated = await this.prisma.order.update({
             where: { id: orderId },
             data: {
-                isCustomerPaid,
-                customerPaidAt: isCustomerPaid ? (order.customerPaidAt || new Date()) : null,
-                isDriverPaid,
-                driverPaidAt,
-                isSubForwarderPaid,
-                subForwarderPaidAt,
-            },
+                status: OrderStatus.COMPLETED,
+                completedAt: new Date(),
+                pendingStatus: null,
+                pendingStatusById: null,
+                pendingStatusAt: null,
+                statusHistory: {
+                    create: {
+                        status: OrderStatus.COMPLETED,
+                        comment: 'Завершение рейса подтверждено',
+                        changedById: userId,
+                    }
+                }
+            }
         });
+
+        await this.paymentsService.syncOrderPaymentFlags(orderId);
+
+        // Уведомляем инициатора
+        if (order.pendingStatusById) {
+            try {
+                await this.notificationsService.notifyCompany(order.pendingStatusById, {
+                    title: 'Завершение рейса подтверждено',
+                    body: `Завершение рейса по заявке №${order.orderNumber} подтверждено второй стороной`,
+                    data: { type: 'COMPLETION_CONFIRMED', orderId }
+                });
+            } catch (err) {
+                console.warn('Completion confirmation notification failed:', err);
+            }
+        }
+
+        return updated;
+    }
+
+    async rejectCompletion(orderId: string, companyId: string, userId: string, reason?: string) {
+        const order = await this.findById(orderId);
+        if (!order) {
+            throw new NotFoundException('Заявка не найдена');
+        }
+
+        if (order.pendingStatus !== OrderStatus.COMPLETED) {
+            throw new BadRequestException('Заявка не ожидает подтверждения завершения');
+        }
+
+        const registeredParticipants = await this.getRegisteredParticipants(order);
+        if (!registeredParticipants.includes(companyId) || order.pendingStatusById === companyId) {
+            throw new ForbiddenException('У вас нет прав на отклонение завершения этой заявки');
+        }
+
+        const comment = `Завершение отклонено: ${reason || 'без указания причины'}`;
+        const updated = await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                pendingStatus: null,
+                pendingStatusById: null,
+                pendingStatusAt: null,
+                statusHistory: {
+                    create: {
+                        status: order.status,
+                        comment,
+                        changedById: userId,
+                    }
+                }
+            }
+        });
+
+        // Уведомляем инициатора
+        if (order.pendingStatusById) {
+            try {
+                await this.notificationsService.notifyCompany(order.pendingStatusById, {
+                    title: 'Запрос завершения отклонен',
+                    body: `Запрос на завершение рейса по заявке №${order.orderNumber} отклонен второй стороной. Причина: ${reason || 'не указана'}`,
+                    data: { type: 'COMPLETION_REJECTED', orderId }
+                });
+            } catch (err) {
+                console.warn('Completion rejection notification failed:', err);
+            }
+        }
+
+        return updated;
+    }
+
+    async cancelCompletionRequest(orderId: string, companyId: string, userId: string) {
+        const order = await this.findById(orderId);
+        if (!order) {
+            throw new NotFoundException('Заявка не найдена');
+        }
+
+        if (order.pendingStatus !== OrderStatus.COMPLETED) {
+            throw new BadRequestException('Заявка не ожидает подтверждения завершения');
+        }
+
+        if (order.pendingStatusById !== companyId) {
+            throw new ForbiddenException('Вы не являетесь инициатором запроса завершения');
+        }
+
+        const updated = await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                pendingStatus: null,
+                pendingStatusById: null,
+                pendingStatusAt: null,
+                statusHistory: {
+                    create: {
+                        status: order.status,
+                        comment: 'Запрос завершения рейса отменен инициатором',
+                        changedById: userId,
+                    }
+                }
+            }
+        });
+
+        // Уведомляем другую сторону
+        const registeredParticipants = await this.getRegisteredParticipants(order);
+        const otherSide = registeredParticipants.filter(id => id !== companyId);
+
+        try {
+            for (const targetCompanyId of otherSide) {
+                await this.notificationsService.notifyCompany(targetCompanyId, {
+                    title: 'Запрос завершения отменен',
+                    body: `Инициатор отменил запрос завершения рейса по заявке №${order.orderNumber}`,
+                    data: { type: 'COMPLETION_CANCELLED', orderId }
+                });
+            }
+        } catch (err) {
+            console.warn('Completion cancel notification failed:', err);
+        }
+
+        return updated;
     }
 
     /**
@@ -583,7 +806,7 @@ export class OrdersService implements OnModuleInit {
             };
         }
 
-        return this.prisma.order.update({
+        const updated = await this.prisma.order.update({
             where: { id: orderId },
             data: updateData,
             include: {
@@ -597,6 +820,17 @@ export class OrdersService implements OnModuleInit {
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
             },
         });
+
+        if (
+            data.customerPrice !== undefined ||
+            data.driverCost !== undefined ||
+            data.subForwarderPrice !== undefined ||
+            data.subForwarderId !== undefined
+        ) {
+            await this.paymentsService.syncOrderPaymentFlags(orderId);
+        }
+
+        return updated;
     }
 
     /**

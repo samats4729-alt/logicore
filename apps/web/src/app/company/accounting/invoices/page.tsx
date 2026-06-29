@@ -171,6 +171,31 @@ export default function InvoicesPage() {
             render: (d: string) => d ? dayjs(d).format('DD.MM.YYYY') : '—',
         },
         {
+            title: 'Рейсы',
+            key: 'orders',
+            width: 140,
+            render: (_: any, record: any) => {
+                const orders = [...(record.incomingOrders || []), ...(record.outgoingOrders || [])];
+                if (orders.length === 0) return '—';
+                const listContent = (
+                    <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                        {orders.map((o: any) => (
+                            <div key={o.id} style={{ fontSize: 11, padding: '2px 0' }}>
+                                Рейс №{o.orderNumber}
+                            </div>
+                        ))}
+                    </div>
+                );
+                return (
+                    <Tooltip title={listContent} overlayInnerStyle={{ padding: '8px 12px' }}>
+                        <span style={{ cursor: 'pointer', color: token.colorPrimary, fontWeight: 500, borderBottom: `1px dashed ${token.colorPrimary}` }}>
+                            {orders.length === 1 ? `1 рейс` : `${orders.length} рейса(ов)`}
+                        </span>
+                    </Tooltip>
+                );
+            },
+        },
+        {
             title: 'Сумма',
             key: 'amount',
             align: 'right' as const,

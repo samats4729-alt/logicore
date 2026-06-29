@@ -178,7 +178,32 @@ export class OrdersController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Обновить статус заявки' })
     async updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Request() req: any) {
-        return this.ordersService.updateStatus(id, dto.status, dto.comment, req.user.sub);
+        return this.ordersService.updateStatus(id, dto.status, dto.comment, req.user.sub, req.user.companyId);
+    }
+
+    @Put(':id/confirm-completion')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Подтвердить завершение рейса' })
+    async confirmCompletion(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.confirmCompletion(id, req.user.companyId, req.user.sub);
+    }
+
+    @Put(':id/reject-completion')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Отклонить завершение рейса' })
+    async rejectCompletion(
+        @Param('id') id: string,
+        @Body() body: { reason?: string },
+        @Request() req: any
+    ) {
+        return this.ordersService.rejectCompletion(id, req.user.companyId, req.user.sub, body.reason);
+    }
+
+    @Put(':id/cancel-completion')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Отменить запрос на завершение рейса' })
+    async cancelCompletionRequest(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.cancelCompletionRequest(id, req.user.companyId, req.user.sub);
     }
 
     @Post(':id/problem')

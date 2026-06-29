@@ -81,14 +81,14 @@ export class AuthService {
             },
         });
 
+        const { passwordHash: _pwdHash, ...userWithoutPassword } = user;
         return {
             accessToken,
             user: {
-                id: user.id,
-                email: user.email,
-                lastName: user.lastName,
+                ...userWithoutPassword,
+                companyId: user.companyId,
                 role: user.role,
-                company: (user as any).company,
+                company: user.company,
             },
         };
     }
@@ -134,8 +134,9 @@ export class AuthService {
             role = activeRole as any;
         }
 
+        const { passwordHash, ...userWithoutPassword } = user;
         return {
-            ...user,
+            ...userWithoutPassword,
             companyId,
             role,
             company
@@ -437,13 +438,12 @@ export class AuthService {
         };
         const accessToken = this.jwtService.sign(payload);
 
+        const { passwordHash: _pwdHash, ...adminWithoutPassword } = result.admin;
         return {
             company: result.company,
             admin: {
-                id: result.admin.id,
-                email: result.admin.email,
-                firstName: result.admin.firstName,
-                lastName: result.admin.lastName,
+                ...adminWithoutPassword,
+                companyId: result.company.id,
                 role: result.admin.role,
                 company: result.company,
             },
@@ -556,15 +556,14 @@ export class AuthService {
             },
         });
 
+        const { passwordHash: _pwdHash, ...userWithoutPassword } = user;
         return {
             accessToken,
             user: {
-                id: user.id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
+                ...userWithoutPassword,
+                companyId: user.companyId,
                 role: user.role,
-                company: (user as any).company,
+                company: user.company,
             },
         };
     }
@@ -774,13 +773,12 @@ export class AuthService {
         };
         const accessToken = this.jwtService.sign(payload);
 
+        const { passwordHash: _pwdHash, ...adminWithoutPassword } = result.admin;
         return {
             company: result.company,
             admin: {
-                id: result.admin.id,
-                email: result.admin.email,
-                firstName: result.admin.firstName,
-                lastName: result.admin.lastName,
+                ...adminWithoutPassword,
+                companyId: result.company.id,
                 role: result.admin.role,
                 company: result.company,
             },
@@ -870,13 +868,17 @@ export class AuthService {
         };
         const accessToken = this.jwtService.sign(payload);
 
+        const company = await this.prisma.company.findUnique({
+            where: { id: result.companyId! },
+        });
+
+        const { passwordHash: _pwdHash, ...userWithoutPassword } = result;
         return {
             user: {
-                id: result.id,
-                email: result.email,
-                firstName: result.firstName,
-                lastName: result.lastName,
+                ...userWithoutPassword,
+                companyId: result.companyId,
                 role: result.role,
+                company,
             },
             accessToken,
         };
