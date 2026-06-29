@@ -196,7 +196,7 @@ export default function CompanyOrdersPage() {
         addEmails(order.customerCompany?.email, `Компания-заказчик (${order.customerCompany?.name})`);
         addEmails(order.customer?.email, `Заказчик (${order.customer?.firstName} ${order.customer?.lastName})`);
         addEmails(order.forwarder?.email, `Экспедитор (${order.forwarder?.name})`);
-        addEmails(order.subForwarder?.email, `Суб-экспедитор (${order.subForwarder?.name})`);
+        addEmails(order.subForwarder?.email, `Перевозчик (${order.subForwarder?.name})`);
         addEmails(order.partner?.email, `Партнер (${order.partner?.name})`);
         
         // Add emails from route points/warehouses
