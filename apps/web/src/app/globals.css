@@ -534,4 +534,64 @@ a.mapboxgl-ctrl-logo,
   filter: opacity(1) !important;
 }
 
+/* ==========================================
+   AI GUIDE — SPOTLIGHT HIGHLIGHT
+   ========================================== */
+.ai-spot-ring {
+  position: absolute;
+  border-radius: 14px;
+  border: 2px solid #1677ff;
+  box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.55);
+  transition: top 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    left 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    width 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    height 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ai-spot-ring::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  animation: aiSpotPulse 1.8s ease-out infinite;
+}
+
+@keyframes aiSpotPulse {
+  0% { box-shadow: 0 0 0 0 rgba(22, 119, 255, 0.5); }
+  70% { box-shadow: 0 0 0 16px rgba(22, 119, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(22, 119, 255, 0); }
+}
+
+.ai-spot-tip {
+  position: absolute;
+  max-width: 300px;
+  background: linear-gradient(135deg, #0b1220, #15294d);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid rgba(22, 119, 255, 0.6);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  animation: aiTipIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ai-spot-tip::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 22px;
+  width: 12px;
+  height: 12px;
+  background: #0b1220;
+  border-left: 1px solid rgba(22, 119, 255, 0.6);
+  border-top: 1px solid rgba(22, 119, 255, 0.6);
+  transform: rotate(45deg);
+}
+
+@keyframes aiTipIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 

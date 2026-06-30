@@ -44,6 +44,22 @@ function parseAction(text: string): { clean: string; action: GuideAction | null 
     return { clean, action };
 }
 
+function renderRich(text: string) {
+    return text.split('\n').map((line, li) => {
+        const cleaned = line.replace(/^\s*[-*•]\s+/, '• ');
+        const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
+        return (
+            <div key={li} style={line.trim() ? undefined : { height: 6 }}>
+                {parts.map((p, i) => {
+                    const b = p.match(/^\*\*([^*]+)\*\*$/);
+                    if (b) return <strong key={i}>{b[1]}</strong>;
+                    return <span key={i}>{p.replace(/\*/g, '')}</span>;
+                })}
+            </div>
+        );
+    });
+}
+
 export default function AssistantWidget() {
     const router = useRouter();
     const [open, setOpen] = useState(false);
@@ -199,7 +215,7 @@ export default function AssistantWidget() {
                                         border: m.role === 'user' ? 'none' : '1px solid #e4e4e7',
                                     }}
                                 >
-                                    {m.content}
+                                    {m.role === 'assistant' ? renderRich(m.content) : m.content}
                                     {m.action?.goto && (
                                         <Button
                                             type="primary"
@@ -243,31 +259,20 @@ export default function AssistantWidget() {
             {spotlight && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 1500, pointerEvents: 'none' }}>
                     <div
+                        className="ai-spot-ring"
                         style={{
-                            position: 'absolute',
                             top: spotlight.top - 6,
                             left: spotlight.left - 6,
                             width: spotlight.width + 12,
                             height: spotlight.height + 12,
-                            borderRadius: 12,
-                            boxShadow: '0 0 0 9999px rgba(2,6,23,0.55)',
-                            border: '2px solid #1677ff',
-                            transition: 'all 0.3s ease',
                         }}
                     />
                     {spotlight.text && (
                         <div
+                            className="ai-spot-tip"
                             style={{
-                                position: 'absolute',
-                                top: Math.min(spotlight.top + spotlight.height + 14, window.innerHeight - 80),
+                                top: Math.min(spotlight.top + spotlight.height + 16, window.innerHeight - 80),
                                 left: Math.min(spotlight.left, window.innerWidth - 320),
-                                maxWidth: 300,
-                                background: '#0b1220',
-                                color: '#fff',
-                                padding: '10px 14px',
-                                borderRadius: 10,
-                                fontSize: 13,
-                                border: '1px solid #1677ff',
                             }}
                         >
                             {spotlight.text}
