@@ -14,7 +14,6 @@ import {
     CarOutlined,
     ShopOutlined,
     EnvironmentOutlined,
-    ThunderboltOutlined,
     CloudOutlined,
     MobileOutlined
 } from '@ant-design/icons';
@@ -262,27 +261,19 @@ export default function HomePage() {
                 <div className={styles.heroGlow} />
                 <div className={styles.gridOverlay} />
                 
-                <div className={styles.content}>
-                    <Reveal delay={100}>
-                        <div className={styles.badge}>
-                            <ThunderboltOutlined style={{ marginRight: 6 }} /> 
-                            Интеллектуальная логистика нового поколения
-                        </div>
-                    </Reveal>
-                    
+                <div className={styles.heroInner}>
+                    <div className={styles.heroIndex}>(01 — Цифровая логистика)</div>
+
                     <h1 className={styles.kineticTitle}>
                         <span className={styles.kineticLine}>{splitChars('Логистика', 0)}</span>
                         <span className={styles.kineticLine}>{splitChars('в движении', 1, true)}</span>
                     </h1>
                     
-                    <Reveal delay={500}>
-                        <p className={styles.subtitle}>
-                            Единая цифровая экосистема, которая объединяет грузовладельцев, экспедиторов и водителей. Автоматизируйте процессы, отслеживайте грузы в реальном времени и увеличивайте рентабельность вашего бизнеса с помощью передовых технологий LogiCore.
-                        </p>
-                    </Reveal>
-                    
-                    <Reveal delay={700}>
-                        <div className={styles.actions}>
+                    <p className={styles.heroLead}>
+                        Единая цифровая платформа для грузовладельцев, экспедиторов и водителей. Заявки, трекинг в реальном времени и финансы — в одном движении, без трения.
+                    </p>
+
+                    <div className={styles.heroActions}>
                             <Magnetic>
                                 <Button
                                     type="primary"
@@ -293,22 +284,19 @@ export default function HomePage() {
                                     Начать работу <ArrowRightOutlined />
                                 </Button>
                             </Magnetic>
-                            <Button 
-                                size="large" 
+                            <Button
+                                size="large"
                                 className={styles.secondaryBtn}
                                 onClick={() => router.push('/login')}
                             >
                                 Вход в систему
                             </Button>
                         </div>
-                    </Reveal>
-                </div>
 
-                <div className={styles.scrollHint}>
-                    <span>Листайте вниз</span>
-                    <span className={styles.mouse}>
-                        <span className={styles.wheel} />
-                    </span>
+                    <div className={styles.heroBottom}>
+                        <span>KZ · Алматы</span>
+                        <span className={styles.heroScrollLabel}>Прокрутите ↓</span>
+                    </div>
                 </div>
             </section>
 

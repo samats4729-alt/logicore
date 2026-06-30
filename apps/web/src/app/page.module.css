@@ -71,11 +71,71 @@
     position: relative;
     min-height: 100vh;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 120px 20px 80px;
+    align-items: stretch;
+    padding: 0;
     width: 100%;
     overflow: hidden;
+}
+
+.heroInner {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    text-align: left;
+    padding: 140px 8% 120px;
+}
+
+.heroIndex {
+    font-size: 0.8rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: #5b6b8c;
+    margin-bottom: 24px;
+}
+
+.heroLead {
+    max-width: 540px;
+    margin: 28px 0 38px;
+    color: #94a3b8;
+    font-size: 1.2rem;
+    line-height: 1.6;
+}
+
+.heroActions {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.heroBottom {
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: 42px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5b6b8c;
+    z-index: 10;
+}
+
+.heroScrollLabel {
+    animation: heroScrollPulse 2s ease-in-out infinite;
+}
+
+@keyframes heroScrollPulse {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
 }
 
 .heroGlow {
@@ -707,6 +767,18 @@
 
     .marqueeTrack {
         font-size: 0.95rem;
+    }
+
+    .heroInner {
+        padding: 110px 24px 96px;
+    }
+
+    .heroLead {
+        font-size: 1.05rem;
+    }
+
+    .heroActions {
+        width: 100%;
     }
 }
 
