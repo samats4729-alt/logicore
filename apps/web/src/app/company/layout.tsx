@@ -31,9 +31,12 @@ import {
     BarChartOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
+import dynamic from 'next/dynamic';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
+
+const AssistantWidget = dynamic(() => import('@/components/ui/AssistantWidget'), { ssr: false });
 
 export default function CompanyLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
@@ -450,6 +453,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             {/* Content */}
             <Layout style={{ background: isTrackingPage ? '#f8f8f8' : '#f8f8f8', padding: isTrackingPage ? 0 : (isMobile ? 0 : 24) }}>
                 <Content
+                    data-guide="content"
                     style={{
                         margin: isTrackingPage ? 0 : (isMobile ? 16 : 0),
                         padding: isTrackingPage ? 0 : (isMobile ? 16 : 32),
@@ -464,6 +468,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     {children}
                 </Content>
             </Layout>
+
+            <AssistantWidget />
         </Layout >
     );
 }
