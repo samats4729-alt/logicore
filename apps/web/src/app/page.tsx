@@ -27,6 +27,7 @@ const HeroNetwork = dynamic(() => import('@/components/ui/HeroNetwork'), { ssr: 
 // Direct imports of lightweight client components
 import Reveal from '@/components/ui/Reveal';
 import CustomCursor from '@/components/ui/CustomCursor';
+import InteractiveCard from '@/components/ui/InteractiveCard';
 
 // Magnetic wrapper — element drifts toward the cursor on hover
 function Magnetic({ children }: { children: React.ReactNode }) {
@@ -294,7 +295,6 @@ export default function HomePage() {
                         </div>
 
                     <div className={styles.heroBottom}>
-                        <span>KZ · Алматы</span>
                         <span className={styles.heroScrollLabel}>Прокрутите ↓</span>
                     </div>
                 </div>
@@ -320,16 +320,16 @@ export default function HomePage() {
                 </Reveal>
                 <div className={styles.featuresGrid}>
                     {features.map((feat, i) => (
-                        <Reveal 
-                            key={i} 
-                            className={styles.featureCard} 
-                            delay={(i % 3) * 100}
-                        >
-                            <div className={styles.featureIconWrapper}>
-                                {feat.icon}
-                            </div>
-                            <h3 className={styles.featureTitle}>{feat.title}</h3>
-                            <p className={styles.featureDesc}>{feat.desc}</p>
+                        <Reveal key={i} delay={(i % 3) * 100}>
+                            <InteractiveCard className={styles.featureCard}>
+                                <span className={styles.featureNum}>{String(i + 1).padStart(2, '0')}</span>
+                                <div className={styles.featureIconWrapper}>
+                                    {feat.icon}
+                                </div>
+                                <h3 className={styles.featureTitle}>{feat.title}</h3>
+                                <p className={styles.featureDesc}>{feat.desc}</p>
+                                <ArrowRightOutlined className={styles.featureArrow} />
+                            </InteractiveCard>
                         </Reveal>
                     ))}
                 </div>
@@ -347,14 +347,12 @@ export default function HomePage() {
                 </Reveal>
                 <div className={styles.stepsGrid}>
                     {steps.map((step, i) => (
-                        <Reveal 
-                            key={i} 
-                            className={styles.stepCard} 
-                            delay={i * 100}
-                        >
-                            <div className={styles.stepNumber}>{step.num}</div>
-                            <h3 className={styles.stepTitle}>{step.title}</h3>
-                            <p className={styles.stepDesc}>{step.desc}</p>
+                        <Reveal key={i} delay={i * 100}>
+                            <InteractiveCard className={styles.stepCard}>
+                                <div className={styles.stepNumber}>{step.num}</div>
+                                <h3 className={styles.stepTitle}>{step.title}</h3>
+                                <p className={styles.stepDesc}>{step.desc}</p>
+                            </InteractiveCard>
                         </Reveal>
                     ))}
                 </div>
@@ -372,19 +370,17 @@ export default function HomePage() {
                 </Reveal>
                 <div className={styles.rolesGrid}>
                     {roles.map((role, i) => (
-                        <Reveal 
-                            key={i} 
-                            className={styles.roleCard} 
-                            delay={i * 100}
-                        >
-                            <h3 className={styles.roleTitle}>
-                                {role.icon} {role.title}
-                            </h3>
-                            <ul className={styles.roleList}>
-                                {role.list.map((item, j) => (
-                                    <li key={j}>{item}</li>
-                                ))}
-                            </ul>
+                        <Reveal key={i} delay={i * 100}>
+                            <InteractiveCard className={styles.roleCard}>
+                                <h3 className={styles.roleTitle}>
+                                    {role.icon} {role.title}
+                                </h3>
+                                <ul className={styles.roleList}>
+                                    {role.list.map((item, j) => (
+                                        <li key={j}>{item}</li>
+                                    ))}
+                                </ul>
+                            </InteractiveCard>
                         </Reveal>
                     ))}
                 </div>
@@ -398,14 +394,16 @@ export default function HomePage() {
                     <p className={styles.ctaSubtitle}>
                         Присоединяйтесь к тысячам компаний, которые уже масштабируют свой бизнес, экономят на издержках и доставляют грузы точно в срок с помощью LogiCore.
                     </p>
-                    <Button 
-                        type="primary" 
-                        size="large" 
-                        className={styles.primaryBtn}
-                        onClick={() => router.push('/register')}
-                    >
-                        Создать аккаунт <ArrowRightOutlined />
-                    </Button>
+                    <Magnetic>
+                        <Button
+                            type="primary"
+                            size="large"
+                            className={styles.primaryBtn}
+                            onClick={() => router.push('/register')}
+                        >
+                            Создать аккаунт <ArrowRightOutlined />
+                        </Button>
+                    </Magnetic>
                 </Reveal>
             </section>
 

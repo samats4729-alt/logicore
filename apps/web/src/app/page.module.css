@@ -120,7 +120,7 @@
     right: 8%;
     bottom: 42px;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     font-size: 0.72rem;
     letter-spacing: 0.18em;
@@ -426,9 +426,8 @@
 }
 
 .featureCard:hover {
-    transform: translateY(-8px);
     background: rgba(255, 255, 255, 0.03);
-    border-color: rgba(22, 119, 255, 0.3);
+    border-color: rgba(22, 119, 255, 0.35);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 25px rgba(22, 119, 255, 0.1);
 }
 
@@ -501,7 +500,6 @@
 .stepCard:hover {
     background: rgba(255, 255, 255, 0.03);
     border-color: rgba(22, 119, 255, 0.25);
-    transform: translateY(-4px);
 }
 
 .stepNumber {
@@ -555,7 +553,6 @@
 .roleCard:hover {
     background: rgba(255, 255, 255, 0.03);
     border-color: rgba(22, 119, 255, 0.2);
-    transform: translateY(-6px);
 }
 
 .roleTitle {
@@ -891,5 +888,78 @@
     .cursorDot,
     .cursorRing {
         display: none;
+    }
+}
+
+/* Interactive cards — tilt toward cursor + spotlight */
+.iCard {
+    position: relative;
+    overflow: hidden;
+    --rx: 0deg;
+    --ry: 0deg;
+    --ty: 0px;
+    --mx: 50%;
+    --my: 50%;
+    transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--ty));
+    transition: transform 0.2s ease, border-color 0.4s ease, background 0.4s ease, box-shadow 0.4s ease;
+}
+
+.iCard:hover {
+    --ty: -8px;
+}
+
+.iCard::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(240px circle at var(--mx) var(--my), rgba(77, 124, 255, 0.16), transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.iCard:hover::before {
+    opacity: 1;
+}
+
+.iCard > * {
+    position: relative;
+    z-index: 2;
+}
+
+/* Feature tile number + arrow */
+.featureNum {
+    position: absolute;
+    top: 28px;
+    right: 32px;
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: rgba(148, 163, 184, 0.4);
+    letter-spacing: 0.05em;
+    z-index: 2;
+}
+
+.featureArrow {
+    position: absolute;
+    bottom: 28px;
+    right: 32px;
+    font-size: 20px;
+    color: #4d8cff;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 2;
+}
+
+.featureCard:hover .featureArrow {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+@media (max-width: 768px) {
+    .iCard:hover {
+        --ty: 0px;
     }
 }
