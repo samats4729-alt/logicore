@@ -700,4 +700,124 @@
     .sectionTitle {
         font-size: 2.25rem;
     }
+
+    .kineticTitle {
+        font-size: clamp(2.5rem, 14vw, 3.5rem);
+    }
+
+    .marqueeTrack {
+        font-size: 0.95rem;
+    }
+}
+
+/* Kinetic Hero Title */
+.kineticTitle {
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 900;
+    font-size: clamp(3rem, 9vw, 6.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    margin-bottom: 28px;
+    color: #ffffff;
+    text-transform: none;
+}
+
+.kineticLine {
+    display: block;
+    overflow: hidden;
+    padding-bottom: 0.04em;
+}
+
+.kineticChar {
+    display: inline-block;
+    transform: translateY(115%);
+    animation: kineticRise 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform;
+}
+
+.kineticAccent {
+    color: #4d8cff;
+}
+
+@keyframes kineticRise {
+    to {
+        transform: translateY(0);
+    }
+}
+
+/* Marquee strip */
+.marquee {
+    overflow: hidden;
+    white-space: nowrap;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: #020617;
+    padding: 18px 0;
+    position: relative;
+    z-index: 10;
+}
+
+.marqueeTrack {
+    display: inline-block;
+    white-space: nowrap;
+    animation: marqueeMove 28s linear infinite;
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: 0.04em;
+    color: #2a3550;
+    text-transform: uppercase;
+}
+
+.marqueeTrack span {
+    margin: 0 28px;
+}
+
+.marqueeTrack b {
+    color: #4d8cff;
+}
+
+@keyframes marqueeMove {
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+/* Custom cursor */
+.cursorDot,
+.cursorRing {
+    position: fixed;
+    top: 0;
+    left: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.cursorDot {
+    width: 6px;
+    height: 6px;
+    background: #4d8cff;
+    transform: translate(-50%, -50%);
+}
+
+.cursorRing {
+    width: 34px;
+    height: 34px;
+    border: 1.5px solid rgba(255, 255, 255, 0.5);
+    transition: width 0.25s ease, height 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+}
+
+.cursorGrow {
+    width: 64px;
+    height: 64px;
+    border-color: rgba(77, 124, 255, 0.9);
+    background: rgba(77, 124, 255, 0.12);
+}
+
+@media (max-width: 768px) {
+    .cursorDot,
+    .cursorRing {
+        display: none;
+    }
 }

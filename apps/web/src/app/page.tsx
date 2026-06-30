@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Spin, Button } from 'antd';
@@ -22,11 +22,38 @@ import {
 // CSS Module
 import styles from './page.module.css';
 
-// Dynamic Import of Three.js Globe (Client-only, no SSR)
-const HeroGlobe = dynamic(() => import('@/components/ui/HeroGlobe'), { ssr: false });
+// Dynamic Import of animated network background (Client-only, no SSR)
+const HeroNetwork = dynamic(() => import('@/components/ui/HeroNetwork'), { ssr: false });
 
 // Direct imports of lightweight client components
 import Reveal from '@/components/ui/Reveal';
+import CustomCursor from '@/components/ui/CustomCursor';
+
+// Magnetic wrapper — element drifts toward the cursor on hover
+function Magnetic({ children }: { children: React.ReactNode }) {
+    const ref = useRef<HTMLSpanElement>(null);
+    const onMove = (e: React.MouseEvent) => {
+        const el = ref.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const x = e.clientX - r.left - r.width / 2;
+        const y = e.clientY - r.top - r.height / 2;
+        el.style.transform = `translate(${x * 0.25}px, ${y * 0.35}px)`;
+    };
+    const reset = () => {
+        if (ref.current) ref.current.style.transform = 'translate(0, 0)';
+    };
+    return (
+        <span
+            ref={ref}
+            onMouseMove={onMove}
+            onMouseLeave={reset}
+            style={{ display: 'inline-block', transition: 'transform 0.2s ease' }}
+        >
+            {children}
+        </span>
+    );
+}
 
 export default function HomePage() {
     const router = useRouter();
@@ -189,8 +216,20 @@ export default function HomePage() {
         }
     ];
 
+    const splitChars = (text: string, lineIndex: number, accent = false) =>
+        Array.from(text).map((ch, i) => (
+            <span
+                key={i}
+                className={`${styles.kineticChar}${accent ? ' ' + styles.kineticAccent : ''}`}
+                style={{ animationDelay: `${0.15 + lineIndex * 0.32 + i * 0.04}s` }}
+            >
+                {ch === ' ' ? ' ' : ch}
+            </span>
+        ));
+
     return (
         <div className={styles.container}>
+            <CustomCursor />
             {/* Header / Navbar */}
             <nav className={`${styles.navbar} ${scrolled ? styles.navbarScrolled : ''}`}>
                 <div className={styles.logo} onClick={() => router.push('/')}>
@@ -219,7 +258,7 @@ export default function HomePage() {
 
             {/* Hero Section */}
             <section className={styles.hero}>
-                <HeroGlobe />
+                <HeroNetwork />
                 <div className={styles.heroGlow} />
                 <div className={styles.gridOverlay} />
                 
@@ -231,11 +270,10 @@ export default function HomePage() {
                         </div>
                     </Reveal>
                     
-                    <Reveal delay={300}>
-                        <h1 className={styles.title}>
-                            Новое измерение логистики<br />и грузоперевозок
-                        </h1>
-                    </Reveal>
+                    <h1 className={styles.kineticTitle}>
+                        <span className={styles.kineticLine}>{splitChars('Логистика', 0)}</span>
+                        <span className={styles.kineticLine}>{splitChars('в движении', 1, true)}</span>
+                    </h1>
                     
                     <Reveal delay={500}>
                         <p className={styles.subtitle}>
@@ -245,14 +283,16 @@ export default function HomePage() {
                     
                     <Reveal delay={700}>
                         <div className={styles.actions}>
-                            <Button 
-                                type="primary" 
-                                size="large" 
-                                className={styles.primaryBtn}
-                                onClick={() => router.push('/register')}
-                            >
-                                Начать работу <ArrowRightOutlined />
-                            </Button>
+                            <Magnetic>
+                                <Button
+                                    type="primary"
+                                    size="large"
+                                    className={styles.primaryBtn}
+                                    onClick={() => router.push('/register')}
+                                >
+                                    Начать работу <ArrowRightOutlined />
+                                </Button>
+                            </Magnetic>
                             <Button 
                                 size="large" 
                                 className={styles.secondaryBtn}
@@ -272,6 +312,13 @@ export default function HomePage() {
                 </div>
             </section>
 
+            {/* Marquee */}
+            <div className={styles.marquee} aria-hidden="true">
+                <div className={styles.marqueeTrack}>
+                    <span>Заявки</span><b>·</b><span>Трекинг</span><b>·</b><span>Финансы</span><b>·</b><span>Документы</span><b>·</b><span>Автопарк</span><b>·</b><span>Взаиморасчёты</span><b>·</b>
+                    <span>Заявки</span><b>·</b><span>Трекинг</span><b>·</b><span>Финансы</span><b>·</b><span>Документы</span><b>·</b><span>Автопарк</span><b>·</b><span>Взаиморасчёты</span><b>·</b>
+                </div>
+            </div>
 
             {/* Features Section */}
             <section className={styles.featuresSection}>
