@@ -904,8 +904,9 @@ export class FinancialReportsService {
             amount += flow === 'customer' ? (o.customerPrice || 0) : (o.subForwarderPrice || 0);
         }
 
-        // Тип счёта — относительно владельца отчёта (companyId)
-        const type = issuerId === companyId ? InvoiceType.OUTGOING : InvoiceType.INCOMING;
+        // Тип счёта следует потоку денег (единая конвенция со слотами и страницами счёта):
+        // customer-поток (экспедитор выставляет заказчику) = OUTGOING, executor-поток = INCOMING
+        const type = flow === 'customer' ? InvoiceType.OUTGOING : InvoiceType.INCOMING;
 
         // Проверяем, что заказы ещё не засчётованы по этому направлению
         for (const order of orders) {

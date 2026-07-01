@@ -119,15 +119,17 @@ export default function InvoicesPage() {
 
     const filteredInvoices = useMemo(() => {
         return invoices.filter((inv) => {
-            const matchesTab = inv.type === activeTab;
+            // Направление счёта — относительно нашей компании (мы выставили или нам выставили)
+            const isOutgoingForMe = inv.issuerId === user?.companyId;
+            const matchesTab = activeTab === 'OUTGOING' ? isOutgoingForMe : !isOutgoingForMe;
             const matchesStatus = statusFilter === 'all' || inv.status === statusFilter;
-            const counterpartyName = activeTab === 'OUTGOING' ? (inv.recipient?.name || '') : (inv.issuer?.name || '');
+            const counterpartyName = isOutgoingForMe ? (inv.recipient?.name || '') : (inv.issuer?.name || '');
             const matchesSearch =
                 inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
                 counterpartyName.toLowerCase().includes(search.toLowerCase());
             return matchesTab && matchesStatus && matchesSearch;
         });
-    }, [invoices, activeTab, statusFilter, search]);
+    }, [invoices, activeTab, statusFilter, search, user?.companyId]);
 
     const columns = [
         {
@@ -149,7 +151,7 @@ export default function InvoicesPage() {
             title: activeTab === 'OUTGOING' ? 'Получатель (клиент)' : 'Отправитель (партнер)',
             key: 'counterparty',
             render: (_: any, record: any) => {
-                const comp = activeTab === 'OUTGOING' ? record.recipient : record.issuer;
+                const comp = record.issuerId === user?.companyId ? record.recipient : record.issuer;
                 return (
                     <div>
                         <div style={{ fontWeight: 500 }}>{comp?.name || 'Внешняя компания'}</div>

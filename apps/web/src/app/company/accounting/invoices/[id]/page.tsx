@@ -151,7 +151,7 @@ export default function InvoiceDetailPage() {
         );
     }
 
-    const orders = invoice.type === 'OUTGOING' ? invoice.outgoingOrders : invoice.incomingOrders;
+    const orders = [...(invoice.outgoingOrders || []), ...(invoice.incomingOrders || [])];
     
     // Check if there are disputes
     const hasDisputes = invoice.status === 'DISPUTED';
@@ -318,7 +318,7 @@ export default function InvoiceDetailPage() {
                     <Card style={cardStyle} title="Информация о счете">
                         <Descriptions column={1} size="small" bordered>
                             <Descriptions.Item label="Тип счета">
-                                {invoice.type === 'OUTGOING' ? 'Исходящий (нам заплатят)' : 'Входящий (мы платим)'}
+                                {invoice.issuerId === user?.companyId ? 'Исходящий (нам заплатят)' : 'Входящий (мы платим)'}
                             </Descriptions.Item>
                             <Descriptions.Item label="Дата выставления">
                                 {dayjs(invoice.date).format('DD.MM.YYYY')}

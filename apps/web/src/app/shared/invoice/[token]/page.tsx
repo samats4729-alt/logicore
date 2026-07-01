@@ -77,7 +77,7 @@ export default function PublicInvoicePage() {
             setInvoice(res.data);
             
             // Initialize proposed prices map
-            const orders = res.data.type === 'OUTGOING' ? res.data.outgoingOrders : res.data.incomingOrders;
+            const orders = [...(res.data.outgoingOrders || []), ...(res.data.incomingOrders || [])];
             const pricesMap: Record<string, number> = {};
             orders.forEach((o: any) => {
                 const original = res.data.type === 'OUTGOING'
@@ -115,7 +115,7 @@ export default function PublicInvoicePage() {
 
     const orders = useMemo(() => {
         if (!invoice) return [];
-        return invoice.type === 'OUTGOING' ? invoice.outgoingOrders : invoice.incomingOrders;
+        return [...(invoice.outgoingOrders || []), ...(invoice.incomingOrders || [])];
     }, [invoice]);
 
     // Live recalculation of the total proposed amount
