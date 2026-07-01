@@ -79,9 +79,11 @@ export class FinancialReportsService {
 
         const isCustomer = order.customerCompanyId === companyId;
 
-        const [payments, incomes, expenses] = await Promise.all([
+        // Платежи всего заказа нужны калькулятору (оплата заказчика/суб-экспедитора
+        // определяется по платежам экспедитора); на экран отдаём только свои.
+        const [allPayments, incomes, expenses] = await Promise.all([
             this.prisma.payment.findMany({
-                where: { orderId, companyId, isDeleted: false },
+                where: { orderId, isDeleted: false },
                 orderBy: { date: 'desc' },
                 include: { counterparty: { select: { name: true } } },
             }),
@@ -97,9 +99,11 @@ export class FinancialReportsService {
                 }),
         ]);
 
+        const payments = allPayments.filter(p => p.companyId === companyId);
+
         const fin = this.calculator.computeOrderFinance({
             order,
-            payments,
+            payments: allPayments,
             incomes,
             expenses,
             companyId,
@@ -335,7 +339,7 @@ export class FinancialReportsService {
                 partner: order.partner,
                 subForwarder: order.subForwarder,
                 routePoints: order.routePoints,
-                margin: fin.margin,
+                margin: isCustomer ? null : fin.margin,
                 customerDebt: fin.customerDebt,
                 executorDebt: fin.executorDebt,
                 paidIn: fin.paidIn,

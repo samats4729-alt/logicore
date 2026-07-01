@@ -96,16 +96,23 @@ export class FinanceCalculatorService {
         let paidOut = 0;
 
         if (isCustomer) {
-            // For Customer, their payments to Forwarder are recorded as IN payments by the Forwarder
-            const customerPayments = forwarderCompId
-                ? payments.filter(p => p.companyId === forwarderCompId && p.direction === PaymentDirection.IN)
-                : [];
-            paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
+            // Customer's payment can be recorded by either side: as the forwarder's IN
+            // or as the customer's own OUT. Take max to avoid double counting.
+            const forwarderIn = forwarderCompId
+                ? payments.filter(p => p.companyId === forwarderCompId && p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0)
+                : 0;
+            const ownOut = payments.filter(p => p.companyId === companyId && p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
+            paidIn = Math.max(forwarderIn, ownOut);
             paidOut = paidIn; // Customer paid this out
         } else if (isSubForwarder) {
-            // For Sub-Forwarder, they only look at their own payments
+            // Sub-forwarder is paid by the forwarder: mirror the forwarder's OUT payments
+            // as our income (or our own recorded IN, whichever side recorded it).
             const subForwarderPayments = payments.filter(p => p.companyId === companyId);
-            paidIn = subForwarderPayments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0);
+            const ownIn = subForwarderPayments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0);
+            const forwarderOut = forwarderCompId
+                ? payments.filter(p => p.companyId === forwarderCompId && p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0)
+                : 0;
+            paidIn = Math.max(ownIn, forwarderOut);
             paidOut = subForwarderPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
         } else {
             // For Forwarder or main company/admin

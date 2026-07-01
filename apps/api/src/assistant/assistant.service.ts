@@ -10,7 +10,6 @@ const ROUTES = `
 - /company — Дашборд (общая сводка)
 - /company/orders — Все заявки
 - /company/orders/create — Создание заявки
-- /company/search — Биржа грузов
 - /company/tracking — GPS / мониторинг
 - /company/warehouse — Склад
 - /company/accounting — Бухгалтерия (обзор)
@@ -42,7 +41,6 @@ const SELECTORS = `
 
 Подпункты (видны ТОЛЬКО после открытия их родительского меню):
 - Все заявки (в «Заявки»): [data-menu-id$='-/company/orders']
-- Биржа грузов (в «Заявки»): [data-menu-id$='-/company/search']
 - Бухгалтерия (в «Финансы»): [data-menu-id$='-/company/accounting']
 - Реестр заявок (в «Финансы»): [data-menu-id$='-/company/accounting/registry']
 - Поступления (в «Финансы»): [data-menu-id$='-/company/accounting/incomes']

@@ -222,12 +222,8 @@ export class InvoiceService {
 
         const oldStatus = invoice.status;
 
-        const updatedInvoice = await this.prisma.invoice.update({
-            where: { id },
-            data: { status },
-        });
-
-        // Если перевели в PAID, проводим платежи по заказам
+        // Если переводим в PAID — сначала проводим платежи. Если платёж не пройдёт
+        // (например, дата в закрытом периоде), счёт останется в прежнем статусе.
         if (status === InvoiceStatus.PAID && oldStatus !== InvoiceStatus.PAID) {
             const dateStr = invoice.date ? invoice.date.toISOString() : undefined;
             if (invoice.type === InvoiceType.OUTGOING) {
@@ -244,6 +240,11 @@ export class InvoiceService {
                 }
             }
         }
+
+        const updatedInvoice = await this.prisma.invoice.update({
+            where: { id },
+            data: { status },
+        });
 
         // Если отменили PAID, удаляем автоматически созданные платежи
         if (oldStatus === InvoiceStatus.PAID && status !== InvoiceStatus.PAID) {

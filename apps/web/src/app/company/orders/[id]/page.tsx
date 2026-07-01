@@ -1330,7 +1330,7 @@ export default function OrderDetailPage() {
                                                         optionLabelProp="label"
                                                         options={[
                                                             { value: MY_COMPANY_VALUE, label: `${myCompanyName || 'Моя компания'} (Моя компания)` },
-                                                            { value: MARKETPLACE_VALUE, label: '📢 Опубликовать на бирже' },
+                                                            ...(selectedCarrier === MARKETPLACE_VALUE ? [{ value: MARKETPLACE_VALUE, label: '📢 Опубликовать на бирже' }] : []),
                                                             ...prepareCompanyOptions(getCustomerOptions(), selectedCarrier)
                                                         ]}
                                                     />

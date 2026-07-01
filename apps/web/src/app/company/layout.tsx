@@ -17,7 +17,6 @@ import {
     SettingOutlined,
     DollarOutlined,
     CarOutlined,
-    SearchOutlined,
     ApartmentOutlined,
     CompassOutlined,
     HomeOutlined,
@@ -126,11 +125,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 icon: <FileTextOutlined />,
                 label: 'Все заявки',
             });
-            ordersChildren.push({
-                key: '/company/search',
-                icon: <SearchOutlined />,
-                label: 'Биржа грузов',
-            });
+            // Биржа временно скрыта до запуска (не входит в релиз)
         }
         if (ordersChildren.length > 0) {
             items.push({

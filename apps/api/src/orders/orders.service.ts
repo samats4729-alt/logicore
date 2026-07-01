@@ -972,11 +972,32 @@ export class OrdersService implements OnModuleInit {
         if (order.forwarderId !== companyId && order.subForwarderId !== companyId) {
             throw new ForbiddenException('Вы не можете отклонить эту заявку');
         }
+
+        // Отклоняет суб-экспедитор: заказ остаётся у экспедитора, чистим только суб-поля
+        if (order.subForwarderId === companyId && order.forwarderId && order.forwarderId !== companyId) {
+            return this.prisma.order.update({
+                where: { id: orderId },
+                data: {
+                    subForwarderId: null,
+                    subForwarderPrice: null,
+                    isConfirmed: true,
+                    statusHistory: {
+                        create: {
+                            status: order.status,
+                            comment: 'Суб-экспедитор отклонил заявку, заказ возвращён экспедитору',
+                        },
+                    },
+                },
+            });
+        }
+
+        // Отклоняет экспедитор: заявка возвращается заказчику
         return this.prisma.order.update({
             where: { id: orderId },
             data: {
                 forwarderId: null,
                 subForwarderId: null,
+                subForwarderPrice: null,
                 isConfirmed: false,
                 status: OrderStatus.DRAFT,
                 statusHistory: {
@@ -994,6 +1015,14 @@ export class OrdersService implements OnModuleInit {
      */
     async assignForwarder(orderId: string, companyId: string, partnerId: string, price: number) {
         const order = await this.findById(orderId);
+
+        if (order.forwarderId !== companyId && order.partnerId !== companyId) {
+            throw new ForbiddenException('Переназначить заявку на партнёра может только её экспедитор');
+        }
+        if (partnerId === companyId) {
+            throw new BadRequestException('Нельзя переназначить заявку на собственную компанию');
+        }
+
         const partnerCompany = await this.prisma.company.findUnique({
             where: { id: partnerId }
         });
@@ -1005,10 +1034,9 @@ export class OrdersService implements OnModuleInit {
                 subForwarderId: partnerId,
                 subForwarderPrice: price,
                 isConfirmed: false,
-                status: OrderStatus.PENDING,
                 statusHistory: {
                     create: {
-                        status: OrderStatus.PENDING,
+                        status: order.status,
                         comment: `Заявка переназначена на партнера ${partnerCompany.name}`,
                     },
                 },

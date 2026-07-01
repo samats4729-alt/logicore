@@ -59,8 +59,17 @@ export class AuthService {
             console.warn('Redis getSession failed (ignoring):', e);
         }
 
+        // Роль в активной компании (мультикомпанийность): приоритет у UserCompanyRelation
+        let effectiveRole = user.role;
+        if (user.companyId) {
+            const relation = await this.prisma.userCompanyRelation.findUnique({
+                where: { userId_companyId: { userId: user.id, companyId: user.companyId } },
+            });
+            if (relation) effectiveRole = relation.role;
+        }
+
         // Создаем токен
-        const payload = { sub: user.id, email: user.email, role: user.role, companyId: user.companyId };
+        const payload = { sub: user.id, email: user.email, role: effectiveRole, companyId: user.companyId };
         const accessToken = this.jwtService.sign(payload);
 
         // Сохраняем сессию
@@ -87,7 +96,7 @@ export class AuthService {
             user: {
                 ...userWithoutPassword,
                 companyId: user.companyId,
-                role: user.role,
+                role: effectiveRole,
                 company: user.company,
             },
         };
@@ -535,8 +544,17 @@ export class AuthService {
             console.warn('Redis getSession failed (ignoring):', e);
         }
 
+        // Роль в активной компании (мультикомпанийность): приоритет у UserCompanyRelation
+        let effectiveRole = user.role;
+        if (user.companyId) {
+            const relation = await this.prisma.userCompanyRelation.findUnique({
+                where: { userId_companyId: { userId: user.id, companyId: user.companyId } },
+            });
+            if (relation) effectiveRole = relation.role;
+        }
+
         // Создаем токен
-        const payload = { sub: user.id, email: user.email, role: user.role, companyId: user.companyId };
+        const payload = { sub: user.id, email: user.email, role: effectiveRole, companyId: user.companyId };
         const accessToken = this.jwtService.sign(payload);
 
         // Сохраняем сессию
@@ -562,7 +580,7 @@ export class AuthService {
             user: {
                 ...userWithoutPassword,
                 companyId: user.companyId,
-                role: user.role,
+                role: effectiveRole,
                 company: user.company,
             },
         };
