@@ -536,6 +536,43 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* ==========================================
+   DARK APP HEADER (premium)
+   ========================================== */
+.app-header-dark .ant-menu-horizontal > .ant-menu-item,
+.app-header-dark .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.app-header-dark .ant-menu-horizontal > .ant-menu-item:hover,
+.app-header-dark .ant-menu-horizontal > .ant-menu-submenu:hover,
+.app-header-dark .ant-menu-horizontal > .ant-menu-submenu-active {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.app-header-dark .ant-menu-horizontal > .ant-menu-item:hover,
+.app-header-dark .ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title,
+.app-header-dark .ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title {
+  color: #ffffff !important;
+}
+
+.app-header-dark .ant-menu-horizontal > .ant-menu-item-selected {
+  background-color: #1677ff !important;
+  color: #ffffff !important;
+}
+
+.app-header-dark .ant-menu-horizontal > .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: #69b1ff !important;
+}
+
+.app-header-dark .user-profile-trigger:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.app-header-dark .ant-btn-text:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ==========================================
    PLATFORM UI POLISH (premium layer)
    ========================================== */
 

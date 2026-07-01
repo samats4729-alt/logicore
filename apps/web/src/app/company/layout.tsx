@@ -351,21 +351,22 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
             {/* Top Header Navigation */}
             <Header
+                className={isTrackingPage ? undefined : 'app-header-dark'}
                 style={{
-                    background: 'rgba(255, 255, 255, 0.82)',
+                    background: isTrackingPage ? 'rgba(255, 255, 255, 0.82)' : 'rgba(9, 12, 20, 0.92)',
                     backdropFilter: 'saturate(1.8) blur(14px)',
                     WebkitBackdropFilter: 'saturate(1.8) blur(14px)',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
                     height: 56,
-                    borderBottom: '1px solid #e7e8ec',
+                    borderBottom: isTrackingPage ? '1px solid #e7e8ec' : '1px solid rgba(255, 255, 255, 0.08)',
                     position: 'sticky',
                     left: 0,
                     right: 0,
                     top: 0,
                     zIndex: 100,
-                    boxShadow: '0 1px 2px rgba(16, 24, 40, 0.03)',
+                    boxShadow: isTrackingPage ? '0 1px 2px rgba(16, 24, 40, 0.03)' : '0 4px 24px rgba(0, 0, 0, 0.25)',
                     transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
             >
@@ -375,7 +376,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         type="text"
                         icon={<MenuOutlined />}
                         onClick={() => setMobileMenuOpen(true)}
-                        style={{ marginRight: 8 }}
+                        style={{ marginRight: 8, color: isTrackingPage ? undefined : '#ffffff' }}
                     />
                 )}
 
@@ -392,7 +393,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>L</span>
                     </div>
                     {!isMobile && (
-                        <Text strong className="logo-text" style={{ fontSize: 14, color: isTrackingPage ? undefined : '#09090b', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                        <Text strong className="logo-text" style={{ fontSize: 14, color: isTrackingPage ? undefined : '#ffffff', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
                             {user.company?.name || 'LogiCore'}
                         </Text>
                     )}
@@ -441,10 +442,15 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         <Avatar
                             icon={<UserOutlined />}
                             size="small"
-                            style={{ background: '#ffffff', color: '#09090b', border: '1px solid #e4e4e7', flexShrink: 0 }}
+                            style={{
+                                background: isTrackingPage ? '#ffffff' : 'rgba(255, 255, 255, 0.12)',
+                                color: isTrackingPage ? '#09090b' : '#ffffff',
+                                border: isTrackingPage ? '1px solid #e4e4e7' : '1px solid rgba(255, 255, 255, 0.2)',
+                                flexShrink: 0,
+                            }}
                         />
                         {!isMobile && (
-                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: isTrackingPage ? 'inherit' : undefined }}>
+                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: isTrackingPage ? 'inherit' : '#ffffff' }}>
                                 {user.firstName} {user.lastName}
                             </Text>
                         )}
