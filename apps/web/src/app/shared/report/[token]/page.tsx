@@ -223,7 +223,10 @@ export default function SharedReportPage() {
             key: 'invoiceInfo',
             width: 140,
             render: (_: any, r: any) => {
-                const invoiceId = r.direction === 'weOwe' ? r.outgoingInvoiceId : r.incomingInvoiceId;
+                // Слот счёта зависит от потока денег: заказчик↔экспедитор — outgoingInvoiceId,
+                // экспедитор↔суб-экспедитор — incomingInvoiceId
+                const isCustomerFlow = data?.ourRole === 'Заказчик' || (data?.ourRole === 'Экспедитор' && r.direction === 'theyOwe');
+                const invoiceId = isCustomerFlow ? r.outgoingInvoiceId : r.incomingInvoiceId;
                 if (invoiceId) {
                     const inv = data?.invoices?.find((i: any) => i.id === invoiceId);
                     if (inv) {

@@ -864,57 +864,54 @@ export class FinancialReportsService {
             throw new BadRequestException('Некоторые заказы не найдены');
         }
 
-        const firstOrder = orders[0];
-        
-        let type: InvoiceType;
-        let issuerId: string;
-        let recipientId: string;
-        let amount = 0;
+        // Каждый заказ обязан относиться к паре companyId<->counterpartyId,
+        // все — к одному «потоку» денег:
+        //  - customer: заказчик платит экспедитору (сумма = customerPrice, слот outgoingInvoiceId)
+        //  - executor: экспедитор платит суб-экспедитору (сумма = subForwarderPrice, слот incomingInvoiceId)
+        const pair = new Set([companyId, counterpartyId]);
+        let flow: 'customer' | 'executor' | null = null;
+        let issuerId = '';
+        let recipientId = '';
 
-        if (firstOrder.customerCompanyId === companyId && firstOrder.forwarderId === counterpartyId) {
-            type = InvoiceType.INCOMING;
-            issuerId = counterpartyId;
-            recipientId = companyId;
-            for (const o of orders) {
-                amount += o.subForwarderId === issuerId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
+        for (const o of orders) {
+            const fwd = o.forwarderId || o.partnerId;
+            let f: 'customer' | 'executor' | null = null;
+            let iss = '';
+            let rec = '';
+            if (o.customerCompanyId && fwd && o.customerCompanyId !== fwd && pair.has(o.customerCompanyId) && pair.has(fwd)) {
+                f = 'customer';
+                iss = fwd;
+                rec = o.customerCompanyId;
+            } else if (fwd && o.subForwarderId && fwd !== o.subForwarderId && pair.has(fwd) && pair.has(o.subForwarderId)) {
+                f = 'executor';
+                iss = o.subForwarderId;
+                rec = fwd;
             }
-        } else if (firstOrder.forwarderId === companyId && firstOrder.customerCompanyId === counterpartyId) {
-            type = InvoiceType.OUTGOING;
-            issuerId = companyId;
-            recipientId = counterpartyId;
-            for (const o of orders) {
-                amount += o.customerPrice || 0;
+            if (!f) {
+                throw new BadRequestException(`Заказ №${o.orderNumber} не относится к взаиморасчётам этих компаний`);
             }
-        } else if (firstOrder.forwarderId === companyId && firstOrder.subForwarderId === counterpartyId) {
-            type = InvoiceType.INCOMING;
-            issuerId = counterpartyId;
-            recipientId = companyId;
-            for (const o of orders) {
-                amount += o.subForwarderId === issuerId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
-            }
-        } else if (firstOrder.subForwarderId === companyId && firstOrder.forwarderId === counterpartyId) {
-            type = InvoiceType.OUTGOING;
-            issuerId = companyId;
-            recipientId = counterpartyId;
-            for (const o of orders) {
-                amount += o.customerPrice || 0;
-            }
-        } else {
-            type = InvoiceType.INCOMING;
-            issuerId = counterpartyId;
-            recipientId = companyId;
-            for (const o of orders) {
-                amount += o.subForwarderId === issuerId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
+            if (!flow) {
+                flow = f;
+                issuerId = iss;
+                recipientId = rec;
+            } else if (flow !== f || issuerId !== iss || recipientId !== rec) {
+                throw new BadRequestException('Все заказы в счёте должны относиться к одной паре компаний и одному направлению расчётов');
             }
         }
 
-        // Verify that none of these orders are already invoiced for this direction
+        let amount = 0;
+        for (const o of orders) {
+            amount += flow === 'customer' ? (o.customerPrice || 0) : (o.subForwarderPrice || 0);
+        }
+
+        // Тип счёта — относительно владельца отчёта (companyId)
+        const type = issuerId === companyId ? InvoiceType.OUTGOING : InvoiceType.INCOMING;
+
+        // Проверяем, что заказы ещё не засчётованы по этому направлению
         for (const order of orders) {
-            if (type === InvoiceType.OUTGOING && order.outgoingInvoiceId) {
-                throw new BadRequestException(`Заказ №${order.orderNumber} уже добавлен в исходящий счет`);
-            }
-            if (type === InvoiceType.INCOMING && order.incomingInvoiceId) {
-                throw new BadRequestException(`Заказ №${order.orderNumber} уже добавлен во входящий счет`);
+            const already = flow === 'customer' ? order.outgoingInvoiceId : order.incomingInvoiceId;
+            if (already) {
+                throw new BadRequestException(`Заказ №${order.orderNumber} уже включён в счёт по этому направлению`);
             }
         }
 
@@ -941,7 +938,9 @@ export class FinancialReportsService {
             },
         });
 
-        if (type === InvoiceType.OUTGOING) {
+        // Слот привязки зависит от потока денег, а не от типа счёта:
+        // customer-поток занимает outgoingInvoiceId, executor-поток — incomingInvoiceId
+        if (flow === 'customer') {
             await this.prisma.order.updateMany({
                 where: { id: { in: dto.orderIds } },
                 data: { outgoingInvoiceId: invoice.id },
