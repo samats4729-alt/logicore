@@ -154,6 +154,10 @@ export default function AssistantWidget() {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } else if (tries < 20) {
                 tries++;
+                if (tries === 2) {
+                    // На мобильном пункты меню живут в Drawer — просим layout открыть его
+                    window.dispatchEvent(new Event('logicore:open-mobile-menu'));
+                }
                 window.setTimeout(tryFind, 250);
             } else {
                 targetElRef.current = null;

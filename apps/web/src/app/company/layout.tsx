@@ -58,6 +58,13 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    // ИИ-гид просит открыть мобильное меню (шаг тура ссылается на пункт в Drawer)
+    useEffect(() => {
+        const openMenu = () => setMobileMenuOpen(true);
+        window.addEventListener('logicore:open-mobile-menu', openMenu);
+        return () => window.removeEventListener('logicore:open-mobile-menu', openMenu);
+    }, []);
+
     // Дожидаемся гидратации хранилища Zustand из localStorage
     useEffect(() => {
         setHydrated(useAuthStore.persist.hasHydrated());

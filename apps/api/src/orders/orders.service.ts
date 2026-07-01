@@ -910,6 +910,19 @@ export class OrdersService implements OnModuleInit {
                 },
             });
             orderSeq = count + 1;
+
+            // Без Redis счётчик по count подвержен гонкам — подбираем свободный номер
+            let attempts = 0;
+            while (attempts < 200) {
+                const candidate = `LC-${datePrefix}-${String(orderSeq).padStart(4, '0')}`;
+                const exists = await this.prisma.order.findUnique({
+                    where: { orderNumber: candidate },
+                    select: { id: true },
+                });
+                if (!exists) break;
+                orderSeq++;
+                attempts++;
+            }
         }
 
         return `LC-${datePrefix}-${String(orderSeq).padStart(4, '0')}`;
