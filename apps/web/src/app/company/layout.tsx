@@ -345,25 +345,27 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     );
 
     return (
-        <Layout style={{ minHeight: '100vh', background: '#f8f8f8' }}>
+        <Layout style={{ minHeight: '100vh', background: '#f6f7f9' }}>
             {/* Mobile Drawer */}
             {isMobile && <MobileMenu />}
 
             {/* Top Header Navigation */}
             <Header
                 style={{
-                    background: '#ffffff',
+                    background: 'rgba(255, 255, 255, 0.82)',
+                    backdropFilter: 'saturate(1.8) blur(14px)',
+                    WebkitBackdropFilter: 'saturate(1.8) blur(14px)',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    height: 50,
-                    borderBottom: '1px solid #e4e4e7',
+                    height: 56,
+                    borderBottom: '1px solid #e7e8ec',
                     position: 'sticky',
                     left: 0,
                     right: 0,
                     top: 0,
                     zIndex: 100,
-                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    boxShadow: '0 1px 2px rgba(16, 24, 40, 0.03)',
                     transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
             >
@@ -383,9 +385,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     onClick={() => router.push('/company')}
                 >
                     <div style={{
-                        width: 26, height: 26, background: '#09090b', borderRadius: 8,
+                        width: 28, height: 28, background: 'linear-gradient(135deg, #1677ff 0%, #0b5ed7 100%)', borderRadius: 9,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        boxShadow: '0 2px 6px rgba(22, 119, 255, 0.35)',
                     }}>
                         <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>L</span>
                     </div>
@@ -451,17 +453,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             </Header>
 
             {/* Content */}
-            <Layout style={{ background: isTrackingPage ? '#f8f8f8' : '#f8f8f8', padding: isTrackingPage ? 0 : (isMobile ? 0 : 24) }}>
+            <Layout style={{ background: '#f6f7f9', padding: isTrackingPage ? 0 : (isMobile ? 0 : 24) }}>
                 <Content
                     data-guide="content"
+                    className={isTrackingPage ? undefined : 'page-content-anim'}
                     style={{
                         margin: isTrackingPage ? 0 : (isMobile ? 16 : 0),
                         padding: isTrackingPage ? 0 : (isMobile ? 16 : 32),
                         background: isTrackingPage ? 'transparent' : '#ffffff',
-                        borderRadius: isTrackingPage ? 0 : 24,
-                        border: isTrackingPage ? 'none' : '1px solid #e4e4e7',
+                        borderRadius: isTrackingPage ? 0 : 20,
+                        border: isTrackingPage ? 'none' : '1px solid #e8e9ee',
                         minHeight: isTrackingPage ? 'calc(100vh - 56px)' : 'calc(100vh - 56px - 48px)',
-                        boxShadow: isTrackingPage ? 'none' : '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
+                        boxShadow: isTrackingPage ? 'none' : '0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px -20px rgba(16, 24, 40, 0.12)',
                         overflow: isTrackingPage ? 'hidden' : 'auto',
                     }}
                 >
