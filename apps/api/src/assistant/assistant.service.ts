@@ -8,49 +8,87 @@ interface ChatMessage {
 
 const ROUTES = `
 - /company — Дашборд (общая сводка)
-- /company/orders — Все заявки (список перевозок)
-- /company/orders/create — Создание новой заявки
+- /company/orders — Все заявки
+- /company/orders/create — Создание заявки
 - /company/search — Биржа грузов
-- /company/tracking — GPS / мониторинг транспорта
+- /company/tracking — GPS / мониторинг
 - /company/warehouse — Склад
 - /company/accounting — Бухгалтерия (обзор)
-- /company/accounting/registry — Реестр заявок (финансы по рейсам)
+- /company/accounting/registry — Реестр заявок
 - /company/accounting/incomes — Поступления
 - /company/accounting/expenses — Расходы
-- /company/accounting/cashflow — ДДС (движение денег)
-- /company/accounting/pnl — P&L (прибыли и убытки)
-- /company/accounting/counterparty-report — Взаиморасчёты с контрагентами
+- /company/accounting/cashflow — ДДС
+- /company/accounting/pnl — P&L
+- /company/accounting/counterparty-report — Взаиморасчёты
 - /company/accounting/invoices — Счета
-- /company/accounting/settings — Статьи (категории доходов/расходов)
-- /company/reports — Отчёты
 - /company/partners — Контрагенты
 - /company/contracts — Договоры
-- /company/vehicles — Транспорт (автопарк)
+- /company/vehicles — Транспорт
 - /company/users — Сотрудники
-- /company/locations — Адреса (точки погрузки/выгрузки)
-- /company/documents — Документы
-- /company/calculator — Калькулятор стоимости
-- /company/settings — Настройки компании (профиль, организации)
+- /company/locations — Адреса
+- /company/calculator — Калькулятор
+- /company/settings — Настройки компании
 `;
 
-const SYSTEM_PROMPT = `Ты — встроенный ИИ-гид платформы LogiCore (SaaS для логистики и грузоперевозок: заявки, трекинг, финансы, документооборот). Ты заменяешь страницу помощи и объясняешь пользователю, как и что делать.
+const SELECTORS = `
+Меню (верхний уровень, видно всегда):
+- Меню «Заявки»: [data-menu-id$='-orders_group']
+- Меню «Логистика»: [data-menu-id$='-logistics_group']
+- Меню «Финансы»: [data-menu-id$='-finance_group']
+- Меню «Компания»: [data-menu-id$='-company_group']
+- Дашборд: [data-menu-id$='-/company']
+- Калькулятор: [data-menu-id$='-/company/calculator']
+- Настройки: [data-menu-id$='-/company/settings']
+
+Подпункты (видны ТОЛЬКО после открытия их родительского меню):
+- Все заявки (в «Заявки»): [data-menu-id$='-/company/orders']
+- Биржа грузов (в «Заявки»): [data-menu-id$='-/company/search']
+- Бухгалтерия (в «Финансы»): [data-menu-id$='-/company/accounting']
+- Реестр заявок (в «Финансы»): [data-menu-id$='-/company/accounting/registry']
+- Поступления (в «Финансы»): [data-menu-id$='-/company/accounting/incomes']
+- Расходы (в «Финансы»): [data-menu-id$='-/company/accounting/expenses']
+- ДДС (в «Финансы»): [data-menu-id$='-/company/accounting/cashflow']
+- P&L (в «Финансы»): [data-menu-id$='-/company/accounting/pnl']
+- Взаиморасчёты (в «Финансы»): [data-menu-id$='-/company/accounting/counterparty-report']
+- Счета (в «Финансы»): [data-menu-id$='-/company/accounting/invoices']
+- Контрагенты (в «Компания»): [data-menu-id$='-/company/partners']
+- Договоры (в «Компания»): [data-menu-id$='-/company/contracts']
+- Транспорт (в «Компания»): [data-menu-id$='-/company/vehicles']
+- Сотрудники (в «Компания»): [data-menu-id$='-/company/users']
+- Адреса (в «Компания»): [data-menu-id$='-/company/locations']
+
+Кнопки на страницах:
+- «Создать заявку» (на странице /company/orders): [data-guide='orders-create']
+`;
+
+const SYSTEM_PROMPT = `Ты — встроенный пошаговый ИИ-гид платформы LogiCore (SaaS для логистики: заявки, трекинг, финансы, документы). Ты заменяешь страницу помощи и проводишь пользователя по интерфейсу шаг за шагом.
 
 Правила:
-- Отвечай кратко, дружелюбно и по делу, на языке пользователя (русский, казахский или английский).
-- НЕ используй markdown-разметку в тексте: никаких звёздочек ** для жирного, символов # для заголовков, маркеров списков. Пиши обычным простым текстом. (Блок action ниже — единственное исключение.)
-- Объясняй пошагово и простыми словами. Не выдумывай функции, которых нет в списке разделов ниже.
-- Если вопрос про «как сделать X» и это относится к конкретному разделу — добавь в самом конце ответа блок действия, чтобы провести пользователя на нужную страницу.
+- Отвечай кратко и дружелюбно, на языке пользователя (рус/каз/англ).
+- НЕ используй markdown: никаких ** для жирного, # для заголовков, маркеров списков. Обычный текст. (Блок steps ниже — исключение.)
+- Не выдумывай функции, которых нет в списке разделов.
+- Когда пользователь спрашивает «как сделать X», дай 1–2 короткие фразы и затем блок steps — пошаговый маршрут кликов до цели.
 
-Разделы платформы (доступные маршруты):
+Разделы (маршруты):
 ${ROUTES}
 
-Формат блока действия (опционально, ТОЛЬКО в самом конце ответа):
-\`\`\`action
-{"goto":"/company/orders/create","say":"Здесь создаётся новая заявка"}
+Доступные селекторы для подсветки:
+${SELECTORS}
+
+Формат пошагового маршрута (в самом конце ответа):
+\`\`\`steps
+[
+  {"selector":"[data-menu-id$='-orders_group']","say":"Откройте меню «Заявки»"},
+  {"selector":"[data-menu-id$='-/company/orders']","say":"Выберите «Все заявки»"},
+  {"selector":"[data-guide='orders-create']","say":"Нажмите «Создать заявку»"}
+]
 \`\`\`
-- goto — ровно один из маршрутов выше (куда перейти).
-- say — одна короткая подсказка, что сделать на этой странице.
-- Вставляй блок только когда переход реально помогает. Если не нужно — не добавляй его.`;
+Правила для steps:
+- Каждый шаг = один клик пользователя. say — короткая команда (что нажать).
+- Используй ТОЛЬКО селекторы из списка выше.
+- Чтобы попасть в подпункт меню, сначала добавь шаг с открытием родительского меню (Заявки/Финансы/Логистика/Компания), затем шаг с подпунктом.
+- Учитывай текущую страницу пользователя: если он уже там, где нужно, не добавляй лишние шаги навигации.
+- Если задача не требует навигации — steps можно не добавлять.`;
 
 @Injectable()
 export class AssistantService {
@@ -58,7 +96,7 @@ export class AssistantService {
 
     constructor(private config: ConfigService) {}
 
-    async chat(messages: ChatMessage[]): Promise<{ reply: string }> {
+    async chat(messages: ChatMessage[], context?: string): Promise<{ reply: string }> {
         const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
         if (!apiKey) {
             return {
@@ -75,6 +113,8 @@ export class AssistantService {
             return { reply: 'Задайте вопрос — например: «Как создать заявку?»' };
         }
 
+        const systemContent = `${SYSTEM_PROMPT}\n\nТекущая страница пользователя: ${context || 'неизвестно'}`;
+
         try {
             const res = await fetch('https://api.deepseek.com/chat/completions', {
                 method: 'POST',
@@ -84,9 +124,9 @@ export class AssistantService {
                 },
                 body: JSON.stringify({
                     model: 'deepseek-chat',
-                    messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmed],
+                    messages: [{ role: 'system', content: systemContent }, ...trimmed],
                     temperature: 0.3,
-                    max_tokens: 700,
+                    max_tokens: 800,
                     stream: false,
                 }),
             });

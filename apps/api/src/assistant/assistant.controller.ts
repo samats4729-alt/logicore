@@ -10,7 +10,7 @@ export class AssistantController {
 
     @Post('chat')
     @Throttle({ default: { limit: 20, ttl: 60000 } })
-    async chat(@Body() body: { messages: { role: 'system' | 'user' | 'assistant'; content: string }[] }) {
-        return this.assistantService.chat(body?.messages || []);
+    async chat(@Body() body: { messages: { role: 'system' | 'user' | 'assistant'; content: string }[]; context?: string }) {
+        return this.assistantService.chat(body?.messages || [], body?.context);
     }
 }

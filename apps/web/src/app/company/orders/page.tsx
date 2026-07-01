@@ -1182,7 +1182,7 @@ export default function CompanyOrdersPage() {
         <div style={{ height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Title level={4} style={{ margin: 0 }}>Заявки</Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
+                <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
                     Создать заявку
                 </Button>
             </div>
