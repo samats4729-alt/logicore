@@ -5,17 +5,12 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Spin, Button } from 'antd';
 import { useAuthStore } from '@/store/auth';
-import { 
-    GlobalOutlined, 
-    LineChartOutlined, 
+import {
+    GlobalOutlined,
     TeamOutlined,
     ArrowRightOutlined,
-    SafetyCertificateOutlined,
     CarOutlined,
     ShopOutlined,
-    EnvironmentOutlined,
-    CloudOutlined,
-    MobileOutlined
 } from '@ant-design/icons';
 
 // CSS Module
@@ -69,13 +64,8 @@ export default function HomePage() {
     // Scroll listener for sticky navbar blur background
     useEffect(() => {
         const handleScroll = () => {
-            if (window.scrollY > 20) {
-                setScrolled(true);
-            } else {
-                setScrolled(false);
-            }
+            setScrolled(window.scrollY > 20);
         };
-
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
@@ -124,93 +114,84 @@ export default function HomePage() {
         );
     }
 
-    // Features data array
     const features = [
         {
-            icon: <EnvironmentOutlined />,
-            title: 'Глобальное отслеживание',
-            desc: 'Интерактивная 3D-карта с отображением всех ваших транспортных средств и грузов в реальном времени. Интеграция с GPS и мобильными устройствами водителей для точного позиционирования.'
+            title: 'Заявки и биржа',
+            desc: 'Создавайте заявки за минуту, назначайте перевозчиков или публикуйте рейс на бирже грузов.'
         },
         {
-            icon: <LineChartOutlined />,
-            title: 'Глубокая финансовая аналитика',
-            desc: 'Полный контроль над финансами. Автоматический расчет рентабельности рейсов, учет расходов (топливо, платные дороги, обслуживание) и прогнозирование доходов.'
+            title: 'GPS-мониторинг',
+            desc: 'Живое положение транспорта на карте и статусы рейса — от погрузки до выгрузки.'
         },
         {
-            icon: <SafetyCertificateOutlined />,
-            title: 'Безопасный документооборот',
-            desc: 'Генерация договоров, актов и путевых листов в один клик. Электронные подписи и надежное облачное хранение всех важных документов вашей компании.'
+            title: 'Финансы и взаиморасчёты',
+            desc: 'Реестр рейсов, ДДС, P&L и прозрачные взаиморасчёты с каждым контрагентом.'
         },
         {
-            icon: <CloudOutlined />,
-            title: 'Облачная инфраструктура',
-            desc: 'Бесперебойный доступ к платформе из любой точки мира. Высокая отказоустойчивость, автоматическое масштабирование ресурсов и максимальная безопасность ваших данных.'
+            title: 'Документы в один клик',
+            desc: 'Договоры, счета и доверенности генерируются автоматически — счётом можно поделиться ссылкой.'
         },
         {
-            icon: <MobileOutlined />,
-            title: 'Мобильное приложение водителя',
-            desc: 'Удобный инструмент для получения заказов, построения маршрутов, отправки отчетов по чекам и прямой связи с диспетчером 24/7.'
+            title: 'Мультикомпании',
+            desc: 'Несколько организаций в одном аккаунте с переключением в один клик.'
         },
         {
-            icon: <TeamOutlined />,
-            title: 'Совместная работа',
-            desc: 'Эффективное взаимодействие между логистами, водителями, экспедиторами и клиентами. Мгновенные уведомления, чаты и общий доступ к информации.'
-        }
+            title: 'ИИ-гид внутри',
+            desc: 'Встроенный ассистент отвечает на вопросы и ведёт по интерфейсу по шагам.'
+        },
     ];
 
-    // Steps data array
     const steps = [
         {
             num: '01',
             title: 'Создайте заявку',
-            desc: 'Укажите параметры груза, точки погрузки/выгрузки и особые требования к транспортировке за несколько кликов.'
+            desc: 'Груз, маршрут, ставки — всё в одной форме. Контрагент подтягивается по БИН.'
         },
         {
             num: '02',
-            title: 'Подберите транспорт',
-            desc: 'Алгоритмы платформы автоматически предложат подходящие машины из вашего автопарка или базы проверенных партнеров.'
+            title: 'Назначьте перевозчика',
+            desc: 'Свой водитель, партнёр или биржа грузов — выбирайте, как удобнее.'
         },
         {
             num: '03',
-            title: 'Отслеживайте груз',
-            desc: 'Следите за перемещением груза в реальном времени на интерактивной карте с получением статусов на каждом этапе.'
+            title: 'Отслеживайте рейс',
+            desc: 'Статусы и GPS в реальном времени. Обе стороны видят одно и то же.'
         },
         {
             num: '04',
-            title: 'Закройте рейс',
-            desc: 'Получите автоматически сформированные закрывающие документы, оцените работу водителя и рассчитайте итоговую прибыль.'
+            title: 'Закройте финансы',
+            desc: 'Оплаты, счета и маржа считаются сами. Документы — в один клик.'
         }
     ];
 
-    // Roles data array
     const roles = [
-        {
-            icon: <ShopOutlined className={styles.roleIcon} />,
-            title: 'Транспортные компании',
-            list: [
-                'Управление автопарком и штатом водителей',
-                'Комплексная аналитика и отчетность',
-                'Распределение заказов и маршрутизация',
-                'Полный контроль над финансами'
-            ]
-        },
         {
             icon: <TeamOutlined className={styles.roleIcon} />,
             title: 'Экспедиторы',
             list: [
-                'Быстрый поиск свободных машин',
-                'Ведение базы клиентов и партнеров',
-                'Мониторинг статуса выполнения заявок',
-                'Автоматическое формирование счетов'
+                'Заявки, перевозчики и биржа в одном окне',
+                'Маржа по каждому рейсу автоматически',
+                'Взаиморасчёты и счета без Excel',
+                'Мультикомпании в одном аккаунте'
+            ]
+        },
+        {
+            icon: <ShopOutlined className={styles.roleIcon} />,
+            title: 'Заказчики',
+            list: [
+                'Прозрачный статус каждой перевозки',
+                'Подтверждение завершения рейса',
+                'История и документы по всем заказам',
+                'Свой кабинет без лишних функций'
             ]
         },
         {
             icon: <CarOutlined className={styles.roleIcon} />,
             title: 'Водители',
             list: [
-                'Удобное мобильное приложение для работы',
-                'Детали маршрута и навигация',
-                'Отчеты по расходам в пути (чеки, фото)',
+                'Мобильное приложение с маршрутом',
+                'Статусы рейса в пару касаний',
+                'Детали погрузки и выгрузки под рукой',
                 'Связь с диспетчером 24/7'
             ]
         }
@@ -237,15 +218,15 @@ export default function HomePage() {
                     Logi<span>Core</span>
                 </div>
                 <div className={styles.navActions}>
-                    <Button 
-                        type="text" 
+                    <Button
+                        type="text"
                         className={styles.navLogin}
                         onClick={() => router.push('/login')}
                     >
                         Войти
                     </Button>
-                    <Button 
-                        type="primary" 
+                    <Button
+                        type="primary"
                         shape="round"
                         size="large"
                         className={styles.primaryBtn}
@@ -261,7 +242,7 @@ export default function HomePage() {
                 <HeroNetwork />
                 <div className={styles.heroGlow} />
                 <div className={styles.gridOverlay} />
-                
+
                 <div className={styles.heroInner}>
                     <div className={styles.heroIndex}>(01 — Цифровая логистика)</div>
 
@@ -269,30 +250,30 @@ export default function HomePage() {
                         <span className={styles.kineticLine}>{splitChars('Логистика', 0)}</span>
                         <span className={styles.kineticLine}>{splitChars('в движении', 1, true)}</span>
                     </h1>
-                    
+
                     <p className={styles.heroLead}>
                         Единая цифровая платформа для грузовладельцев, экспедиторов и водителей. Заявки, трекинг в реальном времени и финансы — в одном движении, без трения.
                     </p>
 
                     <div className={styles.heroActions}>
-                            <Magnetic>
-                                <Button
-                                    type="primary"
-                                    size="large"
-                                    className={styles.primaryBtn}
-                                    onClick={() => router.push('/register')}
-                                >
-                                    Начать работу <ArrowRightOutlined />
-                                </Button>
-                            </Magnetic>
+                        <Magnetic>
                             <Button
+                                type="primary"
                                 size="large"
-                                className={styles.secondaryBtn}
-                                onClick={() => router.push('/login')}
+                                className={styles.primaryBtn}
+                                onClick={() => router.push('/register')}
                             >
-                                Вход в систему
+                                Начать работу <ArrowRightOutlined />
                             </Button>
-                        </div>
+                        </Magnetic>
+                        <Button
+                            size="large"
+                            className={styles.secondaryBtn}
+                            onClick={() => router.push('/login')}
+                        >
+                            Вход в систему
+                        </Button>
+                    </div>
 
                     <div className={styles.heroBottom}>
                         <span className={styles.heroScrollLabel}>Прокрутите ↓</span>
@@ -308,65 +289,64 @@ export default function HomePage() {
                 </div>
             </div>
 
-            {/* Features Section */}
-            <section className={styles.featuresSection}>
-                <Reveal delay={100}>
-                    <h2 className={styles.sectionTitle}>Технологии для вашего бизнеса</h2>
+            {/* (02) Features — editorial rows */}
+            <section className={styles.sectionShell}>
+                <Reveal delay={50}>
+                    <div className={styles.sectionIndex}>(02 — Возможности)</div>
                 </Reveal>
-                <Reveal delay={200}>
-                    <p className={styles.sectionSubtitle}>
-                        Мы собрали лучшие инструменты для управления цепями поставок, объединив финансовый учет, мониторинг и документооборот в одном окне.
-                    </p>
+                <Reveal delay={150}>
+                    <h2 className={styles.sectionHeading}>
+                        Всё для перевозок.<br /><span>В одном окне.</span>
+                    </h2>
                 </Reveal>
-                <div className={styles.featuresGrid}>
-                    {features.map((feat, i) => (
-                        <Reveal key={i} delay={(i % 3) * 100}>
-                            <InteractiveCard className={styles.featureCard}>
-                                <span className={styles.featureNum}>{String(i + 1).padStart(2, '0')}</span>
-                                <div className={styles.featureIconWrapper}>
-                                    {feat.icon}
+                <div className={styles.featureRows}>
+                    {features.map((f, i) => (
+                        <Reveal key={i} delay={i * 60}>
+                            <div className={styles.featureRow} onClick={() => router.push('/register')}>
+                                <span className={styles.frNum}>{String(i + 1).padStart(2, '0')}</span>
+                                <div className={styles.frMain}>
+                                    <h3 className={styles.frTitle}>{f.title}</h3>
+                                    <p className={styles.frDesc}>{f.desc}</p>
                                 </div>
-                                <h3 className={styles.featureTitle}>{feat.title}</h3>
-                                <p className={styles.featureDesc}>{feat.desc}</p>
-                                <ArrowRightOutlined className={styles.featureArrow} />
-                            </InteractiveCard>
+                                <ArrowRightOutlined className={styles.frArrow} />
+                            </div>
                         </Reveal>
                     ))}
                 </div>
             </section>
 
-            {/* How It Works Section */}
-            <section className={styles.howSection}>
-                <Reveal delay={100}>
-                    <h2 className={styles.sectionTitle}>Как это работает</h2>
+            {/* (03) Process */}
+            <section className={styles.sectionShellAlt}>
+                <Reveal delay={50}>
+                    <div className={styles.sectionIndex}>(03 — Процесс)</div>
                 </Reveal>
-                <Reveal delay={200}>
-                    <p className={styles.sectionSubtitle}>
-                        Простые шаги для полной автоматизации и тотального контроля ваших логистических процессов
-                    </p>
+                <Reveal delay={150}>
+                    <h2 className={styles.sectionHeading}>
+                        От заявки<br /><span>до оплаты.</span>
+                    </h2>
                 </Reveal>
-                <div className={styles.stepsGrid}>
+                <div className={styles.stepsFlow}>
                     {steps.map((step, i) => (
                         <Reveal key={i} delay={i * 100}>
-                            <InteractiveCard className={styles.stepCard}>
-                                <div className={styles.stepNumber}>{step.num}</div>
-                                <h3 className={styles.stepTitle}>{step.title}</h3>
-                                <p className={styles.stepDesc}>{step.desc}</p>
+                            <InteractiveCard className={styles.stepItem}>
+                                <span className={styles.stepGhost}>{step.num}</span>
+                                <h3 className={styles.stepName}>{step.title}</h3>
+                                <p className={styles.stepText}>{step.desc}</p>
                             </InteractiveCard>
                         </Reveal>
                     ))}
                 </div>
             </section>
 
-            {/* Roles Section */}
-            <section className={styles.rolesSection}>
-                <Reveal delay={100}>
-                    <h2 className={styles.sectionTitle}>Для каждого участника логистической цепи</h2>
+            {/* (04) Roles */}
+            <section className={styles.sectionShell}>
+                <Reveal delay={50}>
+                    <div className={styles.sectionIndex}>(04 — Для кого)</div>
                 </Reveal>
-                <Reveal delay={200}>
-                    <p className={styles.sectionSubtitle}>
-                        LogiCore предоставляет специализированные рабочие места для всех ролей в вашей компании, обеспечивая бесшовное взаимодействие.
-                    </p>
+                <Reveal delay={150}>
+                    <h2 className={styles.sectionHeading}>
+                        Каждому —<br /><span>своё рабочее место.</span>
+                    </h2>
                 </Reveal>
                 <div className={styles.rolesGrid}>
                     {roles.map((role, i) => (
@@ -386,36 +366,49 @@ export default function HomePage() {
                 </div>
             </section>
 
-            {/* CTA Section */}
-            <section className={styles.ctaSection}>
+            {/* (05) CTA */}
+            <section className={styles.ctaBig}>
                 <div className={styles.ctaGlow} />
-                <Reveal className={styles.ctaInner} delay={100}>
-                    <h2 className={styles.ctaTitle}>Готовы вывести логистику на новый уровень?</h2>
-                    <p className={styles.ctaSubtitle}>
-                        Присоединяйтесь к тысячам компаний, которые уже масштабируют свой бизнес, экономят на издержках и доставляют грузы точно в срок с помощью LogiCore.
+                <Reveal delay={50}>
+                    <div className={styles.sectionIndex}>(05 — Старт)</div>
+                </Reveal>
+                <Reveal delay={150}>
+                    <h2 className={styles.ctaHuge}>
+                        Готовы<br /><span>двигаться?</span>
+                    </h2>
+                </Reveal>
+                <Reveal delay={250}>
+                    <p className={styles.ctaLead}>
+                        Регистрация занимает две минуты. Создайте первую заявку сегодня — и почувствуйте разницу.
                     </p>
-                    <Magnetic>
-                        <Button
-                            type="primary"
-                            size="large"
-                            className={styles.primaryBtn}
-                            onClick={() => router.push('/register')}
-                        >
-                            Создать аккаунт <ArrowRightOutlined />
-                        </Button>
-                    </Magnetic>
+                </Reveal>
+                <Reveal delay={350}>
+                    <div>
+                        <Magnetic>
+                            <Button
+                                type="primary"
+                                size="large"
+                                className={styles.primaryBtn}
+                                onClick={() => router.push('/register')}
+                            >
+                                Создать аккаунт <ArrowRightOutlined />
+                            </Button>
+                        </Magnetic>
+                    </div>
                 </Reveal>
             </section>
 
             {/* Footer */}
-            <footer className={styles.footer}>
-                <div className={styles.footerLogo}>
-                    <GlobalOutlined style={{ color: '#1677ff' }} />
-                    Logi<span>Core</span>
+            <footer className={styles.footerBig}>
+                <div className={styles.footerWordmark} aria-hidden="true">LOGICORE</div>
+                <div className={styles.footerRow}>
+                    <span>© {new Date().getFullYear()} LogiCore Platform — интеллектуальная логистика</span>
+                    <span className={styles.footerLinks}>
+                        <span onClick={() => router.push('/login')}>Войти</span>
+                        <span className={styles.footerDot}>/</span>
+                        <span onClick={() => router.push('/register')}>Регистрация</span>
+                    </span>
                 </div>
-                <p className={styles.footerText}>
-                    © {new Date().getFullYear()} LogiCore Platform. Все права защищены. Интеллектуальная логистика нового поколения.
-                </p>
             </footer>
         </div>
     );

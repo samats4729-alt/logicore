@@ -963,3 +963,308 @@
         --ty: 0px;
     }
 }
+
+/* ==========================================
+   EDITORIAL SECTIONS (activetheory style)
+   ========================================== */
+.sectionShell,
+.sectionShellAlt {
+    position: relative;
+    z-index: 10;
+    padding: 130px 8% 110px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sectionShell {
+    background: #030712;
+}
+
+.sectionShellAlt {
+    background: #020617;
+}
+
+.sectionIndex {
+    font-size: 0.8rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: #5b6b8c;
+    margin-bottom: 22px;
+}
+
+.sectionHeading {
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 900;
+    font-size: clamp(2rem, 4.5vw, 3.4rem);
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    margin: 0 0 64px;
+}
+
+.sectionHeading span {
+    color: #4d8cff;
+}
+
+/* Feature rows — editorial list */
+.featureRows {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.featureRow {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    padding: 34px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    position: relative;
+    transition: background 0.35s ease, padding-left 0.35s ease;
+}
+
+.featureRow:hover {
+    background: rgba(22, 119, 255, 0.05);
+    padding-left: 28px;
+}
+
+.frNum {
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #5b6b8c;
+    min-width: 44px;
+    flex-shrink: 0;
+}
+
+.frMain {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 28px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.frTitle {
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.2rem, 2.4vw, 1.9rem);
+    letter-spacing: -0.01em;
+    color: #e2e8f0;
+    margin: 0;
+    transition: color 0.3s ease;
+}
+
+.featureRow:hover .frTitle {
+    color: #4d8cff;
+}
+
+.frDesc {
+    flex: 1;
+    min-width: 260px;
+    max-width: 480px;
+    color: #64748b;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+    transition: color 0.3s ease;
+}
+
+.featureRow:hover .frDesc {
+    color: #94a3b8;
+}
+
+.frArrow {
+    font-size: 22px;
+    color: #4d8cff;
+    opacity: 0;
+    transform: translateX(-12px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    flex-shrink: 0;
+}
+
+.featureRow:hover .frArrow {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Process — ghost numbered steps */
+.stepsFlow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+}
+
+.stepItem {
+    padding: 30px 24px 28px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.015);
+    transition: border-color 0.35s ease, background 0.35s ease;
+}
+
+.stepItem:hover {
+    border-color: rgba(77, 140, 255, 0.45);
+    background: rgba(22, 119, 255, 0.04);
+}
+
+.stepGhost {
+    display: block;
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 900;
+    font-size: 4.2rem;
+    line-height: 1;
+    color: transparent;
+    -webkit-text-stroke: 1px rgba(77, 140, 255, 0.4);
+    margin-bottom: 16px;
+    user-select: none;
+}
+
+.stepName {
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 10px;
+}
+
+.stepText {
+    color: #64748b;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Big CTA */
+.ctaBig {
+    position: relative;
+    z-index: 10;
+    padding: 150px 8% 140px;
+    background: #020617;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+}
+
+.ctaHuge {
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 900;
+    font-size: clamp(2.6rem, 8vw, 6rem);
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+    color: #ffffff;
+    margin: 0 0 28px;
+    position: relative;
+    z-index: 2;
+}
+
+.ctaHuge span {
+    color: #4d8cff;
+}
+
+.ctaLead {
+    position: relative;
+    z-index: 2;
+    color: #94a3b8;
+    font-size: 1.15rem;
+    line-height: 1.6;
+    max-width: 520px;
+    margin: 0 0 42px;
+}
+
+/* Footer — giant wordmark */
+.footerBig {
+    position: relative;
+    z-index: 10;
+    background: #020617;
+    padding: 90px 8% 40px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+}
+
+.footerWordmark {
+    font-family: 'Unbounded', 'Inter', sans-serif;
+    font-weight: 900;
+    font-size: clamp(3rem, 11.5vw, 9.5rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: transparent;
+    -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.13);
+    white-space: nowrap;
+    user-select: none;
+    margin-bottom: 52px;
+    transition: -webkit-text-stroke-color 0.5s ease;
+}
+
+.footerWordmark:hover {
+    -webkit-text-stroke-color: rgba(77, 140, 255, 0.45);
+}
+
+.footerRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    color: #5b6b8c;
+    font-size: 0.85rem;
+}
+
+.footerLinks span {
+    cursor: pointer;
+    transition: color 0.25s ease;
+}
+
+.footerLinks span:hover {
+    color: #ffffff;
+}
+
+.footerDot {
+    margin: 0 10px;
+    cursor: default !important;
+    color: #2a3550;
+}
+
+@media (max-width: 1024px) {
+    .stepsFlow {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .sectionShell,
+    .sectionShellAlt {
+        padding: 90px 24px 80px;
+    }
+
+    .stepsFlow {
+        grid-template-columns: 1fr;
+    }
+
+    .featureRow {
+        gap: 16px;
+        padding: 26px 4px;
+    }
+
+    .featureRow:hover {
+        padding-left: 4px;
+    }
+
+    .frMain {
+        gap: 8px;
+        flex-direction: column;
+    }
+
+    .frDesc {
+        min-width: 0;
+    }
+
+    .frArrow {
+        display: none;
+    }
+
+    .ctaBig {
+        padding: 100px 24px 90px;
+    }
+
+    .footerBig {
+        padding: 70px 24px 32px;
+    }
+}
