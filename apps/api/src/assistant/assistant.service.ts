@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -88,11 +89,32 @@ ${SELECTORS}
 - Учитывай текущую страницу пользователя: если он уже там, где нужно, не добавляй лишние шаги навигации.
 - Если задача не требует навигации — steps можно не добавлять.`;
 
+const SUPPORT_PROMPT = `Ты — ИИ-агент поддержки платформы LogiCore (SaaS для логистики: заявки, трекинг, финансы, счета, документы). Пользователь обращается, когда что-то работает неправильно: неверные цифры, статусы, счета, отображение.
+
+Твоя задача:
+1. Понять проблему. Свериться с реальными данными компании пользователя (блок «Данные» ниже) — номера заявок, суммы, статусы оплат, счета.
+2. Если данных не хватает — задай 1–2 коротких уточняющих вопроса (номер заявки, какой экран, какая цифра ожидалась).
+3. Когда проблема ясна — сформулируй отчёт для разработчика и заверши ответ блоком:
+
+\`\`\`ticket
+{"title":"Краткая суть (до 80 символов)","category":"finance","severity":"medium","description":"Подробно: что делает пользователь, что ожидает, что происходит на самом деле. Конкретные номера заявок/счетов и цифры из данных.","orders":["LC-20260101-0001"]}
+\`\`\`
+
+Правила:
+- category: finance | orders | documents | display | other. severity: low | medium | high (high — неверные деньги/блокирует работу).
+- Не выдумывай данные. Если в блоке «Данные» видно расхождение — укажи его цифрами в description.
+- Пиши обычным текстом без markdown-разметки (никаких ** и #). Блок ticket — единственное исключение.
+- После блока ticket добавь фразу: «Если всё верно — нажмите "Отправить в поддержку"».
+- Отвечай на языке пользователя.`;
+
 @Injectable()
 export class AssistantService {
     private readonly logger = new Logger('AssistantService');
 
-    constructor(private config: ConfigService) {}
+    constructor(
+        private config: ConfigService,
+        private prisma: PrismaService,
+    ) {}
 
     async chat(messages: ChatMessage[], context?: string): Promise<{ reply: string }> {
         const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
@@ -142,5 +164,189 @@ export class AssistantService {
             this.logger.error(`DeepSeek request failed: ${(e as Error).message}`);
             return { reply: 'Сервис ИИ-гида временно недоступен. Попробуйте позже.' };
         }
+    }
+
+    // ==================== SUPPORT ====================
+
+    /** Компактная сводка данных компании для агента поддержки */
+    private async buildSupportData(companyId: string, lastUserMessage: string): Promise<string> {
+        const participation = [
+            { customerCompanyId: companyId },
+            { forwarderId: companyId },
+            { partnerId: companyId },
+            { subForwarderId: companyId },
+        ];
+
+        const [company, orders, invoices] = await Promise.all([
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true, bin: true } }),
+            this.prisma.order.findMany({
+                where: { OR: participation },
+                orderBy: { createdAt: 'desc' },
+                take: 12,
+                select: {
+                    orderNumber: true, status: true,
+                    customerPrice: true, driverCost: true, subForwarderPrice: true,
+                    isCustomerPaid: true, isDriverPaid: true, isSubForwarderPaid: true,
+                    outgoingInvoiceId: true, incomingInvoiceId: true,
+                    customerCompany: { select: { name: true } },
+                    forwarder: { select: { name: true } },
+                    subForwarder: { select: { name: true } },
+                },
+            }),
+            this.prisma.invoice.findMany({
+                where: { OR: [{ issuerId: companyId }, { recipientId: companyId }] },
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+                select: {
+                    invoiceNumber: true, type: true, status: true, amount: true,
+                    issuer: { select: { name: true } }, recipient: { select: { name: true } },
+                },
+            }),
+        ]);
+
+        const lines: string[] = [];
+        lines.push(`Компания: ${company?.name || '—'} (БИН ${company?.bin || '—'})`);
+        lines.push('');
+        lines.push('Последние заявки:');
+        for (const o of orders) {
+            lines.push(
+                `${o.orderNumber} | ${o.status} | заказчик: ${o.customerCompany?.name || '—'} | исполнитель: ${o.subForwarder?.name || o.forwarder?.name || '—'} | цена заказчика: ${o.customerPrice ?? '—'} | ставка исполнителя: ${o.subForwarderPrice ?? o.driverCost ?? '—'} | оплата заказчика: ${o.isCustomerPaid ? 'да' : 'нет'} | оплата исполнителя: ${(o.isSubForwarderPaid || o.isDriverPaid) ? 'да' : 'нет'} | счета: ${o.outgoingInvoiceId ? 'исх✓' : 'исх—'}/${o.incomingInvoiceId ? 'вх✓' : 'вх—'}`,
+            );
+        }
+        lines.push('');
+        lines.push('Последние счета:');
+        for (const inv of invoices) {
+            lines.push(`${inv.invoiceNumber} | ${inv.type} | ${inv.status} | сумма ${inv.amount} | от ${inv.issuer?.name || '—'} для ${inv.recipient?.name || '—'}`);
+        }
+
+        // Упомянутые заявки — детально, с платежами
+        const mentioned = Array.from(new Set(lastUserMessage.match(/LC-\d{8}-\d{4}/g) || [])).slice(0, 3);
+        if (mentioned.length > 0) {
+            const detailed = await this.prisma.order.findMany({
+                where: { orderNumber: { in: mentioned }, OR: participation },
+                include: {
+                    payments: {
+                        where: { isDeleted: false },
+                        select: { direction: true, amount: true, date: true, companyId: true, note: true },
+                    },
+                },
+            });
+            for (const o of detailed) {
+                lines.push('');
+                lines.push(`Детально ${o.orderNumber}: статус ${o.status}, цена заказчика ${o.customerPrice ?? '—'}, ставка перевозчика ${o.driverCost ?? '—'}, ставка суб-экспедитора ${o.subForwarderPrice ?? '—'}`);
+                lines.push(`Платежи (${o.payments.length}):`);
+                for (const p of o.payments) {
+                    lines.push(`  ${p.direction} ${p.amount} от ${new Date(p.date).toLocaleDateString('ru-RU')} (компания ${p.companyId === companyId ? 'наша' : 'контрагент'})${p.note ? ` — ${p.note}` : ''}`);
+                }
+            }
+        }
+
+        return lines.join('\n');
+    }
+
+    async supportChat(messages: ChatMessage[], userId: string, companyId: string): Promise<{ reply: string }> {
+        const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
+        if (!apiKey) {
+            return { reply: 'Поддержка пока не настроена: не задан ключ DEEPSEEK_API_KEY. Обратитесь к администратору.' };
+        }
+
+        const trimmed = (messages || [])
+            .filter((m) => m && m.content && (m.role === 'user' || m.role === 'assistant'))
+            .slice(-12)
+            .map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
+
+        if (trimmed.length === 0) {
+            return { reply: 'Опишите проблему — что работает неправильно?' };
+        }
+
+        const lastUser = [...trimmed].reverse().find((m) => m.role === 'user')?.content || '';
+        let dataBlock = '';
+        try {
+            dataBlock = await this.buildSupportData(companyId, lastUser);
+        } catch (e) {
+            this.logger.error(`buildSupportData failed: ${(e as Error).message}`);
+        }
+
+        const systemContent = `${SUPPORT_PROMPT}\n\n=== Данные компании пользователя ===\n${dataBlock || 'нет данных'}`;
+
+        try {
+            const res = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                    model: 'deepseek-chat',
+                    messages: [{ role: 'system', content: systemContent }, ...trimmed],
+                    temperature: 0.2,
+                    max_tokens: 900,
+                    stream: false,
+                }),
+            });
+
+            if (!res.ok) {
+                const text = await res.text().catch(() => '');
+                this.logger.error(`DeepSeek support error ${res.status}: ${text}`);
+                return { reply: 'Сейчас не получается ответить. Попробуйте чуть позже.' };
+            }
+
+            const data: any = await res.json();
+            const reply = data?.choices?.[0]?.message?.content?.trim();
+            return { reply: reply || 'Не удалось сформировать ответ.' };
+        } catch (e) {
+            this.logger.error(`DeepSeek support request failed: ${(e as Error).message}`);
+            return { reply: 'Сервис поддержки временно недоступен. Попробуйте позже.' };
+        }
+    }
+
+    async createTicket(
+        userId: string,
+        companyId: string,
+        dto: {
+            title: string;
+            category?: string;
+            severity?: string;
+            description: string;
+            orders?: string[];
+            transcript?: { role: string; content: string }[];
+        },
+    ) {
+        const [user, company] = await Promise.all([
+            this.prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true, email: true } }),
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }),
+        ]);
+
+        const ticket = await this.prisma.supportTicket.create({
+            data: {
+                companyId,
+                companyName: company?.name || '—',
+                userId,
+                userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || '—',
+                userEmail: user?.email || null,
+                title: String(dto.title || 'Обращение').slice(0, 200),
+                category: dto.category || 'other',
+                severity: dto.severity || 'medium',
+                description: String(dto.description || '').slice(0, 8000),
+                orders: (dto.orders || []).slice(0, 20),
+                transcript: dto.transcript ? (dto.transcript.slice(-20) as any) : undefined,
+            },
+        });
+
+        return { id: ticket.id, createdAt: ticket.createdAt };
+    }
+
+    async listTickets(status?: string) {
+        return this.prisma.supportTicket.findMany({
+            where: status ? { status } : undefined,
+            orderBy: { createdAt: 'desc' },
+            take: 200,
+        });
+    }
+
+    async updateTicketStatus(id: string, status: string) {
+        const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
+        if (!ticket) throw new NotFoundException('Тикет не найден');
+        return this.prisma.supportTicket.update({ where: { id }, data: { status } });
     }
 }

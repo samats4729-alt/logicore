@@ -27,6 +27,7 @@ import {
     AimOutlined,
     MenuOutlined,
     GlobalOutlined,
+    CustomerServiceOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -36,6 +37,7 @@ const { Text } = Typography;
 const menuItems = [
     { key: '/admin', icon: <DashboardOutlined />, label: 'Дашборд' },
     { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
+    { key: '/admin/support', icon: <CustomerServiceOutlined />, label: 'Поддержка' },
     { key: '/admin/locations', icon: <GlobalOutlined />, label: 'География' },
     { key: '/admin/settings', icon: <SettingOutlined />, label: 'Настройки' },
 ];

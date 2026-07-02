@@ -12,15 +12,56 @@ interface Step {
     say?: string;
 }
 
+interface TicketDraft {
+    title: string;
+    category?: string;
+    severity?: string;
+    description: string;
+    orders?: string[];
+}
+
 interface ChatMsg {
     role: 'user' | 'assistant';
     content: string;
     steps?: Step[] | null;
+    ticket?: TicketDraft | null;
 }
 
 const GREETING: ChatMsg = {
     role: 'assistant',
     content: 'Привет! Я гид LogiCore. Спросите, как что сделать — например «Как создать заявку?». Я проведу по шагам прямо в интерфейсе.',
+};
+
+const GREETING_SUPPORT: ChatMsg = {
+    role: 'assistant',
+    content: 'Опишите проблему — что работает неправильно? Я сверюсь с вашими данными (заявки, счета, оплаты), уточню детали и оформлю обращение разработчику.',
+};
+
+function parseTicket(text: string): { clean: string; ticket: TicketDraft | null } {
+    const match = text.match(/```ticket\s*([\s\S]*?)```/);
+    if (!match) return { clean: text.trim(), ticket: null };
+    let ticket: TicketDraft | null = null;
+    try {
+        const parsed = JSON.parse(match[1].trim());
+        if (parsed && parsed.title && parsed.description) ticket = parsed;
+    } catch {
+        ticket = null;
+    }
+    return { clean: text.replace(match[0], '').trim(), ticket };
+}
+
+const SEVERITY_LABEL: Record<string, { text: string; color: string }> = {
+    low: { text: 'Низкая', color: '#64748b' },
+    medium: { text: 'Средняя', color: '#b45309' },
+    high: { text: 'Высокая', color: '#dc2626' },
+};
+
+const CATEGORY_LABEL: Record<string, string> = {
+    finance: 'Финансы',
+    orders: 'Заявки',
+    documents: 'Документы',
+    display: 'Отображение',
+    other: 'Другое',
 };
 
 function parseSteps(text: string): { clean: string; steps: Step[] | null } {
@@ -67,9 +108,12 @@ export default function AssistantWidget() {
     const router = useRouter();
     const pathname = usePathname();
     const [open, setOpen] = useState(false);
+    const [mode, setMode] = useState<'guide' | 'support'>('guide');
     const [messages, setMessages] = useState<ChatMsg[]>([GREETING]);
+    const [supportMessages, setSupportMessages] = useState<ChatMsg[]>([GREETING_SUPPORT]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [ticketSending, setTicketSending] = useState(false);
 
     const [tourActive, setTourActive] = useState(false);
     const [tipText, setTipText] = useState('');
@@ -85,7 +129,7 @@ export default function AssistantWidget() {
 
     useEffect(() => {
         if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-    }, [messages, loading, open]);
+    }, [messages, supportMessages, mode, loading, open]);
 
     // Follow the target element every frame (no re-render, smooth on scroll)
     useEffect(() => {
@@ -192,22 +236,56 @@ export default function AssistantWidget() {
     const send = async () => {
         const text = input.trim();
         if (!text || loading) return;
-        const next: ChatMsg[] = [...messages, { role: 'user', content: text }];
-        setMessages(next);
+        const isSupport = mode === 'support';
+        const current = isSupport ? supportMessages : messages;
+        const setCurrent = isSupport ? setSupportMessages : setMessages;
+
+        const next: ChatMsg[] = [...current, { role: 'user', content: text }];
+        setCurrent(next);
         setInput('');
         setLoading(true);
         try {
             const payload = next
                 .filter((m) => m.role === 'user' || m.role === 'assistant')
                 .map((m) => ({ role: m.role, content: m.content }));
-            const res = await api.post('/assistant/chat', { messages: payload, context: pathname });
+            const res = isSupport
+                ? await api.post('/assistant/support', { messages: payload })
+                : await api.post('/assistant/chat', { messages: payload, context: pathname });
             const reply: string = res.data?.reply || 'Не удалось получить ответ.';
-            const { clean, steps } = parseSteps(reply);
-            setMessages((prev) => [...prev, { role: 'assistant', content: clean, steps }]);
+            if (isSupport) {
+                const { clean, ticket } = parseTicket(reply);
+                setCurrent((prev) => [...prev, { role: 'assistant', content: clean, ticket }]);
+            } else {
+                const { clean, steps } = parseSteps(reply);
+                setCurrent((prev) => [...prev, { role: 'assistant', content: clean, steps }]);
+            }
         } catch {
-            setMessages((prev) => [...prev, { role: 'assistant', content: 'Ошибка связи с гидом. Попробуйте ещё раз.' }]);
+            setCurrent((prev) => [...prev, { role: 'assistant', content: 'Ошибка связи. Попробуйте ещё раз.' }]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const sendTicket = async (ticket: TicketDraft, msgIndex: number) => {
+        if (ticketSending) return;
+        setTicketSending(true);
+        try {
+            const transcript = supportMessages
+                .filter((m) => m.role === 'user' || m.role === 'assistant')
+                .map((m) => ({ role: m.role, content: m.content }));
+            await api.post('/assistant/support/ticket', { ...ticket, transcript });
+            setSupportMessages((prev) => {
+                const copy = [...prev];
+                if (copy[msgIndex]) copy[msgIndex] = { ...copy[msgIndex], ticket: null };
+                return [
+                    ...copy,
+                    { role: 'assistant', content: 'Обращение отправлено разработчику. Спасибо! Мы разберёмся и починим.' },
+                ];
+            });
+        } catch {
+            setSupportMessages((prev) => [...prev, { role: 'assistant', content: 'Не удалось отправить обращение. Попробуйте ещё раз.' }]);
+        } finally {
+            setTicketSending(false);
         }
     };
 
@@ -238,15 +316,39 @@ export default function AssistantWidget() {
                         display: 'flex', flexDirection: 'column', overflow: 'hidden',
                     }}
                 >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#1677ff', color: '#fff' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-                            <RobotOutlined /> Гид LogiCore
-                        </span>
-                        <CloseOutlined style={{ cursor: 'pointer' }} onClick={() => setOpen(false)} />
+                    <div style={{ background: '#1677ff', color: '#fff', padding: '12px 16px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+                                <RobotOutlined /> Ассистент LogiCore
+                            </span>
+                            <CloseOutlined style={{ cursor: 'pointer' }} onClick={() => setOpen(false)} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
+                            {([['guide', 'Гид'], ['support', 'Поддержка']] as const).map(([key, label]) => (
+                                <button
+                                    key={key}
+                                    onClick={() => setMode(key)}
+                                    style={{
+                                        flex: 1,
+                                        border: 'none',
+                                        padding: '9px 0',
+                                        borderRadius: '10px 10px 0 0',
+                                        cursor: 'pointer',
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        background: mode === key ? '#f8fafc' : 'rgba(255,255,255,0.14)',
+                                        color: mode === key ? '#1677ff' : '#fff',
+                                        transition: 'background 0.2s',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 16, background: '#f8fafc' }}>
-                        {messages.map((m, i) => (
+                        {(mode === 'guide' ? messages : supportMessages).map((m, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
                                 <div
                                     style={{
@@ -269,6 +371,32 @@ export default function AssistantWidget() {
                                             Показать по шагам
                                         </Button>
                                     )}
+                                    {m.ticket && (
+                                        <div style={{ marginTop: 10, border: '1px solid #dbe3f0', borderRadius: 10, padding: '10px 12px', background: '#f8faff' }}>
+                                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>{m.ticket.title}</div>
+                                            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: '#eef2f7', color: '#475569', fontWeight: 500 }}>
+                                                    {CATEGORY_LABEL[m.ticket.category || 'other'] || m.ticket.category}
+                                                </span>
+                                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: '#fff', border: '1px solid #e4e4e7', fontWeight: 600, color: (SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).color }}>
+                                                    {(SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).text}
+                                                </span>
+                                            </div>
+                                            {m.ticket.orders && m.ticket.orders.length > 0 && (
+                                                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
+                                                    Заявки: {m.ticket.orders.join(', ')}
+                                                </div>
+                                            )}
+                                            <Button
+                                                type="primary"
+                                                size="small"
+                                                loading={ticketSending}
+                                                onClick={() => sendTicket(m.ticket as TicketDraft, i)}
+                                            >
+                                                Отправить в поддержку
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -284,7 +412,7 @@ export default function AssistantWidget() {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); send(); } }}
-                            placeholder="Спросите, как что сделать…"
+                            placeholder={mode === 'guide' ? 'Спросите, как что сделать…' : 'Опишите проблему…'}
                             autoSize={{ minRows: 1, maxRows: 3 }}
                             style={{ flex: 1, resize: 'none' }}
                         />

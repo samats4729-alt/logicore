@@ -1012,3 +1012,26 @@ model UserCompanyRelation {
   @@index([userId])
   @@index([companyId])
 }
+
+// Тикеты поддержки, сформулированные ИИ-ассистентом из обращений пользователей
+model SupportTicket {
+  id          String   @id @default(cuid())
+  companyId   String
+  companyName String
+  userId      String
+  userName    String
+  userEmail   String?
+  title       String
+  category    String   @default("other") // finance | orders | documents | display | other
+  severity    String   @default("medium") // low | medium | high
+  description String
+  orders      String[] @default([]) // номера связанных заявок
+  transcript  Json? // диалог пользователя с ассистентом
+  status      String   @default("NEW") // NEW | IN_PROGRESS | DONE | REJECTED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([companyId])
+  @@index([createdAt])
+}
