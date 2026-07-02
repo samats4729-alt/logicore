@@ -32,14 +32,22 @@ async function main() {
 
     console.log('🌱 Seeding database...');
 
-    // Создаём тестового админа
-    const adminPassword = await bcrypt.hash('admin123', 12);
+    // Админ платформы: логин/пароль берутся из переменных окружения
+    // ADMIN_EMAIL / ADMIN_PASSWORD (fallback — тестовые admin@logcomp.kz / admin123)
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@logcomp.kz';
+    const adminPasswordRaw = process.env.ADMIN_PASSWORD || 'admin123';
+    const adminPassword = await bcrypt.hash(adminPasswordRaw, 12);
 
     const admin = await prisma.user.upsert({
-        where: { email: 'admin@logcomp.kz' },
-        update: {},
+        where: { email: adminEmail },
+        // Пароль обновляется при каждом сиде — смена ADMIN_PASSWORD в env ротирует его
+        update: {
+            passwordHash: adminPassword,
+            role: UserRole.ADMIN,
+            isActive: true,
+        },
         create: {
-            email: 'admin@logcomp.kz',
+            email: adminEmail,
             phone: '+77001234567',
             passwordHash: adminPassword,
             firstName: 'Админ',
@@ -48,6 +56,18 @@ async function main() {
         },
     });
     console.log(`✅ Admin created: ${admin.email}`);
+
+    // Если задан свой админ — деактивируем дефолтного (его логин/пароль публичны в коде)
+    if (adminEmail !== 'admin@logcomp.kz') {
+        const defaultAdmin = await prisma.user.findUnique({ where: { email: 'admin@logcomp.kz' } });
+        if (defaultAdmin && defaultAdmin.isActive) {
+            await prisma.user.update({
+                where: { email: 'admin@logcomp.kz' },
+                data: { isActive: false },
+            });
+            console.log('🔒 Default admin (admin@logcomp.kz) deactivated');
+        }
+    }
 
     // Тестовая компания
     let testCompany = await prisma.company.findFirst({
