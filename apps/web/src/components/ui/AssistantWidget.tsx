@@ -17,6 +17,10 @@ interface TicketDraft {
     category?: string;
     severity?: string;
     description: string;
+    process?: string;
+    where?: string;
+    expected?: string;
+    actual?: string;
     orders?: string[];
 }
 
@@ -382,6 +386,18 @@ export default function AssistantWidget() {
                                                     {(SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).text}
                                                 </span>
                                             </div>
+                                            {m.ticket.expected && (
+                                                <div style={{ fontSize: 11.5, marginBottom: 4 }}>
+                                                    <span style={{ color: '#16a34a', fontWeight: 600 }}>Ожидается: </span>
+                                                    <span style={{ color: '#334155' }}>{m.ticket.expected}</span>
+                                                </div>
+                                            )}
+                                            {m.ticket.actual && (
+                                                <div style={{ fontSize: 11.5, marginBottom: 8 }}>
+                                                    <span style={{ color: '#dc2626', fontWeight: 600 }}>Фактически: </span>
+                                                    <span style={{ color: '#334155' }}>{m.ticket.actual}</span>
+                                                </div>
+                                            )}
                                             {m.ticket.orders && m.ticket.orders.length > 0 && (
                                                 <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
                                                     Заявки: {m.ticket.orders.join(', ')}

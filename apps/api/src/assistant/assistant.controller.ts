@@ -36,6 +36,10 @@ export class AssistantController {
             category?: string;
             severity?: string;
             description: string;
+            process?: string;
+            where?: string;
+            expected?: string;
+            actual?: string;
             orders?: string[];
             transcript?: { role: string; content: string }[];
         },

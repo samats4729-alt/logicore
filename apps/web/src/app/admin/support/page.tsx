@@ -160,6 +160,34 @@ export default function AdminSupportPage() {
                     expandedRowRender: (r: any) => (
                         <div style={{ maxWidth: 900 }}>
                             <Paragraph style={{ whiteSpace: 'pre-wrap', fontSize: 13, marginBottom: 12 }}>{r.description}</Paragraph>
+                            {r.details?.where && (
+                                <div style={{ marginBottom: 10, fontSize: 13 }}>
+                                    <Text strong>Где смотреть: </Text>
+                                    <Text>{r.details.where}</Text>
+                                </div>
+                            )}
+                            {r.details?.process && (
+                                <div style={{ background: '#f6f8ff', border: '1px solid #dbe3f5', borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                                    <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Бизнес-процесс</Text>
+                                    <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{r.details.process}</div>
+                                </div>
+                            )}
+                            {(r.details?.expected || r.details?.actual) && (
+                                <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                                    {r.details?.expected && (
+                                        <div style={{ flex: 1, minWidth: 260, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 12 }}>
+                                            <Text strong style={{ fontSize: 12, color: '#15803d', display: 'block', marginBottom: 4 }}>Ожидается</Text>
+                                            <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{r.details.expected}</div>
+                                        </div>
+                                    )}
+                                    {r.details?.actual && (
+                                        <div style={{ flex: 1, minWidth: 260, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 12 }}>
+                                            <Text strong style={{ fontSize: 12, color: '#b91c1c', display: 'block', marginBottom: 4 }}>Фактически</Text>
+                                            <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{r.details.actual}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             {Array.isArray(r.transcript) && r.transcript.length > 0 && (
                                 <div style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 8, padding: 12 }}>
                                     <Text strong style={{ fontSize: 12 }}>Диалог с ассистентом:</Text>

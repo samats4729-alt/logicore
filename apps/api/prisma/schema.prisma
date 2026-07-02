@@ -1026,6 +1026,7 @@ model SupportTicket {
   severity    String   @default("medium") // low | medium | high
   description String
   orders      String[] @default([]) // номера связанных заявок
+  details     Json? // структура: process / where / expected / actual
   transcript  Json? // диалог пользователя с ассистентом
   status      String   @default("NEW") // NEW | IN_PROGRESS | DONE | REJECTED
   createdAt   DateTime @default(now())
