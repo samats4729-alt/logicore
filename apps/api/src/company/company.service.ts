@@ -84,6 +84,11 @@ export class CompanyService {
      * Создать приглашение для сотрудника
      */
     async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = [], departmentId?: string, position?: string) {
+        // Платформенного ADMIN нельзя назначить через приглашение компании
+        if (role === UserRole.ADMIN) {
+            throw new ForbiddenException('Недопустимая роль для приглашения');
+        }
+
         // Создаем случайный токен, например, 32 символа
         const crypto = require('crypto');
         const token = crypto.randomBytes(16).toString('hex');
@@ -267,7 +272,7 @@ export class CompanyService {
             delete updateData.password;
         }
 
-        return this.prisma.user.update({
+        const updated = await this.prisma.user.update({
             where: { id: userId },
             data: updateData,
             select: {
@@ -279,6 +284,17 @@ export class CompanyService {
                 role: true,
             },
         });
+
+        // Синхронизируем роль в связи с компанией — при логине JWT берёт роль из relation
+        if (data.role) {
+            await this.prisma.userCompanyRelation.upsert({
+                where: { userId_companyId: { userId, companyId } },
+                update: { role: data.role as UserRole },
+                create: { userId, companyId, role: data.role as UserRole },
+            });
+        }
+
+        return updated;
     }
 
     /**
