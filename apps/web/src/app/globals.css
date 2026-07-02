@@ -1074,6 +1074,50 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* ==========================================
+   AI ASSISTANT — LAUNCHER
+   ========================================== */
+.ai-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  z-index: 1600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  background: linear-gradient(180deg, #1c202b 0%, #0f1117 100%);
+  box-shadow: 0 8px 24px rgba(15, 17, 23, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+}
+
+.ai-fab:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 12px 28px rgba(15, 17, 23, 0.4), 0 0 0 6px rgba(22, 119, 255, 0.14);
+}
+
+.ai-fab::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(22, 119, 255, 0.45);
+  animation: aiFabPulse 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes aiFabPulse {
+  0% { transform: scale(0.92); opacity: 0.8; }
+  70% { transform: scale(1.28); opacity: 0; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+
+/* ==========================================
    AI GUIDE — SPOTLIGHT HIGHLIGHT
    ========================================== */
 .ai-spot-ring {
