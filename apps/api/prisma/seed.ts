@@ -69,6 +69,8 @@ async function main() {
         }
     }
 
+    // Тестовые данные (компания/водитель/заказчик/заказ) создаются только при SEED_TEST_DATA=true
+    if (process.env.SEED_TEST_DATA === 'true') {
     // Тестовая компания
     let testCompany = await prisma.company.findFirst({
         where: { bin: '123456789012' }
@@ -201,6 +203,7 @@ async function main() {
         },
     });
     console.log(`✅ Delivery point added to order`);
+    } // end SEED_TEST_DATA
 
     // Seed Locations Hierarchy
     const { kzCities } = require('./kz_cities');
