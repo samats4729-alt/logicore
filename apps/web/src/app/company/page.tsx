@@ -1,28 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Row, Col, Table, Tag, Space, Typography } from 'antd';
+import { useRouter } from 'next/navigation';
+import { Row, Col, Table, Button } from 'antd';
 import {
     FileTextOutlined,
     CheckCircleOutlined,
     ClockCircleOutlined,
     TruckOutlined,
+    PlusOutlined,
+    ArrowRightOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
-
-const { Title } = Typography;
-
-const statusColors: Record<string, string> = {
-    DRAFT: 'default', PENDING: 'orange', ASSIGNED: 'blue', EN_ROUTE_PICKUP: 'gold',
-    AT_PICKUP: 'lime', LOADING: 'purple', IN_TRANSIT: 'cyan', AT_DELIVERY: 'lime',
-    UNLOADING: 'purple', COMPLETED: 'green', CANCELLED: 'default', PROBLEM: 'red',
-};
-
-const statusLabels: Record<string, string> = {
-    DRAFT: 'Черновик', PENDING: 'Ожидает', ASSIGNED: 'Назначен', EN_ROUTE_PICKUP: 'Едет на погр.',
-    AT_PICKUP: 'На погр.', LOADING: 'Загрузка', IN_TRANSIT: 'В пути', AT_DELIVERY: 'На выгр.',
-    UNLOADING: 'Разгрузка', COMPLETED: 'Завершён', CANCELLED: 'Отменён', PROBLEM: 'Проблема',
-};
+import { useAuthStore } from '@/store/auth';
+import StatusPill from '@/components/ui/StatusPill';
 
 interface Order {
     id: string;
@@ -34,11 +25,11 @@ interface Order {
     createdAt: string;
     pickupLocation?: { name: string; address: string; city?: string };
     deliveryPoints?: { location: { name: string; address: string; city?: string } }[];
+    routePoints?: { pointType: string; location?: { name?: string; address?: string; city?: string } }[];
     driver?: { firstName: string; lastName: string; vehiclePlate?: string };
     forwarder?: { name: string };
     assignedDriverName?: string;
     assignedDriverPlate?: string;
-    assignedDriverTrailer?: string;
 }
 
 function extractCity(loc: { name?: string; address?: string; city?: string } | undefined): string {
@@ -48,15 +39,28 @@ function extractCity(loc: { name?: string; address?: string; city?: string } | u
     return loc.name || '—';
 }
 
+function greeting(): string {
+    const h = new Date().getHours();
+    if (h < 5) return 'Доброй ночи';
+    if (h < 12) return 'Доброе утро';
+    if (h < 18) return 'Добрый день';
+    return 'Добрый вечер';
+}
+
 export default function CompanyDashboard() {
+    const router = useRouter();
+    const { user } = useAuthStore();
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, pending: 0, inProgress: 0, completed: 0 });
 
+    const isManager = user?.role === 'LOGISTICIAN';
+
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                const response = await api.get('/company/orders');
+                const mine = isManager ? '&mine=true' : '';
+                const response = await api.get(`/company/orders?limit=100${mine}`);
                 const rawData = response.data;
                 const ordersList = Array.isArray(rawData) ? rawData : (rawData?.data || []);
                 setOrders(ordersList);
@@ -70,19 +74,26 @@ export default function CompanyDashboard() {
             finally { setLoading(false); }
         };
         fetchOrders();
-    }, []);
+    }, [isManager]);
+
+    const metrics = [
+        { label: isManager ? 'Мои заявки' : 'Всего заявок', value: stats.total, hint: 'за всё время', icon: <FileTextOutlined />, bg: '#e8f0fe', fg: '#1d4ed8' },
+        { label: 'Ожидают', value: stats.pending, hint: 'требуют внимания', icon: <ClockCircleOutlined />, bg: '#fff4e5', fg: '#b45309' },
+        { label: 'В пути', value: stats.inProgress, hint: 'активные перевозки', icon: <TruckOutlined />, bg: '#e0f2fe', fg: '#0369a1' },
+        { label: 'Завершено', value: stats.completed, hint: 'успешные доставки', icon: <CheckCircleOutlined />, bg: '#e7f8ef', fg: '#15803d' },
+    ];
 
     const columns = [
         {
             title: '№', dataIndex: 'orderNumber', key: 'num', width: 130,
-            render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span>,
+            render: (t: string) => <span className="lc-ordernum">{t}</span>,
         },
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 60,
             render: (d: string) => <span style={{ fontSize: 11, color: '#888' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
-            title: 'Груз', key: 'cargo', ellipsis: true, width: 120,
+            title: 'Груз', key: 'cargo', ellipsis: true, width: 130,
             render: (_: any, r: Order) => {
                 const parts = [];
                 if (r.natureOfCargo) parts.push(r.natureOfCargo);
@@ -91,22 +102,26 @@ export default function CompanyDashboard() {
             }
         },
         {
-            title: 'Откуда', key: 'from', width: 100, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(r.pickupLocation)}</span>,
-        },
-        {
-            title: 'Куда', key: 'to', width: 100, ellipsis: true,
+            title: 'Маршрут', key: 'route', width: 180, ellipsis: true,
             render: (_: any, r: Order) => {
-                const dp = r.deliveryPoints?.length ? r.deliveryPoints[r.deliveryPoints.length - 1] : null;
-                return <span style={{ fontSize: 12, fontWeight: 500 }}>{extractCity(dp?.location)}</span>;
+                const pickup = r.routePoints?.find(p => p.pointType === 'PICKUP')?.location || r.pickupLocation;
+                const deliveries = r.routePoints?.filter(p => p.pointType === 'DELIVERY') || [];
+                const lastDelivery = deliveries.length ? deliveries[deliveries.length - 1].location : r.deliveryPoints?.[r.deliveryPoints.length - 1]?.location;
+                return (
+                    <span style={{ fontSize: 12, fontWeight: 500 }}>
+                        {extractCity(pickup)}
+                        <ArrowRightOutlined style={{ fontSize: 10, color: '#94a3b8', margin: '0 6px' }} />
+                        {extractCity(lastDelivery)}
+                    </span>
+                );
             },
         },
         {
-            title: 'Статус', dataIndex: 'status', key: 'status', width: 100,
-            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>,
+            title: 'Статус', dataIndex: 'status', key: 'status', width: 110,
+            render: (s: string) => <StatusPill status={s} />,
         },
         {
-            title: 'Водитель', key: 'driver', width: 120, ellipsis: true,
+            title: 'Водитель', key: 'driver', width: 130, ellipsis: true,
             render: (_: any, r: Order) => {
                 if (r.assignedDriverName) return (
                     <span style={{ fontSize: 12 }}>{r.assignedDriverName} <span style={{ color: '#999', fontFamily: 'monospace', fontSize: 11 }}>{r.assignedDriverPlate || ''}</span></span>
@@ -116,73 +131,55 @@ export default function CompanyDashboard() {
             },
         },
         {
-            title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 90, align: 'right' as const,
-            render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 600 }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc' }}>—</span>,
+            title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 100, align: 'right' as const,
+            render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc' }}>—</span>,
         },
     ];
 
     return (
-        <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '32px' }}>
-                <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '8px', color: '#09090b' }}>
-                    Обзор компании
-                </h1>
-                <p style={{ color: '#71717a', fontSize: '16px' }}>
-                    Сводка по вашим текущим заказам и активности
-                </p>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 22, flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                    <div className="lc-eyebrow">LogiCore — обзор</div>
+                    <h1 className="lc-title">{greeting()}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 14, margin: '6px 0 0' }}>
+                        {isManager ? 'Ваши заявки и активность' : 'Сводка по всем заявкам компании'}
+                    </p>
+                </div>
+                <Button type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')}>
+                    Создать заявку
+                </Button>
             </div>
 
-            <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
-                <Col xs={24} sm={12} lg={6}>
-                    <div className="premium-card" style={{ padding: '24px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div className="premium-stat-label">Всего заявок</div>
-                            <FileTextOutlined style={{ color: '#71717a', fontSize: '16px' }} />
+            {/* Metrics */}
+            <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+                {metrics.map((m, i) => (
+                    <Col xs={24} sm={12} lg={6} key={i}>
+                        <div className="lc-metric">
+                            <div className="lc-metric-icon" style={{ background: m.bg, color: m.fg }}>{m.icon}</div>
+                            <div>
+                                <div className="lc-metric-label">{m.label}</div>
+                                <div className="lc-metric-value">{m.value}</div>
+                                <div className="lc-metric-hint">{m.hint}</div>
+                            </div>
                         </div>
-                        <div className="premium-stat-value">{stats.total}</div>
-                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>за все время</div>
-                    </div>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <div className="premium-card" style={{ padding: '24px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div className="premium-stat-label">Ожидают</div>
-                            <ClockCircleOutlined style={{ color: '#71717a', fontSize: '16px' }} />
-                        </div>
-                        <div className="premium-stat-value">{stats.pending}</div>
-                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>требуют внимания</div>
-                    </div>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <div className="premium-card" style={{ padding: '24px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div className="premium-stat-label">В пути</div>
-                            <TruckOutlined style={{ color: '#71717a', fontSize: '16px' }} />
-                        </div>
-                        <div className="premium-stat-value">{stats.inProgress}</div>
-                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>активные перевозки</div>
-                    </div>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <div className="premium-card" style={{ padding: '24px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div className="premium-stat-label">Завершено</div>
-                            <CheckCircleOutlined style={{ color: '#71717a', fontSize: '16px' }} />
-                        </div>
-                        <div className="premium-stat-value">{stats.completed}</div>
-                        <div style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>успешные доставки</div>
-                    </div>
-                </Col>
+                    </Col>
+                ))}
             </Row>
 
-            {/* COMPACT LAST 10 ORDERS TABLE */}
-            <div className="premium-card" style={{ overflow: 'hidden' }}>
-                <div style={{ padding: '16px 16px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Recent orders */}
+            <div className="lc-card">
+                <div style={{ padding: '16px 20px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#09090b', margin: 0 }}>Последние заявки</h2>
-                        <p style={{ color: '#71717a', fontSize: '12px', margin: '2px 0 0' }}>10 последних заявок</p>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#0b0d12', letterSpacing: '-0.01em' }}>Последние заявки</div>
+                        <div style={{ color: '#8a91a0', fontSize: 12, marginTop: 2 }}>
+                            {isManager ? '10 ваших последних заявок' : '10 последних заявок компании'}
+                        </div>
                     </div>
-                    <span style={{ fontSize: 11, color: '#999' }}>Всего: {orders.length}</span>
+                    <span className="lc-link" onClick={() => router.push('/company/orders')}>
+                        Все заявки <ArrowRightOutlined style={{ fontSize: 11 }} />
+                    </span>
                 </div>
                 <Table
                     columns={columns}
@@ -192,46 +189,11 @@ export default function CompanyDashboard() {
                     pagination={false}
                     size="small"
                     scroll={{ x: 900 }}
-                    rowClassName={(record) => {
-                        if (record.status === 'COMPLETED') return 'row-completed';
-                        if (record.status === 'PROBLEM') return 'row-problem';
-                        if (record.status === 'CANCELLED') return 'row-cancelled';
-                        return '';
-                    }}
+                    onRow={(record) => ({
+                        onClick: () => router.push(`/company/orders/${record.id}`),
+                    })}
                 />
             </div>
-
-            <style jsx global>{`
-                .premium-card .ant-table-small .ant-table-thead > tr > th {
-                    padding: 6px 8px !important;
-                    font-size: 11px !important;
-                    font-weight: 600 !important;
-                    background: #fafafa !important;
-                    text-transform: uppercase;
-                    letter-spacing: 0.3px;
-                    color: #666 !important;
-                    white-space: nowrap;
-                }
-                .premium-card .ant-table-small .ant-table-tbody > tr > td {
-                    padding: 4px 8px !important;
-                    font-size: 12px !important;
-                    border-bottom: 1px solid #f5f5f5 !important;
-                }
-                .premium-card .ant-table-small .ant-table-tbody > tr:hover > td {
-                    background: #e6f7ff !important;
-                }
-                .premium-card .ant-table-small .ant-table-tbody > tr.row-completed > td {
-                    background: #f6ffed !important;
-                }
-                .premium-card .ant-table-small .ant-table-tbody > tr.row-problem > td {
-                    background: #fff2f0 !important;
-                }
-                .premium-card .ant-table-small .ant-table-tbody > tr.row-cancelled > td {
-                    background: #fafafa !important;
-                    color: #bbb;
-                    text-decoration: line-through;
-                }
-            `}</style>
         </div>
     );
 }

@@ -321,7 +321,7 @@ export class CompanyService {
     /**
      * Получить заявки компании с пагинацией
      */
-    async getCompanyOrders(companyId: string, query: PaginationQueryDto & { type?: string } = {}) {
+    async getCompanyOrders(companyId: string, query: PaginationQueryDto & { type?: string; mine?: string } = {}, userId?: string) {
         const { skip, take, page, limit } = getPaginationParams(query);
         
         let where: any = {};
@@ -402,6 +402,16 @@ export class CompanyService {
                     { partnerId: companyId },
                     { subForwarderId: companyId },
                     { responsibleManager: { companyId: companyId } },
+                ],
+            };
+        }
+
+        // «Мои заявки»: менеджер видит только заявки, где он ответственный или создатель
+        if (query.mine === 'true' && userId) {
+            where = {
+                AND: [
+                    where,
+                    { OR: [{ responsibleManagerId: userId }, { customerId: userId }] },
                 ],
             };
         }

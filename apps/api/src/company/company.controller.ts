@@ -112,8 +112,8 @@ export class CompanyController {
     @Get('orders')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Получить заявки своей компании' })
-    async getCompanyOrders(@Request() req: any, @Query() query: PaginationQueryDto & { type?: string }) {
-        return this.companyService.getCompanyOrders(req.user.companyId, query);
+    async getCompanyOrders(@Request() req: any, @Query() query: PaginationQueryDto & { type?: string; mine?: string }) {
+        return this.companyService.getCompanyOrders(req.user.companyId, query, req.user.sub);
     }
 
     // ==================== Профиль компании ====================
