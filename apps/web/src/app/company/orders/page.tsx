@@ -1206,11 +1206,11 @@ export default function CompanyOrdersPage() {
 
     return (
         <div className="lc-page" style={{ height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                    <div className="lc-eyebrow">LogiCore — перевозки</div>
-                    <h1 className="lc-title">Заявки<span className="lc-count">{orders.length}</span></h1>
-                    <div className="lc-stats">
+            <div style={{ marginBottom: 14 }}>
+                <div className="lc-eyebrow">LogiCore — перевозки</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                    <h1 className="lc-title" style={{ margin: 0 }}>Заявки<span className="lc-count">{orders.length}</span></h1>
+                    <div className="lc-stats" style={{ marginTop: 0 }}>
                         <span className="lc-chip"><i style={{ background: '#b45309' }} />Ожидает <b>{orders.filter(o => o.status === 'PENDING').length}</b></span>
                         <span className="lc-chip"><i style={{ background: '#1d4ed8' }} />В работе <b>{orders.filter(o => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING'].includes(o.status)).length}</b></span>
                         <span className="lc-chip"><i style={{ background: '#0369a1' }} />В пути <b>{orders.filter(o => ['IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length}</b></span>
@@ -1218,10 +1218,10 @@ export default function CompanyOrdersPage() {
                             <span className="lc-chip lc-chip-alert"><i style={{ background: '#dc2626' }} />Проблемы <b>{orders.filter(o => o.status === 'PROBLEM').length}</b></span>
                         )}
                     </div>
+                    <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
+                        Создать заявку
+                    </Button>
                 </div>
-                <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
-                    Создать заявку
-                </Button>
             </div>
 
             <Tabs

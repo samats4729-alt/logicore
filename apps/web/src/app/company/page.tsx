@@ -139,17 +139,17 @@ export default function CompanyDashboard() {
     return (
         <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 22, flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                    <div className="lc-eyebrow">LogiCore — обзор</div>
-                    <h1 className="lc-title">{greeting()}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 14, margin: '6px 0 0' }}>
-                        {isManager ? 'Ваши заявки и активность' : 'Сводка по всем заявкам компании'}
-                    </p>
+            <div style={{ marginBottom: 18 }}>
+                <div className="lc-eyebrow">LogiCore — обзор</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                    <h1 className="lc-title" style={{ margin: 0 }}>{greeting()}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
+                    <Button type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')}>
+                        Создать заявку
+                    </Button>
                 </div>
-                <Button type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')}>
-                    Создать заявку
-                </Button>
+                <p style={{ color: '#8a91a0', fontSize: 13, margin: '5px 0 0' }}>
+                    {isManager ? 'Ваши заявки и активность' : 'Сводка по всем заявкам компании'}
+                </p>
             </div>
 
             {/* Metrics */}
