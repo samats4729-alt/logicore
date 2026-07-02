@@ -573,6 +573,91 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* ==========================================
+   DARK NAV POPUPS — выпадающие меню навигации
+   ========================================== */
+.lc-nav-pop .ant-menu {
+  background: linear-gradient(180deg, #141822 0%, #0f1117 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 14px !important;
+  padding: 6px !important;
+  box-shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.55) !important;
+  min-width: 208px;
+}
+
+.lc-nav-pop .ant-menu-item {
+  color: rgba(255, 255, 255, 0.72) !important;
+  border-radius: 9px !important;
+  font-size: 12.5px !important;
+  font-weight: 500;
+  margin: 2px 0 !important;
+  height: 34px !important;
+  line-height: 34px !important;
+  transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+.lc-nav-pop .ant-menu-item .anticon {
+  color: rgba(255, 255, 255, 0.45) !important;
+  transition: color 0.15s ease !important;
+}
+
+.lc-nav-pop .ant-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.lc-nav-pop .ant-menu-item:hover .anticon {
+  color: #69b1ff !important;
+}
+
+.lc-nav-pop .ant-menu-item-selected {
+  background: #1677ff !important;
+  color: #ffffff !important;
+}
+
+.lc-nav-pop .ant-menu-item-selected .anticon {
+  color: #ffffff !important;
+}
+
+.lc-nav-pop .ant-menu-item-divider {
+  background: rgba(255, 255, 255, 0.08) !important;
+  margin: 5px 8px !important;
+}
+
+/* Меню профиля в шапке — тёмное */
+.lc-user-pop .ant-dropdown-menu {
+  background: linear-gradient(180deg, #141822 0%, #0f1117 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 14px !important;
+  padding: 6px !important;
+  box-shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.55) !important;
+  min-width: 180px;
+}
+
+.lc-user-pop .ant-dropdown-menu .ant-dropdown-menu-item {
+  color: rgba(255, 255, 255, 0.75) !important;
+  border-radius: 9px !important;
+  font-size: 12.5px !important;
+  padding: 8px 12px !important;
+}
+
+.lc-user-pop .ant-dropdown-menu .ant-dropdown-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.lc-user-pop .ant-dropdown-menu .ant-dropdown-menu-item .anticon {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.lc-user-pop .ant-dropdown-menu .ant-dropdown-menu-item:hover .anticon {
+  color: #69b1ff !important;
+}
+
+.lc-user-pop .ant-dropdown-menu-item-divider {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ==========================================
    PLATFORM UI POLISH (premium layer)
    ========================================== */
 

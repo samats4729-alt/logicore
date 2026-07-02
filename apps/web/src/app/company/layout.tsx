@@ -137,6 +137,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         if (ordersChildren.length > 0) {
             items.push({
                 key: 'orders_group',
+                popupClassName: 'lc-nav-pop',
                 icon: <FileTextOutlined />,
                 label: 'Заявки',
                 children: ordersChildren,
@@ -162,6 +163,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         if (logisticsChildren.length > 0) {
             items.push({
                 key: 'logistics_group',
+                popupClassName: 'lc-nav-pop',
                 icon: <CompassOutlined />,
                 label: 'Логистика',
                 children: logisticsChildren,
@@ -228,6 +230,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         if (financeChildren.length > 0) {
             items.push({
                 key: 'finance_group',
+                popupClassName: 'lc-nav-pop',
                 icon: <DollarOutlined />,
                 label: 'Финансы',
                 children: financeChildren,
@@ -275,6 +278,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         if (companyChildren.length > 0) {
             items.push({
                 key: 'company_group',
+                popupClassName: 'lc-nav-pop',
                 icon: <TeamOutlined />,
                 label: 'Компания',
                 children: companyChildren,
@@ -427,7 +431,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 {isMobile && <div style={{ flex: 1 }} />}
 
                 {/* User Profile */}
-                <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
+                <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']} overlayClassName={isTrackingPage ? undefined : 'lc-user-pop'}>
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
