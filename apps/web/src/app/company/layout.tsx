@@ -467,7 +467,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     className={isTrackingPage ? undefined : 'page-content-anim'}
                     style={{
                         margin: isTrackingPage ? 0 : (isMobile ? 16 : 0),
-                        padding: isTrackingPage ? 0 : (isMobile ? 16 : 32),
+                        padding: isTrackingPage ? 0 : (isMobile ? 16 : 24),
                         background: isTrackingPage ? 'transparent' : '#ffffff',
                         borderRadius: isTrackingPage ? 0 : 20,
                         border: isTrackingPage ? 'none' : '1px solid #e8e9ee',

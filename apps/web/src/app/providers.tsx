@@ -15,33 +15,33 @@ export function AntdProvider({ children }: { children: React.ReactNode }) {
             <ConfigProvider
                 locale={ruRU}
                 theme={{
-                    algorithm: theme.defaultAlgorithm,
+                    algorithm: [theme.defaultAlgorithm, theme.compactAlgorithm],
                     token: {
                         colorPrimary: '#1677ff',
                         colorInfo: '#1677ff',
                         borderRadius: 10,
                         fontFamily: FONT_STACK,
-                        fontSize: 14,
+                        fontSize: 13,
                         colorText: '#18181b',
                         colorTextSecondary: '#52525b',
                         colorTextTertiary: '#a1a1aa',
                         colorBorder: '#e4e4e7',
                         colorBorderSecondary: '#ececf0',
                         colorBgLayout: '#f6f7f9',
-                        controlHeight: 36,
+                        controlHeight: 32,
                     },
                     components: {
                         Button: {
                             fontWeight: 500,
                             borderRadius: 10,
-                            controlHeight: 36,
+                            controlHeight: 32,
                         },
                         Table: {
                             headerBg: '#fafafa',
                             headerColor: '#6b7280',
                             headerSplitColor: 'transparent',
                             rowHoverBg: '#f5f8ff',
-                            cellPaddingBlock: 12,
+                            cellPaddingBlock: 9,
                             borderColor: '#efeff2',
                         },
                         Card: {
@@ -52,18 +52,18 @@ export function AntdProvider({ children }: { children: React.ReactNode }) {
                             borderRadiusLG: 16,
                         },
                         Input: {
-                            controlHeight: 36,
+                            controlHeight: 32,
                             activeShadow: '0 0 0 3px rgba(22, 119, 255, 0.12)',
                         },
                         InputNumber: {
-                            controlHeight: 36,
+                            controlHeight: 32,
                         },
                         Select: {
-                            controlHeight: 36,
+                            controlHeight: 32,
                             borderRadiusLG: 12,
                         },
                         DatePicker: {
-                            controlHeight: 36,
+                            controlHeight: 32,
                         },
                         Menu: {
                             itemBorderRadius: 8,

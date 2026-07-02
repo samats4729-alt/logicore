@@ -678,7 +678,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .lc-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #0b0d12;
@@ -689,7 +689,7 @@ a.mapboxgl-ctrl-logo,
 .lc-page .lc-count {
   color: #9aa2b1;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   margin-left: 10px;
 }
 
@@ -697,9 +697,9 @@ a.mapboxgl-ctrl-logo,
   background: linear-gradient(180deg, #1c202b 0%, #0f1117 100%) !important;
   border: none !important;
   color: #fff !important;
-  height: 40px;
-  padding: 0 20px !important;
-  border-radius: 12px !important;
+  height: 34px;
+  padding: 0 16px !important;
+  border-radius: 10px !important;
   font-weight: 600;
   box-shadow: 0 4px 14px rgba(15, 17, 23, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
@@ -732,11 +732,11 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .ant-tabs-tab {
-  padding: 6px 16px !important;
+  padding: 4px 13px !important;
   margin: 0 !important;
-  border-radius: 9px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12.5px;
   color: #6b7280;
   transition: all 0.2s ease;
 }
@@ -776,8 +776,8 @@ a.mapboxgl-ctrl-logo,
 .lc-page .lc-filterbar {
   background: #ffffff;
   border: 1px solid #ececf0;
-  border-radius: 14px;
-  padding: 10px 14px;
+  border-radius: 12px;
+  padding: 8px 12px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
@@ -801,8 +801,8 @@ a.mapboxgl-ctrl-logo,
 
 .lc-page .ant-table-tbody > tr > td {
   border-bottom: 1px solid #f1f2f4 !important;
-  padding-top: 13px !important;
-  padding-bottom: 13px !important;
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
 }
 
 .lc-page .ant-table-tbody > tr:hover > td {
@@ -820,12 +820,12 @@ a.mapboxgl-ctrl-logo,
 .lc-chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
+  gap: 6px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: #ffffff;
   border: 1px solid #ececf0;
-  font-size: 12px;
+  font-size: 11.5px;
   color: #5b6472;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
@@ -921,11 +921,11 @@ a.mapboxgl-ctrl-logo,
 .lc-metric {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
   background: #ffffff;
   border: 1px solid #ececf0;
-  border-radius: 16px;
-  padding: 18px 20px;
+  border-radius: 14px;
+  padding: 13px 15px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   transition: box-shadow 0.25s ease, transform 0.25s ease;
   height: 100%;
@@ -937,24 +937,24 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-metric-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 15px;
   flex-shrink: 0;
 }
 
 .lc-metric-label {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
   color: #6b7280;
 }
 
 .lc-metric-value {
-  font-size: 26px;
+  font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #0b0d12;
@@ -963,7 +963,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-metric-hint {
-  font-size: 11.5px;
+  font-size: 11px;
   color: #98a1b2;
 }
 
@@ -985,19 +985,19 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-pad {
-  padding: 22px 24px;
+  padding: 16px 18px;
 }
 
 /* Заголовки секций внутри карточек */
 .lc-sec-title {
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 700;
   color: #0b0d12;
   letter-spacing: -0.01em;
 }
 
 .lc-sec-hint {
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: #8a91a0;
   margin-top: 3px;
 }
@@ -1054,10 +1054,10 @@ a.mapboxgl-ctrl-logo,
 .lc-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px 3px 8px;
+  gap: 5px;
+  padding: 2px 9px 2px 7px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 16px;
