@@ -41,6 +41,21 @@ const GREETING_SUPPORT: ChatMsg = {
     content: 'Опишите проблему — что работает неправильно? Я сверюсь с вашими данными (заявки, счета, оплаты), уточню детали и оформлю обращение разработчику.',
 };
 
+// Карта преломления «толстой линзы»: центр нейтральный (#808080 — без смещения),
+// у скруглённых краёв R/G-каналы кодируют изгиб фона наружу (эффект Apple Liquid Glass)
+const LG_MAP = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='380' height='560'>" +
+    "<defs>" +
+    "<linearGradient id='x' x1='0' y1='0' x2='1' y2='0'><stop offset='0' stop-color='#000000'/><stop offset='1' stop-color='#ff0000'/></linearGradient>" +
+    "<linearGradient id='y' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#000000'/><stop offset='1' stop-color='#00ff00'/></linearGradient>" +
+    "<filter id='b'><feGaussianBlur stdDeviation='12'/></filter>" +
+    "</defs>" +
+    "<rect width='380' height='560' fill='url(#x)'/>" +
+    "<rect width='380' height='560' fill='url(#y)' style='mix-blend-mode:screen'/>" +
+    "<rect x='22' y='22' width='336' height='516' rx='34' fill='#808080' filter='url(#b)'/>" +
+    "</svg>"
+);
+
 function parseTicket(text: string): { clean: string; ticket: TicketDraft | null } {
     const match = text.match(/```ticket\s*([\s\S]*?)```/);
     if (!match) return { clean: text.trim(), ticket: null };
@@ -313,10 +328,9 @@ export default function AssistantWidget() {
                 >
                     {/* SVG-фильтр преломления (liquid glass), применяется через backdrop-filter: url() */}
                     <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-                        <filter id="lg-dist" x="-20%" y="-20%" width="140%" height="140%">
-                            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.012" numOctaves="2" seed="7" result="noise" />
-                            <feGaussianBlur in="noise" stdDeviation="3" result="soft" />
-                            <feDisplacementMap in="SourceGraphic" in2="soft" scale="64" xChannelSelector="R" yChannelSelector="G" />
+                        <filter id="lg-dist" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+                            <feImage href={LG_MAP} x="0" y="0" width="380" height="560" preserveAspectRatio="none" result="map" />
+                            <feDisplacementMap in="SourceGraphic" in2="map" scale="72" xChannelSelector="R" yChannelSelector="G" />
                         </filter>
                     </svg>
                     <div className="ai-glass-refract" />
