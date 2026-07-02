@@ -665,6 +665,174 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* ==========================================
+   LC PAGE SKIN — фирменный стиль страниц LogiCore
+   (подключается классом lc-page на корне страницы)
+   ========================================== */
+.lc-page .lc-eyebrow {
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #98a1b2;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.lc-page .lc-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0b0d12;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.lc-page .lc-count {
+  color: #9aa2b1;
+  font-weight: 600;
+  font-size: 14px;
+  margin-left: 10px;
+}
+
+.lc-page .lc-cta.ant-btn {
+  background: #0f1117 !important;
+  border: none !important;
+  color: #fff !important;
+  height: 40px;
+  padding: 0 20px !important;
+  border-radius: 12px !important;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(15, 17, 23, 0.25) !important;
+}
+
+.lc-page .lc-cta.ant-btn:hover:not(:disabled) {
+  background: #1677ff !important;
+  box-shadow: 0 6px 18px rgba(22, 119, 255, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+.lc-page .lc-cta.ant-btn:disabled {
+  background: #e4e4e7 !important;
+  color: #a1a1aa !important;
+  box-shadow: none !important;
+}
+
+/* Вкладки — сегментированные пилюли вместо линий antd */
+.lc-page .ant-tabs-nav {
+  margin-bottom: 14px;
+}
+
+.lc-page .ant-tabs-nav::before {
+  border-bottom: none !important;
+}
+
+.lc-page .ant-tabs-nav-list {
+  background: #f1f2f5;
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.lc-page .ant-tabs-tab {
+  padding: 6px 16px !important;
+  margin: 0 !important;
+  border-radius: 9px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.lc-page .ant-tabs-tab + .ant-tabs-tab {
+  margin-left: 2px !important;
+}
+
+.lc-page .ant-tabs-tab-active {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.12);
+}
+
+.lc-page .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #0b0d12 !important;
+}
+
+.lc-page .ant-tabs-ink-bar {
+  display: none !important;
+}
+
+.lc-page .ant-tabs-tab .ant-tag {
+  background: #fff;
+  border-color: #e4e4e7;
+  border-radius: 999px;
+  color: #6b7280;
+  line-height: 16px;
+}
+
+.lc-page .ant-tabs-tab-active .ant-tag {
+  background: #eef4ff;
+  border-color: #c6dcff;
+  color: #1677ff;
+}
+
+/* Панель фильтров — фирменная карточка */
+.lc-page .lc-filterbar {
+  background: #ffffff;
+  border: 1px solid #ececf0;
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+/* Таблица без antd-хрома */
+.lc-page .ant-table {
+  background: transparent;
+}
+
+.lc-page .ant-table-thead > tr > th {
+  background: transparent !important;
+  border-bottom: 1px solid #e7e8ec !important;
+  color: #8a91a0 !important;
+  font-size: 10.5px !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.lc-page .ant-table-thead > tr > th::before {
+  display: none !important;
+}
+
+.lc-page .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #f1f2f4 !important;
+  padding-top: 13px !important;
+  padding-bottom: 13px !important;
+}
+
+.lc-page .ant-table-tbody > tr:hover > td {
+  background: #f6f9ff !important;
+}
+
+/* Фирменные статус-пилюли */
+.lc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.lc-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ==========================================
    AI GUIDE — SPOTLIGHT HIGHLIGHT
    ========================================== */
 .ai-spot-ring {

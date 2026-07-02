@@ -55,6 +55,32 @@ const statusLabels: Record<string, string> = {
     CANCELLED: 'Отменён',
 };
 
+// Фирменные статус-пилюли LogiCore (вместо стандартных antd Tag)
+const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
+    DRAFT: { bg: '#f1f2f4', fg: '#5f6672' },
+    PENDING: { bg: '#fff4e5', fg: '#b45309' },
+    ASSIGNED: { bg: '#e8f0fe', fg: '#1d4ed8' },
+    EN_ROUTE_PICKUP: { bg: '#e6f6fb', fg: '#0e7490' },
+    AT_PICKUP: { bg: '#eefbe7', fg: '#4d7c0f' },
+    LOADING: { bg: '#f3e8ff', fg: '#7e22ce' },
+    IN_TRANSIT: { bg: '#e0f2fe', fg: '#0369a1' },
+    AT_DELIVERY: { bg: '#ecfccb', fg: '#3f6212' },
+    UNLOADING: { bg: '#fae8ff', fg: '#a21caf' },
+    COMPLETED: { bg: '#e7f8ef', fg: '#15803d' },
+    PROBLEM: { bg: '#fee2e2', fg: '#dc2626' },
+    CANCELLED: { bg: '#fdeaea', fg: '#b91c1c' },
+};
+
+function StatusPill({ status }: { status: string }) {
+    const meta = STATUS_PILL[status] || STATUS_PILL.DRAFT;
+    return (
+        <span className="lc-status" style={{ background: meta.bg, color: meta.fg }}>
+            <i />
+            {statusLabels[status] || status}
+        </span>
+    );
+}
+
 interface Driver {
     id: string;
     firstName: string;
@@ -992,7 +1018,7 @@ export default function CompanyOrdersPage() {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
             render: (s: string, r: Order) => (
                 <div>
-                    <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>{statusLabels[s] || s}</Tag>
+                    <StatusPill status={s} />
                     {r.pendingStatus === 'COMPLETED' && r.pendingStatusById !== user?.companyId && (
                         <Tooltip title="Ожидает вашего подтверждения завершения">
                             <ExclamationCircleOutlined style={{ color: '#faad14', marginLeft: 4, fontSize: 13 }} />
@@ -1103,7 +1129,7 @@ export default function CompanyOrdersPage() {
     const archiveColumns = [
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
-            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag>,
+            render: (s: string) => <StatusPill status={s} />,
         },
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{t}</span> },
         ...orgColumn,
@@ -1179,10 +1205,13 @@ export default function CompanyOrdersPage() {
     // =================== RENDER ===================
 
     return (
-        <div style={{ height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Title level={4} style={{ margin: 0 }}>Заявки</Title>
-                <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
+        <div className="lc-page" style={{ height: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                    <div className="lc-eyebrow">LogiCore — перевозки</div>
+                    <h1 className="lc-title">Заявки<span className="lc-count">{orders.length}</span></h1>
+                </div>
+                <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
                     Создать заявку
                 </Button>
             </div>
@@ -1198,10 +1227,9 @@ export default function CompanyOrdersPage() {
                         children: (
                             <div>
                                 {/* FILTER BAR */}
-                                <div style={{
-                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8,
-                                    padding: '8px 12px', background: '#fafafa', borderRadius: 8,
-                                    border: '1px solid #f0f0f0', alignItems: 'center'
+                                <div className="lc-filterbar" style={{
+                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12,
+                                    alignItems: 'center'
                                 }}>
                                     <FilterOutlined style={{ color: '#999', fontSize: 13 }} />
                                     <Select
@@ -1311,10 +1339,9 @@ export default function CompanyOrdersPage() {
                         children: (
                             <div>
                                 {/* FILTER BAR */}
-                                <div style={{
-                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8,
-                                    padding: '8px 12px', background: '#fafafa', borderRadius: 8,
-                                    border: '1px solid #f0f0f0', alignItems: 'center'
+                                <div className="lc-filterbar" style={{
+                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12,
+                                    alignItems: 'center'
                                 }}>
                                     <FilterOutlined style={{ color: '#999', fontSize: 13 }} />
                                     <Select
