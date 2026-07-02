@@ -142,11 +142,11 @@ export class PowerOfAttorneyService {
             // ============================================
             let curY = 30;
             
-            // Column widths
-            const w1 = 60;
+            // Column widths (сумма должна оставаться прежней — ширина таблицы)
+            const w1 = 90;
             const w2 = 65;
             const w3 = 65;
-            const w4 = 195;
+            const w4 = 165;
             const w5 = 150;
 
             const x1 = leftM;
@@ -186,9 +186,17 @@ export class PowerOfAttorneyService {
             curY += 10;
 
             // Row 3 (Values 1-5)
+            // Автоподбор размера шрифта: значение всегда в одну строку внутри ячейки
             const drawCellValue = (x: number, w: number, text: string, isBold = false) => {
                 doc.rect(x, curY, w, 20).stroke();
-                doc.fontSize(7).font(isBold ? 'Roboto-Bold' : 'Roboto').text(text, x + 2, curY + 6, { width: w - 4, align: 'center' });
+                const font = isBold ? 'Roboto-Bold' : 'Roboto';
+                let size = 7;
+                doc.font(font).fontSize(size);
+                while (size > 4.5 && doc.widthOfString(text) > w - 6) {
+                    size -= 0.5;
+                    doc.fontSize(size);
+                }
+                doc.text(text, x + 3, curY + 6, { width: w - 6, align: 'center', lineBreak: false });
             };
 
             const validToDate = deliveryPoint?.expectedDate 
