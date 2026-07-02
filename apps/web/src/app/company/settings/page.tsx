@@ -251,14 +251,17 @@ export default function SettingsPage() {
         {
             key: 'profile',
             label: (
-                <span><UserOutlined style={{ marginRight: 6 }} />Настройки профиля</span>
+                <span><UserOutlined style={{ marginRight: 6 }} />Профиль</span>
             ),
             children: (
-                <Card bordered={false}>
+                <div className="lc-card lc-pad" style={{ maxWidth: 860 }}>
+                    <div className="lc-sec-title">Личные данные</div>
+                    <div className="lc-sec-hint">Имя и контакты, которые видят коллеги и контрагенты</div>
                     <Form
                         form={profileForm}
                         layout="vertical"
                         onFinish={handleProfileUpdate}
+                        style={{ marginTop: 18 }}
                         initialValues={{
                             firstName: user?.firstName,
                             lastName: user?.lastName,
@@ -300,13 +303,13 @@ export default function SettingsPage() {
                                 </Form.Item>
                             </Col>
                         </Row>
-                        <Form.Item>
-                            <Button type="primary" htmlType="submit" loading={loading} size="large">
+                        <Form.Item style={{ marginBottom: 0 }}>
+                            <Button type="primary" htmlType="submit" loading={loading} className="lc-cta">
                                 Сохранить изменения
                             </Button>
                         </Form.Item>
                     </Form>
-                </Card>
+                </div>
             ),
         },
         ...(user?.role === 'COMPANY_ADMIN' || user?.role === 'FORWARDER' ? [{
@@ -315,7 +318,47 @@ export default function SettingsPage() {
                 <span><BankOutlined style={{ marginRight: 6 }} />Данные компании</span>
             ),
             children: (
-                <Card bordered={false}>
+                <div className="lc-stack">
+                    {/* Организации */}
+                    <div className="lc-card lc-pad">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                            <div>
+                                <div className="lc-sec-title">Организации</div>
+                                <div className="lc-sec-hint">Переключение между вашими компаниями и добавление новых</div>
+                            </div>
+                            <Button icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
+                                Добавить организацию
+                            </Button>
+                        </div>
+                        <div style={{ marginTop: 16 }}>
+                            {prepareCompanyOptions(myCompanies, user?.companyId, user?.company?.name).length > 1 ? (
+                                <Space align="center" size="middle" wrap>
+                                    <Select
+                                        style={{ width: 300 }}
+                                        size="large"
+                                        value={user?.companyId}
+                                        onChange={handleSwitchCompany}
+                                        optionLabelProp="label"
+                                        options={prepareCompanyOptions(myCompanies, user?.companyId, user?.company?.name)}
+                                        loading={myCompaniesLoading}
+                                    />
+                                    <Popconfirm
+                                        title="Удалить организацию?"
+                                        description="Вы действительно хотите удалить эту организацию? Доступ к её данным для вас будет закрыт."
+                                        okText="Да, удалить"
+                                        cancelText="Отмена"
+                                        onConfirm={() => user?.companyId && handleDeleteCompany(user.companyId)}
+                                        okButtonProps={{ danger: true, loading: submitLoading }}
+                                    >
+                                        <Button danger icon={<DeleteOutlined />} size="large" />
+                                    </Popconfirm>
+                                </Space>
+                            ) : (
+                                <Text strong style={{ fontSize: 15 }}>{user?.company?.name || 'Ваша организация'}</Text>
+                            )}
+                        </div>
+                    </div>
+
                     <Form
                         form={companyForm}
                         layout="vertical"
@@ -344,42 +387,9 @@ export default function SettingsPage() {
                             }
                         }}
                     >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                            {prepareCompanyOptions(myCompanies, user?.companyId, user?.company?.name).length > 1 ? (
-                                <Space align="center" size="middle">
-                                    <Text strong style={{ fontSize: 15 }}>Организация:</Text>
-                                    <Select
-                                        style={{ width: 280 }}
-                                        size="large"
-                                        value={user?.companyId}
-                                        onChange={handleSwitchCompany}
-                                        optionLabelProp="label"
-                                        options={prepareCompanyOptions(myCompanies, user?.companyId, user?.company?.name)}
-                                        loading={myCompaniesLoading}
-                                    />
-                                    <Popconfirm
-                                        title="Удалить организацию?"
-                                        description="Вы действительно хотите удалить эту организацию? Доступ к её данным для вас будет закрыт."
-                                        okText="Да, удалить"
-                                        cancelText="Отмена"
-                                        onConfirm={() => user?.companyId && handleDeleteCompany(user.companyId)}
-                                        okButtonProps={{ danger: true, loading: submitLoading }}
-                                    >
-                                        <Button type="primary" danger icon={<DeleteOutlined />} size="large" />
-                                    </Popconfirm>
-                                </Space>
-                            ) : (
-                                <Title level={5} style={{ margin: 0 }}>Основная информация</Title>
-                            )}
-                            <Button 
-                                type="primary" 
-                                icon={<PlusOutlined />} 
-                                onClick={() => setModalVisible(true)}
-                                size="large"
-                            >
-                                Добавить организацию
-                            </Button>
-                        </div>
+                        <div className="lc-card lc-pad">
+                        <div className="lc-sec-title">Основная информация</div>
+                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Реквизиты подтягиваются автоматически по БИН</div>
                         <Row gutter={24}>
                             <Col xs={24} md={12}>
                                 <Form.Item
@@ -442,12 +452,11 @@ export default function SettingsPage() {
                                 </Form.Item>
                             </Col>
                         </Row>
+                        </div>
 
-                        <Divider />
-                        <Title level={5} style={{ marginBottom: 16 }}>
-                            <BankOutlined style={{ marginRight: 8 }} />
-                            Банковские реквизиты
-                        </Title>
+                        <div className="lc-card lc-pad" style={{ marginTop: 16 }}>
+                        <div className="lc-sec-title"><BankOutlined style={{ marginRight: 8 }} />Банковские реквизиты</div>
+                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Используются в счетах и договорах</div>
                         <Row gutter={24}>
                             <Col xs={24} md={12}>
                                 <Form.Item 
@@ -486,57 +495,58 @@ export default function SettingsPage() {
                                 </Form.Item>
                             </Col>
                         </Row>
+                        </div>
 
-                        <Form.Item>
-                            <Button type="primary" htmlType="submit" loading={companyLoading} size="large">
+                        <Form.Item style={{ margin: '16px 0 0' }}>
+                            <Button type="primary" htmlType="submit" loading={companyLoading} className="lc-cta">
                                 Сохранить данные компании
                             </Button>
                         </Form.Item>
                     </Form>
 
-                    <Divider />
-                    <Title level={5} style={{ marginBottom: 16 }}>Печать компании</Title>
-                    <Space direction="vertical" size="middle" style={{ marginBottom: 24, display: 'block' }}>
-                        {stampUrl && (
-                            <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, display: 'inline-block', marginBottom: 8 }}>
-                                <Image src={stampUrl} alt="Печать" width={150} />
-                            </div>
-                        )}
-                        <div>
-                            <Upload
-                                accept=".png,.jpg,.jpeg"
-                                showUploadList={false}
-                                beforeUpload={handleStampUpload}
-                            >
-                                <Button icon={<UploadOutlined />} loading={stampLoading} size="large">
-                                    {stampUrl ? 'Заменить печать' : 'Загрузить печать (PNG)'}
-                                </Button>
-                            </Upload>
-                        </div>
-                        <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
-                    </Space>
-
-                    <Divider />
-                    <Title level={5} style={{ marginBottom: 16 }}>Подпись руководителя</Title>
-                    <Space direction="vertical" size="middle" style={{ display: 'block' }}>
-                        {signatureUrl && (
-                            <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, display: 'inline-block', marginBottom: 8 }}>
-                                <Image src={signatureUrl} alt="Подпись" width={150} />
-                            </div>
-                        )}
-                        <div>
-                            <Upload
-                                accept=".png,.jpg,.jpeg"
-                                showUploadList={false}
-                                beforeUpload={handleSignatureUpload}
-                            >
-                                <Button icon={<UploadOutlined />} loading={signatureLoading} size="large">
-                                    {signatureUrl ? 'Заменить подпись' : 'Загрузить подпись (PNG)'}
-                                </Button>
-                            </Upload>
-                        </div>
-                        <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>Рекомендуется PNG с прозрачным фоном, размер не более 5 МБ</Text>
-                    </Space>
+                    {/* Печать и подпись */}
+                    <div className="lc-card lc-pad">
+                        <div className="lc-sec-title">Печать и подпись</div>
+                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Подставляются в доверенности, счета и договоры. PNG с прозрачным фоном, до 5 МБ</div>
+                        <Row gutter={[16, 16]}>
+                            <Col xs={24} md={12}>
+                                <div className="lc-upload-tile">
+                                    <div className="lc-upload-preview">
+                                        {stampUrl
+                                            ? <Image src={stampUrl} alt="Печать" width={120} />
+                                            : <span className="lc-upload-empty"><UploadOutlined /> Печать не загружена</span>}
+                                    </div>
+                                    <Upload
+                                        accept=".png,.jpg,.jpeg"
+                                        showUploadList={false}
+                                        beforeUpload={handleStampUpload}
+                                    >
+                                        <Button icon={<UploadOutlined />} loading={stampLoading}>
+                                            {stampUrl ? 'Заменить печать' : 'Загрузить печать'}
+                                        </Button>
+                                    </Upload>
+                                </div>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <div className="lc-upload-tile">
+                                    <div className="lc-upload-preview">
+                                        {signatureUrl
+                                            ? <Image src={signatureUrl} alt="Подпись" width={120} />
+                                            : <span className="lc-upload-empty"><UploadOutlined /> Подпись не загружена</span>}
+                                    </div>
+                                    <Upload
+                                        accept=".png,.jpg,.jpeg"
+                                        showUploadList={false}
+                                        beforeUpload={handleSignatureUpload}
+                                    >
+                                        <Button icon={<UploadOutlined />} loading={signatureLoading}>
+                                            {signatureUrl ? 'Заменить подпись' : 'Загрузить подпись'}
+                                        </Button>
+                                    </Upload>
+                                </div>
+                            </Col>
+                        </Row>
+                    </div>
                     <Modal
                         title="Добавить организацию"
                         open={modalVisible}
@@ -560,7 +570,7 @@ export default function SettingsPage() {
                             </Form>
                         </div>
                     </Modal>
-                </Card>
+                </div>
             ),
         }] : []),
         {
@@ -569,13 +579,15 @@ export default function SettingsPage() {
                 <span><SafetyOutlined style={{ marginRight: 6 }} />Изменить пароль</span>
             ),
             children: (
-                <Card bordered={false}>
+                <div className="lc-card lc-pad" style={{ maxWidth: 560 }}>
+                    <div className="lc-sec-title"><LockOutlined style={{ marginRight: 8 }} />Смена пароля</div>
+                    <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Минимум 6 символов. После смены текущая сессия сохранится</div>
                     <Form
                         form={passwordForm}
                         layout="vertical"
                         onFinish={handlePasswordChange}
                     >
-                        <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 600 }}>
+                        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                             <Form.Item
                                 name="currentPassword"
                                 label="Текущий пароль"
@@ -603,26 +615,31 @@ export default function SettingsPage() {
                                 <Input.Password prefix={<LockOutlined />} size="large" />
                             </Form.Item>
 
-                            <Form.Item>
-                                <Button type="primary" htmlType="submit" loading={passwordLoading} size="large">
+                            <Form.Item style={{ marginBottom: 0 }}>
+                                <Button type="primary" htmlType="submit" loading={passwordLoading} className="lc-cta">
                                     Изменить пароль
                                 </Button>
                             </Form.Item>
                         </Space>
                     </Form>
-                </Card>
+                </div>
             ),
         },
     ];
 
     return (
-        <div>
-            <Title level={3} style={{ marginBottom: 20 }}>Настройки</Title>
+        <div className="lc-page">
+            <div style={{ marginBottom: 18 }}>
+                <div className="lc-eyebrow">LogiCore — аккаунт</div>
+                <h1 className="lc-title">Настройки</h1>
+                <p style={{ color: '#8a91a0', fontSize: 14, margin: '6px 0 0' }}>
+                    Профиль, данные организации и безопасность
+                </p>
+            </div>
             <Tabs
                 defaultActiveKey="profile"
                 items={tabItems}
                 tabPosition="top"
-                size="large"
                 style={{ minHeight: 400 }}
             />
         </div>

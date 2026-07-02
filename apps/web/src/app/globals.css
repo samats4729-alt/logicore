@@ -976,6 +976,64 @@ a.mapboxgl-ctrl-logo,
   overflow: hidden;
 }
 
+/* Вертикальный стек карточек */
+.lc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 980px;
+}
+
+.lc-pad {
+  padding: 22px 24px;
+}
+
+/* Заголовки секций внутри карточек */
+.lc-sec-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0b0d12;
+  letter-spacing: -0.01em;
+}
+
+.lc-sec-hint {
+  font-size: 12.5px;
+  color: #8a91a0;
+  margin-top: 3px;
+}
+
+/* Зона загрузки (печать/подпись) */
+.lc-upload-tile {
+  border: 1.5px dashed #d9dce3;
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.lc-upload-tile:hover {
+  border-color: #1677ff;
+  background: #f6f9ff;
+}
+
+.lc-upload-preview {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lc-upload-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #98a1b2;
+  font-size: 13px;
+}
+
 /* Маленькая ссылка-действие */
 .lc-link {
   font-size: 12.5px;
