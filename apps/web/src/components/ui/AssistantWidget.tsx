@@ -303,50 +303,40 @@ export default function AssistantWidget() {
 
             {open && (
                 <div
+                    className="ai-glass-panel"
                     style={{
                         position: 'fixed', right: 24, bottom: 24,
                         width: 'min(380px, calc(100vw - 32px))', height: 'min(560px, calc(100vh - 100px))',
-                        background: '#fff', borderRadius: 20, border: '1px solid #e7e8ec',
-                        boxShadow: '0 24px 64px -12px rgba(16,24,40,0.35)', zIndex: 1600,
+                        zIndex: 1600,
                         display: 'flex', flexDirection: 'column', overflow: 'hidden',
                     }}
                 >
-                    <div style={{ background: 'linear-gradient(135deg, #0f1117 0%, #1a2233 100%)', color: '#fff', padding: '14px 16px 0' }}>
+                    <div className="ai-glass-header">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, color: '#0b0d12' }}>
                                 <span style={{
-                                    width: 30, height: 30, borderRadius: 10, background: 'rgba(22,119,255,0.22)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#69b1ff', fontSize: 16,
+                                    width: 30, height: 30, borderRadius: 10, background: 'rgba(22,119,255,0.14)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1677ff', fontSize: 16,
+                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.6)',
                                 }}>
                                     <RobotOutlined />
                                 </span>
                                 <span>
                                     Ассистент LogiCore
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 500, color: 'rgba(255,255,255,0.55)' }}>
-                                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.2)' }} />
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 500, color: 'rgba(60,60,67,0.6)' }}>
+                                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.18)' }} />
                                         онлайн
                                     </span>
                                 </span>
                             </span>
-                            <CloseOutlined style={{ cursor: 'pointer', opacity: 0.7 }} onClick={() => setOpen(false)} />
+                            <CloseOutlined style={{ cursor: 'pointer', color: 'rgba(60,60,67,0.55)' }} onClick={() => setOpen(false)} />
                         </div>
-                        <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
+                        <div className="ai-seg" style={{ marginTop: 12 }}>
                             {([['guide', 'Гид'], ['support', 'Поддержка']] as const).map(([key, label]) => (
                                 <button
                                     key={key}
                                     onClick={() => setMode(key)}
-                                    style={{
-                                        flex: 1,
-                                        border: 'none',
-                                        padding: '9px 0',
-                                        borderRadius: '12px 12px 0 0',
-                                        cursor: 'pointer',
-                                        fontWeight: 600,
-                                        fontSize: 13,
-                                        background: mode === key ? '#f8fafc' : 'rgba(255,255,255,0.08)',
-                                        color: mode === key ? '#0b0d12' : 'rgba(255,255,255,0.75)',
-                                        transition: 'background 0.2s, color 0.2s',
-                                    }}
+                                    className={`ai-seg-btn${mode === key ? ' active' : ''}`}
                                 >
                                     {label}
                                 </button>
@@ -354,7 +344,7 @@ export default function AssistantWidget() {
                         </div>
                     </div>
 
-                    <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 16, background: '#f8fafc' }}>
+                    <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 16, background: 'transparent' }}>
                         {(mode === 'guide' ? messages : supportMessages).map((m, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
                                 <div
@@ -364,10 +354,14 @@ export default function AssistantWidget() {
                                         borderRadius: 14,
                                         borderBottomRightRadius: m.role === 'user' ? 4 : 14,
                                         borderBottomLeftRadius: m.role === 'user' ? 14 : 4,
-                                        background: m.role === 'user' ? 'linear-gradient(180deg, #1c202b, #0f1117)' : '#fff',
+                                        background: m.role === 'user' ? 'rgba(17, 20, 28, 0.82)' : 'rgba(255, 255, 255, 0.72)',
+                                        backdropFilter: 'blur(14px) saturate(1.4)',
+                                        WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
                                         color: m.role === 'user' ? '#fff' : '#0f172a',
-                                        border: m.role === 'user' ? 'none' : '1px solid #e7e8ec',
-                                        boxShadow: m.role === 'user' ? '0 3px 10px rgba(15,17,23,0.2)' : '0 1px 2px rgba(16,24,40,0.04)',
+                                        border: m.role === 'user' ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.7)',
+                                        boxShadow: m.role === 'user'
+                                            ? '0 3px 12px rgba(15,17,23,0.25), inset 0 1px 1px rgba(255,255,255,0.12)'
+                                            : '0 2px 8px rgba(16,24,40,0.06), inset 0 1px 1px rgba(255,255,255,0.9)',
                                     }}
                                 >
                                     {m.role === 'assistant' ? renderRich(m.content) : m.content}
@@ -430,7 +424,7 @@ export default function AssistantWidget() {
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid #eef0f3', background: '#fff', alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid rgba(16,24,40,0.07)', background: 'rgba(255,255,255,0.35)', alignItems: 'flex-end' }}>
                         <Input.TextArea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
@@ -438,7 +432,7 @@ export default function AssistantWidget() {
                             placeholder={mode === 'guide' ? 'Спросите, как что сделать…' : 'Опишите проблему…'}
                             autoSize={{ minRows: 1, maxRows: 3 }}
                             variant="borderless"
-                            style={{ flex: 1, resize: 'none', background: '#f1f2f5', borderRadius: 12, padding: '8px 14px' }}
+                            style={{ flex: 1, resize: 'none', background: 'rgba(118,118,128,0.12)', borderRadius: 12, padding: '8px 14px' }}
                         />
                         <Button
                             type="primary"
@@ -446,7 +440,7 @@ export default function AssistantWidget() {
                             icon={<SendOutlined />}
                             onClick={send}
                             loading={loading}
-                            style={{ background: '#0f1117', boxShadow: '0 3px 10px rgba(15,17,23,0.3)', flexShrink: 0 }}
+                            style={{ background: 'rgba(22,119,255,0.92)', boxShadow: '0 3px 12px rgba(22,119,255,0.35), inset 0 1px 1px rgba(255,255,255,0.35)', flexShrink: 0 }}
                         />
                     </div>
                 </div>

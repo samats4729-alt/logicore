@@ -1176,14 +1176,18 @@ a.mapboxgl-ctrl-logo,
   justify-content: center;
   font-size: 24px;
   color: #fff;
-  background: linear-gradient(180deg, #1c202b 0%, #0f1117 100%);
-  box-shadow: 0 8px 24px rgba(15, 17, 23, 0.35);
-  transition: transform 0.2s ease, box-shadow 0.3s ease;
+  background: rgba(17, 20, 28, 0.62);
+  backdrop-filter: blur(18px) saturate(1.6);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 24px rgba(15, 17, 23, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.22);
+  transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.3s ease;
 }
 
 .ai-fab:hover {
   transform: translateY(-2px) scale(1.04);
-  box-shadow: 0 12px 28px rgba(15, 17, 23, 0.4), 0 0 0 6px rgba(22, 119, 255, 0.14);
+  background: rgba(17, 20, 28, 0.78);
+  box-shadow: 0 12px 28px rgba(15, 17, 23, 0.4), 0 0 0 6px rgba(22, 119, 255, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.25);
 }
 
 .ai-fab::after {
@@ -1200,6 +1204,56 @@ a.mapboxgl-ctrl-logo,
   0% { transform: scale(0.92); opacity: 0.8; }
   70% { transform: scale(1.28); opacity: 0; }
   100% { transform: scale(1.28); opacity: 0; }
+}
+
+/* ==========================================
+   AI ASSISTANT — LIQUID GLASS PANEL
+   ========================================== */
+.ai-glass-panel {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.78) 0%, rgba(244, 247, 253, 0.6) 55%, rgba(238, 243, 252, 0.55) 100%);
+  backdrop-filter: blur(34px) saturate(1.8);
+  -webkit-backdrop-filter: blur(34px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 24px;
+  box-shadow:
+    0 24px 64px -12px rgba(16, 24, 40, 0.35),
+    0 2px 8px rgba(16, 24, 40, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -1px 1px rgba(16, 24, 40, 0.04);
+}
+
+.ai-glass-header {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(16, 24, 40, 0.06);
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* iOS-сегменты */
+.ai-seg {
+  display: flex;
+  gap: 4px;
+  background: rgba(118, 118, 128, 0.14);
+  padding: 3px;
+  border-radius: 11px;
+}
+
+.ai-seg-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 7px 0;
+  border-radius: 9px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: rgba(60, 60, 67, 0.6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-seg-btn.active {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0b0d12;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.9);
 }
 
 /* ==========================================
