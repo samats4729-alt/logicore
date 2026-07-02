@@ -1175,19 +1175,27 @@ a.mapboxgl-ctrl-logo,
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  color: #fff;
-  background: rgba(17, 20, 28, 0.62);
-  backdrop-filter: blur(18px) saturate(1.6);
-  -webkit-backdrop-filter: blur(18px) saturate(1.6);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 8px 24px rgba(15, 17, 23, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.22);
+  color: #1677ff;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.12));
+  backdrop-filter: blur(8px) saturate(1.9);
+  -webkit-backdrop-filter: blur(8px) saturate(1.9);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 10px 28px rgba(16, 24, 40, 0.25),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.95),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.35),
+    inset 4px 6px 12px -8px rgba(255, 255, 255, 0.8);
   transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.3s ease;
 }
 
 .ai-fab:hover {
-  transform: translateY(-2px) scale(1.04);
-  background: rgba(17, 20, 28, 0.78);
-  box-shadow: 0 12px 28px rgba(15, 17, 23, 0.4), 0 0 0 6px rgba(22, 119, 255, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px) scale(1.05);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2));
+  box-shadow:
+    0 14px 34px rgba(16, 24, 40, 0.3),
+    0 0 0 6px rgba(22, 119, 255, 0.12),
+    inset 0 1.5px 1px rgba(255, 255, 255, 1),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.4);
 }
 
 .ai-fab::after {
@@ -1210,22 +1218,60 @@ a.mapboxgl-ctrl-logo,
    AI ASSISTANT — LIQUID GLASS PANEL
    ========================================== */
 .ai-glass-panel {
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.78) 0%, rgba(244, 247, 253, 0.6) 55%, rgba(238, 243, 252, 0.55) 100%);
-  backdrop-filter: blur(34px) saturate(1.8);
-  -webkit-backdrop-filter: blur(34px) saturate(1.8);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 24px;
+  /* Прозрачная линза: минимальная заливка, лёгкий blur — фон читается сквозь стекло */
+  background: linear-gradient(155deg,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.08) 38%,
+    rgba(255, 255, 255, 0.05) 62%,
+    rgba(255, 255, 255, 0.18) 100%);
+  backdrop-filter: blur(9px) saturate(1.9);
+  -webkit-backdrop-filter: blur(9px) saturate(1.9);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 28px;
   box-shadow:
-    0 24px 64px -12px rgba(16, 24, 40, 0.35),
-    0 2px 8px rgba(16, 24, 40, 0.08),
-    inset 0 1px 1px rgba(255, 255, 255, 0.85),
-    inset 0 -1px 1px rgba(16, 24, 40, 0.04);
+    0 30px 70px -15px rgba(16, 24, 40, 0.45),
+    0 4px 14px rgba(16, 24, 40, 0.1),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.95),
+    inset 1px 0 1px rgba(255, 255, 255, 0.55),
+    inset -1px 0 1px rgba(255, 255, 255, 0.35),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.3),
+    inset 10px 14px 28px -18px rgba(255, 255, 255, 0.7),
+    inset -10px -10px 28px -18px rgba(255, 255, 255, 0.4);
+}
+
+/* Слой преломления: SVG displacement искажает фон под стеклом (Chromium) */
+.ai-glass-refract {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  backdrop-filter: url(#lg-dist);
+  -webkit-backdrop-filter: url(#lg-dist);
+}
+
+/* Диагональный световой мазок по стеклу */
+.ai-glass-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(120deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.14) 16%,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0) 76%,
+    rgba(255, 255, 255, 0.16) 92%,
+    rgba(255, 255, 255, 0.3) 100%);
 }
 
 .ai-glass-header {
   padding: 14px 16px 12px;
-  border-bottom: 1px solid rgba(16, 24, 40, 0.06);
-  background: rgba(255, 255, 255, 0.28);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.16);
+  position: relative;
+  z-index: 2;
 }
 
 /* iOS-сегменты */

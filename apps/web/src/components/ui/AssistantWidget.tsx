@@ -311,6 +311,16 @@ export default function AssistantWidget() {
                         display: 'flex', flexDirection: 'column', overflow: 'hidden',
                     }}
                 >
+                    {/* SVG-фильтр преломления (liquid glass), применяется через backdrop-filter: url() */}
+                    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+                        <filter id="lg-dist" x="-20%" y="-20%" width="140%" height="140%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.012" numOctaves="2" seed="7" result="noise" />
+                            <feGaussianBlur in="noise" stdDeviation="3" result="soft" />
+                            <feDisplacementMap in="SourceGraphic" in2="soft" scale="64" xChannelSelector="R" yChannelSelector="G" />
+                        </filter>
+                    </svg>
+                    <div className="ai-glass-refract" />
+                    <div className="ai-glass-sheen" />
                     <div className="ai-glass-header">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, color: '#0b0d12' }}>
@@ -344,7 +354,7 @@ export default function AssistantWidget() {
                         </div>
                     </div>
 
-                    <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 16, background: 'transparent' }}>
+                    <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 16, background: 'transparent', position: 'relative', zIndex: 2 }}>
                         {(mode === 'guide' ? messages : supportMessages).map((m, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
                                 <div
@@ -424,7 +434,7 @@ export default function AssistantWidget() {
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid rgba(16,24,40,0.07)', background: 'rgba(255,255,255,0.35)', alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.22)', alignItems: 'flex-end', position: 'relative', zIndex: 2 }}>
                         <Input.TextArea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
