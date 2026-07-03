@@ -8,6 +8,16 @@ import { PaginationQueryDto, getPaginationParams } from '../common/dto/paginatio
 import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
+import { EmailService } from '../email/email.service';
+
+const ROLE_LABELS_RU: Record<string, string> = {
+    COMPANY_ADMIN: 'Администратор',
+    LOGISTICIAN: 'Менеджер',
+    ACCOUNTANT: 'Бухгалтер',
+    WAREHOUSE_MANAGER: 'Заведующий складом',
+    DRIVER: 'Водитель',
+    FORWARDER: 'Экспедитор',
+};
 
 @Injectable()
 export class CompanyService {
@@ -16,6 +26,7 @@ export class CompanyService {
         private s3Service: S3Service,
         private jwtService: JwtService,
         private redisService: RedisService,
+        private emailService: EmailService,
     ) { }
 
     async getCompanyUsers(companyId: string, query: any = {}) {
@@ -119,9 +130,27 @@ export class CompanyService {
                 departmentId: departmentId || null,
             },
         });
-        
-        // Возвращаем токен (в реальной жизни здесь был бы вызов MailService)
-        return invitation;
+
+        // Автоматически отправляем письмо-приглашение (сбой почты не ломает создание)
+        let emailSent = false;
+        try {
+            const company = await this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: { name: true },
+            });
+            const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+            const inviteLink = `${frontendUrl}/invite?token=${token}`;
+            emailSent = await this.emailService.sendInvitationEmail(
+                email,
+                inviteLink,
+                company?.name || 'LogiCore',
+                ROLE_LABELS_RU[role] || role,
+            );
+        } catch (e) {
+            console.warn('Invitation email failed:', e);
+        }
+
+        return { ...invitation, emailSent };
     }
 
     /**

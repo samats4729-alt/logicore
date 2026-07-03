@@ -95,6 +95,59 @@ export class EmailService {
         }
     }
 
+    /**
+     * Письмо-приглашение сотруднику. Возвращает true, если письмо реально отправлено.
+     */
+    async sendInvitationEmail(to: string, inviteLink: string, companyName: string, roleLabel: string): Promise<boolean> {
+        const subject = `Приглашение в ${companyName} — LogiCore`;
+        const html = `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f6f7f9;font-family:Arial,Helvetica,sans-serif;">
+    <div style="max-width:520px;margin:32px auto;background:#ffffff;border-radius:16px;border:1px solid #e8e9ee;overflow:hidden;">
+        <div style="background:#0f1117;padding:22px 28px;">
+            <span style="color:#ffffff;font-size:18px;font-weight:bold;">Logi<span style="color:#4d8cff;">Core</span></span>
+        </div>
+        <div style="padding:28px;">
+            <h2 style="margin:0 0 12px;font-size:19px;color:#0b0d12;">Вас пригласили в компанию «${companyName}»</h2>
+            <p style="margin:0 0 8px;font-size:14px;color:#5b6472;line-height:1.6;">
+                Роль: <b style="color:#0b0d12;">${roleLabel}</b>
+            </p>
+            <p style="margin:0 0 24px;font-size:14px;color:#5b6472;line-height:1.6;">
+                Нажмите кнопку ниже, чтобы завершить регистрацию и получить доступ к платформе.
+            </p>
+            <a href="${inviteLink}" style="display:inline-block;background:#1677ff;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:10px;font-size:14px;font-weight:bold;">
+                Принять приглашение
+            </a>
+            <p style="margin:24px 0 0;font-size:12px;color:#98a1b2;line-height:1.6;">
+                ⏱ Ссылка действительна 3 дня.<br>
+                Если кнопка не работает, скопируйте адрес: <br>
+                <span style="color:#1677ff;word-break:break-all;">${inviteLink}</span>
+            </p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+        if (!this.resend) {
+            this.logger.log(`📧 [DEV] Invitation email for ${to}: ${inviteLink}`);
+            return false;
+        }
+
+        try {
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to,
+                subject,
+                html,
+            });
+            this.logger.log(`📧 Invitation email sent to ${to}, id: ${(result as any)?.data?.id}`);
+            return true;
+        } catch (error: any) {
+            this.logger.error(`Failed to send invitation email to ${to}: ${error.message}`);
+            return false;
+        }
+    }
+
     async sendPowerOfAttorneyEmail(
         to: string,
         orderNumber: string,

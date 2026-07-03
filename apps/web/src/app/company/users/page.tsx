@@ -478,7 +478,11 @@ export default function CompanyUsersPage() {
 
             try {
                 const res = await api.post('/company/invitations', payload);
-                message.success('Приглашение создано');
+                if (res.data.emailSent) {
+                    message.success(`Приглашение отправлено на ${payload.email}`);
+                } else {
+                    message.warning('Приглашение создано, но письмо не отправлено — передайте ссылку вручную');
+                }
                 const link = `${window.location.origin}/invite?token=${res.data.token}`;
                 setGeneratedLink(link);
                 // Reset standard fields but keep generated link
