@@ -1,12 +1,28 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
-import ReactMap, { Marker, NavigationControl, ViewStateChangeEvent, MapMouseEvent, MarkerDragEvent } from 'react-map-gl/mapbox';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import { useEffect, useRef } from 'react';
 import { EnvironmentOutlined } from '@ant-design/icons';
-import { App } from 'antd';
 
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
+const DGIS_KEY = process.env.NEXT_PUBLIC_2GIS_API_KEY || '';
+
+// Загрузчик 2GIS MapGL (одна инъекция скрипта на всё приложение)
+let mapglPromise: Promise<any> | null = null;
+function loadMapgl(): Promise<any> {
+    if ((window as any).mapgl) return Promise.resolve((window as any).mapgl);
+    if (!mapglPromise) {
+        mapglPromise = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://mapgl.2gis.com/api/js/v1';
+            s.onload = () => resolve((window as any).mapgl);
+            s.onerror = () => {
+                mapglPromise = null;
+                reject(new Error('Не удалось загрузить 2GIS MapGL'));
+            };
+            document.head.appendChild(s);
+        });
+    }
+    return mapglPromise;
+}
 
 const MapPicker = ({
     initialLat,
@@ -17,47 +33,70 @@ const MapPicker = ({
     initialLng?: number,
     onLocationSelect: (lat: number, lng: number, pickedName?: string) => void
 }) => {
-    const { message } = App.useApp();
-    const [viewState, setViewState] = useState({
-        latitude: initialLat || 43.2389,
-        longitude: initialLng || 76.8897,
-        zoom: 13
-    });
-    const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
-        initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null
-    );
+    const containerRef = useRef<HTMLDivElement>(null);
+    const mapRef = useRef<any>(null);
+    const markerRef = useRef<any>(null);
+    const mapglRef = useRef<any>(null);
+    // Актуальный колбэк без пересоздания карты
+    const onSelectRef = useRef(onLocationSelect);
+    onSelectRef.current = onLocationSelect;
 
-    // Update view and marker when initial props change (e.g. from address search)
-    useEffect(() => {
-        if (initialLat && initialLng) {
-            setViewState(prev => ({
-                ...prev,
-                latitude: initialLat,
-                longitude: initialLng
-            }));
-            setMarker({ lat: initialLat, lng: initialLng });
+    const placeMarker = (lng: number, lat: number) => {
+        if (!mapglRef.current || !mapRef.current) return;
+        if (markerRef.current) {
+            markerRef.current.destroy();
+            markerRef.current = null;
         }
+        markerRef.current = new mapglRef.current.Marker(mapRef.current, {
+            coordinates: [lng, lat],
+        });
+    };
+
+    // Инициализация карты
+    useEffect(() => {
+        if (!DGIS_KEY || !containerRef.current) return;
+        let cancelled = false;
+
+        loadMapgl().then((mapgl) => {
+            if (cancelled || !containerRef.current) return;
+            mapglRef.current = mapgl;
+
+            const map = new mapgl.Map(containerRef.current, {
+                center: [initialLng || 76.8897, initialLat || 43.2389],
+                zoom: 13,
+                key: DGIS_KEY,
+                lang: 'ru',
+            });
+            mapRef.current = map;
+
+            if (initialLat && initialLng) {
+                placeMarker(initialLng, initialLat);
+            }
+
+            map.on('click', (e: any) => {
+                const [lng, lat] = e.lngLat;
+                placeMarker(lng, lat);
+                onSelectRef.current(lat, lng);
+            });
+        }).catch(() => { /* заглушка ниже уже объясняет про ключ; сеть — редкий случай */ });
+
+        return () => {
+            cancelled = true;
+            if (markerRef.current) { markerRef.current.destroy(); markerRef.current = null; }
+            if (mapRef.current) { mapRef.current.destroy(); mapRef.current = null; }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Перелёт к точке из поиска адреса
+    useEffect(() => {
+        if (!mapRef.current || !initialLat || !initialLng) return;
+        mapRef.current.setCenter([initialLng, initialLat]);
+        mapRef.current.setZoom(16);
+        placeMarker(initialLng, initialLat);
     }, [initialLat, initialLng]);
 
-    const handleMapClick = useCallback((event: MapMouseEvent) => {
-        const { lat, lng } = event.lngLat;
-        setMarker({ lat, lng });
-
-        // Try to get what the user *actually* clicked on (rendered on the map)
-        // This is much more reliable than reverse geocoding for specific POIs
-        const features = event.target.queryRenderedFeatures(event.point);
-        const poiFeature = features.find(f => f.properties?.name);
-
-        onLocationSelect(lat, lng, poiFeature?.properties?.name);
-    }, [onLocationSelect]);
-
-    const handleMarkerDragEnd = useCallback((event: MarkerDragEvent) => {
-        const { lat, lng } = event.lngLat;
-        setMarker({ lat, lng });
-        onLocationSelect(lat, lng);
-    }, [onLocationSelect]);
-
-    if (!MAPBOX_TOKEN) {
+    if (!DGIS_KEY) {
         return (
             <div style={{
                 height: 400, width: '100%', borderRadius: 8, background: '#f6f7f9',
@@ -67,7 +106,7 @@ const MapPicker = ({
                 <EnvironmentOutlined style={{ fontSize: 28, color: '#c3c9d4' }} />
                 <div style={{ fontWeight: 600, color: '#5b6472' }}>Карта не настроена</div>
                 <div style={{ textAlign: 'center', maxWidth: 360 }}>
-                    Не задан NEXT_PUBLIC_MAPBOX_TOKEN. Переменная должна быть на сервисе web
+                    Не задан NEXT_PUBLIC_2GIS_API_KEY. Переменная должна быть на сервисе web
                     и требует пересборки (redeploy) фронтенда.
                 </div>
             </div>
@@ -75,53 +114,8 @@ const MapPicker = ({
     }
 
     return (
-        <div style={{ height: '400px', width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
-            <ReactMap
-                {...viewState}
-                onMove={(evt: any) => setViewState(evt.viewState)}
-                onLoad={(event) => {
-                    const map = event.target;
-                    try {
-                        (map as any).setConfigProperty?.('basemap', 'lightPreset', 'night');
-                        (map as any).setLanguage?.('ru');
-                    } catch { /* классический стиль без config — не страшно */ }
-                    const style = map.getStyle();
-                    if (style && style.layers) {
-                        for (const layer of style.layers) {
-                            // Skip house numbers and other non-name labels
-                            if (layer.id.includes('housenum') || layer.id.includes('number')) {
-                                continue;
-                            }
-
-                            if (layer.layout && (layer.layout as any)['text-field']) {
-                                map.setLayoutProperty(layer.id, 'text-field', [
-                                    'coalesce',
-                                    ['get', 'name_ru'],
-                                    ['get', 'name']
-                                ]);
-                            }
-                        }
-                    }
-                }}
-                mapStyle="mapbox://styles/mapbox/standard"
-                mapboxAccessToken={MAPBOX_TOKEN}
-                onClick={handleMapClick}
-                cursor="crosshair"
-            >
-                <NavigationControl position="top-right" />
-
-                {marker && (
-                    <Marker
-                        latitude={marker.lat}
-                        longitude={marker.lng}
-                        draggable
-                        onDragEnd={handleMarkerDragEnd}
-                        anchor="bottom"
-                    >
-                        <EnvironmentOutlined style={{ fontSize: '32px', color: '#1890ff', filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))' }} />
-                    </Marker>
-                )}
-            </ReactMap>
+        <div style={{ height: 400, width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+            <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         </div>
     );
 };
