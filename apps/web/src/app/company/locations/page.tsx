@@ -256,12 +256,43 @@ export default function CompanyLocationsPage() {
         }
     };
 
+    // Автоподстановка каскада Страна -> Область -> Город по названию города
+    const prefillCascadeByCityName = async (cityName?: string | null) => {
+        if (!cityName) return;
+        if (form.getFieldValue('city') === cityName) return; // уже выбран — не дёргаем API
+        try {
+            const res = await api.get(`/cities?search=${encodeURIComponent(cityName)}`);
+            const foundCity = res.data.find((c: any) => c.name.toLowerCase() === cityName.toLowerCase());
+            if (!foundCity) return;
+            const { countryId, regionId } = foundCity;
+
+            setSelectedCountryId(countryId);
+            setSelectedRegionId(regionId);
+            setSelectedCityName(foundCity.name);
+
+            const [regionsRes, citiesRes] = await Promise.all([
+                api.get(`/cities/regions?countryId=${countryId}`),
+                api.get(`/cities?regionId=${regionId}`),
+            ]);
+            setRegions(regionsRes.data);
+            setCities(citiesRes.data);
+
+            form.setFieldsValue({ countryId, regionId, city: foundCity.name });
+        } catch (e) {
+            console.error('Failed to prefill city cascade', e);
+        }
+    };
+
     // Когда выбирают адрес из автодополнения
     const handleAddressSelect = (address: string, latitude: number, longitude: number) => {
         setAddressValue(address);
         setLat(latitude);
         setLng(longitude);
         form.setFieldsValue({ latitude, longitude });
+
+        // full_name 2GIS начинается с города: «Алматы, Абая проспект, 143»
+        const cityCandidate = address.includes(',') ? address.split(',')[0].trim() : '';
+        void prefillCascadeByCityName(cityCandidate);
     };
 
     // State for manual address fetching
@@ -325,6 +356,14 @@ export default function CompanyLocationsPage() {
                 message.success({ content: `Адрес: ${finalName}`, key: 'geo' });
             } else {
                 message.warning('Не удалось определить точный адрес. Введите вручную.');
+            }
+
+            // Подставляем каскад Страна/Область/Город из административного деления 2GIS
+            if (data2gis?.result?.items?.length > 0) {
+                const bestItem = data2gis.result.items[0];
+                const cityFromGeo = (bestItem.adm_div || []).find((d: any) => d.type === 'city')?.name
+                    || (bestItem.full_name ? String(bestItem.full_name).split(',')[0].trim() : '');
+                void prefillCascadeByCityName(cityFromGeo);
             }
         } catch (e) {
             console.error('Manual geocode error', e);
