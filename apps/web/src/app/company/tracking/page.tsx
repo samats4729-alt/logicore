@@ -70,7 +70,7 @@ export default function CompanyTrackingPage() {
     const [drivers, setDrivers] = useState<DriverPosition[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [mapStyle, setMapStyle] = useState('mapbox://styles/pontipilat/cmqcu0om5000q01r66lm81p25');
+    // Стиль карты выводится из режима день/ночь (см. mapStyle ниже)
     const [viewState, setViewState] = useState({
         latitude: 43.238949,
         longitude: 76.945780,
@@ -81,7 +81,11 @@ export default function CompanyTrackingPage() {
     const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [popupInfo, setPopupInfo] = useState<DriverPosition | null>(null);
 
-    const [mapMode, setMapMode] = useState<'day' | 'night'>('day');
+    const [mapMode, setMapMode] = useState<'day' | 'night'>('night');
+    // Ночь — стандартный тёмный Mapbox, день — фирменный стиль
+    const mapStyle = mapMode === 'night'
+        ? 'mapbox://styles/mapbox/dark-v11'
+        : 'mapbox://styles/pontipilat/cmqcu0om5000q01r66lm81p25';
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {

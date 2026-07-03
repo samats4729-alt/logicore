@@ -125,7 +125,7 @@ export default function InteractiveAdminMap({
         <ReactMap
             {...viewState}
             onMove={(evt: any) => onViewStateChange(evt.viewState)}
-            mapStyle="mapbox://styles/mapbox/standard"
+            mapStyle="mapbox://styles/mapbox/dark-v11"
             mapboxAccessToken={mapboxAccessToken}
             style={{ width: '100%', height: '100%' }}
             onClick={handleMapClick}

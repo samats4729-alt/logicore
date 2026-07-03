@@ -99,7 +99,7 @@ const MapPicker = ({
                         }
                     }
                 }}
-                mapStyle="mapbox://styles/mapbox/streets-v12"
+                mapStyle="mapbox://styles/mapbox/dark-v11"
                 mapboxAccessToken={MAPBOX_TOKEN}
                 onClick={handleMapClick}
                 cursor="crosshair"
