@@ -211,7 +211,14 @@ export default function CompanyTrackingPage() {
     const isDark = mapMode === 'night';
 
     return (
-        <div style={{ position: 'relative', height: isMobile ? 'calc(100vh - 56px - 16px)' : 'calc(100vh - 56px)', overflow: 'hidden' }}>
+        <div style={{
+            position: 'relative',
+            height: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 56px - 48px - 48px)',
+            minHeight: 480,
+            overflow: 'hidden',
+            borderRadius: 14,
+            border: '1px solid #e8e9ee',
+        }}>
             {/* ═══════════════════════════════════════════
                 SIDEBAR — Frosted Glass Panel
                 ═══════════════════════════════════════════ */}

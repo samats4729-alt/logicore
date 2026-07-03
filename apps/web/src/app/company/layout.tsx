@@ -40,7 +40,6 @@ const AssistantWidget = dynamic(() => import('@/components/ui/AssistantWidget'),
 export default function CompanyLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
-    const isTrackingPage = pathname === '/company/tracking';
     const { user, logout, checkAuth, isLoading } = useAuthStore();
 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -357,22 +356,22 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
             {/* Top Header Navigation */}
             <Header
-                className={isTrackingPage ? undefined : 'app-header-dark'}
+                className="app-header-dark"
                 style={{
-                    background: isTrackingPage ? 'rgba(255, 255, 255, 0.82)' : 'rgba(9, 12, 20, 0.92)',
+                    background: 'rgba(9, 12, 20, 0.92)',
                     backdropFilter: 'saturate(1.8) blur(14px)',
                     WebkitBackdropFilter: 'saturate(1.8) blur(14px)',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
                     height: 56,
-                    borderBottom: isTrackingPage ? '1px solid #e7e8ec' : '1px solid rgba(255, 255, 255, 0.08)',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                     position: 'sticky',
                     left: 0,
                     right: 0,
                     top: 0,
                     zIndex: 100,
-                    boxShadow: isTrackingPage ? '0 1px 2px rgba(16, 24, 40, 0.03)' : '0 4px 24px rgba(0, 0, 0, 0.25)',
+                    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.25)',
                     transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
             >
@@ -382,7 +381,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         type="text"
                         icon={<MenuOutlined />}
                         onClick={() => setMobileMenuOpen(true)}
-                        style={{ marginRight: 8, color: isTrackingPage ? undefined : '#ffffff' }}
+                        style={{ marginRight: 8, color: '#ffffff' }}
                     />
                 )}
 
@@ -399,7 +398,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>L</span>
                     </div>
                     {!isMobile && (
-                        <Text strong className="logo-text" style={{ fontSize: 14, color: isTrackingPage ? undefined : '#ffffff', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                        <Text strong className="logo-text" style={{ fontSize: 14, color: '#ffffff', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
                             {user.company?.name || 'LogiCore'}
                         </Text>
                     )}
@@ -431,7 +430,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 {isMobile && <div style={{ flex: 1 }} />}
 
                 {/* User Profile */}
-                <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']} overlayClassName={isTrackingPage ? undefined : 'lc-user-pop'}>
+                <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']} overlayClassName="lc-user-pop">
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -449,14 +448,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             icon={<UserOutlined />}
                             size="small"
                             style={{
-                                background: isTrackingPage ? '#ffffff' : 'rgba(255, 255, 255, 0.12)',
-                                color: isTrackingPage ? '#09090b' : '#ffffff',
-                                border: isTrackingPage ? '1px solid #e4e4e7' : '1px solid rgba(255, 255, 255, 0.2)',
+                                background: 'rgba(255, 255, 255, 0.12)',
+                                color: '#ffffff',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
                                 flexShrink: 0,
                             }}
                         />
                         {!isMobile && (
-                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: isTrackingPage ? 'inherit' : '#ffffff' }}>
+                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: '#ffffff' }}>
                                 {user.firstName} {user.lastName}
                             </Text>
                         )}
@@ -465,19 +464,19 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             </Header>
 
             {/* Content */}
-            <Layout style={{ background: '#f6f7f9', padding: isTrackingPage ? 0 : (isMobile ? 0 : 24) }}>
+            <Layout style={{ background: '#f6f7f9', padding: isMobile ? 0 : 24 }}>
                 <Content
                     data-guide="content"
-                    className={isTrackingPage ? undefined : 'page-content-anim'}
+                    className="page-content-anim"
                     style={{
-                        margin: isTrackingPage ? 0 : (isMobile ? 16 : 0),
-                        padding: isTrackingPage ? 0 : (isMobile ? 16 : 24),
-                        background: isTrackingPage ? 'transparent' : '#ffffff',
-                        borderRadius: isTrackingPage ? 0 : 20,
-                        border: isTrackingPage ? 'none' : '1px solid #e8e9ee',
-                        minHeight: isTrackingPage ? 'calc(100vh - 56px)' : 'calc(100vh - 56px - 48px)',
-                        boxShadow: isTrackingPage ? 'none' : '0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px -20px rgba(16, 24, 40, 0.12)',
-                        overflow: isTrackingPage ? 'hidden' : 'auto',
+                        margin: isMobile ? 16 : 0,
+                        padding: isMobile ? 16 : 24,
+                        background: '#ffffff',
+                        borderRadius: 20,
+                        border: '1px solid #e8e9ee',
+                        minHeight: 'calc(100vh - 56px - 48px)',
+                        boxShadow: '0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px -20px rgba(16, 24, 40, 0.12)',
+                        overflow: 'auto',
                     }}
                 >
                     {children}
