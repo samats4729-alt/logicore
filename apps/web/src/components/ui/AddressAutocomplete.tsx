@@ -38,6 +38,7 @@ export default function AddressAutocomplete({
 }: AddressAutocompleteProps) {
     const [options, setOptions] = useState<{ value: string; label: React.ReactNode; data: MapboxFeature }[]>([]);
     const [loading, setLoading] = useState(false);
+    const [keyMissing, setKeyMissing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -55,6 +56,7 @@ export default function AddressAutocomplete({
         debounceRef.current = setTimeout(async () => {
             const apiKey = process.env.NEXT_PUBLIC_2GIS_API_KEY;
             if (!apiKey) {
+                setKeyMissing(true);
                 setOptions([]);
                 setLoading(false);
                 return;
@@ -167,7 +169,13 @@ export default function AddressAutocomplete({
             onSearch={handleSearch}
             onSelect={handleSelect}
             style={{ width: '100%' }}
-            notFoundContent={loading ? <Spin size="small" /> : null}
+            notFoundContent={
+                loading
+                    ? <Spin size="small" />
+                    : keyMissing && searchQuery.length >= 2
+                        ? <span style={{ fontSize: 12, color: '#b45309' }}>Поиск адресов не настроен: нет NEXT_PUBLIC_2GIS_API_KEY (сервис web, нужна пересборка)</span>
+                        : null
+            }
             disabled={disabled}
         >
             <Input

@@ -57,6 +57,23 @@ const MapPicker = ({
         onLocationSelect(lat, lng);
     }, [onLocationSelect]);
 
+    if (!MAPBOX_TOKEN) {
+        return (
+            <div style={{
+                height: 400, width: '100%', borderRadius: 8, background: '#f6f7f9',
+                border: '1px dashed #d9dce3', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: 8, color: '#8a91a0', fontSize: 13,
+            }}>
+                <EnvironmentOutlined style={{ fontSize: 28, color: '#c3c9d4' }} />
+                <div style={{ fontWeight: 600, color: '#5b6472' }}>Карта не настроена</div>
+                <div style={{ textAlign: 'center', maxWidth: 360 }}>
+                    Не задан NEXT_PUBLIC_MAPBOX_TOKEN. Переменная должна быть на сервисе web
+                    и требует пересборки (redeploy) фронтенда.
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div style={{ height: '400px', width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
             <ReactMap
