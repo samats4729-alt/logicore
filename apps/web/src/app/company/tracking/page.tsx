@@ -1,24 +1,22 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
 
-const InteractiveMap = dynamic(() => import('@/components/ui/InteractiveMap'), {
+const DgisTrackingMap = dynamic(() => import('@/components/ui/DgisTrackingMap'), {
     ssr: false,
     loading: () => (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f8f8' }}>
-            <Spin size="large" tip="Загрузка 3D-карты..." />
+            <Spin size="large" tip="Загрузка карты..." />
         </div>
     )
 });
 
 const { Text } = Typography;
-
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
 // Цвета для разных рейсов
 const ORDER_COLORS = [
@@ -70,22 +68,11 @@ export default function CompanyTrackingPage() {
     const [drivers, setDrivers] = useState<DriverPosition[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    // Стиль карты выводится из режима день/ночь (см. mapStyle ниже)
-    const [viewState, setViewState] = useState({
-        latitude: 43.238949,
-        longitude: 76.945780,
-        zoom: 14,
-        pitch: 50,
-        bearing: -17
-    });
+    const dgisMapRef = useRef<any>(null);
     const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [popupInfo, setPopupInfo] = useState<DriverPosition | null>(null);
 
-    const [mapMode, setMapMode] = useState<'day' | 'night'>('night');
-    // Ночь — Mapbox Standard с ночным освещением (цветные парки/реки), день — фирменный стиль
-    const mapStyle = mapMode === 'night'
-        ? 'mapbox://styles/mapbox/standard'
-        : 'mapbox://styles/pontipilat/cmqcu0om5000q01r66lm81p25';
+    const [mapMode, setMapMode] = useState<'day' | 'night'>('day');
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -167,7 +154,8 @@ export default function CompanyTrackingPage() {
                 (position) => {
                     const { latitude, longitude } = position.coords;
                     setMyLocation({ latitude, longitude });
-                    setViewState(prev => ({ ...prev, latitude, longitude, zoom: 14 }));
+                    dgisMapRef.current?.setCenter([longitude, latitude]);
+                    dgisMapRef.current?.setZoom(14);
                     message.success('Карта центрирована на вашем местоположении');
                 },
                 (error) => {
@@ -184,12 +172,8 @@ export default function CompanyTrackingPage() {
     // Центрировать на выбранном водителе
     const centerOnDriver = (driver: DriverPosition) => {
         setSelectedDriver(driver.driverId);
-        setViewState(prev => ({
-            ...prev,
-            latitude: driver.latitude,
-            longitude: driver.longitude,
-            zoom: 15
-        }));
+        dgisMapRef.current?.setCenter([driver.longitude, driver.latitude]);
+        dgisMapRef.current?.setZoom(15);
         setPopupInfo(driver);
     };
 
@@ -537,18 +521,33 @@ export default function CompanyTrackingPage() {
                 MAP — Full screen background
                 ═══════════════════════════════════════════ */}
             <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 0 }}>
-                <InteractiveMap
-                    viewState={viewState}
-                    onViewStateChange={setViewState}
-                    mapStyle={mapStyle}
-                    mapboxAccessToken={MAPBOX_TOKEN}
+                <DgisTrackingMap
                     drivers={drivers}
-                    popupInfo={popupInfo}
-                    onPopupInfoChange={setPopupInfo}
+                    selectedDriverId={selectedDriver}
+                    onDriverClick={(d) => { setSelectedDriver(d.driverId); setPopupInfo(d as any); }}
                     myLocation={myLocation}
                     getDriverColor={getDriverColor}
-                    lightPreset={isDark ? 'night' : 'day'}
+                    onReady={(m) => { dgisMapRef.current = m; }}
                 />
+
+                {popupInfo && (
+                    <div style={{
+                        position: 'absolute', right: 84, bottom: 24, zIndex: 5,
+                        background: '#fff', borderRadius: 12, border: '1px solid #e8e9ee',
+                        boxShadow: '0 12px 32px -8px rgba(16,24,40,0.25)', padding: '12px 14px', minWidth: 220,
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                            <span style={{ fontWeight: 700, fontSize: 13 }}>{popupInfo.driverName}</span>
+                            <span style={{ cursor: 'pointer', color: '#98a1b2' }} onClick={() => setPopupInfo(null)}>✕</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#5b6472', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <span>Госномер: <b style={{ color: '#0b0d12' }}>{popupInfo.vehiclePlate || '—'}</b></span>
+                            {popupInfo.orderNumber && <span>Рейс: <b style={{ color: '#1677ff' }}>{popupInfo.orderNumber}</b></span>}
+                            <span>Скорость: <b style={{ color: '#0b0d12' }}>{Math.round(popupInfo.speed || 0)} км/ч</b></span>
+                            <span>Обновлено: {new Date(popupInfo.updatedAt).toLocaleTimeString('ru-RU')}</span>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ═══════════════════════════════════════════
