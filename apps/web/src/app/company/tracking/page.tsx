@@ -82,9 +82,9 @@ export default function CompanyTrackingPage() {
     const [popupInfo, setPopupInfo] = useState<DriverPosition | null>(null);
 
     const [mapMode, setMapMode] = useState<'day' | 'night'>('night');
-    // Ночь — стандартный тёмный Mapbox, день — фирменный стиль
+    // Ночь — Mapbox Standard с ночным освещением (цветные парки/реки), день — фирменный стиль
     const mapStyle = mapMode === 'night'
-        ? 'mapbox://styles/mapbox/dark-v11'
+        ? 'mapbox://styles/mapbox/standard'
         : 'mapbox://styles/pontipilat/cmqcu0om5000q01r66lm81p25';
     const [isMobile, setIsMobile] = useState(false);
 
@@ -540,6 +540,7 @@ export default function CompanyTrackingPage() {
                     onPopupInfoChange={setPopupInfo}
                     myLocation={myLocation}
                     getDriverColor={getDriverColor}
+                    lightPreset={isDark ? 'night' : 'day'}
                 />
             </div>
 

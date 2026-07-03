@@ -146,8 +146,10 @@ export default function CompanyLocationsPage() {
 
     const handleSubmit = async (values: any) => {
         try {
+            // countryId/regionId — служебные поля каскада выбора города, бэкенд их не принимает
+            const { countryId, regionId, ...restValues } = values;
             const payload = {
-                ...values,
+                ...restValues,
                 address: addressValue,
                 latitude: lat,
                 longitude: lng,

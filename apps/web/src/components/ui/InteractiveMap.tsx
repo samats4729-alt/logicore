@@ -43,6 +43,7 @@ interface InteractiveMapProps {
     onPopupInfoChange: (info: DriverPosition | null) => void;
     myLocation: { latitude: number; longitude: number } | null;
     getDriverColor: (driver: DriverPosition) => string;
+    lightPreset?: 'day' | 'dawn' | 'dusk' | 'night';
 }
 
 export default function InteractiveMap({
@@ -55,8 +56,16 @@ export default function InteractiveMap({
     onPopupInfoChange,
     myLocation,
     getDriverColor,
+    lightPreset = 'day',
 }: InteractiveMapProps) {
     const [selectedBuilding, setSelectedBuilding] = useState<any | null>(null);
+
+    // Применяем освещение при каждой загрузке стиля (день/ночь переключает стиль карты)
+    const applyLightPreset = useCallback((event: any) => {
+        try {
+            event.target?.setConfigProperty?.('basemap', 'lightPreset', lightPreset);
+        } catch { /* классический стиль без config */ }
+    }, [lightPreset]);
 
     const handleMapLoad = useCallback((event: any) => {
         const map = event.target;
@@ -64,7 +73,7 @@ export default function InteractiveMap({
         try {
             if (map.setConfigProperty) {
                 map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
-                map.setConfigProperty('basemap', 'lightPreset', 'day');
+                map.setConfigProperty('basemap', 'lightPreset', lightPreset);
             }
             
             // Нативное выделение зданий для стилей на базе Mapbox Standard (v3)
@@ -116,6 +125,7 @@ export default function InteractiveMap({
             terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
             onClick={handleMapClick}
             onLoad={handleMapLoad}
+            onStyleData={applyLightPreset}
         >
             <NavigationControl position="bottom-right" />
 

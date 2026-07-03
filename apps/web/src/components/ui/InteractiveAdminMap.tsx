@@ -79,7 +79,7 @@ export default function InteractiveAdminMap({
         try {
             if (map.setConfigProperty) {
                 map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
-                map.setConfigProperty('basemap', 'lightPreset', 'day');
+                map.setConfigProperty('basemap', 'lightPreset', 'night');
             }
             
             // Нативное выделение зданий для стилей на базе Mapbox Standard (v3)
@@ -114,7 +114,7 @@ export default function InteractiveAdminMap({
         try {
             if (map.setConfigProperty) {
                 map.setConfigProperty('basemap', 'colorBuildingSelect', '#1677ff');
-                map.setConfigProperty('basemap', 'lightPreset', 'day');
+                map.setConfigProperty('basemap', 'lightPreset', 'night');
             }
         } catch (e) {}
 
@@ -125,7 +125,7 @@ export default function InteractiveAdminMap({
         <ReactMap
             {...viewState}
             onMove={(evt: any) => onViewStateChange(evt.viewState)}
-            mapStyle="mapbox://styles/mapbox/dark-v11"
+            mapStyle="mapbox://styles/mapbox/standard"
             mapboxAccessToken={mapboxAccessToken}
             style={{ width: '100%', height: '100%' }}
             onClick={handleMapClick}

@@ -81,6 +81,10 @@ const MapPicker = ({
                 onMove={(evt: any) => setViewState(evt.viewState)}
                 onLoad={(event) => {
                     const map = event.target;
+                    try {
+                        (map as any).setConfigProperty?.('basemap', 'lightPreset', 'night');
+                        (map as any).setLanguage?.('ru');
+                    } catch { /* классический стиль без config — не страшно */ }
                     const style = map.getStyle();
                     if (style && style.layers) {
                         for (const layer of style.layers) {
@@ -99,7 +103,7 @@ const MapPicker = ({
                         }
                     }
                 }}
-                mapStyle="mapbox://styles/mapbox/dark-v11"
+                mapStyle="mapbox://styles/mapbox/standard"
                 mapboxAccessToken={MAPBOX_TOKEN}
                 onClick={handleMapClick}
                 cursor="crosshair"
