@@ -812,8 +812,10 @@ export default function CompanyUsersPage() {
 
     const renderRootNode = () => {
         const rootDepts = getSubDepartments(null);
-        // Company admins
-        const adminUsers = users.filter(u => u.role === 'COMPANY_ADMIN');
+        // В корне — только админы БЕЗ отдела; админ, назначенный в отдел, отображается внутри него
+        const adminUsers = users.filter(u => u.role === 'COMPANY_ADMIN' && !(u as any).departmentId);
+        // Офисные сотрудники без отдела — отдельная группа, чтобы не «выпадали» из схемы
+        const unassignedUsers = users.filter(u => u.role !== 'COMPANY_ADMIN' && u.role !== 'DRIVER' && !(u as any).departmentId);
 
         return (
             <div className="org-tree">
@@ -841,6 +843,20 @@ export default function CompanyUsersPage() {
                             {rootDepts.map(sd => renderDeptNode(sd))}
                         </div>
                     </>
+                )}
+
+                {unassignedUsers.length > 0 && (
+                    <div style={{ marginTop: 20 }}>
+                        <div style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
+                            Без отдела
+                        </div>
+                        <div style={{
+                            display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap',
+                            padding: 14, border: '1px dashed #d1d5db', borderRadius: 14, background: '#fafbfc',
+                        }}>
+                            {unassignedUsers.map(u => renderEmployeeNode(u, false))}
+                        </div>
+                    </div>
                 )}
             </div>
         );
