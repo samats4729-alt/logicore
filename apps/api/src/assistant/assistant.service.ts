@@ -1,6 +1,7 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 
 interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -109,13 +110,34 @@ const SUPPORT_PROMPT = `Ты — ИИ-агент поддержки платфо
 - Отвечай на языке пользователя.`;
 
 @Injectable()
-export class AssistantService {
+export class AssistantService implements OnApplicationBootstrap {
     private readonly logger = new Logger('AssistantService');
 
     constructor(
         private config: ConfigService,
         private prisma: PrismaService,
+        private emailService: EmailService,
     ) {}
+
+    onApplicationBootstrap() {
+        // Run generation task asynchronously on startup so it does not block application startup
+        this.runUpdateGenerationTask().catch(err => {
+            this.logger.error(`Error in startup update generation: ${err.message}`);
+        });
+
+        // Run checking task every 12 hours
+        setInterval(() => {
+            this.runUpdateGenerationTask().catch(err => {
+                this.logger.error(`Error in periodic update generation: ${err.message}`);
+            });
+        }, 12 * 60 * 60 * 1000);
+    }
+
+    private async runUpdateGenerationTask() {
+        this.logger.log('Starting automatic platform updates generation...');
+        const res = await this.generatePlatformUpdates();
+        this.logger.log(`Automatic platform updates generation completed: ${res.message}`);
+    }
 
     async chat(messages: ChatMessage[], context?: string): Promise<{ reply: string }> {
         const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
@@ -134,7 +156,8 @@ export class AssistantService {
             return { reply: 'Задайте вопрос — например: «Как создать заявку?»' };
         }
 
-        const systemContent = `${SYSTEM_PROMPT}\n\nТекущая страница пользователя: ${context || 'неизвестно'}`;
+        const updatesBlock = await this.getPublishedUpdatesBlock();
+        const systemContent = `${SYSTEM_PROMPT}${updatesBlock}\n\nТекущая страница пользователя: ${context || 'неизвестно'}`;
 
         try {
             const res = await fetch('https://api.deepseek.com/chat/completions', {
@@ -361,5 +384,206 @@ export class AssistantService {
         const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
         if (!ticket) throw new NotFoundException('Тикет не найден');
         return this.prisma.supportTicket.update({ where: { id }, data: { status } });
+    }
+
+    // ==================== PLATFORM UPDATES (нововведения) ====================
+
+    private updatesCache: { block: string; ts: number } | null = null;
+
+    /** Блок опубликованных нововведений для системного промпта гида (кэш 5 минут) */
+    private async getPublishedUpdatesBlock(): Promise<string> {
+        if (this.updatesCache && Date.now() - this.updatesCache.ts < 5 * 60 * 1000) {
+            return this.updatesCache.block;
+        }
+        let block = '';
+        try {
+            const updates = await this.prisma.platformUpdate.findMany({
+                where: { status: 'PUBLISHED' },
+                orderBy: { publishedAt: 'desc' },
+                take: 6,
+                select: { title: true, description: true, publishedAt: true },
+            });
+            if (updates.length > 0) {
+                const lines = updates.map(u => `- ${u.title}: ${u.description}`);
+                block = `\n\nНедавние обновления платформы (используй, когда спрашивают «что нового», и учитывай в подсказках):\n${lines.join('\n')}`;
+            }
+        } catch (e) {
+            this.logger.warn(`getPublishedUpdatesBlock failed: ${(e as Error).message}`);
+        }
+        this.updatesCache = { block, ts: Date.now() };
+        return block;
+    }
+
+    /** Последние коммиты репозитория через GitHub API */
+    private async fetchRecentCommits(): Promise<{ sha: string; message: string; date: string }[]> {
+        const repo = this.config.get<string>('GITHUB_REPO') || 'samats4729-alt/logicore';
+        const token = this.config.get<string>('GITHUB_TOKEN');
+        const res = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=40`, {
+            headers: {
+                Accept: 'application/vnd.github+json',
+                'User-Agent': 'logicore-platform',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+        });
+        if (!res.ok) {
+            throw new Error(`GitHub API ${res.status}. Если репозиторий приватный — задайте переменную GITHUB_TOKEN (personal access token с правом repo).`);
+        }
+        const data: any[] = await res.json();
+        return (data || [])
+            .map(c => ({
+                sha: c.sha as string,
+                message: String(c.commit?.message || '').split('\n')[0],
+                date: c.commit?.author?.date || '',
+            }))
+            .filter(c => c.message && !c.message.startsWith('Merge'));
+    }
+
+    /** ИИ читает новые коммиты и создаёт черновики анонсов для подтверждения админом */
+    async generatePlatformUpdates(): Promise<{ created: number; message: string }> {
+        const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
+        if (!apiKey) return { created: 0, message: 'Не задан DEEPSEEK_API_KEY' };
+
+        const commits = await this.fetchRecentCommits();
+
+        // Дедупликация: не обрабатываем коммиты, уже фигурировавшие в анонсах
+        const existing = await this.prisma.platformUpdate.findMany({ select: { sourceCommits: true } });
+        const knownShas = new Set(existing.flatMap(u => u.sourceCommits));
+        const fresh = commits.filter(c => !knownShas.has(c.sha));
+
+        if (fresh.length === 0) {
+            return { created: 0, message: 'Новых коммитов нет — все изменения уже обработаны' };
+        }
+
+        const commitList = fresh.map((c, i) => `${i + 1}. ${c.message}`).join('\n');
+        const prompt = `Ты — продакт-менеджер логистической платформы LogiCore (заявки, финансы, GPS-трекинг, документы). Ниже список коммитов разработки.
+
+Выбери ТОЛЬКО изменения, заметные пользователям платформы: новые возможности, изменения интерфейса, важные исправления поведения. Пропусти чисто техническое: рефакторинг, сборку, БД, внутренние фиксы, безопасность без видимого эффекта.
+
+Сгруппируй связанные коммиты в анонсы и верни СТРОГО JSON-массив без пояснений и без markdown:
+[{"title":"Заголовок до 60 символов","description":"1-3 предложения простым языком, без технических терминов","commitNumbers":[1,2]}]
+Если пользовательских изменений нет — верни [].
+
+Коммиты:
+${commitList}`;
+
+        const res = await fetch('https://api.deepseek.com/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: 'deepseek-chat',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.2,
+                max_tokens: 1200,
+                stream: false,
+            }),
+        });
+        if (!res.ok) {
+            const t = await res.text().catch(() => '');
+            this.logger.error(`DeepSeek updates error ${res.status}: ${t}`);
+            return { created: 0, message: 'Сервис ИИ временно недоступен' };
+        }
+        const data: any = await res.json();
+        let raw = (data?.choices?.[0]?.message?.content || '').trim();
+        raw = raw.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+
+        let items: { title: string; description: string; commitNumbers?: number[] }[] = [];
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) items = parsed;
+        } catch {
+            this.logger.error(`Failed to parse updates JSON: ${raw.slice(0, 300)}`);
+            return { created: 0, message: 'ИИ вернул некорректный формат, попробуйте ещё раз' };
+        }
+
+        // Все свежие sha помечаем обработанными (раскладываем по анонсам, остаток — в первый)
+        const usedShas = new Set<string>();
+        let created = 0;
+        for (const item of items) {
+            if (!item?.title || !item?.description) continue;
+            const shas = (item.commitNumbers || [])
+                .map(n => fresh[n - 1]?.sha)
+                .filter((s): s is string => !!s);
+            shas.forEach(s => usedShas.add(s));
+            await this.prisma.platformUpdate.create({
+                data: {
+                    title: String(item.title).slice(0, 120),
+                    description: String(item.description).slice(0, 2000),
+                    sourceCommits: shas,
+                    status: 'DRAFT',
+                },
+            });
+            created++;
+        }
+
+        // Технические коммиты без анонса тоже помечаем, чтобы не крутить их повторно
+        const leftovers = fresh.filter(c => !usedShas.has(c.sha)).map(c => c.sha);
+        if (leftovers.length > 0) {
+            await this.prisma.platformUpdate.create({
+                data: {
+                    title: '[тех] Служебные изменения',
+                    description: 'Технические коммиты без пользовательского эффекта (автопометка для дедупликации).',
+                    sourceCommits: leftovers,
+                    status: 'REJECTED',
+                },
+            });
+        }
+
+        if (created > 0) {
+            try {
+                const admins = await this.prisma.user.findMany({
+                    where: { role: 'ADMIN', isActive: true, email: { not: null } },
+                    select: { email: true },
+                });
+                for (const admin of admins) {
+                    if (admin.email) {
+                        await this.emailService.sendUpdatesPendingApprovalEmail(admin.email, created);
+                    }
+                }
+            } catch (err) {
+                this.logger.error(`Failed to notify admins of new update drafts: ${(err as Error).message}`);
+            }
+        }
+
+        return {
+            created,
+            message: created > 0
+                ? `Создано черновиков: ${created} (из ${fresh.length} новых коммитов)`
+                : `Обработано ${fresh.length} коммитов — пользовательских изменений не найдено`,
+        };
+    }
+
+    async listPlatformUpdates(status?: string) {
+        return this.prisma.platformUpdate.findMany({
+            where: status ? { status } : { status: { not: 'REJECTED' } },
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+        });
+    }
+
+    async updatePlatformUpdate(id: string, dto: { title?: string; description?: string; status?: string }) {
+        const update = await this.prisma.platformUpdate.findUnique({ where: { id } });
+        if (!update) throw new NotFoundException('Нововведение не найдено');
+        const result = await this.prisma.platformUpdate.update({
+            where: { id },
+            data: {
+                ...(dto.title !== undefined && { title: String(dto.title).slice(0, 120) }),
+                ...(dto.description !== undefined && { description: String(dto.description).slice(0, 2000) }),
+                ...(dto.status !== undefined && {
+                    status: dto.status,
+                    publishedAt: dto.status === 'PUBLISHED' ? new Date() : update.publishedAt,
+                }),
+            },
+        });
+        this.updatesCache = null; // сбрасываем кэш промпта гида
+        return result;
+    }
+
+    async getPublishedPlatformUpdates() {
+        return this.prisma.platformUpdate.findMany({
+            where: { status: 'PUBLISHED' },
+            orderBy: { publishedAt: 'desc' },
+            take: 20,
+            select: { id: true, title: true, description: true, publishedAt: true },
+        });
     }
 }

@@ -1013,6 +1013,20 @@ model UserCompanyRelation {
   @@index([companyId])
 }
 
+// Нововведения платформы: черновики генерирует ИИ из коммитов, админ подтверждает
+model PlatformUpdate {
+  id            String    @id @default(cuid())
+  title         String
+  description   String
+  sourceCommits String[]  @default([]) // sha коммитов-источников (для дедупликации)
+  status        String    @default("DRAFT") // DRAFT | PUBLISHED | REJECTED
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+}
+
 // Тикеты поддержки, сформулированные ИИ-ассистентом из обращений пользователей
 model SupportTicket {
   id          String   @id @default(cuid())

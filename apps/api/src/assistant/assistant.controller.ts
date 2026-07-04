@@ -60,4 +60,36 @@ export class AssistantController {
     async updateTicketStatus(@Param('id') id: string, @Body() body: { status: string }) {
         return this.assistantService.updateTicketStatus(id, body?.status);
     }
+
+    // ==================== PLATFORM UPDATES ====================
+
+    @Post('updates/generate')
+    @UseGuards(RolesGuard)
+    @Roles(UserRole.ADMIN)
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    async generateUpdates() {
+        return this.assistantService.generatePlatformUpdates();
+    }
+
+    @Get('updates')
+    @UseGuards(RolesGuard)
+    @Roles(UserRole.ADMIN)
+    async listUpdates(@Query('status') status?: string) {
+        return this.assistantService.listPlatformUpdates(status);
+    }
+
+    @Patch('updates/:id')
+    @UseGuards(RolesGuard)
+    @Roles(UserRole.ADMIN)
+    async updateUpdate(
+        @Param('id') id: string,
+        @Body() body: { title?: string; description?: string; status?: string },
+    ) {
+        return this.assistantService.updatePlatformUpdate(id, body || {});
+    }
+
+    @Get('updates/published')
+    async publishedUpdates() {
+        return this.assistantService.getPublishedPlatformUpdates();
+    }
 }

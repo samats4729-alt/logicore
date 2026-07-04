@@ -28,19 +28,13 @@ import {
     MenuOutlined,
     GlobalOutlined,
     CustomerServiceOutlined,
+    NotificationOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
+import { api } from '@/lib/api';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
-
-const menuItems = [
-    { key: '/admin', icon: <DashboardOutlined />, label: 'Дашборд' },
-    { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
-    { key: '/admin/support', icon: <CustomerServiceOutlined />, label: 'Поддержка' },
-    { key: '/admin/locations', icon: <GlobalOutlined />, label: 'География' },
-    { key: '/admin/settings', icon: <SettingOutlined />, label: 'Настройки' },
-];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
@@ -51,6 +45,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [loading, setLoading] = useState(true);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [draftCount, setDraftCount] = useState(0);
+
+    const menuItems = [
+        { key: '/admin', icon: <DashboardOutlined />, label: 'Дашборд' },
+        { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
+        { key: '/admin/support', icon: <CustomerServiceOutlined />, label: 'Поддержка' },
+        {
+            key: '/admin/updates',
+            icon: <NotificationOutlined />,
+            label: (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span>Нововведения</span>
+                    {draftCount > 0 && (
+                        <span style={{
+                            background: '#ff4d4f',
+                            color: '#fff',
+                            borderRadius: 10,
+                            padding: '0 6px',
+                            fontSize: 11,
+                            lineHeight: '18px',
+                            height: 18,
+                            minWidth: 18,
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            display: 'inline-block'
+                        }}>
+                            {draftCount}
+                        </span>
+                    )}
+                </div>
+            )
+        },
+        { key: '/admin/locations', icon: <GlobalOutlined />, label: 'География' },
+        { key: '/admin/settings', icon: <SettingOutlined />, label: 'Настройки' },
+    ];
 
     // Определяем мобильное устройство
     useEffect(() => {
@@ -81,6 +110,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         };
         init();
     }, [hydrated, checkAuth]);
+
+    useEffect(() => {
+        if (!hydrated || loading || !isAuthenticated || user?.role !== 'ADMIN') return;
+        const fetchDrafts = async () => {
+            try {
+                const res = await api.get('/assistant/updates?status=DRAFT');
+                setDraftCount(res.data?.length || 0);
+            } catch (err) {
+                console.error('Failed to fetch draft updates count', err);
+            }
+        };
+        fetchDrafts();
+        const interval = setInterval(fetchDrafts, 60 * 1000);
+        return () => clearInterval(interval);
+    }, [hydrated, loading, isAuthenticated, user]);
 
     useEffect(() => {
         if (loading) return;

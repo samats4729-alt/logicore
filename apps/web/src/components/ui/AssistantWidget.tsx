@@ -133,6 +133,8 @@ export default function AssistantWidget() {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [ticketSending, setTicketSending] = useState(false);
+    const [hasNewUpdates, setHasNewUpdates] = useState(false);
+    const [newUpdates, setNewUpdates] = useState<any[]>([]);
 
     const [tourActive, setTourActive] = useState(false);
     const [tipText, setTipText] = useState('');
@@ -252,8 +254,42 @@ export default function AssistantWidget() {
         setTourActive(false);
     };
 
-    const send = async () => {
-        const text = input.trim();
+    useEffect(() => {
+        const fetchPublishedUpdates = async () => {
+            try {
+                const res = await api.get('/assistant/updates/published');
+                const publishedList = res.data || [];
+                if (publishedList.length > 0) {
+                    const latest = publishedList[0];
+                    const stored = localStorage.getItem('lc_last_read_update_id');
+                    if (stored !== latest.id) {
+                        setHasNewUpdates(true);
+                        setNewUpdates(publishedList);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch published updates', err);
+            }
+        };
+        fetchPublishedUpdates();
+    }, []);
+
+    const handleOpen = () => {
+        setOpen(true);
+        if (hasNewUpdates && newUpdates.length > 0) {
+            localStorage.setItem('lc_last_read_update_id', newUpdates[0].id);
+            setHasNewUpdates(false);
+            const updatesText = "У нас вышли новые обновления на платформе!\n\n" +
+                newUpdates.map((u: any) => `**${u.title}**\n${u.description}`).join('\n\n');
+            setMessages(prev => [
+                prev[0],
+                { role: 'assistant', content: updatesText },
+                ...prev.slice(1)
+            ]);
+        }
+    };
+
+    const sendPrompt = async (text: string) => {
         if (!text || loading) return;
         const isSupport = mode === 'support';
         const current = isSupport ? supportMessages : messages;
@@ -261,7 +297,6 @@ export default function AssistantWidget() {
 
         const next: ChatMsg[] = [...current, { role: 'user', content: text }];
         setCurrent(next);
-        setInput('');
         setLoading(true);
         try {
             const payload = next
@@ -283,6 +318,13 @@ export default function AssistantWidget() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const send = async () => {
+        const text = input.trim();
+        if (!text || loading) return;
+        setInput('');
+        await sendPrompt(text);
     };
 
     const sendTicket = async (ticket: TicketDraft, msgIndex: number) => {
@@ -311,8 +353,9 @@ export default function AssistantWidget() {
     return (
         <>
             {!open && (
-                <button aria-label="Открыть ИИ-ассистента" className="ai-fab" onClick={() => setOpen(true)}>
+                <button aria-label="Открыть ИИ-ассистента" className="ai-fab" onClick={handleOpen}>
                     <RobotOutlined />
+                    {hasNewUpdates && <span className="ai-badge-dot" />}
                 </button>
             )}
 
@@ -441,6 +484,56 @@ export default function AssistantWidget() {
                                 </div>
                             </div>
                         ))}
+                        {mode === 'guide' && messages.length === 1 && !loading && (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, marginBottom: 8 }}>
+                                <button
+                                    onClick={() => sendPrompt('Что нового на платформе?')}
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.65)',
+                                        border: '1px solid rgba(22, 119, 255, 0.3)',
+                                        color: '#1677ff',
+                                        padding: '5px 12px',
+                                        borderRadius: 16,
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 6px rgba(16,24,40,0.04)',
+                                        transition: 'all 0.2s',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background = '#eef4ff';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255, 255, 255, 0.65)';
+                                    }}
+                                >
+                                    Что нового?
+                                </button>
+                                <button
+                                    onClick={() => sendPrompt('Как создать заявку?')}
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.65)',
+                                        border: '1px solid rgba(22, 119, 255, 0.3)',
+                                        color: '#1677ff',
+                                        padding: '5px 12px',
+                                        borderRadius: 16,
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 6px rgba(16,24,40,0.04)',
+                                        transition: 'all 0.2s',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background = '#eef4ff';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255, 255, 255, 0.65)';
+                                    }}
+                                >
+                                    Как создать заявку?
+                                </button>
+                            </div>
+                        )}
                         {loading && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
                                 <Spin size="small" /> Думаю…
