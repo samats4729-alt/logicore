@@ -3,25 +3,17 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
     Table, Card, Button, Space, Modal, Form,
-    Input, Typography, App, InputNumber, Row, Col, Select, Tag, Tooltip
+    Input, Typography, App, Select, Tag, Tooltip
 } from 'antd';
 import { 
     PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined,
     SearchOutlined, ClearOutlined, MailOutlined, UserOutlined, GlobalOutlined
 } from '@ant-design/icons';
-import { api, Location, City, Country, Region } from '@/lib/api';
-import dynamic from 'next/dynamic';
-import AddressAutocomplete from '@/components/ui/AddressAutocomplete';
-
-const MapPicker = dynamic(() => import('@/components/ui/MapPicker'), {
-    ssr: false,
-    loading: () => <div style={{ height: 400, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Загрузка карты...</div>
-});
+import { api, Location } from '@/lib/api';
+import LocationForm from '@/components/ui/LocationForm';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
-
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
 export default function CompanyLocationsPage() {
     const { message } = App.useApp();
@@ -34,31 +26,12 @@ export default function CompanyLocationsPage() {
     const [searchText, setSearchText] = useState('');
     const [filterCompanyId, setFilterCompanyId] = useState<string | undefined>(undefined);
 
-    // Coordinates managed manually to sync with Map
-    const [lat, setLat] = useState<number | undefined>();
-    const [lng, setLng] = useState<number | undefined>();
-    const [addressValue, setAddressValue] = useState('');
-
-    // City management
-    // Hierarchy state
-    const [countries, setCountries] = useState<Country[]>([]);
-    const [regions, setRegions] = useState<Region[]>([]);
-    const [cities, setCities] = useState<City[]>([]);
-
-    const [selectedCountryId, setSelectedCountryId] = useState<string | undefined>();
-    const [selectedRegionId, setSelectedRegionId] = useState<string | undefined>();
-
-    const [selectedCityCoords, setSelectedCityCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
-    const [selectedCityName, setSelectedCityName] = useState<string | undefined>(undefined);
-    const [loadingData, setLoadingData] = useState(false);
-
-    // Companies/Partners for linking
+    // Companies/Partners for filtering
     const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
     const [companiesLoading, setCompaniesLoading] = useState(false);
 
     useEffect(() => {
         fetchLocations();
-        fetchCountries();
         fetchCompanies();
     }, []);
 
@@ -94,45 +67,6 @@ export default function CompanyLocationsPage() {
         }
     };
 
-    const fetchCountries = async () => {
-        try {
-            const res = await api.get('/cities/countries');
-            setCountries(res.data);
-        } catch (e) {
-            console.error('Failed to fetch countries');
-        }
-    };
-
-    const handleCountryChange = async (countryId: string) => {
-        setSelectedCountryId(countryId);
-        setSelectedRegionId(undefined);
-        setRegions([]);
-        setCities([]);
-        form.setFieldsValue({ regionId: undefined, city: undefined });
-
-        setLoadingData(true);
-        try {
-            const res = await api.get(`/cities/regions?countryId=${countryId}`);
-            setRegions(res.data);
-        } finally {
-            setLoadingData(false);
-        }
-    };
-
-    const handleRegionChange = async (regionId: string) => {
-        setSelectedRegionId(regionId);
-        setCities([]);
-        form.setFieldsValue({ city: undefined });
-
-        setLoadingData(true);
-        try {
-            const res = await api.get(`/cities?regionId=${regionId}`);
-            setCities(res.data);
-        } finally {
-            setLoadingData(false);
-        }
-    };
-
     const fetchLocations = async () => {
         try {
             const response = await api.get('/locations');
@@ -150,9 +84,6 @@ export default function CompanyLocationsPage() {
             const { countryId, regionId, ...restValues } = values;
             const payload = {
                 ...restValues,
-                address: addressValue,
-                latitude: lat,
-                longitude: lng,
                 emails: values.emails ? values.emails.join(',') : null
             };
             if (editingLocation) {
@@ -165,64 +96,15 @@ export default function CompanyLocationsPage() {
             setModalOpen(false);
             setEditingLocation(null);
             form.resetFields();
-            setLat(undefined);
-            setLng(undefined);
-            setAddressValue('');
             fetchLocations();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка сохранения');
         }
     };
 
-    const handleEditClick = async (record: Location) => {
+    const handleEditClick = (record: Location) => {
         setEditingLocation(record);
         setModalOpen(true);
-        setAddressValue(record.address);
-        setLat(record.latitude);
-        setLng(record.longitude);
-        
-        // Prefill form basic fields
-        form.setFieldsValue({
-            name: record.name,
-            latitude: record.latitude,
-            longitude: record.longitude,
-            contactName: record.contactName,
-            contactPhone: record.contactPhone,
-            emails: (record as any).emails ? (record as any).emails.split(',').map((e: string) => e.trim()).filter(Boolean) : [],
-            companyId: (record as any).companyId || undefined
-        });
-
-        if (record.city) {
-            try {
-                const res = await api.get(`/cities?search=${encodeURIComponent(record.city)}`);
-                const foundCity = res.data.find((c: any) => c.name.toLowerCase() === record.city?.toLowerCase());
-                if (foundCity) {
-                    const countryId = foundCity.countryId;
-                    const regionId = foundCity.regionId;
-                    
-                    setSelectedCountryId(countryId);
-                    setSelectedRegionId(regionId);
-                    setSelectedCityName(foundCity.name);
-                    setSelectedCityCoords({ lat: foundCity.latitude, lng: foundCity.longitude });
-                    
-                    const [regionsRes, citiesRes] = await Promise.all([
-                        api.get(`/cities/regions?countryId=${countryId}`),
-                        api.get(`/cities?regionId=${regionId}`),
-                    ]);
-                    
-                    setRegions(regionsRes.data);
-                    setCities(citiesRes.data);
-                    
-                    form.setFieldsValue({
-                        countryId,
-                        regionId,
-                        city: foundCity.name
-                    });
-                }
-            } catch (e) {
-                console.error('Failed to prefill city details', e);
-            }
-        }
     };
 
     const handleDelete = async (id: string) => {
@@ -242,135 +124,6 @@ export default function CompanyLocationsPage() {
                 }
             },
         });
-    };
-
-    const onCityChange = (cityName: string) => {
-        const city = cities.find(c => c.name === cityName);
-        if (city) {
-            const coords = { lat: city.latitude, lng: city.longitude };
-            setSelectedCityCoords(coords);
-            setSelectedCityName(city.name);
-            // Move map to city center
-            setLat(city.latitude);
-            setLng(city.longitude);
-        }
-    };
-
-    // Автоподстановка каскада Страна -> Область -> Город по названию города
-    const prefillCascadeByCityName = async (cityName?: string | null) => {
-        if (!cityName) return;
-        if (form.getFieldValue('city') === cityName) return; // уже выбран — не дёргаем API
-        try {
-            const res = await api.get(`/cities?search=${encodeURIComponent(cityName)}`);
-            const foundCity = res.data.find((c: any) => c.name.toLowerCase() === cityName.toLowerCase());
-            if (!foundCity) return;
-            const { countryId, regionId } = foundCity;
-
-            setSelectedCountryId(countryId);
-            setSelectedRegionId(regionId);
-            setSelectedCityName(foundCity.name);
-
-            const [regionsRes, citiesRes] = await Promise.all([
-                api.get(`/cities/regions?countryId=${countryId}`),
-                api.get(`/cities?regionId=${regionId}`),
-            ]);
-            setRegions(regionsRes.data);
-            setCities(citiesRes.data);
-
-            form.setFieldsValue({ countryId, regionId, city: foundCity.name });
-        } catch (e) {
-            console.error('Failed to prefill city cascade', e);
-        }
-    };
-
-    // Когда выбирают адрес из автодополнения
-    const handleAddressSelect = (address: string, latitude: number, longitude: number) => {
-        setAddressValue(address);
-        setLat(latitude);
-        setLng(longitude);
-        form.setFieldsValue({ latitude, longitude });
-
-        // full_name 2GIS начинается с города: «Алматы, Абая проспект, 143»
-        const cityCandidate = address.includes(',') ? address.split(',')[0].trim() : '';
-        void prefillCascadeByCityName(cityCandidate);
-    };
-
-    // State for manual address fetching
-    const [isFetchingAddress, setIsFetchingAddress] = useState(false);
-
-    // Когда кликают на карту - ТОЛЬКО обновляем координаты (экономия 2GIS)
-    const handleMapSelect = async (latitude: number, longitude: number, pickedName?: string) => {
-        setLat(latitude);
-        setLng(longitude);
-        form.setFieldsValue({ latitude, longitude });
-
-        // Если есть "подсказка" с карты (векторная плитка) - используем её БЕСПЛАТНО
-        if (pickedName) {
-            setAddressValue(pickedName);
-            message.success({ content: `Выбрано: ${pickedName}`, key: 'geo' });
-            return;
-        }
-
-        // Иначе просто показываем координаты. Запрос НЕ шлем.
-        const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-        setAddressValue(coords); // Временно пишем координаты в поле
-        message.info({ content: 'Точка выбрана. Нажмите "Определить адрес", если нужно.', key: 'geo' });
-    };
-
-    // ФУНКЦИЯ РУЧНОГО ОПРЕДЕЛЕНИЯ (Тратит 1 запрос 2GIS)
-    const handleManualGeocode = async () => {
-        if (!lat || !lng) return;
-        const apiKey = process.env.NEXT_PUBLIC_2GIS_API_KEY;
-        if (!apiKey) {
-            message.warning('2GIS API key не сконфигурирован');
-            return;
-        }
-
-        setIsFetchingAddress(true);
-        try {
-            const params = new URLSearchParams({
-                key: apiKey,
-                fields: 'items.point,items.address_name,items.building_name,items.full_name,items.adm_div',
-                lon: lng.toString(),
-                lat: lat.toString(),
-                radius: '100'
-            });
-
-            const url = `https://catalog.api.2gis.com/3.0/items/geocode?${params}`;
-            const res = await fetch(url);
-            const data2gis = await res.json();
-
-            let finalName = '';
-            if (data2gis && data2gis.result && data2gis.result.items && data2gis.result.items.length > 0) {
-                const bestItem = data2gis.result.items[0];
-                if (bestItem.building_name) {
-                    finalName = bestItem.address_name ? `${bestItem.building_name} (${bestItem.address_name})` : bestItem.building_name;
-                } else {
-                    finalName = bestItem.address_name || bestItem.full_name;
-                }
-                if (!finalName && bestItem.name) finalName = bestItem.name;
-            }
-
-            if (finalName) {
-                setAddressValue(finalName);
-                message.success({ content: `Адрес: ${finalName}`, key: 'geo' });
-            } else {
-                message.warning('Не удалось определить точный адрес. Введите вручную.');
-            }
-
-            // Подставляем каскад Страна/Область/Город из административного деления 2GIS
-            if (data2gis?.result?.items?.length > 0) {
-                const bestItem = data2gis.result.items[0];
-                const cityFromGeo = (bestItem.adm_div || []).find((d: any) => d.type === 'city')?.name
-                    || (bestItem.full_name ? String(bestItem.full_name).split(',')[0].trim() : '');
-                void prefillCascadeByCityName(cityFromGeo);
-            }
-        } catch (e) {
-            console.error('Manual geocode error', e);
-            message.error('Ошибка соединения с 2GIS');
-        } finally {
-            setIsFetchingAddress(false);
-        }
     };
 
     const filteredLocations = useMemo(() => {
@@ -529,9 +282,6 @@ export default function CompanyLocationsPage() {
                 <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => {
                     setEditingLocation(null);
                     form.resetFields();
-                    setAddressValue('');
-                    setLat(undefined);
-                    setLng(undefined);
                     setModalOpen(true);
                 }}>
                     Добавить новый адрес
@@ -555,6 +305,7 @@ export default function CompanyLocationsPage() {
                         onChange={setFilterCompanyId}
                         style={{ width: 250 }}
                         allowClear
+                        loading={companiesLoading}
                     >
                         <Option value="global">📍 Общие адреса (без контрагента)</Option>
                         {companies.map(c => (
@@ -591,172 +342,20 @@ export default function CompanyLocationsPage() {
                     setModalOpen(false);
                     setEditingLocation(null);
                     form.resetFields();
-                    setAddressValue('');
-                    setLat(undefined);
-                    setLng(undefined);
                 }}
                 onOk={() => form.submit()}
-                width={800}
+                width={850}
                 centered
+                destroyOnClose
             >
-                <Row gutter={24}>
-                    <Col span={10}>
-                        <Form form={form} layout="vertical" onFinish={handleSubmit}>
-                            <Row gutter={12}>
-                                <Col span={24}>
-                                    <Form.Item
-                                        name="countryId"
-                                        label="Страна"
-                                        rules={[{ required: true, message: 'Выберите страну' }]}
-                                    >
-                                        <Select
-                                            placeholder="Страна"
-                                            onChange={handleCountryChange}
-                                            loading={loadingData}
-                                        >
-                                            {countries.map(c => (
-                                                <Option key={c.id} value={c.id}>{c.name}</Option>
-                                            ))}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={24}>
-                                    <Form.Item
-                                        name="regionId"
-                                        label="Область"
-                                        rules={[{ required: true, message: 'Выберите область' }]}
-                                    >
-                                        <Select
-                                            placeholder="Область"
-                                            onChange={handleRegionChange}
-                                            disabled={!selectedCountryId}
-                                            loading={loadingData}
-                                        >
-                                            {regions.map(r => (
-                                                <Option key={r.id} value={r.id}>{r.name}</Option>
-                                            ))}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={24}>
-                                    <Form.Item
-                                        name="city"
-                                        label="Город"
-                                        rules={[{ required: true, message: 'Выберите город' }]}
-                                    >
-                                        <Select
-                                            onChange={onCityChange}
-                                            placeholder="Город"
-                                            disabled={!selectedRegionId}
-                                            showSearch
-                                            optionFilterProp="children"
-                                        >
-                                            {cities.map(city => (
-                                                <Option key={city.id} value={city.name}>
-                                                    {city.name} {city.country?.code ? `(${city.country.code})` : ''}
-                                                </Option>
-                                            ))}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-
-                            <Form.Item
-                                name="name"
-                                label="Название точки"
-                                rules={[{ required: true, message: 'Например: Склад Алматы 1' }]}
-                            >
-                                <Input placeholder="Склад №1" size="large" />
-                            </Form.Item>
-
-                            <Form.Item
-                                label="Адрес"
-                                required
-                                help="Начните вводить адрес — он найдётся автоматически"
-                            >
-                                <AddressAutocomplete
-                                    value={addressValue}
-                                    onChange={setAddressValue}
-                                    onSelect={handleAddressSelect}
-                                    placeholder={selectedCityName ? "ул. Гоголя, 1" : "Выберите город или укажите точку на карте"}
-                                    proximity={selectedCityCoords}
-                                    city={selectedCityName}
-                                />
-                            </Form.Item>
-
-                            <Row gutter={12}>
-                                <Col span={12}>
-                                    <Form.Item name="latitude" label="Широта" rules={[{ required: true, message: 'Выберите адрес или укажите на карте' }]}>
-                                        <InputNumber style={{ width: '100%' }} value={lat} readOnly placeholder="—" />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="longitude" label="Долгота" rules={[{ required: true, message: '' }]}>
-                                        <InputNumber style={{ width: '100%' }} value={lng} readOnly placeholder="—" />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-
-                            <Form.Item name="companyId" label="Привязать к контрагенту (компании)">
-                                <Select placeholder="Без привязки (общий)" allowClear showSearch optionFilterProp="children" loading={companiesLoading}>
-                                    {companies.map(c => (
-                                        <Option key={c.id} value={c.id}>{c.name}</Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-
-                            <Form.Item name="emails" label="Email-адреса склада" help="Введите email и нажмите Enter">
-                                <Select mode="tags" placeholder="warehouse@company.com" tokenSeparators={[',', ' ']} style={{ width: '100%' }} />
-                            </Form.Item>
-
-                            <Form.Item name="contactName" label="Контактное лицо">
-                                <Input placeholder="Иван Иванов" />
-                            </Form.Item>
-                            <Form.Item name="contactPhone" label="Телефон">
-                                <Input placeholder="+7..." />
-                            </Form.Item>
-                        </Form>
-                    </Col>
-                    <Col span={14}>
-                        <div style={{ marginBottom: 8 }}>
-                            <Text strong>Или укажите точку на карте:</Text>
-                        </div>
-                        <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
-                            <MapPicker
-                                onLocationSelect={handleMapSelect}
-                                initialLat={lat}
-                                initialLng={lng}
-                            />
-                            {/* Floating Button Overlay */}
-                            <div style={{
-                                position: 'absolute',
-                                bottom: 20,
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                zIndex: 1000,
-                                background: 'white',
-                                padding: 4,
-                                borderRadius: 6,
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                            }}>
-                                <Button
-                                    type="primary"
-                                    onClick={handleManualGeocode}
-                                    loading={isFetchingAddress}
-                                    disabled={!lat || !lng}
-                                    icon={<EnvironmentOutlined />}
-                                >
-                                    Определить адрес
-                                </Button>
-                            </div>
-                        </div>
-                        <div style={{ marginTop: 8 }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                                При выборе адреса карта автоматически переместится к нужной точке
-                            </Text>
-                        </div>
-                    </Col>
-                </Row>
+                <div style={{ marginTop: 16 }}>
+                    <LocationForm
+                        form={form}
+                        editingLocation={editingLocation}
+                        onFinish={handleSubmit}
+                        showCompanySelect={true}
+                    />
+                </div>
             </Modal>
         </div>
     );

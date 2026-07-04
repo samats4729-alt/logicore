@@ -14,6 +14,7 @@ import {
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
+import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -164,6 +165,34 @@ export default function CreateOrderPage() {
     // Quick partner modal
     const [quickPartnerModalOpen, setQuickPartnerModalOpen] = useState(false);
     const [quickPartnerLoading, setQuickPartnerLoading] = useState(false);
+
+    // Quick create location modal
+    const [quickLocationModalOpen, setQuickLocationModalOpen] = useState(false);
+    const [activeRoutePointIndex, setActiveRoutePointIndex] = useState<number | null>(null);
+
+    const handleNewLocationSuccess = async (newLoc: Location) => {
+        setQuickLocationModalOpen(false);
+        await fetchLocations();
+
+        if (activeRoutePointIndex !== null) {
+            const newPts = [...routePointsState];
+            newPts[activeRoutePointIndex] = {
+                ...newPts[activeRoutePointIndex],
+                city: newLoc.city || '',
+                address: newLoc.address,
+                id: newLoc.id
+            };
+            setRoutePointsState(newPts);
+
+            // Trigger tariff check
+            const firstPickup = newPts.find(p => p.pointType === 'PICKUP');
+            const lastDelivery = [...newPts].reverse().find(p => p.pointType === 'DELIVERY');
+            if (firstPickup?.city && lastDelivery?.city) {
+                lookupTariff(firstPickup.city, lastDelivery.city);
+            }
+        }
+        setActiveRoutePointIndex(null);
+    };
 
     useEffect(() => {
         api.get('/company/profile-status').then(res => {
@@ -582,6 +611,24 @@ export default function CreateOrderPage() {
                             }
                             setRoutePointsState(newPts);
                         }}
+                        dropdownRender={(menu) => (
+                            <>
+                                {menu}
+                                <Divider style={{ margin: '4px 0' }} />
+                                <Button
+                                    type="text"
+                                    icon={<PlusOutlined />}
+                                    block
+                                    onClick={() => {
+                                        setActiveRoutePointIndex(i);
+                                        setQuickLocationModalOpen(true);
+                                    }}
+                                    style={{ textAlign: 'left', padding: '4px 12px', height: 'auto', color: '#1677ff' }}
+                                >
+                                    + Добавить новый адрес
+                                </Button>
+                            </>
+                        )}
                     >
                         {getLocationOptions().map(group => (
                             <Select.OptGroup key={group.label} label={group.label}>
@@ -1137,6 +1184,16 @@ export default function CreateOrderPage() {
                     </Form.Item>
                 </Form>
             </Modal>
+
+            <QuickCreateLocationModal
+                open={quickLocationModalOpen}
+                onCancel={() => {
+                    setQuickLocationModalOpen(false);
+                    setActiveRoutePointIndex(null);
+                }}
+                onSuccess={handleNewLocationSuccess}
+                defaultCompanyId={selectedCustomer !== MY_COMPANY_VALUE ? selectedCustomer : selectedMyCompanyId}
+            />
         </div>
     );
 }
