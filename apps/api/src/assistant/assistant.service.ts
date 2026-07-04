@@ -1,7 +1,6 @@
 import { Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { EmailService } from '../email/email.service';
 
 interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -116,7 +115,6 @@ export class AssistantService implements OnApplicationBootstrap {
     constructor(
         private config: ConfigService,
         private prisma: PrismaService,
-        private emailService: EmailService,
     ) {}
 
     onApplicationBootstrap() {
@@ -528,21 +526,6 @@ ${commitList}`;
             });
         }
 
-        if (created > 0) {
-            try {
-                const admins = await this.prisma.user.findMany({
-                    where: { role: 'ADMIN', isActive: true, email: { not: null } },
-                    select: { email: true },
-                });
-                for (const admin of admins) {
-                    if (admin.email) {
-                        await this.emailService.sendUpdatesPendingApprovalEmail(admin.email, created);
-                    }
-                }
-            } catch (err) {
-                this.logger.error(`Failed to notify admins of new update drafts: ${(err as Error).message}`);
-            }
-        }
 
         return {
             created,
