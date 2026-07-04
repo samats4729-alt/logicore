@@ -279,6 +279,7 @@ export default function AssistantWidget() {
         if (hasNewUpdates && newUpdates.length > 0) {
             localStorage.setItem('lc_last_read_update_id', newUpdates[0].id);
             setHasNewUpdates(false);
+            window.dispatchEvent(new Event('logicore:updates-read'));
             const updatesText = "У нас вышли новые обновления на платформе!\n\n" +
                 newUpdates.map((u: any) => `**${u.title}**\n${u.description}`).join('\n\n');
             setMessages(prev => [
@@ -288,6 +289,55 @@ export default function AssistantWidget() {
             ]);
         }
     };
+
+    const handleOpenUpdates = async () => {
+        setOpen(true);
+        if (hasNewUpdates && newUpdates.length > 0) {
+            localStorage.setItem('lc_last_read_update_id', newUpdates[0].id);
+            setHasNewUpdates(false);
+            window.dispatchEvent(new Event('logicore:updates-read'));
+            const updatesText = "У нас вышли новые обновления на платформе!\n\n" +
+                newUpdates.map((u: any) => `**${u.title}**\n${u.description}`).join('\n\n');
+            setMessages(prev => [
+                prev[0],
+                { role: 'assistant', content: updatesText },
+                ...prev.slice(1)
+            ]);
+        } else {
+            try {
+                const res = await api.get('/assistant/updates/published');
+                const list = res.data || [];
+                if (list.length > 0) {
+                    const updatesText = "Вот недавние обновления платформы:\n\n" +
+                        list.map((u: any) => `**${u.title}**\n${u.description}`).join('\n\n');
+                    setMessages(prev => {
+                        const alreadyShown = prev.some(m => m.content.includes("недавние обновления платформы"));
+                        if (alreadyShown) return prev;
+                        return [
+                            ...prev,
+                            { role: 'assistant', content: updatesText }
+                        ];
+                    });
+                } else {
+                    setMessages(prev => [
+                        ...prev,
+                        { role: 'assistant', content: "У нас пока нет опубликованных обновлений." }
+                    ]);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    };
+
+    useEffect(() => {
+        const onOpenUpdates = () => {
+            handleOpenUpdates();
+        };
+        window.addEventListener('logicore:open-updates', onOpenUpdates);
+        return () => window.removeEventListener('logicore:open-updates', onOpenUpdates);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasNewUpdates, newUpdates]);
 
     const sendPrompt = async (text: string) => {
         if (!text || loading) return;

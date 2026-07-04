@@ -28,9 +28,11 @@ import {
     UserSwitchOutlined,
     CalculatorOutlined,
     BarChartOutlined,
+    NotificationOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
+import { api } from '@/lib/api';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -44,8 +46,34 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-
     const [hydrated, setHydrated] = useState(false);
+    const [hasNewUpdates, setHasNewUpdates] = useState(false);
+
+    useEffect(() => {
+        const fetchPublishedUpdates = async () => {
+            try {
+                const res = await api.get('/assistant/updates/published');
+                const publishedList = res.data || [];
+                if (publishedList.length > 0) {
+                    const latest = publishedList[0];
+                    const stored = localStorage.getItem('lc_last_read_update_id');
+                    if (stored !== latest.id) {
+                        setHasNewUpdates(true);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch published updates', err);
+            }
+        };
+        fetchPublishedUpdates();
+
+        // Listen for user marking updates as read to clear top badge
+        const handleUpdatesRead = () => {
+            setHasNewUpdates(false);
+        };
+        window.addEventListener('logicore:updates-read', handleUpdatesRead);
+        return () => window.removeEventListener('logicore:updates-read', handleUpdatesRead);
+    }, []);
 
     // Определяем мобильное устройство
     useEffect(() => {
@@ -302,6 +330,30 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     const userMenu = {
         items: [
             {
+                key: 'updates',
+                icon: <NotificationOutlined style={{ color: hasNewUpdates ? '#ff4d4f' : undefined }} />,
+                label: (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 12 }}>
+                        <span>Что нового?</span>
+                        {hasNewUpdates && (
+                            <span style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                background: '#ff4d4f',
+                                display: 'inline-block'
+                            }} />
+                        )}
+                    </div>
+                ),
+                onClick: () => {
+                    window.dispatchEvent(new Event('logicore:open-updates'));
+                }
+            },
+            {
+                type: 'divider' as const,
+            },
+            {
                 key: 'profile',
                 icon: <UserOutlined />,
                 label: 'Профиль',
@@ -436,24 +488,43 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         alignItems: 'center',
                         gap: 8,
                         cursor: 'pointer',
-                        padding: '4px 8px',
+                        padding: '4px 10px',
                         borderRadius: '8px',
-                        transition: 'background 0.2s',
+                        transition: 'all 0.3s ease',
                         flexShrink: 0,
                         marginLeft: 8,
+                        position: 'relative',
+                        boxShadow: hasNewUpdates ? '0 0 0 2px rgba(255, 77, 79, 0.4), 0 0 12px rgba(255, 77, 79, 0.3)' : undefined,
+                        border: hasNewUpdates ? '1px solid rgba(255, 77, 79, 0.5)' : '1px solid transparent',
+                        animation: hasNewUpdates ? 'profileGlow 2s infinite' : undefined,
                     }}
                         className="user-profile-trigger"
                     >
-                        <Avatar
-                            icon={<UserOutlined />}
-                            size="small"
-                            style={{
-                                background: 'rgba(255, 255, 255, 0.12)',
-                                color: '#ffffff',
-                                border: '1px solid rgba(255, 255, 255, 0.2)',
-                                flexShrink: 0,
-                            }}
-                        />
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <Avatar
+                                icon={<UserOutlined />}
+                                size="small"
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.12)',
+                                    color: '#ffffff',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    flexShrink: 0,
+                                }}
+                            />
+                            {hasNewUpdates && (
+                                <span style={{
+                                    position: 'absolute',
+                                    top: -4,
+                                    right: -4,
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    background: '#ff4d4f',
+                                    border: '1.5px solid rgba(9, 12, 20, 0.92)',
+                                    display: 'inline-block'
+                                }} />
+                            )}
+                        </div>
                         {!isMobile && (
                             <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: '#ffffff' }}>
                                 {user.firstName} {user.lastName}

@@ -1379,4 +1379,10 @@ a.mapboxgl-ctrl-logo,
   100% { box-shadow: 0 0 0 5px rgba(255, 77, 79, 0); }
 }
 
+@keyframes profileGlow {
+  0% { box-shadow: 0 0 0 0px rgba(255, 77, 79, 0.5), 0 0 4px rgba(255, 77, 79, 0.3); }
+  75% { box-shadow: 0 0 0 6px rgba(255, 77, 79, 0), 0 0 12px rgba(255, 77, 79, 0.05); }
+  100% { box-shadow: 0 0 0 6px rgba(255, 77, 79, 0), 0 0 4px rgba(255, 77, 79, 0.05); }
+}
+
 
