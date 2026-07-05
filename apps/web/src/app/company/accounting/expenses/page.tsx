@@ -1,31 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Typography, Space, Tag, DatePicker, Input, Select, Switch, message, Tooltip, Statistic, Row, Col, Segmented, Modal, Form, InputNumber, Popconfirm, Drawer, Descriptions, Divider, theme } from 'antd';
+import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, message, Segmented, Modal, Form, InputNumber, Popconfirm, Drawer, Descriptions, Divider, theme } from 'antd';
 import {
-    SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, ArrowLeftOutlined,
-    PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, SaveOutlined,
+    SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, DollarOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 interface JournalEntry {
-    id: string;
-    orderNumber: string;
-    createdAt: string;
-    status: string;
-    cargoDescription: string;
-    customerPrice: number;
-    isCustomerPaid: boolean;
-    customerPaidAt: string | null;
+    id: string; orderNumber: string; createdAt: string; status: string;
+    cargoDescription: string; customerPrice: number; isCustomerPaid: boolean; customerPaidAt: string | null;
     forwarder: { id: string; name: string } | null;
 }
-
 interface ManualExpense { id: string; date: string; category: string; description: string; amount: number; note?: string; order?: { orderNumber: string }; }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -33,7 +25,6 @@ const STATUS_LABELS: Record<string, string> = {
     AT_PICKUP: 'На погрузке', LOADING: 'Погрузка', IN_TRANSIT: 'В пути',
     AT_DELIVERY: 'На выгрузке', UNLOADING: 'Выгрузка', COMPLETED: 'Завершён', PROBLEM: 'Проблема',
 };
-
 const EXPENSE_CATEGORIES = [
     { value: 'fuel', label: 'Топливо' }, { value: 'repair', label: 'Ремонт' },
     { value: 'salary', label: 'Зарплата' }, { value: 'insurance', label: 'Страхование' },
@@ -42,7 +33,6 @@ const EXPENSE_CATEGORIES = [
     { value: 'corporate', label: 'Корпоративные' }, { value: 'penalties', label: 'Штрафы' },
     { value: 'refund', label: 'Возврат' }, { value: 'other', label: 'Прочее' },
 ];
-
 const categoryColors: Record<string, string> = {
     fuel: 'orange', repair: 'red', salary: 'blue', insurance: 'cyan',
     tax: 'volcano', rent: 'purple', communication: 'geekblue', office: 'lime',
@@ -53,11 +43,6 @@ export default function CompanyExpensesPage() {
     const { token } = theme.useToken();
     const { user } = useAuthStore();
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
-    const cardStyle = {
-        borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        border: `1px solid ${token.colorBorderSecondary}`,
-    };
     const [tab, setTab] = useState<string>('journal');
     const [entries, setEntries] = useState<JournalEntry[]>([]);
     const [manualExpenses, setManualExpenses] = useState<ManualExpense[]>([]);
@@ -69,24 +54,15 @@ export default function CompanyExpensesPage() {
     const [editingExpense, setEditingExpense] = useState<ManualExpense | null>(null);
     const [form] = Form.useForm();
     const router = useRouter();
-
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
 
     useEffect(() => { fetchJournal(); fetchManual(); }, []);
-
     const fetchJournal = async () => { setLoading(true); try { const res = await api.get('/accounting/customer-expenses-journal'); setEntries(res.data); } catch {} finally { setLoading(false); } };
     const fetchManual = async () => { try { const res = await api.get('/accounting/expenses'); setManualExpenses(res.data); } catch {} };
 
-    const getCarrierName = (e: JournalEntry): string => {
-        if (e.forwarder) return e.forwarder.name;
-        return '—';
-    };
-
-    const openDetail = (entry: JournalEntry) => {
-        setSelectedEntry(entry);
-        setDrawerOpen(true);
-    };
+    const getCarrierName = (e: JournalEntry): string => { if (e.forwarder) return e.forwarder.name; return '—'; };
+    const openDetail = (entry: JournalEntry) => { setSelectedEntry(entry); setDrawerOpen(true); };
 
     const handleSaveManual = async (values: any) => {
         try {
@@ -97,11 +73,7 @@ export default function CompanyExpensesPage() {
             setModalOpen(false); setEditingExpense(null); form.resetFields(); fetchManual();
         } catch { message.error('Ошибка сохранения'); }
     };
-
-    const handleDeleteManual = async (id: string) => {
-        try { await api.delete(`/accounting/expenses/${id}`); message.success('Удалено'); fetchManual(); }
-        catch { message.error('Ошибка удаления'); }
-    };
+    const handleDeleteManual = async (id: string) => { try { await api.delete(`/accounting/expenses/${id}`); message.success('Удалено'); fetchManual(); } catch { message.error('Ошибка удаления'); } };
 
     const filtered = entries.filter(e => {
         if (searchQuery) { const q = searchQuery.toLowerCase(); if (!e.orderNumber.toLowerCase().includes(q) && !getCarrierName(e).toLowerCase().includes(q) && !e.cargoDescription.toLowerCase().includes(q)) return false; }
@@ -110,7 +82,6 @@ export default function CompanyExpensesPage() {
         if (dateRange && dateRange[0] && dateRange[1]) { const d = dayjs(e.createdAt); if (d.isBefore(dateRange[0], 'day') || d.isAfter(dateRange[1], 'day')) return false; }
         return true;
     });
-
     const totalSum = filtered.reduce((s, e) => s + (e.customerPrice || 0), 0);
     const paidSum = filtered.filter(e => e.isCustomerPaid).reduce((s, e) => s + (e.customerPrice || 0), 0);
     const debtSum = totalSum - paidSum;
@@ -132,164 +103,118 @@ export default function CompanyExpensesPage() {
     const otherExpensesTotal = otherExpenses.reduce((s, exp) => s + exp.amount, 0);
 
     const journalColumns = [
-        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 100, render: (val: string) => <Text strong style={{ fontSize: 13 }}>{val}</Text> },
-        { title: 'Дата', dataIndex: 'createdAt', key: 'createdAt', width: 100, sorter: (a: JournalEntry, b: JournalEntry) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <Text style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</Text> },
-        { title: 'Экспедитор', key: 'carrier', width: 220, render: (_: any, r: JournalEntry) => <Text strong={!r.isCustomerPaid} style={{ fontSize: 13, color: r.isCustomerPaid ? undefined : token.colorError }}>{getCarrierName(r)}</Text> },
-        { title: 'Описание', dataIndex: 'cargoDescription', key: 'cargoDescription', ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val}</Text> },
-        { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, render: (val: string) => <Tag color={val === 'COMPLETED' ? 'green' : val === 'PROBLEM' ? 'red' : 'blue'} style={{ fontSize: 12 }}>{STATUS_LABELS[val] || val}</Tag> },
-        { title: 'Сумма', key: 'customerPrice', width: 130, align: 'right' as const, sorter: (a: JournalEntry, b: JournalEntry) => (a.customerPrice || 0) - (b.customerPrice || 0), render: (_: any, r: JournalEntry) => <Text strong style={{ fontSize: 13 }}>{(r.customerPrice || 0).toLocaleString('ru-RU')} ₸</Text> },
-        { title: 'Оплата', key: 'paid', width: 90, align: 'center' as const, render: (_: any, r: JournalEntry) => <Tooltip title={r.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}>{r.isCustomerPaid ? <CheckCircleOutlined style={{ color: token.colorSuccess, fontSize: 16 }} /> : <CloseCircleOutlined style={{ color: token.colorError, fontSize: 16 }} />}</Tooltip> },
+        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 100, render: (val: string) => <strong style={{ fontSize: 13 }}>{val}</strong> },
+        { title: 'Дата', dataIndex: 'createdAt', key: 'createdAt', width: 100, sorter: (a: JournalEntry, b: JournalEntry) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <span style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</span> },
+        { title: 'Груз', dataIndex: 'cargoDescription', key: 'cargoDescription', ellipsis: true, render: (val: string) => <span style={{ fontSize: 13 }}>{val || '—'}</span> },
+        { title: 'Перевозчик', key: 'carrier', render: (_: any, r: JournalEntry) => <span style={{ fontSize: 13 }}>{getCarrierName(r)}</span> },
+        { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, render: (val: string) => <Tag>{STATUS_LABELS[val] || val}</Tag> },
+        { title: 'Сумма', dataIndex: 'customerPrice', key: 'customerPrice', width: 130, align: 'right' as const, sorter: (a: JournalEntry, b: JournalEntry) => (a.customerPrice || 0) - (b.customerPrice || 0), render: (val: number) => <strong style={{ fontSize: 13 }}>{val.toLocaleString('ru-RU')} ₸</strong> },
+        { title: 'Оплата', key: 'payment', width: 100, render: (_: any, r: JournalEntry) => r.isCustomerPaid ? <Tag color="green">Оплачено</Tag> : <Tag color="red">Не оплачено</Tag> },
     ];
 
     const manualColumns = [
-        { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, sorter: (a: ManualExpense, b: ManualExpense) => dayjs(a.date).unix() - dayjs(b.date).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <Text style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</Text> },
-        { title: 'Категория', dataIndex: 'category', key: 'category', width: 150, render: (val: string) => <Tag color={categoryColors[val] || 'default'} style={{ fontSize: 12 }}>{EXPENSE_CATEGORIES.find(c => c.value === val)?.label || val}</Tag> },
+        { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, sorter: (a: ManualExpense, b: ManualExpense) => dayjs(a.date).unix() - dayjs(b.date).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <span style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</span> },
+        { title: 'Категория', dataIndex: 'category', key: 'category', width: 170, render: (val: string) => <Tag color={categoryColors[val] || 'default'} style={{ fontSize: 12 }}>{EXPENSE_CATEGORIES.find(c => c.value === val)?.label || val}</Tag> },
         { title: 'Описание', dataIndex: 'description', key: 'description', ellipsis: true, render: (val: string, r: ManualExpense) => (
             <Space direction="vertical" size={0}>
-                <Text style={{ fontSize: 13 }}>{val}</Text>
+                <span style={{ fontSize: 13 }}>{val}</span>
                 {r.order && <Tag color="blue" style={{ marginTop: 4 }}>Заявка {r.order.orderNumber}</Tag>}
             </Space>
         ) },
-        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <Text strong style={{ fontSize: 13, color: token.colorError }}>−{val.toLocaleString('ru-RU')} ₸</Text> },
-        { title: 'Примечание', dataIndex: 'note', key: 'note', width: 180, ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val || '—'}</Text> },
+        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <strong style={{ fontSize: 13, color: '#dc3545' }}>-{val.toLocaleString('ru-RU')} ₸</strong> },
+        { title: 'Примечание', dataIndex: 'note', key: 'note', width: 180, ellipsis: true, render: (val: string) => <span style={{ fontSize: 13 }}>{val || '—'}</span> },
         { title: '', key: 'actions', width: 80, render: (_: any, r: ManualExpense) => canEditFinance ? <Space><Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditingExpense(r); form.setFieldsValue({ ...r, date: dayjs(r.date) }); setModalOpen(true); }} /><Popconfirm title="Удалить?" onConfirm={() => handleDeleteManual(r.id)} okText="Да" cancelText="Нет"><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> : null },
     ];
 
+    const currentTotal = tab === 'journal' ? totalSum : tab === 'order_expenses' ? orderExpensesTotal : otherExpensesTotal;
+
     return (
-        <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px' }} />
-                <Title level={4} style={{ margin: 0 }}>Расход денежных средств</Title>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: 0, marginRight: 8, height: 'auto' }} />
+                        Финансы · Расходы
+                    </div>
+                    <h1 className="lc2-title">Расходы</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Учёт исходящих платежей по заявкам и прочих расходов
+                    </p>
+                    {tab !== 'journal' && canEditFinance && (
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingExpense(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }} className="lc-cta">
+                            Добавить расход
+                        </Button>
+                    )}
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc3545' }}>
+                            <DollarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Сумма</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#dc3545' }}>
+                                {currentTotal.toLocaleString('ru-RU')} ₸
+                            </div>
+                            <div className="lc2-msub">за период</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <Segmented 
-                value={tab} 
-                onChange={(v) => { setTab(v as string); setSearchQuery(''); setPaymentFilter(undefined); setDateRange(null); }} 
+            <Segmented value={tab} onChange={(v) => { setTab(v as string); setSearchQuery(''); setDateRange(null); }}
                 options={[
-                    { label: 'Оплата за перевозку', value: 'journal' }, 
-                    { label: 'Расходы по заявкам', value: 'order_expenses' },
-                    { label: 'Прочие расходы', value: 'other_expenses' }
-                ]} 
-                style={{ marginBottom: 16 }} 
-            />
+                    { label: 'Журнал', value: 'journal' },
+                    { label: 'По заявкам', value: 'order_expenses' },
+                    { label: 'Прочие', value: 'other_expenses' }
+                ]} style={{ marginBottom: 16 }} />
 
             {tab === 'journal' ? (
                 <>
-                    <Row gutter={16} style={{ marginBottom: 16 }}>
-                        <Col xs={24} sm={8}><Card size="small" style={cardStyle}><Statistic title="Общая сумма" value={totalSum} suffix="₸" valueStyle={{ fontSize: 20 }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
-                        <Col xs={24} sm={8}><Card size="small" style={cardStyle}><Statistic title="Оплачено" value={paidSum} suffix="₸" valueStyle={{ fontSize: 20, color: token.colorSuccess }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
-                        <Col xs={24} sm={8}><Card size="small" style={cardStyle}><Statistic title="Наш долг" value={debtSum} suffix="₸" valueStyle={{ fontSize: 20, color: debtSum > 0 ? token.colorError : token.colorSuccess }} formatter={(val) => Number(val).toLocaleString('ru-RU')} /></Card></Col>
-                    </Row>
-                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
+                    <div className="lc-card" style={{ padding: 16, marginBottom: 12 }}>
                         <Space wrap>
-                            <Input placeholder="Поиск..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 280 }} allowClear size="small" />
-                            <Select placeholder="Статус оплаты" value={paymentFilter} onChange={setPaymentFilter} allowClear style={{ width: 160 }} size="small" options={[{ value: 'paid', label: 'Оплачено' }, { value: 'unpaid', label: 'Не оплачено' }]} />
-                            <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
+                            <Input placeholder="Поиск..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear />
+                            <Select placeholder="Статус оплаты" value={paymentFilter} onChange={setPaymentFilter} style={{ width: 180 }} allowClear options={[{ value: 'paid', label: 'Оплачено' }, { value: 'unpaid', label: 'Не оплачено' }]} />
+                            <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} />
                         </Space>
-                    </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
-                        <Table columns={journalColumns} dataSource={filtered} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет данных' }}
-                            pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }}
-                            rowClassName={(r) => `${r.isCustomerPaid ? '' : 'unpaid-row'} clickable-row`}
-                            onRow={(record) => ({ onClick: () => openDetail(record) })}
-                        />
-                    </Card>
-                </>
-            ) : tab === 'order_expenses' ? (
-                <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Card size="small" style={{ flex: 1, marginRight: 12, ...cardStyle }}>
-                            <Space size="large">
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого расходов по заявкам</Text><div><Text strong style={{ fontSize: 20, color: token.colorError }}>{orderExpensesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{orderExpenses.length}</Text></div></div>
-                            </Space>
-                        </Card>
                     </div>
-                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
-                        <Space wrap>
-                            <Input placeholder="Поиск..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear size="small" />
-                            <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
-                        </Space>
-                    </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
-                        <Table columns={manualColumns} dataSource={orderExpenses} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }} />
-                    </Card>
+                    <div className="lc-card" style={{ padding: 0 }}>
+                        <Table columns={journalColumns} dataSource={filtered} rowKey="id" loading={loading} size="small"
+                            locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true }}
+                            onRow={(record) => ({ onClick: () => openDetail(record), style: { cursor: 'pointer' } })} />
+                    </div>
                 </>
             ) : (
                 <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Card size="small" style={{ flex: 1, marginRight: 12, ...cardStyle }}>
-                            <Space size="large">
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого прочих расходов</Text><div><Text strong style={{ fontSize: 20, color: token.colorError }}>{otherExpensesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{otherExpenses.length}</Text></div></div>
-                            </Space>
-                        </Card>
-                        {canEditFinance && (
-                            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingExpense(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }}>Добавить расход</Button>
-                        )}
-                    </div>
-                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
+                    <div className="lc-card" style={{ padding: 16, marginBottom: 12 }}>
                         <Space wrap>
-                            <Input placeholder="Поиск..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear size="small" />
-                            <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
+                            <Input placeholder="Поиск..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear />
+                            <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} />
                         </Space>
-                    </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
-                        <Table columns={manualColumns} dataSource={otherExpenses} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }} />
-                    </Card>
+                    </div>
+                    <div className="lc-card" style={{ padding: 0 }}>
+                        <Table columns={manualColumns} dataSource={tab === 'order_expenses' ? orderExpenses : otherExpenses} rowKey="id" loading={loading} size="small"
+                            locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+                    </div>
                 </>
             )}
 
-            {/* ==================== DETAIL DRAWER ==================== */}
-            <Drawer
-                title={<Space><FileTextOutlined /><span>Расход ДС {selectedEntry?.orderNumber} от {selectedEntry ? dayjs(selectedEntry.createdAt).format('DD.MM.YYYY HH:mm') : ''}</span></Space>}
-                width={520}
-                open={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-            >
+            <Drawer title={<Space><FileTextOutlined /><span>Расход ДС {selectedEntry?.orderNumber}</span></Space>}
+                open={drawerOpen} onClose={() => setDrawerOpen(false)} width={500}>
                 {selectedEntry && (
-                    <div>
-                        <Descriptions column={1} size="small" bordered labelStyle={{ width: 160, fontSize: 13 }} contentStyle={{ fontSize: 13 }}>
-                            <Descriptions.Item label="Номер">{selectedEntry.orderNumber}</Descriptions.Item>
-                            <Descriptions.Item label="Дата создания">{dayjs(selectedEntry.createdAt).format('DD.MM.YYYY HH:mm')}</Descriptions.Item>
-                            <Descriptions.Item label="Контрагент">
-                                <Text strong style={{ color: selectedEntry.isCustomerPaid ? undefined : token.colorError }}>
-                                    {getCarrierName(selectedEntry)}
-                                </Text>
-                            </Descriptions.Item>
-                            <Descriptions.Item label="Вид операции">Оплата за перевозку</Descriptions.Item>
-                            <Descriptions.Item label="Статус заявки">
-                                <Tag color={selectedEntry.status === 'COMPLETED' ? 'green' : selectedEntry.status === 'PROBLEM' ? 'red' : 'blue'}>
-                                    {STATUS_LABELS[selectedEntry.status] || selectedEntry.status}
-                                </Tag>
-                            </Descriptions.Item>
-                            <Descriptions.Item label="Статус оплаты">
-                                {selectedEntry.isCustomerPaid ? <Tag color="green">Оплачено</Tag> : <Tag color="red">Не оплачено</Tag>}
-                                {selectedEntry.customerPaidAt && <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>{dayjs(selectedEntry.customerPaidAt).format('DD.MM.YYYY')}</Text>}
-                            </Descriptions.Item>
-                        </Descriptions>
-
-                        <Divider style={{ margin: '16px 0' }}>Сделка</Divider>
-
-                        <Card size="small" style={{ background: token.colorBgLayout, borderRadius: 8, border: 'none' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>Заявка</Text>
-                                    <div>
-                                        <Button type="link" size="small" style={{ padding: 0, fontSize: 13 }} onClick={() => router.push(`/company/orders/${selectedEntry.id}`)}>
-                                            {selectedEntry.orderNumber} от {dayjs(selectedEntry.createdAt).format('DD.MM.YYYY HH:mm')}
-                                        </Button>
-                                    </div>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>{selectedEntry.cargoDescription}</Text>
-                                </div>
-                                <Text strong style={{ fontSize: 16 }}>{(selectedEntry.customerPrice || 0).toLocaleString('ru-RU')} ₸</Text>
-                            </div>
-                        </Card>
-                    </div>
+                    <Descriptions column={1} size="small" bordered>
+                        <Descriptions.Item label="Заявка">{selectedEntry.orderNumber}</Descriptions.Item>
+                        <Descriptions.Item label="Дата">{dayjs(selectedEntry.createdAt).format('DD.MM.YYYY HH:mm')}</Descriptions.Item>
+                        <Descriptions.Item label="Статус">{STATUS_LABELS[selectedEntry.status] || selectedEntry.status}</Descriptions.Item>
+                        <Descriptions.Item label="Груз">{selectedEntry.cargoDescription}</Descriptions.Item>
+                        <Descriptions.Item label="Перевозчик">{getCarrierName(selectedEntry)}</Descriptions.Item>
+                        <Divider />
+                        <Descriptions.Item label="Сумма"><strong>{selectedEntry.customerPrice.toLocaleString('ru-RU')} ₸</strong></Descriptions.Item>
+                        <Descriptions.Item label="Оплата">{selectedEntry.isCustomerPaid ? <Tag color="green">Оплачено {dayjs(selectedEntry.customerPaidAt).format('DD.MM.YYYY')}</Tag> : <Tag color="red">Не оплачено</Tag>}</Descriptions.Item>
+                    </Descriptions>
                 )}
             </Drawer>
 
-            {/* ==================== MANUAL ADD MODAL ==================== */}
             <Modal title={editingExpense ? 'Редактировать' : 'Новый расход'} open={modalOpen} onCancel={() => { setModalOpen(false); setEditingExpense(null); }} footer={null} destroyOnClose>
                 <Form form={form} layout="vertical" onFinish={handleSaveManual} initialValues={{ date: dayjs() }}>
                     <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
@@ -299,14 +224,6 @@ export default function CompanyExpensesPage() {
                     <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}><Space><Button onClick={() => { setModalOpen(false); setEditingExpense(null); }}>Отмена</Button><Button type="primary" htmlType="submit">{editingExpense ? 'Сохранить' : 'Добавить'}</Button></Space></Form.Item>
                 </Form>
             </Modal>
-
-            <style jsx global>{`
-                .unpaid-row { background: ${token.colorErrorBg} !important; }
-                .unpaid-row:hover > td { background: ${token.colorErrorBgActive || token.colorErrorBgHover || token.colorErrorBg} !important; }
-                .clickable-row { cursor: pointer; }
-                .clickable-row:hover > td { background: ${token.colorPrimaryBg} !important; }
-                .unpaid-row.clickable-row:hover > td { background: ${token.colorErrorBgActive || token.colorErrorBgHover || token.colorErrorBg} !important; }
-            `}</style>
         </div>
     );
 }

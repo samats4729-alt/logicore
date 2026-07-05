@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Typography, Space, Tag, DatePicker, Input, Select, message, Statistic, Row, Col, Segmented, Modal, Form, InputNumber, Popconfirm, theme } from 'antd';
-import { SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, message, Segmented, Modal, Form, InputNumber, Popconfirm, theme } from 'antd';
+import { SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 interface ManualIncome { id: string; date: string; category: string; description: string; amount: number; note?: string; order?: { orderNumber: string }; }
@@ -20,11 +20,6 @@ export default function CompanyIncomesPage() {
     const { token } = theme.useToken();
     const { user } = useAuthStore();
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
-    const cardStyle = {
-        borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        border: `1px solid ${token.colorBorderSecondary}`,
-    };
     const [tab, setTab] = useState<string>('order_incomes');
     const [manualIncomes, setManualIncomes] = useState<ManualIncome[]>([]);
     const [loading, setLoading] = useState(false);
@@ -58,26 +53,70 @@ export default function CompanyIncomesPage() {
     const otherIncomesTotal = otherIncomes.reduce((s, inc) => s + inc.amount, 0);
 
     const manualColumns = [
-        { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, sorter: (a: ManualIncome, b: ManualIncome) => dayjs(a.date).unix() - dayjs(b.date).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <Text style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</Text> },
+        { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, sorter: (a: ManualIncome, b: ManualIncome) => dayjs(a.date).unix() - dayjs(b.date).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <span style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</span> },
         { title: 'Категория', dataIndex: 'category', key: 'category', width: 170, render: (val: string) => <Tag color={categoryColors[val] || 'default'} style={{ fontSize: 12 }}>{INCOME_CATEGORIES.find(c => c.value === val)?.label || val}</Tag> },
         { title: 'Описание', dataIndex: 'description', key: 'description', ellipsis: true, render: (val: string, r: ManualIncome) => (
             <Space direction="vertical" size={0}>
-                <Text style={{ fontSize: 13 }}>{val}</Text>
+                <span style={{ fontSize: 13 }}>{val}</span>
                 {r.order && <Tag color="blue" style={{ marginTop: 4 }}>Заявка {r.order.orderNumber}</Tag>}
             </Space>
         ) },
-        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <Text strong style={{ fontSize: 13, color: token.colorSuccess }}>+{val.toLocaleString('ru-RU')} ₸</Text> },
-        { title: 'Примечание', dataIndex: 'note', key: 'note', width: 180, ellipsis: true, render: (val: string) => <Text style={{ fontSize: 13 }}>{val || '—'}</Text> },
+        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 130, align: 'right' as const, render: (val: number) => <strong style={{ fontSize: 13, color: '#28a745' }}>+{val.toLocaleString('ru-RU')} ₸</strong> },
+        { title: 'Примечание', dataIndex: 'note', key: 'note', width: 180, ellipsis: true, render: (val: string) => <span style={{ fontSize: 13 }}>{val || '—'}</span> },
         { title: '', key: 'actions', width: 80, render: (_: any, r: ManualIncome) => canEditFinance ? <Space><Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditingIncome(r); form.setFieldsValue({ ...r, date: dayjs(r.date) }); setModalOpen(true); }} /><Popconfirm title="Удалить?" onConfirm={() => handleDeleteManual(r.id)} okText="Да" cancelText="Нет"><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> : null },
     ];
 
+    const currentTotal = tab === 'order_incomes' ? orderIncomesTotal : otherIncomesTotal;
+    const currentCount = tab === 'order_incomes' ? orderIncomes.length : otherIncomes.length;
+
     return (
-        <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px' }} />
-                <Title level={4} style={{ margin: 0 }}>Поступление денежных средств</Title>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: 0, marginRight: 8, height: 'auto' }} />
+                        Финансы · Поступления
+                    </div>
+                    <h1 className="lc2-title">Поступления</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Учёт входящих платежей по заявкам и прочих доходов
+                    </p>
+                    {tab === 'other_incomes' && canEditFinance && (
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIncome(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }} className="lc-cta">
+                            Добавить поступление
+                        </Button>
+                    )}
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                            <WalletOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Сумма</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#28a745' }}>
+                                {currentTotal.toLocaleString('ru-RU')} ₸
+                            </div>
+                            <div className="lc2-msub">за период</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <EditOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Записей</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {currentCount}
+                            </div>
+                            <div className="lc2-msub">в таблице</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
+            {/* ===== CONTENT ===== */}
             <Segmented 
                 value={tab} 
                 onChange={(v) => { setTab(v as string); setSearchQuery(''); setDateRange(null); }} 
@@ -88,50 +127,17 @@ export default function CompanyIncomesPage() {
                 style={{ marginBottom: 16 }} 
             />
 
-            {tab === 'order_incomes' ? (
-                <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Card size="small" style={{ flex: 1, marginRight: 12, ...cardStyle }}>
-                            <Space size="large">
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого поступлений по заявкам</Text><div><Text strong style={{ fontSize: 20, color: token.colorSuccess }}>{orderIncomesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{orderIncomes.length}</Text></div></div>
-                            </Space>
-                        </Card>
-                    </div>
-                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
-                        <Space wrap>
-                            <Input placeholder="Поиск по описанию..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear size="small" />
-                            <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
-                        </Space>
-                    </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
-                        <Table columns={manualColumns} dataSource={orderIncomes} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }} />
-                    </Card>
-                </>
-            ) : (
-                <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Card size="small" style={{ flex: 1, marginRight: 12, ...cardStyle }}>
-                            <Space size="large">
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Итого прочих поступлений</Text><div><Text strong style={{ fontSize: 20, color: token.colorSuccess }}>{otherIncomesTotal.toLocaleString('ru-RU')} ₸</Text></div></div>
-                                <div><Text type="secondary" style={{ fontSize: 12 }}>Записей</Text><div><Text strong style={{ fontSize: 20 }}>{otherIncomes.length}</Text></div></div>
-                            </Space>
-                        </Card>
-                        {canEditFinance && (
-                            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIncome(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }}>Добавить поступление</Button>
-                        )}
-                    </div>
-                    <Card size="small" style={{ marginBottom: 12, ...cardStyle }}>
-                        <Space wrap>
-                            <Input placeholder="Поиск по описанию..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear size="small" />
-                            <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} size="small" />
-                        </Space>
-                    </Card>
-                    <Card size="small" styles={{ body: { padding: 0 } }} style={cardStyle}>
-                        <Table columns={manualColumns} dataSource={otherIncomes} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true, size: 'small' }} />
-                    </Card>
-                </>
-            )}
+            <div className="lc-card" style={{ padding: 16, marginBottom: 12 }}>
+                <Space wrap>
+                    <Input placeholder="Поиск по описанию..." prefix={<SearchOutlined />} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 250 }} allowClear />
+                    <RangePicker value={dateRange} onChange={(dates) => setDateRange(dates)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} />
+                </Space>
+            </div>
+
+            <div className="lc-card" style={{ padding: 0 }}>
+                <Table columns={manualColumns} dataSource={tab === 'order_incomes' ? orderIncomes : otherIncomes} rowKey="id" loading={loading} size="small" locale={{ emptyText: 'Нет записей' }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+            </div>
+
             <Modal title={editingIncome ? 'Редактировать' : 'Новое поступление'} open={modalOpen} onCancel={() => { setModalOpen(false); setEditingIncome(null); }} footer={null} destroyOnClose>
                 <Form form={form} layout="vertical" onFinish={handleSaveManual} initialValues={{ date: dayjs() }}>
                     <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
