@@ -482,6 +482,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                         key={item.key}
                                         trigger={['hover', 'click']}
                                         overlayClassName="lc2-nav-drop"
+                                        transitionName=""
                                         menu={{
                                             items: item.children,
                                             onClick: ({ key }) => { if (key.startsWith('/')) router.push(key); },
@@ -574,7 +575,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     <div className="lc2-header-divider" />
 
                     {/* User Profile */}
-                    <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
+                    <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']} overlayClassName="lc2-nav-drop" transitionName="">
                         <div
                             className="lc2-profile user-profile-trigger"
                             style={{
