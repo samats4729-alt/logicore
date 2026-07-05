@@ -48,13 +48,8 @@ export default function CompanyWarehousePage() {
             setQueueItems(response.data);
         } catch (error: any) {
             console.error(error);
-            // Если 404 или 400 - считаем что просто нет данных
             if (error.response && (error.response.status === 404 || error.response.status === 400)) {
                 setQueueItems([]);
-            } else {
-                // Для других ошибок (500, сеть) оставляем сообщение, но можно сделать менее навязчивым
-                // message.error('Не удалось загрузить очередь'); 
-                // Пользователь просил убрать, так что пока уберем совсем для интервального опроса
             }
         } finally {
             setLoading(false);
@@ -84,11 +79,61 @@ export default function CompanyWarehousePage() {
         return <Tag color="default">Ожидает</Tag>;
     };
 
+    const waitingCount = queueItems.filter(i => !i.assignedAt).length;
+    const loadingCount = queueItems.filter(i => i.startedAt && !i.completedAt).length;
+
     return (
-        <div style={{ padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-                <Title level={2}>Очередь на погрузку</Title>
-                <Button icon={<ReloadOutlined />} onClick={fetchQueue}>Обновить</Button>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">Склад · Операции</div>
+                    <h1 className="lc2-title">Очередь на погрузку</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Управление очередью машин на складах
+                    </p>
+                    <Button icon={<ReloadOutlined />} onClick={fetchQueue}>
+                        Обновить
+                    </Button>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">В очереди</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {queueItems.length}
+                            </div>
+                            <div className="lc2-msub">машин</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#fff3e0', color: '#e67e22' }}>
+                            <ClockCircleOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Ожидают</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {waitingCount}
+                            </div>
+                            <div className="lc2-msub">назначения ворот</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: loadingCount > 0 ? '#e6ffed' : '#f1f2f5', color: loadingCount > 0 ? '#28a745' : '#5f6672' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">На погрузке</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {loadingCount}
+                            </div>
+                            <div className="lc2-msub">сейчас</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {loading && queueItems.length === 0 ? (
@@ -96,27 +141,25 @@ export default function CompanyWarehousePage() {
                     <Spin size="large" />
                 </div>
             ) : Object.keys(groupedItems).length === 0 ? (
-                <Card>
-                    <div style={{ textAlign: 'center', padding: 40 }}>
-                        <Text type="secondary">Очередь пуста</Text>
-                    </div>
-                </Card>
+                <div className="lc-card" style={{ padding: 20, textAlign: 'center' }}>
+                    <Text type="secondary">Очередь пуста</Text>
+                </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                     {Object.entries(groupedItems).map(([locationName, items]) => (
-                        <Card
-                            key={locationName}
-                            title={
+                        <div className="lc-card" key={locationName} style={{ padding: 0 }}>
+                            <div style={{ padding: '16px 20px', fontWeight: 600, fontSize: 15, borderBottom: '1px solid #f0f0f0' }}>
                                 <Space>
                                     <EnvironmentOutlined />
                                     {locationName}
                                 </Space>
-                            }
-                        >
+                            </div>
+                            <div style={{ padding: 16 }}>
                             <Table
                                 dataSource={items}
                                 rowKey="id"
                                 pagination={false}
+                                size="small"
                                 columns={[
                                     {
                                         title: 'Время прибытия',
@@ -169,7 +212,8 @@ export default function CompanyWarehousePage() {
                                     }
                                 ]}
                             />
-                        </Card>
+                            </div>
+                        </div>
                     ))}
                 </div>
             )}
