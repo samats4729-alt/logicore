@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Typography, Tabs, Card, Table, Form, InputNumber, Select, Button, Space, Row, Col, Modal, DatePicker, message, Popconfirm, Tag, Spin } from 'antd';
-import { SettingOutlined, TableOutlined, PlusOutlined, DeleteOutlined, UserOutlined, PercentageOutlined, DollarOutlined } from '@ant-design/icons';
+import { SettingOutlined, TableOutlined, PlusOutlined, DeleteOutlined, UserOutlined, PercentageOutlined, DollarOutlined, StarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 
@@ -333,13 +333,47 @@ export default function PayrollAdminPage() {
     ];
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1400, margin: '0 auto' }}>
-            <div style={{ marginBottom: 18 }}>
-                <div className="lc-eyebrow">Финансы компании</div>
-                <Title level={3} style={{ margin: 0 }}>Зарплаты и мотивация менеджеров</Title>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">Финансы компании</div>
+                    <h1 className="lc2-title">Зарплаты и мотивация</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Настройка схем начислений и KPI для менеджеров
+                    </p>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <UserOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Схемы</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {schemes.length}
+                            </div>
+                            <div className="lc2-msub">персональных</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
+                            <StarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">KPI</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {kpiRules.length}
+                            </div>
+                            <div className="lc2-msub">правил</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <Tabs activeKey={activeTab} onChange={setActiveTab} style={{ background: '#ffffff', borderRadius: 16 }}>
+            {/* ===== TABS CARD ===== */}
+            <div className="lc-card" style={{ padding: 20 }}>
+            <Tabs activeKey={activeTab} onChange={setActiveTab}>
                 {/* TAB 1: SCHEMES CONFIG */}
                 <Tabs.TabPane tab={<span><SettingOutlined />Настройки схем и KPI</span>} key="1">
                     <div style={{ padding: '0 8px' }}>
@@ -515,6 +549,7 @@ export default function PayrollAdminPage() {
                     </div>
                 </Tabs.TabPane>
             </Tabs>
+            </div>
 
             {/* Modal: Create/Edit Personal Scheme */}
             <Modal

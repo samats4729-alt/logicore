@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Card, Row, Col, DatePicker, Table, Space, Tag, Empty, Spin } from 'antd';
+import { Typography, Row, Col, DatePicker, Table, Space, Tag, Empty, Spin } from 'antd';
 import { DollarOutlined, FileTextOutlined, AccountBookOutlined, StarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import Link from 'next/link';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 interface Accrual {
@@ -88,9 +88,9 @@ export default function MySalaryPage() {
                 if (v === null || v === undefined) return '—';
                 const baseText = r.percentBase === 'MARGIN' ? ' (Маржа)' : ' (Сумма)';
                 return (
-                    <Text style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
-                        {v.toLocaleString('ru-RU')} ₸ <Text type="secondary" style={{ fontSize: 10 }}>{baseText}</Text>
-                    </Text>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
+                        {v.toLocaleString('ru-RU')} ₸ <span style={{ color: '#8a91a0', fontSize: 10 }}>{baseText}</span>
+                    </span>
                 );
             },
         },
@@ -112,70 +112,65 @@ export default function MySalaryPage() {
 
     return (
         <div className="lc-page" style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
                 <div>
                     <div className="lc-eyebrow">Мои финансы</div>
-                    <Title level={3} style={{ margin: 0 }}>Личный кабинет начислений</Title>
+                    <h1 className="lc2-title">Моя зарплата</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Личный кабинет начислений
+                    </p>
+                    <RangePicker
+                        picker="month"
+                        value={dates}
+                        onChange={(val) => {
+                            if (val && val[0] && val[1]) {
+                                setDates([val[0], val[1]]);
+                            }
+                        }}
+                        allowClear={false}
+                        placeholder={['Начало', 'Конец']}
+                    />
                 </div>
-                <RangePicker
-                    picker="month"
-                    value={dates}
-                    onChange={(val) => {
-                        if (val && val[0] && val[1]) {
-                            setDates([val[0], val[1]]);
-                        }
-                    }}
-                    allowClear={false}
-                    placeholder={['Начало', 'Конец']}
-                />
+                {!loading && (
+                    <div className="lc2-metrics">
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: '#fdf2f8', color: '#db2777' }}>
+                                <DollarOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Всего</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#db2777' }}>
+                                    {data.totals.total.toLocaleString('ru-RU')} ₸
+                                </div>
+                                <div className="lc2-msub">за период</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: '#f0fdf4', color: '#16a34a' }}>
+                                <AccountBookOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Оклад</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                    {data.totals.salary.toLocaleString('ru-RU')} ₸
+                                </div>
+                                <div className="lc2-msub">фиксированная часть</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {loading ? (
                 <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>
             ) : (
                 <Space direction="vertical" size={20} style={{ width: '100%' }}>
-                    {/* Summary cards */}
-                    <Row gutter={[16, 16]}>
-                        <Col xs={24} sm={12} lg={6}>
-                            <Card size="small" bordered={false} style={{ background: '#fdf2f8', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>Всего за период</Text>
-                                <div style={{ fontSize: 22, fontWeight: 800, color: '#db2777', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                                    {data.totals.total.toLocaleString('ru-RU')} ₸
-                                </div>
-                                <Text style={{ fontSize: 10, color: '#f472b6' }}>Все начисления суммарно</Text>
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} lg={6}>
-                            <Card size="small" bordered={false} style={{ background: '#f0fdf4', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>Оклад</Text>
-                                <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                                    {data.totals.salary.toLocaleString('ru-RU')} ₸
-                                </div>
-                                <Text style={{ fontSize: 10, color: '#4ade80' }}>Фиксированная часть</Text>
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} lg={6}>
-                            <Card size="small" bordered={false} style={{ background: '#eff6ff', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>Проценты с заявок</Text>
-                                <div style={{ fontSize: 22, fontWeight: 800, color: '#2563eb', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                                    {data.totals.percentTotal.toLocaleString('ru-RU')} ₸
-                                </div>
-                                <Text style={{ fontSize: 10, color: '#60a5fa' }}>От маржи или сумм заявок</Text>
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} lg={6}>
-                            <Card size="small" bordered={false} style={{ background: '#faf5ff', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>Бонусы KPI</Text>
-                                <div style={{ fontSize: 22, fontWeight: 800, color: '#7c3aed', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                                    {data.totals.kpiTotal.toLocaleString('ru-RU')} ₸
-                                </div>
-                                <Text style={{ fontSize: 10, color: '#a78bfa' }}>За выполнение показателей</Text>
-                            </Card>
-                        </Col>
-                    </Row>
-
                     {/* Percent details */}
-                    <Card title={<span style={{ fontWeight: 600 }}><FileTextOutlined style={{ marginRight: 8, color: '#2563eb' }} />Начисленные проценты по заявкам</span>} size="small">
+                    <div className="lc-card" style={{ padding: 20 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 16 }}>
+                            <FileTextOutlined style={{ marginRight: 8, color: '#2563eb' }} />Начисленные проценты по заявкам
+                        </div>
                         <Table
                             columns={columns}
                             dataSource={percentAccruals}
@@ -184,12 +179,15 @@ export default function MySalaryPage() {
                             pagination={{ pageSize: 10, showSizeChanger: false }}
                             locale={{ emptyText: <Empty description="Нет начислений за этот период" /> }}
                         />
-                    </Card>
+                    </div>
 
                     {/* Salary & KPI details side-by-side */}
                     <Row gutter={[16, 16]}>
                         <Col xs={24} lg={12}>
-                            <Card title={<span style={{ fontWeight: 600 }}><AccountBookOutlined style={{ marginRight: 8, color: '#16a34a' }} />Оклад по месяцам</span>} size="small" style={{ height: '100%' }}>
+                            <div className="lc-card" style={{ padding: 20 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 12 }}>
+                                    <AccountBookOutlined style={{ marginRight: 8, color: '#16a34a' }} />Оклад по месяцам
+                                </div>
                                 {salaryAccruals.length === 0 ? (
                                     <Empty description="Оклады не начислялись" style={{ padding: 20 }} />
                                 ) : (
@@ -202,10 +200,13 @@ export default function MySalaryPage() {
                                         ))}
                                     </div>
                                 )}
-                            </Card>
+                            </div>
                         </Col>
                         <Col xs={24} lg={12}>
-                            <Card title={<span style={{ fontWeight: 600 }}><StarOutlined style={{ marginRight: 8, color: '#7c3aed' }} />Бонусы KPI</span>} size="small" style={{ height: '100%' }}>
+                            <div className="lc-card" style={{ padding: 20 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 12 }}>
+                                    <StarOutlined style={{ marginRight: 8, color: '#7c3aed' }} />Бонусы KPI
+                                </div>
                                 {kpiAccruals.length === 0 ? (
                                     <Empty description="KPI бонусы не начислялись" style={{ padding: 20 }} />
                                 ) : (
@@ -224,7 +225,7 @@ export default function MySalaryPage() {
                                         })}
                                     </div>
                                 )}
-                            </Card>
+                            </div>
                         </Col>
                     </Row>
                 </Space>
