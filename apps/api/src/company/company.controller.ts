@@ -493,6 +493,15 @@ export class CompanyController {
         return this.companyService.switchCompany(req.user.sub, companyId);
     }
 
+    // ==================== События (тикер) ====================
+
+    @Get('orders/events')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Последние события по заявкам компании (для живого тикера)' })
+    async getOrderEvents(@Request() req: any, @Query('limit') limit?: string) {
+        return this.companyService.getOrderEvents(req.user.companyId, limit ? parseInt(limit, 10) : 20);
+    }
+
     @Delete('my-companies/:id')
     @ApiOperation({ summary: 'Удалить связь с организацией' })
     async deleteMyCompany(@Request() req: any, @Param('id') companyId: string) {

@@ -84,12 +84,12 @@ lc-page, lc-title/eyebrow, lc-status, lc-metric, lc-card, lc-filterbar, комп
 Для каждой: lc-page обёртка + хиро-заголовок с метриками (если есть) + карточки lc-card +
 таблицы уже стилизуются глобально. НЕ переписывать логику загрузки/форм.
 
-### Этап 5. Карта в featured-карточке + живой тикер — [ ] TODO
-- [ ] Мини-карта 2GIS в featured-карточке заявки (тёмная не обязательна; точки маршрута
+### Этап 5. Карта в featured-карточке + живой тикер — [x] ГОТОВО (кроме прогресса по GPS)
+- [x] Мини-карта 2GIS в featured-карточке заявки (тёмная не обязательна; точки маршрута
       из routePoints[].location.latitude/longitude, линия между ними). Референс-компонент:
       components/ui/DgisTrackingMap.tsx (загрузчик mapgl уже есть — вынести loadMapgl в
       общий util, чтобы не дублировать третий раз).
-- [ ] Тикер v2: реальные события — нужен лёгкий эндпоинт GET /company/orders/events
+- [x] Тикер v2: реальные события — нужен лёгкий эндпоинт GET /company/orders/events
       (последние N записей OrderStatusHistory по заявкам компании: orderNumber, status,
       changedAt). Обновление раз в 60с. Бэкенд: apps/api/src/company/* по образцу getCompanyOrders.
 - [ ] Прогресс «В движении · 52%» по-настоящему: сейчас % считается по позиции статуса
@@ -161,3 +161,9 @@ lc-page, lc-title/eyebrow, lc-status, lc-metric, lc-card, lc-filterbar, комп
   Каждая обернута в lc-page + lc2-hero с метриками, Card заменены на lc-card,
   Table с size="small". Предсуществующая ошибка TS2345 в settings/page.tsx:494
   (не от редизайна) остаётся. Этап 5 (карта + живой тикер) — следующий.
+- 2026-07-06 (DeepSeek): Этап 5 выполнен (кроме прогресса по GPS):
+  loadMapgl вынесен в lib/mapgl-loader.ts (убраны дубликаты из DgisTrackingMap и MapPicker),
+  мини-карта 2GIS (RouteMapThumbnail) встроена в FeaturedOrderCard (точки маршрута + полилиния),
+  бэкенд-эндпоинт GET /company/orders/events (controller + service),
+  хук useOrderEvents + компонент LiveEventTicker (опрос раз в 60с).
+  tsc чистый в apps/web и apps/api. Этап 6 (глобальный поиск) — следующий.

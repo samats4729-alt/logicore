@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { Button } from 'antd';
-import { RightOutlined, PhoneOutlined } from '@ant-design/icons';
+import { RightOutlined, PhoneOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import StatusPill, { STATUS_LABELS } from './StatusPill';
 import { shortenCompanyName } from '@/lib/company-helper';
+import { loadMapgl, DGIS_KEY } from '@/lib/mapgl-loader';
 
 // Грубый прогресс рейса по позиции статуса (точный % по GPS — этап 5 REDESIGN_PLAN.md)
 export const ORDER_STATUS_PROGRESS: Record<string, number> = {
@@ -37,6 +39,83 @@ function cityOf(order: any, type: 'pickup' | 'delivery'): string {
         if (m?.[1]) return m[1].trim();
     }
     return loc?.name || '';
+}
+
+// Мини-карта маршрута (точки погрузки → выгрузки)
+function RouteMapThumbnail({ order }: { order: any }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!DGIS_KEY || !containerRef.current) return;
+        const pts = (order?.routePoints || []) as any[];
+        const coords = pts
+            .filter((p: any) => p.location?.latitude && p.location?.longitude)
+            .map((p: any) => [p.location.longitude, p.location.latitude] as [number, number]);
+
+        if (coords.length < 1) return;
+
+        let cancelled = false;
+        loadMapgl().then((mapgl) => {
+            if (cancelled || !containerRef.current) return;
+            const map = new mapgl.Map(containerRef.current, {
+                center: coords[0],
+                zoom: 10,
+                key: DGIS_KEY,
+                lang: 'ru',
+                zoomControl: false,
+                attributionControl: false,
+            });
+
+            // Маркеры точек
+            coords.forEach((c, i) => {
+                const isFirst = i === 0;
+                const el = document.createElement('div');
+                el.style.cssText = `width:${isFirst ? 10 : 8}px;height:${isFirst ? 10 : 8}px;border-radius:50%;background:${isFirst ? '#1677ff' : '#dc3545'};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);`;
+                new mapgl.HtmlMarker(map, { coordinates: c, html: el, anchor: [isFirst ? 5 : 4, isFirst ? 5 : 4] });
+            });
+
+            // Линия маршрута
+            if (coords.length >= 2) {
+                new mapgl.Polyline(map, {
+                    coordinates: coords,
+                    width: 2,
+                    color: '#1677ff',
+                    dash: [4, 4],
+                });
+            }
+
+            // Подгоняем viewport под все точки
+            if (coords.length >= 2) {
+                const lngs = coords.map(c => c[0]);
+                const lats = coords.map(c => c[1]);
+                const pad = 0.3;
+                map.setBounds([
+                    [Math.min(...lngs) - pad, Math.min(...lats) - pad],
+                    [Math.max(...lngs) + pad, Math.max(...lats) + pad],
+                ]);
+            }
+        }).catch(() => {});
+
+        return () => { cancelled = true; };
+    }, [order?.id]);
+
+    if (!DGIS_KEY) {
+        return (
+            <div style={{
+                flex: 1, minHeight: 140, background: 'rgba(255,255,255,0.04)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 12, marginBottom: 12,
+            }}>
+                <EnvironmentOutlined style={{ fontSize: 22, color: 'rgba(255,255,255,0.25)' }} />
+            </div>
+        );
+    }
+
+    return (
+        <div ref={containerRef} style={{
+            flex: 1, minHeight: 140, borderRadius: 12, overflow: 'hidden', marginBottom: 12,
+        }} />
+    );
 }
 
 export default function FeaturedOrderCard({ order, onOpen }: { order: any; onOpen?: (id: string) => void }) {
@@ -79,6 +158,10 @@ export default function FeaturedOrderCard({ order, onOpen }: { order: any; onOpe
                 </div>
             </div>
             <div className="lc2-f-right">
+                {/* Мини-карта маршрута */}
+                <RouteMapThumbnail order={order} />
+
+                {/* Водитель */}
                 <div className="lc2-f-driver">
                     <span className="lc2-avatar">{nameInitials(driverName)}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>

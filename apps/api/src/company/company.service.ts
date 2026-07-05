@@ -1300,5 +1300,34 @@ export class CompanyService {
             user: nextUser
         };
     }
-}
 
+    /** Получить последние события (смены статусов) по заявкам компании — для живого тикера */
+    async getOrderEvents(companyId: string, limit = 20) {
+        const events = await this.prisma.orderStatusHistory.findMany({
+            where: {
+                order: {
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { responsibleManager: { companyId } },
+                    ],
+                },
+            },
+            orderBy: { changedAt: 'desc' },
+            take: limit,
+            select: {
+                id: true,
+                status: true,
+                changedAt: true,
+                order: {
+                    select: { id: true, orderNumber: true },
+                },
+            },
+        });
+        return events.map((e) => ({
+            orderId: e.order.id, orderNumber: e.order.orderNumber,
+            status: e.status, changedAt: e.changedAt.toISOString(),
+        }));
+    }
+}
