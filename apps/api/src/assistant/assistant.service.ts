@@ -23,7 +23,7 @@ const ROUTES = `
 - /company/accounting/invoices — Счета
 - /company/partners — Контрагенты
 - /company/contracts — Договоры
-- /company/vehicles — Транспорт
+- /company/vehicles — Автопарк
 - /company/users — Сотрудники
 - /company/locations — Адреса
 - /company/calculator — Калькулятор
@@ -32,16 +32,16 @@ const ROUTES = `
 
 const SELECTORS = `
 Меню (верхний уровень, видно всегда):
-- Меню «Заявки»: [data-menu-id$='-orders_group']
-- Меню «Логистика»: [data-menu-id$='-logistics_group']
-- Меню «Финансы»: [data-menu-id$='-finance_group']
-- Меню «Компания»: [data-menu-id$='-company_group']
 - Дашборд: [data-menu-id$='-/company']
-- Калькулятор: [data-menu-id$='-/company/calculator']
-- Настройки: [data-menu-id$='-/company/settings']
+- Заявки (сразу открывает список заявок, группы нет): [data-menu-id$='-/company/orders']
+- Меню «Мониторинг»: [data-menu-id$='-monitoring_group']
+- Меню «Финансы»: [data-menu-id$='-finance_group']
+- Меню «Транспорт»: [data-menu-id$='-transport_group']
+- Меню профиля (аватар справа вверху): [data-guide='profile']
 
 Подпункты (видны ТОЛЬКО после открытия их родительского меню):
-- Все заявки (в «Заявки»): [data-menu-id$='-/company/orders']
+- GPS / Мониторинг (в «Мониторинг»): [data-menu-id$='-/company/tracking']
+- Склад (в «Мониторинг»): [data-menu-id$='-/company/warehouse']
 - Бухгалтерия (в «Финансы»): [data-menu-id$='-/company/accounting']
 - Реестр заявок (в «Финансы»): [data-menu-id$='-/company/accounting/registry']
 - Поступления (в «Финансы»): [data-menu-id$='-/company/accounting/incomes']
@@ -50,11 +50,15 @@ const SELECTORS = `
 - P&L (в «Финансы»): [data-menu-id$='-/company/accounting/pnl']
 - Взаиморасчёты (в «Финансы»): [data-menu-id$='-/company/accounting/counterparty-report']
 - Счета (в «Финансы»): [data-menu-id$='-/company/accounting/invoices']
-- Контрагенты (в «Компания»): [data-menu-id$='-/company/partners']
-- Договоры (в «Компания»): [data-menu-id$='-/company/contracts']
-- Транспорт (в «Компания»): [data-menu-id$='-/company/vehicles']
-- Сотрудники (в «Компания»): [data-menu-id$='-/company/users']
-- Адреса (в «Компания»): [data-menu-id$='-/company/locations']
+- Зарплата (в «Финансы», только админ/экспедитор): [data-menu-id$='-/company/payroll']
+- Моя зарплата (в «Финансы», только логист): [data-menu-id$='-/company/my-salary']
+- Калькулятор (в «Финансы»): [data-menu-id$='-/company/calculator']
+- Автопарк (в «Транспорт»): [data-menu-id$='-/company/vehicles']
+- Контрагенты (в «Транспорт»): [data-menu-id$='-/company/partners']
+- Договоры (в «Транспорт»): [data-menu-id$='-/company/contracts']
+- Сотрудники (в «Транспорт»): [data-menu-id$='-/company/users']
+- Адреса (в «Транспорт»): [data-menu-id$='-/company/locations']
+- Настройки (в меню профиля): [data-menu-id$='-/company/settings']
 
 Кнопки на страницах:
 - «Создать заявку» (на странице /company/orders): [data-guide='orders-create']
@@ -77,15 +81,15 @@ ${SELECTORS}
 Формат пошагового маршрута (в самом конце ответа):
 \`\`\`steps
 [
-  {"selector":"[data-menu-id$='-orders_group']","say":"Откройте меню «Заявки»"},
-  {"selector":"[data-menu-id$='-/company/orders']","say":"Выберите «Все заявки»"},
+  {"selector":"[data-menu-id$='-/company/orders']","say":"Откройте «Заявки»"},
   {"selector":"[data-guide='orders-create']","say":"Нажмите «Создать заявку»"}
 ]
 \`\`\`
 Правила для steps:
 - Каждый шаг = один клик пользователя. say — короткая команда (что нажать).
 - Используй ТОЛЬКО селекторы из списка выше.
-- Чтобы попасть в подпункт меню, сначала добавь шаг с открытием родительского меню (Заявки/Финансы/Логистика/Компания), затем шаг с подпунктом.
+- Чтобы попасть в подпункт меню, сначала добавь шаг с открытием родительского меню (Мониторинг/Финансы/Транспорт, а для Настроек — меню профиля [data-guide='profile']), затем шаг с подпунктом.
+- Заявки открываются одним кликом по пилюле, без промежуточного меню.
 - Учитывай текущую страницу пользователя: если он уже там, где нужно, не добавляй лишние шаги навигации.
 - Если задача не требует навигации — steps можно не добавлять.`;
 

@@ -371,7 +371,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Профиль',
             },
             {
-                key: 'settings',
+                key: '/company/settings',
                 icon: <SettingOutlined />,
                 label: 'Настройки',
                 onClick: () => router.push('/company/settings'),
@@ -578,6 +578,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']} overlayClassName="lc2-nav-drop" transitionName="">
                         <div
                             className="lc2-profile user-profile-trigger"
+                            data-guide="profile"
                             style={{
                                 boxShadow: hasNewUpdates ? '0 0 0 2px rgba(255, 77, 79, 0.35), 0 0 12px rgba(255, 77, 79, 0.25)' : undefined,
                                 animation: hasNewUpdates ? 'profileGlow 2s infinite' : undefined,
