@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
 import { shortenCompanyName } from '@/lib/company-helper';
+import StatusPill from '@/components/ui/StatusPill';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -310,6 +311,15 @@ export default function FinancialRegistryPage() {
         }
     };
 
+    const getInitials = (name: string) => {
+        if (!name || name === '—') return '';
+        const parts = name.trim().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    };
+
     const columns = [
         {
             title: '№', dataIndex: 'orderNumber', key: 'num', width: 75, fixed: 'left' as const,
@@ -320,7 +330,7 @@ export default function FinancialRegistryPage() {
             render: (d: string) => <span style={{ fontSize: 11, color: '#64748b' }}>{dayjs(d).format('DD.MM.YY')}</span>,
         },
         {
-            title: 'Заказчик / Выручка', key: 'customer', width: 200,
+            title: 'Заказчик / Выручка', key: 'customer', width: 220,
             render: (_: any, r: RegistryOrder) => {
                 const total = r.customerPrice || 0;
                 const paid = r.paidIn || 0;
@@ -331,7 +341,12 @@ export default function FinancialRegistryPage() {
                     <div style={{ padding: '2px 0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                             <Tooltip title={name}>
-                                <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>{shortenCompanyName(name)}</span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>
+                                    <span className="lc2-avatar lc2-avatar-sm" style={{ marginRight: 6, background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                                        {getInitials(name) || 'ЗК'}
+                                    </span>
+                                    {shortenCompanyName(name)}
+                                </span>
                             </Tooltip>
                             <span style={{ fontSize: 12, fontWeight: 600 }}>{fmt(total)} ₸</span>
                         </div>
@@ -344,21 +359,25 @@ export default function FinancialRegistryPage() {
             },
         },
         {
-            title: 'Исполнитель / Затраты', key: 'executor', width: 200,
+            title: 'Исполнитель / Затраты', key: 'executor', width: 220,
             render: (_: any, r: RegistryOrder) => {
                 const total = getExecutorCost(r);
                 const paid = r.paidOut || 0;
                 const percent = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
 
                 const name = r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—');
+                const isSub = !!r.subForwarderId;
 
                 return (
                     <div style={{ padding: '2px 0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                             <Tooltip title={name}>
-                                <span style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>
-                                    <CarOutlined style={{ marginRight: 4, color: token.colorTextSecondary }} /> {shortenCompanyName(name)}
-                                    {r.subForwarderId && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px' }}>Суб</Tag>}
+                                <span style={{ display: 'inline-flex', alignItems: 'center', fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>
+                                    <span className="lc2-avatar lc2-avatar-sm" style={{ marginRight: 6, background: '#f1f2f5', color: '#5f6672', flexShrink: 0 }}>
+                                        {getInitials(name) || 'ПВ'}
+                                    </span>
+                                    {shortenCompanyName(name)}
+                                    {isSub && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px', flexShrink: 0 }}>Суб</Tag>}
                                 </span>
                             </Tooltip>
                             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{fmt(total)} ₸</span>
@@ -373,7 +392,7 @@ export default function FinancialRegistryPage() {
         },
         {
             title: 'Статус рейса', dataIndex: 'status', key: 'status', width: 110,
-            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag>,
+            render: (s: string) => <StatusPill status={s} />,
         },
         {
             title: 'Долг заказчика', key: 'customerDebt', width: 140, align: 'right' as const,
@@ -461,132 +480,121 @@ export default function FinancialRegistryPage() {
         },
     ];
 
+    const metricsData = [
+        { label: 'Выручка', value: totals.totalIncome, hint: 'всего', icon: <ArrowUpOutlined />, bg: '#e8f0fe', fg: '#1d4ed8' },
+        { label: 'Затраты', value: totals.totalExpense, hint: 'перевозчики', icon: <ArrowDownOutlined />, bg: '#f1f2f5', fg: '#5f6672' },
+        {
+            label: 'Маржа',
+            value: totals.totalMargin,
+            hint: `${totals.totalIncome ? Math.round((totals.totalMargin / totals.totalIncome) * 100) : 0}% маржинальность`,
+            icon: <DollarOutlined />,
+            bg: totals.totalMargin >= 0 ? '#e7f8ef' : '#fdf2f8',
+            fg: totals.totalMargin >= 0 ? '#15803d' : '#db2777'
+        },
+        { label: 'Дебиторка', value: totals.debtorSum, hint: 'долг клиентов', icon: <ArrowUpOutlined />, bg: '#fff4e5', fg: '#b45309' },
+        { label: 'Кредиторка', value: totals.creditorSum, hint: 'наш долг перед ТК', icon: <ArrowDownOutlined />, bg: '#fef2f2', fg: '#ef4444' },
+    ];
+
     return (
-        <div style={{ height: '100%', padding: '4px 0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
                 <div>
-                    <Title level={3} style={{ margin: 0, fontWeight: 700 }}>Финансовый реестр заявок</Title>
-                    <Text type="secondary">Маржа, учет оплат и сверка взаиморасчетов по рейсам</Text>
+                    <div className="lc-eyebrow">Бухгалтерия · Финансы</div>
+                    <h1 className="lc2-title">Реестр заявок</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Маржа, учет оплат и сверка взаиморасчетов по рейсам
+                    </p>
+                    <Button
+                        type="default"
+                        icon={<FileExcelOutlined />}
+                        onClick={handleExportExcel}
+                        loading={exporting}
+                        className="lc-cta"
+                        style={{
+                            borderColor: token.colorSuccess,
+                            color: token.colorSuccess,
+                            fontWeight: 600,
+                            boxShadow: `0 2px 4px ${token.colorSuccess}20`,
+                        }}
+                    >
+                        Экспорт в Excel
+                    </Button>
                 </div>
-                <Button
-                    type="default"
-                    icon={<FileExcelOutlined />}
-                    onClick={handleExportExcel}
-                    loading={exporting}
-                    style={{
-                        borderColor: token.colorSuccess,
-                        color: token.colorSuccess,
-                        fontWeight: 600,
-                        boxShadow: `0 2px 4px ${token.colorSuccess}20`,
+                <div className="lc2-metrics">
+                    {metricsData.map((m, i) => (
+                        <div key={i} className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: m.bg, color: m.fg }}>
+                                {m.icon}
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">{m.label}</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: m.fg }}>
+                                    {typeof m.value === 'number' ? `${fmt(m.value)} ₸` : m.value}
+                                </div>
+                                <div className="lc2-msub">{m.hint}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* ===== TABLE & FILTERS CARD ===== */}
+            <div className="lc-card" style={{ padding: '20px' }}>
+                {/* FILTERS */}
+                <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Input
+                        placeholder="Поиск по №, грузу, заказчику..."
+                        prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        style={{ width: 240 }}
+                        allowClear
+                        size="middle"
+                    />
+                    <RangePicker
+                        size="middle"
+                        format="DD.MM.YYYY"
+                        onChange={(dates) => setDateRange(dates as any)}
+                        placeholder={['От', 'До']}
+                    />
+                    <Select
+                        size="middle"
+                        value={paymentFilter}
+                        onChange={setPaymentFilter}
+                        style={{ width: 210 }}
+                        options={[
+                            { value: 'all', label: 'Все заявки' },
+                            { value: 'debtor', label: 'Долг заказчика' },
+                            { value: 'creditor', label: 'Наш долг перед ТК' },
+                            { value: 'all_paid', label: 'Все расчеты завершены' },
+                        ]}
+                    />
+                    <span style={{ fontSize: 12, color: token.colorTextSecondary, marginLeft: 'auto' }}>
+                        Показано: <strong>{filtered.length}</strong> заявок
+                    </span>
+                </div>
+
+                {/* TABLE */}
+                <Table
+                    columns={columns}
+                    dataSource={filtered}
+                    rowKey="id"
+                    loading={loading}
+                    size="small"
+                    scroll={{ x: 1000 }}
+                    pagination={{ pageSize: 25, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100'], showTotal: (t) => `Всего: ${t}` }}
+                    onRow={(record) => ({
+                        style: { cursor: 'pointer' },
+                        onDoubleClick: () => setSelectedOrder(record),
+                    })}
+                    rowClassName={(record) => {
+                        if (record.status === 'COMPLETED') return 'row-completed';
+                        if (record.status === 'PROBLEM') return 'row-problem';
+                        return '';
                     }}
-                >
-                    Экспорт в Excel
-                </Button>
+                />
             </div>
-
-            {/* SUMMARY CARDS */}
-            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-                <Col xs={12} sm={8} md={4}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
-                        <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Выручка</span>}
-                            value={totals.totalIncome}
-                            valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
-                            formatter={(val) => `${fmt(val as number)} ₸`}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={12} sm={8} md={4}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
-                        <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Затраты</span>}
-                            value={totals.totalExpense}
-                            valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
-                            formatter={(val) => `${fmt(val as number)} ₸`}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={12} sm={8} md={4}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
-                        <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Маржа</span>}
-                            value={totals.totalMargin}
-                            valueStyle={{ fontSize: 15, color: totals.totalMargin >= 0 ? token.colorSuccess : token.colorError, fontWeight: 700 }}
-                            formatter={(val) => `${totals.totalMargin >= 0 ? '+' : ''}${fmt(val as number)} ₸`}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={12} sm={8} md={6}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
-                        <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 500 }}>Дебиторка</span>}
-                            value={totals.debtorSum}
-                            valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
-                            formatter={(val) => `${fmt(val as number)} ₸`}
-                            prefix={<ArrowUpOutlined style={{ color: token.colorWarning, fontSize: 13 }} />}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={12} sm={8} md={6}>
-                    <Card size="small" bodyStyle={{ padding: 12 }} style={cardStyle}>
-                        <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 500 }}>Кредиторка</span>}
-                            value={totals.creditorSum}
-                            valueStyle={{ fontSize: 15, color: token.colorText, fontWeight: 700 }}
-                            formatter={(val) => `${fmt(val as number)} ₸`}
-                            prefix={<ArrowDownOutlined style={{ color: token.colorError, fontSize: 13 }} />}
-                        />
-                    </Card>
-                </Col>
-            </Row>
-
-            {/* FILTERS */}
-            <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-                <Input
-                    placeholder="Поиск по №, грузу, заказчику..."
-                    prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-                    value={search} onChange={e => setSearch(e.target.value)}
-                    style={{ width: 240 }} allowClear size="middle"
-                />
-                <RangePicker
-                    size="middle" format="DD.MM.YYYY"
-                    onChange={(dates) => setDateRange(dates as any)}
-                    placeholder={['От', 'До']}
-                />
-                <Select
-                    size="middle" value={paymentFilter} onChange={setPaymentFilter}
-                    style={{ width: 210 }}
-                    options={[
-                        { value: 'all', label: 'Все заявки' },
-                        { value: 'debtor', label: 'Долг заказчика' },
-                        { value: 'creditor', label: 'Наш долг перед ТК' },
-                        { value: 'all_paid', label: 'Все расчеты завершены' },
-                    ]}
-                />
-                <span style={{ fontSize: 12, color: token.colorTextSecondary, marginLeft: 'auto' }}>
-                    Показано: <strong>{filtered.length}</strong> заявок
-                </span>
-            </div>
-
-            {/* TABLE */}
-            <Table
-                columns={columns}
-                dataSource={filtered}
-                rowKey="id"
-                loading={loading}
-                size="small"
-                scroll={{ x: 1000 }}
-                pagination={{ pageSize: 25, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100'], showTotal: (t) => `Всего: ${t}` }}
-                onRow={(record) => ({
-                    style: { cursor: 'pointer' },
-                    onDoubleClick: () => setSelectedOrder(record),
-                })}
-                rowClassName={(record) => {
-                    if (record.status === 'COMPLETED') return 'row-completed';
-                    if (record.status === 'PROBLEM') return 'row-problem';
-                    return '';
-                }}
-            />
 
             {/* CSS FOR COMPACT PREMIUM GRID */}
             <style jsx global>{`
