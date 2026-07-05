@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import {
-    Table, Card, Button, Space, Modal, Form,
-    Input, Typography, App, Select, Tag, Tooltip
+    Table, Button, Space, Modal, Form,
+    Input, App, Select, Tag, Tooltip
 } from 'antd';
 import { 
     PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined,
@@ -12,7 +12,6 @@ import {
 import { api, Location } from '@/lib/api';
 import LocationForm from '@/components/ui/LocationForm';
 
-const { Title, Text } = Typography;
 const { Option } = Select;
 
 export default function CompanyLocationsPage() {
@@ -142,30 +141,33 @@ export default function CompanyLocationsPage() {
         });
     }, [locations, searchText, filterCompanyId]);
 
+    const getInitials = (name: string) => {
+        if (!name || name === '—') return '';
+        const parts = name.trim().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    };
+
     const columns = [
         {
-            title: 'Название',
+            title: 'Адрес',
             dataIndex: 'name',
             key: 'name',
-            width: 170,
-            render: (text: string) => (
-                <Space>
-                    <EnvironmentOutlined style={{ color: '#1677ff' }} />
-                    <strong style={{ whiteSpace: 'nowrap' }}>{text}</strong>
-                </Space>
-            ),
-        },
-        {
-            title: 'Адрес',
-            dataIndex: 'address',
-            key: 'address',
-            width: 250,
-            render: (text: string) => (
-                <Tooltip title={text} placement="topLeft">
-                    <span style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {text || '—'}
-                    </span>
-                </Tooltip>
+            width: 220,
+            render: (text: string, record: Location) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Space>
+                        <EnvironmentOutlined style={{ color: '#1677ff' }} />
+                        <strong style={{ whiteSpace: 'nowrap' }}>{text}</strong>
+                    </Space>
+                    {record.address && (
+                        <span style={{ fontSize: 12, color: '#8a91a0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
+                            {record.address}
+                        </span>
+                    )}
+                </div>
             ),
         },
         {
@@ -174,13 +176,22 @@ export default function CompanyLocationsPage() {
             key: 'company',
             width: 170,
             render: (company: any) => {
-                if (!company) return <Tag icon={<GlobalOutlined />} color="default" style={{ margin: 0 }}>Общий адрес</Tag>;
+                if (!company) return (
+                    <Space size={8}>
+                        <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#f1f2f5', color: '#5f6672', flexShrink: 0 }}>
+                            <GlobalOutlined />
+                        </span>
+                        <span style={{ color: '#8a91a0', fontSize: 13 }}>Общий</span>
+                    </Space>
+                );
+                const initials = getInitials(company.name);
                 return (
-                    <Tooltip title={company.name}>
-                        <Tag color="geekblue" style={{ fontWeight: 500, margin: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {company.name}
-                        </Tag>
-                    </Tooltip>
+                    <Space size={8}>
+                        <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                            {initials || 'КГ'}
+                        </span>
+                        <span style={{ fontWeight: 500, fontSize: 13 }}>{company.name}</span>
+                    </Space>
                 );
             }
         },
@@ -243,15 +254,15 @@ export default function CompanyLocationsPage() {
             key: 'coords',
             width: 120,
             render: (_: any, record: Location) => (
-                <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                <span style={{ color: '#8a91a0', fontSize: 12, whiteSpace: 'nowrap' }}>
                     {record.latitude?.toFixed(4)}, {record.longitude?.toFixed(4)}
-                </Text>
+                </span>
             ),
         },
         {
             title: 'Действия',
             key: 'actions',
-            width: 100,
+            width: 80,
             render: (_: any, record: Location) => (
                 <Space size="middle">
                     <Button
@@ -272,23 +283,74 @@ export default function CompanyLocationsPage() {
         },
     ];
 
+    const locationsWithContacts = locations.filter(l => l.contactName).length;
+    const locationsGlobal = locations.filter(l => !l.companyId).length;
+
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, alignItems: 'center' }}>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
                 <div>
-                    <Title level={2} style={{ margin: 0 }}>Адреса</Title>
-                    <Text type="secondary">Управление точками погрузки и выгрузки</Text>
+                    <div className="lc-eyebrow">Справочники · Адреса</div>
+                    <h1 className="lc2-title">Адреса</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Управление точками погрузки и выгрузки
+                    </p>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                            setEditingLocation(null);
+                            form.resetFields();
+                            setModalOpen(true);
+                        }}
+                        className="lc-cta"
+                    >
+                        Добавить новый адрес
+                    </Button>
                 </div>
-                <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => {
-                    setEditingLocation(null);
-                    form.resetFields();
-                    setModalOpen(true);
-                }}>
-                    Добавить новый адрес
-                </Button>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <EnvironmentOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Всего</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {locations.length}
+                            </div>
+                            <div className="lc2-msub">адресов</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                            <UserOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">С контактами</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {locationsWithContacts}
+                            </div>
+                            <div className="lc2-msub">из них с телефоном</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#f1f2f5', color: '#5f6672' }}>
+                            <GlobalOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Общие</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {locationsGlobal}
+                            </div>
+                            <div className="lc2-msub">без привязки</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <Card bordered={false} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+            {/* ===== CONTENT CARD ===== */}
+            <div className="lc-card" style={{ padding: 20 }}>
                 {/* Search & Filter Panel */}
                 <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
                     <Input
@@ -308,7 +370,7 @@ export default function CompanyLocationsPage() {
                         loading={companiesLoading}
                     >
                         <Option value="global">📍 Общие адреса (без контрагента)</Option>
-                        {companies.map(c => (
+                        {companies.map((c: { id: string; name: string }) => (
                             <Option key={c.id} value={c.id}>{c.name}</Option>
                         ))}
                     </Select>
@@ -332,8 +394,9 @@ export default function CompanyLocationsPage() {
                     loading={loading}
                     pagination={{ pageSize: 10 }}
                     scroll={{ x: 'max-content' }}
+                    size="small"
                 />
-            </Card>
+            </div>
 
             <Modal
                 title={editingLocation ? "Редактирование адреса" : "Добавление нового адреса"}
