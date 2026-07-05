@@ -25,6 +25,7 @@ import { resolveCompanyName, prepareCompanyOptions } from '@/lib/company-helper'
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
+import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -88,6 +89,8 @@ interface LocationState {
     city: string;
     address: string;
     id?: string;
+    latitude?: number;
+    longitude?: number;
 }
 
 const getNextStatuses = (s: string) => {
@@ -248,6 +251,9 @@ export default function OrderDetailPage() {
     const [quickPartnerModalOpen, setQuickPartnerModalOpen] = useState(false);
     const [quickPartnerForm] = Form.useForm();
     const [quickPartnerLoading, setQuickPartnerLoading] = useState(false);
+    const [quickPartnerTarget, setQuickPartnerTarget] = useState<'CUSTOMER' | 'CARRIER' | null>(null);
+    const [quickLocationModalOpen, setQuickLocationModalOpen] = useState(false);
+    const [activeRoutePointIndex, setActiveRoutePointIndex] = useState<number | null>(null);
 
     // =================== DATA FETCHING ===================
 
@@ -325,6 +331,25 @@ export default function OrderDetailPage() {
             const response = await api.get('/locations');
             setLocations(response.data);
         } catch { }
+    };
+
+    const handleNewLocationSuccess = async (newLoc: Location) => {
+        setQuickLocationModalOpen(false);
+        await fetchLocations();
+
+        if (activeRoutePointIndex !== null) {
+            const newPts = [...routePointsState];
+            newPts[activeRoutePointIndex] = {
+                ...newPts[activeRoutePointIndex],
+                city: newLoc.city || '',
+                address: newLoc.address,
+                id: newLoc.id,
+                latitude: newLoc.latitude,
+                longitude: newLoc.longitude
+            };
+            setRoutePointsState(newPts);
+        }
+        setActiveRoutePointIndex(null);
     };
 
     const fetchCargoTypes = async () => {
@@ -645,7 +670,9 @@ export default function OrderDetailPage() {
                 id: p.location.id,
                 city: p.location.city || '',
                 address: p.location.address,
-                pointType: p.pointType
+                pointType: p.pointType,
+                latitude: p.location.latitude,
+                longitude: p.location.longitude
             })));
         } else {
             setRoutePointsState([
@@ -673,7 +700,13 @@ export default function OrderDetailPage() {
         try {
             const getLocId = async (loc: LocationState) => {
                 if (loc.id) return loc.id;
-                const res = await api.post('/locations', { name: `${loc.city}, ${loc.address}`, address: `${loc.city}, ${loc.address}`, latitude: 0, longitude: 0, city: loc.city || '' });
+                const res = await api.post('/locations', {
+                    name: `${loc.city}, ${loc.address}`,
+                    address: `${loc.city}, ${loc.address}`,
+                    latitude: loc.latitude ?? 0,
+                    longitude: loc.longitude ?? 0,
+                    city: loc.city || ''
+                });
                 return res.data.id;
             };
 
@@ -1308,14 +1341,25 @@ export default function OrderDetailPage() {
                                                             { value: MY_COMPANY_VALUE, label: `${myCompanyName || 'Моя компания'} (Моя компания)` },
                                                             ...prepareCompanyOptions(getCustomerOptions(), selectedCustomer)
                                                         ]}
+                                                        dropdownRender={(menu) => (
+                                                            <>
+                                                                <Button
+                                                                    type="text"
+                                                                    icon={<PlusOutlined />}
+                                                                    block
+                                                                    onClick={() => {
+                                                                        setQuickPartnerTarget('CUSTOMER');
+                                                                        setQuickPartnerModalOpen(true);
+                                                                    }}
+                                                                    style={{ textAlign: 'left', padding: '8px 12px', height: 'auto', color: '#1677ff', fontWeight: 500 }}
+                                                                >
+                                                                    + Добавить контрагента
+                                                                </Button>
+                                                                <Divider style={{ margin: '4px 0' }} />
+                                                                {menu}
+                                                            </>
+                                                        )}
                                                     />
-                                                    <Button
-                                                        type="link" size="small"
-                                                        style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 4 }}
-                                                        onClick={() => setQuickPartnerModalOpen(true)}
-                                                    >
-                                                        + Добавить нового контрагента
-                                                    </Button>
                                                 </div>
 
                                                 <div style={{ marginBottom: 20 }}>
@@ -1333,14 +1377,25 @@ export default function OrderDetailPage() {
                                                             ...(selectedCarrier === MARKETPLACE_VALUE ? [{ value: MARKETPLACE_VALUE, label: '📢 Опубликовать на бирже' }] : []),
                                                             ...prepareCompanyOptions(getCustomerOptions(), selectedCarrier)
                                                         ]}
+                                                        dropdownRender={(menu) => (
+                                                            <>
+                                                                <Button
+                                                                    type="text"
+                                                                    icon={<PlusOutlined />}
+                                                                    block
+                                                                    onClick={() => {
+                                                                        setQuickPartnerTarget('CARRIER');
+                                                                        setQuickPartnerModalOpen(true);
+                                                                    }}
+                                                                    style={{ textAlign: 'left', padding: '8px 12px', height: 'auto', color: '#1677ff', fontWeight: 500 }}
+                                                                >
+                                                                    + Добавить контрагента
+                                                                </Button>
+                                                                <Divider style={{ margin: '4px 0' }} />
+                                                                {menu}
+                                                            </>
+                                                        )}
                                                     />
-                                                    <Button
-                                                        type="link" size="small"
-                                                        style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 4 }}
-                                                        onClick={() => setQuickPartnerModalOpen(true)}
-                                                    >
-                                                        + Добавить нового контрагента
-                                                    </Button>
                                                 </div>
 
                                                 <Divider style={{ margin: '8px 0 16px' }}>Ставки</Divider>

@@ -29,6 +29,8 @@ interface LocationState {
     city: string;
     address: string;
     id?: string;
+    latitude?: number;
+    longitude?: number;
 }
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
@@ -64,6 +66,7 @@ export default function CreateOrderPage() {
     // Parties
     const [selectedCustomer, setSelectedCustomer] = useState<string>(MY_COMPANY_VALUE);
     const [selectedCarrier, setSelectedCarrier] = useState<string>('');
+    const [quickPartnerTarget, setQuickPartnerTarget] = useState<'CUSTOMER' | 'CARRIER' | null>(null);
 
     const isOwnOrExternalCarrier = selectedCarrier === MY_COMPANY_VALUE || 
         (selectedCarrier && partners.find(p => p.id === selectedCarrier)?.isExternal === true);
@@ -180,7 +183,9 @@ export default function CreateOrderPage() {
                 ...newPts[activeRoutePointIndex],
                 city: newLoc.city || '',
                 address: newLoc.address,
-                id: newLoc.id
+                id: newLoc.id,
+                latitude: newLoc.latitude,
+                longitude: newLoc.longitude
             };
             setRoutePointsState(newPts);
 
@@ -295,9 +300,9 @@ export default function CreateOrderPage() {
     const handleCreateQuickPartner = async (values: any) => {
         setQuickPartnerLoading(true);
         try {
-            await api.post('/external-companies', {
+            const res = await api.post('/external-companies', {
                 ...values,
-                isCustomer: false,
+                isCustomer: true,
                 isCarrier: true,
                 type: 'FORWARDER'
             });
@@ -305,10 +310,16 @@ export default function CreateOrderPage() {
             setQuickPartnerModalOpen(false);
             quickPartnerForm.resetFields();
             await fetchPartners();
+            if (quickPartnerTarget === 'CUSTOMER') {
+                setSelectedCustomer(res.data.id);
+            } else if (quickPartnerTarget === 'CARRIER') {
+                setSelectedCarrier(res.data.id);
+            }
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка при создании контрагента');
         } finally {
             setQuickPartnerLoading(false);
+            setQuickPartnerTarget(null);
         }
     };
 
@@ -327,7 +338,26 @@ export default function CreateOrderPage() {
 
     // Validate current step before proceeding
     const validateStep = async () => {
-        if (currentStep === 0) {
+        if (currentStep === 0) { // Parties
+            if (!selectedCustomer) {
+                message.error('Укажите заказчика');
+                return false;
+            }
+            if (!selectedCarrier) {
+                message.error('Укажите перевозчика');
+                return false;
+            }
+            if (isOwnOrExternalCarrier && selectedDriverId === '__NEW_DRIVER__') {
+                try {
+                    await form.validateFields(['lastName', 'firstName', 'phone', 'vehiclePlate']);
+                    return true;
+                } catch {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (currentStep === 1) { // Route
             // Validate route
             const pickupDate = form.getFieldValue('pickupDate');
             if (!pickupDate) {
@@ -340,7 +370,7 @@ export default function CreateOrderPage() {
             if (!hasDelivery) { message.error('Укажите точку выгрузки'); return false; }
             return true;
         }
-        if (currentStep === 1) {
+        if (currentStep === 2) { // Cargo
             try {
                 await form.validateFields(['natureOfCargo']);
                 return true;
@@ -436,7 +466,8 @@ export default function CreateOrderPage() {
                 const res = await api.post('/locations', {
                     name: `${loc.city}, ${loc.address}`,
                     address: `${loc.city}, ${loc.address}`,
-                    latitude: 0, longitude: 0,
+                    latitude: loc.latitude ?? 0,
+                    longitude: loc.longitude ?? 0,
                     city: loc.city || ''
                 });
                 return res.data.id;
@@ -597,11 +628,18 @@ export default function CreateOrderPage() {
                         value={pt.id || undefined}
                         onChange={(val) => {
                             const newPts = [...routePointsState];
-                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined }; }
+                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined, latitude: undefined, longitude: undefined }; }
                             else {
                                 const loc = locations.find(l => l.id === val);
                                 if (loc) {
-                                    newPts[i] = { ...newPts[i], city: loc.city || '', address: loc.address, id: loc.id };
+                                    newPts[i] = { 
+                                        ...newPts[i], 
+                                        city: loc.city || '', 
+                                        address: loc.address, 
+                                        id: loc.id,
+                                        latitude: loc.latitude,
+                                        longitude: loc.longitude
+                                    };
                                     const firstPickup = newPts.find(p => p.pointType === 'PICKUP');
                                     const lastDelivery = [...newPts].reverse().find(p => p.pointType === 'DELIVERY');
                                     if (firstPickup?.city && lastDelivery?.city) {
@@ -731,6 +769,24 @@ export default function CreateOrderPage() {
                             onChange={setSelectedCustomer}
                             showSearch
                             optionFilterProp="children"
+                            dropdownRender={(menu) => (
+                                <>
+                                    <Button
+                                        type="text"
+                                        icon={<PlusOutlined />}
+                                        block
+                                        onClick={() => {
+                                            setQuickPartnerTarget('CUSTOMER');
+                                            setQuickPartnerModalOpen(true);
+                                        }}
+                                        style={{ textAlign: 'left', padding: '8px 12px', height: 'auto', color: '#1677ff', fontWeight: 500 }}
+                                    >
+                                        + Добавить контрагента
+                                    </Button>
+                                    <Divider style={{ margin: '4px 0' }} />
+                                    {menu}
+                                </>
+                            )}
                         >
                             <Select.Option value={MY_COMPANY_VALUE}>
                                 <span style={{ fontWeight: 600 }}>{myCompanyName || 'Моя компания'}</span>
@@ -739,13 +795,6 @@ export default function CreateOrderPage() {
                                 {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                             </Select.OptGroup>
                         </Select>
-                        <Button
-                            type="link" size="small"
-                            style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 4 }}
-                            onClick={() => setQuickPartnerModalOpen(true)}
-                        >
-                            + Добавить нового контрагента
-                        </Button>
                     </div>
                 </Col>
                 <Col xs={24} md={12}>
@@ -768,6 +817,24 @@ export default function CreateOrderPage() {
                             }}
                             showSearch
                             optionFilterProp="children"
+                            dropdownRender={(menu) => (
+                                <>
+                                    <Button
+                                        type="text"
+                                        icon={<PlusOutlined />}
+                                        block
+                                        onClick={() => {
+                                            setQuickPartnerTarget('CARRIER');
+                                            setQuickPartnerModalOpen(true);
+                                        }}
+                                        style={{ textAlign: 'left', padding: '8px 12px', height: 'auto', color: '#1677ff', fontWeight: 500 }}
+                                    >
+                                        + Добавить контрагента
+                                    </Button>
+                                    <Divider style={{ margin: '4px 0' }} />
+                                    {menu}
+                                </>
+                            )}
                         >
                             <Select.Option value={MY_COMPANY_VALUE}>
                                 <span style={{ fontWeight: 600 }}>{myCompanyName || 'Моя компания'}</span>
@@ -777,13 +844,6 @@ export default function CreateOrderPage() {
                                 {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                             </Select.OptGroup>
                         </Select>
-                        <Button
-                            type="link" size="small"
-                            style={{ padding: 0, height: 'auto', fontSize: 12, marginTop: 4 }}
-                            onClick={() => setQuickPartnerModalOpen(true)}
-                        >
-                            + Добавить нового контрагента
-                        </Button>
                     </div>
                 </Col>
             </Row>
@@ -1064,9 +1124,9 @@ export default function CreateOrderPage() {
     );
 
     const steps = [
+        { title: 'Стороны и ставки', content: stepParties, icon: <CheckCircleOutlined /> },
         { title: 'Маршрут', content: stepRoute, icon: <EnvironmentOutlined /> },
         { title: 'Груз', content: stepCargo, icon: <SendOutlined /> },
-        { title: 'Стороны и ставки', content: stepParties, icon: <CheckCircleOutlined /> },
     ];
 
     return (
@@ -1185,15 +1245,32 @@ export default function CreateOrderPage() {
                 </Form>
             </Modal>
 
-            <QuickCreateLocationModal
-                open={quickLocationModalOpen}
-                onCancel={() => {
-                    setQuickLocationModalOpen(false);
-                    setActiveRoutePointIndex(null);
-                }}
-                onSuccess={handleNewLocationSuccess}
-                defaultCompanyId={selectedCustomer !== MY_COMPANY_VALUE ? selectedCustomer : selectedMyCompanyId}
-            />
+            {(() => {
+                const currentCustomerCompany = selectedCustomer === MY_COMPANY_VALUE
+                    ? { id: selectedMyCompanyId, name: myCompanies.find(c => c.id === selectedMyCompanyId)?.name || myCompanyName || 'Моя компания' }
+                    : selectedCustomer
+                        ? { id: selectedCustomer, name: partners.find(p => p.id === selectedCustomer)?.name || 'Заказчик' }
+                        : undefined;
+
+                const currentCarrierCompany = selectedCarrier === MY_COMPANY_VALUE
+                    ? { id: selectedMyCompanyId, name: myCompanies.find(c => c.id === selectedMyCompanyId)?.name || myCompanyName || 'Моя компания' }
+                    : (selectedCarrier && selectedCarrier !== MARKETPLACE_VALUE)
+                        ? { id: selectedCarrier, name: partners.find(p => p.id === selectedCarrier)?.name || 'Исполнитель' }
+                        : undefined;
+
+                return (
+                    <QuickCreateLocationModal
+                        open={quickLocationModalOpen}
+                        onCancel={() => {
+                            setQuickLocationModalOpen(false);
+                            setActiveRoutePointIndex(null);
+                        }}
+                        onSuccess={handleNewLocationSuccess}
+                        customerCompany={currentCustomerCompany}
+                        carrierCompany={currentCarrierCompany}
+                    />
+                );
+            })()}
         </div>
     );
 }

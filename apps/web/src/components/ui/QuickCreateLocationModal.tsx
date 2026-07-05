@@ -10,13 +10,17 @@ interface QuickCreateLocationModalProps {
     onCancel: () => void;
     onSuccess: (location: Location) => void;
     defaultCompanyId?: string;
+    customerCompany?: { id: string; name: string };
+    carrierCompany?: { id: string; name: string };
 }
 
 export default function QuickCreateLocationModal({
     open,
     onCancel,
     onSuccess,
-    defaultCompanyId
+    defaultCompanyId,
+    customerCompany,
+    carrierCompany
 }: QuickCreateLocationModalProps) {
     const { message } = App.useApp();
     const [form] = Form.useForm();
@@ -64,6 +68,8 @@ export default function QuickCreateLocationModal({
                     onFinish={handleSubmit}
                     defaultCompanyId={defaultCompanyId}
                     showCompanySelect={true}
+                    customerCompany={customerCompany}
+                    carrierCompany={carrierCompany}
                 />
             </div>
         </Modal>

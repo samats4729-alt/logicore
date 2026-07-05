@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-    Form, Input, InputNumber, Row, Col, Select, Typography, App, Button, FormInstance
+    Form, Input, InputNumber, Row, Col, Select, Typography, App, Button, FormInstance, Radio
 } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import { api, Country, Region, City, Location } from '@/lib/api';
@@ -23,6 +23,8 @@ export interface LocationFormProps {
     editingLocation?: Location | null;
     defaultCompanyId?: string;
     showCompanySelect?: boolean;
+    customerCompany?: { id: string; name: string };
+    carrierCompany?: { id: string; name: string };
 }
 
 export default function LocationForm({
@@ -30,7 +32,9 @@ export default function LocationForm({
     onFinish,
     editingLocation,
     defaultCompanyId,
-    showCompanySelect = true
+    showCompanySelect = true,
+    customerCompany,
+    carrierCompany
 }: LocationFormProps) {
     const { message } = App.useApp();
 
@@ -90,6 +94,7 @@ export default function LocationForm({
             if (defaultCompanyId) {
                 form.setFieldsValue({ companyId: defaultCompanyId });
             }
+            form.setFieldsValue({ bindingType: 'none' });
         }
     }, [editingLocation, defaultCompanyId]);
 
@@ -287,9 +292,20 @@ export default function LocationForm({
 
     return (
         <Form form={form} layout="vertical" onFinish={(values) => {
+            let finalCompanyId = values.companyId;
+            if (customerCompany || carrierCompany) {
+                if (values.bindingType === 'customer') {
+                    finalCompanyId = customerCompany?.id;
+                } else if (values.bindingType === 'carrier') {
+                    finalCompanyId = carrierCompany?.id;
+                } else {
+                    finalCompanyId = undefined;
+                }
+            }
             // Include dynamic state values not managed natively by form fields if any
             void onFinish({
                 ...values,
+                companyId: finalCompanyId,
                 address: addressValue,
                 latitude: lat,
                 longitude: lng
@@ -395,7 +411,19 @@ export default function LocationForm({
                         </Col>
                     </Row>
 
-                    {showCompanySelect && (
+                    { (customerCompany?.id || carrierCompany?.id) ? (
+                        <Form.Item name="bindingType" label="Привязать адрес к участнику заявки" initialValue="none">
+                            <Radio.Group style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <Radio value="none">Без привязки (разовый общий адрес)</Radio>
+                                {customerCompany?.id && (
+                                    <Radio value="customer">Заказчик: {customerCompany.name}</Radio>
+                                )}
+                                {carrierCompany?.id && (
+                                    <Radio value="carrier">Исполнитель: {carrierCompany.name}</Radio>
+                                )}
+                            </Radio.Group>
+                        </Form.Item>
+                    ) : showCompanySelect && (
                         <Form.Item name="companyId" label="Привязать к контрагенту (компании)">
                             <Select placeholder="Без привязки (общий)" allowClear showSearch optionFilterProp="children" loading={companiesLoading}>
                                 {companies.map(c => (
