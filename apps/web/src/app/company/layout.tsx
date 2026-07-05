@@ -29,10 +29,22 @@ import {
     CalculatorOutlined,
     BarChartOutlined,
     NotificationOutlined,
+    BellOutlined,
+    SearchOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
 import { api } from '@/lib/api';
+import { shortenCompanyName } from '@/lib/company-helper';
+
+const ROLE_LABELS: Record<string, string> = {
+    COMPANY_ADMIN: 'Администратор',
+    LOGISTICIAN: 'Логист',
+    FORWARDER: 'Экспедитор',
+    ACCOUNTANT: 'Бухгалтер',
+    WAREHOUSE_MANAGER: 'Завскладом',
+    PARTNER: 'Партнёр',
+};
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -151,49 +163,38 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             },
         ];
 
-        // --- ЗАЯВКИ ---
-        const ordersChildren: any[] = [];
+        // --- ЗАЯВКИ (standalone по референсу) ---
         if (hasPerm('orders')) {
-            ordersChildren.push({
+            items.push({
                 key: '/company/orders',
                 icon: <FileTextOutlined />,
-                label: 'Все заявки',
-            });
-            // Биржа временно скрыта до запуска (не входит в релиз)
-        }
-        if (ordersChildren.length > 0) {
-            items.push({
-                key: 'orders_group',
-                popupClassName: 'lc-nav-pop',
-                icon: <FileTextOutlined />,
                 label: 'Заявки',
-                children: ordersChildren,
             });
         }
 
-        // --- ЛОГИСТИКА ---
-        const logisticsChildren: any[] = [];
+        // --- МОНИТОРИНГ (бывш. «Логистика») ---
+        const monitoringChildren: any[] = [];
         if (hasPerm('tracking')) {
-            logisticsChildren.push({
+            monitoringChildren.push({
                 key: '/company/tracking',
                 icon: <EnvironmentOutlined />,
                 label: 'GPS / Мониторинг',
             });
         }
         if (user.role === 'WAREHOUSE_MANAGER' || ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            logisticsChildren.push({
+            monitoringChildren.push({
                 key: '/company/warehouse',
                 icon: <HomeOutlined />,
                 label: 'Склад',
             });
         }
-        if (logisticsChildren.length > 0) {
+        if (monitoringChildren.length > 0) {
             items.push({
-                key: 'logistics_group',
+                key: 'monitoring_group',
                 popupClassName: 'lc-nav-pop',
                 icon: <CompassOutlined />,
-                label: 'Логистика',
-                children: logisticsChildren,
+                label: 'Мониторинг',
+                children: monitoringChildren,
             });
         }
 
@@ -261,83 +262,79 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Отчёты',
             });
         }
-        if (financeChildren.length > 0) {
-            items.push({
-                key: 'finance_group',
-                popupClassName: 'lc-nav-pop',
-                icon: <DollarOutlined />,
-                label: 'Финансы',
-                children: financeChildren,
-            });
-        }
-
-        // --- КОМПАНИЯ ---
-        const companyChildren: any[] = [];
-        if (hasPerm('partners')) {
-            companyChildren.push({
-                key: '/company/partners',
-                icon: <TeamOutlined />,
-                label: 'Контрагенты',
-            });
-            companyChildren.push({
-                key: '/company/contracts',
-                icon: <FileProtectOutlined />,
-                label: 'Договоры',
-            });
-        }
-        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            companyChildren.push({
-                key: '/company/vehicles',
-                icon: <CarOutlined />,
-                label: 'Транспорт',
-            });
-            companyChildren.push({
-                key: '/company/users',
-                icon: <UserSwitchOutlined />,
-                label: 'Сотрудники',
-            });
-        }
-        companyChildren.push({
-            key: '/company/locations',
-            icon: <PushpinOutlined />,
-            label: 'Адреса',
-        });
-        if (hasPerm('documents')) {
-            companyChildren.push({
-                key: '/company/documents',
-                icon: <InboxOutlined />,
-                label: 'Документы',
-            });
-        }
-        if (companyChildren.length > 0) {
-            items.push({
-                key: 'company_group',
-                popupClassName: 'lc-nav-pop',
-                icon: <TeamOutlined />,
-                label: 'Компания',
-                children: companyChildren,
-            });
-        }
-
+        // Калькулятор и Моя зарплата — в группу Финансы (доступны без бухгалтерского разрешения)
         if (user.role === 'LOGISTICIAN') {
-            items.push({
+            if (financeChildren.length > 0) financeChildren.push({ type: 'divider' });
+            financeChildren.push({
                 key: '/company/my-salary',
                 icon: <DollarOutlined />,
                 label: 'Моя зарплата',
             });
         }
-
-        items.push({
+        if (financeChildren.length > 0) financeChildren.push({ type: 'divider' });
+        financeChildren.push({
             key: '/company/calculator',
             icon: <CalculatorOutlined />,
             label: 'Калькулятор',
         });
 
         items.push({
-            key: '/company/settings',
-            icon: <SettingOutlined />,
-            label: 'Настройки',
+            key: 'finance_group',
+            popupClassName: 'lc-nav-pop',
+            icon: <DollarOutlined />,
+            label: 'Финансы',
+            children: financeChildren,
         });
+
+        // --- ТРАНСПОРТ (бывш. «Компания») ---
+        const transportChildren: any[] = [];
+        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            transportChildren.push({
+                key: '/company/vehicles',
+                icon: <CarOutlined />,
+                label: 'Автопарк',
+            });
+        }
+        if (hasPerm('partners')) {
+            transportChildren.push({
+                key: '/company/partners',
+                icon: <TeamOutlined />,
+                label: 'Контрагенты',
+            });
+            transportChildren.push({
+                key: '/company/contracts',
+                icon: <FileProtectOutlined />,
+                label: 'Договоры',
+            });
+        }
+        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            transportChildren.push({
+                key: '/company/users',
+                icon: <UserSwitchOutlined />,
+                label: 'Сотрудники',
+            });
+        }
+        transportChildren.push({
+            key: '/company/locations',
+            icon: <PushpinOutlined />,
+            label: 'Адреса',
+        });
+        if (hasPerm('documents')) {
+            transportChildren.push({
+                key: '/company/documents',
+                icon: <InboxOutlined />,
+                label: 'Документы',
+            });
+        }
+        if (transportChildren.length > 0) {
+            items.push({
+                key: 'transport_group',
+                popupClassName: 'lc-nav-pop',
+                icon: <CarOutlined />,
+                label: 'Транспорт',
+                children: transportChildren,
+            });
+        }
 
         return items;
     };
@@ -372,6 +369,12 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 key: 'profile',
                 icon: <UserOutlined />,
                 label: 'Профиль',
+            },
+            {
+                key: 'settings',
+                icon: <SettingOutlined />,
+                label: 'Настройки',
+                onClick: () => router.push('/company/settings'),
             },
             {
                 type: 'divider' as const,
@@ -425,21 +428,19 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Header
                 className="app-header-2026"
                 style={{
-                    background: 'rgba(255, 255, 255, 0.85)',
+                    background: 'rgba(246, 247, 249, 0.88)',
                     backdropFilter: 'saturate(1.8) blur(14px)',
                     WebkitBackdropFilter: 'saturate(1.8) blur(14px)',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    height: 56,
-                    borderBottom: '1px solid #e7e8ec',
+                    height: 64,
+                    borderBottom: '1px solid rgba(231, 232, 236, 0.6)',
                     position: 'sticky',
                     left: 0,
                     right: 0,
                     top: 0,
                     zIndex: 100,
-                    boxShadow: '0 1px 2px rgba(16, 24, 40, 0.04)',
-                    transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
             >
                 {/* Mobile: burger button */}
@@ -452,101 +453,138 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     />
                 )}
 
-                {/* Logo */}
+                {/* Logo: словомарка LogiCore */}
                 <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginRight: 14, flexShrink: 0 }}
+                    style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: 18, flexShrink: 0 }}
                     onClick={() => router.push('/company')}
                 >
-                    <div style={{
-                        width: 28, height: 28, background: 'linear-gradient(135deg, #1677ff 0%, #0b5ed7 100%)', borderRadius: 9,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 2px 6px rgba(22, 119, 255, 0.35)',
-                    }}>
-                        <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>L</span>
-                    </div>
-                    {!isMobile && (
-                        <Text strong className="logo-text" style={{ fontSize: 14, color: '#0b0d12', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
-                            {user.company?.name || 'LogiCore'}
-                        </Text>
-                    )}
+                    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: '#0b0d12', whiteSpace: 'nowrap' }}>
+                        Logi<span style={{ color: '#1677ff' }}>Core</span>
+                    </span>
                 </div>
 
-                {/* Desktop horizontal menu */}
+                {/* Desktop: пилюльная навигация */}
                 {!isMobile && (
-                    <Menu
-                        mode="horizontal"
-                        selectedKeys={[pathname]}
-                        items={getMenuItems()}
-                        onClick={({ key }) => {
-                            if (key.startsWith('/')) {
-                                router.push(key);
+                    <nav className="lc2-nav">
+                        {getMenuItems().map((item: any) => {
+                            const childKeys: string[] = (item.children || [])
+                                .filter((c: any) => c?.key && String(c.key).startsWith('/'))
+                                .map((c: any) => String(c.key));
+                            const active = item.key === '/company'
+                                ? pathname === '/company'
+                                : String(item.key).startsWith('/')
+                                    ? (pathname === item.key || pathname.startsWith(item.key + '/'))
+                                    : childKeys.some(k => pathname === k || pathname.startsWith(k + '/'));
+
+                            if (item.children) {
+                                return (
+                                    <Dropdown
+                                        key={item.key}
+                                        trigger={['hover', 'click']}
+                                        overlayClassName="lc2-nav-drop"
+                                        menu={{
+                                            items: item.children,
+                                            onClick: ({ key }) => { if (key.startsWith('/')) router.push(key); },
+                                        }}
+                                    >
+                                        <button
+                                            type="button"
+                                            className={`lc2-nav-item${active ? ' active' : ''}`}
+                                            data-menu-id={`lc2-${item.key}`}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    </Dropdown>
+                                );
                             }
-                        }}
-                        style={{
-                            flex: 1,
-                            border: 'none',
-                            background: 'transparent',
-                            lineHeight: '54px',
-                            minWidth: 0,
-                        }}
-                        className="premium-menu"
-                    />
+                            return (
+                                <button
+                                    key={item.key}
+                                    type="button"
+                                    className={`lc2-nav-item${active ? ' active' : ''}`}
+                                    data-menu-id={`lc2-${item.key}`}
+                                    onClick={() => router.push(item.key)}
+                                >
+                                    {item.label}
+                                </button>
+                            );
+                        })}
+                    </nav>
                 )}
 
-                {/* Spacer for mobile */}
-                {isMobile && <div style={{ flex: 1 }} />}
+                {/* Spacer */}
+                <div style={{ flex: 1 }} />
 
-                {/* User Profile */}
-                <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        cursor: 'pointer',
-                        padding: '4px 10px',
-                        borderRadius: '8px',
-                        transition: 'all 0.3s ease',
-                        flexShrink: 0,
-                        marginLeft: 8,
-                        position: 'relative',
-                        boxShadow: hasNewUpdates ? '0 0 0 2px rgba(255, 77, 79, 0.4), 0 0 12px rgba(255, 77, 79, 0.3)' : undefined,
-                        border: hasNewUpdates ? '1px solid rgba(255, 77, 79, 0.5)' : '1px solid transparent',
-                        animation: hasNewUpdates ? 'profileGlow 2s infinite' : undefined,
-                    }}
-                        className="user-profile-trigger"
+                {/* Right section */}
+                <div className="lc2-header-right">
+                    {/* Поиск (заглушка — Этап 6) */}
+                    <button
+                        type="button"
+                        className="lc2-iconbtn"
+                        aria-label="Поиск"
+                        title="Глобальный поиск"
                     >
-                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                            <Avatar
-                                icon={<UserOutlined />}
-                                size="small"
-                                style={{
-                                    background: '#eef2f7',
-                                    color: '#0b0d12',
-                                    border: '1px solid #e4e4e7',
-                                    flexShrink: 0,
-                                }}
-                            />
-                            {hasNewUpdates && (
-                                <span style={{
-                                    position: 'absolute',
-                                    top: -4,
-                                    right: -4,
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: '50%',
-                                    background: '#ff4d4f',
-                                    border: '1.5px solid rgba(9, 12, 20, 0.92)',
-                                    display: 'inline-block'
-                                }} />
+                        <SearchOutlined />
+                    </button>
+
+                    {/* Уведомления */}
+                    <button
+                        type="button"
+                        className="lc2-iconbtn"
+                        aria-label="Уведомления"
+                        onClick={() => window.dispatchEvent(new Event('logicore:open-updates'))}
+                    >
+                        <BellOutlined />
+                        {hasNewUpdates && <span className="lc2-dot" />}
+                    </button>
+
+                    {/* Тема (заглушка — Этап 8) */}
+                    <button
+                        type="button"
+                        className="lc2-iconbtn"
+                        aria-label="Переключить тему"
+                        title="Светлая / тёмная тема"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="5" />
+                            <line x1="12" y1="1" x2="12" y2="3" />
+                            <line x1="12" y1="21" x2="12" y2="23" />
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                            <line x1="1" y1="12" x2="3" y2="12" />
+                            <line x1="21" y1="12" x2="23" y2="12" />
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                        </svg>
+                    </button>
+
+                    <div className="lc2-header-divider" />
+
+                    {/* User Profile */}
+                    <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
+                        <div
+                            className="lc2-profile user-profile-trigger"
+                            style={{
+                                boxShadow: hasNewUpdates ? '0 0 0 2px rgba(255, 77, 79, 0.35), 0 0 12px rgba(255, 77, 79, 0.25)' : undefined,
+                                animation: hasNewUpdates ? 'profileGlow 2s infinite' : undefined,
+                            }}
+                        >
+                            <span className="lc2-profile-av">
+                                {((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase() || <UserOutlined />}
+                            </span>
+                            {!isMobile && (
+                                <div style={{ lineHeight: 1.25 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0b0d12', whiteSpace: 'nowrap' }}>
+                                        {user.firstName} {user.lastName}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#8a91a0', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {ROLE_LABELS[user.role] || user.role}{user.company?.name ? ` · ${shortenCompanyName(user.company.name)}` : ''}
+                                    </div>
+                                </div>
                             )}
                         </div>
-                        {!isMobile && (
-                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: '#0b0d12' }}>
-                                {user.firstName} {user.lastName}
-                            </Text>
-                        )}
-                    </div>
-                </Dropdown>
+                    </Dropdown>
+                </div>
             </Header>
 
             {/* Content */}

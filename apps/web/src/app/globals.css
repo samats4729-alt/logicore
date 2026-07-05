@@ -1544,7 +1544,177 @@ a.mapboxgl-ctrl-logo,
   }
 }
 
-/* ===== Шапка 2026: светлая, пилюльная навигация ===== */
+/* ===== LC2 Nav — pill-based header navigation ===== */
+.lc2-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.lc2-nav-item {
+  border: none;
+  background: transparent;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #5f6672;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+  line-height: 1.3;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+}
+
+.lc2-nav-item:hover {
+  background: #eff0f3;
+  color: #0b0d12;
+}
+
+.lc2-nav-item.active {
+  background: #0f1117;
+  color: #ffffff;
+}
+
+.lc2-nav-item.active:hover {
+  background: #1a1d27;
+}
+
+/* Nav dropdown overlay */
+.lc2-nav-drop .ant-dropdown-menu {
+  border-radius: 16px !important;
+  padding: 6px !important;
+  border: 1px solid rgba(231, 232, 236, 0.8) !important;
+  box-shadow: 0 20px 50px -12px rgba(16, 24, 40, 0.22),
+              0 4px 12px rgba(16, 24, 40, 0.06) !important;
+  background: #ffffff !important;
+  min-width: 210px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.lc2-nav-drop .ant-dropdown-menu-item {
+  border-radius: 10px !important;
+  padding: 9px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #3f4654 !important;
+  transition: all 0.15s ease !important;
+  margin: 1px 0 !important;
+}
+
+.lc2-nav-drop .ant-dropdown-menu-item:hover {
+  background: #f4f5f7 !important;
+  color: #0b0d12 !important;
+}
+
+.lc2-nav-drop .ant-dropdown-menu-item .anticon {
+  color: #98a1b2 !important;
+  font-size: 14px !important;
+  margin-right: 8px !important;
+}
+
+.lc2-nav-drop .ant-dropdown-menu-item:hover .anticon {
+  color: #1677ff !important;
+}
+
+.lc2-nav-drop .ant-dropdown-menu-item-divider {
+  background: #f1f2f4 !important;
+  margin: 4px 10px !important;
+}
+
+/* Icon buttons: search, bell, theme */
+.lc2-iconbtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #5f6672;
+  font-size: 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease;
+  position: relative;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.lc2-iconbtn:hover {
+  background: #f1f2f5;
+  color: #0b0d12;
+}
+
+/* Notification dot */
+.lc2-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background: #ff4d4f;
+  border-radius: 50%;
+  border: 2px solid rgba(246, 247, 249, 0.95);
+  animation: lc2DotPulse 2s ease-out infinite;
+}
+
+@keyframes lc2DotPulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.5); }
+  70% { box-shadow: 0 0 0 5px rgba(255, 77, 79, 0); }
+  100% { box-shadow: 0 0 0 5px rgba(255, 77, 79, 0); }
+}
+
+/* Right section of header */
+.lc2-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lc2-header-divider {
+  width: 1px;
+  height: 24px;
+  background: #e7e8ec;
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+/* Profile capsule */
+.lc2-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 5px 10px 5px 5px;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.lc2-profile:hover {
+  background: #f1f2f5;
+}
+
+.lc2-profile-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1677ff, #4096ff);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+/* ===== Шапка 2026: светлая, пилюльная навигация (legacy antd-menu стили) ===== */
 .app-header-2026 .ant-menu-horizontal > .ant-menu-item,
 .app-header-2026 .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
   color: #5f6672 !important;
