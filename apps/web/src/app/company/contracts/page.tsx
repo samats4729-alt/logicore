@@ -361,50 +361,101 @@ export default function CompanyContractsPage() {
             title: 'Откуда',
             dataIndex: 'originCity',
             key: 'originCity',
-            render: (city: CityRef) => <Text strong>{city?.name}{city?.region ? <Text type="secondary" style={{ fontSize: 12 }}> ({city.region.name})</Text> : ''}</Text>,
+            render: (city: CityRef) => <strong>{city?.name}{city?.region ? <span style={{ fontSize: 12, color: '#8a91a0' }}> ({city.region.name})</span> : ''}</strong>,
         },
         {
             title: 'Куда',
             dataIndex: 'destinationCity',
             key: 'destinationCity',
-            render: (city: CityRef) => <Text strong>{city?.name}{city?.region ? <Text type="secondary" style={{ fontSize: 12 }}> ({city.region.name})</Text> : ''}</Text>,
+            render: (city: CityRef) => <strong>{city?.name}{city?.region ? <span style={{ fontSize: 12, color: '#8a91a0' }}> ({city.region.name})</span> : ''}</strong>,
         },
         {
             title: 'Стоимость',
             dataIndex: 'price',
             key: 'price',
             render: (price: number) => (
-                <Text type="success" strong>
+                <span style={{ color: '#28a745', fontWeight: 600 }}>
                     {price.toLocaleString('ru-RU')} ₸
-                </Text>
+                </span>
             ),
         },
         {
             title: 'Тип кузова',
             dataIndex: 'vehicleType',
             key: 'vehicleType',
-            render: (type: string) => type || <Text type="secondary">Любой</Text>,
+            render: (type: string) => type || <span style={{ color: '#8a91a0' }}>Любой</span>,
         },
     ];
 
     const pendingCount = pendingAgreements.length;
+    const activeContracts = contracts.filter(c => c.status === 'ACTIVE' || c.status === 'APPROVED').length;
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <Title level={3} style={{ margin: 0 }}>Договоры и тарифы</Title>
-                <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => {
-                        contractForm.resetFields();
-                        setContractModalOpen(true);
-                    }}
-                >
-                    Новый договор
-                </Button>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">Документы · Договоры</div>
+                    <h1 className="lc2-title">Договоры и тарифы</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Управление договорами, доп. соглашениями и тарифными сетками
+                    </p>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                            contractForm.resetFields();
+                            setContractModalOpen(true);
+                        }}
+                        className="lc-cta"
+                    >
+                        Новый договор
+                    </Button>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <FileTextOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Договоры</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {contracts.length}
+                            </div>
+                            <div className="lc2-msub">всего</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                            <CheckCircleOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Активных</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {activeContracts}
+                            </div>
+                            <div className="lc2-msub">действующих</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: pendingCount > 0 ? '#fff3e0' : '#f1f2f5', color: pendingCount > 0 ? '#e67e22' : '#5f6672' }}>
+                            <ExclamationCircleOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">На согласовании</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {pendingCount}
+                            </div>
+                            <div className="lc2-msub" style={{ color: pendingCount > 0 ? '#e67e22' : '#8a91a0' }}>
+                                {pendingCount > 0 ? 'требуют внимания' : 'все согласованы'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
+            {/* ===== TABS CARD ===== */}
+            <div className="lc-card" style={{ padding: 20 }}>
             <Tabs
                 defaultActiveKey={pendingCount > 0 ? 'pending' : 'contracts'}
                 items={[
@@ -451,37 +502,22 @@ export default function CompanyContractsPage() {
                                                     </div>
                                                 )}
                                                 {agreement.notes && (
-                                                    <div style={{ marginBottom: 12 }}>
-                                                        <Text type="secondary">Примечание: {agreement.notes}</Text>
+                                                    <div style={{ marginBottom: 8 }}>
+                                                        <Text type="secondary">{agreement.notes}</Text>
                                                     </div>
                                                 )}
-
-                                                <Title level={5}>Предлагаемые тарифы</Title>
-                                                <Table
-                                                    columns={tariffColumns}
-                                                    dataSource={agreement.tariffs}
-                                                    rowKey="id"
-                                                    pagination={false}
-                                                    size="small"
-                                                />
-
-                                                <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
+                                                <Space>
                                                     <Button
-                                                        type="primary"
-                                                        icon={<CheckCircleOutlined />}
-                                                        onClick={() => handleApprove(agreement.id)}
+                                                        size="small" type="primary"
                                                         style={{ background: token.colorSuccess, borderColor: token.colorSuccess }}
+                                                        onClick={() => handleApprove(agreement.id)}
                                                     >
                                                         Утвердить
                                                     </Button>
-                                                    <Button
-                                                        danger
-                                                        icon={<CloseCircleOutlined />}
-                                                        onClick={() => openRejectModal(agreement.id)}
-                                                    >
+                                                    <Button size="small" danger onClick={() => openRejectModal(agreement.id)}>
                                                         Отклонить
                                                     </Button>
-                                                </div>
+                                                </Space>
                                             </Card>
                                         ))}
                                     </Space>
@@ -491,17 +527,17 @@ export default function CompanyContractsPage() {
                     },
                     {
                         key: 'contracts',
-                        label: 'Все договоры',
+                        label: 'Договоры',
                         children: (
                             <>
-                                {contracts.length === 0 && !loading ? (
+                                {contracts.length === 0 ? (
                                     <Empty description="Нет договоров" />
                                 ) : (
-                                    <Space direction="vertical" style={{ width: '100%' }} size={16}>
+                                    <Collapse>
                                         {contracts.map(contract => (
-                                            <Card
+                                            <Panel
                                                 key={contract.id}
-                                                title={
+                                                header={
                                                     <Space>
                                                         <FileTextOutlined />
                                                         <span>Договор №{contract.contractNumber}</span>
@@ -534,133 +570,139 @@ export default function CompanyContractsPage() {
                                                             icon={<PlusOutlined />}
                                                             onClick={() => openAgreementModal(contract.id)}
                                                         >
-                                                            Добавить ДС
+                                                            Доп. соглашение
                                                         </Button>
                                                     </Space>
                                                 }
                                             >
-                                                {contract.startDate && (
-                                                    <div style={{ marginBottom: 12 }}>
-                                                        <Text type="secondary">
-                                                            Период: {dayjs(contract.startDate).format('DD.MM.YYYY')}
-                                                            {contract.endDate && ` — ${dayjs(contract.endDate).format('DD.MM.YYYY')}`}
-                                                        </Text>
-                                                    </div>
-                                                )}
-
-                                                {contract.agreements.length > 0 && (
-                                                    <Collapse accordion>
-                                                        {contract.agreements.map(agreement => (
-                                                            <Panel
-                                                                key={agreement.id}
-                                                                header={
-                                                                    <Space>
-                                                                        <span>ДС №{agreement.agreementNumber}</span>
-                                                                        <Tag color={statusColors[agreement.status]}>
-                                                                            {statusLabels[agreement.status]}
-                                                                        </Tag>
-                                                                        {agreement.proposedBy === 'CUSTOMER' && (
-                                                                            <Tag color="blue">Ваше предложение</Tag>
-                                                                        )}
-                                                                        <Badge
-                                                                            count={agreement.tariffs?.length || 0}
-                                                                            style={{ backgroundColor: token.colorSuccess }}
-                                                                        />
-                                                                    </Space>
-                                                                }
-                                                                extra={
-                                                                    <Space onClick={e => e.stopPropagation()}>
-                                                                        {agreement.status === 'PENDING' && agreement.proposedBy === 'FORWARDER' && (
-                                                                            <>
-                                                                                <Button
-                                                                                    size="small" type="primary"
-                                                                                    style={{ background: token.colorSuccess, borderColor: token.colorSuccess }}
-                                                                                    onClick={() => handleApprove(agreement.id)}
-                                                                                >
-                                                                                    Утвердить
-                                                                                </Button>
-                                                                                <Button size="small" danger onClick={() => openRejectModal(agreement.id)}>
-                                                                                    Отклонить
-                                                                                </Button>
-                                                                            </>
-                                                                        )}
-                                                                        {agreement.status === 'DRAFT' && agreement.proposedBy === 'CUSTOMER' && (
-                                                                            <Tooltip title="Отправить на согласование экспедитору">
-                                                                                <Button
-                                                                                    size="small" type="primary"
-                                                                                    icon={<SendOutlined />}
-                                                                                    onClick={() => sendForApproval(agreement.id)}
-                                                                                >
-                                                                                    Отправить
-                                                                                </Button>
-                                                                            </Tooltip>
-                                                                        )}
-                                                                    </Space>
-                                                                }
-                                                            >
-                                                                {/* Кнопка добавления тарифа для своих ДС */}
-                                                                {agreement.proposedBy === 'CUSTOMER' && (agreement.status === 'DRAFT' || agreement.status === 'APPROVED') && (
-                                                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                                                                        <Button
-                                                                            size="small"
-                                                                            icon={<PlusOutlined />}
-                                                                            onClick={() => openTariffModal(agreement.id, agreement.status)}
-                                                                        >
-                                                                            Добавить тариф
-                                                                        </Button>
-                                                                    </div>
-                                                                )}
-
-                                                                {agreement.tariffs && agreement.tariffs.length > 0 ? (
-                                                                    <Table
-                                                                        columns={tariffColumns}
-                                                                        dataSource={agreement.tariffs}
-                                                                        rowKey="id"
-                                                                        pagination={false}
+                                                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                                                    {contract.agreements.map(agreement => (
+                                                        <Card
+                                                            key={agreement.id}
+                                                            size="small"
+                                                            title={
+                                                                <Space>
+                                                                    <span>ДС №{agreement.agreementNumber}</span>
+                                                                    <Tag color={statusColors[agreement.status]}>
+                                                                        {statusLabels[agreement.status]}
+                                                                    </Tag>
+                                                                    {agreement.proposedBy === 'CUSTOMER' && (
+                                                                        <Tag color="blue">Ваше предложение</Tag>
+                                                                    )}
+                                                                    <Badge
+                                                                        count={agreement.tariffs?.length || 0}
+                                                                        style={{ backgroundColor: token.colorSuccess }}
+                                                                    />
+                                                                </Space>
+                                                            }
+                                                            extra={
+                                                                <Space onClick={e => e.stopPropagation()}>
+                                                                    {agreement.status === 'PENDING' && agreement.proposedBy === 'FORWARDER' && (
+                                                                        <>
+                                                                            <Button
+                                                                                size="small" type="primary"
+                                                                                style={{ background: token.colorSuccess, borderColor: token.colorSuccess }}
+                                                                                onClick={() => handleApprove(agreement.id)}
+                                                                            >
+                                                                                Утвердить
+                                                                            </Button>
+                                                                            <Button size="small" danger onClick={() => openRejectModal(agreement.id)}>
+                                                                                Отклонить
+                                                                            </Button>
+                                                                        </>
+                                                                    )}
+                                                                    {agreement.status === 'DRAFT' && agreement.proposedBy === 'CUSTOMER' && (
+                                                                        <Tooltip title="Отправить на согласование экспедитору">
+                                                                            <Button
+                                                                                size="small" type="primary"
+                                                                                icon={<SendOutlined />}
+                                                                                onClick={() => sendForApproval(agreement.id)}
+                                                                            >
+                                                                                На согласование
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                    )}
+                                                                    <Button
                                                                         size="small"
-                                                                    />
-                                                                ) : (
-                                                                    <Empty
-                                                                        description="Нет тарифов"
-                                                                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                                                    />
-                                                                )}
-                                                            </Panel>
-                                                        ))}
-                                                    </Collapse>
-                                                )}
-                                            </Card>
+                                                                        icon={<PlusOutlined />}
+                                                                        onClick={() => openTariffModal(agreement.id, agreement.status)}
+                                                                    >
+                                                                        Тариф
+                                                                    </Button>
+                                                                </Space>
+                                                            }
+                                                        >
+                                                            <Table
+                                                                columns={tariffColumns}
+                                                                dataSource={agreement.tariffs}
+                                                                rowKey="id"
+                                                                pagination={false}
+                                                                size="small"
+                                                                locale={{ emptyText: 'Нет тарифов' }}
+                                                            />
+                                                        </Card>
+                                                    ))}
+                                                </Space>
+                                            </Panel>
                                         ))}
-                                    </Space>
+                                    </Collapse>
+                                )}
+                            </>
+                        ),
+                    },
+                    {
+                        key: 'agreements',
+                        label: 'Все ДС',
+                        children: (
+                            <>
+                                {contracts.length === 0 ? (
+                                    <Empty description="Нет доп. соглашений" />
+                                ) : (
+                                    <Collapse>
+                                        {contracts.flatMap(contract =>
+                                            contract.agreements.map(agreement => ({ ...agreement, contract }))
+                                        ).map(item => (
+                                            <Panel
+                                                key={item.id}
+                                                header={
+                                                    <Space>
+                                                        <span>ДС №{item.agreementNumber}</span>
+                                                        <Tag color={statusColors[item.status]}>
+                                                            {statusLabels[item.status]}
+                                                        </Tag>
+                                                        {item.proposedBy === 'CUSTOMER' && (
+                                                            <Tag color="blue">Ваше предложение</Tag>
+                                                        )}
+                                                    </Space>
+                                                }
+                                                extra={
+                                                    <Space>
+                                                        <Text type="secondary">
+                                                            Договор №{item.contract.contractNumber}
+                                                        </Text>
+                                                    </Space>
+                                                }
+                                            >
+                                                <Table
+                                                    columns={tariffColumns}
+                                                    dataSource={item.tariffs}
+                                                    rowKey="id"
+                                                    pagination={false}
+                                                    size="small"
+                                                    locale={{ emptyText: 'Нет тарифов' }}
+                                                />
+                                            </Panel>
+                                        ))}
+                                    </Collapse>
                                 )}
                             </>
                         ),
                     },
                 ]}
             />
+            </div>
 
-            {/* Модал отклонения */}
-            <Modal
-                title="Отклонить доп. соглашение"
-                open={rejectModalOpen}
-                onCancel={() => setRejectModalOpen(false)}
-                onOk={handleReject}
-                okText="Отклонить"
-                okButtonProps={{ danger: true }}
-                cancelText="Отмена"
-            >
-                <div style={{ marginBottom: 12 }}>
-                    <Text>Укажите причину отклонения (необязательно):</Text>
-                </div>
-                <Input.TextArea
-                    rows={3}
-                    value={rejectReason}
-                    onChange={e => setRejectReason(e.target.value)}
-                    placeholder="Причина отклонения..."
-                />
-            </Modal>
-
-            {/* Модал создания договора */}
+            {/* Modal: Создание договора */}
             <Modal
                 title="Новый договор"
                 open={contractModalOpen}
@@ -668,19 +710,18 @@ export default function CompanyContractsPage() {
                 onOk={() => contractForm.submit()}
                 okText="Создать"
                 cancelText="Отмена"
+                destroyOnClose
             >
                 <Form form={contractForm} layout="vertical" onFinish={handleCreateContract}>
                     <Form.Item
                         name="forwarderCompanyId"
-                        label="Компания-экспедитор"
-                        rules={[{ required: true, message: 'Выберите экспедитора' }]}
+                        label="Экспедитор (перевозчик)"
+                        rules={[{ required: true, message: 'Выберите перевозчика' }]}
                     >
                         <Select
-                            placeholder="Выберите компанию"
                             showSearch
-                            filterOption={(input, option) =>
-                                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                            }
+                            placeholder="Выберите перевозчика"
+                            filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
                             options={partners.map(p => ({ label: p.name, value: p.id }))}
                         />
                     </Form.Item>
@@ -689,34 +730,35 @@ export default function CompanyContractsPage() {
                         label="Номер договора"
                         rules={[{ required: true, message: 'Введите номер' }]}
                     >
-                        <Input placeholder="ДГ-001/2026" />
+                        <Input placeholder="Например: Д-2026/001" />
                     </Form.Item>
                     <Row gutter={16}>
                         <Col span={12}>
                             <Form.Item name="startDate" label="Дата начала">
-                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                                <DatePicker style={{ width: '100%' }} />
                             </Form.Item>
                         </Col>
                         <Col span={12}>
                             <Form.Item name="endDate" label="Дата окончания">
-                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                                <DatePicker style={{ width: '100%' }} />
                             </Form.Item>
                         </Col>
                     </Row>
                     <Form.Item name="notes" label="Примечания">
-                        <Input.TextArea rows={2} placeholder="Дополнительная информация..." />
+                        <Input.TextArea rows={3} placeholder="Особые условия..." />
                     </Form.Item>
                 </Form>
             </Modal>
 
-            {/* Модал создания ДС */}
+            {/* Modal: Создание Доп. Соглашения */}
             <Modal
-                title="Новое доп. соглашение"
+                title="Дополнительное соглашение"
                 open={agreementModalOpen}
                 onCancel={() => setAgreementModalOpen(false)}
                 onOk={() => agreementForm.submit()}
                 okText="Создать"
                 cancelText="Отмена"
+                destroyOnClose
             >
                 <Form form={agreementForm} layout="vertical" onFinish={handleCreateAgreement}>
                     <Form.Item
@@ -724,44 +766,34 @@ export default function CompanyContractsPage() {
                         label="Номер ДС"
                         rules={[{ required: true, message: 'Введите номер' }]}
                     >
-                        <Input placeholder="ДС-1" />
+                        <Input placeholder="Например: ДС-1" />
                     </Form.Item>
                     <Form.Item name="dates" label="Период действия">
-                        <DatePicker.RangePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DatePicker.RangePicker style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item name="notes" label="Примечания">
-                        <Input.TextArea rows={2} />
+                        <Input.TextArea rows={3} placeholder="Особые условия..." />
                     </Form.Item>
                 </Form>
             </Modal>
 
-            {/* Модал добавления тарифа */}
+            {/* Modal: Добавить тариф */}
             <Modal
-                title="Добавить тариф по направлению"
+                title="Добавить тариф"
                 open={tariffModalOpen}
                 onCancel={() => setTariffModalOpen(false)}
                 onOk={() => tariffForm.submit()}
                 okText="Добавить"
                 cancelText="Отмена"
-                width={600}
+                destroyOnClose
+                width={700}
             >
                 <Form form={tariffForm} layout="vertical" onFinish={handleAddTariff}>
-                    {selectedAgreementStatus === 'APPROVED' && (
-                        <div style={{
-                            background: token.colorWarningBg, border: `1px solid ${token.colorWarningBorder}`, borderRadius: 8,
-                            padding: '8px 12px', marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
-                        }}>
-                            <ExclamationCircleOutlined style={{ color: token.colorWarning }} />
-                            <span>Это ДС уже утверждено. После добавления тарифа оно будет отправлено на повторное согласование.</span>
-                        </div>
-                    )}
-
-                    {/* ОТКУДА */}
-                    <div style={{ background: token.colorPrimaryBg, padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
-                        <Text strong style={{ display: 'block', marginBottom: 8, color: token.colorPrimary }}>Откуда</Text>
-                        <Row gutter={12}>
+                    <div style={{ background: '#f9fafb', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 12, color: '#1f2937' }}>Откуда</div>
+                        <Row gutter={16}>
                             <Col span={8}>
-                                <Form.Item name="originCountryId" label="Страна" rules={[{ required: true, message: 'Выберите' }]} style={{ marginBottom: 8 }}>
+                                <Form.Item name="originCountryId" label="Страна" style={{ marginBottom: 8 }}>
                                     <Select placeholder="Страна" onChange={handleOriginCountryChange} options={countries.map((c: any) => ({ label: c.name, value: c.id }))} />
                                 </Form.Item>
                             </Col>
@@ -777,13 +809,11 @@ export default function CompanyContractsPage() {
                             </Col>
                         </Row>
                     </div>
-
-                    {/* КУДА */}
-                    <div style={{ background: token.colorSuccessBg, padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
-                        <Text strong style={{ display: 'block', marginBottom: 8, color: token.colorSuccess }}>Куда</Text>
-                        <Row gutter={12}>
+                    <div style={{ background: '#f9fafb', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 12, color: '#1f2937' }}>Куда</div>
+                        <Row gutter={16}>
                             <Col span={8}>
-                                <Form.Item name="destCountryId" label="Страна" rules={[{ required: true, message: 'Выберите' }]} style={{ marginBottom: 8 }}>
+                                <Form.Item name="destCountryId" label="Страна" style={{ marginBottom: 8 }}>
                                     <Select placeholder="Страна" onChange={handleDestCountryChange} options={countries.map((c: any) => ({ label: c.name, value: c.id }))} />
                                 </Form.Item>
                             </Col>
@@ -812,6 +842,28 @@ export default function CompanyContractsPage() {
                         <Input placeholder="Тент, Реф, Изотерм..." />
                     </Form.Item>
                 </Form>
+            </Modal>
+
+            {/* Modal: Отклонение */}
+            <Modal
+                title="Отклонить доп. соглашение"
+                open={rejectModalOpen}
+                onCancel={() => setRejectModalOpen(false)}
+                onOk={handleReject}
+                okText="Отклонить"
+                cancelText="Отмена"
+                okButtonProps={{ danger: true }}
+                destroyOnClose
+            >
+                <div style={{ marginBottom: 12 }}>
+                    <Text type="secondary">Укажите причину отклонения:</Text>
+                </div>
+                <Input.TextArea
+                    value={rejectReason}
+                    onChange={e => setRejectReason(e.target.value)}
+                    rows={4}
+                    placeholder="Причина отклонения..."
+                />
             </Modal>
         </div>
     );
