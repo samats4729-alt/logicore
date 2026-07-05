@@ -68,13 +68,15 @@ export default function PayrollAdminPage() {
         setLoading(true);
         try {
             const [usersRes, schemesRes, kpiRes] = await Promise.all([
-                api.get('/company/users'),
+                api.get('/company/users?limit=200'),
                 api.get('/payroll/schemes'),
                 api.get('/payroll/kpi-rules'),
             ]);
 
+            // /company/users возвращает пагинированный объект { data, total, ... }
+            const rawUsers = Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data?.data || []);
             // Filter out drivers and recipients
-            const filteredUsers = (usersRes.data || []).filter((u: User) => !['DRIVER', 'RECIPIENT'].includes(u.role));
+            const filteredUsers = rawUsers.filter((u: User) => !['DRIVER', 'RECIPIENT'].includes(u.role));
             setUsers(filteredUsers);
 
             const allSchemes = schemesRes.data || [];
