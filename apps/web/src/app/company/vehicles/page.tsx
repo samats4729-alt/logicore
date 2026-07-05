@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Input, Modal, Form, Select, message, Typography, Space, Popconfirm, Segmented, Tag, Checkbox, Row, Col, Divider } from 'antd';
+import { Table, Button, Input, Modal, Form, Select, message, Space, Popconfirm, Segmented, Tag, Checkbox, Row, Col, Divider } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, CarOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
-
-const { Title, Text } = Typography;
 
 interface Vehicle {
     id: string;
@@ -222,6 +220,15 @@ export default function VehiclesPage() {
         }
     };
 
+    const getInitials = (name: string) => {
+        if (!name || name === '—') return '';
+        const parts = name.trim().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    };
+
     // Combine and filter
     const allVehicles = [...ownVehicles, ...carrierVehicles];
     const filteredBySource = filter === 'own'
@@ -243,19 +250,19 @@ export default function VehiclesPage() {
             title: 'Модель ТС',
             dataIndex: 'model',
             key: 'model',
-            render: (text: string) => <Text strong>{text}</Text>,
+            render: (text: string) => <strong>{text}</strong>,
         },
         {
             title: 'Госномер авто',
             dataIndex: 'plate',
             key: 'plate',
-            render: (text: string) => <Text type="danger" style={{ fontFamily: 'monospace', fontWeight: 600 }}>{text}</Text>,
+            render: (text: string) => <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#dc3545' }}>{text}</span>,
         },
         {
             title: 'Номер прицепа',
             dataIndex: 'trailerNumber',
             key: 'trailerNumber',
-            render: (text: string) => text ? <Text style={{ fontFamily: 'monospace' }}>{text}</Text> : <Text type="secondary">—</Text>,
+            render: (text: string) => text ? <span style={{ fontFamily: 'monospace' }}>{text}</span> : <span style={{ color: '#8a91a0' }}>—</span>,
         },
         {
             title: 'Тип транспорта',
@@ -268,28 +275,34 @@ export default function VehiclesPage() {
             render: (_: any, record: Vehicle) => {
                 if (record.driverName) {
                     return (
-                        <Space direction="vertical" size={0}>
-                            <Text strong>{record.driverName}</Text>
-                            {record.driverPhone && <Text type="secondary" style={{ fontSize: 12 }}>{record.driverPhone}</Text>}
+                        <Space size={8}>
+                            <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                                {getInitials(record.driverName) || 'ВД'}
+                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                <span style={{ fontWeight: 500, fontSize: 13 }}>{record.driverName}</span>
+                                {record.driverPhone && <span style={{ color: '#8a91a0', fontSize: 12 }}>{record.driverPhone}</span>}
+                            </div>
                         </Space>
                     );
                 }
-                return <Text type="secondary">—</Text>;
+                return <span style={{ color: '#8a91a0' }}>—</span>;
             },
         },
         {
             title: 'Принадлежность',
             key: 'source',
+            width: 160,
             render: (_: any, record: Vehicle) => {
                 if (record.source === 'carrier') {
                     return (
-                        <Space direction="vertical" size={0}>
-                            <Tag color="orange">От перевозчика</Tag>
-                            {record.carrierName && <Text type="secondary" style={{ fontSize: 12 }}>{record.carrierName}</Text>}
-                        </Space>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <Tag color="orange" style={{ margin: 0, width: 'fit-content' }}>От перевозчика</Tag>
+                            {record.carrierName && <span style={{ color: '#8a91a0', fontSize: 12 }}>{record.carrierName}</span>}
+                        </div>
                     );
                 }
-                return <Tag color="blue">Свой</Tag>;
+                return <Tag color="blue" style={{ margin: 0 }}>Свой</Tag>;
             },
         },
         {
@@ -301,6 +314,7 @@ export default function VehiclesPage() {
         {
             title: 'Действия',
             key: 'actions',
+            width: 80,
             render: (_: any, record: Vehicle) => {
                 return (
                     <Space>
@@ -327,35 +341,77 @@ export default function VehiclesPage() {
     ];
 
     return (
-        <div style={{ padding: '4px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
                 <div>
-                    <Title level={3} style={{ margin: 0 }}>Транспорт</Title>
-                    <Text type="secondary">Собственный транспорт и транспорт от перевозчиков</Text>
+                    <div className="lc-eyebrow">Транспорт · Автопарк</div>
+                    <h1 className="lc2-title">Автопарк</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Собственный транспорт и транспорт от перевозчиков
+                    </p>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                            setEditingVehicle(null);
+                            form.resetFields();
+                            setModalOpen(true);
+                        }}
+                        className="lc-cta"
+                    >
+                        Добавить свой транспорт
+                    </Button>
                 </div>
-                <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    size="large"
-                    onClick={() => {
-                        setEditingVehicle(null);
-                        form.resetFields();
-                        setModalOpen(true);
-                    }}
-                >
-                    Добавить свой транспорт
-                </Button>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Всего</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {allVehicles.length}
+                            </div>
+                            <div className="lc2-msub">единиц</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Свои</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {ownVehicles.length}
+                            </div>
+                            <div className="lc2-msub">в автопарке</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: carrierVehicles.length > 0 ? '#fff3e0' : '#f1f2f5', color: carrierVehicles.length > 0 ? '#e67e22' : '#5f6672' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Перевозчики</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {carrierVehicles.length}
+                            </div>
+                            <div className="lc2-msub">привлечённый транспорт</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <Card bordered={false} style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.01)' }}>
+            {/* ===== CONTENT CARD ===== */}
+            <div className="lc-card" style={{ padding: 20 }}>
                 <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                     <Input
                         placeholder="Поиск по модели, госномеру, перевозчику..."
                         prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        style={{ maxWidth: 400, borderRadius: 8 }}
-                        size="large"
+                        style={{ maxWidth: 400 }}
                         allowClear
                     />
                     <Segmented
@@ -366,7 +422,6 @@ export default function VehiclesPage() {
                             { label: `Свои (${ownVehicles.length})`, value: 'own' },
                             { label: `От перевозчиков (${carrierVehicles.length})`, value: 'carrier' },
                         ]}
-                        size="large"
                     />
                 </div>
 
@@ -376,8 +431,9 @@ export default function VehiclesPage() {
                     rowKey="id"
                     loading={loading}
                     pagination={{ pageSize: 10 }}
+                    size="small"
                 />
-            </Card>
+            </div>
 
             <Modal
                 title={editingVehicle 
