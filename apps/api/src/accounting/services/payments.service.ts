@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PeriodClosingService } from './period-closing.service';
 import { FinancialSettingsService } from './financial-settings.service';
 import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus } from '@prisma/client';
 import { money } from '../../common/utils/money';
+import { PayrollService } from '../../payroll/payroll.service';
 
 @Injectable()
 export class PaymentsService {
@@ -15,6 +16,8 @@ export class PaymentsService {
         private prisma: PrismaService,
         private periodClosingService: PeriodClosingService,
         private financialSettingsService: FinancialSettingsService,
+        @Inject(forwardRef(() => PayrollService))
+        private payrollService: PayrollService,
     ) { }
 
     // ==================== EXPENSES (manual) ====================
@@ -403,6 +406,7 @@ export class PaymentsService {
         const paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
         const revenue = order.customerPrice || 0;
         const isCustomerPaid = hasPaidOutgoingInvoice || (paidIn >= revenue && revenue > 0);
+        const customerPaidBecameTrue = !order.isCustomerPaid && isCustomerPaid;
 
         // Sync Driver / Sub-forwarder Paid Flag
         const hasPaidIncomingInvoice = order.incomingInvoice?.status === InvoiceStatus.PAID;
@@ -442,6 +446,14 @@ export class PaymentsService {
                 subForwarderPaidAt,
             },
         });
+
+        if (customerPaidBecameTrue) {
+            try {
+                await this.payrollService.processOrderTrigger(orderId, 'CUSTOMER_PAID');
+            } catch (err) {
+                console.warn(`Payroll trigger failed for CUSTOMER_PAID: ${err}`);
+            }
+        }
     }
 
     async markCustomerPaid(companyId: string, orderId: string, paid: boolean, userId: string, date?: string) {

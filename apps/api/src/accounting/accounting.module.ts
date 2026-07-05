@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AccountingController } from './accounting.controller';
 import { PublicAccountingController } from './public-accounting.controller';
 import { AccountingService } from './accounting.service';
@@ -8,9 +8,10 @@ import { FinancialSettingsService } from './services/financial-settings.service'
 import { PaymentsService } from './services/payments.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { EmailModule } from '../email/email.module';
+import { PayrollModule } from '../payroll/payroll.module';
 
 @Module({
-    imports: [EmailModule],
+    imports: [EmailModule, forwardRef(() => PayrollModule)],
     controllers: [AccountingController, PublicAccountingController],
     providers: [
         AccountingService,

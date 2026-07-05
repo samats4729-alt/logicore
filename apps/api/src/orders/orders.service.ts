@@ -5,6 +5,7 @@ import { PaginationQueryDto, getPaginationParams } from '../common/dto/paginatio
 import { RedisService } from '../redis/redis.service';
 import { PaymentsService } from '../accounting/services/payments.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PayrollService } from '../payroll/payroll.service';
 
 const STATUS_CHAIN = [
     OrderStatus.ASSIGNED,
@@ -78,6 +79,7 @@ export class OrdersService implements OnModuleInit {
         private redis: RedisService,
         private paymentsService: PaymentsService,
         private notificationsService: NotificationsService,
+        private payrollService: PayrollService,
     ) { }
 
     async onModuleInit() {
@@ -584,6 +586,12 @@ export class OrdersService implements OnModuleInit {
             await this.paymentsService.syncOrderPaymentFlags(orderId);
         }
 
+        try {
+            await this.payrollService.processOrderTrigger(orderId, 'STATUS:' + status);
+        } catch (err) {
+            console.warn(`Payroll trigger failed for status update: ${err}`);
+        }
+
         return updated;
     }
 
@@ -621,6 +629,12 @@ export class OrdersService implements OnModuleInit {
         });
 
         await this.paymentsService.syncOrderPaymentFlags(orderId);
+
+        try {
+            await this.payrollService.processOrderTrigger(orderId, 'STATUS:COMPLETED');
+        } catch (err) {
+            console.warn(`Payroll trigger failed for completion confirmation: ${err}`);
+        }
 
         // Уведомляем инициатора
         if (order.pendingStatusById) {

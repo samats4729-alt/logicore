@@ -237,6 +237,13 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 icon: <TeamOutlined />,
                 label: 'Взаиморасчёты',
             });
+            if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+                financeChildren.push({
+                    key: '/company/payroll',
+                    icon: <DollarOutlined />,
+                    label: 'Зарплата',
+                });
+            }
             financeChildren.push({ type: 'divider' });
             financeChildren.push({
                 key: '/company/accounting/invoices',
@@ -309,6 +316,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 icon: <TeamOutlined />,
                 label: 'Компания',
                 children: companyChildren,
+            });
+        }
+
+        if (user.role === 'LOGISTICIAN') {
+            items.push({
+                key: '/company/my-salary',
+                icon: <DollarOutlined />,
+                label: 'Моя зарплата',
             });
         }
 

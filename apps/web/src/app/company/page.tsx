@@ -10,6 +10,7 @@ import {
     TruckOutlined,
     PlusOutlined,
     ArrowRightOutlined,
+    DollarOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -53,6 +54,7 @@ export default function CompanyDashboard() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, pending: 0, inProgress: 0, completed: 0 });
+    const [payrollSummary, setPayrollSummary] = useState<{ total: number; hasScheme: boolean } | null>(null);
 
     const isManager = user?.role === 'LOGISTICIAN';
 
@@ -76,12 +78,32 @@ export default function CompanyDashboard() {
         fetchOrders();
     }, [isManager]);
 
+    useEffect(() => {
+        if (isManager) {
+            api.get('/payroll/my/summary')
+                .then(res => setPayrollSummary(res.data))
+                .catch(err => console.error('Failed to fetch payroll summary', err));
+        }
+    }, [isManager]);
+
     const metrics = [
         { label: isManager ? 'Мои заявки' : 'Всего заявок', value: stats.total, hint: 'за всё время', icon: <FileTextOutlined />, bg: '#e8f0fe', fg: '#1d4ed8' },
         { label: 'Ожидают', value: stats.pending, hint: 'требуют внимания', icon: <ClockCircleOutlined />, bg: '#fff4e5', fg: '#b45309' },
         { label: 'В пути', value: stats.inProgress, hint: 'активные перевозки', icon: <TruckOutlined />, bg: '#e0f2fe', fg: '#0369a1' },
         { label: 'Завершено', value: stats.completed, hint: 'успешные доставки', icon: <CheckCircleOutlined />, bg: '#e7f8ef', fg: '#15803d' },
     ];
+
+    if (isManager && payrollSummary?.hasScheme) {
+        metrics.push({
+            label: 'Заработано в этом месяце',
+            value: `${payrollSummary.total.toLocaleString('ru-RU')} ₸`,
+            hint: 'перейти к деталям',
+            icon: <DollarOutlined />,
+            bg: '#fdf2f8',
+            fg: '#db2777',
+            onClick: () => router.push('/company/my-salary'),
+        } as any);
+    }
 
     const columns = [
         {
@@ -153,20 +175,39 @@ export default function CompanyDashboard() {
             </div>
 
             {/* Metrics */}
-            <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-                {metrics.map((m, i) => (
-                    <Col xs={24} sm={12} lg={6} key={i}>
-                        <div className="lc-metric">
-                            <div className="lc-metric-icon" style={{ background: m.bg, color: m.fg }}>{m.icon}</div>
-                            <div>
-                                <div className="lc-metric-label">{m.label}</div>
-                                <div className="lc-metric-value">{m.value}</div>
-                                <div className="lc-metric-hint">{m.hint}</div>
-                            </div>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+                {metrics.map((m: any, i) => (
+                    <div
+                        key={i}
+                        className="lc-metric"
+                        onClick={m.onClick}
+                        style={{
+                            flex: '1 1 200px',
+                            cursor: m.onClick ? 'pointer' : 'default',
+                            transition: 'transform 0.2s, box-shadow 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                            if (m.onClick) {
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.06)';
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (m.onClick) {
+                                e.currentTarget.style.transform = 'none';
+                                e.currentTarget.style.boxShadow = 'none';
+                            }
+                        }}
+                    >
+                        <div className="lc-metric-icon" style={{ background: m.bg, color: m.fg }}>{m.icon}</div>
+                        <div>
+                            <div className="lc-metric-label">{m.label}</div>
+                            <div className="lc-metric-value" style={{ fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
+                            <div className="lc-metric-hint">{m.hint}</div>
                         </div>
-                    </Col>
+                    </div>
                 ))}
-            </Row>
+            </div>
 
             {/* Recent orders */}
             <div className="lc-card">

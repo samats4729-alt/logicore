@@ -1050,3 +1050,50 @@ model SupportTicket {
   @@index([companyId])
   @@index([createdAt])
 }
+
+model PayrollScheme {
+  id            String   @id @default(cuid())
+  companyId     String
+  userId        String?  // null = общая схема компании; задан = персональная (переопределяет общую)
+  type          String   // FIXED | PERCENT | HYBRID
+  fixedAmount   Float    @default(0)      // оклад в месяц (для FIXED и HYBRID)
+  percentValue  Float    @default(0)      // процент (для PERCENT и HYBRID)
+  percentBase   String   @default("MARGIN") // MARGIN | ORDER_AMOUNT — база процента
+  accrualStatus String   @default("COMPLETED") // статус заявки-триггер: любой OrderStatus ИЛИ спец-значение CUSTOMER_PAID
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@unique([companyId, userId])
+  @@index([companyId])
+}
+
+model PayrollKpiRule {
+  id          String  @id @default(cuid())
+  companyId   String
+  userId      String? // null = для всех менеджеров компании
+  metric      String  @default("COMPLETED_ORDERS_MONTH") // v1: количество завершённых заявок за месяц
+  threshold   Int     // порог (например 20 заявок)
+  bonusAmount Float   // бонус при достижении
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  @@index([companyId])
+}
+
+model PayrollAccrual {
+  id             String   @id @default(cuid())
+  companyId      String
+  userId         String   // менеджер
+  orderId        String?  // для kind=PERCENT; null для SALARY/KPI
+  kind           String   // PERCENT | SALARY | KPI
+  amount         Float
+  periodMonth    String   // 'YYYY-MM' — месяц начисления
+  baseAmount     Float?   // база на момент расчёта (сумма заявки или маржа)
+  schemeSnapshot Json?    // снимок схемы/правила на момент расчёта
+  kpiRuleId      String?
+  createdAt      DateTime @default(now())
+  @@unique([orderId, userId, kind])          // защита от двойного начисления по заявке
+  @@unique([userId, periodMonth, kind, kpiRuleId]) // защита для SALARY/KPI за месяц
+  @@index([companyId, periodMonth])
+  @@index([userId, periodMonth])
+}
+
