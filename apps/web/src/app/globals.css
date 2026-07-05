@@ -1590,18 +1590,16 @@ a.mapboxgl-ctrl-logo,
 
 /* ---- Nav dropdown: Apple-style slide-in ---- */
 .lc2-nav-drop {
-  animation: lc2DropIn 0.22s cubic-bezier(0.2, 0.6, 0.35, 1) both;
+  animation: lc2DropIn 0.12s ease-out both;
   transform-origin: top center;
 }
 
 @keyframes lc2DropIn {
   from {
     opacity: 0;
-    transform: translateY(-6px) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
@@ -1615,6 +1613,19 @@ a.mapboxgl-ctrl-logo,
   backdrop-filter: saturate(1.8) blur(20px) !important;
   -webkit-backdrop-filter: saturate(1.8) blur(20px) !important;
   min-width: 200px;
+  position: relative;
+}
+
+/* Invisible bridge to prevent mouse-leave flickering when gliding down */
+.lc2-nav-drop .ant-dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: -24px;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: transparent;
+  pointer-events: auto;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item {
