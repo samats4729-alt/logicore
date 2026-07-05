@@ -428,14 +428,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Header
                 className="app-header-2026"
                 style={{
-                    background: 'rgba(246, 247, 249, 0.88)',
-                    backdropFilter: 'saturate(1.8) blur(14px)',
-                    WebkitBackdropFilter: 'saturate(1.8) blur(14px)',
+                    background: 'rgba(255, 255, 255, 0.85)',
+                    backdropFilter: 'saturate(1.9) blur(20px)',
+                    WebkitBackdropFilter: 'saturate(1.9) blur(20px)',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    height: 64,
-                    borderBottom: '1px solid rgba(231, 232, 236, 0.6)',
+                    height: 60,
+                    borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
                     position: 'sticky',
                     left: 0,
                     right: 0,
@@ -538,25 +538,38 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         {hasNewUpdates && <span className="lc2-dot" />}
                     </button>
 
-                    {/* Тема (заглушка — Этап 8) */}
-                    <button
-                        type="button"
-                        className="lc2-iconbtn"
-                        aria-label="Переключить тему"
-                        title="Светлая / тёмная тема"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="5" />
-                            <line x1="12" y1="1" x2="12" y2="3" />
-                            <line x1="12" y1="21" x2="12" y2="23" />
-                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                            <line x1="1" y1="12" x2="3" y2="12" />
-                            <line x1="21" y1="12" x2="23" y2="12" />
-                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                        </svg>
-                    </button>
+                    {/* Тема (заглушка — Этап 8) — Apple Segmented Control */}
+                    <div className="lc2-theme-toggle">
+                        <div className="lc2-theme-active-bg" style={{ transform: 'translateX(0px)' }} />
+                        <button
+                            type="button"
+                            className="lc2-theme-btn active"
+                            aria-label="Светлая тема"
+                            title="Светлая тема"
+                        >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="5" />
+                                <line x1="12" y1="1" x2="12" y2="3" />
+                                <line x1="12" y1="21" x2="12" y2="23" />
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                                <line x1="1" y1="12" x2="3" y2="12" />
+                                <line x1="21" y1="12" x2="23" y2="12" />
+                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
+                            className="lc2-theme-btn"
+                            aria-label="Тёмная тема"
+                            title="Тёмная тема"
+                        >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                            </svg>
+                        </button>
+                    </div>
 
                     <div className="lc2-header-divider" />
 
@@ -588,18 +601,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             </Header>
 
             {/* Content */}
-            <Layout style={{ background: '#f6f7f9', padding: isMobile ? 0 : 24 }}>
+            <Layout style={{ background: '#f4f5f7', padding: isMobile ? 0 : '16px 24px 24px' }}>
                 <Content
                     data-guide="content"
                     className="page-content-anim"
                     style={{
-                        margin: isMobile ? 16 : 0,
-                        padding: isMobile ? 16 : 24,
-                        background: '#ffffff',
-                        borderRadius: 20,
-                        border: '1px solid #e8e9ee',
-                        minHeight: 'calc(100vh - 56px - 48px)',
-                        boxShadow: '0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px -20px rgba(16, 24, 40, 0.12)',
+                        margin: 0,
+                        padding: 0,
+                        background: 'transparent',
+                        borderRadius: 0,
+                        border: 'none',
+                        minHeight: 'calc(100vh - 60px - 40px)',
+                        boxShadow: 'none',
                         overflow: 'auto',
                     }}
                 >

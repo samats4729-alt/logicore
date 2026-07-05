@@ -1544,76 +1544,100 @@ a.mapboxgl-ctrl-logo,
   }
 }
 
-/* ===== LC2 Nav — pill-based header navigation ===== */
+/* ===== LC2 Nav — Apple-grade header navigation ===== */
 .lc2-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 4px;
+  gap: 2px;
+  margin-left: 32px;
+  background: rgba(0, 0, 0, 0.035);
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.01);
 }
 
 .lc2-nav-item {
   border: none;
   background: transparent;
-  padding: 8px 16px;
+  padding: 6px 16px;
   border-radius: 999px;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: #5f6672;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.2s ease,
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
-  line-height: 1.3;
+  line-height: 1.35;
   font-family: inherit;
   letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
 }
 
-.lc2-nav-item:hover {
-  background: #eff0f3;
-  color: #0b0d12;
+.lc2-nav-item:hover:not(.active) {
+  background: #ffffff;
+  color: #1d1d1f;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .lc2-nav-item.active {
   background: #0f1117;
   color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  font-weight: 600;
 }
 
-.lc2-nav-item.active:hover {
-  background: #1a1d27;
+/* ---- Nav dropdown: Apple-style slide-in ---- */
+.lc2-nav-drop {
+  animation: lc2DropIn 0.22s cubic-bezier(0.2, 0.6, 0.35, 1) both;
+  transform-origin: top center;
 }
 
-/* Nav dropdown overlay */
+@keyframes lc2DropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .lc2-nav-drop .ant-dropdown-menu {
-  border-radius: 16px !important;
-  padding: 6px !important;
-  border: 1px solid rgba(231, 232, 236, 0.8) !important;
-  box-shadow: 0 20px 50px -12px rgba(16, 24, 40, 0.22),
-              0 4px 12px rgba(16, 24, 40, 0.06) !important;
-  background: #ffffff !important;
-  min-width: 210px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  border-radius: 14px !important;
+  padding: 5px !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12),
+              0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: saturate(1.8) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(1.8) blur(20px) !important;
+  min-width: 200px;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item {
-  border-radius: 10px !important;
-  padding: 9px 12px !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
   font-size: 13px !important;
-  font-weight: 500 !important;
-  color: #3f4654 !important;
-  transition: all 0.15s ease !important;
+  font-weight: 400 !important;
+  color: #1d1d1f !important;
+  transition: background 0.15s ease !important;
   margin: 1px 0 !important;
+  letter-spacing: -0.006em;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item:hover {
-  background: #f4f5f7 !important;
-  color: #0b0d12 !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #1d1d1f !important;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item .anticon {
-  color: #98a1b2 !important;
-  font-size: 14px !important;
+  color: #86868b !important;
+  font-size: 15px !important;
   margin-right: 8px !important;
+  transition: color 0.15s ease !important;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item:hover .anticon {
@@ -1621,54 +1645,115 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item-divider {
-  background: #f1f2f4 !important;
-  margin: 4px 10px !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+  margin: 4px 8px !important;
 }
 
-/* Icon buttons: search, bell, theme */
+/* ---- Icon buttons: search, bell, theme ---- */
 .lc2-iconbtn {
   width: 36px;
   height: 36px;
   border-radius: 50%;
   border: none;
   background: transparent;
-  color: #5f6672;
-  font-size: 16px;
+  color: #86868b;
+  font-size: 17px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
   position: relative;
   flex-shrink: 0;
   font-family: inherit;
+  -webkit-font-smoothing: antialiased;
 }
 
 .lc2-iconbtn:hover {
-  background: #f1f2f5;
-  color: #0b0d12;
+  background: rgba(0, 0, 0, 0.04);
+  color: #1d1d1f;
+}
+
+.lc2-iconbtn:active {
+  transform: scale(0.92);
 }
 
 /* Notification dot */
 .lc2-dot {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 5px;
+  right: 5px;
   width: 8px;
   height: 8px;
-  background: #ff4d4f;
+  background: #ff3b30;
   border-radius: 50%;
-  border: 2px solid rgba(246, 247, 249, 0.95);
+  border: 2px solid #ffffff;
   animation: lc2DotPulse 2s ease-out infinite;
 }
 
 @keyframes lc2DotPulse {
-  0% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.5); }
-  70% { box-shadow: 0 0 0 5px rgba(255, 77, 79, 0); }
-  100% { box-shadow: 0 0 0 5px rgba(255, 77, 79, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.5); }
+  70% { box-shadow: 0 0 0 5px rgba(255, 59, 48, 0); }
+  100% { box-shadow: 0 0 0 5px rgba(255, 59, 48, 0); }
 }
 
-/* Right section of header */
+/* ---- Theme Toggle Segmented Control ---- */
+.lc2-theme-toggle {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.035);
+  border-radius: 999px;
+  padding: 2px;
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.01);
+  margin: 0 6px;
+  height: 32px;
+  width: 58px;
+}
+
+.lc2-theme-active-bg {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 1px rgba(0, 0, 0, 0.05);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  left: 3px;
+  top: 3px;
+  z-index: 1;
+}
+
+.lc2-theme-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: #86868b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  transition: color 0.2s ease, transform 0.15s ease;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.lc2-theme-btn.active {
+  color: #1d1d1f;
+}
+
+.lc2-theme-btn:hover:not(.active) {
+  color: #1d1d1f;
+}
+
+.lc2-theme-btn:active {
+  transform: scale(0.9);
+}
+
+/* ---- Right section of header ---- */
 .lc2-header-right {
   display: flex;
   align-items: center;
@@ -1677,41 +1762,43 @@ a.mapboxgl-ctrl-logo,
 
 .lc2-header-divider {
   width: 1px;
-  height: 24px;
-  background: #e7e8ec;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.08);
   margin: 0 8px;
   flex-shrink: 0;
+  border-radius: 1px;
 }
 
-/* Profile capsule */
+/* ---- Profile capsule ---- */
 .lc2-profile {
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  padding: 5px 10px 5px 5px;
+  padding: 4px 12px 4px 4px;
   border-radius: 999px;
   transition: background 0.2s ease;
   flex-shrink: 0;
 }
 
 .lc2-profile:hover {
-  background: #f1f2f5;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .lc2-profile-av {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #1677ff, #4096ff);
+  background: linear-gradient(145deg, #007aff, #5856d6);
   color: #fff;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ===== Шапка 2026: светлая, пилюльная навигация (legacy antd-menu стили) ===== */
