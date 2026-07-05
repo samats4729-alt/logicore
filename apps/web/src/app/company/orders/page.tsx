@@ -12,7 +12,8 @@ import {
     UserAddOutlined, CheckCircleOutlined, PlusOutlined,
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
     FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined,
-    MailOutlined, RightOutlined, EditOutlined, ExclamationCircleOutlined
+    MailOutlined, RightOutlined, EditOutlined, ExclamationCircleOutlined,
+    ClockCircleOutlined, TruckOutlined, PhoneOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -80,6 +81,22 @@ function StatusPill({ status }: { status: string }) {
         </span>
     );
 }
+
+// Грубый прогресс рейса по позиции статуса в цепочке (точный % по GPS — этап 5 плана редизайна)
+const STATUS_PROGRESS: Record<string, number> = {
+    DRAFT: 4, PENDING: 8, ASSIGNED: 18, EN_ROUTE_PICKUP: 30, AT_PICKUP: 42,
+    LOADING: 52, IN_TRANSIT: 68, AT_DELIVERY: 82, UNLOADING: 92,
+    COMPLETED: 100, PROBLEM: 50, CANCELLED: 100,
+};
+
+const progressColor = (s: string) =>
+    s === 'PROBLEM' ? '#dc2626' : s === 'COMPLETED' ? '#16a34a' : s === 'CANCELLED' ? '#9ca3af' : '#1677ff';
+
+const nameInitials = (name?: string) => {
+    if (!name) return '—';
+    const parts = name.trim().split(/\s+/);
+    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '—';
+};
 
 interface Driver {
     id: string;
@@ -1074,20 +1091,36 @@ export default function CompanyOrdersPage() {
             },
         },
         {
-            title: 'Водитель', key: 'drv', width: 120, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span>,
+            title: 'Водитель', key: 'drv', width: 140, ellipsis: true,
+            render: (_: any, r: Order) => {
+                const name = r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '');
+                if (!name) return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                return (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%' }}>
+                        <span className="lc2-avatar lc2-avatar-sm">{nameInitials(name)}</span>
+                        <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                    </span>
+                );
+            },
         },
         {
             title: 'Транспорт', key: 'vehicle', width: 100, ellipsis: true,
             render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverPlate || r.driver?.vehiclePlate || '—'}</span>,
         },
         {
-            title: 'Маршрут', key: 'route', width: 160, ellipsis: true,
+            title: 'Маршрут', key: 'route', width: 170,
             render: (_: any, r: Order) => {
                 const from = extractCity(r, 'pickup');
                 const to = extractCity(r, 'delivery');
                 if (!from && !to) return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
-                return <span style={{ fontSize: 12, fontWeight: 500 }}>{from || '?'} → {to || '?'}</span>;
+                return (
+                    <div style={{ minWidth: 120 }}>
+                        <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{from || '?'} → {to || '?'}</span>
+                        <div className="lc2-rowbar">
+                            <i style={{ width: `${STATUS_PROGRESS[r.status] ?? 0}%`, background: progressColor(r.status) }} />
+                        </div>
+                    </div>
+                );
             },
         },
         {
@@ -1204,25 +1237,160 @@ export default function CompanyOrdersPage() {
 
     // =================== RENDER ===================
 
+    const inTransitCount = orders.filter(o => ['IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length;
+    const pendingCount = orders.filter(o => o.status === 'PENDING').length;
+    const problemCount = orders.filter(o => o.status === 'PROBLEM').length;
+    const featured = filteredOrders[0] || orders[0] || null;
+    const tickerItems = orders.slice(0, 10).map(o => {
+        const from = extractCity(o, 'pickup');
+        const to = extractCity(o, 'delivery');
+        return {
+            num: o.orderNumber,
+            text: `${statusLabels[o.status] || o.status}${from && to ? ` · ${from} → ${to}` : ''}`,
+            color: (STATUS_PILL[o.status] || STATUS_PILL.DRAFT).fg,
+        };
+    });
+
     return (
         <div className="lc-page" style={{ height: '100%' }}>
-            <div style={{ marginBottom: 14 }}>
-                <div className="lc-eyebrow">LogiCore — перевозки</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                    <h1 className="lc-title" style={{ margin: 0 }}>Заявки<span className="lc-count">{orders.length}</span></h1>
-                    <div className="lc-stats" style={{ marginTop: 0 }}>
-                        <span className="lc-chip"><i style={{ background: '#b45309' }} />Ожидает <b>{orders.filter(o => o.status === 'PENDING').length}</b></span>
-                        <span className="lc-chip"><i style={{ background: '#1d4ed8' }} />В работе <b>{orders.filter(o => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING'].includes(o.status)).length}</b></span>
-                        <span className="lc-chip"><i style={{ background: '#0369a1' }} />В пути <b>{orders.filter(o => ['IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length}</b></span>
-                        {orders.filter(o => o.status === 'PROBLEM').length > 0 && (
-                            <span className="lc-chip lc-chip-alert"><i style={{ background: '#dc2626' }} />Проблемы <b>{orders.filter(o => o.status === 'PROBLEM').length}</b></span>
-                        )}
+            {/* ===== HERO ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">LogiCore — перевозки</div>
+                    <h1 className="lc2-title">Заявки компании</h1>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <span className="lc2-mic"><FileTextOutlined /></span>
+                        <div>
+                            <div className="lc2-mlabel">Всего заявок</div>
+                            <div className="lc2-mvalue">{orders.length}</div>
+                            <div className="lc2-msub" style={{ color: '#16a34a' }}>активная база</div>
+                        </div>
                     </div>
+                    <div className="lc2-metric">
+                        <span className="lc2-mic"><TruckOutlined /></span>
+                        <div>
+                            <div className="lc2-mlabel">Сейчас в пути</div>
+                            <div className="lc2-mvalue">{inTransitCount}</div>
+                            <div className="lc2-msub" style={{ color: '#16a34a' }}>по графику</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <span className="lc2-mic"><ClockCircleOutlined /></span>
+                        <div>
+                            <div className="lc2-mlabel">Ожидают назначения</div>
+                            <div className="lc2-mvalue">{pendingCount}</div>
+                            <div className="lc2-msub" style={{ color: pendingCount > 0 ? '#b45309' : '#16a34a' }}>
+                                {pendingCount > 0 ? 'внимание ⚠' : 'всё назначено'}
+                            </div>
+                        </div>
+                    </div>
+                    {problemCount > 0 && (
+                        <div className="lc2-metric lc2-metric-alert">
+                            <span className="lc2-mic" style={{ background: '#fee2e2', color: '#dc2626' }}><ExclamationCircleOutlined /></span>
+                            <div>
+                                <div className="lc2-mlabel">Проблемы</div>
+                                <div className="lc2-mvalue" style={{ color: '#dc2626' }}>{problemCount}</div>
+                                <div className="lc2-msub" style={{ color: '#dc2626' }}>требуют решения</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ===== ТИКЕР ЖИВЫХ СОБЫТИЙ (v1: из загруженных заявок) ===== */}
+            {tickerItems.length > 0 && (
+                <div className="lc2-ticker" aria-hidden="true">
+                    <div className="lc2-ticker-track">
+                        {[...tickerItems, ...tickerItems].map((t, i) => (
+                            <span className="lc2-tick" key={i}>
+                                <i style={{ background: t.color }} />
+                                <b>{t.num}</b>
+                                <span>{t.text}</span>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ===== ACTION BAR ===== */}
+            <div className="lc2-actionbar">
+                <div className="lc2-ab-left">
+                    <span className="lc2-ab-ic"><EnvironmentOutlined /></span>
+                    <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0b0d12' }}>База заявок</div>
+                        <div style={{ fontSize: 11.5, color: '#8a91a0' }}>Сегодня · {dayjs().format('DD.MM.YYYY')}</div>
+                    </div>
+                </div>
+                <div className="lc2-ab-right">
+                    {pendingCount > 0 && (
+                        <span className="lc2-ab-warn">
+                            <ExclamationCircleOutlined /> {pendingCount} {pendingCount === 1 ? 'заявка ожидает' : 'заявки ожидают'} назначения
+                        </span>
+                    )}
                     <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
                         Создать заявку
                     </Button>
                 </div>
             </div>
+
+            {/* ===== FEATURED: последняя заявка ===== */}
+            {featured && (
+                <div className="lc2-featured">
+                    <div className="lc2-f-left">
+                        <div className="lc2-f-head">
+                            <span className="lc-eyebrow" style={{ marginBottom: 0 }}>История рейса</span>
+                            <StatusPill status={featured.status} />
+                        </div>
+                        <div className="lc2-f-num">{featured.orderNumber}</div>
+                        <div className="lc2-f-cargo">
+                            {[(featured as any).natureOfCargo, (featured as any).cargoWeight ? `${(featured as any).cargoWeight} т` : null, (featured as any).cargoType]
+                                .filter(Boolean).join(' · ') || featured.cargoDescription || 'Груз не указан'}
+                        </div>
+                        <div className="lc2-f-timeline">
+                            <div className="lc2-f-step done">
+                                <i /><div><b>{extractCity(featured, 'pickup') || 'Погрузка'}</b><span>Точка погрузки</span></div>
+                            </div>
+                            <div className="lc2-f-step active">
+                                <i /><div><b>{statusLabels[featured.status] || featured.status}</b><span>Прогресс ≈ {STATUS_PROGRESS[featured.status] ?? 0}%</span></div>
+                            </div>
+                            <div className={`lc2-f-step ${featured.status === 'COMPLETED' ? 'done' : ''}`}>
+                                <i /><div><b>{extractCity(featured, 'delivery') || 'Выгрузка'}</b><span>Точка выгрузки</span></div>
+                            </div>
+                        </div>
+                        <div className="lc2-f-progress">
+                            <i style={{ width: `${STATUS_PROGRESS[featured.status] ?? 0}%`, background: progressColor(featured.status) }} />
+                        </div>
+                        <div className="lc2-f-stats">
+                            <div><span>Стоимость</span><b>{featured.customerPrice ? `${featured.customerPrice.toLocaleString('ru-RU')} ₸` : '—'}</b></div>
+                            <div><span>Дата</span><b>{dayjs(featured.createdAt).format('DD.MM.YYYY')}</b></div>
+                            <div><span>Заказчик</span><b>{shortenCompanyName(featured.customerCompany?.name || '') || '—'}</b></div>
+                        </div>
+                    </div>
+                    <div className="lc2-f-right">
+                        <div className="lc2-f-driver">
+                            <span className="lc2-avatar">{nameInitials(featured.assignedDriverName || (featured.driver ? `${featured.driver.lastName} ${featured.driver.firstName}` : ''))}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {featured.assignedDriverName || (featured.driver ? `${featured.driver.lastName} ${featured.driver.firstName}` : 'Водитель не назначен')}
+                                </div>
+                                <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.55)' }}>
+                                    Водитель · {featured.assignedDriverPlate || featured.driver?.vehiclePlate || '—'}
+                                </div>
+                            </div>
+                            {(featured as any).assignedDriverPhone && (
+                                <a className="lc2-callbtn" href={`tel:${(featured as any).assignedDriverPhone}`} aria-label="Позвонить водителю">
+                                    <PhoneOutlined />
+                                </a>
+                            )}
+                        </div>
+                        <Button block className="lc2-openbtn" onClick={() => router.push(`/company/orders/${featured.id}`)}>
+                            Открыть заявку <RightOutlined />
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             <Tabs
                 activeKey={activeTab}

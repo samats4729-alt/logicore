@@ -1159,6 +1159,466 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* ==========================================
+   LC 2026 — редизайн по референсу (см. REDESIGN_PLAN.md)
+   ========================================== */
+
+/* Хиро: крупный заголовок + метрики справа */
+.lc2-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.lc2-title {
+  font-size: clamp(26px, 3.4vw, 38px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  color: #0b0d12;
+  margin: 2px 0 0;
+  max-width: 420px;
+}
+
+.lc2-metrics {
+  display: flex;
+  gap: 26px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.lc2-metric {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 130px;
+}
+
+.lc2-mic {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #f1f2f5;
+  color: #0b0d12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.lc2-mlabel {
+  font-size: 11.5px;
+  color: #8a91a0;
+  font-weight: 500;
+}
+
+.lc2-mvalue {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0b0d12;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.lc2-msub {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Тикер живых событий */
+.lc2-ticker {
+  background: #0b0d12;
+  border-radius: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 8px 0;
+  margin-bottom: 14px;
+}
+
+.lc2-ticker-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 34px;
+  white-space: nowrap;
+  animation: lc2Ticker 40s linear infinite;
+  padding-left: 16px;
+}
+
+.lc2-ticker:hover .lc2-ticker-track {
+  animation-play-state: paused;
+}
+
+.lc2-tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.lc2-tick b {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.lc2-tick i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@keyframes lc2Ticker {
+  to { transform: translateX(-50%); }
+}
+
+/* Action bar */
+.lc2-actionbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #ffffff;
+  border: 1px solid #ececf0;
+  border-radius: 16px;
+  padding: 10px 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.lc2-ab-left {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.lc2-ab-ic {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f1f2f5;
+  color: #5f6672;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.lc2-ab-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.lc2-ab-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+/* Featured-карточка заявки */
+.lc2-featured {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.lc2-f-left {
+  background: #ffffff;
+  border: 1px solid #ececf0;
+  border-radius: 18px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.lc2-f-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.lc2-f-num {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0b0d12;
+}
+
+.lc2-f-cargo {
+  font-size: 12.5px;
+  color: #8a91a0;
+  margin-bottom: 14px;
+}
+
+.lc2-f-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lc2-f-step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.lc2-f-step i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  background: #fff;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.lc2-f-step.done i {
+  border-color: #16a34a;
+  background: #16a34a;
+}
+
+.lc2-f-step.active i {
+  border-color: #1677ff;
+  background: #1677ff;
+  box-shadow: 0 0 0 4px rgba(22, 119, 255, 0.15);
+}
+
+.lc2-f-step b {
+  display: block;
+  font-size: 13px;
+  color: #0b0d12;
+  line-height: 1.2;
+}
+
+.lc2-f-step span {
+  font-size: 11px;
+  color: #98a1b2;
+}
+
+.lc2-f-progress {
+  height: 5px;
+  border-radius: 999px;
+  background: #eef0f3;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.lc2-f-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.lc2-f-stats {
+  display: flex;
+  gap: 26px;
+  flex-wrap: wrap;
+  border-top: 1px solid #f1f2f4;
+  padding-top: 12px;
+}
+
+.lc2-f-stats span {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #98a1b2;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.lc2-f-stats b {
+  font-size: 14px;
+  color: #0b0d12;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Правая тёмная панель featured (карта — этап 5 плана) */
+.lc2-f-right {
+  background: linear-gradient(160deg, #12151d 0%, #0b0d12 100%);
+  border-radius: 18px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 200px;
+}
+
+.lc2-f-driver {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.lc2-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1677ff;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lc2-avatar-sm {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  background: #eef2f7;
+  color: #3f4654;
+}
+
+.lc2-callbtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #fff !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.lc2-callbtn:hover {
+  transform: scale(1.08);
+}
+
+.lc2-openbtn.ant-btn {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+  border-radius: 12px !important;
+  height: 38px;
+  font-weight: 600;
+}
+
+.lc2-openbtn.ant-btn:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* Прогресс-бар в строках таблицы */
+.lc2-rowbar {
+  height: 3px;
+  border-radius: 999px;
+  background: #eef0f3;
+  overflow: hidden;
+  margin-top: 4px;
+  max-width: 140px;
+}
+
+.lc2-rowbar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+  .lc2-featured {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== Шапка 2026: светлая, пилюльная навигация ===== */
+.app-header-2026 .ant-menu-horizontal > .ant-menu-item,
+.app-header-2026 .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
+  color: #5f6672 !important;
+  font-weight: 600 !important;
+}
+
+.app-header-2026 .ant-menu-horizontal > .ant-menu-item:hover,
+.app-header-2026 .ant-menu-horizontal > .ant-menu-submenu:hover,
+.app-header-2026 .ant-menu-horizontal > .ant-menu-submenu-active {
+  background-color: #f1f2f5 !important;
+}
+
+.app-header-2026 .ant-menu-horizontal > .ant-menu-item:hover,
+.app-header-2026 .ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title,
+.app-header-2026 .ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title {
+  color: #0b0d12 !important;
+}
+
+.app-header-2026 .ant-menu-horizontal > .ant-menu-item-selected {
+  background-color: #0f1117 !important;
+  color: #ffffff !important;
+}
+
+.app-header-2026 .ant-menu-horizontal > .ant-menu-item-selected .anticon {
+  color: #ffffff !important;
+}
+
+.app-header-2026 .ant-menu-horizontal > .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: #0b0d12 !important;
+  font-weight: 700 !important;
+}
+
+.app-header-2026 .ant-btn-text:hover {
+  background-color: #f1f2f5 !important;
+}
+
+/* Выпадашки навигации — светлые карточки (перекрывает тёмный вариант выше) */
+.lc-nav-pop .ant-menu {
+  background: #ffffff !important;
+  border: 1px solid #e7e8ec !important;
+  box-shadow: 0 16px 40px -12px rgba(16, 24, 40, 0.18) !important;
+}
+
+.lc-nav-pop .ant-menu-item {
+  color: #3f4654 !important;
+}
+
+.lc-nav-pop .ant-menu-item .anticon {
+  color: #98a1b2 !important;
+}
+
+.lc-nav-pop .ant-menu-item:hover {
+  background: #f1f2f5 !important;
+  color: #0b0d12 !important;
+}
+
+.lc-nav-pop .ant-menu-item:hover .anticon {
+  color: #1677ff !important;
+}
+
+.lc-nav-pop .ant-menu-item-selected {
+  background: #0f1117 !important;
+  color: #ffffff !important;
+}
+
+.lc-nav-pop .ant-menu-item-selected .anticon {
+  color: #ffffff !important;
+}
+
+.lc-nav-pop .ant-menu-item-divider {
+  background: #eef0f3 !important;
+}
+
+/* ==========================================
    AI ASSISTANT — LAUNCHER
    ========================================== */
 .ai-fab {

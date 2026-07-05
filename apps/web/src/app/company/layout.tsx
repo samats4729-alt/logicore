@@ -423,22 +423,22 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
             {/* Top Header Navigation */}
             <Header
-                className="app-header-dark"
+                className="app-header-2026"
                 style={{
-                    background: 'rgba(9, 12, 20, 0.92)',
+                    background: 'rgba(255, 255, 255, 0.85)',
                     backdropFilter: 'saturate(1.8) blur(14px)',
                     WebkitBackdropFilter: 'saturate(1.8) blur(14px)',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
                     height: 56,
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderBottom: '1px solid #e7e8ec',
                     position: 'sticky',
                     left: 0,
                     right: 0,
                     top: 0,
                     zIndex: 100,
-                    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.25)',
+                    boxShadow: '0 1px 2px rgba(16, 24, 40, 0.04)',
                     transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
             >
@@ -448,7 +448,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         type="text"
                         icon={<MenuOutlined />}
                         onClick={() => setMobileMenuOpen(true)}
-                        style={{ marginRight: 8, color: '#ffffff' }}
+                        style={{ marginRight: 8, color: '#0b0d12' }}
                     />
                 )}
 
@@ -465,7 +465,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>L</span>
                     </div>
                     {!isMobile && (
-                        <Text strong className="logo-text" style={{ fontSize: 14, color: '#ffffff', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                        <Text strong className="logo-text" style={{ fontSize: 14, color: '#0b0d12', fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
                             {user.company?.name || 'LogiCore'}
                         </Text>
                     )}
@@ -497,7 +497,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 {isMobile && <div style={{ flex: 1 }} />}
 
                 {/* User Profile */}
-                <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']} overlayClassName="lc-user-pop">
+                <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -520,9 +520,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 icon={<UserOutlined />}
                                 size="small"
                                 style={{
-                                    background: 'rgba(255, 255, 255, 0.12)',
-                                    color: '#ffffff',
-                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    background: '#eef2f7',
+                                    color: '#0b0d12',
+                                    border: '1px solid #e4e4e7',
                                     flexShrink: 0,
                                 }}
                             />
@@ -541,7 +541,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             )}
                         </div>
                         {!isMobile && (
-                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: '#ffffff' }}>
+                            <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: '#0b0d12' }}>
                                 {user.firstName} {user.lastName}
                             </Text>
                         )}
