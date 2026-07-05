@@ -481,18 +481,17 @@ export default function FinancialRegistryPage() {
     ];
 
     const metricsData = [
-        { label: 'Выручка', value: totals.totalIncome, hint: 'всего', icon: <ArrowUpOutlined />, bg: 'rgba(52, 199, 89, 0.12)', fg: '#34c759' },
-        { label: 'Затраты', value: totals.totalExpense, hint: 'перевозчики', icon: <ArrowDownOutlined />, bg: 'rgba(142, 142, 147, 0.12)', fg: '#8e8e93' },
+        { label: 'Выручка', value: totals.totalIncome, hint: 'всего', icon: <ArrowUpOutlined /> },
+        { label: 'Затраты', value: totals.totalExpense, hint: 'перевозчики', icon: <ArrowDownOutlined /> },
         {
             label: 'Маржа',
             value: totals.totalMargin,
             hint: `${totals.totalIncome ? Math.round((totals.totalMargin / totals.totalIncome) * 100) : 0}% маржинальность`,
             icon: <DollarOutlined />,
-            bg: totals.totalMargin >= 0 ? 'rgba(88, 86, 214, 0.12)' : 'rgba(255, 59, 48, 0.12)',
-            fg: totals.totalMargin >= 0 ? '#5856d6' : '#ff3b30'
+            valueColor: totals.totalMargin >= 0 ? '#34c759' : '#ff3b30'
         },
-        { label: 'Дебиторка', value: totals.debtorSum, hint: 'долг клиентов', icon: <ArrowUpOutlined />, bg: 'rgba(255, 149, 0, 0.12)', fg: '#ff9500' },
-        { label: 'Кредиторка', value: totals.creditorSum, hint: 'наш долг перед ТК', icon: <ArrowDownOutlined />, bg: 'rgba(255, 45, 85, 0.12)', fg: '#ff2d55' },
+        { label: 'Дебиторка', value: totals.debtorSum, hint: 'долг клиентов', icon: <ArrowUpOutlined />, hintColor: totals.debtorSum > 0 ? '#ff9500' : undefined },
+        { label: 'Кредиторка', value: totals.creditorSum, hint: 'наш долг перед ТК', icon: <ArrowDownOutlined />, hintColor: totals.creditorSum > 0 ? '#ff3b30' : undefined },
     ];
 
     return (
@@ -524,15 +523,15 @@ export default function FinancialRegistryPage() {
                 <div className="lc2-metrics">
                     {metricsData.map((m, i) => (
                         <div key={i} className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: m.bg, color: m.fg }}>
+                            <div className="lc2-mic">
                                 {m.icon}
                             </div>
                             <div>
                                 <div className="lc2-mlabel">{m.label}</div>
-                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: m.fg }}>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: m.valueColor || '#0b0d12' }}>
                                     {typeof m.value === 'number' ? `${fmt(m.value)} ₸` : m.value}
                                 </div>
-                                <div className="lc2-msub">{m.hint}</div>
+                                <div className="lc2-msub" style={{ color: m.hintColor || '#8a91a0' }}>{m.hint}</div>
                             </div>
                         </div>
                     ))}
