@@ -6,7 +6,6 @@ import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import CompanyFormFields from '@/components/CompanyFormFields';
-import { prepareCompanyOptions } from '@/lib/company-helper';
 
 const { Title, Text } = Typography;
 
@@ -489,12 +488,12 @@ export default function SettingsPage() {
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item name="kbe" label="КБЕ">
-                                    <Select placeholder="КБЕ" size="large" allowClear>
-                                        {prepareCompanyOptions('kbe').map((opt: any) => (
-                                            <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
-                                        ))}
-                                    </Select>
+                                <Form.Item
+                                    name="kbe"
+                                    label="КБЕ"
+                                    rules={[{ required: true, message: 'Введите КБЕ' }]}
+                                >
+                                    <Input size="large" placeholder="17" maxLength={2} />
                                 </Form.Item>
                             </Col>
                         </Row>
