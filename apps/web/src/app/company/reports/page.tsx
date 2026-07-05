@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Table, Card, Statistic, Row, Col, Button, Space, Typography, DatePicker, Tag, Tabs, Spin, Alert, Divider, theme } from 'antd';
-import { PrinterOutlined, ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { Table, Statistic, Row, Col, Button, Space, DatePicker, Tag, Tabs, Spin, Alert, Divider, theme } from 'antd';
+import { PrinterOutlined, ReloadOutlined, ArrowLeftOutlined, BarChartOutlined, DollarOutlined, TeamOutlined, CarOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 
-const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 interface DriverReportEntry {
@@ -204,8 +203,11 @@ export default function ReportsPage() {
         );
     }
 
+    const profitability = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0;
+
     return (
-        <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
             {error && (
                 <Alert
                     type="warning"
@@ -217,62 +219,90 @@ export default function ReportsPage() {
                 />
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 32, flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company')} style={{ padding: '4px 8px' }} />
-                    <div>
-                        <Title level={2} style={{ margin: 0, fontWeight: 600 }}>
-                            Конструктор отчётов
-                        </Title>
-                        <Text type="secondary" style={{ fontSize: '16px' }}>
-                            Аналитика по периодам, контрагентам, водителям и рентабельности
-                        </Text>
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company')} style={{ padding: '0 4px 0 0', marginRight: 6 }} />
+                        Отчёты · Аналитика
+                    </div>
+                    <h1 className="lc2-title">Конструктор отчётов</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Аналитика по периодам, контрагентам, водителям и рентабельности
+                    </p>
+                    <Space wrap>
+                        <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchAll} className="lc-cta">Обновить</Button>
+                        <RangePicker value={dateRange as any} onChange={(d) => setDateRange(d as any)} format="DD.MM.YYYY" allowClear={false} style={{ boxShadow: `0 1px 3px ${token.colorBorderSecondary}`, borderRadius: 8 }} />
+                        <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Печать</Button>
+                    </Space>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                            <DollarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Доходы</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#52c41a' }}>
+                                {fmt(totalIncome)} ₸
+                            </div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc3545' }}>
+                            <BarChartOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Расходы</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#ff4d4f' }}>
+                                {fmt(totalExpense)} ₸
+                            </div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
+                            <TeamOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Маржа</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: totalIncome >= totalExpense ? '#28a745' : '#dc3545' }}>
+                                {totalIncome >= totalExpense ? '+' : ''}{fmt(totalIncome - totalExpense)} ₸
+                            </div>
+                            <div className="lc2-msub">
+                                {profitability}% рентабельность
+                            </div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#fff7e6', color: '#fa8c16' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Контрагенты</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {uniqueCounterparties}
+                            </div>
+                            <div className="lc2-msub">
+                                активных
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <Space wrap>
-                    <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchAll}>Обновить</Button>
-                    <RangePicker value={dateRange as any} onChange={(d) => setDateRange(d as any)} format="DD.MM.YYYY" allowClear={false} style={{ boxShadow: `0 1px 3px ${token.colorBorderSecondary}`, borderRadius: 8 }} />
-                    <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Печать</Button>
-                </Space>
             </div>
 
-            {/* KPI Cards */}
-            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-                <Col xs={12} md={6}>
-                    <Card size="small" className="premium-card" bordered={false}>
-                        <Statistic title="Доходы" value={totalIncome} suffix="₸" valueStyle={{ color: '#52c41a', fontSize: 18, fontWeight: 700 }} formatter={(v) => fmt(v as number)} />
-                    </Card>
-                </Col>
-                <Col xs={12} md={6}>
-                    <Card size="small" className="premium-card" bordered={false}>
-                        <Statistic title="Расходы" value={totalExpense} suffix="₸" valueStyle={{ color: '#ff4d4f', fontSize: 18, fontWeight: 700 }} formatter={(v) => fmt(v as number)} />
-                    </Card>
-                </Col>
-                <Col xs={12} md={6}>
-                    <Card size="small" className="premium-card" bordered={false}>
-                        <Statistic title="Маржа" value={totalIncome - totalExpense} suffix="₸" valueStyle={{ color: totalIncome >= totalExpense ? '#52c41a' : '#ff4d4f', fontSize: 18, fontWeight: 700 }} formatter={(v) => fmt(v as number)} />
-                    </Card>
-                </Col>
-                <Col xs={12} md={6}>
-                    <Card size="small" className="premium-card" bordered={false}>
-                        <Statistic title="Рентабельность" value={totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0} suffix="%" valueStyle={{ color: totalIncome >= totalExpense ? '#52c41a' : '#ff4d4f', fontSize: 18, fontWeight: 700 }} />
-                    </Card>
-                </Col>
-            </Row>
+            {/* ===== TABS & TABLE CARD ===== */}
+            <div className="lc-card" style={{ padding: 20 }}>
+                <Tabs activeKey={reportType} onChange={(k) => setReportType(k as any)} style={{ marginBottom: 20 }}>
+                    <Tabs.TabPane tab="P&L" key="pnl" />
+                    <Tabs.TabPane tab="Контрагенты" key="counterparties" />
+                    <Tabs.TabPane tab="Рентабельность" key="profitability" />
+                    <Tabs.TabPane tab="Водители" key="drivers" />
+                    <Tabs.TabPane tab="Сводка" key="summary" />
+                </Tabs>
 
-            <Tabs activeKey={reportType} onChange={(k) => setReportType(k as any)} style={{ marginBottom: 20 }}>
-                <Tabs.TabPane tab="P&L" key="pnl" />
-                <Tabs.TabPane tab="Контрагенты" key="counterparties" />
-                <Tabs.TabPane tab="Рентабельность" key="profitability" />
-                <Tabs.TabPane tab="Водители" key="drivers" />
-                <Tabs.TabPane tab="Сводка" key="summary" />
-            </Tabs>
-
-            <Card className="premium-card" bordered={false} styles={{ body: { padding: 12 } }}>
                 {reportType === 'pnl' && (
                     <Table 
                         columns={[
-                            { title: 'Период', dataIndex: 'month', key: 'month', render: (v: string) => <Text style={{ fontSize: 13, fontWeight: 500 }}>{v}</Text> },
+                            { title: 'Период', dataIndex: 'month', key: 'month', render: (v: string) => <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span> },
                             { title: 'Доходы', dataIndex: 'income', key: 'inc', align: 'right' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
                             { title: 'Расходы', dataIndex: 'expense', key: 'exp', align: 'right' as const, render: (v: number) => <span style={{ color: '#ff4d4f', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
                             { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 700, color: v >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{v >= 0 ? '+' : ''}{fmt(v)} ₸</span> },
@@ -286,7 +316,7 @@ export default function ReportsPage() {
                 {reportType === 'counterparties' && (
                     <Table 
                         columns={[
-                            { title: 'Контрагент', dataIndex: 'name', key: 'name', render: (v: string) => <Text style={{ fontSize: 13, fontWeight: 500 }}>{v}</Text> },
+                            { title: 'Контрагент', dataIndex: 'name', key: 'name', render: (v: string) => <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span> },
                             { title: 'Поступления', dataIndex: 'income', key: 'inc', align: 'right' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>+{fmt(v)} ₸</span> },
                             { title: 'Выплаты', dataIndex: 'expense', key: 'exp', align: 'right' as const, render: (v: number) => <span style={{ color: '#ff4d4f', fontWeight: 600, fontSize: 13 }}>-{fmt(v)} ₸</span> },
                             { title: 'Сальдо', dataIndex: 'balance', key: 'bal', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 700, color: v >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{v >= 0 ? '+' : ''}{fmt(v)} ₸</span> },
@@ -301,7 +331,7 @@ export default function ReportsPage() {
                     <Table 
                         columns={[
                             { title: 'Заявка', dataIndex: 'orderNumber', key: 'num', render: (v: string) => <span style={{ fontWeight: 700, color: '#1677ff', fontSize: 13 }}>{v}</span> },
-                            { title: 'Маршрут', dataIndex: 'route', key: 'route', ellipsis: true, render: (v: string) => <Text style={{ fontSize: 13 }}>{v}</Text> },
+                            { title: 'Маршрут', dataIndex: 'route', key: 'route', ellipsis: true, render: (v: string) => <span style={{ fontSize: 13 }}>{v}</span> },
                             { title: 'Ставка', dataIndex: 'revenue', key: 'rev', align: 'right' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
                             { title: 'Затраты', dataIndex: 'cost', key: 'cost', align: 'right' as const, render: (v: number) => <span style={{ color: '#ff4d4f', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
                             { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 700, color: v >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{v >= 0 ? '+' : ''}{fmt(v)} ₸</span> },
@@ -316,9 +346,9 @@ export default function ReportsPage() {
                 {reportType === 'drivers' && (
                     <Table 
                         columns={[
-                            { title: 'Водитель', dataIndex: 'name', key: 'name', render: (v: string) => <Text style={{ fontSize: 13, fontWeight: 500 }}>{v}</Text> },
-                            { title: 'ТС', dataIndex: 'vehicle', key: 'vehicle', render: (v: string) => <Text style={{ fontSize: 13 }}>{v}</Text> },
-                            { title: 'Рейсов', dataIndex: 'orders', key: 'orders', align: 'center' as const, render: (v: number) => <Text style={{ fontSize: 13 }}>{v}</Text> },
+                            { title: 'Водитель', dataIndex: 'name', key: 'name', render: (v: string) => <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span> },
+                            { title: 'ТС', dataIndex: 'vehicle', key: 'vehicle', render: (v: string) => <span style={{ fontSize: 13 }}>{v}</span> },
+                            { title: 'Рейсов', dataIndex: 'orders', key: 'orders', align: 'center' as const, render: (v: number) => <span style={{ fontSize: 13 }}>{v}</span> },
                             { title: 'Завершено', dataIndex: 'completed', key: 'completed', align: 'center' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>{v}</span> },
                             { title: 'Выручка', dataIndex: 'revenue', key: 'rev', align: 'right' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
                             { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 700, color: v >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{v >= 0 ? '+' : ''}{fmt(v)} ₸</span> },
@@ -332,37 +362,40 @@ export default function ReportsPage() {
                 {reportType === 'summary' && (
                     <Row gutter={[16, 16]}>
                         <Col xs={24} md={8}>
-                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Заявки</span>} size="small" className="premium-card" bordered={false}>
+                            <div className="lc-card" style={{ padding: 20 }}>
+                                <h4 style={{ fontWeight: 600, fontSize: 14, margin: '0 0 12px' }}>Заявки</h4>
                                 <Row gutter={[8, 8]}>
                                     <Col span={12}><Statistic title="Всего" value={filteredOrders.length} valueStyle={{ fontSize: 16 }} /></Col>
                                     <Col span={12}><Statistic title="Завершено" value={filteredOrders.filter(o => o.status === 'COMPLETED').length} valueStyle={{ color: '#52c41a', fontSize: 16 }} /></Col>
                                     <Col span={12}><Statistic title="В работе" value={filteredOrders.filter(o => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length} valueStyle={{ color: '#1677ff', fontSize: 16 }} /></Col>
                                     <Col span={12}><Statistic title="Отменено" value={filteredOrders.filter(o => o.status === 'CANCELLED').length} valueStyle={{ color: '#ff4d4f', fontSize: 16 }} /></Col>
                                 </Row>
-                            </Card>
+                            </div>
                         </Col>
                         <Col xs={24} md={8}>
-                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Финансы</span>} size="small" className="premium-card" bordered={false}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><Text type="secondary" style={{ fontSize: 13 }}>Выручка</Text><Text strong style={{ color: '#52c41a', fontSize: 13 }}>{fmt(totalIncome)} ₸</Text></div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><Text type="secondary" style={{ fontSize: 13 }}>Затраты</Text><Text strong style={{ color: '#ff4d4f', fontSize: 13 }}>{fmt(totalExpense)} ₸</Text></div>
+                            <div className="lc-card" style={{ padding: 20 }}>
+                                <h4 style={{ fontWeight: 600, fontSize: 14, margin: '0 0 12px' }}>Финансы</h4>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ color: '#8a91a0', fontSize: 13 }}>Выручка</span><span style={{ fontWeight: 600, color: '#52c41a', fontSize: 13 }}>{fmt(totalIncome)} ₸</span></div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ color: '#8a91a0', fontSize: 13 }}>Затраты</span><span style={{ fontWeight: 600, color: '#ff4d4f', fontSize: 13 }}>{fmt(totalExpense)} ₸</span></div>
                                 <Divider style={{ margin: '12px 0' }} />
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Text strong style={{ fontSize: 13 }}>Маржа</Text>
-                                    <Text strong style={{ color: totalIncome >= totalExpense ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{totalIncome >= totalExpense ? '+' : ''}{fmt(totalIncome - totalExpense)} ₸</Text>
+                                    <span style={{ fontWeight: 600, fontSize: 13 }}>Маржа</span>
+                                    <span style={{ fontWeight: 600, color: totalIncome >= totalExpense ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{totalIncome >= totalExpense ? '+' : ''}{fmt(totalIncome - totalExpense)} ₸</span>
                                 </div>
-                            </Card>
+                            </div>
                         </Col>
                         <Col xs={24} md={8}>
-                            <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>Автопарк</span>} size="small" className="premium-card" bordered={false}>
+                            <div className="lc-card" style={{ padding: 20 }}>
+                                <h4 style={{ fontWeight: 600, fontSize: 14, margin: '0 0 12px' }}>Автопарк</h4>
                                 <Statistic title="Всего водителей" value={drivers.length} valueStyle={{ fontSize: 16 }} />
                                 <div style={{ marginTop: 12 }}>
                                     <Statistic title="Контрагентов" value={uniqueCounterparties} valueStyle={{ fontSize: 16 }} />
                                 </div>
-                            </Card>
+                            </div>
                         </Col>
                     </Row>
                 )}
-            </Card>
+            </div>
         </div>
     );
 }

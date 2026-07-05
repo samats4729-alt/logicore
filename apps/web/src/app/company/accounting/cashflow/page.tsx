@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Card, Button, DatePicker, Table, Row, Col, Statistic, Tabs, Space, Spin, App, Tag, theme } from 'antd';
-import { ArrowLeftOutlined, CalendarOutlined, FileExcelOutlined, ArrowUpOutlined, ArrowDownOutlined, WalletOutlined, DollarOutlined, SwapOutlined } from '@ant-design/icons';
+import { Typography, Button, DatePicker, Table, Tabs, Space, Spin, App, Tag, theme } from 'antd';
+import { ArrowLeftOutlined, FileExcelOutlined, ArrowUpOutlined, ArrowDownOutlined, WalletOutlined, SwapOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 interface FlowItem {
@@ -102,13 +102,6 @@ export default function CashflowReportPage() {
     const formatMoney = (val?: number) => {
         if (val === undefined || val === null) return '0 ₸';
         return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(val) + ' ₸';
-    };
-
-    const cardStyle = {
-        borderRadius: 8,
-        background: token.colorBgContainer,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     };
 
     // Columns config
@@ -237,32 +230,100 @@ export default function CashflowReportPage() {
     ];
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px' }} />
-                    <div>
-                        <Title level={4} style={{ margin: 0 }}>Движение денежных средств (ДДС)</Title>
-                        <Text type="secondary">Фактическое движение денег по счетам и кассам</Text>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px', marginRight: 8 }} />
+                        Бухгалтерия · ДДС
                     </div>
+                    <h1 className="lc2-title">Движение денежных средств</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Фактическое движение денег по счетам и кассам
+                    </p>
+                    <Space wrap>
+                        <RangePicker
+                            value={dates}
+                            onChange={(val) => setDates(val as any)}
+                            allowClear={false}
+                            style={{
+                                borderRadius: 8,
+                                background: token.colorBgContainer,
+                                border: `1px solid ${token.colorBorderSecondary}`,
+                            }}
+                        />
+                        <Button
+                            type="default"
+                            icon={<FileExcelOutlined />}
+                            onClick={handleExportExcel}
+                            loading={exporting}
+                            className="lc-cta"
+                            style={{
+                                borderColor: token.colorSuccess,
+                                color: token.colorSuccess,
+                                fontWeight: 600,
+                                boxShadow: `0 2px 4px ${token.colorSuccess}20`,
+                            }}
+                        >
+                            Скачать Excel
+                        </Button>
+                    </Space>
                 </div>
-                <Space wrap>
-                    <RangePicker
-                        value={dates}
-                        onChange={(val) => setDates(val as any)}
-                        allowClear={false}
-                        style={cardStyle}
-                    />
-                    <Button
-                        type="primary"
-                        icon={<FileExcelOutlined />}
-                        onClick={handleExportExcel}
-                        loading={exporting}
-                        style={{ background: '#10b981', borderColor: '#10b981' }}
-                    >
-                        Скачать Excel
-                    </Button>
-                </Space>
+                {report && (
+                    <div className="lc2-metrics">
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                                <WalletOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Начальный остаток</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(report.startBalance)}</div>
+                                <div className="lc2-msub">на начало периода</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                                <ArrowUpOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Поступления (+)</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(report.totalIn)}</div>
+                                <div className="lc2-msub">приход</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc3545' }}>
+                                <ArrowDownOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Списания</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(report.totalOut)}</div>
+                                <div className="lc2-msub">расход</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: report.netChange >= 0 ? '#e6ffed' : '#ffeef0', color: report.netChange >= 0 ? '#28a745' : '#dc3545' }}>
+                                <SwapOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Чистый поток</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: report.netChange >= 0 ? '#28a745' : '#dc3545' }}>{formatMoney(report.netChange)}</div>
+                                <div className="lc2-msub">{report.netChange >= 0 ? 'приток' : 'отток'}</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
+                                <WalletOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Конечный остаток</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(report.endBalance)}</div>
+                                <div className="lc2-msub">на конец периода</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {loading ? (
@@ -270,111 +331,49 @@ export default function CashflowReportPage() {
                     <Spin size="large" tip="Вычисление показателей..." />
                 </div>
             ) : report ? (
-                <div>
-                    {/* KPI Balance Cards */}
-                    <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-                        <Col xs={24} sm={12} md={5}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Начальный остаток</span>}
-                                    value={report.startBalance}
-                                    valueStyle={{ fontSize: 16, fontWeight: 700 }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<WalletOutlined style={{ fontSize: 14, color: token.colorPrimary, marginRight: 4 }} />}
+                <div className="lc-card" style={{ padding: 20 }}>
+                    <Tabs defaultActiveKey="flows" items={[
+                        {
+                            key: 'flows',
+                            label: `Операции (${report.flows.length})`,
+                            children: (
+                                <Table
+                                    columns={flowColumns}
+                                    dataSource={report.flows}
+                                    rowKey="id"
+                                    size="small"
+                                    pagination={{ pageSize: 25, showSizeChanger: true }}
+                                    scroll={{ x: true }}
                                 />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} md={5}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Поступления (+)</span>}
-                                    value={report.totalIn}
-                                    valueStyle={{ fontSize: 16, fontWeight: 700, color: '#389e0d' }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<ArrowUpOutlined style={{ fontSize: 14, marginRight: 4 }} />}
+                            )
+                        },
+                        {
+                            key: 'accounts',
+                            label: 'По счетам и кассам',
+                            children: (
+                                <Table
+                                    columns={accountColumns}
+                                    dataSource={report.accounts}
+                                    rowKey="name"
+                                    size="small"
+                                    pagination={false}
                                 />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} md={5}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Списания</span>}
-                                    value={report.totalOut}
-                                    valueStyle={{ fontSize: 16, fontWeight: 700, color: '#cf1322' }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<ArrowDownOutlined style={{ fontSize: 14, marginRight: 4 }} />}
+                            )
+                        },
+                        {
+                            key: 'categories',
+                            label: 'Распределение по статьям',
+                            children: (
+                                <Table
+                                    columns={categoryColumns}
+                                    dataSource={report.categories}
+                                    rowKey={(r) => `${r.name}_${r.direction}`}
+                                    size="small"
+                                    pagination={{ pageSize: 20 }}
                                 />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} md={4}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Чистый поток</span>}
-                                    value={report.netChange}
-                                    valueStyle={{ fontSize: 16, fontWeight: 800, color: report.netChange >= 0 ? '#389e0d' : '#cf1322' }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<SwapOutlined style={{ fontSize: 14, marginRight: 4 }} />}
-                                />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} md={5}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Конечный остаток</span>}
-                                    value={report.endBalance}
-                                    valueStyle={{ fontSize: 16, fontWeight: 700 }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<WalletOutlined style={{ fontSize: 14, color: '#8c8c8c', marginRight: 4 }} />}
-                                />
-                            </Card>
-                        </Col>
-                    </Row>
-
-                    {/* Breakdown Tabs */}
-                    <Card style={cardStyle}>
-                        <Tabs defaultActiveKey="flows" items={[
-                            {
-                                key: 'flows',
-                                label: `Операции (${report.flows.length})`,
-                                children: (
-                                    <Table
-                                        columns={flowColumns}
-                                        dataSource={report.flows}
-                                        rowKey="id"
-                                        size="small"
-                                        pagination={{ pageSize: 25, showSizeChanger: true }}
-                                        scroll={{ x: true }}
-                                    />
-                                )
-                            },
-                            {
-                                key: 'accounts',
-                                label: 'По счетам и кассам',
-                                children: (
-                                    <Table
-                                        columns={accountColumns}
-                                        dataSource={report.accounts}
-                                        rowKey="name"
-                                        size="small"
-                                        pagination={false}
-                                    />
-                                )
-                            },
-                            {
-                                key: 'categories',
-                                label: 'Распределение по статьям',
-                                children: (
-                                    <Table
-                                        columns={categoryColumns}
-                                        dataSource={report.categories}
-                                        rowKey={(r) => `${r.name}_${r.direction}`}
-                                        size="small"
-                                        pagination={{ pageSize: 20 }}
-                                    />
-                                )
-                            }
-                        ]} />
-                    </Card>
+                            )
+                        }
+                    ]} />
                 </div>
             ) : (
                 <div style={{ textAlign: 'center', padding: 40 }}>Сводка недоступна</div>

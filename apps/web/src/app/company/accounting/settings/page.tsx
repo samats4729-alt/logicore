@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Card, Button, Table, Tabs, Switch, Modal, Form, Input, Select, Space, App, Tag, theme } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
+import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, Select, Space, App, Tag, theme, Spin } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface FinanceAccount {
     id: string;
@@ -208,26 +208,34 @@ export default function FinanceSettingsPage() {
         }
     ];
 
-    const cardStyle = {
-        borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        border: `1px solid ${token.colorBorderSecondary}`,
-    };
-
     return (
-        <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px' }} />
-                <Title level={4} style={{ margin: 0 }}>Настройки финансовых справочников</Title>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px', marginRight: 8 }} />
+                        Бухгалтерия · Настройки
+                    </div>
+                    <h1 className="lc2-title">Настройки финансовых справочников</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Управление счетами, кассами и статьями доходов и расходов
+                    </p>
+                </div>
             </div>
 
             {!canEditFinance && (
                 <div style={{ marginBottom: 16 }}>
-                    <Text type="warning">Внимание: У вас нет прав на редактирование финансовых настроек. Разрешен только просмотр.</Text>
+                    <span style={{ color: '#faad14', fontSize: 13 }}>Внимание: У вас нет прав на редактирование финансовых настроек. Разрешен только просмотр.</span>
                 </div>
             )}
 
-            <Card style={cardStyle} loading={loading}>
+            {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 250, background: token.colorBgContainer, borderRadius: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
+                    <Spin />
+                </div>
+            ) : (
+            <div className="lc-card" style={{ padding: 20 }}>
                 <Tabs defaultActiveKey="accounts" size="large" type="line" items={[
                     {
                         key: 'accounts',
@@ -286,7 +294,8 @@ export default function FinanceSettingsPage() {
                         )
                     }
                 ]} />
-            </Card>
+            </div>
+            )}
 
             {/* Account Modal */}
             <Modal

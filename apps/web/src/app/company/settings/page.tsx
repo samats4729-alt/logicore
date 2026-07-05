@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Select, Popconfirm } from 'antd';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Select, Popconfirm, Tag } from 'antd';
 import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -321,27 +321,30 @@ export default function SettingsPage() {
                 <div className="lc-stack">
                     {/* Организации */}
                     <div className="lc-card lc-pad">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                            <div>
-                                <div className="lc-sec-title">Организации</div>
-                                <div className="lc-sec-hint">Переключение между вашими компаниями и добавление новых</div>
-                            </div>
-                            <Button icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
+                        <div className="lc-sec-title">Организации</div>
+                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Переключайтесь между своими организациями или добавьте новую</div>
+                        <Space wrap style={{ marginBottom: 16 }}>
+                            <Select
+                                placeholder="Переключить организацию"
+                                style={{ minWidth: 280 }}
+                                loading={myCompaniesLoading}
+                                onChange={handleSwitchCompany}
+                                options={myCompanies.map((c: any) => ({
+                                    label: c.name,
+                                    value: c.id,
+                                }))}
+                                size="large"
+                            />
+                            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setModalVisible(true)} size="large">
                                 Добавить организацию
                             </Button>
-                        </div>
-                        <div style={{ marginTop: 16 }}>
-                            {prepareCompanyOptions(myCompanies, user?.companyId, user?.company?.name).length > 1 ? (
-                                <Space align="center" size="middle" wrap>
-                                    <Select
-                                        style={{ width: 300 }}
-                                        size="large"
-                                        value={user?.companyId}
-                                        onChange={handleSwitchCompany}
-                                        optionLabelProp="label"
-                                        options={prepareCompanyOptions(myCompanies, user?.companyId, user?.company?.name)}
-                                        loading={myCompaniesLoading}
-                                    />
+                        </Space>
+                        {myCompanies.length > 1 && user?.companyId ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                <Tag color="blue" style={{ padding: '2px 8px', fontSize: 13 }}>
+                                    {user?.company?.name || 'Текущая организация'}
+                                </Tag>
+                                {user.role === 'COMPANY_ADMIN' && (
                                     <Popconfirm
                                         title="Удалить организацию?"
                                         description="Вы действительно хотите удалить эту организацию? Доступ к её данным для вас будет закрыт."
@@ -352,11 +355,11 @@ export default function SettingsPage() {
                                     >
                                         <Button danger icon={<DeleteOutlined />} size="large" />
                                     </Popconfirm>
-                                </Space>
-                            ) : (
-                                <Text strong style={{ fontSize: 15 }}>{user?.company?.name || 'Ваша организация'}</Text>
-                            )}
-                        </div>
+                                )}
+                            </div>
+                        ) : (
+                            <Text strong style={{ fontSize: 15 }}>{user?.company?.name || 'Ваша организация'}</Text>
+                        )}
                     </div>
 
                     <Form
@@ -456,47 +459,46 @@ export default function SettingsPage() {
 
                         <div className="lc-card lc-pad" style={{ marginTop: 16 }}>
                         <div className="lc-sec-title"><BankOutlined style={{ marginRight: 8 }} />Банковские реквизиты</div>
-                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Используются в счетах и договорах</div>
+                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Используются для формирования счёта на оплату. Все поля обязательны для юрлиц</div>
                         <Row gutter={24}>
                             <Col xs={24} md={12}>
-                                <Form.Item 
-                                    name="bankAccount" 
-                                    label="ИИК (номер счёта)"
-                                    rules={[{ required: true, message: 'Введите ИИК' }]}
+                                <Form.Item
+                                    name="bankAccount"
+                                    label="Расчётный счёт (IBAN)"
+                                    rules={[{ required: true, message: 'Введите расчётный счёт' }]}
                                 >
-                                    <Input size="large" placeholder="KZ12345678901234567" />
+                                    <Input size="large" placeholder="KZ123456789012345678" />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item 
-                                    name="bankName" 
+                                <Form.Item
+                                    name="bankName"
                                     label="Название банка"
                                     rules={[{ required: true, message: 'Введите название банка' }]}
                                 >
-                                    <Input size="large" placeholder="АО «Каспи Банк»" />
+                                    <Input size="large" placeholder="АО Народный Банк" />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item 
-                                    name="bankBic" 
+                                <Form.Item
+                                    name="bankBic"
                                     label="БИК"
                                     rules={[{ required: true, message: 'Введите БИК' }]}
                                 >
-                                    <Input size="large" placeholder="CASPKZKA" />
+                                    <Input size="large" placeholder="NBRKKZKA" />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>
-                                <Form.Item 
-                                    name="kbe" 
-                                    label="КБЕ"
-                                    rules={[{ required: true, message: 'Введите КБЕ' }]}
-                                >
-                                    <Input size="large" placeholder="17" maxLength={2} />
+                                <Form.Item name="kbe" label="КБЕ">
+                                    <Select placeholder="КБЕ" size="large" allowClear>
+                                        {prepareCompanyOptions('kbe').map((opt: any) => (
+                                            <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
+                                        ))}
+                                    </Select>
                                 </Form.Item>
                             </Col>
                         </Row>
                         </div>
-
                         <Form.Item style={{ margin: '16px 0 0' }}>
                             <Button type="primary" htmlType="submit" loading={companyLoading} className="lc-cta">
                                 Сохранить данные компании
@@ -628,13 +630,27 @@ export default function SettingsPage() {
     ];
 
     return (
-        <div className="lc-page">
-            <div style={{ marginBottom: 18 }}>
-                <div className="lc-eyebrow">LogiCore — аккаунт</div>
-                <h1 className="lc-title">Настройки</h1>
-                <p style={{ color: '#8a91a0', fontSize: 14, margin: '6px 0 0' }}>
-                    Профиль, данные организации и безопасность
-                </p>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">LogiCore · Аккаунт</div>
+                    <h1 className="lc2-title">Настройки</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Профиль, данные организации и безопасность
+                    </p>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
+                            <UserOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Пользователь</div>
+                            <div className="lc2-mvalue">{user?.firstName} {user?.lastName}</div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <Tabs
                 defaultActiveKey="profile"

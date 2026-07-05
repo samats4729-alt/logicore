@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, Table, Button, Tag, Space, Input, Select, Empty, Typography } from 'antd';
+import { Table, Button, Tag, Space, Input, Select, Empty } from 'antd';
 import { FileOutlined, DownloadOutlined, EyeOutlined, UploadOutlined } from '@ant-design/icons';
 
-const { Title, Text } = Typography;
 const { Search } = Input;
 
 interface Document {
@@ -69,15 +68,34 @@ export default function DocumentsPage() {
     ];
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Title level={3}>Документы</Title>
-                <Button type="primary" icon={<UploadOutlined />}>
-                    Загрузить документ
-                </Button>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">Документы · Обзор</div>
+                    <h1 className="lc2-title">Документы</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Загруженные файлы — ТТН, счета, договоры и прочие документы
+                    </p>
+                    <Button type="primary" icon={<UploadOutlined />} className="lc-cta">
+                        Загрузить документ
+                    </Button>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
+                            <FileOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Всего документов</div>
+                            <div className="lc2-mvalue">{documents.length}</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <Card>
+            {/* ===== CONTENT CARD ===== */}
+            <div className="lc-card" style={{ padding: 20 }}>
                 <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     <Space>
                         <Search
@@ -107,11 +125,12 @@ export default function DocumentsPage() {
                             dataSource={documents}
                             rowKey="id"
                             loading={loading}
+                            size="small"
                             pagination={{ pageSize: 20 }}
                         />
                     )}
                 </Space>
-            </Card>
+            </div>
         </div>
     );
 }

@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Card, Button, DatePicker, Row, Col, Statistic, Table, Space, Spin, App, Tag, theme } from 'antd';
-import { ArrowLeftOutlined, FileExcelOutlined, DollarOutlined, LineChartOutlined, PercentageOutlined, WalletOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
+import { Typography, Button, DatePicker, Table, Space, Spin, App, Tag, theme } from 'antd';
+import { ArrowLeftOutlined, FileExcelOutlined, DollarOutlined, LineChartOutlined, WalletOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 interface PnLReport {
@@ -91,13 +91,6 @@ export default function PnLReportPage() {
         return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(val) + ' ₸';
     };
 
-    const cardStyle = {
-        borderRadius: 8,
-        background: token.colorBgContainer,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    };
-
     // Table rows data builder
     const getReportRows = () => {
         if (!report) return [];
@@ -172,32 +165,100 @@ export default function PnLReportPage() {
     ];
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px' }} />
-                    <div>
-                        <Title level={4} style={{ margin: 0 }}>Прибыли и убытки (P&L)</Title>
-                        <Text type="secondary">Финансовые результаты на основе начислений по закрытым сделкам</Text>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px', marginRight: 8 }} />
+                        Бухгалтерия · P&L
                     </div>
+                    <h1 className="lc2-title">Прибыли и убытки (P&L)</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Финансовые результаты на основе начислений по закрытым сделкам
+                    </p>
+                    <Space wrap>
+                        <RangePicker
+                            value={dates}
+                            onChange={(val) => setDates(val as any)}
+                            allowClear={false}
+                            style={{
+                                borderRadius: 8,
+                                background: token.colorBgContainer,
+                                border: `1px solid ${token.colorBorderSecondary}`,
+                            }}
+                        />
+                        <Button
+                            type="default"
+                            icon={<FileExcelOutlined />}
+                            onClick={handleExportExcel}
+                            loading={exporting}
+                            className="lc-cta"
+                            style={{
+                                borderColor: token.colorSuccess,
+                                color: token.colorSuccess,
+                                fontWeight: 600,
+                                boxShadow: `0 2px 4px ${token.colorSuccess}20`,
+                            }}
+                        >
+                            Скачать Excel
+                        </Button>
+                    </Space>
                 </div>
-                <Space wrap>
-                    <RangePicker
-                        value={dates}
-                        onChange={(val) => setDates(val as any)}
-                        allowClear={false}
-                        style={cardStyle}
-                    />
-                    <Button
-                        type="primary"
-                        icon={<FileExcelOutlined />}
-                        onClick={handleExportExcel}
-                        loading={exporting}
-                        style={{ background: '#10b981', borderColor: '#10b981' }}
-                    >
-                        Скачать Excel
-                    </Button>
-                </Space>
+                {report && (
+                    <div className="lc2-metrics">
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                                <WalletOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Выручка</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(report.revenueNet)}</div>
+                                <div className="lc2-msub">за период</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: '#f1f2f5', color: '#5f6672' }}>
+                                <FallOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Себестоимость</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(report.executorCostNet)}</div>
+                                <div className="lc2-msub">расходы</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: report.grossProfit >= 0 ? '#e6ffed' : '#ffeef0', color: report.grossProfit >= 0 ? '#28a745' : '#dc3545' }}>
+                                <RiseOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Валовая прибыль</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: report.grossProfit >= 0 ? '#28a745' : '#dc3545' }}>{formatMoney(report.grossProfit)}</div>
+                                <div className="lc2-msub">{report.grossProfit >= 0 ? 'доход' : 'убыток'}</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: report.netProfit >= 0 ? '#e6ffed' : '#ffeef0', color: report.netProfit >= 0 ? '#28a745' : '#dc3545' }}>
+                                <DollarOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Чистая прибыль</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: report.netProfit >= 0 ? '#28a745' : '#dc3545' }}>{formatMoney(report.netProfit)}</div>
+                                <div className="lc2-msub">{report.netProfit >= 0 ? 'прибыль' : 'убыток'}</div>
+                            </div>
+                        </div>
+                        <div className="lc2-metric">
+                            <div className="lc2-mic" style={{ background: report.marginPercentage >= 0 ? '#e6ffed' : '#ffeef0', color: report.marginPercentage >= 0 ? '#28a745' : '#dc3545' }}>
+                                <LineChartOutlined />
+                            </div>
+                            <div>
+                                <div className="lc2-mlabel">Рентабельность</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: report.marginPercentage >= 0 ? '#28a745' : '#dc3545' }}>{report.marginPercentage}%</div>
+                                <div className="lc2-msub">чистой прибыли</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {loading ? (
@@ -205,82 +266,21 @@ export default function PnLReportPage() {
                     <Spin size="large" tip="Составление отчета..." />
                 </div>
             ) : report ? (
-                <div>
-                    {/* KPI Cards */}
-                    <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-                        <Col xs={24} sm={12} md={5}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Выручка</span>}
-                                    value={report.revenueNet}
-                                    valueStyle={{ fontSize: 16, fontWeight: 700 }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<WalletOutlined style={{ fontSize: 14, color: token.colorPrimary, marginRight: 4 }} />}
-                                />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} md={5}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Себестоимость</span>}
-                                    value={report.executorCostNet}
-                                    valueStyle={{ fontSize: 16, fontWeight: 700, color: token.colorTextSecondary }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<FallOutlined style={{ fontSize: 14, marginRight: 4, color: '#bfbfbf' }} />}
-                                />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} md={5}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Валовая прибыль</span>}
-                                    value={report.grossProfit}
-                                    valueStyle={{ fontSize: 16, fontWeight: 700, color: report.grossProfit >= 0 ? '#389e0d' : '#cf1322' }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<RiseOutlined style={{ fontSize: 14, marginRight: 4 }} />}
-                                />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} md={5}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Чистая прибыль</span>}
-                                    value={report.netProfit}
-                                    valueStyle={{ fontSize: 18, fontWeight: 800, color: report.netProfit >= 0 ? '#389e0d' : '#cf1322' }}
-                                    formatter={(v) => formatMoney(v as number)}
-                                    prefix={<DollarOutlined style={{ fontSize: 16, marginRight: 4 }} />}
-                                />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} md={4}>
-                            <Card size="small" style={cardStyle}>
-                                <Statistic
-                                    title={<span style={{ fontSize: 12, color: token.colorTextSecondary }}>Рентабельность</span>}
-                                    value={report.marginPercentage}
-                                    valueStyle={{ fontSize: 16, fontWeight: 700, color: report.marginPercentage >= 0 ? '#389e0d' : '#cf1322' }}
-                                    formatter={(v) => `${v}%`}
-                                    prefix={<LineChartOutlined style={{ fontSize: 14, marginRight: 4 }} />}
-                                />
-                            </Card>
-                        </Col>
-                    </Row>
-
-                    {/* Report Table */}
-                    <Card style={cardStyle} title={<span style={{ fontWeight: 600 }}>Отчёт о прибылях и убытках за выбранный период</span>}>
-                        <Table
-                            columns={columns}
-                            dataSource={getReportRows()}
-                            rowKey="key"
-                            size="middle"
-                            pagination={false}
-                            rowClassName={(r) => {
-                                if (r.type === 'spacer') return 'spacer-row';
-                                if (r.type === 'total_accent') return 'total-accent-row';
-                                if (r.type === 'final_accent') return 'final-accent-row';
-                                return '';
-                            }}
-                        />
-                    </Card>
+                <div className="lc-card" style={{ padding: 20 }}>
+                    <h2 style={{ fontWeight: 600, fontSize: 15, marginBottom: 16, color: token.colorText }}>Отчёт о прибылях и убытках за выбранный период</h2>
+                    <Table
+                        columns={columns}
+                        dataSource={getReportRows()}
+                        rowKey="key"
+                        size="small"
+                        pagination={false}
+                        rowClassName={(r) => {
+                            if (r.type === 'spacer') return 'spacer-row';
+                            if (r.type === 'total_accent') return 'total-accent-row';
+                            if (r.type === 'final_accent') return 'final-accent-row';
+                            return '';
+                        }}
+                    />
                 </div>
             ) : (
                 <div style={{ textAlign: 'center', padding: 40 }}>Отчет недоступен</div>
