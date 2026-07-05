@@ -537,7 +537,7 @@ ${commitList}`;
 
     async listPlatformUpdates(status?: string) {
         return this.prisma.platformUpdate.findMany({
-            where: status ? { status } : { status: { not: 'REJECTED' } },
+            where: status ? { status } : undefined,
             orderBy: { createdAt: 'desc' },
             take: 100,
         });

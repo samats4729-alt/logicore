@@ -58,7 +58,7 @@ export default function AdminUpdatesPage() {
         setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || { title: '', description: '' }), ...patch } }));
     };
 
-    const applyStatus = async (u: PlatformUpdate, status: 'PUBLISHED' | 'REJECTED') => {
+    const applyStatus = async (u: PlatformUpdate, status: 'PUBLISHED' | 'REJECTED' | 'DRAFT') => {
         try {
             const e = getEdit(u);
             await api.patch(`/assistant/updates/${u.id}`, {
@@ -66,7 +66,13 @@ export default function AdminUpdatesPage() {
                 description: e.description,
                 status,
             });
-            message.success(status === 'PUBLISHED' ? 'Опубликовано — гид уже в курсе' : 'Отклонено');
+            message.success(
+                status === 'PUBLISHED'
+                    ? 'Опубликовано — гид уже в курсе'
+                    : status === 'DRAFT'
+                        ? 'Перенесено в черновики'
+                        : 'Отклонено'
+            );
             setEdits(prev => { const c = { ...prev }; delete c[u.id]; return c; });
             load();
         } catch {
@@ -76,6 +82,7 @@ export default function AdminUpdatesPage() {
 
     const drafts = updates.filter(u => u.status === 'DRAFT');
     const published = updates.filter(u => u.status === 'PUBLISHED');
+    const rejected = updates.filter(u => u.status === 'REJECTED');
 
     return (
         <div>
@@ -140,9 +147,9 @@ export default function AdminUpdatesPage() {
 
                     <Title level={5} style={{ marginBottom: 12 }}>Опубликовано ({published.length})</Title>
                     {published.length === 0 ? (
-                        <Empty description="Пока нет опубликованных нововведений" />
+                        <Empty description="Пока нет опубликованных нововведений" style={{ marginBottom: 24 }} />
                     ) : (
-                        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                        <Space direction="vertical" size={10} style={{ width: '100%', marginBottom: 24 }}>
                             {published.map(u => (
                                 <Card key={u.id} size="small">
                                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -163,6 +170,47 @@ export default function AdminUpdatesPage() {
                                     </div>
                                 </Card>
                             ))}
+                        </Space>
+                    )}
+
+                    <Title level={5} style={{ marginBottom: 12 }}>Служебные и отклонённые изменения ({rejected.length})</Title>
+                    {rejected.length === 0 ? (
+                        <Empty description="Пока нет отклонённых или технических коммитов" />
+                    ) : (
+                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                            {rejected.map(u => {
+                                const e = getEdit(u);
+                                return (
+                                    <Card key={u.id} size="small" style={{ borderColor: '#f0f0f0', background: '#fafafa' }}>
+                                        <Input
+                                            value={e.title}
+                                            onChange={ev => setEdit(u.id, { title: ev.target.value })}
+                                            style={{ fontWeight: 600, marginBottom: 8, background: '#fff' }}
+                                            maxLength={120}
+                                        />
+                                        <TextArea
+                                            value={e.description}
+                                            onChange={ev => setEdit(u.id, { description: ev.target.value })}
+                                            autoSize={{ minRows: 2, maxRows: 5 }}
+                                            style={{ marginBottom: 10, background: '#fff' }}
+                                            maxLength={2000}
+                                        />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                            <Text type="secondary" style={{ fontSize: 11 }}>
+                                                {dayjs(u.createdAt).format('DD.MM.YYYY HH:mm')} · коммитов: {u.sourceCommits.length}
+                                            </Text>
+                                            <Space>
+                                                <Button size="small" icon={<CheckOutlined />} onClick={() => applyStatus(u, 'DRAFT')}>
+                                                    Вернуть в черновики
+                                                </Button>
+                                                <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => applyStatus(u, 'PUBLISHED')}>
+                                                    Опубликовать
+                                                </Button>
+                                            </Space>
+                                        </div>
+                                    </Card>
+                                );
+                            })}
                         </Space>
                     )}
                 </>
