@@ -13,8 +13,10 @@ import {
     EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
     FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined,
     MailOutlined, RightOutlined, EditOutlined, ExclamationCircleOutlined,
-    ClockCircleOutlined, TruckOutlined, PhoneOutlined
+    ClockCircleOutlined, TruckOutlined
 } from '@ant-design/icons';
+import LiveTicker, { buildOrderTickerItems } from '@/components/ui/LiveTicker';
+import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
@@ -1241,15 +1243,7 @@ export default function CompanyOrdersPage() {
     const pendingCount = orders.filter(o => o.status === 'PENDING').length;
     const problemCount = orders.filter(o => o.status === 'PROBLEM').length;
     const featured = filteredOrders[0] || orders[0] || null;
-    const tickerItems = orders.slice(0, 10).map(o => {
-        const from = extractCity(o, 'pickup');
-        const to = extractCity(o, 'delivery');
-        return {
-            num: o.orderNumber,
-            text: `${statusLabels[o.status] || o.status}${from && to ? ` · ${from} → ${to}` : ''}`,
-            color: (STATUS_PILL[o.status] || STATUS_PILL.DRAFT).fg,
-        };
-    });
+    const tickerItems = buildOrderTickerItems(orders);
 
     return (
         <div className="lc-page" style={{ height: '100%' }}>
@@ -1300,19 +1294,7 @@ export default function CompanyOrdersPage() {
             </div>
 
             {/* ===== ТИКЕР ЖИВЫХ СОБЫТИЙ (v1: из загруженных заявок) ===== */}
-            {tickerItems.length > 0 && (
-                <div className="lc2-ticker" aria-hidden="true">
-                    <div className="lc2-ticker-track">
-                        {[...tickerItems, ...tickerItems].map((t, i) => (
-                            <span className="lc2-tick" key={i}>
-                                <i style={{ background: t.color }} />
-                                <b>{t.num}</b>
-                                <span>{t.text}</span>
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            )}
+            <LiveTicker items={tickerItems} />
 
             {/* ===== ACTION BAR ===== */}
             <div className="lc2-actionbar">
@@ -1336,61 +1318,7 @@ export default function CompanyOrdersPage() {
             </div>
 
             {/* ===== FEATURED: последняя заявка ===== */}
-            {featured && (
-                <div className="lc2-featured">
-                    <div className="lc2-f-left">
-                        <div className="lc2-f-head">
-                            <span className="lc-eyebrow" style={{ marginBottom: 0 }}>История рейса</span>
-                            <StatusPill status={featured.status} />
-                        </div>
-                        <div className="lc2-f-num">{featured.orderNumber}</div>
-                        <div className="lc2-f-cargo">
-                            {[(featured as any).natureOfCargo, (featured as any).cargoWeight ? `${(featured as any).cargoWeight} т` : null, (featured as any).cargoType]
-                                .filter(Boolean).join(' · ') || featured.cargoDescription || 'Груз не указан'}
-                        </div>
-                        <div className="lc2-f-timeline">
-                            <div className="lc2-f-step done">
-                                <i /><div><b>{extractCity(featured, 'pickup') || 'Погрузка'}</b><span>Точка погрузки</span></div>
-                            </div>
-                            <div className="lc2-f-step active">
-                                <i /><div><b>{statusLabels[featured.status] || featured.status}</b><span>Прогресс ≈ {STATUS_PROGRESS[featured.status] ?? 0}%</span></div>
-                            </div>
-                            <div className={`lc2-f-step ${featured.status === 'COMPLETED' ? 'done' : ''}`}>
-                                <i /><div><b>{extractCity(featured, 'delivery') || 'Выгрузка'}</b><span>Точка выгрузки</span></div>
-                            </div>
-                        </div>
-                        <div className="lc2-f-progress">
-                            <i style={{ width: `${STATUS_PROGRESS[featured.status] ?? 0}%`, background: progressColor(featured.status) }} />
-                        </div>
-                        <div className="lc2-f-stats">
-                            <div><span>Стоимость</span><b>{featured.customerPrice ? `${featured.customerPrice.toLocaleString('ru-RU')} ₸` : '—'}</b></div>
-                            <div><span>Дата</span><b>{dayjs(featured.createdAt).format('DD.MM.YYYY')}</b></div>
-                            <div><span>Заказчик</span><b>{shortenCompanyName(featured.customerCompany?.name || '') || '—'}</b></div>
-                        </div>
-                    </div>
-                    <div className="lc2-f-right">
-                        <div className="lc2-f-driver">
-                            <span className="lc2-avatar">{nameInitials(featured.assignedDriverName || (featured.driver ? `${featured.driver.lastName} ${featured.driver.firstName}` : ''))}</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {featured.assignedDriverName || (featured.driver ? `${featured.driver.lastName} ${featured.driver.firstName}` : 'Водитель не назначен')}
-                                </div>
-                                <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.55)' }}>
-                                    Водитель · {featured.assignedDriverPlate || featured.driver?.vehiclePlate || '—'}
-                                </div>
-                            </div>
-                            {(featured as any).assignedDriverPhone && (
-                                <a className="lc2-callbtn" href={`tel:${(featured as any).assignedDriverPhone}`} aria-label="Позвонить водителю">
-                                    <PhoneOutlined />
-                                </a>
-                            )}
-                        </div>
-                        <Button block className="lc2-openbtn" onClick={() => router.push(`/company/orders/${featured.id}`)}>
-                            Открыть заявку <RightOutlined />
-                        </Button>
-                    </div>
-                </div>
-            )}
+            <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />
 
             <Tabs
                 activeKey={activeTab}

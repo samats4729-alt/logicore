@@ -15,6 +15,8 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import StatusPill from '@/components/ui/StatusPill';
+import LiveTicker, { buildOrderTickerItems } from '@/components/ui/LiveTicker';
+import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 
 interface Order {
     id: string;
@@ -158,56 +160,47 @@ export default function CompanyDashboard() {
         },
     ];
 
+    const featured = orders.find(o => !['COMPLETED', 'CANCELLED', 'DRAFT'].includes(o.status)) || orders[0] || null;
+    const tickerItems = buildOrderTickerItems(orders);
+
     return (
         <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
-            {/* Header */}
-            <div style={{ marginBottom: 18 }}>
-                <div className="lc-eyebrow">LogiCore — обзор</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                    <h1 className="lc-title" style={{ margin: 0 }}>{greeting()}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">LogiCore — обзор</div>
+                    <h1 className="lc2-title">{greeting()}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        {isManager ? 'Ваши заявки и активность' : 'Сводка по всем заявкам компании'}
+                    </p>
                     <Button type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')}>
                         Создать заявку
                     </Button>
                 </div>
-                <p style={{ color: '#8a91a0', fontSize: 13, margin: '5px 0 0' }}>
-                    {isManager ? 'Ваши заявки и активность' : 'Сводка по всем заявкам компании'}
-                </p>
+                <div className="lc2-metrics">
+                    {metrics.map((m: any, i) => (
+                        <div
+                            key={i}
+                            className="lc2-metric"
+                            onClick={m.onClick}
+                            style={m.onClick ? { cursor: 'pointer' } : undefined}
+                        >
+                            <div className="lc2-mic" style={{ background: m.bg, color: m.fg }}>{m.icon}</div>
+                            <div>
+                                <div className="lc2-mlabel">{m.label}</div>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
+                                <div className="lc2-msub">{m.hint}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            {/* Metrics */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-                {metrics.map((m: any, i) => (
-                    <div
-                        key={i}
-                        className="lc-metric"
-                        onClick={m.onClick}
-                        style={{
-                            flex: '1 1 200px',
-                            cursor: m.onClick ? 'pointer' : 'default',
-                            transition: 'transform 0.2s, box-shadow 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                            if (m.onClick) {
-                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.06)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            if (m.onClick) {
-                                e.currentTarget.style.transform = 'none';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }
-                        }}
-                    >
-                        <div className="lc-metric-icon" style={{ background: m.bg, color: m.fg }}>{m.icon}</div>
-                        <div>
-                            <div className="lc-metric-label">{m.label}</div>
-                            <div className="lc-metric-value" style={{ fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
-                            <div className="lc-metric-hint">{m.hint}</div>
-                        </div>
-                    </div>
-                ))}
-            </div>
+            {/* ===== ТИКЕР ===== */}
+            <LiveTicker items={tickerItems} />
+
+            {/* ===== FEATURED: активная заявка ===== */}
+            <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />
 
             {/* Recent orders */}
             <div className="lc-card">

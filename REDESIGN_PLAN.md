@@ -65,12 +65,17 @@ lc-page, lc-title/eyebrow, lc-status, lc-metric, lc-card, lc-filterbar, комп
 - [ ] Переключатель светлая/тёмная тема (☀/🌙 на референсе) — НЕ делан. Крупная задача:
       нужна тёмная палитра всего скина. Решение за владельцем.
 
-### Этап 3. Дашборд → референсный вид — [ ] TODO
+### Этап 3. Дашборд → референсный вид — [x] (сделано)
 Файл: apps/web/src/app/company/page.tsx
-- [ ] Хиро-метрики в стиле Этапа 1 (сейчас lc-metric карточки — привести к крупным цифрам).
-- [ ] Тикер (переиспользовать компонент из Этапа 1 — вынести в components/ui/LiveTicker.tsx,
-      сейчас он написан инлайн в orders/page.tsx — ВЫНЕСТИ при первом переиспользовании).
-- [ ] Featured-блок «последняя активная заявка» (переиспользовать из Этапа 1).
+- [x] Хиро-метрики в стиле Этапа 1: lc2-hero (приветствие + подпись + «Создать заявку» слева,
+      lc2-metrics справа; метрика «Заработано в этом месяце» осталась кликабельной → /company/my-salary).
+- [x] Тикер вынесен в components/ui/LiveTicker.tsx (default LiveTicker + buildOrderTickerItems);
+      orders/page.tsx и дашборд используют общий компонент.
+- [x] Featured-карточка вынесена в components/ui/FeaturedOrderCard.tsx (+ экспорты
+      ORDER_STATUS_PROGRESS / orderProgressColor / nameInitials); на дашборде показывает
+      первую активную заявку (не COMPLETED/CANCELLED/DRAFT), иначе первую из списка.
+      В orders/page.tsx локальные STATUS_PROGRESS/progressColor/nameInitials оставлены —
+      их использует колонка таблицы (прогресс-бар маршрута, аватар водителя).
 
 ### Этап 4. Остальные страницы под скин — [ ] TODO (по одной, аккуратно)
 Порядок: Реестр заявок → Счета → Взаиморасчёты → Контрагенты → Адреса → Транспорт →
@@ -105,3 +110,6 @@ lc-page, lc-title/eyebrow, lc-status, lc-metric, lc-card, lc-filterbar, комп
   детали в коммитах. Тикер v1 — из загруженных заявок, без нового бэкенда.
   Следующему исполнителю: начинать с Этапа 3 (дашборд), при этом СНАЧАЛА вынести
   LiveTicker и FeaturedOrderCard из orders/page.tsx в components/ui/ для переиспользования.
+- 2026-07-05 (Claude): выполнен Этап 3 — LiveTicker и FeaturedOrderCard вынесены в
+  components/ui/, дашборд переведён на lc2-hero + тикер + featured. tsc чистый.
+  Следующему исполнителю: Этап 4 (остальные страницы под скин, начать с Реестра заявок).
