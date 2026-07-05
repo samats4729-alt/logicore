@@ -1044,7 +1044,7 @@ export default function CompanyUsersPage() {
     );
 
     return (
-        <div className="company-structure-page">
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
             {/* Elegant Background Dot Grid Pattern for modern aesthetics */}
             <style>{`
                 .org-tree-container {
@@ -1381,49 +1381,91 @@ export default function CompanyUsersPage() {
                 }
             `}</style>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
                 <div>
-                    <Title level={3} style={{ margin: 0 }}>Персонал</Title>
-                    <Text type="secondary">Управление структурой, сотрудниками и водителями</Text>
+                    <div className="lc-eyebrow">Компания · Персонал</div>
+                    <h1 className="lc2-title">Персонал</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Управление структурой, сотрудниками и водителями
+                    </p>
+                    <Space>
+                        <Segmented
+                            value={activeSegment}
+                            onChange={(value) => {
+                                setActiveSegment(value as 'office' | 'drivers');
+                                if (value === 'drivers') {
+                                    setViewMode('list');
+                                }
+                            }}
+                            options={[
+                                { label: 'Офис', value: 'office' },
+                                { label: 'Водители', value: 'drivers' }
+                            ]}
+                        />
+                        {activeSegment === 'office' && (
+                            <Radio.Group value={viewMode} onChange={e => setViewMode(e.target.value)} buttonStyle="solid">
+                                <Radio.Button value="tree">
+                                    <ApartmentOutlined style={{ marginRight: 6 }} />
+                                    Схема
+                                </Radio.Button>
+                                <Radio.Button value="list">
+                                    <UnorderedListOutlined style={{ marginRight: 6 }} />
+                                    Список
+                                </Radio.Button>
+                            </Radio.Group>
+                        )}
+                        {activeSegment === 'drivers' ? (
+                            <Button type="primary" icon={<CarOutlined />} onClick={() => handleOpenUnifiedModal()} className="lc-cta">
+                                Добавить водителя
+                            </Button>
+                        ) : (
+                            <Button type="primary" icon={<MailOutlined />} onClick={() => handleOpenUnifiedModal()} className="lc-cta">
+                                Пригласить
+                            </Button>
+                        )}
+                    </Space>
                 </div>
-                <Space>
-                    <Segmented
-                        value={activeSegment}
-                        onChange={(value) => {
-                            setActiveSegment(value as 'office' | 'drivers');
-                            if (value === 'drivers') {
-                                setViewMode('list');
-                            }
-                        }}
-                        options={[
-                            { label: 'Офис', value: 'office' },
-                            { label: 'Водители', value: 'drivers' }
-                        ]}
-                        size="middle"
-                        style={{ marginRight: 8 }}
-                    />
-                    {activeSegment === 'office' && (
-                        <Radio.Group value={viewMode} onChange={e => setViewMode(e.target.value)} buttonStyle="solid">
-                            <Radio.Button value="tree">
-                                <ApartmentOutlined style={{ marginRight: 6 }} />
-                                Схема
-                            </Radio.Button>
-                            <Radio.Button value="list">
-                                <UnorderedListOutlined style={{ marginRight: 6 }} />
-                                Список
-                            </Radio.Button>
-                        </Radio.Group>
-                    )}
-                    {activeSegment === 'drivers' ? (
-                        <Button type="primary" icon={<CarOutlined />} onClick={() => handleOpenUnifiedModal()}>
-                            Добавить водителя
-                        </Button>
-                    ) : (
-                        <Button type="primary" icon={<MailOutlined />} onClick={() => handleOpenUnifiedModal()}>
-                            Пригласить
-                        </Button>
-                    )}
-                </Space>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <TeamOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Сотрудники</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {users.filter(u => u.role !== 'DRIVER').length}
+                            </div>
+                            <div className="lc2-msub">офис</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Водители</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {users.filter(u => u.role === 'DRIVER').length}
+                            </div>
+                            <div className="lc2-msub">в штате</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: invitations.length > 0 ? '#ffeef0' : '#f1f2f5', color: invitations.length > 0 ? '#dc3545' : '#5f6672' }}>
+                            <MailOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Приглашения</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {invitations.length}
+                            </div>
+                            <div className="lc2-msub" style={{ color: invitations.length > 0 ? '#dc3545' : '#8a91a0' }}>
+                                {invitations.length > 0 ? 'ожидают активации' : 'нет активных'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {viewMode === 'tree' ? (
@@ -1464,17 +1506,11 @@ export default function CompanyUsersPage() {
                         </div>
                     </Col>
                     <Col xs={24} lg={6}>
-                        <Card 
-                            title={
-                                <span style={{ fontWeight: 600, color: '#374151', fontSize: 13 }}>
-                                    <UserOutlined style={{ marginRight: 6, color: '#6b7280' }} />
-                                    Нераспределенные ({unassignedUsers.length})
-                                </span>
-                            }
-                            size="small"
-                            style={{ borderRadius: 12, minHeight: 480, border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}
-                            bodyStyle={{ padding: 12 }}
-                        >
+                        <div className="lc-card" style={{ padding: 12, minHeight: 480, borderRadius: 16 }}>
+                            <div style={{ fontWeight: 600, color: '#374151', fontSize: 13, marginBottom: 12 }}>
+                                <UserOutlined style={{ marginRight: 6, color: '#6b7280' }} />
+                                Нераспределенные ({unassignedUsers.length})
+                            </div>
                             <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 12 }}>
                                 Сотрудники и водители без привязки к отделам. Вы можете назначить их из карточки нужного отдела.
                             </Text>
@@ -1527,11 +1563,11 @@ export default function CompanyUsersPage() {
                                     ))
                                 )}
                             </div>
-                        </Card>
+                        </div>
                     </Col>
                 </Row>
             ) : (
-                <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.01)' }}>
+                <div className="lc-card" style={{ padding: 20 }}>
                     <Tabs defaultActiveKey="1">
                         <Tabs.TabPane tab={activeSegment === 'drivers' ? `Водители (${filteredUsers.length})` : `Активные (${filteredUsers.length})`} key="1">
                             <Table
@@ -1540,6 +1576,7 @@ export default function CompanyUsersPage() {
                                 rowKey="id"
                                 loading={loading}
                                 pagination={{ pageSize: 10 }}
+                                size="small"
                             />
                         </Tabs.TabPane>
                         {activeSegment === 'office' && (
@@ -1550,11 +1587,12 @@ export default function CompanyUsersPage() {
                                     rowKey="id"
                                     loading={loading}
                                     pagination={{ pageSize: 10 }}
+                                    size="small"
                                 />
                             </Tabs.TabPane>
                         )}
                     </Tabs>
-                </Card>
+                </div>
             )}
 
             {/* Modal: Create Department */}
