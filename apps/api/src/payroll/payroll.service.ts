@@ -50,7 +50,8 @@ export class PayrollService {
 
             // Получить схему менеджера
             const scheme = await this.getSchemeFor(managerCompanyId, manager.id);
-            if (!scheme || !scheme.isActive || scheme.accrualStatus !== trigger) {
+            const normalizedTrigger = trigger.startsWith('STATUS:') ? trigger.slice(7) : trigger;
+            if (!scheme || !scheme.isActive || scheme.accrualStatus !== normalizedTrigger) {
                 return;
             }
 
