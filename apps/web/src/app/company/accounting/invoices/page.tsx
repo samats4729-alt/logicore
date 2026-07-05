@@ -32,6 +32,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
+import StatusPill from '@/components/ui/StatusPill';
 
 const { Title, Text } = Typography;
 
@@ -131,6 +132,15 @@ export default function InvoicesPage() {
         });
     }, [invoices, activeTab, statusFilter, search, user?.companyId]);
 
+    const getInitials = (name: string) => {
+        if (!name || name === '—') return '';
+        const parts = name.trim().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    };
+
     const columns = [
         {
             title: 'Номер счета',
@@ -152,10 +162,16 @@ export default function InvoicesPage() {
             key: 'counterparty',
             render: (_: any, record: any) => {
                 const comp = record.issuerId === user?.companyId ? record.recipient : record.issuer;
+                const name = comp?.name || 'Внешняя компания';
                 return (
-                    <div>
-                        <div style={{ fontWeight: 500 }}>{comp?.name || 'Внешняя компания'}</div>
-                        {comp?.bin && <div style={{ fontSize: 11, color: token.colorTextSecondary }}>БИН: {comp.bin}</div>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="lc2-avatar lc2-avatar-sm" style={{ background: activeTab === 'OUTGOING' ? '#e0f2fe' : '#f1f2f5', color: activeTab === 'OUTGOING' ? '#0369a1' : '#5f6672', flexShrink: 0 }}>
+                            {getInitials(name) || 'CO'}
+                        </span>
+                        <div>
+                            <div style={{ fontWeight: 500 }}>{name}</div>
+                            {comp?.bin && <div style={{ fontSize: 11, color: token.colorTextSecondary }}>БИН: {comp.bin}</div>}
+                        </div>
                     </div>
                 );
             },
@@ -227,11 +243,7 @@ export default function InvoicesPage() {
             title: 'Статус',
             dataIndex: 'status',
             key: 'status',
-            render: (status: string) => (
-                <Tag color={statusColors[status] || 'default'} style={{ fontWeight: 500 }}>
-                    {statusLabels[status] || status}
-                </Tag>
-            ),
+            render: (status: string) => <StatusPill status={status} />,
         },
         {
             title: 'Действия',
@@ -298,26 +310,30 @@ export default function InvoicesPage() {
     ];
 
     return (
-        <div style={{ height: '100%', padding: '0 8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
                 <div>
-                    <Title level={3} style={{ margin: 0 }}>Реестр счетов</Title>
-                    <Text type="secondary" style={{ fontSize: 13 }}>
+                    <div className="lc-eyebrow">Бухгалтерия · Документы</div>
+                    <h1 className="lc2-title">Реестр счетов</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
                         Группировка выполненных рейсов и сделок для взаимных расчетов с заказчиками и партнерами
-                    </Text>
+                    </p>
+                    {isAccountantOrAdmin && (
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={() => router.push('/company/accounting/invoices/create')}
+                            className="lc-cta"
+                        >
+                            Выставить счет
+                        </Button>
+                    )}
                 </div>
-                {isAccountantOrAdmin && (
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={() => router.push('/company/accounting/invoices/create')}
-                    >
-                        Выставить счет
-                    </Button>
-                )}
             </div>
 
-            <Card style={cardStyle} styles={{ body: { padding: '16px' } }}>
+            {/* ===== TABLE CARD ===== */}
+            <div className="lc-card" style={{ padding: '20px' }}>
                 <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
                     <Input
                         placeholder="Поиск по номеру счета или контрагенту..."
@@ -356,6 +372,7 @@ export default function InvoicesPage() {
                             label: `Входящие (Расходы / От партнеров нам)`,
                         },
                     ]}
+                    style={{ marginBottom: 16 }}
                 />
 
                 <Table
@@ -365,19 +382,9 @@ export default function InvoicesPage() {
                     loading={loading}
                     pagination={{ pageSize: 15 }}
                     scroll={{ x: 1000 }}
+                    size="small"
                 />
-            </Card>
-
-            <style jsx global>{`
-                .ant-table-thead > tr > th {
-                    font-size: 12px !important;
-                    font-weight: 600 !important;
-                    background: ${token.colorBgLayout} !important;
-                }
-                .ant-table-tbody > tr > td {
-                    font-size: 13px !important;
-                }
-            `}</style>
+            </div>
         </div>
     );
 }

@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import StatusPill from '@/components/ui/StatusPill';
 
 const { Title, Text } = Typography;
 
@@ -66,6 +67,15 @@ interface Totals {
 }
 
 const fmt = (n: number) => n.toLocaleString('ru-RU');
+
+const getInitials = (name: string) => {
+    if (!name || name === '—') return '';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+};
 
 function getRoute(order: OrderItem): string {
     const pts = order.routePoints || [];
@@ -242,7 +252,7 @@ export default function CounterpartyReportPage() {
         },
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110,
-            render: (s: string) => <Tag color={statusColors[s] || 'default'} style={{ fontSize: 11, margin: 0 }}>{statusLabels[s] || s}</Tag>,
+            render: (s: string) => <StatusPill status={s} />,
         },
         {
             title: 'Направление', key: 'direction', width: 120,
@@ -284,112 +294,115 @@ export default function CounterpartyReportPage() {
     }
 
     return (
-        <div style={{ height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 16 }}>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
                 <div>
-                    <Title level={4} style={{ margin: 0 }}>Взаиморасчёты с контрагентами</Title>
-                    <Text type="secondary" style={{ display: 'block', fontSize: 13 }}>
+                    <div className="lc-eyebrow">Бухгалтерия · Финансы</div>
+                    <h1 className="lc2-title">Взаиморасчёты</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
                         Финансовая отчётность по всем контрагентам — как заказчик, экспедитор или суб-экспедитор
-                    </Text>
+                    </p>
+                    <Button
+                        type="default"
+                        icon={<FileExcelOutlined />}
+                        onClick={handleExportExcel}
+                        loading={exporting}
+                        className="lc-cta"
+                        style={{
+                            borderColor: token.colorSuccess,
+                            color: token.colorSuccess,
+                            fontWeight: 600,
+                            boxShadow: `0 2px 4px ${token.colorSuccess}20`,
+                        }}
+                    >
+                        Экспорт в Excel
+                    </Button>
                 </div>
-                <Button
-                    type="default"
-                    icon={<FileExcelOutlined />}
-                    onClick={handleExportExcel}
-                    loading={exporting}
-                    style={{
-                        borderColor: token.colorSuccess,
-                        color: token.colorSuccess,
-                        fontWeight: 600,
-                        boxShadow: `0 2px 4px ${token.colorSuccess}20`,
-                    }}
-                >
-                    Экспорт в Excel
-                </Button>
-            </div>
-
-            {/* SUMMARY CARDS */}
-            <Row gutter={12} style={{ marginBottom: 16 }}>
-                <Col xs={24} sm={8}>
-                    <Card size="small" styles={{ body: { padding: '12px 16px' } }} style={cardStyle}>
-                        <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Нам должны</span>}
-                            value={filteredTotals.unpaidTheyOweUs}
-                            prefix={<ArrowUpOutlined style={{ color: token.colorWarning, marginRight: 4 }} />}
-                            valueStyle={{ fontSize: 20, color: token.colorText, fontWeight: 700 }}
-                            suffix="₸"
-                        />
-                        {filteredTotals.totalTheyOweUs > 0 && (
-                            <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                            <ArrowUpOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Нам должны</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {fmt(filteredTotals.unpaidTheyOweUs)} ₸
+                            </div>
+                            <div className="lc2-msub">
                                 всего: {fmt(filteredTotals.totalTheyOweUs)} ₸
                             </div>
-                        )}
-                    </Card>
-                </Col>
-                <Col xs={24} sm={8}>
-                    <Card size="small" styles={{ body: { padding: '12px 16px' } }} style={cardStyle}>
-                        <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Мы должны</span>}
-                            value={filteredTotals.unpaidWeOweThem}
-                            prefix={<ArrowDownOutlined style={{ color: token.colorError, marginRight: 4 }} />}
-                            valueStyle={{ fontSize: 20, color: token.colorText, fontWeight: 700 }}
-                            suffix="₸"
-                        />
-                        {filteredTotals.totalWeOweThem > 0 && (
-                            <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc3545' }}>
+                            <ArrowDownOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Мы должны</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {fmt(filteredTotals.unpaidWeOweThem)} ₸
+                            </div>
+                            <div className="lc2-msub">
                                 всего: {fmt(filteredTotals.totalWeOweThem)} ₸
                             </div>
-                        )}
-                    </Card>
-                </Col>
-                <Col xs={24} sm={8}>
-                    <Card size="small" styles={{ body: { padding: '12px 16px' } }} style={cardStyle}>
-                        <Statistic
-                            title={<span style={{ fontSize: 11, color: token.colorTextSecondary }}>Баланс</span>}
-                            value={filteredTotals.balance}
-                            prefix={<SwapOutlined style={{ color: token.colorPrimary, marginRight: 4 }} />}
-                            valueStyle={{ fontSize: 20, color: token.colorText, fontWeight: 700 }}
-                            suffix="₸"
-                        />
-                        <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
-                            {filtered.length} контрагент{filtered.length === 1 ? '' : filtered.length < 5 ? 'а' : 'ов'}
                         </div>
-                    </Card>
-                </Col>
-            </Row>
-
-            {/* FILTERS */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                <Input
-                    placeholder="Поиск по контрагенту или № заявки..."
-                    prefix={<SearchOutlined style={{ color: token.colorTextDescription }} />}
-                    value={search} onChange={e => setSearch(e.target.value)}
-                    style={{ width: 280 }} allowClear size="small"
-                />
-                <Select
-                    size="small" value={roleFilter} onChange={setRoleFilter}
-                    style={{ width: 200 }}
-                    options={[
-                        { value: 'all', label: 'Все роли' },
-                        { value: 'Заказчик', label: 'Мы заказчик' },
-                        { value: 'Экспедитор', label: 'Мы экспедитор' },
-                        { value: 'Суб-экспедитор', label: 'Мы суб-экспедитор' },
-                    ]}
-                />
-                <Select
-                    size="small" value={paymentFilter} onChange={setPaymentFilter}
-                    style={{ width: 220 }}
-                    options={[
-                        { value: 'all', label: 'Все контрагенты' },
-                        { value: 'unpaid_them', label: 'Нам должны' },
-                        { value: 'unpaid_us', label: 'Мы должны' },
-                        { value: 'settled', label: 'Все оплачено' },
-                    ]}
-                />
-                <span style={{ fontSize: 11, color: token.colorTextSecondary, marginLeft: 'auto', lineHeight: '24px' }}>
-                    {filtered.length} из {data.counterparties.length} контрагентов
-                </span>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
+                            <SwapOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Баланс</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: filteredTotals.balance >= 0 ? '#28a745' : '#dc3545' }}>
+                                {filteredTotals.balance >= 0 ? '+' : ''}{fmt(filteredTotals.balance)} ₸
+                            </div>
+                            <div className="lc2-msub">
+                                {filtered.length} контрагент{filtered.length === 1 ? '' : filtered.length < 5 ? 'а' : 'ов'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            {/* ===== TABLE & FILTERS CARD ===== */}
+            <div className="lc-card" style={{ padding: '20px' }}>
+                {/* FILTERS */}
+                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Input
+                        placeholder="Поиск по контрагенту или № заявки..."
+                        prefix={<SearchOutlined style={{ color: token.colorTextDescription }} />}
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        style={{ width: 300 }}
+                        allowClear
+                    />
+                    <Select
+                        value={roleFilter}
+                        onChange={setRoleFilter}
+                        style={{ width: 200 }}
+                        options={[
+                            { value: 'all', label: 'Все роли' },
+                            { value: 'Заказчик', label: 'Мы заказчик' },
+                            { value: 'Экспедитор', label: 'Мы экспедитор' },
+                            { value: 'Суб-экспедитор', label: 'Мы суб-экспедитор' },
+                        ]}
+                    />
+                    <Select
+                        value={paymentFilter}
+                        onChange={setPaymentFilter}
+                        style={{ width: 220 }}
+                        options={[
+                            { value: 'all', label: 'Все контрагенты' },
+                            { value: 'unpaid_them', label: 'Нам должны' },
+                            { value: 'unpaid_us', label: 'Мы должны' },
+                            { value: 'settled', label: 'Все оплачено' },
+                        ]}
+                    />
+                    <span style={{ fontSize: 12, color: token.colorTextSecondary, marginLeft: 'auto' }}>
+                        Показано: <strong>{filtered.length}</strong> из {data.counterparties.length} контрагентов
+                    </span>
+                </div>
 
             {/* COUNTERPARTY CARDS */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -439,19 +452,23 @@ export default function CounterpartyReportPage() {
                                 </span>
 
                                 {/* Company name + role */}
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <TeamOutlined style={{ color: token.colorPrimary, fontSize: 14 }} />
-                                        <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {cp.counterparty.name}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                                    <span className="lc2-avatar lc2-avatar-sm" style={{ background: cp.ourRole === 'Заказчик' ? '#e0f2fe' : '#f1f2f5', color: cp.ourRole === 'Заказчик' ? '#0369a1' : '#5f6672', flexShrink: 0 }}>
+                                        {getInitials(cp.counterparty.name) || 'КГ'}
+                                    </span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                            <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' }}>
+                                                {cp.counterparty.name}
+                                            </Text>
+                                            <Tag color="processing" style={{ fontSize: 10, margin: 0, padding: '0 6px', lineHeight: '16px' }}>
+                                                {roleInfo.label}
+                                            </Tag>
+                                        </div>
+                                        <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
+                                            {cp.totalOrders} заяв{cp.totalOrders === 1 ? 'ка' : cp.totalOrders < 5 ? 'ки' : 'ок'}
                                         </Text>
-                                        <Tag color="processing" style={{ fontSize: 10, margin: 0, padding: '0 6px', lineHeight: '16px' }}>
-                                            {roleInfo.label}
-                                        </Tag>
                                     </div>
-                                    <Text type="secondary" style={{ fontSize: 11 }}>
-                                        {cp.totalOrders} заяв{cp.totalOrders === 1 ? 'ка' : cp.totalOrders < 5 ? 'ки' : 'ок'}
-                                    </Text>
                                 </div>
 
                                 {/* Mini stats */}
@@ -554,6 +571,7 @@ export default function CounterpartyReportPage() {
                     );
                 })}
             </div>
+            </div> {/* Close lc-card */}
 
             {/* DETAIL DRAWER */}
             <Drawer

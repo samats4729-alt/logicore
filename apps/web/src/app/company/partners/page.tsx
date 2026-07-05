@@ -220,22 +220,33 @@ export default function PartnersPage() {
         setModalOpen(true);
     };
 
+    const getInitials = (name: string) => {
+        if (!name || name === '—') return '';
+        const parts = name.trim().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    };
+
     const columns = [
         {
             title: 'Компания',
             dataIndex: 'name',
             key: 'name',
             render: (text: string, record: any) => (
-                <Space direction="vertical" size={2}>
-                    <Space>
-                        <Avatar icon={<ShopOutlined />} style={{ backgroundColor: record.isExternal ? '#8c8c8c' : '#1890ff' }} />
-                        <Text strong>{text}</Text>
-                    </Space>
-                    <Space size={4}>
-                        {record.isCustomer && <Tag color="blue" style={{ fontSize: '10px', lineHeight: '14px', margin: 0 }}>Заказчик</Tag>}
-                        {record.isCarrier && <Tag color="green" style={{ fontSize: '10px', lineHeight: '14px', margin: 0 }}>Перевозчик</Tag>}
-                    </Space>
-                </Space>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span className="lc2-avatar lc2-avatar-sm" style={{ background: record.isCarrier ? '#e6ffed' : '#e0f2fe', color: record.isCarrier ? '#28a745' : '#0369a1', flexShrink: 0 }}>
+                        {getInitials(text) || 'КГ'}
+                    </span>
+                    <div>
+                        <div style={{ fontWeight: 600 }}>{text}</div>
+                        <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                            {record.isCustomer && <Tag color="blue" style={{ fontSize: '10px', lineHeight: '14px', margin: 0 }}>Заказчик</Tag>}
+                            {record.isCarrier && <Tag color="green" style={{ fontSize: '10px', lineHeight: '14px', margin: 0 }}>Перевозчик</Tag>}
+                        </div>
+                    </div>
+                </div>
             )
         },
         {
@@ -296,15 +307,16 @@ export default function PartnersPage() {
         const filteredData = data.filter(c => tabType === 'customers' ? c.isCustomer : c.isCarrier);
         
         return (
-            <Card style={{ minHeight: 400 }}>
+            <div style={{ minHeight: 400, paddingTop: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
-                    <Title level={4} style={{ margin: 0 }}>
+                    <Title level={4} style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
                         {tabType === 'customers' ? 'Список заказчиков' : 'Список перевозчиков'}
                     </Title>
                     <Space>
                         <Button 
                             type="primary" 
                             icon={<PlusOutlined />} 
+                            className="lc-cta"
                             onClick={() => {
                                 setEditingCompany(null);
                                 form.resetFields();
@@ -322,20 +334,21 @@ export default function PartnersPage() {
                     dataSource={filteredData}
                     rowKey="id"
                     loading={loading}
+                    size="small"
                     locale={{ emptyText: tabType === 'customers' ? 'У вас пока нет заказчиков' : 'У вас пока нет перевозчиков' }}
                     onRow={(record) => ({
                         onClick: () => router.push(`/company/partners/${record.id}`),
                         style: { cursor: 'pointer' },
                     })}
                 />
-            </Card>
+            </div>
         );
     };
 
     const searchContent = (
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
-            <div style={{ marginBottom: 32, textAlign: 'center' }}>
-                <Title level={3}>Поиск компаний</Title>
+            <div style={{ marginBottom: 32, textAlign: 'center', paddingTop: 16 }}>
+                <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px 0', color: '#0b0d12' }}>Поиск компаний</h3>
                 <Text type="secondary">Находите зарегистрированные компании для сотрудничества на платформе</Text>
                 <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
                     <Input
@@ -403,11 +416,74 @@ export default function PartnersPage() {
         </div>
     );
 
-    return (
-        <div>
-            <Title level={2} style={{ marginBottom: 24 }}>Контрагенты</Title>
+    const customersCount = counterparties.filter(c => c.isCustomer).length;
+    const carriersCount = counterparties.filter(c => c.isCarrier).length;
+    const requestsCount = requests.length;
 
-            <Tabs
+    return (
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">Транспорт · Партнёры</div>
+                    <h1 className="lc2-title">Контрагенты</h1>
+                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                        Управление заказчиками, перевозчиками и входящими запросами на партнерство
+                    </p>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={openCreate}
+                        className="lc-cta"
+                    >
+                        Добавить контрагента
+                    </Button>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <TeamOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Заказчики</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {customersCount}
+                            </div>
+                            <div className="lc2-msub">в системе</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Перевозчики</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {carriersCount}
+                            </div>
+                            <div className="lc2-msub">в системе</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: requestsCount > 0 ? '#ffeef0' : '#f1f2f5', color: requestsCount > 0 ? '#dc3545' : '#5f6672' }}>
+                            <TeamOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Запросы</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {requestsCount}
+                            </div>
+                            <div className="lc2-msub" style={{ color: requestsCount > 0 ? '#dc3545' : '#8a91a0' }}>
+                                {requestsCount > 0 ? 'требуют ответа' : 'нет новых'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ===== TABS CARD ===== */}
+            <div className="lc-card" style={{ padding: '20px' }}>
+                <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
                 type="card"
@@ -502,6 +578,7 @@ export default function PartnersPage() {
                     }
                 ]}
             />
+            </div> {/* Close lc-card */}
 
             <Modal
                 title={editingCompany ? 'Редактировать контрагента' : 'Новый контрагент'}
