@@ -481,18 +481,18 @@ export default function FinancialRegistryPage() {
     ];
 
     const metricsData = [
-        { label: 'Выручка', value: totals.totalIncome, hint: 'всего', icon: <ArrowUpOutlined />, bg: '#e8f0fe', fg: '#1d4ed8' },
-        { label: 'Затраты', value: totals.totalExpense, hint: 'перевозчики', icon: <ArrowDownOutlined />, bg: '#f1f2f5', fg: '#5f6672' },
+        { label: 'Выручка', value: totals.totalIncome, hint: 'всего', icon: <ArrowUpOutlined />, bg: 'rgba(52, 199, 89, 0.12)', fg: '#34c759' },
+        { label: 'Затраты', value: totals.totalExpense, hint: 'перевозчики', icon: <ArrowDownOutlined />, bg: 'rgba(142, 142, 147, 0.12)', fg: '#8e8e93' },
         {
             label: 'Маржа',
             value: totals.totalMargin,
             hint: `${totals.totalIncome ? Math.round((totals.totalMargin / totals.totalIncome) * 100) : 0}% маржинальность`,
             icon: <DollarOutlined />,
-            bg: totals.totalMargin >= 0 ? '#e7f8ef' : '#fdf2f8',
-            fg: totals.totalMargin >= 0 ? '#15803d' : '#db2777'
+            bg: totals.totalMargin >= 0 ? 'rgba(88, 86, 214, 0.12)' : 'rgba(255, 59, 48, 0.12)',
+            fg: totals.totalMargin >= 0 ? '#5856d6' : '#ff3b30'
         },
-        { label: 'Дебиторка', value: totals.debtorSum, hint: 'долг клиентов', icon: <ArrowUpOutlined />, bg: '#fff4e5', fg: '#b45309' },
-        { label: 'Кредиторка', value: totals.creditorSum, hint: 'наш долг перед ТК', icon: <ArrowDownOutlined />, bg: '#fef2f2', fg: '#ef4444' },
+        { label: 'Дебиторка', value: totals.debtorSum, hint: 'долг клиентов', icon: <ArrowUpOutlined />, bg: 'rgba(255, 149, 0, 0.12)', fg: '#ff9500' },
+        { label: 'Кредиторка', value: totals.creditorSum, hint: 'наш долг перед ТК', icon: <ArrowDownOutlined />, bg: 'rgba(255, 45, 85, 0.12)', fg: '#ff2d55' },
     ];
 
     return (
