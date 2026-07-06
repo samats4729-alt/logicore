@@ -123,6 +123,18 @@ export class PayrollService {
         const filteredMonths = months.filter(m => m <= nowStr);
 
         for (const periodMonth of filteredMonths) {
+            // Проверка закрытого периода
+            const [yearStr, monthStr] = periodMonth.split('-');
+            if (yearStr && monthStr) {
+                const year = parseInt(yearStr, 10);
+                const month = parseInt(monthStr, 10);
+                const closedPeriod = await this.prisma.closedPeriod.findUnique({
+                    where: { companyId_year_month: { companyId, year, month } },
+                    select: { id: true },
+                });
+                if (closedPeriod) continue; // Период закрыт — пропускаем
+            }
+
             const scheme = await this.getSchemeFor(companyId, userId);
             if (!scheme || !scheme.isActive) {
                 continue;
