@@ -1500,7 +1500,7 @@ export default function OrderDetailPage() {
                                             </Card>
 
                                             {/* Action buttons for saving the inline form */}
-                                            <div style={{ marginTop: 20, background: '#fafafa', padding: 16, borderRadius: 8, border: '1px solid #f0f0f0', display: 'flex', gap: 12 }}>
+                                            <div style={{ marginTop: 20, background: 'var(--lc-card-2)', padding: 16, borderRadius: 8, border: '1px solid var(--lc-border)', display: 'flex', gap: 12 }}>
                                                 <Button type="primary" onClick={() => editForm.submit()} style={{ flex: 1 }} disabled={!selectedCustomer || !selectedCarrier}>
                                                     Сохранить
                                                 </Button>
@@ -2002,7 +2002,7 @@ export default function OrderDetailPage() {
                     <Text type="secondary">Выберите получателей для отправки доверенности (PDF):</Text>
                 </div>
                 {shareEmailsList.length > 0 ? (
-                    <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 16, border: '1px solid #f0f0f0', borderRadius: 8, padding: 12 }}>
+                    <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 16, border: '1px solid var(--lc-border)', borderRadius: 8, padding: 12 }}>
                         {shareEmailsList.map((item, idx) => (
                             <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                                 <Checkbox
@@ -2016,7 +2016,7 @@ export default function OrderDetailPage() {
                         ))}
                     </div>
                 ) : (
-                    <div style={{ textAlign: 'center', padding: 24, background: '#fafafa', borderRadius: 8, marginBottom: 16 }}>
+                    <div style={{ textAlign: 'center', padding: 24, background: 'var(--lc-card-2)', borderRadius: 8, marginBottom: 16 }}>
                         <Text type="secondary">Нет email-адресов.</Text>
                     </div>
                 )}

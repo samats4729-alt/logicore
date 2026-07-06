@@ -1620,7 +1620,7 @@ export default function CompanyOrdersPage() {
                 </div>
 
                 {shareEmailsList.length > 0 ? (
-                    <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 16, border: '1px solid #f0f0f0', borderRadius: 8, padding: 12 }}>
+                    <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 16, border: '1px solid var(--lc-border)', borderRadius: 8, padding: 12 }}>
                         {shareEmailsList.map((item, idx) => (
                             <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                                 <Checkbox
@@ -1638,7 +1638,7 @@ export default function CompanyOrdersPage() {
                         ))}
                     </div>
                 ) : (
-                    <div style={{ textAlign: 'center', padding: 24, background: '#fafafa', borderRadius: 8, marginBottom: 16 }}>
+                    <div style={{ textAlign: 'center', padding: 24, background: 'var(--lc-card-2)', borderRadius: 8, marginBottom: 16 }}>
                         <Text type="secondary">В заявке нет сохраненных email-адресов.</Text>
                     </div>
                 )}
@@ -1839,8 +1839,8 @@ export default function CompanyOrdersPage() {
                 style={{ top: 20 }}
             >
                 <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
-                    <div style={{ marginBottom: 20, background: '#fafafa', padding: '12px 16px', borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: '#333' }}>Ваша роль в этой сделке:</div>
+                    <div style={{ marginBottom: 20, background: 'var(--lc-card-2)', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--lc-border)' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: 'var(--lc-text)' }}>Ваша роль в этой сделке:</div>
                         <Radio.Group 
                             value={editCreatorRole} 
                             onChange={e => handleEditCreatorRoleChange(e.target.value)}
