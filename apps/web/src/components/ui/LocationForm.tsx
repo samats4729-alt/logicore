@@ -303,8 +303,9 @@ export default function LocationForm({
                 }
             }
             // Include dynamic state values not managed natively by form fields if any
+            const { bindingType, ...rest } = values;
             void onFinish({
-                ...values,
+                ...rest,
                 companyId: finalCompanyId,
                 address: addressValue,
                 latitude: lat,
