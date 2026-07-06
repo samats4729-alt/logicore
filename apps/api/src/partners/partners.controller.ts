@@ -1,9 +1,12 @@
 import { Controller, Get, Post, Put, Body, Query, UseGuards, Request, Param } from '@nestjs/common';
 import { PartnersService } from './partners.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { UserRole } from '@prisma/client';
 
 @Controller('partners')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
 export class PartnersController {
     constructor(private readonly partnersService: PartnersService) { }
 

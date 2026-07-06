@@ -32,8 +32,9 @@ export class UsersController {
     @Get('drivers')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Получить список водителей' })
-    async findDrivers() {
-        return this.usersService.findDrivers();
+    async findDrivers(@Request() req: any) {
+        const companyId = req.user.role === 'ADMIN' ? undefined : req.user.companyId;
+        return this.usersService.findDrivers(companyId);
     }
 
     @Get(':id')

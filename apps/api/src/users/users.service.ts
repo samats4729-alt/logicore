@@ -77,9 +77,13 @@ export class UsersService {
         });
     }
 
-    async findDrivers() {
+    async findDrivers(companyId?: string) {
+        const where: any = { role: 'DRIVER', isActive: true };
+        if (companyId) {
+            where.companyId = companyId;
+        }
         return this.prisma.user.findMany({
-            where: { role: 'DRIVER', isActive: true },
+            where,
             orderBy: { lastName: 'asc' },
         });
     }

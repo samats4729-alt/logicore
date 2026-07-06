@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, UseGuards, Request, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { WarehouseService } from './warehouse.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -29,7 +29,12 @@ export class WarehouseController {
     @Post('arrived/:orderId')
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Водитель прибыл на склад' })
-    async driverArrived(@Param('orderId') orderId: string) {
+    async driverArrived(@Param('orderId') orderId: string, @Request() req: any) {
+        // Проверка, что водитель назначен на эту заявку
+        const order = await this.warehouseService.getOrderDriver(orderId);
+        if (!order || order.driverId !== req.user.sub) {
+            throw new ForbiddenException('Вы не назначены на эту заявку');
+        }
         return this.warehouseService.driverArrived(orderId);
     }
 

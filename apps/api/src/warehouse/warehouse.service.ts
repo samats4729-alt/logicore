@@ -123,6 +123,13 @@ export class WarehouseService {
         });
     }
 
+    async getOrderDriver(orderId: string) {
+        return this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { driverId: true },
+        });
+    }
+
     async createGate(locationId: string, gateNumber: string) {
         return this.prisma.warehouseGate.create({
             data: { locationId, gateNumber },
