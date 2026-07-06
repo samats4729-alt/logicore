@@ -18,6 +18,7 @@ export default function RootLayout({
     return (
         <html lang="ru">
             <head>
+                <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('lc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')}catch(e){}` }} />
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
                 <link

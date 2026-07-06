@@ -1,21 +1,30 @@
 'use client';
 
+import { useMemo } from 'react';
 import { ConfigProvider, theme, App as AntdApp } from 'antd';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { SWRConfig } from 'swr';
 import ruRU from 'antd/locale/ru_RU';
+import ThemeProvider, { useTheme } from '@/components/ThemeProvider';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com';
 
 const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
-export function AntdProvider({ children }: { children: React.ReactNode }) {
+function AntdConfig({ children }: { children: React.ReactNode }) {
+    const { theme: currentTheme } = useTheme();
+
+    const algorithm = useMemo(() => {
+        if (currentTheme === 'dark') return [theme.darkAlgorithm, theme.compactAlgorithm];
+        return [theme.defaultAlgorithm, theme.compactAlgorithm];
+    }, [currentTheme]);
+
     return (
         <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
             <ConfigProvider
                 locale={ruRU}
                 theme={{
-                    algorithm: [theme.defaultAlgorithm, theme.compactAlgorithm],
+                    algorithm,
                     token: {
                         colorPrimary: '#1677ff',
                         colorInfo: '#1677ff',
@@ -94,5 +103,13 @@ export function AntdProvider({ children }: { children: React.ReactNode }) {
                 </SWRConfig>
             </ConfigProvider>
         </GoogleOAuthProvider>
+    );
+}
+
+export function AntdProvider({ children }: { children: React.ReactNode }) {
+    return (
+        <ThemeProvider>
+            <AntdConfig>{children}</AntdConfig>
+        </ThemeProvider>
     );
 }

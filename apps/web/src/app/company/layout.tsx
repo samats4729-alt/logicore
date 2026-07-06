@@ -36,6 +36,7 @@ import { api } from '@/lib/api';
 import { shortenCompanyName } from '@/lib/company-helper';
 import GlobalSearch from '@/components/ui/GlobalSearch';
 import NotificationBell from '@/components/ui/NotificationBell';
+import { useTheme } from '@/components/ThemeProvider';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -60,6 +61,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     const [isMobile, setIsMobile] = useState(false);
     const [hydrated, setHydrated] = useState(false);
     const [hasNewUpdates, setHasNewUpdates] = useState(false);
+    const { theme, setTheme } = useTheme();
 
     useEffect(() => {
         const fetchPublishedUpdates = async () => {
@@ -420,7 +422,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     );
 
     return (
-        <Layout style={{ minHeight: '100vh', background: '#f6f7f9' }}>
+        <Layout style={{ minHeight: '100vh', background: 'var(--lc-bg)' }}>
             {/* Mobile Drawer */}
             {isMobile && <MobileMenu />}
 
@@ -428,7 +430,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Header
                 className="app-header-2026"
                 style={{
-                    background: 'rgba(255, 255, 255, 0.85)',
+                    background: 'var(--lc-header-bg)',
                     backdropFilter: 'saturate(1.9) blur(20px)',
                     WebkitBackdropFilter: 'saturate(1.9) blur(20px)',
                     padding: '0 24px',
@@ -449,7 +451,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         type="text"
                         icon={<MenuOutlined />}
                         onClick={() => setMobileMenuOpen(true)}
-                        style={{ marginRight: 8, color: '#0b0d12' }}
+                        style={{ marginRight: 8, color: 'var(--lc-text)' }}
                     />
                 )}
 
@@ -458,7 +460,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: 18, flexShrink: 0 }}
                     onClick={() => router.push('/company')}
                 >
-                    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: '#0b0d12', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
                         Logi<span style={{ color: '#1677ff' }}>Core</span>
                     </span>
                 </div>
@@ -524,14 +526,15 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     {/* Центр уведомлений (Этап 7) */}
                     <NotificationBell hasNewUpdates={hasNewUpdates} />
 
-                    {/* Тема (заглушка — Этап 8) — Apple Segmented Control */}
+                    {/* Тема (Этап 8) — Apple Segmented Control */}
                     <div className="lc2-theme-toggle">
-                        <div className="lc2-theme-active-bg" style={{ transform: 'translateX(0px)' }} />
+                        <div className="lc2-theme-active-bg" style={{ transform: theme === 'dark' ? 'translateX(34px)' : 'translateX(0px)' }} />
                         <button
                             type="button"
-                            className="lc2-theme-btn active"
+                            className={`lc2-theme-btn ${theme === 'light' ? 'active' : ''}`}
                             aria-label="Светлая тема"
                             title="Светлая тема"
+                            onClick={() => setTheme('light')}
                         >
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="5" />
@@ -547,9 +550,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         </button>
                         <button
                             type="button"
-                            className="lc2-theme-btn"
+                            className={`lc2-theme-btn ${theme === 'dark' ? 'active' : ''}`}
                             aria-label="Тёмная тема"
                             title="Тёмная тема"
+                            onClick={() => setTheme('dark')}
                         >
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
@@ -574,10 +578,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             </span>
                             {!isMobile && (
                                 <div style={{ lineHeight: 1.25 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0b0d12', whiteSpace: 'nowrap' }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
                                         {user.firstName} {user.lastName}
                                     </div>
-                                    <div style={{ fontSize: 11, color: '#8a91a0', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         {ROLE_LABELS[user.role] || user.role}{user.company?.name ? ` · ${shortenCompanyName(user.company.name)}` : ''}
                                     </div>
                                 </div>
@@ -588,7 +592,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             </Header>
 
             {/* Content */}
-            <Layout style={{ background: '#f4f5f7', padding: isMobile ? 0 : '16px 24px 24px' }}>
+            <Layout style={{ background: 'var(--lc-bg)', padding: isMobile ? 0 : '16px 24px 24px' }}>
                 <Content
                     data-guide="content"
                     className="page-content-anim"
