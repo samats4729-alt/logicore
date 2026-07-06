@@ -7,13 +7,14 @@ export default function AiButton() {
 
     const handleClick = useCallback(() => {
         setActive((v) => !v);
+        window.dispatchEvent(new Event('logicore:open-assistant'));
     }, []);
 
     return (
         <button
             type="button"
             className={`ai-btn${active ? ' active' : ''}`}
-            title="Голосовой ассистент"
+            title="ИИ-ассистент"
             onClick={handleClick}
             aria-label="AI-ассистент"
         >

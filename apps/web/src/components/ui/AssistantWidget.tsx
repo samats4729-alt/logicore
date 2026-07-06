@@ -335,7 +335,12 @@ export default function AssistantWidget() {
             handleOpenUpdates();
         };
         window.addEventListener('logicore:open-updates', onOpenUpdates);
-        return () => window.removeEventListener('logicore:open-updates', onOpenUpdates);
+        const onOpenAssistant = () => handleOpen();
+        window.addEventListener('logicore:open-assistant', onOpenAssistant);
+        return () => {
+            window.removeEventListener('logicore:open-updates', onOpenUpdates);
+            window.removeEventListener('logicore:open-assistant', onOpenAssistant);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasNewUpdates, newUpdates]);
 
@@ -402,13 +407,6 @@ export default function AssistantWidget() {
 
     return (
         <>
-            {!open && (
-                <button aria-label="Открыть ИИ-ассистента" className="ai-fab" onClick={handleOpen}>
-                    <RobotOutlined />
-                    {hasNewUpdates && <span className="ai-badge-dot" />}
-                </button>
-            )}
-
             {open && (
                 <div
                     className="ai-glass-panel"
