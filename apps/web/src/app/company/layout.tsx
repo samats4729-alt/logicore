@@ -30,7 +30,6 @@ import {
     BarChartOutlined,
     NotificationOutlined,
     BellOutlined,
-    SearchOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';

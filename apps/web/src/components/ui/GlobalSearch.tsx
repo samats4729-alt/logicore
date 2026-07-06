@@ -121,7 +121,7 @@ export default function GlobalSearch() {
     const isEmpty = hasSearched && !loading && results.orders.length === 0 && results.partners.length === 0;
 
     return (
-        <div ref={containerRef} style={{ position: 'relative' }}>
+        <div ref={containerRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <button
                 type="button"
                 className="lc2-iconbtn"
