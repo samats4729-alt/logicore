@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentType } from '@prisma/client';
 import { S3Service } from '../s3/s3.service';
@@ -20,15 +20,44 @@ export class DocumentsService {
         mimeType: string;
         orderId?: string;
         uploadedById: string;
-    }) {
+    }, user?: { sub: string; role: string; companyId?: string }) {
+        // Проверка: если документ привязан к заявке, компания должна быть участником
+        if (data.orderId && user && user.role !== 'ADMIN') {
+            await this.checkOrderAccess(data.orderId, user.companyId);
+        }
         return this.prisma.document.create({ data });
+    }
+
+    /** Проверка, что компания — участник заявки */
+    private async checkOrderAccess(orderId: string, companyId?: string) {
+        if (!companyId) throw new ForbiddenException('Нет доступа к заявке');
+        const order = await this.prisma.order.findFirst({
+            where: {
+                id: orderId,
+                OR: [
+                    { customerCompanyId: companyId },
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { responsibleManager: { companyId } },
+                ],
+            },
+            select: { id: true },
+        });
+        if (!order) {
+            throw new ForbiddenException('Нет доступа к заявке');
+        }
     }
 
     /**
      * Загрузка файла документа
      */
-    async uploadFile(orderId: string, userId: string, type: DocumentType, file: Express.Multer.File) {
+    async uploadFile(orderId: string, userId: string, type: DocumentType, file: Express.Multer.File, user?: { sub: string; role: string; companyId?: string }) {
         if (!file) throw new NotFoundException('Файл не найден');
+
+        // Проверка доступа к заявке
+        if (user && user.role !== 'ADMIN') {
+            await this.checkOrderAccess(orderId, user.companyId);
+        }
         
         const ext = path.extname(file.originalname);
         const filename = `doc_${orderId}_${Date.now()}${ext}`;
@@ -61,10 +90,14 @@ export class DocumentsService {
     /**
      * Получение документов заявки
      */
-    async findByOrder(orderId: string) {
+    async findByOrder(orderId: string, user?: { sub: string; role: string; companyId?: string }) {
+        // Проверка доступа к заявке
+        if (user && user.role !== 'ADMIN') {
+            await this.checkOrderAccess(orderId, user.companyId);
+        }
         return this.prisma.document.findMany({
             where: { orderId },
-            include: { uploadedBy: true },
+            include: { uploadedBy: { select: { id: true, firstName: true, lastName: true } } },
             orderBy: { createdAt: 'desc' },
         });
     }
@@ -72,14 +105,44 @@ export class DocumentsService {
     /**
      * Получение документа по ID
      */
-    async findById(id: string) {
+    async findById(id: string, user?: { sub: string; role: string; companyId?: string }) {
         const doc = await this.prisma.document.findUnique({
             where: { id },
-            include: { order: true, uploadedBy: true },
+            include: {
+                order: {
+                    select: {
+                        id: true,
+                        customerCompanyId: true,
+                        forwarderId: true,
+                        partnerId: true,
+                        responsibleManager: { select: { companyId: true } },
+                    },
+                },
+                uploadedBy: { select: { id: true, firstName: true, lastName: true, companyId: true } },
+            },
         });
 
         if (!doc) {
             throw new NotFoundException('Документ не найден');
+        }
+
+        // Проверка доступа
+        if (user && user.role !== 'ADMIN') {
+            if (doc.order) {
+                // Документ привязан к заявке — проверяем участие компании
+                const isParticipant = doc.order.customerCompanyId === user.companyId
+                    || doc.order.forwarderId === user.companyId
+                    || doc.order.partnerId === user.companyId
+                    || doc.order.responsibleManager?.companyId === user.companyId;
+                if (!isParticipant) {
+                    throw new ForbiddenException('Нет доступа к документу');
+                }
+            } else {
+                // Документ без заявки — проверяем, что загрузивший принадлежит той же компании
+                if (doc.uploadedBy?.companyId !== user.companyId) {
+                    throw new ForbiddenException('Нет доступа к документу');
+                }
+            }
         }
 
         return doc;

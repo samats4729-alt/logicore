@@ -32,7 +32,7 @@ export class DocumentsController {
         @UploadedFile() file: Express.Multer.File,
         @Request() req: any,
     ) {
-        return this.documentsService.uploadFile(orderId, req.user.sub, type, file);
+        return this.documentsService.uploadFile(orderId, req.user.sub, type, file, req.user);
     }
 
     @Post()
@@ -51,25 +51,25 @@ export class DocumentsController {
         return this.documentsService.create({
             ...dto,
             uploadedById: req.user.sub,
-        });
+        }, req.user);
     }
 
     @Get('order/:orderId')
     @ApiOperation({ summary: 'Получить документы заявки' })
-    async findByOrder(@Param('orderId') orderId: string) {
-        return this.documentsService.findByOrder(orderId);
+    async findByOrder(@Param('orderId') orderId: string, @Request() req: any) {
+        return this.documentsService.findByOrder(orderId, req.user);
     }
 
     @Get(':id')
     @ApiOperation({ summary: 'Получить документ по ID' })
-    async findOne(@Param('id') id: string) {
-        return this.documentsService.findById(id);
+    async findOne(@Param('id') id: string, @Request() req: any) {
+        return this.documentsService.findById(id, req.user);
     }
 
     @Get(':id/download')
     @ApiOperation({ summary: 'Скачать файл документа' })
-    async downloadFile(@Param('id') id: string, @Res() res: Response) {
-        const doc = await this.documentsService.findById(id);
+    async downloadFile(@Param('id') id: string, @Res() res: Response, @Request() req: any) {
+        const doc = await this.documentsService.findById(id, req.user);
 
         if (this.s3Service.isS3Enabled()) {
             try {
