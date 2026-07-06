@@ -174,18 +174,20 @@ export default function EditContractContentPage() {
     }
 
     return (
-        <div style={{ padding: '24px', maxWidth: 1000, margin: '0 auto' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <Space>
-                    <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>
+        <div className="lc-page" style={{ maxWidth: 1000, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} style={{ marginBottom: 8 }}>
                         Назад
                     </Button>
-                    <Title level={3} style={{ margin: 0 }}>
-                        <EditOutlined /> Редактирование договора {contractNumber ? `№${contractNumber}` : ''}
-                    </Title>
-                </Space>
-                <Space>
+                    <div className="lc-eyebrow">Транспорт · Договоры</div>
+                    <h1 className="lc2-title">
+                        <EditOutlined style={{ marginRight: 8 }} />
+                        {contractNumber ? `Договор №${contractNumber}` : 'Редактирование договора'}
+                    </h1>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                     <Popconfirm
                         title="Сбросить текст к шаблону по умолчанию?"
                         description="Все ваши изменения будут потеряны."
@@ -203,11 +205,10 @@ export default function EditContractContentPage() {
                         onClick={handleSave}
                         loading={saving}
                         disabled={!hasChanges}
-                        size="large"
                     >
                         Сохранить
                     </Button>
-                </Space>
+                </div>
             </div>
 
             {hasChanges && (
@@ -219,10 +220,11 @@ export default function EditContractContentPage() {
                 />
             )}
 
+            {/* ===== EDITOR CARD ===== */}
+            <div className="lc-card" style={{ padding: '24px', marginTop: 0 }}>
             {/* Articles */}
             <Collapse
                 defaultActiveKey={articles.map((_, i) => String(i))}
-                style={{ background: '#fafafa' }}
             >
                 {articles.map((article, articleIdx) => (
                     <Panel
@@ -312,6 +314,7 @@ export default function EditContractContentPage() {
             >
                 Добавить статью
             </Button>
+            </div>
 
             {/* Bottom save bar */}
             {hasChanges && (
@@ -320,7 +323,7 @@ export default function EditContractContentPage() {
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    background: '#fff',
+                    background: 'var(--lc-card)',
                     borderTop: '1px solid var(--lc-border)',
                     padding: '12px 24px',
                     display: 'flex',
