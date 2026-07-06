@@ -615,19 +615,19 @@ export default function AssistantWidget() {
                 <div style={{ position: 'fixed', inset: 0, zIndex: 1500, pointerEvents: 'none' }}>
                     <div ref={ringRef} className="ai-spot-ring" style={{ opacity: 0 }} />
                     <div ref={tipRef} className="ai-spot-tip" style={{ pointerEvents: 'auto' }}>
-                        <div style={{ marginBottom: 10 }}>{tipText}</div>
+                        <div style={{ marginBottom: 10, fontWeight: 500 }}>{tipText}</div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                            <span style={{ fontSize: 11, opacity: 0.6 }}>{tipMeta.index + 1} / {tipMeta.total}</span>
+                            <span style={{ fontSize: 11.5, opacity: 0.65, fontWeight: 500 }}>{tipMeta.index + 1} / {tipMeta.total}</span>
                             <span style={{ display: 'flex', gap: 6 }}>
                                 <button
                                     onClick={endTour}
-                                    style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}
+                                    className="ai-spot-btn-secondary"
                                 >
                                     Закрыть
                                 </button>
                                 <button
                                     onClick={() => advance()}
-                                    style={{ background: '#1677ff', border: 'none', color: '#fff', borderRadius: 8, padding: '4px 12px', fontSize: 12, cursor: 'pointer' }}
+                                    className="ai-spot-btn-primary"
                                 >
                                     {tipMeta.index + 1 >= tipMeta.total ? 'Готово' : 'Дальше'}
                                 </button>

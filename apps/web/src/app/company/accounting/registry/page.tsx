@@ -528,7 +528,7 @@ export default function FinancialRegistryPage() {
                             </div>
                             <div>
                                 <div className="lc2-mlabel">{m.label}</div>
-                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: m.valueColor || '#0b0d12' }}>
+                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: m.valueColor || 'var(--lc-text)' }}>
                                     {typeof m.value === 'number' ? `${fmt(m.value)} ₸` : m.value}
                                 </div>
                                 <div className="lc2-msub" style={{ color: m.hintColor || '#8a91a0' }}>{m.hint}</div>

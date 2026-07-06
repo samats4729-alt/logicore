@@ -453,7 +453,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         type="text"
                         icon={<MenuOutlined />}
                         onClick={() => setMobileMenuOpen(true)}
-                        style={{ marginRight: 8, color: '#0b0d12' }}
+                        style={{ marginRight: 8, color: 'var(--lc-text)' }}
                     />
                 )}
 
@@ -462,7 +462,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: 18, flexShrink: 0 }}
                     onClick={() => router.push('/company')}
                 >
-                    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: '#0b0d12', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
                         Logi<span style={{ color: '#1677ff' }}>Core</span>
                     </span>
                 </div>
@@ -571,7 +571,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             </span>
                             {!isMobile && (
                                 <div style={{ lineHeight: 1.25 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0b0d12', whiteSpace: 'nowrap' }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
                                         {user.firstName} {user.lastName}
                                     </div>
                                     <div style={{ fontSize: 11, color: '#8a91a0', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>

@@ -1526,40 +1526,52 @@ export default function CompanyOrdersPage() {
                     padding: 6px 8px !important;
                     font-size: 11px !important;
                     font-weight: 600 !important;
-                    background: #fafafa !important;
+                    background: var(--lc-hover) !important;
                     text-transform: uppercase;
                     letter-spacing: 0.3px;
-                    color: #666 !important;
+                    color: var(--lc-text-sec) !important;
                     white-space: nowrap;
+                    border-bottom: 1px solid var(--lc-border) !important;
                 }
                 .ant-table-small .ant-table-tbody > tr > td {
                     padding: 4px 8px !important;
                     font-size: 12px !important;
-                    border-bottom: 1px solid #f5f5f5 !important;
+                    border-bottom: 1px solid var(--lc-border-soft) !important;
                 }
                 .ant-table-small .ant-table-tbody > tr:hover > td {
-                    background: #e6f7ff !important;
+                    background: var(--lc-hover) !important;
                 }
                 .ant-table-small .ant-table-tbody > tr.row-completed > td {
-                    background: #f6ffed !important;
-                    color: #389e0d;
+                    background: rgba(34, 197, 94, 0.12) !important;
+                    color: #22c55e !important;
+                }
+                .ant-table-small .ant-table-tbody > tr.row-completed > td span,
+                .ant-table-small .ant-table-tbody > tr.row-completed > td div,
+                .ant-table-small .ant-table-tbody > tr.row-completed > td a {
+                    color: #22c55e !important;
                 }
                 .ant-table-small .ant-table-tbody > tr.row-problem > td {
-                    background: #fff2f0 !important;
+                    background: rgba(239, 68, 68, 0.12) !important;
+                    color: #ef4444 !important;
+                }
+                .ant-table-small .ant-table-tbody > tr.row-problem > td span,
+                .ant-table-small .ant-table-tbody > tr.row-problem > td div,
+                .ant-table-small .ant-table-tbody > tr.row-problem > td a {
+                    color: #ef4444 !important;
                 }
                 .ant-table-small .ant-table-tbody > tr.row-cancelled > td {
-                    background: #fafafa !important;
-                    color: #bbbbbb !important;
+                    background: var(--lc-hover) !important;
+                    color: var(--lc-text-ter) !important;
                 }
                 .ant-table-small .ant-table-tbody > tr.row-cancelled > td span,
                 .ant-table-small .ant-table-tbody > tr.row-cancelled > td div,
                 .ant-table-small .ant-table-tbody > tr.row-cancelled > td a {
-                    color: #bbbbbb !important;
+                    color: var(--lc-text-ter) !important;
                 }
                 .ant-table-small .ant-table-tbody > tr.row-cancelled > td .ant-tag {
-                    background: #f5f5f5 !important;
-                    color: #bbbbbb !important;
-                    border-color: #d9d9d9 !important;
+                    background: var(--lc-border-soft) !important;
+                    color: var(--lc-text-ter) !important;
+                    border-color: var(--lc-border) !important;
                 }
                 .ant-table-small .ant-pagination {
                     margin: 8px 0 !important;

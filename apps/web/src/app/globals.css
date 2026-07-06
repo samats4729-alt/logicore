@@ -1364,7 +1364,7 @@ a.mapboxgl-ctrl-logo,
   align-items: center;
   gap: 34px;
   white-space: nowrap;
-  animation: lc2Ticker 40s linear infinite;
+  animation: lc2Ticker 20s linear infinite;
 }
 
 .lc2-ticker:hover .lc2-ticker-track {
@@ -1726,12 +1726,12 @@ a.mapboxgl-ctrl-logo,
 .lc2-nav-drop .ant-dropdown-menu {
   border-radius: 14px !important;
   padding: 5px !important;
-  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid var(--lc-border) !important;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12),
               0 2px 8px rgba(0, 0, 0, 0.04) !important;
-  background: rgba(255, 255, 255, 0.92) !important;
-  backdrop-filter: saturate(1.8) blur(20px) !important;
-  -webkit-backdrop-filter: saturate(1.8) blur(20px) !important;
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   min-width: 200px;
   position: relative;
 }
@@ -2220,18 +2220,19 @@ a.mapboxgl-ctrl-logo,
    ========================================== */
 .ai-spot-ring {
   position: fixed;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 2px solid #1677ff;
-  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.25), 0 0 20px 5px rgba(22, 119, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.25), 0 0 20px 5px rgba(22, 119, 255, 0.4);
   pointer-events: none;
   z-index: 1500;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ai-spot-ring::after {
   content: '';
   position: absolute;
   inset: -5px;
-  border-radius: 13px;
+  border-radius: 15px;
   border: 2px solid rgba(22, 119, 255, 0.5);
   animation: aiSpotPulse 1.5s ease-out infinite;
 }
@@ -2243,16 +2244,17 @@ a.mapboxgl-ctrl-logo,
 
 .ai-spot-tip {
   position: absolute;
-  max-width: 300px;
-  background: linear-gradient(135deg, #0b1220, #15294d);
-  color: #fff;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.5;
-  border: 1px solid rgba(22, 119, 255, 0.6);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  max-width: 320px;
+  background: var(--lc-card);
+  color: var(--lc-text);
+  padding: 16px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  border: 1px solid rgba(22, 119, 255, 0.35);
+  box-shadow: 0 16px 48px -12px rgba(16, 24, 40, 0.22);
   animation: aiTipIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: top 0.3s cubic-bezier(0.16, 1, 0.3, 1), left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ai-spot-tip::before {
@@ -2262,10 +2264,46 @@ a.mapboxgl-ctrl-logo,
   left: 22px;
   width: 12px;
   height: 12px;
-  background: #0b1220;
-  border-left: 1px solid rgba(22, 119, 255, 0.6);
-  border-top: 1px solid rgba(22, 119, 255, 0.6);
+  background: var(--lc-card);
+  border-left: 1px solid rgba(22, 119, 255, 0.35);
+  border-top: 1px solid rgba(22, 119, 255, 0.35);
   transform: rotate(45deg);
+}
+
+/* Tooltip Buttons */
+.ai-spot-btn-secondary {
+  background: var(--lc-hover);
+  border: 1px solid var(--lc-border);
+  color: var(--lc-text-sec);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-spot-btn-secondary:hover {
+  background: var(--lc-border);
+  color: var(--lc-text);
+}
+
+.ai-spot-btn-primary {
+  background: #1677ff;
+  border: none;
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.3);
+  transition: all 0.2s ease;
+}
+
+.ai-spot-btn-primary:hover {
+  background: #4096ff;
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.45);
 }
 
 @keyframes aiTipIn {
