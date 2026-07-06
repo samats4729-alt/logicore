@@ -31,6 +31,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             throw new UnauthorizedException('Токен не предоставлен');
         }
 
+        // Проверка активности пользователя
+        const user = await this.authService.findUserById(payload.sub);
+        if (!user) {
+            throw new UnauthorizedException('Пользователь не найден');
+        }
+        if (!user.isActive) {
+            throw new UnauthorizedException('Аккаунт деактивирован');
+        }
+
         // Проверка сессии через Redis (Single Session Policy)
         const isValidSession = await this.authService.validateSession(payload.sub, token);
         if (!isValidSession) {
