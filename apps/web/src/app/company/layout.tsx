@@ -430,7 +430,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Header
                 className="app-header-2026"
                 style={{
-                    background: 'var(--lc-header-bg)',
+                    background: 'rgba(255, 255, 255, 0.9)',
                     backdropFilter: 'saturate(1.9) blur(20px)',
                     WebkitBackdropFilter: 'saturate(1.9) blur(20px)',
                     padding: '0 24px',
@@ -451,7 +451,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         type="text"
                         icon={<MenuOutlined />}
                         onClick={() => setMobileMenuOpen(true)}
-                        style={{ marginRight: 8, color: 'var(--lc-text)' }}
+                        style={{ marginRight: 8, color: '#0b0d12' }}
                     />
                 )}
 
@@ -460,7 +460,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: 18, flexShrink: 0 }}
                     onClick={() => router.push('/company')}
                 >
-                    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: '#0b0d12', whiteSpace: 'nowrap' }}>
                         Logi<span style={{ color: '#1677ff' }}>Core</span>
                     </span>
                 </div>
@@ -578,10 +578,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             </span>
                             {!isMobile && (
                                 <div style={{ lineHeight: 1.25 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0b0d12', whiteSpace: 'nowrap' }}>
                                         {user.firstName} {user.lastName}
                                     </div>
-                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div style={{ fontSize: 11, color: '#8a91a0', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         {ROLE_LABELS[user.role] || user.role}{user.company?.name ? ` · ${shortenCompanyName(user.company.name)}` : ''}
                                     </div>
                                 </div>

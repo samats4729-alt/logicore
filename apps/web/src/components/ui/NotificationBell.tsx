@@ -116,9 +116,9 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                     style={{
                         position: 'absolute', right: 0, top: 44,
                         width: 'min(400px, 90vw)', maxHeight: '70vh', overflowY: 'auto',
-                        zIndex: 200, background: 'var(--lc-card)', borderRadius: 14,
-                        border: '1px solid var(--lc-border-soft)',
-                        boxShadow: 'var(--lc-panel-shadow)',
+                        zIndex: 200, background: '#ffffff', borderRadius: 14,
+                        border: '1px solid rgba(0, 0, 0, 0.06)',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
                         padding: 12,
                     }}
                 >
@@ -132,7 +132,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                             transition: 'background 0.12s',
                         }}
                     >
-                        <NotificationOutlined style={{ color: hasNewUpdates ? '#e67e22' : 'var(--lc-text-sec)', fontSize: 16 }} />
+                        <NotificationOutlined style={{ color: hasNewUpdates ? '#e67e22' : '#5f6672', fontSize: 16 }} />
                         <span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>Что нового?</span>
                         {hasNewUpdates && (
                             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc3545', flexShrink: 0 }} />
@@ -142,7 +142,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                     {/* Ожидающие подтверждения */}
                     {hasPending && (
                         <div style={{ marginBottom: 8 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--lc-text-ter)', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#8a91a0', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
                                 Требуют действия
                             </div>
                             {pending.map((p) => (
@@ -153,7 +153,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                                         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
                                         cursor: 'pointer', borderRadius: 8, transition: 'background 0.12s',
                                     }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--lc-hover)')}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f4f5f7')}
                                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                                 >
                                     <span style={{ fontWeight: 600, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
@@ -163,7 +163,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                                         Ожидает подтверждения завершения
                                     </span>
                                     {p.pendingStatusAt && (
-                                        <span style={{ fontSize: 11, color: 'var(--lc-text-ter)', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontSize: 11, color: '#8a91a0', whiteSpace: 'nowrap' }}>
                                             {dayjs(p.pendingStatusAt).format('DD.MM HH:mm')}
                                         </span>
                                     )}
@@ -175,7 +175,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                     {/* Лента событий */}
                     {events.length > 0 && (
                         <div>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--lc-text-ter)', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#8a91a0', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
                                 Лента событий
                             </div>
                             {events.map((e) => {
@@ -188,17 +188,17 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                                             display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
                                             cursor: 'pointer', borderRadius: 8, transition: 'background 0.12s',
                                         }}
-                                        onMouseEnter={(ev) => (ev.currentTarget.style.background = 'var(--lc-hover)')}
+                                        onMouseEnter={(ev) => (ev.currentTarget.style.background = '#f4f5f7')}
                                         onMouseLeave={(ev) => (ev.currentTarget.style.background = 'transparent')}
                                     >
                                         <i style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
                                         <span style={{ fontWeight: 600, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
                                             {e.orderNumber}
                                         </span>
-                                        <span style={{ fontSize: 12, color: 'var(--lc-text-sec)', flex: 1 }}>
+                                        <span style={{ fontSize: 12, color: '#5f6672', flex: 1 }}>
                                             {STATUS_LABELS[e.status] || e.status}
                                         </span>
-                                        <span style={{ fontSize: 11, color: 'var(--lc-text-ter)', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontSize: 11, color: '#8a91a0', whiteSpace: 'nowrap' }}>
                                             {dayjs(e.changedAt).format('DD.MM HH:mm')}
                                         </span>
                                     </div>
@@ -209,7 +209,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
 
                     {/* Пусто */}
                     {!loading && !hasPending && events.length === 0 && (
-                        <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--lc-text-ter)', fontSize: 13 }}>
+                        <div style={{ padding: '24px 12px', textAlign: 'center', color: '#8a91a0', fontSize: 13 }}>
                             Пока нет уведомлений
                         </div>
                     )}
