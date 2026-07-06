@@ -450,6 +450,8 @@ model Order {
   @@index([customerCompanyId, status])
   @@index([forwarderId, status])
   @@index([partnerId, status])
+  @@index([responsibleManagerId])
+  @@index([subForwarderId])
 }
 
 model OrderRoutePoint {
@@ -1096,4 +1098,3 @@ model PayrollAccrual {
   @@index([companyId, periodMonth])
   @@index([userId, periodMonth])
 }
-
