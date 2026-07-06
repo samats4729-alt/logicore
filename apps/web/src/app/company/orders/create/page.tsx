@@ -1143,7 +1143,7 @@ export default function CreateOrderPage() {
                         Назад к заявкам
                     </Button>
                 </div>
-
+            </div>
 
             {!profileComplete && (
                 <div style={{
@@ -1173,8 +1173,6 @@ export default function CreateOrderPage() {
                     </div>
                 ))}
             </Form>
-
-                        </div>
             </div>
 {/* Navigation buttons */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, marginBottom: 32 }}>
