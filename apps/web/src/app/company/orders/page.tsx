@@ -15,7 +15,7 @@ import {
     MailOutlined, RightOutlined, EditOutlined, ExclamationCircleOutlined,
     ClockCircleOutlined, TruckOutlined
 } from '@ant-design/icons';
-import LiveTicker, { buildOrderTickerItems } from '@/components/ui/LiveTicker';
+import LiveTicker, { buildOrderTickerItems, LiveEventTicker } from '@/components/ui/LiveTicker';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -1294,7 +1294,7 @@ export default function CompanyOrdersPage() {
             </div>
 
             {/* ===== ТИКЕР ЖИВЫХ СОБЫТИЙ (v1: из загруженных заявок) ===== */}
-            <LiveTicker items={tickerItems} />
+            <LiveEventTicker fallback={tickerItems} />
 
             {/* ===== ACTION BAR ===== */}
             <div className="lc2-actionbar">

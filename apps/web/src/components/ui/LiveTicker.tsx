@@ -93,13 +93,14 @@ export function useOrderEvents(pollMs = 60000): { items: TickerItem[]; loading: 
 }
 
 /** Тикер v2 — автономно опрашивает бэкенд, не требуя списка заявок */
-export function LiveEventTicker() {
+export function LiveEventTicker({ fallback = [] }: { fallback?: TickerItem[] }) {
     const { items } = useOrderEvents(60000);
-    if (!items || items.length === 0) return null;
+    const shown = items.length > 0 ? items : fallback;
+    if (shown.length === 0) return null;
     return (
         <div className="lc2-ticker" aria-hidden="true">
             <div className="lc2-ticker-track">
-                {[...items, ...items].map((t, i) => (
+                {[...shown, ...shown].map((t, i) => (
                     <span className="lc2-tick" key={i}>
                         <i style={{ background: t.color }} />
                         <b>{t.num}</b>

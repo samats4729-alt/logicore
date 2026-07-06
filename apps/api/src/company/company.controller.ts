@@ -499,7 +499,9 @@ export class CompanyController {
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Последние события по заявкам компании (для живого тикера)' })
     async getOrderEvents(@Request() req: any, @Query('limit') limit?: string) {
-        return this.companyService.getOrderEvents(req.user.companyId, limit ? parseInt(limit, 10) : 20);
+        const parsed = parseInt(limit ?? '', 10);
+        const safeLimit = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 50) : 20;
+        return this.companyService.getOrderEvents(req.user.companyId, safeLimit);
     }
 
     @Delete('my-companies/:id')

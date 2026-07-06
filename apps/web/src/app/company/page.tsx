@@ -15,7 +15,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import StatusPill from '@/components/ui/StatusPill';
-import LiveTicker, { buildOrderTickerItems } from '@/components/ui/LiveTicker';
+import LiveTicker, { buildOrderTickerItems, LiveEventTicker } from '@/components/ui/LiveTicker';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 
 interface Order {
@@ -197,7 +197,7 @@ export default function CompanyDashboard() {
             </div>
 
             {/* ===== ТИКЕР ===== */}
-            <LiveTicker items={tickerItems} />
+            <LiveEventTicker fallback={tickerItems} />
 
             {/* ===== FEATURED: активная заявка ===== */}
             <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />
