@@ -262,7 +262,7 @@ export default function VehiclesPage() {
             title: 'Номер прицепа',
             dataIndex: 'trailerNumber',
             key: 'trailerNumber',
-            render: (text: string) => text ? <span style={{ fontFamily: 'monospace' }}>{text}</span> : <span style={{ color: '#8a91a0' }}>—</span>,
+            render: (text: string) => text ? <span style={{ fontFamily: 'monospace' }}>{text}</span> : <span style={{ color: 'var(--lc-text-ter)' }}>—</span>,
         },
         {
             title: 'Тип транспорта',
@@ -281,12 +281,12 @@ export default function VehiclesPage() {
                             </span>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                 <span style={{ fontWeight: 500, fontSize: 13 }}>{record.driverName}</span>
-                                {record.driverPhone && <span style={{ color: '#8a91a0', fontSize: 12 }}>{record.driverPhone}</span>}
+                                {record.driverPhone && <span style={{ color: 'var(--lc-text-ter)', fontSize: 12 }}>{record.driverPhone}</span>}
                             </div>
                         </Space>
                     );
                 }
-                return <span style={{ color: '#8a91a0' }}>—</span>;
+                return <span style={{ color: 'var(--lc-text-ter)' }}>—</span>;
             },
         },
         {
@@ -298,7 +298,7 @@ export default function VehiclesPage() {
                     return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                             <Tag color="orange" style={{ margin: 0, width: 'fit-content' }}>От перевозчика</Tag>
-                            {record.carrierName && <span style={{ color: '#8a91a0', fontSize: 12 }}>{record.carrierName}</span>}
+                            {record.carrierName && <span style={{ color: 'var(--lc-text-ter)', fontSize: 12 }}>{record.carrierName}</span>}
                         </div>
                     );
                 }
@@ -347,7 +347,7 @@ export default function VehiclesPage() {
                 <div>
                     <div className="lc-eyebrow">Транспорт · Автопарк</div>
                     <h1 className="lc2-title">Автопарк</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Собственный транспорт и транспорт от перевозчиков
                     </p>
                     <Button

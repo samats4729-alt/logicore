@@ -89,7 +89,7 @@ export default function MySalaryPage() {
                 const baseText = r.percentBase === 'MARGIN' ? ' (Маржа)' : ' (Сумма)';
                 return (
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
-                        {v.toLocaleString('ru-RU')} ₸ <span style={{ color: '#8a91a0', fontSize: 10 }}>{baseText}</span>
+                        {v.toLocaleString('ru-RU')} ₸ <span style={{ color: 'var(--lc-text-ter)', fontSize: 10 }}>{baseText}</span>
                     </span>
                 );
             },
@@ -117,7 +117,7 @@ export default function MySalaryPage() {
                 <div>
                     <div className="lc-eyebrow">Мои финансы</div>
                     <h1 className="lc2-title">Моя зарплата</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Личный кабинет начислений
                     </p>
                     <RangePicker

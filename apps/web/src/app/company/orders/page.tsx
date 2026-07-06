@@ -1067,7 +1067,7 @@ export default function CompanyOrdersPage() {
                 const date = (pickupPt as any)?.expectedDate;
                 return date
                     ? <span style={{ fontSize: 11, color: '#333' }}>{dayjs(date).format('DD.MM.YY')}</span>
-                    : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                    : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1096,7 +1096,7 @@ export default function CompanyOrdersPage() {
             title: 'Водитель', key: 'drv', width: 140, ellipsis: true,
             render: (_: any, r: Order) => {
                 const name = r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '');
-                if (!name) return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                if (!name) return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
                 return (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%' }}>
                         <span className="lc2-avatar lc2-avatar-sm">{nameInitials(name)}</span>
@@ -1114,7 +1114,7 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => {
                 const from = extractCity(r, 'pickup');
                 const to = extractCity(r, 'delivery');
-                if (!from && !to) return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                if (!from && !to) return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
                 return (
                     <div style={{ minWidth: 120 }}>
                         <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{from || '?'} → {to || '?'}</span>
@@ -1131,7 +1131,7 @@ export default function CompanyOrdersPage() {
                 if (r.responsibleManager) {
                     return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
                 }
-                return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1139,7 +1139,7 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => {
                 return r.customerPrice
                     ? <span style={{ fontSize: 12, fontWeight: 600, color: '#389e0d' }}>{r.customerPrice.toLocaleString('ru-RU')}</span>
-                    : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                    : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1148,7 +1148,7 @@ export default function CompanyOrdersPage() {
                 const cost = r.driverCost || (r as any).subForwarderPrice;
                 return cost
                     ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span>
-                    : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                    : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1174,7 +1174,7 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => {
                 const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
                 const date = (pickupPt as any)?.expectedDate;
-                return date ? <span style={{ fontSize: 11, color: '#333' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                return date ? <span style={{ fontSize: 11, color: '#333' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1206,7 +1206,7 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => {
                 const from = extractCity(r, 'pickup');
                 const to = extractCity(r, 'delivery');
-                if (!from && !to) return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                if (!from && !to) return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
                 return <span style={{ fontSize: 12, fontWeight: 500 }}>{from || '?'} → {to || '?'}</span>;
             },
         },
@@ -1216,18 +1216,18 @@ export default function CompanyOrdersPage() {
                 if (r.responsibleManager) {
                     return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
                 }
-                return <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
         {
             title: 'Ставка зак.', key: 'customerPrice', width: 100, align: 'right' as const,
-            render: (_: any, r: Order) => r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600, color: '#389e0d' }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>,
+            render: (_: any, r: Order) => r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600, color: '#389e0d' }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>,
         },
         {
             title: 'Ставка перев.', key: 'carrierPrice', width: 100, align: 'right' as const,
             render: (_: any, r: Order) => {
                 const cost = r.driverCost || (r as any).subForwarderPrice;
-                return cost ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc', fontSize: 11 }}>—</span>;
+                return cost ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
         { title: '', key: 'actions', width: 50, render: (_: any, r: Order) => (
@@ -1301,8 +1301,8 @@ export default function CompanyOrdersPage() {
                 <div className="lc2-ab-left">
                     <span className="lc2-ab-ic"><EnvironmentOutlined /></span>
                     <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0b0d12' }}>База заявок</div>
-                        <div style={{ fontSize: 11.5, color: '#8a91a0' }}>Сегодня · {dayjs().format('DD.MM.YYYY')}</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--lc-text)' }}>База заявок</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--lc-text-ter)' }}>Сегодня · {dayjs().format('DD.MM.YYYY')}</div>
                     </div>
                 </div>
                 <div className="lc2-ab-right">
@@ -1335,7 +1335,7 @@ export default function CompanyOrdersPage() {
                                     display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12,
                                     alignItems: 'center'
                                 }}>
-                                    <FilterOutlined style={{ color: '#999', fontSize: 13 }} />
+                                    <FilterOutlined style={{ color: 'var(--lc-text-ter)', fontSize: 13 }} />
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
                                         placeholder="Заказчик" style={{ width: 140 }}
@@ -1447,7 +1447,7 @@ export default function CompanyOrdersPage() {
                                     display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12,
                                     alignItems: 'center'
                                 }}>
-                                    <FilterOutlined style={{ color: '#999', fontSize: 13 }} />
+                                    <FilterOutlined style={{ color: 'var(--lc-text-ter)', fontSize: 13 }} />
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
                                         placeholder="Контрагент" style={{ width: 150 }}
@@ -1625,7 +1625,7 @@ export default function CompanyOrdersPage() {
                                     }}
                                 >
                                     <Text style={{ fontSize: 13 }}>{item.label}</Text>
-                                    <div style={{ fontSize: 11, color: '#999', paddingLeft: 24 }}>{item.email}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', paddingLeft: 24 }}>{item.email}</div>
                                 </Checkbox>
                             </div>
                         ))}
@@ -1636,7 +1636,7 @@ export default function CompanyOrdersPage() {
                     </div>
                 )}
 
-                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+                <div style={{ borderTop: '1px solid var(--lc-border)', paddingTop: 16 }}>
                     <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
                         Добавить получателя вручную:
                     </Text>

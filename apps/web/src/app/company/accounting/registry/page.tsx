@@ -501,7 +501,7 @@ export default function FinancialRegistryPage() {
                 <div>
                     <div className="lc-eyebrow">Бухгалтерия · Финансы</div>
                     <h1 className="lc2-title">Реестр заявок</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Маржа, учет оплат и сверка взаиморасчетов по рейсам
                     </p>
                     <Button

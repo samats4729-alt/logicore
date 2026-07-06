@@ -79,7 +79,7 @@ export default function CompanyIncomesPage() {
                         Финансы · Поступления
                     </div>
                     <h1 className="lc2-title">Поступления</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Учёт входящих платежей по заявкам и прочих доходов
                     </p>
                     {tab === 'other_incomes' && canEditFinance && (

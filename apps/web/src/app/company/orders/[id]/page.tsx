@@ -217,7 +217,7 @@ export default function OrderDetailPage() {
         if (isMeCarr && selectedCustomer) return { text: 'Вы — перевозчик. Заказ от контрагента', color: '#389e0d' };
         if (!isMeCust && !isMeCarr && selectedCustomer && selectedCarrier) return { text: 'Вы — посредник между заказчиком и перевозчиком', color: '#eb2f96' };
         if (selectedCustomer && !selectedCarrier) return { text: 'Выберите перевозчика', color: '#faad14' };
-        return { text: 'Укажите стороны сделки', color: '#999' };
+        return { text: 'Укажите стороны сделки', color: 'var(--lc-text-ter)' };
     };
 
     const roleInfo = getRoleDescription();
@@ -1039,7 +1039,7 @@ export default function OrderDetailPage() {
                 flexWrap: 'wrap',
                 gap: 16, 
                 marginBottom: 24,
-                borderBottom: '1px solid #f0f0f0',
+                borderBottom: '1px solid var(--lc-border)',
                 paddingBottom: 16
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -2010,7 +2010,7 @@ export default function OrderDetailPage() {
                                     onChange={(e) => { const newList = [...shareEmailsList]; newList[idx].checked = e.target.checked; setShareEmailsList(newList); }}
                                 >
                                     <Text style={{ fontSize: 13 }}>{item.label}</Text>
-                                    <div style={{ fontSize: 11, color: '#999', paddingLeft: 24 }}>{item.email}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', paddingLeft: 24 }}>{item.email}</div>
                                 </Checkbox>
                             </div>
                         ))}
@@ -2020,7 +2020,7 @@ export default function OrderDetailPage() {
                         <Text type="secondary">Нет email-адресов.</Text>
                     </div>
                 )}
-                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+                <div style={{ borderTop: '1px solid var(--lc-border)', paddingTop: 16 }}>
                     <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>Добавить получателя вручную:</Text>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <Input placeholder="example@mail.com" value={customEmailInput} onChange={(e) => setCustomEmailInput(e.target.value)} onPressEnter={handleAddCustomEmail} />

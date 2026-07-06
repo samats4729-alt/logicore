@@ -407,7 +407,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 onClick={({ key }) => handleMenuClick(key)}
                 style={{ border: 'none' }}
             />
-            <div style={{ padding: 16, borderTop: '1px solid #f0f0f0', marginTop: 16 }}>
+            <div style={{ padding: 16, borderTop: '1px solid var(--lc-border)', marginTop: 16 }}>
                 <Button
                     type="text"
                     danger

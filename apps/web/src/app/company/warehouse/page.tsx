@@ -89,7 +89,7 @@ export default function CompanyWarehousePage() {
                 <div>
                     <div className="lc-eyebrow">Склад · Операции</div>
                     <h1 className="lc2-title">Очередь на погрузку</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление очередью машин на складах
                     </p>
                     <Button icon={<ReloadOutlined />} onClick={fetchQueue}>
@@ -148,7 +148,7 @@ export default function CompanyWarehousePage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                     {Object.entries(groupedItems).map(([locationName, items]) => (
                         <div className="lc-card" key={locationName} style={{ padding: 0 }}>
-                            <div style={{ padding: '16px 20px', fontWeight: 600, fontSize: 15, borderBottom: '1px solid #f0f0f0' }}>
+                            <div style={{ padding: '16px 20px', fontWeight: 600, fontSize: 15, borderBottom: '1px solid var(--lc-border)' }}>
                                 <Space>
                                     <EnvironmentOutlined />
                                     {locationName}
@@ -181,7 +181,7 @@ export default function CompanyWarehousePage() {
                                                 <Avatar icon={<CarOutlined />} />
                                                 <div>
                                                     <div>{record.order.driver?.vehiclePlate || 'Без номера'}</div>
-                                                    <div style={{ fontSize: 12, color: '#888' }}>
+                                                    <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
                                                         {record.order.driver?.lastName} {record.order.driver?.firstName}
                                                     </div>
                                                 </div>
@@ -194,7 +194,7 @@ export default function CompanyWarehousePage() {
                                         render: (_, record) => (
                                             <div>
                                                 <Text strong>{record.order.orderNumber}</Text>
-                                                <div style={{ fontSize: 12, color: '#888' }}>
+                                                <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
                                                     {record.order.cargoDescription}
                                                 </div>
                                             </div>

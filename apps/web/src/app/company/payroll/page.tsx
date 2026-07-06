@@ -339,7 +339,7 @@ export default function PayrollAdminPage() {
                 <div>
                     <div className="lc-eyebrow">Финансы компании</div>
                     <h1 className="lc2-title">Зарплаты и мотивация</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Настройка схем начислений и KPI для менеджеров
                     </p>
                 </div>

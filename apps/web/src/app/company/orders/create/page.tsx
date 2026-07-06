@@ -333,7 +333,7 @@ export default function CreateOrderPage() {
         if (isMeCarrier && selectedCustomer) return { text: 'Вы — перевозчик. Заказ от контрагента', color: '#389e0d' };
         if (!isMeCustomer && !isMeCarrier && selectedCustomer && selectedCarrier) return { text: 'Вы — посредник между заказчиком и перевозчиком', color: '#eb2f96' };
         if (selectedCustomer && !selectedCarrier) return { text: 'Выберите перевозчика', color: '#faad14' };
-        return { text: 'Укажите стороны сделки', color: '#999' };
+        return { text: 'Укажите стороны сделки', color: 'var(--lc-text-ter)' };
     };
 
     // Validate current step before proceeding

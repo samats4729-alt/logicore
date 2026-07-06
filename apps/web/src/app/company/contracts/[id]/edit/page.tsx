@@ -321,7 +321,7 @@ export default function EditContractContentPage() {
                     left: 0,
                     right: 0,
                     background: '#fff',
-                    borderTop: '1px solid #f0f0f0',
+                    borderTop: '1px solid var(--lc-border)',
                     padding: '12px 24px',
                     display: 'flex',
                     justifyContent: 'flex-end',

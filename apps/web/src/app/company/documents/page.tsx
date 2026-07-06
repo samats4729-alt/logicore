@@ -74,7 +74,7 @@ export default function DocumentsPage() {
                 <div>
                     <div className="lc-eyebrow">Документы · Обзор</div>
                     <h1 className="lc2-title">Документы</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Загруженные файлы — ТТН, счета, договоры и прочие документы
                     </p>
                     <Button type="primary" icon={<UploadOutlined />} className="lc-cta">

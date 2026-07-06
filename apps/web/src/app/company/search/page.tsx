@@ -196,7 +196,7 @@ export default function ForwarderSearchPage() {
                             Ставка: <Text type="success" strong>{selectedOrder.customerPrice ? `${selectedOrder.customerPrice.toLocaleString()} ₸` : 'Не указана'}</Text>
                         </div>
                         {selectedOrder.customerPriceType && (
-                            <div style={{ color: '#888' }}>Тип оплаты: {selectedOrder.customerPriceType}</div>
+                            <div style={{ color: 'var(--lc-text-ter)' }}>Тип оплаты: {selectedOrder.customerPriceType}</div>
                         )}
 
                         <Title level={5} style={{ marginTop: 24 }}>Маршрут</Title>

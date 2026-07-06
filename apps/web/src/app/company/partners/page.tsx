@@ -348,7 +348,7 @@ export default function PartnersPage() {
     const searchContent = (
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
             <div style={{ marginBottom: 32, textAlign: 'center', paddingTop: 16 }}>
-                <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px 0', color: '#0b0d12' }}>Поиск компаний</h3>
+                <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px 0', color: 'var(--lc-text)' }}>Поиск компаний</h3>
                 <Text type="secondary">Находите зарегистрированные компании для сотрудничества на платформе</Text>
                 <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
                     <Input
@@ -409,7 +409,7 @@ export default function PartnersPage() {
             />
 
             {searchResults.length === 0 && !searchLoading && (
-                <div style={{ textAlign: 'center', marginTop: 40, color: '#999' }}>
+                <div style={{ textAlign: 'center', marginTop: 40, color: 'var(--lc-text-ter)' }}>
                     {searchQuery ? 'Ничего не найдено' : 'Нет доступных компаний для партнерства'}
                 </div>
             )}
@@ -427,7 +427,7 @@ export default function PartnersPage() {
                 <div>
                     <div className="lc-eyebrow">Транспорт · Партнёры</div>
                     <h1 className="lc2-title">Контрагенты</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление заказчиками, перевозчиками и входящими запросами на партнерство
                     </p>
                     <Button

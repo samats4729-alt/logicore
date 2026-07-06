@@ -541,9 +541,9 @@ export default function CompanyTrackingPage() {
                             <span style={{ cursor: 'pointer', color: '#98a1b2' }} onClick={() => setPopupInfo(null)}>✕</span>
                         </div>
                         <div style={{ fontSize: 12, color: '#5b6472', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <span>Госномер: <b style={{ color: '#0b0d12' }}>{popupInfo.vehiclePlate || '—'}</b></span>
+                            <span>Госномер: <b style={{ color: 'var(--lc-text)' }}>{popupInfo.vehiclePlate || '—'}</b></span>
                             {popupInfo.orderNumber && <span>Рейс: <b style={{ color: '#1677ff' }}>{popupInfo.orderNumber}</b></span>}
-                            <span>Скорость: <b style={{ color: '#0b0d12' }}>{Math.round(popupInfo.speed || 0)} км/ч</b></span>
+                            <span>Скорость: <b style={{ color: 'var(--lc-text)' }}>{Math.round(popupInfo.speed || 0)} км/ч</b></span>
                             <span>Обновлено: {new Date(popupInfo.updatedAt).toLocaleTimeString('ru-RU')}</span>
                         </div>
                     </div>

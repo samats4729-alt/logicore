@@ -1386,7 +1386,7 @@ export default function CompanyUsersPage() {
                 <div>
                     <div className="lc-eyebrow">Компания · Персонал</div>
                     <h1 className="lc2-title">Персонал</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление структурой, сотрудниками и водителями
                     </p>
                     <Space>
@@ -1527,8 +1527,8 @@ export default function CompanyUsersPage() {
                                                 alignItems: 'center',
                                                 justifyContent: 'space-between',
                                                 padding: '6px 8px',
-                                                background: '#f9fafb',
-                                                border: '1px solid #e5e7eb',
+                                                background: 'var(--lc-card)',
+                                                border: '1px solid var(--lc-border)',
                                                 borderRadius: 8,
                                                 marginBottom: 6
                                             }}

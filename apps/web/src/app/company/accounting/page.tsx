@@ -167,7 +167,7 @@ export default function CompanyAccountingPage() {
                 <div>
                     <div className="lc-eyebrow">Финансы · Обзор</div>
                     <h1 className="lc2-title">Бухгалтерия</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Финансовое состояние платформы и аналитика
                     </p>
                     <Space direction="horizontal" size={8}>
@@ -233,38 +233,38 @@ export default function CompanyAccountingPage() {
                 <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
                     <Col xs={24} sm={8}>
                         <div className="lc-card" style={{ padding: 16 }}>
-                            <div style={{ color: '#8a91a0', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
+                            <div style={{ color: 'var(--lc-text-ter)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
                                 <ArrowUpOutlined style={{ marginRight: 4, color: '#e67e22' }} />
                                 Дебиторка
                             </div>
                             <div style={{ fontWeight: 700, fontSize: 20, fontVariantNumeric: 'tabular-nums', marginBottom: 4 }}>
                                 {formatMoney(summary.debtorSum)}
                             </div>
-                            <div style={{ fontSize: 12, color: '#8a91a0' }}>Ожидаемые поступления от заказчиков</div>
+                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>Ожидаемые поступления от заказчиков</div>
                         </div>
                     </Col>
                     <Col xs={24} sm={8}>
                         <div className="lc-card" style={{ padding: 16 }}>
-                            <div style={{ color: '#8a91a0', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
+                            <div style={{ color: 'var(--lc-text-ter)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
                                 <ArrowDownOutlined style={{ marginRight: 4, color: '#dc3545' }} />
                                 Кредиторка
                             </div>
                             <div style={{ fontWeight: 700, fontSize: 20, fontVariantNumeric: 'tabular-nums', marginBottom: 4 }}>
                                 {formatMoney(summary.creditorSum)}
                             </div>
-                            <div style={{ fontSize: 12, color: '#8a91a0' }}>Обязательства перед перевозчиками</div>
+                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>Обязательства перед перевозчиками</div>
                         </div>
                     </Col>
                     <Col xs={24} sm={8}>
                         <div className="lc-card" style={{ padding: 16 }}>
-                            <div style={{ color: '#8a91a0', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
-                                <FileTextOutlined style={{ marginRight: 4, color: '#5f6672' }} />
+                            <div style={{ color: 'var(--lc-text-ter)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
+                                <FileTextOutlined style={{ marginRight: 4, color: 'var(--lc-text-sec)' }} />
                                 Неоплаченные рейсы
                             </div>
                             <div style={{ fontWeight: 700, fontSize: 20, fontVariantNumeric: 'tabular-nums', marginBottom: 4 }}>
                                 {summary.unpaidOrdersCount}
                             </div>
-                            <div style={{ fontSize: 12, color: '#8a91a0' }}>Количество заявок с задолженностью</div>
+                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>Количество заявок с задолженностью</div>
                         </div>
                     </Col>
                 </Row>

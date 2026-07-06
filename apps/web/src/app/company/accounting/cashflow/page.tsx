@@ -239,7 +239,7 @@ export default function CashflowReportPage() {
                         Бухгалтерия · ДДС
                     </div>
                     <h1 className="lc2-title">Движение денежных средств</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Фактическое движение денег по счетам и кассам
                     </p>
                     <Space wrap>

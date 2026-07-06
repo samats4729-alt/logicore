@@ -174,7 +174,7 @@ export default function PnLReportPage() {
                         Бухгалтерия · P&L
                     </div>
                     <h1 className="lc2-title">Прибыли и убытки (P&L)</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Финансовые результаты на основе начислений по закрытым сделкам
                     </p>
                     <Space wrap>

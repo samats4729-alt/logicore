@@ -361,13 +361,13 @@ export default function CompanyContractsPage() {
             title: 'Откуда',
             dataIndex: 'originCity',
             key: 'originCity',
-            render: (city: CityRef) => <strong>{city?.name}{city?.region ? <span style={{ fontSize: 12, color: '#8a91a0' }}> ({city.region.name})</span> : ''}</strong>,
+            render: (city: CityRef) => <strong>{city?.name}{city?.region ? <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}> ({city.region.name})</span> : ''}</strong>,
         },
         {
             title: 'Куда',
             dataIndex: 'destinationCity',
             key: 'destinationCity',
-            render: (city: CityRef) => <strong>{city?.name}{city?.region ? <span style={{ fontSize: 12, color: '#8a91a0' }}> ({city.region.name})</span> : ''}</strong>,
+            render: (city: CityRef) => <strong>{city?.name}{city?.region ? <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}> ({city.region.name})</span> : ''}</strong>,
         },
         {
             title: 'Стоимость',
@@ -383,7 +383,7 @@ export default function CompanyContractsPage() {
             title: 'Тип кузова',
             dataIndex: 'vehicleType',
             key: 'vehicleType',
-            render: (type: string) => type || <span style={{ color: '#8a91a0' }}>Любой</span>,
+            render: (type: string) => type || <span style={{ color: 'var(--lc-text-ter)' }}>Любой</span>,
         },
     ];
 
@@ -397,7 +397,7 @@ export default function CompanyContractsPage() {
                 <div>
                     <div className="lc-eyebrow">Документы · Договоры</div>
                     <h1 className="lc2-title">Договоры и тарифы</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление договорами, доп. соглашениями и тарифными сетками
                     </p>
                     <Button
@@ -789,7 +789,7 @@ export default function CompanyContractsPage() {
                 width={700}
             >
                 <Form form={tariffForm} layout="vertical" onFinish={handleAddTariff}>
-                    <div style={{ background: '#f9fafb', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--lc-card)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                         <div style={{ fontWeight: 600, marginBottom: 12, color: '#1f2937' }}>Откуда</div>
                         <Row gutter={16}>
                             <Col span={8}>
@@ -809,7 +809,7 @@ export default function CompanyContractsPage() {
                             </Col>
                         </Row>
                     </div>
-                    <div style={{ background: '#f9fafb', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--lc-card)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                         <div style={{ fontWeight: 600, marginBottom: 12, color: '#1f2937' }}>Куда</div>
                         <Row gutter={16}>
                             <Col span={8}>

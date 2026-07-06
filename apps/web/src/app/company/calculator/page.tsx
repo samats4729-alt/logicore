@@ -26,7 +26,7 @@ export default function CalculatorPage() {
                 <div>
                     <div className="lc-eyebrow">Финансы · Расчёты</div>
                     <h1 className="lc2-title">Калькулятор рентабельности рейса</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Быстрый расчет маржинальности и рентабельности перевозки
                     </p>
                 </div>
@@ -92,15 +92,15 @@ export default function CalculatorPage() {
                 <Col xs={24} md={12}>
                     <div className="lc-card" style={{ padding: 20 }}>
                         <h4 style={{ fontWeight: 600, margin: '0 0 4px' }}>Параметры рейса</h4>
-                        <span style={{ color: '#8a91a0', fontSize: 13 }}>Исходные данные для расчёта</span>
+                        <span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>Исходные данные для расчёта</span>
                         <div style={{ marginTop: 18 }}>
                             <Space direction="vertical" style={{ width: '100%' }} size="middle">
                                 <div>
-                                    <div style={{ marginBottom: 6 }}><span style={{ color: '#8a91a0' }}>Расстояние (км)</span></div>
+                                    <div style={{ marginBottom: 6 }}><span style={{ color: 'var(--lc-text-ter)' }}>Расстояние (км)</span></div>
                                     <InputNumber value={distance} onChange={v => setDistance(v || 0)} style={{ width: '100%' }} min={0} />
                                 </div>
                                 <div>
-                                    <div style={{ marginBottom: 6 }}><span style={{ color: '#8a91a0' }}>Ставка за км (₸)</span></div>
+                                    <div style={{ marginBottom: 6 }}><span style={{ color: 'var(--lc-text-ter)' }}>Ставка за км (₸)</span></div>
                                     <InputNumber value={rate} onChange={v => setRate(v || 0)} style={{ width: '100%' }} min={0} />
                                 </div>
                             </Space>
@@ -108,19 +108,19 @@ export default function CalculatorPage() {
                     </div>
                     <div className="lc-card" style={{ padding: 20, marginTop: 16 }}>
                         <h4 style={{ fontWeight: 600, margin: '0 0 4px' }}>Затраты</h4>
-                        <span style={{ color: '#8a91a0', fontSize: 13 }}>Расходы на выполнение рейса</span>
+                        <span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>Расходы на выполнение рейса</span>
                         <div style={{ marginTop: 18 }}>
                             <Space direction="vertical" style={{ width: '100%' }} size="middle">
                                 <div>
-                                    <div style={{ marginBottom: 6 }}><span style={{ color: '#8a91a0' }}>Цена топлива (₸/л)</span></div>
+                                    <div style={{ marginBottom: 6 }}><span style={{ color: 'var(--lc-text-ter)' }}>Цена топлива (₸/л)</span></div>
                                     <InputNumber value={fuelCost} onChange={v => setFuelCost(v || 0)} style={{ width: '100%' }} min={0} />
                                 </div>
                                 <div>
-                                    <div style={{ marginBottom: 6 }}><span style={{ color: '#8a91a0' }}>Расход (л/100км)</span></div>
+                                    <div style={{ marginBottom: 6 }}><span style={{ color: 'var(--lc-text-ter)' }}>Расход (л/100км)</span></div>
                                     <InputNumber value={fuelConsumption} onChange={v => setFuelConsumption(v || 0)} style={{ width: '100%' }} min={0} />
                                 </div>
                                 <div>
-                                    <div style={{ marginBottom: 6 }}><span style={{ color: '#8a91a0' }}>Доп. расходы (₸)</span></div>
+                                    <div style={{ marginBottom: 6 }}><span style={{ color: 'var(--lc-text-ter)' }}>Доп. расходы (₸)</span></div>
                                     <InputNumber value={extraCosts} onChange={v => setExtraCosts(v || 0)} style={{ width: '100%' }} min={0} />
                                 </div>
                             </Space>
@@ -130,7 +130,7 @@ export default function CalculatorPage() {
                 <Col xs={24} md={12}>
                     <div className="lc-card" style={{ padding: 20 }}>
                         <h4 style={{ fontWeight: 600, margin: '0 0 4px' }}>Результат расчета</h4>
-                        <span style={{ color: '#8a91a0', fontSize: 13 }}>Итоговые показатели рейса</span>
+                        <span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>Итоговые показатели рейса</span>
                         <div style={{ padding: '8px 0', marginTop: 12 }}>
                             <div className="lc2-mlabel">Выручка</div>
                             <div style={{ fontSize: 28, fontWeight: 700, color: '#52c41a', fontVariantNumeric: 'tabular-nums' }}>
@@ -139,11 +139,11 @@ export default function CalculatorPage() {
                         </div>
                         <Divider style={{ margin: '16px 0' }} />
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
-                            <span style={{ color: '#8a91a0' }}>Топливо</span>
+                            <span style={{ color: 'var(--lc-text-ter)' }}>Топливо</span>
                             <span style={{ fontWeight: 600, color: '#ff4d4f' }}>-{fmt(fuelTotal)} ₸</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
-                            <span style={{ color: '#8a91a0' }}>Доп. расходы</span>
+                            <span style={{ color: 'var(--lc-text-ter)' }}>Доп. расходы</span>
                             <span style={{ fontWeight: 600, color: '#ff4d4f' }}>-{fmt(extraCosts)} ₸</span>
                         </div>
                         <Divider style={{ margin: '16px 0' }} />

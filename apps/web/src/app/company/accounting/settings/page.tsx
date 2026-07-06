@@ -218,7 +218,7 @@ export default function FinanceSettingsPage() {
                         Бухгалтерия · Настройки
                     </div>
                     <h1 className="lc2-title">Настройки финансовых справочников</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление счетами, кассами и статьями доходов и расходов
                     </p>
                 </div>

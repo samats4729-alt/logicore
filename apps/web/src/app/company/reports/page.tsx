@@ -226,7 +226,7 @@ export default function ReportsPage() {
                         Отчёты · Аналитика
                     </div>
                     <h1 className="lc2-title">Конструктор отчётов</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Аналитика по периодам, контрагентам, водителям и рентабельности
                     </p>
                     <Space wrap>
@@ -375,8 +375,8 @@ export default function ReportsPage() {
                         <Col xs={24} md={8}>
                             <div className="lc-card" style={{ padding: 20 }}>
                                 <h4 style={{ fontWeight: 600, fontSize: 14, margin: '0 0 12px' }}>Финансы</h4>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ color: '#8a91a0', fontSize: 13 }}>Выручка</span><span style={{ fontWeight: 600, color: '#52c41a', fontSize: 13 }}>{fmt(totalIncome)} ₸</span></div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ color: '#8a91a0', fontSize: 13 }}>Затраты</span><span style={{ fontWeight: 600, color: '#ff4d4f', fontSize: 13 }}>{fmt(totalExpense)} ₸</span></div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>Выручка</span><span style={{ fontWeight: 600, color: '#52c41a', fontSize: 13 }}>{fmt(totalIncome)} ₸</span></div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>Затраты</span><span style={{ fontWeight: 600, color: '#ff4d4f', fontSize: 13 }}>{fmt(totalExpense)} ₸</span></div>
                                 <Divider style={{ margin: '12px 0' }} />
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <span style={{ fontWeight: 600, fontSize: 13 }}>Маржа</span>

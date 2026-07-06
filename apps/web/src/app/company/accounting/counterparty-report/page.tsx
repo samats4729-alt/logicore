@@ -300,7 +300,7 @@ export default function CounterpartyReportPage() {
                 <div>
                     <div className="lc-eyebrow">Бухгалтерия · Финансы</div>
                     <h1 className="lc2-title">Взаиморасчёты</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Финансовая отчётность по всем контрагентам — как заказчик, экспедитор или суб-экспедитор
                     </p>
                     <Button

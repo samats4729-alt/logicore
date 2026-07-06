@@ -102,7 +102,7 @@ lc-page, lc-title/eyebrow, lc-status, lc-metric, lc-card, lc-filterbar, комп
 ### Этап 7. Центр уведомлений (колокольчик) — [x] ГОТОВО (прочитанность в localStorage, без миграций) (функционал)
 Лента: смены статусов, запросы подтверждения завершения, новые тикеты (для админа).
 
-### Этап 8. Тёмная тема платформы — [ ] TODO (решение владельца)
+### Этап 8. Тёмная тема платформы — [x] ГОТОВО (localStorage lc_theme, по умолчанию светлая) (решение владельца)
 Референс имеет обе темы. Нужны CSS-переменные для всего lc-скина + переключатель в шапке
 + тёмный вариант antd (theme.darkAlgorithm). Большая задача, делать последней.
 
@@ -176,3 +176,7 @@ lc-page, lc-title/eyebrow, lc-status, lc-metric, lc-card, lc-filterbar, комп
 - 2026-07-06 (DeepSeek): Этап 7 выполнен — эндпоинт pending-confirmations,
   центр уведомлений NotificationBell (лента событий + ожидающие подтверждения,
   localStorage lc_notif_last_seen, опрос 60с), селектор для гида. tsc чистый.
+- 2026-07-06 (DeepSeek): Этап 8 выполнен — ThemeProvider, CSS-переменные :root/[data-theme='dark'],
+  antd darkAlgorithm, рабочий переключатель (light/dark) в шапке, инлайн-скрипт anti-flicker,
+  globals.css lc/lc2 на var(), панели шапки на var(), инлайн-цвета страниц на var().
+  По умолчанию светлая тема, тёмные акцент-блоки фиксированы. tsc чистый.

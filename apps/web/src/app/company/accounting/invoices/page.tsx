@@ -316,7 +316,7 @@ export default function InvoicesPage() {
                 <div>
                     <div className="lc-eyebrow">Бухгалтерия · Документы</div>
                     <h1 className="lc2-title">Реестр счетов</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Группировка выполненных рейсов и сделок для взаимных расчетов с заказчиками и партнерами
                     </p>
                     {isAccountantOrAdmin && (

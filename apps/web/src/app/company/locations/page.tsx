@@ -163,7 +163,7 @@ export default function CompanyLocationsPage() {
                         <strong style={{ whiteSpace: 'nowrap' }}>{text}</strong>
                     </Space>
                     {record.address && (
-                        <span style={{ fontSize: 12, color: '#8a91a0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
+                        <span style={{ fontSize: 12, color: 'var(--lc-text-ter)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
                             {record.address}
                         </span>
                     )}
@@ -181,7 +181,7 @@ export default function CompanyLocationsPage() {
                         <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#f1f2f5', color: '#5f6672', flexShrink: 0 }}>
                             <GlobalOutlined />
                         </span>
-                        <span style={{ color: '#8a91a0', fontSize: 13 }}>Общий</span>
+                        <span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>Общий</span>
                     </Space>
                 );
                 const initials = getInitials(company.name);
@@ -254,7 +254,7 @@ export default function CompanyLocationsPage() {
             key: 'coords',
             width: 120,
             render: (_: any, record: Location) => (
-                <span style={{ color: '#8a91a0', fontSize: 12, whiteSpace: 'nowrap' }}>
+                <span style={{ color: 'var(--lc-text-ter)', fontSize: 12, whiteSpace: 'nowrap' }}>
                     {record.latitude?.toFixed(4)}, {record.longitude?.toFixed(4)}
                 </span>
             ),
@@ -293,7 +293,7 @@ export default function CompanyLocationsPage() {
                 <div>
                     <div className="lc-eyebrow">Справочники · Адреса</div>
                     <h1 className="lc2-title">Адреса</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление точками погрузки и выгрузки
                     </p>
                     <Button

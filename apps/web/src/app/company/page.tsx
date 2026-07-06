@@ -114,7 +114,7 @@ export default function CompanyDashboard() {
         },
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 60,
-            render: (d: string) => <span style={{ fontSize: 11, color: '#888' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
+            render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
             title: 'Груз', key: 'cargo', ellipsis: true, width: 130,
@@ -148,15 +148,15 @@ export default function CompanyDashboard() {
             title: 'Водитель', key: 'driver', width: 130, ellipsis: true,
             render: (_: any, r: Order) => {
                 if (r.assignedDriverName) return (
-                    <span style={{ fontSize: 12 }}>{r.assignedDriverName} <span style={{ color: '#999', fontFamily: 'monospace', fontSize: 11 }}>{r.assignedDriverPlate || ''}</span></span>
+                    <span style={{ fontSize: 12 }}>{r.assignedDriverName} <span style={{ color: 'var(--lc-text-ter)', fontFamily: 'monospace', fontSize: 11 }}>{r.assignedDriverPlate || ''}</span></span>
                 );
                 if (r.driver) return <span style={{ fontSize: 12 }}>{r.driver.firstName} {r.driver.lastName}</span>;
-                return <span style={{ color: '#ccc' }}>—</span>;
+                return <span style={{ color: 'var(--lc-text-ter)' }}>—</span>;
             },
         },
         {
             title: 'Сумма ₸', dataIndex: 'customerPrice', key: 'price', width: 100, align: 'right' as const,
-            render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: '#ccc' }}>—</span>,
+            render: (p: number) => p ? <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{p.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--lc-text-ter)' }}>—</span>,
         },
     ];
 
@@ -170,7 +170,7 @@ export default function CompanyDashboard() {
                 <div>
                     <div className="lc-eyebrow">LogiCore — обзор</div>
                     <h1 className="lc2-title">{greeting()}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         {isManager ? 'Ваши заявки и активность' : 'Сводка по всем заявкам компании'}
                     </p>
                     <Button type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')}>
@@ -206,8 +206,8 @@ export default function CompanyDashboard() {
             <div className="lc-card">
                 <div style={{ padding: '16px 20px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#0b0d12', letterSpacing: '-0.01em' }}>Последние заявки</div>
-                        <div style={{ color: '#8a91a0', fontSize: 12, marginTop: 2 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--lc-text)', letterSpacing: '-0.01em' }}>Последние заявки</div>
+                        <div style={{ color: 'var(--lc-text-ter)', fontSize: 12, marginTop: 2 }}>
                             {isManager ? '10 ваших последних заявок' : '10 последних заявок компании'}
                         </div>
                     </div>

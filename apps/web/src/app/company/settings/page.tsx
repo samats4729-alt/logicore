@@ -635,7 +635,7 @@ export default function SettingsPage() {
                 <div>
                     <div className="lc-eyebrow">LogiCore · Аккаунт</div>
                     <h1 className="lc2-title">Настройки</h1>
-                    <p style={{ color: '#8a91a0', fontSize: 13, margin: '6px 0 14px' }}>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Профиль, данные организации и безопасность
                     </p>
                 </div>
