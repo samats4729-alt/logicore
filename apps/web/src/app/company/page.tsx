@@ -15,7 +15,6 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import StatusPill from '@/components/ui/StatusPill';
-import LiveTicker, { buildOrderTickerItems, LiveEventTicker } from '@/components/ui/LiveTicker';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 
 interface Order {
@@ -161,8 +160,6 @@ export default function CompanyDashboard() {
     ];
 
     const featured = orders.find(o => !['COMPLETED', 'CANCELLED', 'DRAFT'].includes(o.status)) || orders[0] || null;
-    const tickerItems = buildOrderTickerItems(orders);
-
     return (
         <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
             {/* ===== HERO 2026 ===== */}
@@ -195,9 +192,6 @@ export default function CompanyDashboard() {
                     ))}
                 </div>
             </div>
-
-            {/* ===== ТИКЕР ===== */}
-            <LiveEventTicker fallback={tickerItems} />
 
             {/* ===== FEATURED: активная заявка ===== */}
             <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />

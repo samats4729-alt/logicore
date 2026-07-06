@@ -37,6 +37,8 @@ import { shortenCompanyName } from '@/lib/company-helper';
 import NotificationBell from '@/components/ui/NotificationBell';
 import { useTheme } from '@/components/ThemeProvider';
 import AiButton from '@/components/ui/AiButton';
+import { LiveEventTicker } from '@/components/ui/LiveTicker';
+import GlobalSearch from '@/components/ui/GlobalSearch';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -523,14 +525,17 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     {/* AI-ассистент */}
                     <AiButton />
 
+                    {/* Глобальный поиск */}
+                    <GlobalSearch />
+
                     {/* Центр уведомлений (Этап 7) */}
                     <NotificationBell hasNewUpdates={hasNewUpdates} />
 
-                    {/* Тема (Этап 8) — круглый кроссфейд */}
+                    {/* Тема (Этап 8) — капсульный переключатель */}
                     <div className="lc2-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'} aria-label="Переключить тему">
-                        <span className="lc2-theme-active-bg" />
+                        <div className="lc2-theme-active-bg" style={{ transform: theme === 'dark' ? 'translateX(32px)' : 'translateX(0px)' }} />
                         <span className="lc2-theme-btn sun">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="5" />
                                 <line x1="12" y1="1" x2="12" y2="3" />
                                 <line x1="12" y1="21" x2="12" y2="23" />
@@ -543,7 +548,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             </svg>
                         </span>
                         <span className="lc2-theme-btn moon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                             </svg>
                         </span>
@@ -578,6 +583,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     </Dropdown>
                 </div>
             </Header>
+
+            {/* Тикер живых событий (глобальный) */}
+            <LiveEventTicker />
 
             {/* Content */}
             <Layout style={{ background: 'var(--lc-bg)', padding: isMobile ? 0 : '16px 24px 24px' }}>

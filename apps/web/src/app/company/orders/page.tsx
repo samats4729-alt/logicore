@@ -15,7 +15,6 @@ import {
     MailOutlined, RightOutlined, EditOutlined, ExclamationCircleOutlined,
     ClockCircleOutlined, TruckOutlined
 } from '@ant-design/icons';
-import LiveTicker, { buildOrderTickerItems, LiveEventTicker } from '@/components/ui/LiveTicker';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -1243,7 +1242,6 @@ export default function CompanyOrdersPage() {
     const pendingCount = orders.filter(o => o.status === 'PENDING').length;
     const problemCount = orders.filter(o => o.status === 'PROBLEM').length;
     const featured = filteredOrders[0] || orders[0] || null;
-    const tickerItems = buildOrderTickerItems(orders);
 
     return (
         <div className="lc-page" style={{ height: '100%' }}>
@@ -1292,9 +1290,6 @@ export default function CompanyOrdersPage() {
                     )}
                 </div>
             </div>
-
-            {/* ===== ТИКЕР ЖИВЫХ СОБЫТИЙ (v1: из загруженных заявок) ===== */}
-            <LiveEventTicker fallback={tickerItems} />
 
             {/* ===== ACTION BAR ===== */}
             <div className="lc2-actionbar">
