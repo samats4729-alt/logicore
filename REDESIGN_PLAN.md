@@ -89,7 +89,7 @@ lc-page, lc-title/eyebrow, lc-status, lc-metric, lc-card, lc-filterbar, комп
       из routePoints[].location.latitude/longitude, линия между ними). Референс-компонент:
       components/ui/DgisTrackingMap.tsx (загрузчик mapgl уже есть — вынести loadMapgl в
       общий util, чтобы не дублировать третий раз).
-- [x] Тикер v2: реальные события — нужен лёгкий эндпоинт GET /company/orders/events
+- [x] Тикер v2: реальные события — эндпоинт, хук useOrderEvents, LiveEventTicker с fallback, подключён
       (последние N записей OrderStatusHistory по заявкам компании: orderNumber, status,
       changedAt). Обновление раз в 60с. Бэкенд: apps/api/src/company/* по образцу getCompanyOrders.
 - [ ] Прогресс «В движении · 52%» по-настоящему: сейчас % считается по позиции статуса
@@ -167,3 +167,6 @@ lc-page, lc-title/eyebrow, lc-status, lc-metric, lc-card, lc-filterbar, комп
   бэкенд-эндпоинт GET /company/orders/events (controller + service),
   хук useOrderEvents + компонент LiveEventTicker (опрос раз в 60с).
   tsc чистый в apps/web и apps/api. Этап 6 (глобальный поиск) — следующий.
+- 2026-07-06 (DeepSeek): багфиксы Этапа 5 — убран bindingType из LocationForm,
+  починена мини-карта (destroy + fitBounds + заглушка без координат),
+  тикер v2 подключён на дашборд и заявки (LiveEventTicker с fallback), кламп limit в API.
