@@ -504,6 +504,17 @@ export class CompanyController {
         return this.companyService.getOrderEvents(req.user.companyId, safeLimit);
     }
 
+    // ==================== Глобальный поиск ====================
+
+    @Get('search')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Глобальный поиск: заявки по номеру, контрагенты по названию' })
+    async globalSearch(@Request() req: any, @Query('q') q?: string) {
+        const query = (q || '').trim();
+        if (query.length < 2) return { orders: [], partners: [] };
+        return this.companyService.globalSearch(req.user.companyId, query.slice(0, 60));
+    }
+
     @Delete('my-companies/:id')
     @ApiOperation({ summary: 'Удалить связь с организацией' })
     async deleteMyCompany(@Request() req: any, @Param('id') companyId: string) {

@@ -1330,4 +1330,46 @@ export class CompanyService {
             status: e.status, changedAt: e.changedAt.toISOString(),
         }));
     }
+
+    /** Глобальный поиск: заявки по номеру + контрагенты по названию */
+    async globalSearch(companyId: string, q: string) {
+        const orderWhere = {
+            AND: [
+                {
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { responsibleManager: { companyId } },
+                    ],
+                },
+                { orderNumber: { contains: q, mode: 'insensitive' as const } },
+            ],
+        };
+
+        const [orders, partnerIds] = await Promise.all([
+            this.prisma.order.findMany({
+                where: orderWhere,
+                take: 7,
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, orderNumber: true, status: true, customerCompany: { select: { name: true } } },
+            }),
+            this.prisma.partnership.findMany({
+                where: {
+                    OR: [{ requesterId: companyId }, { recipientId: companyId }],
+                    status: 'ACCEPTED',
+                },
+                select: { requesterId: true, recipientId: true },
+            }),
+        ]);
+
+        const companyIds = partnerIds.map((p) => (p.requesterId === companyId ? p.recipientId : p.requesterId));
+
+        const partners = companyIds.length > 0 ? await this.prisma.company.findMany({
+            where: { id: { in: companyIds }, name: { contains: q, mode: 'insensitive' }, isActive: true },
+            take: 7, select: { id: true, name: true, isCustomer: true, isCarrier: true },
+        }) : [];
+
+        return { orders: orders.map((o) => ({ id: o.id, orderNumber: o.orderNumber, status: o.status, customerName: o.customerCompany?.name || null })), partners };
+    }
 }
