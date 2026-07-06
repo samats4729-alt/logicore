@@ -135,7 +135,7 @@ export default function GlobalSearch() {
 
             {open && (
                 <div style={{
-                    position: 'absolute', right: 0, top: 44, width: 'min(440px, 90vw)',
+                    position: 'absolute', right: 0, top: 40, width: 'min(440px, 90vw)',
                     zIndex: 200, background: '#ffffff', borderRadius: 14,
                     border: '1px solid rgba(0, 0, 0, 0.06)',
                     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',

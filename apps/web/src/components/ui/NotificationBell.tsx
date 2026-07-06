@@ -114,7 +114,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                     tabIndex={-1}
                     onKeyDown={handleKeyDown}
                     style={{
-                        position: 'absolute', right: 0, top: 44,
+                        position: 'absolute', right: 0, top: 40,
                         width: 'min(400px, 90vw)', maxHeight: '70vh', overflowY: 'auto',
                         zIndex: 200, background: '#ffffff', borderRadius: 14,
                         border: '1px solid rgba(0, 0, 0, 0.06)',
