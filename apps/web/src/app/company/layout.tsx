@@ -29,13 +29,13 @@ import {
     CalculatorOutlined,
     BarChartOutlined,
     NotificationOutlined,
-    BellOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
 import { api } from '@/lib/api';
 import { shortenCompanyName } from '@/lib/company-helper';
 import GlobalSearch from '@/components/ui/GlobalSearch';
+import NotificationBell from '@/components/ui/NotificationBell';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -521,16 +521,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     {/* Глобальный поиск (Этап 6) */}
                     <GlobalSearch />
 
-                    {/* Уведомления */}
-                    <button
-                        type="button"
-                        className="lc2-iconbtn"
-                        aria-label="Уведомления"
-                        onClick={() => window.dispatchEvent(new Event('logicore:open-updates'))}
-                    >
-                        <BellOutlined />
-                        {hasNewUpdates && <span className="lc2-dot" />}
-                    </button>
+                    {/* Центр уведомлений (Этап 7) */}
+                    <NotificationBell hasNewUpdates={hasNewUpdates} />
 
                     {/* Тема (заглушка — Этап 8) — Apple Segmented Control */}
                     <div className="lc2-theme-toggle">
