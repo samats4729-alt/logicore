@@ -218,36 +218,36 @@ export default function InvoiceDetailPage() {
     ];
 
     return (
-        <div style={{ padding: '0 8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+        <div className="lc-page" style={{ maxWidth: 1200, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
                 <div>
                     <Button
                         type="link"
                         icon={<ArrowLeftOutlined />}
                         onClick={() => router.push('/company/accounting/invoices')}
-                        style={{ padding: 0, marginBottom: 8 }}
+                        style={{ padding: 0, color: 'var(--lc-text-ter)', marginBottom: 8 }}
                     >
                         Назад к реестру
                     </Button>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <Title level={3} style={{ margin: 0 }}>Счет {invoice.invoiceNumber}</Title>
-                        <Tag color={statusColors[invoice.status]} style={{ fontSize: 13, padding: '2px 8px' }}>
+                    <div className="lc-eyebrow">Бухгалтерия · Счета</div>
+                    <h1 className="lc2-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+                        Счет {invoice.invoiceNumber}
+                        <Tag color={statusColors[invoice.status]} style={{ fontSize: 13, padding: '2px 8px', verticalAlign: 'middle' }}>
                             {statusLabels[invoice.status] || invoice.status}
                         </Tag>
-                    </div>
+                    </h1>
                 </div>
-                
-                <Space>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                     <Button icon={<CopyOutlined />} onClick={handleCopyLink}>
                         Публичная ссылка
                     </Button>
-                    
                     {isAccountantOrAdmin && invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && (
                         <Button type="primary" icon={<CheckOutlined />} onClick={handleMarkAsPaid}>
                             Отметить оплату
                         </Button>
                     )}
-                </Space>
+                </div>
             </div>
 
             {hasDisputes && (
@@ -277,45 +277,42 @@ export default function InvoiceDetailPage() {
                 />
             )}
 
+            <div className="lc-card" style={{ padding: '24px' }}>
             <Row gutter={16} style={{ marginBottom: 16 }}>
                 <Col xs={24} md={8}>
-                    <Card style={cardStyle} styles={{ body: { padding: '16px' } }}>
-                        <Statistic
-                            title="Сумма счета"
-                            value={invoice.amount}
-                            suffix="₸"
-                            valueStyle={{ fontWeight: 800, color: token.colorPrimary }}
-                        />
-                    </Card>
+                    <div className="lc2-metric" style={{ padding: 16, border: '1px solid var(--lc-border)', borderRadius: 16 }}>
+                        <div className="lc2-mlabel">Сумма счета</div>
+                        <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: token.colorPrimary }}>
+                            {invoice.amount.toLocaleString('ru-RU')} ₸
+                        </div>
+                    </div>
                 </Col>
                 
                 {invoice.adjustedAmount !== null && invoice.adjustedAmount !== undefined && (
                     <Col xs={24} md={8}>
-                        <Card style={cardStyle} styles={{ body: { padding: '16px' } }}>
-                            <Statistic
-                                title="Сумма с корректировками партнера"
-                                value={invoice.adjustedAmount}
-                                suffix="₸"
-                                valueStyle={{ fontWeight: 800, color: token.colorError }}
-                            />
-                        </Card>
+                        <div className="lc2-metric" style={{ padding: 16, border: '1px solid var(--lc-border)', borderRadius: 16 }}>
+                            <div className="lc2-mlabel">Сумма с корректировками</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: token.colorError }}>
+                                {invoice.adjustedAmount.toLocaleString('ru-RU')} ₸
+                            </div>
+                        </div>
                     </Col>
                 )}
 
                 <Col xs={24} md={8}>
-                    <Card style={cardStyle} styles={{ body: { padding: '16px' } }}>
-                        <Statistic
-                            title="Рейсов в счете"
-                            value={orders.length}
-                            valueStyle={{ fontWeight: 800 }}
-                        />
-                    </Card>
+                    <div className="lc2-metric" style={{ padding: 16, border: '1px solid var(--lc-border)', borderRadius: 16 }}>
+                        <div className="lc2-mlabel">Рейсов в счете</div>
+                        <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {orders.length}
+                        </div>
+                    </div>
                 </Col>
             </Row>
 
             <Row gutter={16}>
                 <Col xs={24} lg={10}>
-                    <Card style={cardStyle} title="Информация о счете">
+                    <div>
+                        <Text strong style={{ fontSize: 15, display: 'block', marginBottom: 12 }}>Информация о счете</Text>
                         <Descriptions column={1} size="small" bordered>
                             <Descriptions.Item label="Тип счета">
                                 {invoice.issuerId === user?.companyId ? 'Исходящий (нам заплатят)' : 'Входящий (мы платим)'}
@@ -359,11 +356,12 @@ export default function InvoiceDetailPage() {
                                 {invoice.recipient?.address && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginLeft: 22 }}>Адрес: {invoice.recipient.address}</div>}
                             </div>
                         </div>
-                    </Card>
+                    </div>
                 </Col>
 
                 <Col xs={24} lg={14}>
-                    <Card style={cardStyle} title="Содержимое счета (рейсы)">
+                    <div>
+                        <Text strong style={{ fontSize: 15, display: 'block', marginBottom: 12 }}>Содержимое счета (рейсы)</Text>
                         <Table
                             columns={columns}
                             dataSource={orders}
@@ -371,9 +369,10 @@ export default function InvoiceDetailPage() {
                             pagination={false}
                             size="small"
                         />
-                    </Card>
+                    </div>
                 </Col>
             </Row>
+            </div>
         </div>
     );
 }
