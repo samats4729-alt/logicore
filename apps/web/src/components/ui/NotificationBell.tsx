@@ -87,21 +87,12 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
         return () => document.removeEventListener('mousedown', handler);
     }, [open]);
 
-    useEffect(() => {
-        const handler = () => {
-            markSeen();
-            setOpen(true);
-        };
-        window.addEventListener('logicere:open-updates', handler);
-        return () => window.removeEventListener('logicere:open-updates', handler);
-    }, [markSeen]);
-
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Escape') setOpen(false);
     };
 
     const handleOpenUpdates = () => {
-        window.dispatchEvent(new Event('logicere:open-updates'));
+        window.dispatchEvent(new Event('logicore:open-updates'));
         setOpen(false);
     };
 
