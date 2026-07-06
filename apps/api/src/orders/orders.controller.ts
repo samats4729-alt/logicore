@@ -178,7 +178,7 @@ export class OrdersController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Обновить статус заявки' })
     async updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Request() req: any) {
-        return this.ordersService.updateStatus(id, dto.status, dto.comment, req.user.sub, req.user.companyId);
+        return this.ordersService.updateStatus(id, dto.status, dto.comment, req.user.sub, req.user.companyId, req.user.role);
     }
 
     @Put(':id/confirm-completion')
@@ -223,7 +223,8 @@ export class OrdersController {
     async addDeliveryPoint(
         @Param('id') id: string,
         @Body() dto: { locationId: string; notes?: string },
+        @Request() req: any,
     ) {
-        return this.ordersService.addDeliveryPoint(id, dto.locationId, dto.notes);
+        return this.ordersService.addDeliveryPoint(id, dto.locationId, dto.notes, req.user);
     }
 }

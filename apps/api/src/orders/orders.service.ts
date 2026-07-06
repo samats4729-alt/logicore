@@ -357,6 +357,7 @@ export class OrdersService implements OnModuleInit {
                 documents: true,
                 statusHistory: { orderBy: { changedAt: 'desc' } },
                 problems: true,
+                responsibleManager: { select: { companyId: true } },
             },
         });
 
@@ -503,8 +504,26 @@ export class OrdersService implements OnModuleInit {
     /**
      * Обновление статуса заявки
      */
-    async updateStatus(orderId: string, status: OrderStatus, comment?: string, changedById?: string, companyId?: string) {
+    async updateStatus(orderId: string, status: OrderStatus, comment?: string, changedById?: string, companyId?: string, role?: string) {
         const order = await this.findById(orderId);
+
+        // Проверка прав на смену статуса
+        if (role && role !== 'ADMIN') {
+            if (role === 'DRIVER') {
+                if (order.driverId !== changedById) {
+                    throw new ForbiddenException('Водитель может менять статус только своих заявок');
+                }
+            } else {
+                // Остальные роли — проверка участия компании в заявке
+                const isParticipant = order.customerCompanyId === companyId
+                    || order.forwarderId === companyId
+                    || order.partnerId === companyId
+                    || order.responsibleManager?.companyId === companyId;
+                if (!isParticipant) {
+                    throw new ForbiddenException('Нет доступа к заявке');
+                }
+            }
+        }
 
         if (order.status !== status) {
             const allowed = ALLOWED_TRANSITIONS[order.status] || [];
@@ -850,7 +869,21 @@ export class OrdersService implements OnModuleInit {
     /**
      * Добавление точки выгрузки в пути
      */
-    async addDeliveryPoint(orderId: string, locationId: string, notes?: string) {
+    async addDeliveryPoint(orderId: string, locationId: string, notes?: string, user?: { sub: string; role: string; companyId?: string }) {
+        // Проверка участия компании в заявке
+        if (user && user.role !== 'ADMIN') {
+            const order = await this.prisma.order.findUnique({
+                where: { id: orderId },
+                select: { customerCompanyId: true, forwarderId: true, partnerId: true, responsibleManagerId: true },
+            });
+            if (order) {
+                const mgrCompany = order.responsibleManagerId ? (await this.prisma.user.findUnique({ where: { id: order.responsibleManagerId }, select: { companyId: true } }))?.companyId : undefined;
+                const isParticipant = order.customerCompanyId === user.companyId || order.forwarderId === user.companyId || order.partnerId === user.companyId || mgrCompany === user.companyId;
+                if (!isParticipant) {
+                    throw new ForbiddenException('Нет доступа к заявке');
+                }
+            }
+        }
         const lastPoint = await this.prisma.orderRoutePoint.findFirst({
             where: { orderId },
             orderBy: { sequence: 'desc' },
