@@ -223,22 +223,33 @@ export default function CreateInvoicePage() {
     };
 
     return (
-        <div style={{ padding: '0 8px' }}>
-            <div style={{ marginBottom: 20 }}>
-                <Button
-                    type="link"
-                    icon={<ArrowLeftOutlined />}
-                    onClick={() => router.push('/company/accounting/invoices')}
-                    style={{ padding: 0, marginBottom: 8 }}
-                >
-                    Назад к реестру
-                </Button>
-                <Title level={3} style={{ margin: 0 }}>Выставление нового счета</Title>
+        <div className="lc-page" style={{ maxWidth: 1400, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">Бухгалтерия · Счета</div>
+                    <h1 className="lc2-title">Новый счёт</h1>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
+                        Выставление счета для взаиморасчётов с заказчиками и партнёрами
+                    </p>
+                    <Button
+                        type="link"
+                        icon={<ArrowLeftOutlined />}
+                        onClick={() => router.push('/company/accounting/invoices')}
+                        style={{ padding: 0, color: 'var(--lc-text-ter)' }}
+                    >
+                        Назад к реестру
+                    </Button>
+                </div>
             </div>
 
-            <Row gutter={16}>
-                <Col xs={24} lg={8}>
-                    <Card style={cardStyle} title="Параметры счета">
+            {/* ===== FORM CARD ===== */}
+            <div className="lc-card" style={{ padding: '24px' }}>
+                <Row gutter={16}>
+                    <Col xs={24} lg={8}>
+                        <div style={{ marginBottom: 16 }}>
+                            <Text strong style={{ fontSize: 15 }}>Параметры счета</Text>
+                        </div>
                         <Form
                             form={form}
                             layout="vertical"
@@ -338,19 +349,15 @@ export default function CreateInvoicePage() {
                                 </Button>
                             </div>
                         </Form>
-                    </Card>
                 </Col>
 
                 <Col xs={24} lg={16}>
-                    <Card
-                        style={cardStyle}
-                        title="Доступные рейсы для включения в счет"
-                        extra={
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                                Показываются только завершенные (COMPLETED) рейсы
-                            </Text>
-                        }
-                    >
+                    <div style={{ marginBottom: 16 }}>
+                        <Text strong style={{ fontSize: 15 }}>Доступные рейсы для включения в счет</Text>
+                        <Text type="secondary" style={{ fontSize: 12, marginLeft: 12 }}>
+                            Показываются только завершенные (COMPLETED) рейсы
+                        </Text>
+                    </div>
                         {!selectedCounterpartyId ? (
                             <div style={{ textAlign: 'center', padding: '40px 0', color: token.colorTextDescription }}>
                                 <FileTextOutlined style={{ fontSize: 32, marginBottom: 8, display: 'block', margin: '0 auto 8px' }} />
@@ -375,9 +382,9 @@ export default function CreateInvoicePage() {
                                 scroll={{ y: 500 }}
                             />
                         )}
-                    </Card>
                 </Col>
             </Row>
+            </div>
 
             <style jsx global>{`
                 .ant-picker {
