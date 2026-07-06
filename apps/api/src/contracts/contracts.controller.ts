@@ -110,8 +110,11 @@ export class ContractsController {
     @ApiOperation({ summary: 'Скачать PDF договора' })
     async downloadContractPdf(
         @Param('id') id: string,
+        @Request() req: any,
         @Res() res: Response,
     ) {
+        // Проверяем доступ через getContract (выбрасывает ForbiddenException если не сторона)
+        await this.contractsService.getContract(id, req.user.companyId);
         const pdfBuffer = await this.contractPdfService.generateContractPdf(id);
 
         res.set({
@@ -212,4 +215,3 @@ export class ContractsController {
         return this.contractsService.removeTariff(req.user.companyId, id);
     }
 }
-
