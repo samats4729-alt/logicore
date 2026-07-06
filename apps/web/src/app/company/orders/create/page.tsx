@@ -1130,12 +1130,20 @@ export default function CreateOrderPage() {
     ];
 
     return (
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-                <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} />
-                <Title level={4} style={{ margin: 0 }}>Создать заявку</Title>
-            </div>
+        <div className="lc-page" style={{ maxWidth: 1000, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div>
+                    <div className="lc-eyebrow">Заявки</div>
+                    <h1 className="lc2-title">Новая заявка</h1>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
+                        Создание заявки на перевозку — 3 шага
+                    </p>
+                    <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>
+                        Назад к заявкам
+                    </Button>
+                </div>
+
 
             {!profileComplete && (
                 <div style={{
@@ -1148,7 +1156,9 @@ export default function CreateOrderPage() {
                 </div>
             )}
 
-            {/* Steps progress */}
+            {/* ===== WIZARD CARD ===== */}
+            <div className="lc-card" style={{ padding: '24px' }}>
+            {currentStep < steps.length - 1 && <div style={{ marginBottom: 16, color: 'var(--lc-text-ter)', fontSize: 13 }}>Шаг {currentStep + 1} из {steps.length}</div>}
             <Steps
                 current={currentStep}
                 items={steps.map(s => ({ title: s.title, icon: s.icon }))}
@@ -1164,7 +1174,9 @@ export default function CreateOrderPage() {
                 ))}
             </Form>
 
-            {/* Navigation buttons */}
+                        </div>
+            </div>
+{/* Navigation buttons */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, marginBottom: 32 }}>
                 <div>
                     {currentStep > 0 && (
