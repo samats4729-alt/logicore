@@ -36,6 +36,7 @@ import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
 import { api } from '@/lib/api';
 import { shortenCompanyName } from '@/lib/company-helper';
+import GlobalSearch from '@/components/ui/GlobalSearch';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -518,15 +519,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
                 {/* Right section */}
                 <div className="lc2-header-right">
-                    {/* Поиск (заглушка — Этап 6) */}
-                    <button
-                        type="button"
-                        className="lc2-iconbtn"
-                        aria-label="Поиск"
-                        title="Глобальный поиск"
-                    >
-                        <SearchOutlined />
-                    </button>
+                    {/* Глобальный поиск (Этап 6) */}
+                    <GlobalSearch />
 
                     {/* Уведомления */}
                     <button
