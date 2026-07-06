@@ -34,21 +34,21 @@ export class LocationsController {
 
     @Get(':id')
     @ApiOperation({ summary: 'Получить точку по ID' })
-    async findOne(@Param('id') id: string) {
-        return this.locationsService.findById(id);
+    async findOne(@Param('id') id: string, @Request() req: any) {
+        return this.locationsService.findById(id, req.user);
     }
 
     @Put(':id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Обновить точку' })
-    async update(@Param('id') id: string, @Body() dto: UpdateLocationDto) {
-        return this.locationsService.update(id, dto);
+    async update(@Param('id') id: string, @Body() dto: UpdateLocationDto, @Request() req: any) {
+        return this.locationsService.update(id, dto, req.user);
     }
 
     @Delete(':id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Удалить точку' })
-    async delete(@Param('id') id: string) {
-        return this.locationsService.delete(id);
+    async delete(@Param('id') id: string, @Request() req: any) {
+        return this.locationsService.delete(id, req.user);
     }
 }

@@ -1,4 +1,4 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 
@@ -98,18 +98,35 @@ export class LocationsService {
         return data;
     }
 
-    async findById(id: string) {
-        return this.prisma.location.findUnique({ 
+    async findById(id: string, user?: { sub: string; role: string; companyId?: string }) {
+        const location = await this.prisma.location.findUnique({ 
             where: { id },
             include: {
                 company: {
-                    select: {
-                        id: true,
-                        name: true
-                    }
+                    select: { id: true, name: true }
                 }
             }
         });
+
+        if (!location) throw new NotFoundException('Адрес не найден');
+
+        // Проверка доступа: ADMIN всегда проходит; остальные — владелец или создатель
+        if (user && user.role !== 'ADMIN') {
+            const isOwner = location.companyId === user.companyId;
+            let isCreator = false;
+            if (location.createdById) {
+                const creator = await this.prisma.user.findUnique({
+                    where: { id: location.createdById },
+                    select: { companyId: true },
+                });
+                isCreator = creator?.companyId === user.companyId;
+            }
+            if (!isOwner && !isCreator) {
+                throw new ForbiddenException('Нет доступа к этому адресу');
+            }
+        }
+
+        return location;
     }
 
     async update(id: string, data: Partial<{
@@ -123,7 +140,22 @@ export class LocationsService {
         city: string | null;
         companyId: string | null;
         emails: string | null;
-    }>) {
+    }>, user?: { sub: string; role: string; companyId?: string }) {
+        // Проверка доступа
+        if (user && user.role !== 'ADMIN') {
+            const location = await this.prisma.location.findUnique({ where: { id }, select: { companyId: true, createdById: true } });
+            if (!location) throw new NotFoundException('Адрес не найден');
+            const isOwner = location.companyId === user.companyId;
+            let isCreator = false;
+            if (location.createdById) {
+                const creator = await this.prisma.user.findUnique({ where: { id: location.createdById }, select: { companyId: true } });
+                isCreator = creator?.companyId === user.companyId;
+            }
+            if (!isOwner && !isCreator) {
+                throw new ForbiddenException('Нет доступа к этому адресу');
+            }
+        }
+
         try {
             const {
                 name, address, latitude, longitude,
@@ -155,7 +187,22 @@ export class LocationsService {
         }
     }
 
-    async delete(id: string) {
+    async delete(id: string, user?: { sub: string; role: string; companyId?: string }) {
+        // Проверка доступа
+        if (user && user.role !== 'ADMIN') {
+            const location = await this.prisma.location.findUnique({ where: { id }, select: { companyId: true, createdById: true } });
+            if (!location) throw new NotFoundException('Адрес не найден');
+            const isOwner = location.companyId === user.companyId;
+            let isCreator = false;
+            if (location.createdById) {
+                const creator = await this.prisma.user.findUnique({ where: { id: location.createdById }, select: { companyId: true } });
+                isCreator = creator?.companyId === user.companyId;
+            }
+            if (!isOwner && !isCreator) {
+                throw new ForbiddenException('Нет доступа к этому адресу');
+            }
+        }
+
         // Check for dependencies before deletion to prevent Foreign Key errors
         const usedInOrder = await this.prisma.orderRoutePoint.count({ where: { locationId: id } });
         if (usedInOrder > 0) {
