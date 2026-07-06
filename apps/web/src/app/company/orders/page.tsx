@@ -1311,7 +1311,7 @@ export default function CompanyOrdersPage() {
                             <ExclamationCircleOutlined /> {pendingCount} {pendingCount === 1 ? 'заявка ожидает' : 'заявки ожидают'} назначения
                         </span>
                     )}
-                    <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
+                    <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} className="lc-cta lc-cta-shine" onClick={() => router.push('/company/orders/create')} disabled={!profileComplete}>
                         Создать заявку
                     </Button>
                 </div>

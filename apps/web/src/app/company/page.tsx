@@ -173,7 +173,7 @@ export default function CompanyDashboard() {
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         {isManager ? 'Ваши заявки и активность' : 'Сводка по всем заявкам компании'}
                     </p>
-                    <Button type="primary" icon={<PlusOutlined />} className="lc-cta" onClick={() => router.push('/company/orders/create')}>
+                    <Button type="primary" icon={<PlusOutlined />} className="lc-cta lc-cta-shine" onClick={() => router.push('/company/orders/create')}>
                         Создать заявку
                     </Button>
                 </div>

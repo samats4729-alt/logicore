@@ -829,6 +829,32 @@ a.mapboxgl-ctrl-logo,
   box-shadow: none !important;
 }
 
+/* Блик на главных CTA */
+.lc-cta-shine {
+  position: relative;
+  overflow: hidden;
+}
+.lc-cta-shine::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.35) 50%, transparent 80%);
+  transform: skewX(-20deg);
+  animation: lcShine 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes lcShine {
+  0% { left: -80%; }
+  55% { left: 130%; }
+  100% { left: 130%; }
+}
+[data-theme='dark'] .lc-page .lc-cta.ant-btn {
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+}
+
 /* Вкладки — сегментированные пилюли вместо линий antd */
 .lc-page .ant-tabs-nav {
   margin-bottom: 14px;
@@ -1276,7 +1302,8 @@ a.mapboxgl-ctrl-logo,
 
 /* Тикер живых событий */
 .lc2-ticker {
-  background: #0b0d12;
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
   border-radius: 12px;
   overflow: hidden;
   white-space: nowrap;
@@ -1302,12 +1329,23 @@ a.mapboxgl-ctrl-logo,
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--lc-text-sec);
 }
 
 .lc2-tick b {
-  color: #ffffff;
+  color: var(--lc-text);
   font-weight: 700;
+}
+
+[data-theme='dark'] .lc2-ticker {
+  background: #0b0d12;
+  border-color: transparent;
+}
+[data-theme='dark'] .lc2-tick b {
+  color: #ffffff;
+}
+[data-theme='dark'] .lc2-tick {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .lc2-tick i {
@@ -1631,6 +1669,16 @@ a.mapboxgl-ctrl-logo,
   color: #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
   font-weight: 600;
+}
+
+[data-theme='dark'] .lc2-nav-item.active {
+  background: #ffffff;
+  color: #0b0d12;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+[data-theme='dark'] .lc2-nav-item.active:hover {
+  background: #ffffff;
+  color: #0b0d12;
 }
 
 /* ---- Nav dropdown: Apple-style slide-in ---- */
