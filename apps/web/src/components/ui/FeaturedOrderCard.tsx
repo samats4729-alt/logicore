@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { Button } from 'antd';
 import { RightOutlined, PhoneOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -44,14 +44,17 @@ function cityOf(order: any, type: 'pickup' | 'delivery'): string {
 // Мини-карта маршрута (точки погрузки → выгрузки)
 function RouteMapThumbnail({ order }: { order: any }) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const mapRef = useRef<any>(null);
+
+    const coords = useMemo(() => {
+        const pts = (order?.routePoints || []) as any[];
+        return pts
+            .filter((p: any) => p.location?.latitude && p.location?.longitude)
+            .map((p: any) => [p.location.longitude, p.location.latitude] as [number, number]);
+    }, [order?.routePoints]);
 
     useEffect(() => {
         if (!DGIS_KEY || !containerRef.current) return;
-        const pts = (order?.routePoints || []) as any[];
-        const coords = pts
-            .filter((p: any) => p.location?.latitude && p.location?.longitude)
-            .map((p: any) => [p.location.longitude, p.location.latitude] as [number, number]);
-
         if (coords.length < 1) return;
 
         let cancelled = false;
@@ -65,6 +68,7 @@ function RouteMapThumbnail({ order }: { order: any }) {
                 zoomControl: false,
                 attributionControl: false,
             });
+            mapRef.current = map;
 
             // Маркеры точек
             coords.forEach((c, i) => {
@@ -84,28 +88,29 @@ function RouteMapThumbnail({ order }: { order: any }) {
                 });
             }
 
-            // Подгоняем viewport под все точки
+            // Подгоняем viewport под все точки (fitBounds — правильный метод 2GIS)
             if (coords.length >= 2) {
                 const lngs = coords.map(c => c[0]);
                 const lats = coords.map(c => c[1]);
-                const pad = 0.3;
-                map.setBounds([
-                    [Math.min(...lngs) - pad, Math.min(...lats) - pad],
-                    [Math.max(...lngs) + pad, Math.max(...lats) + pad],
-                ]);
+                map.fitBounds(
+                    {
+                        southWest: [Math.min(...lngs), Math.min(...lats)],
+                        northEast: [Math.max(...lngs), Math.max(...lats)],
+                    },
+                    { padding: { top: 24, right: 24, bottom: 24, left: 24 } },
+                );
             }
         }).catch(() => {});
 
-        return () => { cancelled = true; };
-    }, [order?.id]);
+        return () => {
+            cancelled = true;
+            if (mapRef.current) { mapRef.current.destroy(); mapRef.current = null; }
+        };
+    }, [coords]);
 
-    if (!DGIS_KEY) {
+    if (!DGIS_KEY || coords.length < 1) {
         return (
-            <div style={{
-                flex: 1, minHeight: 140, background: 'rgba(255,255,255,0.04)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                borderRadius: 12, marginBottom: 12,
-            }}>
+            <div style={{ flex: 1, minHeight: 140, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginBottom: 12 }}>
                 <EnvironmentOutlined style={{ fontSize: 22, color: 'rgba(255,255,255,0.25)' }} />
             </div>
         );
