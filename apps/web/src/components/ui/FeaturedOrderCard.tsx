@@ -119,6 +119,7 @@ function RouteMapThumbnail({ order }: { order: any }) {
     return (
         <div ref={containerRef} style={{
             flex: 1, minHeight: 140, borderRadius: 12, overflow: 'hidden', marginBottom: 12,
+            filter: 'invert(0.92) hue-rotate(180deg) saturate(0.8) brightness(0.9) contrast(0.95)',
         }} />
     );
 }
