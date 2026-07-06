@@ -136,9 +136,9 @@ export default function GlobalSearch() {
             {open && (
                 <div style={{
                     position: 'absolute', right: 0, top: 44, width: 'min(440px, 90vw)',
-                    zIndex: 200, background: '#fff', borderRadius: 14,
-                    border: '1px solid rgba(0,0,0,0.06)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                    zIndex: 200, background: 'var(--lc-card)', borderRadius: 14,
+                    border: '1px solid var(--lc-border-soft)',
+                    boxShadow: 'var(--lc-panel-shadow)',
                     padding: 12,
                 }}>
                     <Input
@@ -154,26 +154,26 @@ export default function GlobalSearch() {
                     />
 
                     {q.trim().length < 2 && (
-                        <div style={{ padding: '24px 12px', textAlign: 'center', color: '#8a91a0', fontSize: 13 }}>
+                        <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--lc-text-ter)', fontSize: 13 }}>
                             Введите номер заявки или название контрагента
                         </div>
                     )}
 
                     {q.trim().length >= 2 && loading && (
-                        <div style={{ padding: '24px 12px', textAlign: 'center', color: '#8a91a0', fontSize: 13 }}>
+                        <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--lc-text-ter)', fontSize: 13 }}>
                             Поиск...
                         </div>
                     )}
 
                     {isEmpty && (
-                        <div style={{ padding: '24px 12px', textAlign: 'center', color: '#8a91a0', fontSize: 13 }}>
+                        <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--lc-text-ter)', fontSize: 13 }}>
                             Ничего не найдено
                         </div>
                     )}
 
                     {results.orders.length > 0 && (
                         <div style={{ marginTop: 8 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#8a91a0', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--lc-text-ter)', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
                                 Заявки
                             </div>
                             {results.orders.map((o) => (
@@ -184,7 +184,7 @@ export default function GlobalSearch() {
                                         display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
                                         cursor: 'pointer', borderRadius: 8, transition: 'background 0.12s',
                                     }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f4f5f7')}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--lc-hover)')}
                                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                                 >
                                     <span style={{ fontWeight: 600, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
@@ -192,7 +192,7 @@ export default function GlobalSearch() {
                                     </span>
                                     <StatusPill status={o.status} />
                                     {o.customerName && (
-                                        <span style={{ color: '#8a91a0', fontSize: 12, marginLeft: 'auto' }}>
+                                        <span style={{ color: 'var(--lc-text-ter)', fontSize: 12, marginLeft: 'auto' }}>
                                             {o.customerName}
                                         </span>
                                     )}
@@ -203,7 +203,7 @@ export default function GlobalSearch() {
 
                     {results.partners.length > 0 && (
                         <div style={{ marginTop: results.orders.length > 0 ? 4 : 8 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#8a91a0', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--lc-text-ter)', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
                                 Контрагенты
                             </div>
                             {results.partners.map((p) => (
@@ -214,7 +214,7 @@ export default function GlobalSearch() {
                                         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
                                         cursor: 'pointer', borderRadius: 8, transition: 'background 0.12s',
                                     }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f4f5f7')}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--lc-hover)')}
                                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                                 >
                                     <span className="lc2-avatar lc2-avatar-sm" style={{

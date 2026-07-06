@@ -785,7 +785,7 @@ a.mapboxgl-ctrl-logo,
   font-size: 10.5px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: #98a1b2;
+  color: var(--lc-text-ter);
   font-weight: 600;
   margin-bottom: 4px;
 }
@@ -794,13 +794,13 @@ a.mapboxgl-ctrl-logo,
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: #0b0d12;
+  color: var(--lc-text);
   line-height: 1.1;
   margin: 0;
 }
 
 .lc-page .lc-count {
-  color: #9aa2b1;
+  color: var(--lc-text-sec);
   font-weight: 600;
   font-size: 13px;
   margin-left: 10px;
@@ -839,7 +839,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .ant-tabs-nav-list {
-  background: #f1f2f5;
+  background: var(--lc-hover);
   padding: 4px;
   border-radius: 12px;
 }
@@ -850,7 +850,7 @@ a.mapboxgl-ctrl-logo,
   border-radius: 8px;
   font-weight: 600;
   font-size: 12.5px;
-  color: #6b7280;
+  color: var(--lc-text-ter);
   transition: all 0.2s ease;
 }
 
@@ -859,12 +859,12 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .ant-tabs-tab-active {
-  background: #ffffff;
+  background: var(--lc-card);
   box-shadow: 0 1px 4px rgba(16, 24, 40, 0.12);
 }
 
 .lc-page .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #0b0d12 !important;
+  color: var(--lc-text) !important;
 }
 
 .lc-page .ant-tabs-ink-bar {
@@ -872,10 +872,10 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .ant-tabs-tab .ant-tag {
-  background: #fff;
-  border-color: #e4e4e7;
+  background: var(--lc-card);
+  border-color: var(--lc-border);
   border-radius: 999px;
-  color: #6b7280;
+  color: var(--lc-text-ter);
   line-height: 16px;
 }
 
@@ -887,8 +887,8 @@ a.mapboxgl-ctrl-logo,
 
 /* Панель фильтров — фирменная карточка */
 .lc-page .lc-filterbar {
-  background: #ffffff;
-  border: 1px solid #ececf0;
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
   border-radius: 12px;
   padding: 8px 12px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
@@ -901,8 +901,8 @@ a.mapboxgl-ctrl-logo,
 
 .lc-page .ant-table-thead > tr > th {
   background: transparent !important;
-  border-bottom: 1px solid #e7e8ec !important;
-  color: #8a91a0 !important;
+  border-bottom: 1px solid var(--lc-border) !important;
+  color: var(--lc-text-ter) !important;
   font-size: 10.5px !important;
   padding-top: 8px !important;
   padding-bottom: 8px !important;
@@ -913,7 +913,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .ant-table-tbody > tr > td {
-  border-bottom: 1px solid #f1f2f4 !important;
+  border-bottom: 1px solid var(--lc-border-soft) !important;
   padding-top: 9px !important;
   padding-bottom: 9px !important;
 }
@@ -936,15 +936,15 @@ a.mapboxgl-ctrl-logo,
   gap: 6px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid #ececf0;
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
   font-size: 11.5px;
-  color: #5b6472;
+  color: var(--lc-text-sec);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
 .lc-chip b {
-  color: #0b0d12;
+  color: var(--lc-text);
   font-weight: 700;
 }
 
@@ -971,7 +971,7 @@ a.mapboxgl-ctrl-logo,
 .lc-page .lc-filterbar .ant-input,
 .lc-page .lc-filterbar .ant-picker {
   border: none !important;
-  background: #f4f5f7 !important;
+  background: var(--lc-bg) !important;
   border-radius: 10px !important;
   box-shadow: none !important;
   transition: background 0.2s ease;
@@ -980,11 +980,11 @@ a.mapboxgl-ctrl-logo,
 .lc-page .lc-filterbar .ant-select:hover .ant-select-selector,
 .lc-page .lc-filterbar .ant-input:hover,
 .lc-page .lc-filterbar .ant-picker:hover {
-  background: #ebedf1 !important;
+  background: var(--lc-hover) !important;
 }
 
 .lc-page .lc-filterbar .ant-select-focused .ant-select-selector {
-  background: #ffffff !important;
+  background: var(--lc-card) !important;
   box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.14) !important;
 }
 
@@ -992,7 +992,7 @@ a.mapboxgl-ctrl-logo,
 .lc-ordernum {
   font-weight: 700;
   font-size: 12px;
-  color: #0b0d12;
+  color: var(--lc-text);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
@@ -1018,7 +1018,7 @@ a.mapboxgl-ctrl-logo,
 /* Пагинация */
 .lc-page .ant-pagination .ant-pagination-item {
   border-radius: 10px !important;
-  border-color: #ececf0;
+  border-color: var(--lc-border);
 }
 
 .lc-page .ant-pagination .ant-pagination-item-active {
@@ -1035,8 +1035,8 @@ a.mapboxgl-ctrl-logo,
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: #ffffff;
-  border: 1px solid #ececf0;
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
   border-radius: 14px;
   padding: 13px 15px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
@@ -1063,27 +1063,27 @@ a.mapboxgl-ctrl-logo,
 .lc-metric-label {
   font-size: 11.5px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--lc-text-ter);
 }
 
 .lc-metric-value {
   font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: #0b0d12;
+  color: var(--lc-text);
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
 .lc-metric-hint {
   font-size: 11px;
-  color: #98a1b2;
+  color: var(--lc-text-sec);
 }
 
 /* Белая карточка-контейнер */
 .lc-card {
-  background: #ffffff;
-  border: 1px solid #ececf0;
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
   border-radius: 16px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   overflow: hidden;
@@ -1105,13 +1105,13 @@ a.mapboxgl-ctrl-logo,
 .lc-sec-title {
   font-size: 13.5px;
   font-weight: 700;
-  color: #0b0d12;
+  color: var(--lc-text);
   letter-spacing: -0.01em;
 }
 
 .lc-sec-hint {
   font-size: 11.5px;
-  color: #8a91a0;
+  color: var(--lc-text-ter);
   margin-top: 3px;
 }
 
@@ -1143,7 +1143,7 @@ a.mapboxgl-ctrl-logo,
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #98a1b2;
+  color: var(--lc-text-sec);
   font-size: 13px;
 }
 
@@ -1205,7 +1205,7 @@ a.mapboxgl-ctrl-logo,
   font-weight: 800;
   letter-spacing: -0.035em;
   line-height: 1.05;
-  color: #0b0d12;
+  color: var(--lc-text);
   margin: 2px 0 0;
   max-width: 420px;
 }
@@ -1232,7 +1232,7 @@ a.mapboxgl-ctrl-logo,
   transform: translateY(-50%);
   width: 1px;
   height: 28px;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--lc-border-soft);
 }
 
 .lc2-mic {
@@ -1252,7 +1252,7 @@ a.mapboxgl-ctrl-logo,
 
 .lc2-mlabel {
   font-size: 11.5px;
-  color: #8a91a0;
+  color: var(--lc-text-ter);
   font-weight: 500;
   line-height: 1.2;
 }
@@ -1261,7 +1261,7 @@ a.mapboxgl-ctrl-logo,
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: #0b0d12;
+  color: var(--lc-text);
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
   display: inline-flex;
@@ -1329,8 +1329,8 @@ a.mapboxgl-ctrl-logo,
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  background: #ffffff;
-  border: 1px solid #ececf0;
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
   border-radius: 16px;
   padding: 10px 16px;
   margin-bottom: 14px;
@@ -1347,8 +1347,8 @@ a.mapboxgl-ctrl-logo,
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: #f1f2f5;
-  color: #5f6672;
+  background: var(--lc-hover);
+  color: var(--lc-text-sec);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1380,8 +1380,8 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-f-left {
-  background: #ffffff;
-  border: 1px solid #ececf0;
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
   border-radius: 18px;
   padding: 18px 20px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
@@ -1398,12 +1398,12 @@ a.mapboxgl-ctrl-logo,
   font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #0b0d12;
+  color: var(--lc-text);
 }
 
 .lc2-f-cargo {
   font-size: 12.5px;
-  color: #8a91a0;
+  color: var(--lc-text-ter);
   margin-bottom: 14px;
 }
 
@@ -1425,7 +1425,7 @@ a.mapboxgl-ctrl-logo,
   height: 10px;
   border-radius: 50%;
   border: 2px solid #d1d5db;
-  background: #fff;
+  background: var(--lc-card);
   margin-top: 3px;
   flex-shrink: 0;
 }
@@ -1444,19 +1444,19 @@ a.mapboxgl-ctrl-logo,
 .lc2-f-step b {
   display: block;
   font-size: 13px;
-  color: #0b0d12;
+  color: var(--lc-text);
   line-height: 1.2;
 }
 
 .lc2-f-step span {
   font-size: 11px;
-  color: #98a1b2;
+  color: var(--lc-text-sec);
 }
 
 .lc2-f-progress {
   height: 5px;
   border-radius: 999px;
-  background: #eef0f3;
+  background: var(--lc-hover);
   overflow: hidden;
   margin-bottom: 14px;
 }
@@ -1472,7 +1472,7 @@ a.mapboxgl-ctrl-logo,
   display: flex;
   gap: 26px;
   flex-wrap: wrap;
-  border-top: 1px solid #f1f2f4;
+  border-top: 1px solid var(--lc-border-soft);
   padding-top: 12px;
 }
 
@@ -1481,14 +1481,14 @@ a.mapboxgl-ctrl-logo,
   font-size: 10.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #98a1b2;
+  color: var(--lc-text-sec);
   font-weight: 600;
   margin-bottom: 2px;
 }
 
 .lc2-f-stats b {
   font-size: 14px;
-  color: #0b0d12;
+  color: var(--lc-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1571,7 +1571,7 @@ a.mapboxgl-ctrl-logo,
 .lc2-rowbar {
   height: 3px;
   border-radius: 999px;
-  background: #eef0f3;
+  background: var(--lc-hover);
   overflow: hidden;
   margin-top: 4px;
   max-width: 140px;
@@ -1608,7 +1608,7 @@ a.mapboxgl-ctrl-logo,
   border-radius: 999px;
   font-size: 13px;
   font-weight: 500;
-  color: #5f6672;
+  color: var(--lc-text-sec);
   cursor: pointer;
   transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
               color 0.2s ease,
@@ -1621,8 +1621,8 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-nav-item:hover:not(.active) {
-  background: #ffffff;
-  color: #1d1d1f;
+  background: var(--lc-card);
+  color: var(--lc-text);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
@@ -1651,7 +1651,7 @@ a.mapboxgl-ctrl-logo,
 .lc2-nav-drop .ant-dropdown-menu {
   border-radius: 14px !important;
   padding: 5px !important;
-  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid var(--lc-border-soft) !important;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12),
               0 2px 8px rgba(0, 0, 0, 0.04) !important;
   background: rgba(255, 255, 255, 0.92) !important;
@@ -1678,19 +1678,19 @@ a.mapboxgl-ctrl-logo,
   padding: 8px 10px !important;
   font-size: 13px !important;
   font-weight: 400 !important;
-  color: #1d1d1f !important;
+  color: var(--lc-text) !important;
   transition: background 0.15s ease !important;
   margin: 1px 0 !important;
   letter-spacing: -0.006em;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item:hover {
-  background: rgba(0, 0, 0, 0.04) !important;
-  color: #1d1d1f !important;
+  background: var(--lc-hover) !important;
+  color: var(--lc-text) !important;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item .anticon {
-  color: #86868b !important;
+  color: var(--lc-text-sec) !important;
   font-size: 15px !important;
   margin-right: 8px !important;
   transition: color 0.15s ease !important;
@@ -1701,7 +1701,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item-divider {
-  background: rgba(0, 0, 0, 0.06) !important;
+  background: var(--lc-border-soft) !important;
   margin: 4px 8px !important;
 }
 
@@ -1712,7 +1712,7 @@ a.mapboxgl-ctrl-logo,
   border-radius: 50%;
   border: none;
   background: transparent;
-  color: #86868b;
+  color: var(--lc-text-sec);
   font-size: 17px;
   cursor: pointer;
   display: inline-flex;
@@ -1726,8 +1726,8 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-iconbtn:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #1d1d1f;
+  background: var(--lc-hover);
+  color: var(--lc-text);
 }
 
 .lc2-iconbtn:active {
@@ -1771,7 +1771,7 @@ a.mapboxgl-ctrl-logo,
   position: absolute;
   width: 26px;
   height: 26px;
-  background: #ffffff;
+  background: var(--lc-card);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 1px rgba(0, 0, 0, 0.05);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1785,7 +1785,7 @@ a.mapboxgl-ctrl-logo,
   height: 26px;
   border: none;
   background: transparent;
-  color: #86868b;
+  color: var(--lc-text-sec);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1798,11 +1798,11 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-theme-btn.active {
-  color: #1d1d1f;
+  color: var(--lc-text);
 }
 
 .lc2-theme-btn:hover:not(.active) {
-  color: #1d1d1f;
+  color: var(--lc-text);
 }
 
 .lc2-theme-btn:active {
@@ -1819,7 +1819,7 @@ a.mapboxgl-ctrl-logo,
 .lc2-header-divider {
   width: 1px;
   height: 20px;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--lc-border-soft);
   margin: 0 8px;
   flex-shrink: 0;
   border-radius: 1px;
@@ -1838,7 +1838,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-profile:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--lc-hover);
 }
 
 .lc2-profile-av {
@@ -1860,20 +1860,20 @@ a.mapboxgl-ctrl-logo,
 /* ===== Шапка 2026: светлая, пилюльная навигация (legacy antd-menu стили) ===== */
 .app-header-2026 .ant-menu-horizontal > .ant-menu-item,
 .app-header-2026 .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
-  color: #5f6672 !important;
+  color: var(--lc-text-sec) !important;
   font-weight: 600 !important;
 }
 
 .app-header-2026 .ant-menu-horizontal > .ant-menu-item:hover,
 .app-header-2026 .ant-menu-horizontal > .ant-menu-submenu:hover,
 .app-header-2026 .ant-menu-horizontal > .ant-menu-submenu-active {
-  background-color: #f1f2f5 !important;
+  background-color: var(--lc-hover) !important;
 }
 
 .app-header-2026 .ant-menu-horizontal > .ant-menu-item:hover,
 .app-header-2026 .ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title,
 .app-header-2026 .ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title {
-  color: #0b0d12 !important;
+  color: var(--lc-text) !important;
 }
 
 .app-header-2026 .ant-menu-horizontal > .ant-menu-item-selected {
@@ -1886,18 +1886,18 @@ a.mapboxgl-ctrl-logo,
 }
 
 .app-header-2026 .ant-menu-horizontal > .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: #0b0d12 !important;
+  color: var(--lc-text) !important;
   font-weight: 700 !important;
 }
 
 .app-header-2026 .ant-btn-text:hover {
-  background-color: #f1f2f5 !important;
+  background-color: var(--lc-hover) !important;
 }
 
 /* Выпадашки навигации — светлые карточки (перекрывает тёмный вариант выше) */
 .lc-nav-pop .ant-menu {
-  background: #ffffff !important;
-  border: 1px solid #e7e8ec !important;
+  background: var(--lc-card) !important;
+  border: 1px solid var(--lc-border) !important;
   box-shadow: 0 16px 40px -12px rgba(16, 24, 40, 0.18) !important;
 }
 
@@ -1906,12 +1906,12 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-nav-pop .ant-menu-item .anticon {
-  color: #98a1b2 !important;
+  color: var(--lc-text-sec) !important;
 }
 
 .lc-nav-pop .ant-menu-item:hover {
-  background: #f1f2f5 !important;
-  color: #0b0d12 !important;
+  background: var(--lc-hover) !important;
+  color: var(--lc-text) !important;
 }
 
 .lc-nav-pop .ant-menu-item:hover .anticon {
@@ -1928,7 +1928,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-nav-pop .ant-menu-item-divider {
-  background: #eef0f3 !important;
+  background: var(--lc-border-soft) !important;
 }
 
 /* ==========================================
