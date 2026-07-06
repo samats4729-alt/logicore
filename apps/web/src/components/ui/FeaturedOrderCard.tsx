@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import StatusPill, { STATUS_LABELS } from './StatusPill';
 import { shortenCompanyName } from '@/lib/company-helper';
 import { loadMapgl, DGIS_KEY } from '@/lib/mapgl-loader';
+import { useTheme } from '@/components/ThemeProvider';
 
 // Грубый прогресс рейса по позиции статуса (точный % по GPS — этап 5 REDESIGN_PLAN.md)
 export const ORDER_STATUS_PROGRESS: Record<string, number> = {
@@ -42,7 +43,7 @@ function cityOf(order: any, type: 'pickup' | 'delivery'): string {
 }
 
 // Мини-карта маршрута (точки погрузки → выгрузки)
-function RouteMapThumbnail({ order }: { order: any }) {
+function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
 
@@ -109,22 +110,42 @@ function RouteMapThumbnail({ order }: { order: any }) {
     }, [coords]);
 
     if (!DGIS_KEY || coords.length < 1) {
+        const isDark = theme === 'dark';
         return (
-            <div style={{ flex: 1, minHeight: 140, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginBottom: 12 }}>
-                <EnvironmentOutlined style={{ fontSize: 22, color: 'rgba(255,255,255,0.25)' }} />
+            <div style={{
+                flex: 1,
+                minHeight: 140,
+                background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 12,
+                marginBottom: 12
+            }}>
+                <EnvironmentOutlined style={{
+                    fontSize: 22,
+                    color: isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)'
+                }} />
             </div>
         );
     }
 
+    const mapFilter = theme === 'dark'
+        ? 'invert(0.92) hue-rotate(180deg) saturate(0.8) brightness(0.9) contrast(0.95)'
+        : 'none';
+
     return (
         <div ref={containerRef} style={{
             flex: 1, minHeight: 140, borderRadius: 12, overflow: 'hidden', marginBottom: 12,
-            filter: 'invert(0.92) hue-rotate(180deg) saturate(0.8) brightness(0.9) contrast(0.95)',
+            filter: mapFilter,
+            background: theme === 'dark' ? '#1a1e26' : '#f1f5f9',
         }} />
     );
 }
 
 export default function FeaturedOrderCard({ order, onOpen }: { order: any; onOpen?: (id: string) => void }) {
+    const { theme } = useTheme();
+
     if (!order) return null;
 
     const progress = ORDER_STATUS_PROGRESS[order.status] ?? 0;
@@ -163,18 +184,18 @@ export default function FeaturedOrderCard({ order, onOpen }: { order: any; onOpe
                     <div><span>Заказчик</span><b>{shortenCompanyName(order.customerCompany?.name || '') || '—'}</b></div>
                 </div>
             </div>
-            <div className="lc2-f-right">
+            <div className={`lc2-f-right ${theme}`}>
                 {/* Мини-карта маршрута */}
-                <RouteMapThumbnail order={order} />
+                <RouteMapThumbnail order={order} theme={theme} />
 
                 {/* Водитель */}
                 <div className="lc2-f-driver">
                     <span className="lc2-avatar">{nameInitials(driverName)}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div className="lc2-f-driver-name" style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {driverName || 'Водитель не назначен'}
                         </div>
-                        <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.55)' }}>
+                        <div className="lc2-f-driver-sub" style={{ fontSize: 11.5 }}>
                             Водитель · {order.assignedDriverPlate || order.driver?.vehiclePlate || '—'}
                         </div>
                     </div>

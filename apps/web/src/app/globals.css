@@ -1569,7 +1569,6 @@ a.mapboxgl-ctrl-logo,
 
 /* Правая тёмная панель featured (карта — этап 5 плана) */
 .lc2-f-right {
-  background: linear-gradient(160deg, #12151d 0%, #0b0d12 100%);
   border-radius: 18px;
   padding: 18px;
   display: flex;
@@ -1577,16 +1576,67 @@ a.mapboxgl-ctrl-logo,
   justify-content: flex-end;
   gap: 12px;
   min-height: 200px;
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.lc2-f-right.dark {
+  background: linear-gradient(160deg, #12151d 0%, #0b0d12 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.lc2-f-right.light {
+  background: linear-gradient(160deg, #ffffff 0%, #f4f5f7 100%);
+  border: 1px solid var(--lc-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .lc2-f-driver {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   padding: 12px 14px;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.lc2-f-right.dark .lc2-f-driver {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lc2-f-right.light .lc2-f-driver {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.lc2-f-driver-name {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.3s ease;
+}
+
+.lc2-f-right.dark .lc2-f-driver-name {
+  color: #ffffff;
+}
+
+.lc2-f-right.light .lc2-f-driver-name {
+  color: var(--lc-text);
+}
+
+.lc2-f-driver-sub {
+  font-size: 11.5px;
+  transition: color 0.3s ease;
+}
+
+.lc2-f-right.dark .lc2-f-driver-sub {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.lc2-f-right.light .lc2-f-driver-sub {
+  color: var(--lc-text-sec);
 }
 
 .lc2-avatar {
@@ -1630,16 +1680,30 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-openbtn.ant-btn {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
   border-radius: 12px !important;
   height: 38px;
   font-weight: 600;
+  transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
-.lc2-openbtn.ant-btn:hover {
+.lc2-f-right.dark .lc2-openbtn.ant-btn {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+}
+
+.lc2-f-right.dark .lc2-openbtn.ant-btn:hover {
   background: rgba(255, 255, 255, 0.18) !important;
+}
+
+.lc2-f-right.light .lc2-openbtn.ant-btn {
+  background: var(--lc-hover) !important;
+  border: 1px solid var(--lc-border) !important;
+  color: var(--lc-text) !important;
+}
+
+.lc2-f-right.light .lc2-openbtn.ant-btn:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
 }
 
 /* Прогресс-бар в строках таблицы */
