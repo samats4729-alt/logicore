@@ -34,9 +34,9 @@ import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
 import { api } from '@/lib/api';
 import { shortenCompanyName } from '@/lib/company-helper';
-import GlobalSearch from '@/components/ui/GlobalSearch';
 import NotificationBell from '@/components/ui/NotificationBell';
 import { useTheme } from '@/components/ThemeProvider';
+import AiButton from '@/components/ui/AiButton';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -430,7 +430,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Header
                 className="app-header-2026"
                 style={{
-                    background: 'rgba(255, 255, 255, 0.9)',
+                    background: 'var(--lc-bg)',
                     backdropFilter: 'saturate(1.9) blur(20px)',
                     WebkitBackdropFilter: 'saturate(1.9) blur(20px)',
                     padding: '0 24px',
@@ -520,23 +520,17 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
                 {/* Right section */}
                 <div className="lc2-header-right">
-                    {/* Глобальный поиск (Этап 6) */}
-                    <GlobalSearch />
+                    {/* AI-ассистент */}
+                    <AiButton />
 
                     {/* Центр уведомлений (Этап 7) */}
                     <NotificationBell hasNewUpdates={hasNewUpdates} />
 
-                    {/* Тема (Этап 8) — Apple Segmented Control */}
-                    <div className="lc2-theme-toggle">
-                        <div className="lc2-theme-active-bg" style={{ transform: theme === 'dark' ? 'translateX(34px)' : 'translateX(0px)' }} />
-                        <button
-                            type="button"
-                            className={`lc2-theme-btn ${theme === 'light' ? 'active' : ''}`}
-                            aria-label="Светлая тема"
-                            title="Светлая тема"
-                            onClick={() => setTheme('light')}
-                        >
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {/* Тема (Этап 8) — круглый кроссфейд */}
+                    <div className="lc2-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'} aria-label="Переключить тему">
+                        <span className="lc2-theme-active-bg" />
+                        <span className="lc2-theme-btn sun">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="5" />
                                 <line x1="12" y1="1" x2="12" y2="3" />
                                 <line x1="12" y1="21" x2="12" y2="23" />
@@ -547,18 +541,12 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
                                 <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
                             </svg>
-                        </button>
-                        <button
-                            type="button"
-                            className={`lc2-theme-btn ${theme === 'dark' ? 'active' : ''}`}
-                            aria-label="Тёмная тема"
-                            title="Тёмная тема"
-                            onClick={() => setTheme('dark')}
-                        >
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        </span>
+                        <span className="lc2-theme-btn moon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                             </svg>
-                        </button>
+                        </span>
                     </div>
 
                     <div className="lc2-header-divider" />

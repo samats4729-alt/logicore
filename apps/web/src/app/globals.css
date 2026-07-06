@@ -1786,8 +1786,8 @@ a.mapboxgl-ctrl-logo,
   height: 36px;
   border-radius: 50%;
   border: none;
-  background: transparent;
-  color: #5f6672;
+  background: var(--lc-card);
+  color: var(--lc-text-sec);
   font-size: 17px;
   cursor: pointer;
   display: inline-flex;
@@ -1798,11 +1798,12 @@ a.mapboxgl-ctrl-logo,
   flex-shrink: 0;
   font-family: inherit;
   -webkit-font-smoothing: antialiased;
+  box-shadow: var(--nav-sel-shadow);
 }
 
 .lc2-iconbtn:hover {
-  background: #f2f3f6;
-  color: #0b0d12;
+  background: var(--lc-card);
+  color: var(--lc-text);
 }
 
 .lc2-iconbtn:active {
@@ -1828,61 +1829,119 @@ a.mapboxgl-ctrl-logo,
   100% { box-shadow: 0 0 0 5px rgba(255, 59, 48, 0); }
 }
 
-/* ---- Theme Toggle Segmented Control ---- */
+/* ---- Theme Toggle — круглый кроссфейд ---- */
 .lc2-theme-toggle {
+  position: relative;
+  height: 38px;
+  width: 38px;
+  border-radius: 50%;
+  border: none;
+  background: var(--lc-card);
+  box-shadow: var(--nav-sel-shadow);
+  cursor: pointer;
   display: flex;
   align-items: center;
-  background: var(--lc-bg);
-  border-radius: 999px;
-  padding: 2px;
-  position: relative;
-  border: 1px solid var(--nav-line);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
-  margin: 0 6px;
-  height: 32px;
-  width: 58px;
+  justify-content: center;
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .lc2-theme-active-bg {
-  position: absolute;
-  width: 26px;
-  height: 26px;
-  background: var(--nav-sel-bg);
-  border-radius: 50%;
-  box-shadow: var(--nav-sel-shadow);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  left: 3px;
-  top: 3px;
-  z-index: 1;
+  display: none;
 }
 
 .lc2-theme-btn {
-  width: 26px;
-  height: 26px;
+  position: absolute;
+  inset: 0;
   border: none;
   background: transparent;
-  color: #5f6672;
+  color: var(--lc-text);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  z-index: 2;
-  transition: color 0.2s ease, transform 0.15s ease;
+  transition: opacity 0.35s ease, transform 0.35s ease;
   border-radius: 50%;
   padding: 0;
 }
 
-.lc2-theme-btn.active {
-  color: #0b0d12;
+.lc2-theme-btn.sun {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+.lc2-theme-btn.moon {
+  opacity: 0;
+  transform: scale(0.5) rotate(-90deg);
 }
 
-.lc2-theme-btn:hover:not(.active) {
-  color: #0b0d12;
+[data-theme='dark'] .lc2-theme-btn.sun {
+  opacity: 0;
+  transform: scale(0.5) rotate(90deg);
+}
+[data-theme='dark'] .lc2-theme-btn.moon {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
 }
 
-.lc2-theme-btn:active {
-  transform: scale(0.9);
+/* ===== AI Button — morphing blob ===== */
+.ai-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  box-shadow: 0 3px 10px rgba(123, 107, 255, 0.28);
+  transition: box-shadow 0.3s;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+.ai-btn.active {
+  box-shadow: 0 4px 18px rgba(123, 107, 255, 0.45);
+}
+.ai-btn__blob {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #7b6bff, #5da2ff 45%, #5be3c9 75%, #ff6bcb);
+  animation: blobMorph 4.2s ease-in-out infinite, blobBreathe 3.2s ease-in-out infinite;
+}
+.ai-btn.active .ai-btn__blob {
+  animation-duration: 1.6s, 1.1s;
+}
+.ai-btn__ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+}
+.ai-btn.active .ai-btn__ring {
+  border-color: rgba(123, 107, 255, 0.5);
+  animation: ringPulse 1.3s ease-out infinite;
+}
+.ai-btn__label {
+  position: relative;
+  z-index: 2;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+@keyframes blobMorph {
+  0%, 100% { border-radius: 42% 58% 65% 35% / 45% 40% 60% 55%; }
+  25% { border-radius: 58% 42% 40% 60% / 60% 55% 45% 40%; }
+  50% { border-radius: 50% 50% 35% 65% / 40% 60% 40% 60%; }
+  75% { border-radius: 35% 65% 58% 42% / 55% 45% 55% 45%; }
+}
+@keyframes blobBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+@keyframes ringPulse {
+  0% { box-shadow: 0 0 0 0 rgba(123, 107, 255, 0.35); }
+  100% { box-shadow: 0 0 0 14px rgba(123, 107, 255, 0); }
 }
 
 /* ---- Right section of header ---- */
