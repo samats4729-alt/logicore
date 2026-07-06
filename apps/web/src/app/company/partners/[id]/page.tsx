@@ -226,7 +226,7 @@ export default function PartnerDetailPage() {
 
     // ===== Profile Tab =====
     const profileContent = (
-        <Card>
+        <div>
             <Descriptions
                 column={{ xs: 1, sm: 2, md: 2 }}
                 bordered
@@ -256,7 +256,7 @@ export default function PartnerDetailPage() {
                     <Descriptions.Item label="ФИО руководителя" span={2}>{partner.directorName}</Descriptions.Item>
                 )}
             </Descriptions>
-        </Card>
+        </div>
     );
 
     // ===== Contracts Tab =====
@@ -296,7 +296,7 @@ export default function PartnerDetailPage() {
     ];
 
     const contractsContent = (
-        <Card>
+        <div>
             <Table
                 columns={contractColumns}
                 dataSource={contracts}
@@ -308,7 +308,7 @@ export default function PartnerDetailPage() {
                     style: { cursor: 'pointer' },
                 })}
             />
-        </Card>
+        </div>
     );
 
     // ===== Drivers Tab =====
@@ -392,7 +392,7 @@ export default function PartnerDetailPage() {
     ];
 
     const driversContent = (
-        <Card>
+        <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <Text strong style={{ fontSize: 15 }}>
                     Водители перевозчика «{partner.name}»
@@ -412,7 +412,7 @@ export default function PartnerDetailPage() {
                 loading={driversLoading}
                 locale={{ emptyText: <Empty description="У этого перевозчика пока нет водителей" /> }}
             />
-        </Card>
+        </div>
     );
 
     // ===== Transport Tab =====
@@ -461,7 +461,7 @@ export default function PartnerDetailPage() {
     ];
 
     const transportContent = (
-        <Card>
+        <div>
             <Table
                 columns={transportColumns}
                 dataSource={transportData}
@@ -469,7 +469,7 @@ export default function PartnerDetailPage() {
                 loading={driversLoading}
                 locale={{ emptyText: <Empty description="У этого перевозчика нет транспорта" /> }}
             />
-        </Card>
+        </div>
     );
 
     // ===== Tab items =====
@@ -485,38 +485,51 @@ export default function PartnerDetailPage() {
         );
     }
 
+    const initials = (partner?.name || '').split(/\s+/).filter(Boolean).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase() || 'КГ';
+
     return (
-        <div>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-                <Button
-                    type="text"
-                    icon={<ArrowLeftOutlined />}
-                    onClick={() => router.push('/company/partners')}
-                    style={{ padding: '4px 8px' }}
-                />
-                <Avatar
-                    size={48}
-                    icon={<ShopOutlined />}
-                    style={{ backgroundColor: partner.isCarrier ? token.colorSuccess : token.colorPrimary, flexShrink: 0 }}
-                />
-                <div>
-                    <Title level={3} style={{ margin: 0 }}>{partner.name}</Title>
-                    <Space size={4}>
-                        {partner.bin && <Text type="secondary">БИН: {partner.bin}</Text>}
-                        {partner.isCustomer && <Tag color="blue" style={{ margin: 0 }}>Заказчик</Tag>}
-                        {partner.isCarrier && <Tag color="green" style={{ margin: 0 }}>Перевозчик</Tag>}
-                    </Space>
+        <div className="lc-page" style={{ maxWidth: 1200, margin: '0 auto' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <Button
+                        type="text"
+                        icon={<ArrowLeftOutlined />}
+                        onClick={() => router.push('/company/partners')}
+                        style={{ padding: '4px 8px', flexShrink: 0 }}
+                    />
+                    <span className="lc2-avatar" style={{ width: 48, height: 48, fontSize: 18, background: partner.isCarrier ? '#e6ffed' : '#e0f2fe', color: partner.isCarrier ? '#28a745' : '#0369a1', flexShrink: 0 }}>
+                        {initials}
+                    </span>
+                    <div>
+                        <div className="lc-eyebrow">Транспорт · Контрагенты</div>
+                        <h1 className="lc2-title" style={{ marginBottom: 4 }}>{partner.name}</h1>
+                        <Space size={4}>
+                            {partner.bin && <span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>БИН: {partner.bin}</span>}
+                            {partner.isCustomer && <Tag color="blue" style={{ margin: 0 }}>Заказчик</Tag>}
+                            {partner.isCarrier && <Tag color="green" style={{ margin: 0 }}>Перевозчик</Tag>}
+                            {!isExternal && <Tag color="cyan" style={{ margin: 0 }}>В системе</Tag>}
+                        </Space>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexShrink: 0 }}>
+                    {isExternal && (
+                        <Button icon={<EditOutlined />} onClick={handleEditPartner}>
+                            Редактировать
+                        </Button>
+                    )}
                 </div>
             </div>
 
-            {/* Tabs */}
-            <Tabs
-                activeKey={activeTab}
-                onChange={setActiveTab}
-                type="card"
-                items={tabItems}
-            />
+            {/* ===== TABS CARD ===== */}
+            <div className="lc-card" style={{ padding: '20px' }}>
+                <Tabs
+                    activeKey={activeTab}
+                    onChange={setActiveTab}
+                    type="card"
+                    items={tabItems}
+                />
+            </div>
 
             {/* Edit Partner Modal */}
             <Modal
