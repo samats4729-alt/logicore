@@ -194,14 +194,43 @@ export default function CompanyTrackingPage() {
 
     const isDark = mapMode === 'night';
 
+    const onlineCount = drivers.length;
+
     return (
+        <div className="lc-page" style={{ maxWidth: '100%', margin: '0 auto', padding: '0 8px' }}>
+            {/* ===== HERO 2026 ===== */}
+            <div className="lc2-hero" style={{ marginBottom: 0 }}>
+                <div>
+                    <div className="lc-eyebrow">Логистика · Мониторинг</div>
+                    <h1 className="lc2-title">GPS-мониторинг</h1>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
+                        Отслеживание водителей в реальном времени
+                    </p>
+                </div>
+                <div className="lc2-metrics">
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: onlineCount > 0 ? '#e0f2fe' : '#f1f2f5', color: onlineCount > 0 ? '#0369a1' : '#5f6672' }}>
+                            <CarOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Водителей онлайн</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {onlineCount}
+                            </div>
+                            <div className="lc2-msub">{onlineCount > 0 ? 'в движении' : 'нет активных'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ===== MAP CARD ===== */}
+            <div className="lc-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{
             position: 'relative',
-            height: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 56px - 48px - 48px)',
+            height: isMobile ? 'calc(100vh - 240px)' : 'calc(100vh - 200px)',
             minHeight: 480,
             overflow: 'hidden',
             borderRadius: 14,
-            border: '1px solid #e8e9ee',
         }}>
             {/* ═══════════════════════════════════════════
                 SIDEBAR — Frosted Glass Panel
@@ -606,6 +635,8 @@ export default function CompanyTrackingPage() {
                     border-radius: 12px;
                 }
             `}</style>
+        </div>
+            </div>
         </div>
     );
 }
