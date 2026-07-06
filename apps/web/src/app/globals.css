@@ -10,6 +10,10 @@
   --lc-hover: #f2f3f6;
   --lc-header-bg: rgba(246, 247, 249, 0.88);
   --lc-panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  /* Navigation segmented control */
+  --nav-line: rgba(0, 0, 0, 0.07);
+  --nav-sel-bg: #ffffff;
+  --nav-sel-shadow: 0 2px 6px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 [data-theme='dark'] {
@@ -24,6 +28,21 @@
   --lc-hover: #1e222b;
   --lc-header-bg: rgba(13, 15, 20, 0.85);
   --lc-panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --nav-line: rgba(255, 255, 255, 0.08);
+  --nav-sel-bg: #1d1d20;
+  --nav-sel-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* Плавное переливание темы — включается data-anim флагом при переключении */
+[data-anim="on"],
+[data-anim="on"] *,
+[data-anim="on"] *::before,
+[data-anim="on"] *::after {
+  transition:
+    background-color .8s cubic-bezier(0.22, 1, 0.36, 1),
+    color .8s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color .8s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow .8s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
 * {
@@ -865,9 +884,11 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .ant-tabs-nav-list {
-  background: var(--lc-hover);
+  background: var(--lc-bg);
   padding: 4px;
   border-radius: 12px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--nav-line);
 }
 
 .lc-page .ant-tabs-tab {
@@ -909,6 +930,33 @@ a.mapboxgl-ctrl-logo,
   background: #eef4ff;
   border-color: #c6dcff;
   color: #1677ff;
+}
+
+/* Segmented контролы — единый стиль с навигацией */
+.lc-page .ant-segmented {
+  background: var(--lc-bg) !important;
+  border-radius: 999px !important;
+  padding: 3px !important;
+  border: 1px solid var(--nav-line) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+.lc-page .ant-segmented .ant-segmented-item {
+  border-radius: 999px !important;
+  color: var(--lc-text-sec) !important;
+  font-weight: 500 !important;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease !important;
+}
+.lc-page .ant-segmented .ant-segmented-item:hover:not(.ant-segmented-item-selected) {
+  color: var(--lc-text) !important;
+}
+.lc-page .ant-segmented .ant-segmented-item-selected {
+  background: var(--nav-sel-bg) !important;
+  color: var(--lc-text) !important;
+  box-shadow: var(--nav-sel-shadow) !important;
+}
+.lc-page .ant-segmented .ant-segmented-thumb {
+  background: var(--nav-sel-bg) !important;
+  box-shadow: var(--nav-sel-shadow) !important;
 }
 
 /* Панель фильтров — фирменная карточка */
@@ -1622,10 +1670,11 @@ a.mapboxgl-ctrl-logo,
   align-items: center;
   gap: 2px;
   margin-left: 32px;
-  background: rgba(0, 0, 0, 0.035);
+  background: var(--lc-bg);
   padding: 3px;
   border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.01);
+  border: 1px solid var(--nav-line);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .lc2-nav-item {
@@ -1635,7 +1684,7 @@ a.mapboxgl-ctrl-logo,
   border-radius: 999px;
   font-size: 13px;
   font-weight: 500;
-  color: #5f6672;
+  color: var(--lc-text-sec);
   cursor: pointer;
   transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
               color 0.2s ease,
@@ -1648,15 +1697,14 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-nav-item:hover:not(.active) {
-  background: #ffffff;
-  color: #0b0d12;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: transparent;
+  color: var(--lc-text);
 }
 
 .lc2-nav-item.active {
-  background: #0f1117;
-  color: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: var(--nav-sel-bg);
+  color: var(--lc-text);
+  box-shadow: var(--nav-sel-shadow);
   font-weight: 600;
 }
 
@@ -1784,11 +1832,12 @@ a.mapboxgl-ctrl-logo,
 .lc2-theme-toggle {
   display: flex;
   align-items: center;
-  background: rgba(0, 0, 0, 0.035);
+  background: var(--lc-bg);
   border-radius: 999px;
   padding: 2px;
   position: relative;
-  border: 1px solid rgba(0, 0, 0, 0.01);
+  border: 1px solid var(--nav-line);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
   margin: 0 6px;
   height: 32px;
   width: 58px;
@@ -1798,9 +1847,9 @@ a.mapboxgl-ctrl-logo,
   position: absolute;
   width: 26px;
   height: 26px;
-  background: #ffffff;
+  background: var(--nav-sel-bg);
   border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--nav-sel-shadow);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   left: 3px;
   top: 3px;
@@ -1904,12 +1953,13 @@ a.mapboxgl-ctrl-logo,
 }
 
 .app-header-2026 .ant-menu-horizontal > .ant-menu-item-selected {
-  background-color: #0f1117 !important;
-  color: #ffffff !important;
+  background-color: var(--nav-sel-bg) !important;
+  color: var(--lc-text) !important;
+  box-shadow: var(--nav-sel-shadow) !important;
 }
 
 .app-header-2026 .ant-menu-horizontal > .ant-menu-item-selected .anticon {
-  color: #ffffff !important;
+  color: var(--lc-text) !important;
 }
 
 .app-header-2026 .ant-menu-horizontal > .ant-menu-submenu-selected > .ant-menu-submenu-title {
