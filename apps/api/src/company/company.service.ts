@@ -1331,6 +1331,29 @@ export class CompanyService {
         }));
     }
 
+    /** Заявки компании, ожидающие подтверждения завершения */
+    async getPendingConfirmations(companyId: string) {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { responsibleManager: { companyId } },
+                        ],
+                    },
+                    { pendingStatus: { not: null } },
+                ],
+            },
+            orderBy: { pendingStatusAt: 'desc' },
+            take: 10,
+            select: { id: true, orderNumber: true, pendingStatus: true, pendingStatusAt: true },
+        });
+        return orders.map((o) => ({ id: o.id, orderNumber: o.orderNumber, pendingStatus: o.pendingStatus, pendingStatusAt: o.pendingStatusAt?.toISOString() || null }));
+    }
+
     /** Глобальный поиск: заявки по номеру + контрагенты по названию */
     async globalSearch(companyId: string, q: string) {
         const orderWhere = {

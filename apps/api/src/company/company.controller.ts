@@ -504,6 +504,15 @@ export class CompanyController {
         return this.companyService.getOrderEvents(req.user.companyId, safeLimit);
     }
 
+    // ==================== Подтверждения завершения ====================
+
+    @Get('orders/pending-confirmations')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Заявки, ожидающие подтверждения завершения (для центра уведомлений)' })
+    async getPendingConfirmations(@Request() req: any) {
+        return this.companyService.getPendingConfirmations(req.user.companyId);
+    }
+
     // ==================== Глобальный поиск ====================
 
     @Get('search')
