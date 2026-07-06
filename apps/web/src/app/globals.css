@@ -2128,61 +2128,21 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* ==========================================
-   AI ASSISTANT — LIQUID GLASS PANEL
+   AI ASSISTANT — PREMIUM PANEL
    ========================================== */
 .ai-glass-panel {
-  /* Прозрачная линза: минимальная заливка, лёгкий blur — фон читается сквозь стекло */
-  background: linear-gradient(155deg,
-    rgba(255, 255, 255, 0.2) 0%,
-    rgba(255, 255, 255, 0.05) 38%,
-    rgba(255, 255, 255, 0.03) 62%,
-    rgba(255, 255, 255, 0.13) 100%);
-  backdrop-filter: blur(5px) saturate(1.9);
-  -webkit-backdrop-filter: blur(5px) saturate(1.9);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 28px;
-  box-shadow:
-    0 30px 70px -15px rgba(16, 24, 40, 0.45),
-    0 4px 14px rgba(16, 24, 40, 0.1),
-    inset 0 1.5px 1px rgba(255, 255, 255, 0.95),
-    inset 1px 0 1px rgba(255, 255, 255, 0.55),
-    inset -1px 0 1px rgba(255, 255, 255, 0.35),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.3),
-    inset 10px 14px 28px -18px rgba(255, 255, 255, 0.7),
-    inset -10px -10px 28px -18px rgba(255, 255, 255, 0.4);
-}
-
-/* Слой преломления: SVG displacement искажает фон под стеклом (Chromium) */
-.ai-glass-refract {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 0;
-  backdrop-filter: url(#lg-dist);
-  -webkit-backdrop-filter: url(#lg-dist);
-}
-
-/* Диагональный световой мазок по стеклу */
-.ai-glass-sheen {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 1;
-  background: linear-gradient(120deg,
-    rgba(255, 255, 255, 0.4) 0%,
-    rgba(255, 255, 255, 0.14) 16%,
-    rgba(255, 255, 255, 0) 30%,
-    rgba(255, 255, 255, 0) 76%,
-    rgba(255, 255, 255, 0.16) 92%,
-    rgba(255, 255, 255, 0.3) 100%);
+  background: var(--lc-card) !important;
+  border: 1px solid var(--lc-border) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.16) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .ai-glass-header {
   padding: 14px 16px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.16);
+  border-bottom: 1px solid var(--lc-border-soft) !important;
+  background: var(--lc-hover) !important;
   position: relative;
   z-index: 2;
 }
@@ -2191,9 +2151,10 @@ a.mapboxgl-ctrl-logo,
 .ai-seg {
   display: flex;
   gap: 4px;
-  background: rgba(118, 118, 128, 0.14);
+  background: var(--lc-bg) !important;
   padding: 3px;
   border-radius: 11px;
+  border: 1px solid var(--lc-border-soft) !important;
 }
 
 .ai-seg-btn {
@@ -2203,16 +2164,106 @@ a.mapboxgl-ctrl-logo,
   padding: 7px 0;
   border-radius: 9px;
   font-weight: 600;
-  font-size: 12.5px;
-  color: rgba(60, 60, 67, 0.6);
+  font-size: 12px;
+  color: var(--lc-text-sec);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .ai-seg-btn.active {
-  background: rgba(255, 255, 255, 0.92);
-  color: #0b0d12;
-  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  background: var(--lc-card) !important;
+  color: var(--lc-text) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Message bubbles */
+.ai-msg-user {
+  max-width: 85%;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  border-radius: 14px;
+  background: #1677ff !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.2) !important;
+}
+
+.ai-msg-assistant {
+  max-width: 85%;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  border-radius: 14px;
+  background: var(--lc-card) !important;
+  color: var(--lc-text) !important;
+  border: 1px solid var(--lc-border) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Prompt Quick Actions */
+.ai-prompt-btn {
+  background: var(--lc-card) !important;
+  border: 1px solid var(--lc-border) !important;
+  color: var(--lc-text-sec) !important;
+  padding: 6px 14px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s;
+}
+
+.ai-prompt-btn:hover {
+  background: var(--lc-hover) !important;
+  color: var(--lc-text) !important;
+  border-color: var(--lc-text-ter) !important;
+}
+
+/* Footer & Inputs */
+.ai-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--lc-border-soft) !important;
+  background: var(--lc-hover) !important;
+  align-items: flex-end;
+  position: relative;
+  z-index: 2;
+}
+
+.ai-input {
+  flex: 1;
+  resize: none;
+  background: var(--lc-card) !important;
+  color: var(--lc-text) !important;
+  border: 1px solid var(--lc-border) !important;
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.ai-input:focus {
+  border-color: #1677ff !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15) !important;
+}
+
+.ai-send-btn {
+  background: #1677ff !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.3) !important;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.ai-send-btn:hover {
+  background: #4096ff !important;
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.45) !important;
 }
 
 /* ==========================================

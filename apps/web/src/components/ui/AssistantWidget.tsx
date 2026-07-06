@@ -417,34 +417,24 @@ export default function AssistantWidget() {
                         display: 'flex', flexDirection: 'column', overflow: 'hidden',
                     }}
                 >
-                    {/* SVG-фильтр преломления (liquid glass), применяется через backdrop-filter: url() */}
-                    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-                        <filter id="lg-dist" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
-                            <feImage href={LG_MAP} x="0" y="0" width="380" height="560" preserveAspectRatio="none" result="map" />
-                            <feDisplacementMap in="SourceGraphic" in2="map" scale="72" xChannelSelector="R" yChannelSelector="G" />
-                        </filter>
-                    </svg>
-                    <div className="ai-glass-refract" />
-                    <div className="ai-glass-sheen" />
                     <div className="ai-glass-header">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, color: '#0b0d12' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, color: 'var(--lc-text)' }}>
                                 <span style={{
                                     width: 30, height: 30, borderRadius: 10, background: 'rgba(22,119,255,0.14)',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1677ff', fontSize: 16,
-                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.6)',
                                 }}>
                                     <RobotOutlined />
                                 </span>
                                 <span>
                                     Ассистент LogiCore
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 500, color: 'rgba(60,60,67,0.6)' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 500, color: 'var(--lc-text-sec)', opacity: 0.85 }}>
                                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.18)' }} />
                                         онлайн
                                     </span>
                                 </span>
                             </span>
-                            <CloseOutlined style={{ cursor: 'pointer', color: 'rgba(60,60,67,0.55)' }} onClick={() => setOpen(false)} />
+                            <CloseOutlined style={{ cursor: 'pointer', color: 'var(--lc-text-sec)', fontSize: 14 }} onClick={() => setOpen(false)} />
                         </div>
                         <div className="ai-seg" style={{ marginTop: 12 }}>
                             {([['guide', 'Гид'], ['support', 'Поддержка']] as const).map(([key, label]) => (
@@ -459,24 +449,14 @@ export default function AssistantWidget() {
                         </div>
                     </div>
 
-                    <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 16, background: 'transparent', position: 'relative', zIndex: 2 }}>
+                    <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 16, background: 'var(--lc-bg)', position: 'relative', zIndex: 2 }}>
                         {(mode === 'guide' ? messages : supportMessages).map((m, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
+                            <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
                                 <div
+                                    className={m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant'}
                                     style={{
-                                        maxWidth: '85%', padding: '10px 14px', fontSize: 13.5, lineHeight: 1.55,
-                                        whiteSpace: 'pre-wrap',
-                                        borderRadius: 14,
                                         borderBottomRightRadius: m.role === 'user' ? 4 : 14,
                                         borderBottomLeftRadius: m.role === 'user' ? 14 : 4,
-                                        background: m.role === 'user' ? 'rgba(17, 20, 28, 0.82)' : 'rgba(255, 255, 255, 0.72)',
-                                        backdropFilter: 'blur(14px) saturate(1.4)',
-                                        WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
-                                        color: m.role === 'user' ? '#fff' : '#0f172a',
-                                        border: m.role === 'user' ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.7)',
-                                        boxShadow: m.role === 'user'
-                                            ? '0 3px 12px rgba(15,17,23,0.25), inset 0 1px 1px rgba(255,255,255,0.12)'
-                                            : '0 2px 8px rgba(16,24,40,0.06), inset 0 1px 1px rgba(255,255,255,0.9)',
                                     }}
                                 >
                                     {m.role === 'assistant' ? renderRich(m.content) : m.content}
@@ -492,30 +472,30 @@ export default function AssistantWidget() {
                                         </Button>
                                     )}
                                     {m.ticket && (
-                                        <div style={{ marginTop: 10, border: '1px solid #dbe3f0', borderRadius: 10, padding: '10px 12px', background: '#f8faff' }}>
+                                        <div style={{ marginTop: 10, border: '1px solid var(--lc-border)', borderRadius: 10, padding: '10px 12px', background: 'var(--lc-card)' }}>
                                             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>{m.ticket.title}</div>
                                             <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: '#eef2f7', color: '#475569', fontWeight: 500 }}>
+                                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'var(--lc-hover)', color: 'var(--lc-text-sec)', fontWeight: 500 }}>
                                                     {CATEGORY_LABEL[m.ticket.category || 'other'] || m.ticket.category}
                                                 </span>
-                                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: '#fff', border: '1px solid #e4e4e7', fontWeight: 600, color: (SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).color }}>
+                                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'var(--lc-bg)', border: '1px solid var(--lc-border)', fontWeight: 600, color: (SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).color }}>
                                                     {(SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).text}
                                                 </span>
                                             </div>
                                             {m.ticket.expected && (
                                                 <div style={{ fontSize: 11.5, marginBottom: 4 }}>
                                                     <span style={{ color: '#16a34a', fontWeight: 600 }}>Ожидается: </span>
-                                                    <span style={{ color: '#334155' }}>{m.ticket.expected}</span>
+                                                    <span style={{ color: 'var(--lc-text-sec)' }}>{m.ticket.expected}</span>
                                                 </div>
                                             )}
                                             {m.ticket.actual && (
                                                 <div style={{ fontSize: 11.5, marginBottom: 8 }}>
                                                     <span style={{ color: '#dc2626', fontWeight: 600 }}>Фактически: </span>
-                                                    <span style={{ color: '#334155' }}>{m.ticket.actual}</span>
+                                                    <span style={{ color: 'var(--lc-text-sec)' }}>{m.ticket.actual}</span>
                                                 </div>
                                             )}
                                             {m.ticket.orders && m.ticket.orders.length > 0 && (
-                                                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
+                                                <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', marginBottom: 8 }}>
                                                     Заявки: {m.ticket.orders.join(', ')}
                                                 </div>
                                             )}
@@ -536,60 +516,26 @@ export default function AssistantWidget() {
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, marginBottom: 8 }}>
                                 <button
                                     onClick={() => sendPrompt('Что нового на платформе?')}
-                                    style={{
-                                        background: 'rgba(255, 255, 255, 0.65)',
-                                        border: '1px solid rgba(22, 119, 255, 0.3)',
-                                        color: '#1677ff',
-                                        padding: '5px 12px',
-                                        borderRadius: 16,
-                                        fontSize: 12,
-                                        fontWeight: 500,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 2px 6px rgba(16,24,40,0.04)',
-                                        transition: 'all 0.2s',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        (e.currentTarget as HTMLButtonElement).style.background = '#eef4ff';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255, 255, 255, 0.65)';
-                                    }}
+                                    className="ai-prompt-btn"
                                 >
                                     Что нового?
                                 </button>
                                 <button
                                     onClick={() => sendPrompt('Как создать заявку?')}
-                                    style={{
-                                        background: 'rgba(255, 255, 255, 0.65)',
-                                        border: '1px solid rgba(22, 119, 255, 0.3)',
-                                        color: '#1677ff',
-                                        padding: '5px 12px',
-                                        borderRadius: 16,
-                                        fontSize: 12,
-                                        fontWeight: 500,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 2px 6px rgba(16,24,40,0.04)',
-                                        transition: 'all 0.2s',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        (e.currentTarget as HTMLButtonElement).style.background = '#eef4ff';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255, 255, 255, 0.65)';
-                                    }}
+                                    className="ai-prompt-btn"
                                 >
                                     Как создать заявку?
                                 </button>
                             </div>
                         )}
                         {loading && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--lc-text-ter)', fontSize: 13 }}>
                                 <Spin size="small" /> Думаю…
                             </div>
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.22)', alignItems: 'flex-end', position: 'relative', zIndex: 2 }}>
+                    <div className="ai-footer">
                         <Input.TextArea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
@@ -597,7 +543,7 @@ export default function AssistantWidget() {
                             placeholder={mode === 'guide' ? 'Спросите, как что сделать…' : 'Опишите проблему…'}
                             autoSize={{ minRows: 1, maxRows: 3 }}
                             variant="borderless"
-                            style={{ flex: 1, resize: 'none', background: 'rgba(118,118,128,0.12)', borderRadius: 12, padding: '8px 14px' }}
+                            className="ai-input"
                         />
                         <Button
                             type="primary"
@@ -605,7 +551,7 @@ export default function AssistantWidget() {
                             icon={<SendOutlined />}
                             onClick={send}
                             loading={loading}
-                            style={{ background: 'rgba(22,119,255,0.92)', boxShadow: '0 3px 12px rgba(22,119,255,0.35), inset 0 1px 1px rgba(255,255,255,0.35)', flexShrink: 0 }}
+                            className="ai-send-btn"
                         />
                     </div>
                 </div>
