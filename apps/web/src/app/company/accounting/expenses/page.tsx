@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
+import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -20,11 +21,6 @@ interface JournalEntry {
 }
 interface ManualExpense { id: string; date: string; category: string; description: string; amount: number; note?: string; order?: { orderNumber: string }; }
 
-const STATUS_LABELS: Record<string, string> = {
-    PENDING: 'Ожидает', ASSIGNED: 'Назначен', EN_ROUTE_PICKUP: 'Едет на погрузку',
-    AT_PICKUP: 'На погрузке', LOADING: 'Погрузка', IN_TRANSIT: 'В пути',
-    AT_DELIVERY: 'На выгрузке', UNLOADING: 'Выгрузка', COMPLETED: 'Завершён', PROBLEM: 'Проблема',
-};
 const EXPENSE_CATEGORIES = [
     { value: 'fuel', label: 'Топливо' }, { value: 'repair', label: 'Ремонт' },
     { value: 'salary', label: 'Зарплата' }, { value: 'insurance', label: 'Страхование' },
@@ -107,7 +103,7 @@ export default function CompanyExpensesPage() {
         { title: 'Дата', dataIndex: 'createdAt', key: 'createdAt', width: 100, sorter: (a: JournalEntry, b: JournalEntry) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(), defaultSortOrder: 'descend' as const, render: (val: string) => <span style={{ fontSize: 13 }}>{dayjs(val).format('DD.MM.YYYY')}</span> },
         { title: 'Груз', dataIndex: 'cargoDescription', key: 'cargoDescription', ellipsis: true, render: (val: string) => <span style={{ fontSize: 13 }}>{val || '—'}</span> },
         { title: 'Перевозчик', key: 'carrier', render: (_: any, r: JournalEntry) => <span style={{ fontSize: 13 }}>{getCarrierName(r)}</span> },
-        { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, render: (val: string) => <Tag>{STATUS_LABELS[val] || val}</Tag> },
+        { title: 'Статус', dataIndex: 'status', key: 'status', width: 120, render: (val: string) => <StatusPill status={val} /> },
         { title: 'Сумма', dataIndex: 'customerPrice', key: 'customerPrice', width: 130, align: 'right' as const, sorter: (a: JournalEntry, b: JournalEntry) => (a.customerPrice || 0) - (b.customerPrice || 0), render: (val: number) => <strong style={{ fontSize: 13 }}>{val.toLocaleString('ru-RU')} ₸</strong> },
         { title: 'Оплата', key: 'payment', width: 100, render: (_: any, r: JournalEntry) => r.isCustomerPaid ? <Tag color="green">Оплачено</Tag> : <Tag color="red">Не оплачено</Tag> },
     ];

@@ -823,7 +823,7 @@ export default function CompanyUsersPage() {
                 {/* Root Administrators Row */}
                 <div className="org-tree-root-row">
                     {adminUsers.length === 0 ? (
-                        <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 11, padding: '8px 16px', background: '#fff', borderRadius: 20, border: '1px dashed #d1d5db' }}>
+                        <div style={{ textAlign: 'center', color: 'var(--lc-text-ter)', fontSize: 11, padding: '8px 16px', background: 'var(--lc-card)', borderRadius: 20, border: '1px dashed var(--lc-border)' }}>
                             Нет назначенных админов
                         </div>
                     ) : (
