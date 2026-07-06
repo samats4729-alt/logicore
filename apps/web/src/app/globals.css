@@ -127,7 +127,7 @@ body {
    ========================================== */
 
 /* Mobile table wrapper - horizontal scroll */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
 
   /* Tables need horizontal scroll on mobile */
   .ant-table-wrapper {
@@ -588,43 +588,6 @@ a.mapboxgl-ctrl-logo,
 
 .mapboxgl-ctrl-group button:hover .mapboxgl-ctrl-icon {
   filter: opacity(1) !important;
-}
-
-/* ==========================================
-   DARK APP HEADER (premium)
-   ========================================== */
-.app-header-dark .ant-menu-horizontal > .ant-menu-item,
-.app-header-dark .ant-menu-horizontal > .ant-menu-submenu > .ant-menu-submenu-title {
-  color: rgba(255, 255, 255, 0.65) !important;
-}
-
-.app-header-dark .ant-menu-horizontal > .ant-menu-item:hover,
-.app-header-dark .ant-menu-horizontal > .ant-menu-submenu:hover,
-.app-header-dark .ant-menu-horizontal > .ant-menu-submenu-active {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-.app-header-dark .ant-menu-horizontal > .ant-menu-item:hover,
-.app-header-dark .ant-menu-horizontal > .ant-menu-submenu:hover > .ant-menu-submenu-title,
-.app-header-dark .ant-menu-horizontal > .ant-menu-submenu-active > .ant-menu-submenu-title {
-  color: #ffffff !important;
-}
-
-.app-header-dark .ant-menu-horizontal > .ant-menu-item-selected {
-  background-color: #1677ff !important;
-  color: #ffffff !important;
-}
-
-.app-header-dark .ant-menu-horizontal > .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: #69b1ff !important;
-}
-
-.app-header-dark .user-profile-trigger:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-.app-header-dark .ant-btn-text:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 /* ==========================================
@@ -2141,62 +2104,6 @@ a.mapboxgl-ctrl-logo,
 
 .lc-nav-pop .ant-menu-item-divider {
   background: rgba(0, 0, 0, 0.06) !important;
-}
-
-/* ==========================================
-   AI ASSISTANT — LAUNCHER
-   ========================================== */
-.ai-fab {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  z-index: 1600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  color: #1677ff;
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.12));
-  backdrop-filter: blur(8px) saturate(1.9);
-  -webkit-backdrop-filter: blur(8px) saturate(1.9);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow:
-    0 10px 28px rgba(16, 24, 40, 0.25),
-    inset 0 1.5px 1px rgba(255, 255, 255, 0.95),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.35),
-    inset 4px 6px 12px -8px rgba(255, 255, 255, 0.8);
-  transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.3s ease;
-}
-
-.ai-fab:hover {
-  transform: translateY(-2px) scale(1.05);
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.2));
-  box-shadow:
-    0 14px 34px rgba(16, 24, 40, 0.3),
-    0 0 0 6px rgba(22, 119, 255, 0.12),
-    inset 0 1.5px 1px rgba(255, 255, 255, 1),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.4);
-}
-
-.ai-fab::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 2px solid rgba(22, 119, 255, 0.45);
-  animation: aiFabPulse 2.6s ease-out infinite;
-  pointer-events: none;
-}
-
-@keyframes aiFabPulse {
-  0% { transform: scale(0.92); opacity: 0.8; }
-  70% { transform: scale(1.28); opacity: 0; }
-  100% { transform: scale(1.28); opacity: 0; }
 }
 
 /* ==========================================

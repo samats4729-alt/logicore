@@ -23,6 +23,7 @@ import { shortenCompanyName } from '@/lib/company-helper';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import AssignDriverModal from '@/components/AssignDriverModal';
+import StatusPill, { STATUS_PILL, STATUS_LABELS } from '@/components/ui/StatusPill';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -41,47 +42,6 @@ const statusColors: Record<string, string> = {
     PROBLEM: 'red',
     CANCELLED: '#f5222d',
 };
-
-const statusLabels: Record<string, string> = {
-    DRAFT: 'Черновик',
-    PENDING: 'Ожидает',
-    ASSIGNED: 'Назначен',
-    EN_ROUTE_PICKUP: 'Едет на погр.',
-    AT_PICKUP: 'На погрузке',
-    LOADING: 'Загрузка',
-    IN_TRANSIT: 'В пути',
-    AT_DELIVERY: 'На выгрузке',
-    UNLOADING: 'Разгрузка',
-    COMPLETED: 'Завершён',
-    PROBLEM: 'Проблема',
-    CANCELLED: 'Отменён',
-};
-
-// Фирменные статус-пилюли LogiCore (вместо стандартных antd Tag)
-const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
-    DRAFT: { bg: '#f1f2f4', fg: '#5f6672' },
-    PENDING: { bg: '#fff4e5', fg: '#b45309' },
-    ASSIGNED: { bg: '#e8f0fe', fg: '#1d4ed8' },
-    EN_ROUTE_PICKUP: { bg: '#e6f6fb', fg: '#0e7490' },
-    AT_PICKUP: { bg: '#eefbe7', fg: '#4d7c0f' },
-    LOADING: { bg: '#f3e8ff', fg: '#7e22ce' },
-    IN_TRANSIT: { bg: '#e0f2fe', fg: '#0369a1' },
-    AT_DELIVERY: { bg: '#ecfccb', fg: '#3f6212' },
-    UNLOADING: { bg: '#fae8ff', fg: '#a21caf' },
-    COMPLETED: { bg: '#e7f8ef', fg: '#15803d' },
-    PROBLEM: { bg: '#fee2e2', fg: '#dc2626' },
-    CANCELLED: { bg: '#fdeaea', fg: '#b91c1c' },
-};
-
-function StatusPill({ status }: { status: string }) {
-    const meta = STATUS_PILL[status] || STATUS_PILL.DRAFT;
-    return (
-        <span className="lc-status" style={{ background: meta.bg, color: meta.fg }}>
-            <i />
-            {statusLabels[status] || status}
-        </span>
-    );
-}
 
 // Грубый прогресс рейса по позиции статуса в цепочке (точный % по GPS — этап 5 плана редизайна)
 const STATUS_PROGRESS: Record<string, number> = {
@@ -1057,7 +1017,7 @@ export default function CompanyOrdersPage() {
         ...orgColumn,
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
-            render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
+            render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
             title: 'Дата погр.', key: 'pickupDate', width: 90,
@@ -1065,7 +1025,7 @@ export default function CompanyOrdersPage() {
                 const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
                 const date = (pickupPt as any)?.expectedDate;
                 return date
-                    ? <span style={{ fontSize: 11, color: '#333' }}>{dayjs(date).format('DD.MM.YY')}</span>
+                    ? <span style={{ fontSize: 11, color: 'var(--lc-text-sec)' }}>{dayjs(date).format('DD.MM.YY')}</span>
                     : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
@@ -1167,13 +1127,13 @@ export default function CompanyOrdersPage() {
         },
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span className="lc-ordernum">{t}</span> },
         ...orgColumn,
-        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: '#666' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
+        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
         {
             title: 'Дата погр.', key: 'pickupDate', width: 90,
             render: (_: any, r: Order) => {
                 const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
                 const date = (pickupPt as any)?.expectedDate;
-                return date ? <span style={{ fontSize: 11, color: '#333' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                return date ? <span style={{ fontSize: 11, color: 'var(--lc-text-sec)' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1364,7 +1324,7 @@ export default function CompanyOrdersPage() {
                                         placeholder="Статус" style={{ width: 120 }}
                                         value={filterStatus} onChange={setFilterStatus}
                                     >
-                                        {uniqueStatuses.map(s => <Select.Option key={s} value={s}>{statusLabels[s] || s}</Select.Option>)}
+                                        {uniqueStatuses.map(s => <Select.Option key={s} value={s}>{STATUS_LABELS[s] || s}</Select.Option>)}
                                     </Select>
                                     <Select
                                         size="small" allowClear showSearch optionFilterProp="children"
@@ -1666,7 +1626,7 @@ export default function CompanyOrdersPage() {
                 {selectedOrder && (
                     <div>
                         <div style={{ marginBottom: 16 }}>
-                            <Tag color={statusColors[selectedOrder.status]} style={{ fontSize: 13 }}>{statusLabels[selectedOrder.status]}</Tag>
+                            <Tag color={statusColors[selectedOrder.status]} style={{ fontSize: 13 }}>{STATUS_LABELS[selectedOrder.status]}</Tag>
                         </div>
 
                         <Title level={5}>Заказчик и Ответственный</Title>
@@ -1710,7 +1670,7 @@ export default function CompanyOrdersPage() {
                                     {pt.pointType === 'PICKUP' ? 'Погрузка' : 
                                      pt.pointType === 'ADDITIONAL_PICKUP' ? 'Доп. погрузка' : 'Выгрузка'}:
                                 </strong> {pt.location.name}
-                                <div style={{ color: '#666' }}>{pt.location.address}</div>
+                                <div style={{ color: 'var(--lc-text-ter)' }}>{pt.location.address}</div>
                             </div>
                         ))}
 
@@ -1814,7 +1774,7 @@ export default function CompanyOrdersPage() {
             <Modal title="Изменить статус" open={statusModalOpen} onCancel={() => setStatusModalOpen(false)} onOk={() => statusForm.submit()} okText="Обновить" cancelText="Отмена" confirmLoading={statusLoading}>
                 {selectedOrder && (
                     <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
-                        <div style={{ marginBottom: 16 }}>Текущий: <Tag color={statusColors[selectedOrder.status]}>{statusLabels[selectedOrder.status]}</Tag></div>
+                        <div style={{ marginBottom: 16 }}>Текущий: <Tag color={statusColors[selectedOrder.status]}>{STATUS_LABELS[selectedOrder.status]}</Tag></div>
                         <Form.Item name="status" label="Новый статус" rules={[{ required: true }]}>
                             <Select placeholder="Статус" size="large">
                                 {getNextStatuses(selectedOrder.status).map(s => <Select.Option key={s.value} value={s.value}>{s.label}</Select.Option>)}
