@@ -1157,7 +1157,7 @@ export default function CreateOrderPage() {
             )}
 
             {/* ===== WIZARD CARD ===== */}
-            <div className="lc-card" style={{ padding: '24px' }}>
+            <div className="lc-card" style={{ padding: '8px 8px 4px' }}>
             {currentStep < steps.length - 1 && <div style={{ marginBottom: 16, color: 'var(--lc-text-ter)', fontSize: 13 }}>Шаг {currentStep + 1} из {steps.length}</div>}
             <Steps
                 current={currentStep}
