@@ -1004,7 +1004,7 @@ export default function OrderDetailPage() {
         { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{dayjs(d).format('DD.MM.YY')}</Text> },
         { title: 'Категория', dataIndex: 'category', key: 'cat', width: 140, render: (c: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{incomeCategories.find(x => x.value === c)?.label || c}</Text> },
         { title: 'Описание', dataIndex: 'description', key: 'desc', ellipsis: true, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{d}</Text> },
-        { title: 'Сумма ₸', dataIndex: 'amount', key: 'amount', width: 120, align: 'right' as const, render: (a: number, r: any) => <Text delete={r.isDeleted} strong style={{ color: r.isDeleted ? '#bfbfbf' : '#389e0d' }}>{fmt(a)}</Text> },
+        { title: 'Сумма ₸', dataIndex: 'amount', key: 'amount', width: 120, align: 'right' as const, render: (a: number, r: any) => <Text delete={r.isDeleted} strong style={{ color: r.isDeleted ? 'var(--lc-text-ter)' : '#389e0d' }}>{fmt(a)}</Text> },
         { title: '', key: 'actions', width: 50, render: (_: any, r: any) => (
             !r.isDeleted && <Popconfirm title="Удалить?" onConfirm={() => handleDeleteIncome(r.id)} okText="Да" cancelText="Нет"><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm>
         )},
@@ -1014,7 +1014,7 @@ export default function OrderDetailPage() {
         { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{dayjs(d).format('DD.MM.YY')}</Text> },
         { title: 'Категория', dataIndex: 'category', key: 'cat', width: 140, render: (c: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{expenseCategories.find(x => x.value === c)?.label || c}</Text> },
         { title: 'Описание', dataIndex: 'description', key: 'desc', ellipsis: true, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{d}</Text> },
-        { title: 'Сумма ₸', dataIndex: 'amount', key: 'amount', width: 120, align: 'right' as const, render: (a: number, r: any) => <Text delete={r.isDeleted} strong style={{ color: r.isDeleted ? '#bfbfbf' : '#cf1322' }}>{fmt(a)}</Text> },
+        { title: 'Сумма ₸', dataIndex: 'amount', key: 'amount', width: 120, align: 'right' as const, render: (a: number, r: any) => <Text delete={r.isDeleted} strong style={{ color: r.isDeleted ? 'var(--lc-text-ter)' : '#cf1322' }}>{fmt(a)}</Text> },
         { title: '', key: 'actions', width: 50, render: (_: any, r: any) => (
             !r.isDeleted && <Popconfirm title="Удалить?" onConfirm={() => handleDeleteExpense(r.id)} okText="Да" cancelText="Нет"><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm>
         )},
@@ -1893,7 +1893,7 @@ export default function OrderDetailPage() {
                                                         </Text>
                                                     </div>
                                                     {h.comment && (
-                                                        <div style={{ fontSize: 13, color: '#555', marginTop: 4, background: '#f5f5f5', padding: '6px 12px', borderRadius: 4, display: 'inline-block' }}>
+                                                        <div style={{ fontSize: 13, color: 'var(--lc-text-sec)', marginTop: 4, background: 'var(--lc-hover)', padding: '6px 12px', borderRadius: 4, display: 'inline-block' }}>
                                                             {h.comment}
                                                         </div>
                                                     )}

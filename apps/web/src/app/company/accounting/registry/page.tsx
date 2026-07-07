@@ -327,7 +327,7 @@ export default function FinancialRegistryPage() {
         },
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 85,
-            render: (d: string) => <span style={{ fontSize: 11, color: '#64748b' }}>{dayjs(d).format('DD.MM.YY')}</span>,
+            render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{dayjs(d).format('DD.MM.YY')}</span>,
         },
         {
             title: 'Заказчик / Выручка', key: 'customer', width: 220,
@@ -531,7 +531,7 @@ export default function FinancialRegistryPage() {
                                 <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: m.valueColor || 'var(--lc-text)' }}>
                                     {typeof m.value === 'number' ? `${fmt(m.value)} ₸` : m.value}
                                 </div>
-                                <div className="lc2-msub" style={{ color: m.hintColor || '#8a91a0' }}>{m.hint}</div>
+                                <div className="lc2-msub" style={{ color: m.hintColor || 'var(--lc-text-ter)' }}>{m.hint}</div>
                             </div>
                         </div>
                     ))}

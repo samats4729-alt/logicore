@@ -408,7 +408,7 @@ export default function VehiclesPage() {
                 <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                     <Input
                         placeholder="Поиск по модели, госномеру, перевозчику..."
-                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                        prefix={<SearchOutlined style={{ color: 'var(--lc-text-ter)' }} />}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{ maxWidth: 400 }}

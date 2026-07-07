@@ -116,7 +116,7 @@ const sections: MenuSection[] = [
                 label: 'Счета и статьи',
                 description: 'Настройка расчетных счетов, касс и статей доходов/расходов',
                 icon: <SettingOutlined />,
-                color: '#64748b',
+                color: 'var(--lc-text-ter)',
                 href: '/company/accounting/settings',
             },
         ],
@@ -171,7 +171,7 @@ export default function CompanyAccountingPage() {
                         Финансовое состояние платформы и аналитика
                     </p>
                     <Space direction="horizontal" size={8}>
-                        <CalendarOutlined style={{ color: '#8c8c8c' }} />
+                        <CalendarOutlined style={{ color: 'var(--lc-text-ter)' }} />
                         <RangePicker
                             value={dates}
                             onChange={(val) => setDates(val as any)}
@@ -280,7 +280,7 @@ export default function CompanyAccountingPage() {
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                 {sections.map((section) => (
                     <div key={section.title} style={{ flex: '1 1 300px', minWidth: 300, marginBottom: 20 }}>
-                        <h4 style={{ fontSize: 15, fontWeight: 600, color: '#1f2937', margin: '0 0 12px' }}>
+                        <h4 style={{ fontSize: 15, fontWeight: 600, color: 'var(--lc-text)', margin: '0 0 12px' }}>
                             {section.title}
                         </h4>
                         <div className="lc-card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -295,7 +295,7 @@ export default function CompanyAccountingPage() {
                                         padding: '16px 20px',
                                         cursor: 'pointer',
                                         transition: 'background 0.15s, transform 0.15s',
-                                        borderBottom: idx < section.items.length - 1 ? '1px solid #f0f0f0' : 'none',
+                                        borderBottom: idx < section.items.length - 1 ? '1px solid var(--lc-border)' : 'none',
                                     }}
                                     onMouseEnter={(e) => {
                                         e.currentTarget.style.background = '#f9fafb';
@@ -325,14 +325,14 @@ export default function CompanyAccountingPage() {
                                         {item.icon}
                                     </div>
                                     <div style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 14, fontWeight: 600, display: 'block', color: '#1f2937' }}>
+                                        <Text style={{ fontSize: 14, fontWeight: 600, display: 'block', color: 'var(--lc-text)' }}>
                                             {item.label}
                                         </Text>
                                         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
                                             {item.description}
                                         </Text>
                                     </div>
-                                    <RightOutlined style={{ color: '#bfbfbf', fontSize: 12 }} />
+                                    <RightOutlined style={{ color: 'var(--lc-text-ter)', fontSize: 12 }} />
                                 </div>
                             ))}
                         </div>

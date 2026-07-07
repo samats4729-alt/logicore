@@ -1507,8 +1507,8 @@ export default function CompanyUsersPage() {
                     </Col>
                     <Col xs={24} lg={6}>
                         <div className="lc-card" style={{ padding: 12, minHeight: 480, borderRadius: 16 }}>
-                            <div style={{ fontWeight: 600, color: '#374151', fontSize: 13, marginBottom: 12 }}>
-                                <UserOutlined style={{ marginRight: 6, color: '#6b7280' }} />
+                            <div style={{ fontWeight: 600, color: 'var(--lc-text)', fontSize: 13, marginBottom: 12 }}>
+                                <UserOutlined style={{ marginRight: 6, color: 'var(--lc-text-ter)' }} />
                                 Нераспределенные ({unassignedUsers.length})
                             </div>
                             <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 12 }}>
@@ -1551,7 +1551,7 @@ export default function CompanyUsersPage() {
                                                     {u.firstName[0]}
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontSize: 11, fontWeight: 600, color: '#1f2937' }}>
+                                                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--lc-text)' }}>
                                                         {u.lastName} {u.firstName}
                                                     </div>
                                                     <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 4px', lineHeight: '12px', height: '14px', borderRadius: 4 }}>

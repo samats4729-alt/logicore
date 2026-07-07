@@ -358,7 +358,7 @@ export default function CompanyTrackingPage() {
                             <div style={{
                                 fontSize: 14,
                                 fontWeight: 600,
-                                color: isDark ? 'rgba(255,255,255,0.85)' : '#09090b',
+                                color: isDark ? 'rgba(255,255,255,0.85)' : 'var(--lc-text)',
                                 marginBottom: 6,
                             }}>
                                 Нет активных рейсов
@@ -562,14 +562,14 @@ export default function CompanyTrackingPage() {
                 {popupInfo && (
                     <div style={{
                         position: 'absolute', right: 84, bottom: 24, zIndex: 5,
-                        background: '#fff', borderRadius: 12, border: '1px solid #e8e9ee',
+                        background: 'var(--lc-card)', borderRadius: 12, border: '1px solid var(--lc-border)',
                         boxShadow: '0 12px 32px -8px rgba(16,24,40,0.25)', padding: '12px 14px', minWidth: 220,
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                             <span style={{ fontWeight: 700, fontSize: 13 }}>{popupInfo.driverName}</span>
-                            <span style={{ cursor: 'pointer', color: '#98a1b2' }} onClick={() => setPopupInfo(null)}>✕</span>
+                            <span style={{ cursor: 'pointer', color: 'var(--lc-text-ter)' }} onClick={() => setPopupInfo(null)}>✕</span>
                         </div>
-                        <div style={{ fontSize: 12, color: '#5b6472', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <div style={{ fontSize: 12, color: 'var(--lc-text-sec)', display: 'flex', flexDirection: 'column', gap: 3 }}>
                             <span>Госномер: <b style={{ color: 'var(--lc-text)' }}>{popupInfo.vehiclePlate || '—'}</b></span>
                             {popupInfo.orderNumber && <span>Рейс: <b style={{ color: '#1677ff' }}>{popupInfo.orderNumber}</b></span>}
                             <span>Скорость: <b style={{ color: 'var(--lc-text)' }}>{Math.round(popupInfo.speed || 0)} км/ч</b></span>
