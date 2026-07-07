@@ -26,6 +26,7 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
+import StatusPill from '@/components/ui/StatusPill';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -1030,28 +1031,18 @@ export default function OrderDetailPage() {
     ];
 
     return (
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div className="lc-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
             {/* =================== HEADER =================== */}
-            <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 16, 
-                marginBottom: 24,
-                borderBottom: '1px solid var(--lc-border)',
-                paddingBottom: 16
-            }}>
+            <div className="lc2-hero" style={{ borderBottom: '1px solid var(--lc-border)', paddingBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} />
                     <div>
+                        <div className="lc-eyebrow">Заявки · Детали</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <Title level={4} style={{ margin: 0 }}>
+                            <h1 className="lc2-title" style={{ margin: 0 }}>
                                 Заявка {order.orderNumber}
-                            </Title>
-                            <Tag color={statusColors[order.status]} style={{ fontSize: 13, padding: '2px 10px', borderRadius: 4, margin: 0 }}>
-                                {statusLabels[order.status] || order.status}
-                            </Tag>
+                            </h1>
+                            <StatusPill status={order.status} />
                         </div>
                         <Text type="secondary" style={{ fontSize: 12 }}>
                             Создана {dayjs(order.createdAt).format('DD.MM.YYYY в HH:mm')}
