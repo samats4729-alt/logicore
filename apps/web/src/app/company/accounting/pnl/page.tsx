@@ -287,8 +287,8 @@ export default function PnLReportPage() {
             )}
 
             <style jsx global>{`
-                .spacer-row > td { background: #fcfcfc !important; height: 16px; border: none; padding: 0 !important; }
-                .total-accent-row > td { background: #fafafa !important; border-top: 1px solid #f0f0f0; border-bottom: 2px double #d9d9d9; }
+                .spacer-row > td { background: var(--lc-card-2) !important; height: 16px; border: none; padding: 0 !important; }
+                .total-accent-row > td { background: var(--lc-card-2) !important; border-top: 1px solid var(--lc-border); border-bottom: 2px double var(--lc-border); }
                 .final-accent-row > td { background: #f6ffed !important; border-top: 2px solid #b7eb8f; border-bottom: 2px solid #b7eb8f; }
             `}</style>
         </div>
