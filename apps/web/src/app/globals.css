@@ -81,6 +81,13 @@ body {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
+/* Тёмная тема для premium-card внутри кабинета (не трогает публичный отчёт) */
+[data-theme='dark'] .lc-page .premium-card {
+  background: var(--lc-card);
+  border-color: var(--lc-border);
+  color: var(--lc-text);
+}
+
 .premium-stat-label {
   font-size: 14px;
   font-weight: 500;
