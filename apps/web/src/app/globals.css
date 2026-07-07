@@ -123,6 +123,21 @@ body {
   background: var(--scrollbar-thumb-hover);
 }
 
+/* Тёмный скроллбар в таблицах antd */
+[data-theme='dark'] .ant-table-body::-webkit-scrollbar-thumb,
+[data-theme='dark'] .ant-table-content::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+[data-theme='dark'] .ant-table-body::-webkit-scrollbar-track,
+[data-theme='dark'] .ant-table-content::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+[data-theme='dark'] .ant-table-sticky-scroll-bar {
+  background: var(--scrollbar-thumb) !important;
+}
+
 /* Leaflet fix */
 .leaflet-container {
   height: 100%;
