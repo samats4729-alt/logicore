@@ -865,7 +865,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="hasVat" label="НДС заказчика" initialValue={false}>
-                                <Select size="large">
+                                <Select size="large" onChange={(val: boolean) => { if (!val) form.setFieldsValue({ vatRate: 0 }); }}>
                                     <Select.Option value={false}>Без НДС</Select.Option>
                                     <Select.Option value={true}>С НДС</Select.Option>
                                 </Select>
@@ -893,7 +893,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="executorHasVat" label="НДС перевозчика" initialValue={false}>
-                                <Select size="large">
+                                <Select size="large" onChange={(val: boolean) => { if (!val) form.setFieldsValue({ executorVatRate: 0 }); }}>
                                     <Select.Option value={false}>Без НДС</Select.Option>
                                     <Select.Option value={true}>С НДС</Select.Option>
                                 </Select>
