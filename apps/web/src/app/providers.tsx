@@ -13,6 +13,7 @@ const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 
 function AntdConfig({ children }: { children: React.ReactNode }) {
     const { theme: currentTheme } = useTheme();
+    const isDark = currentTheme === 'dark';
 
     const algorithm = useMemo(() => {
         if (currentTheme === 'dark') return [theme.darkAlgorithm, theme.compactAlgorithm];
@@ -31,13 +32,16 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                         borderRadius: 10,
                         fontFamily: FONT_STACK,
                         fontSize: 13,
-                        colorText: '#18181b',
-                        colorTextSecondary: '#52525b',
-                        colorTextTertiary: '#a1a1aa',
-                        colorBorder: '#e4e4e7',
-                        colorBorderSecondary: '#ececf0',
-                        colorBgLayout: '#f6f7f9',
                         controlHeight: 32,
+                        // Нейтральные цвета — только для светлой темы; в тёмной их даёт darkAlgorithm
+                        ...(isDark ? {} : {
+                            colorText: '#18181b',
+                            colorTextSecondary: '#52525b',
+                            colorTextTertiary: '#a1a1aa',
+                            colorBorder: '#e4e4e7',
+                            colorBorderSecondary: '#ececf0',
+                            colorBgLayout: '#f6f7f9',
+                        }),
                     },
                     components: {
                         Button: {
