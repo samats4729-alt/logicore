@@ -17,6 +17,7 @@ import {
     SettingOutlined,
     DollarOutlined,
     CarOutlined,
+    DatabaseOutlined,
     ApartmentOutlined,
     CompassOutlined,
     HomeOutlined,
@@ -176,7 +177,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // --- МОНИТОРИНГ (бывш. «Логистика») ---
+        // --- МОНИТОРИНГ ---
         const monitoringChildren: any[] = [];
         if (hasPerm('tracking')) {
             monitoringChildren.push({
@@ -202,84 +203,140 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // --- ФИНАНСЫ ---
+        // --- СПРАВОЧНИКИ (бывш. «Транспорт»: контрагенты, договоры, адреса, автопарк, документы) ---
+        const directoryChildren: any[] = [];
+        if (hasPerm('partners')) {
+            directoryChildren.push({
+                key: '/company/partners',
+                icon: <TeamOutlined />,
+                label: 'Контрагенты',
+            });
+            directoryChildren.push({
+                key: '/company/contracts',
+                icon: <FileProtectOutlined />,
+                label: 'Договоры',
+            });
+        }
+        directoryChildren.push({
+            key: '/company/locations',
+            icon: <PushpinOutlined />,
+            label: 'Адреса',
+        });
+        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            directoryChildren.push({
+                key: '/company/vehicles',
+                icon: <CarOutlined />,
+                label: 'Автопарк',
+            });
+        }
+        if (hasPerm('documents')) {
+            directoryChildren.push({
+                key: '/company/documents',
+                icon: <InboxOutlined />,
+                label: 'Документы',
+            });
+        }
+        items.push({
+            key: 'directory_group',
+            popupClassName: 'lc-nav-pop',
+            icon: <DatabaseOutlined />,
+            label: 'Справочники',
+            children: directoryChildren,
+        });
+
+        // --- ФИНАНСЫ (секции: Операции / Отчёты / Инструменты) ---
         const financeChildren: any[] = [];
         if (hasPerm('accounting')) {
             financeChildren.push({
-                key: '/company/accounting',
-                icon: <BarChartOutlined />,
-                label: 'Бухгалтерия',
-            });
-            financeChildren.push({ type: 'divider' });
-            financeChildren.push({
-                key: '/company/accounting/registry',
-                icon: <ArrowUpOutlined />,
-                label: 'Реестр заявок',
-            });
-            financeChildren.push({
-                key: '/company/accounting/incomes',
-                icon: <ArrowUpOutlined />,
-                label: 'Поступления',
-            });
-            financeChildren.push({
-                key: '/company/accounting/expenses',
-                icon: <ArrowDownOutlined />,
-                label: 'Расходы',
-            });
-            financeChildren.push({ type: 'divider' });
-            financeChildren.push({
-                key: '/company/accounting/cashflow',
-                icon: <FileExcelOutlined />,
-                label: 'ДДС',
-            });
-            financeChildren.push({
-                key: '/company/accounting/pnl',
-                icon: <RiseOutlined />,
-                label: 'P&L',
+                type: 'group',
+                label: 'Операции',
+                children: [
+                    {
+                        key: '/company/accounting/invoices',
+                        icon: <FileOutlined />,
+                        label: 'Счета',
+                    },
+                    {
+                        key: '/company/accounting/incomes',
+                        icon: <ArrowUpOutlined />,
+                        label: 'Поступления',
+                    },
+                    {
+                        key: '/company/accounting/expenses',
+                        icon: <ArrowDownOutlined />,
+                        label: 'Расходы',
+                    },
+                    {
+                        key: '/company/accounting/registry',
+                        icon: <ArrowUpOutlined />,
+                        label: 'Реестр заявок',
+                    },
+                ],
             });
             financeChildren.push({
-                key: '/company/accounting/counterparty-report',
-                icon: <TeamOutlined />,
-                label: 'Взаиморасчёты',
-            });
-            if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-                financeChildren.push({
-                    key: '/company/payroll',
-                    icon: <DollarOutlined />,
-                    label: 'Зарплата',
-                });
-            }
-            financeChildren.push({ type: 'divider' });
-            financeChildren.push({
-                key: '/company/accounting/invoices',
-                icon: <FileOutlined />,
-                label: 'Счета',
-            });
-            financeChildren.push({
-                key: '/company/accounting/settings',
-                icon: <SettingOutlined />,
-                label: 'Статьи',
-            });
-            financeChildren.push({
-                key: '/company/reports',
-                icon: <BarChartOutlined />,
+                type: 'group',
                 label: 'Отчёты',
+                children: [
+                    {
+                        key: '/company/accounting',
+                        icon: <BarChartOutlined />,
+                        label: 'Бухгалтерия',
+                    },
+                    {
+                        key: '/company/accounting/cashflow',
+                        icon: <FileExcelOutlined />,
+                        label: 'ДДС',
+                    },
+                    {
+                        key: '/company/accounting/pnl',
+                        icon: <RiseOutlined />,
+                        label: 'P&L',
+                    },
+                    {
+                        key: '/company/accounting/counterparty-report',
+                        icon: <TeamOutlined />,
+                        label: 'Взаиморасчёты',
+                    },
+                    {
+                        key: '/company/reports',
+                        icon: <BarChartOutlined />,
+                        label: 'Отчёты',
+                    },
+                ],
             });
         }
-        // Калькулятор и Моя зарплата — в группу Финансы (доступны без бухгалтерского разрешения)
+        // Инструменты: зарплата, калькулятор, статьи (калькулятор доступен всем)
+        const financeTools: any[] = [];
+        if (hasPerm('accounting') && ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            financeTools.push({
+                key: '/company/payroll',
+                icon: <DollarOutlined />,
+                label: 'Зарплата',
+            });
+        }
         if (user.role === 'LOGISTICIAN') {
-            if (financeChildren.length > 0) financeChildren.push({ type: 'divider' });
-            financeChildren.push({
+            financeTools.push({
                 key: '/company/my-salary',
                 icon: <DollarOutlined />,
                 label: 'Моя зарплата',
             });
         }
-        if (financeChildren.length > 0) financeChildren.push({ type: 'divider' });
-        financeChildren.push({
+        financeTools.push({
             key: '/company/calculator',
             icon: <CalculatorOutlined />,
             label: 'Калькулятор',
+        });
+        if (hasPerm('accounting')) {
+            financeTools.push({
+                key: '/company/accounting/settings',
+                icon: <SettingOutlined />,
+                label: 'Статьи',
+            });
+        }
+        financeChildren.push({
+            type: 'group',
+            label: 'Инструменты',
+            children: financeTools,
         });
 
         items.push({
@@ -290,55 +347,27 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             children: financeChildren,
         });
 
-        // --- ТРАНСПОРТ (бывш. «Компания») ---
-        const transportChildren: any[] = [];
+        // --- КОМПАНИЯ (сотрудники, настройки) ---
+        const companyChildren: any[] = [];
         if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            transportChildren.push({
-                key: '/company/vehicles',
-                icon: <CarOutlined />,
-                label: 'Автопарк',
-            });
-        }
-        if (hasPerm('partners')) {
-            transportChildren.push({
-                key: '/company/partners',
-                icon: <TeamOutlined />,
-                label: 'Контрагенты',
-            });
-            transportChildren.push({
-                key: '/company/contracts',
-                icon: <FileProtectOutlined />,
-                label: 'Договоры',
-            });
-        }
-        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            transportChildren.push({
+            companyChildren.push({
                 key: '/company/users',
                 icon: <UserSwitchOutlined />,
                 label: 'Сотрудники',
             });
         }
-        transportChildren.push({
-            key: '/company/locations',
-            icon: <PushpinOutlined />,
-            label: 'Адреса',
+        companyChildren.push({
+            key: '/company/settings',
+            icon: <SettingOutlined />,
+            label: 'Настройки',
         });
-        if (hasPerm('documents')) {
-            transportChildren.push({
-                key: '/company/documents',
-                icon: <InboxOutlined />,
-                label: 'Документы',
-            });
-        }
-        if (transportChildren.length > 0) {
-            items.push({
-                key: 'transport_group',
-                popupClassName: 'lc-nav-pop',
-                icon: <CarOutlined />,
-                label: 'Транспорт',
-                children: transportChildren,
-            });
-        }
+        items.push({
+            key: 'company_group',
+            popupClassName: 'lc-nav-pop',
+            icon: <ApartmentOutlined />,
+            label: 'Компания',
+            children: companyChildren,
+        });
 
         return items;
     };
@@ -472,6 +501,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     <nav className="lc2-nav">
                         {getMenuItems().map((item: any) => {
                             const childKeys: string[] = (item.children || [])
+                                .flatMap((c: any) => (c?.type === 'group' && Array.isArray(c.children)) ? c.children : [c])
                                 .filter((c: any) => c?.key && String(c.key).startsWith('/'))
                                 .map((c: any) => String(c.key));
                             const active = item.key === '/company'
