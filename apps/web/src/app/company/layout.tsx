@@ -41,6 +41,7 @@ import AiButton from '@/components/ui/AiButton';
 import { LiveEventTicker } from '@/components/ui/LiveTicker';
 import GlobalSearch from '@/components/ui/GlobalSearch';
 import UserAvatar from '@/components/UserAvatar';
+import PaywallScreen from '@/components/PaywallScreen';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -65,6 +66,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     const [isMobile, setIsMobile] = useState(false);
     const [hydrated, setHydrated] = useState(false);
     const [hasNewUpdates, setHasNewUpdates] = useState(false);
+    const [billingStatus, setBillingStatus] = useState<any>(null);
     const { theme, setTheme } = useTheme();
 
     useEffect(() => {
@@ -109,6 +111,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         window.addEventListener('logicore:open-mobile-menu', openMenu);
         return () => window.removeEventListener('logicore:open-mobile-menu', openMenu);
     }, []);
+
+    // Статус подписки компании (пока биллинг выключен — ответ {enabled: false})
+    useEffect(() => {
+        if (!user?.companyId) return;
+        api.get('/billing/status')
+            .then((res) => setBillingStatus(res.data))
+            .catch(() => setBillingStatus(null));
+    }, [user?.companyId]);
 
     // Дожидаемся гидратации хранилища Zustand из localStorage
     useEffect(() => {
@@ -642,7 +652,19 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         overflow: 'auto',
                     }}
                 >
-                    {children}
+                    {billingStatus?.enabled && billingStatus?.blocked ? (
+                        <PaywallScreen status={billingStatus} />
+                    ) : (
+                        <>
+                            {billingStatus?.enabled && !billingStatus?.blocked && billingStatus?.status === 'TRIAL' && billingStatus?.trialEndsAt && (
+                                <div className="lc-trial-banner">
+                                    Пробный период до {new Date(billingStatus.trialEndsAt).toLocaleDateString('ru-RU')} — осталось{' '}
+                                    {Math.max(0, Math.ceil((new Date(billingStatus.trialEndsAt).getTime() - Date.now()) / 86400000))} дн.
+                                </div>
+                            )}
+                            {children}
+                        </>
+                    )}
                 </Content>
             </Layout>
 

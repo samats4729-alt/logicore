@@ -201,7 +201,8 @@ model Company {
   receivedInvoices   Invoice[]         @relation("InvoiceRecipient")
   userCompanyRelations UserCompanyRelation[]
   documents          Document[]
-  
+  subscription       CompanySubscription?
+
   @@index([bin])
 }
 
@@ -1098,4 +1099,54 @@ model PayrollAccrual {
   @@unique([userId, periodMonth, kind, kpiRuleId]) // защита для SALARY/KPI за месяц
   @@index([companyId, periodMonth])
   @@index([userId, periodMonth])
+}
+
+// ==================== БИЛЛИНГ (подписки компаний) ====================
+
+// Глобальные настройки платформы (ключ-значение)
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model SubscriptionPlan {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  priceMonthly      Int      // тенге в месяц
+  currency          String   @default("KZT")
+  maxUsers          Int?     // null = без лимита
+  maxOrdersPerMonth Int?     // null = без лимита
+  features          String[] @default([])
+  isActive          Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  subscriptions CompanySubscription[]
+}
+
+enum SubscriptionStatus {
+  TRIAL     // Пробный период
+  ACTIVE    // Оплачена
+  PAST_DUE  // Просрочена
+  CANCELLED // Отменена
+}
+
+model CompanySubscription {
+  id          String             @id @default(cuid())
+  companyId   String             @unique
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId      String?
+  plan        SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: SetNull)
+  status      SubscriptionStatus @default(TRIAL)
+  trialEndsAt DateTime?
+  periodStart DateTime?
+  periodEnd   DateTime?
+  note        String?            // Комментарий админа (№ счёта, детали оплаты)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([status])
 }
