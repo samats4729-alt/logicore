@@ -8,6 +8,7 @@ import { CompanyDriversService } from './services/company-drivers.service';
 import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole } from '@prisma/client';
 import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto, GetCompanyUsersQueryDto, CreateVehicleDto, UpdateVehicleDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
@@ -17,7 +18,7 @@ import * as fs from 'fs';
 
 @ApiTags('company')
 @Controller('company')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class CompanyController {
     constructor(
@@ -266,6 +267,7 @@ export class CompanyController {
 
     @Put('orders/:id/status')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Обновить статус заявки' })
     async updateOrderStatus(
         @Param('id') id: string,
@@ -277,6 +279,7 @@ export class CompanyController {
 
     @Put('orders/:id/confirm-completion')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Подтвердить завершение рейса' })
     async confirmOrderStatusCompletion(@Param('id') id: string, @Request() req: any) {
         return this.ordersService.confirmCompletion(id, req.user.companyId, req.user.sub);
@@ -284,6 +287,7 @@ export class CompanyController {
 
     @Put('orders/:id/reject-completion')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Отклонить завершение рейса' })
     async rejectOrderStatusCompletion(
         @Param('id') id: string,
@@ -295,6 +299,7 @@ export class CompanyController {
 
     @Put('orders/:id/cancel-completion')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Отменить запрос на завершение рейса' })
     async cancelOrderStatusCompletionRequest(@Param('id') id: string, @Request() req: any) {
         return this.ordersService.cancelCompletionRequest(id, req.user.companyId, req.user.sub);
@@ -302,6 +307,7 @@ export class CompanyController {
 
     @Put('orders/:id/accept')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Принять заявку в работу' })
     async acceptOrder(@Param('id') id: string, @Request() req: any) {
         return this.ordersService.acceptOrder(id, req.user.companyId);
@@ -309,6 +315,7 @@ export class CompanyController {
 
     @Put('orders/:id/reject')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Отклонить заявку' })
     async rejectOrder(@Param('id') id: string, @Request() req: any) {
         return this.ordersService.rejectOrder(id, req.user.companyId);
@@ -316,6 +323,7 @@ export class CompanyController {
 
     @Put('orders/:id/take')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Взять заявку в работу с биржи' })
     async takeOrder(@Param('id') id: string, @Request() req: any) {
         return this.ordersService.takeOrder(id, req.user.companyId);
@@ -323,6 +331,7 @@ export class CompanyController {
 
     @Put('orders/:id/assign-driver')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Назначить водителя на заявку' })
     async assignDriver(
         @Param('id') id: string,
@@ -338,6 +347,7 @@ export class CompanyController {
 
     @Put('orders/:id/assign-forwarder')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders')
     @ApiOperation({ summary: 'Назначить партнера экспедитором' })
     async assignForwarder(
         @Param('id') id: string,
@@ -363,6 +373,7 @@ export class CompanyController {
 
     @Post('drivers')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders', 'drivers', 'partners')
     @ApiOperation({ summary: 'Создать водителя в своей компании' })
     async createDriver(@Request() req: any, @Body() dto: CreateDriverDto) {
         const { companyId, ...restDto } = dto;
@@ -377,6 +388,7 @@ export class CompanyController {
 
     @Put('drivers/:id')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders', 'drivers', 'partners')
     @ApiOperation({ summary: 'Обновить данные водителя' })
     async updateDriver(
         @Request() req: any,
@@ -393,6 +405,7 @@ export class CompanyController {
 
     @Delete('drivers/:id')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @RequirePermissions('orders', 'drivers', 'partners')
     @ApiOperation({ summary: 'Деактивировать водителя' })
     async deleteDriver(@Request() req: any, @Param('id') driverId: string) {
         return this.companyDriversService.deactivateDriver(driverId, req.user.companyId);

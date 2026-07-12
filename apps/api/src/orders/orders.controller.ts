@@ -5,6 +5,7 @@ import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { CreateOrderDto, UpdateStatusDto, AssignDriverDto } from './dto/order.dto';
 import { UserRole, OrderStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
@@ -13,7 +14,8 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('orders')
 @Controller('orders')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@RequirePermissions('orders')
 @ApiBearerAuth()
 export class OrdersController {
     constructor(

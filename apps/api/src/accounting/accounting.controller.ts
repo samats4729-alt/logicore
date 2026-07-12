@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Qu
 import { AccountingService } from './accounting.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole, PaymentDirection } from '@prisma/client';
 import { EmailService } from '../email/email.service';
 import { Response } from 'express';
@@ -10,7 +11,8 @@ const FINANCE_VIEW_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACC
 const FINANCE_CHANGE_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT];
 
 @Controller('accounting')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@RequirePermissions('accounting')
 export class AccountingController {
     constructor(
         private readonly accountingService: AccountingService,
@@ -21,6 +23,7 @@ export class AccountingController {
 
     @Get('orders/:id/financials')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions('accounting', 'orders')
     async getOrderFinancials(@Request() req: any, @Param('id') id: string) {
         return this.accountingService.getOrderFinancials(req.user.companyId, id);
     }
@@ -199,6 +202,7 @@ export class AccountingController {
 
     @Get('payments/order/:orderId')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions('accounting', 'orders')
     async getPaymentsByOrder(@Request() req: any, @Param('orderId') orderId: string) {
         return this.accountingService.getPaymentsByOrder(req.user.companyId, orderId);
     }
@@ -297,6 +301,7 @@ export class AccountingController {
 
     @Get('finance-accounts')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions('accounting', 'orders')
     async getFinanceAccounts(@Request() req: any) {
         return this.accountingService.getFinanceAccounts(req.user.companyId);
     }
@@ -315,6 +320,7 @@ export class AccountingController {
 
     @Get('finance-categories')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions('accounting', 'orders')
     async getFinanceCategories(@Request() req: any) {
         return this.accountingService.getFinanceCategories(req.user.companyId);
     }

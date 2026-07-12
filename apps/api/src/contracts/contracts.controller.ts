@@ -5,11 +5,13 @@ import { ContractPdfService } from './contract-pdf.service';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole } from '@prisma/client';
 
 @ApiTags('contracts')
 @Controller('contracts')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@RequirePermissions('partners')
 @ApiBearerAuth()
 export class ContractsController {
     constructor(
@@ -52,6 +54,7 @@ export class ContractsController {
 
     @Get('tariff-lookup')
     @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @RequirePermissions('partners', 'orders')
     @ApiOperation({ summary: 'Поиск тарифа по маршруту' })
     async lookupTariff(
         @Query('originCity') originCity: string,

@@ -8,11 +8,13 @@ import { DocumentsService } from './documents.service';
 import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole, DocumentType } from '@prisma/client';
 
 @ApiTags('documents')
 @Controller('documents')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@RequirePermissions('documents', 'orders')
 @ApiBearerAuth()
 export class DocumentsController {
     constructor(

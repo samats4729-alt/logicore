@@ -113,7 +113,7 @@ export class AuthService {
     }
 
     async findUserById(userId: string) {
-        return this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, isActive: true } });
+        return this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, isActive: true, permissions: true } });
     }
 
     /**
