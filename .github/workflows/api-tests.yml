@@ -61,6 +61,9 @@ jobs:
           pnpm --filter api prisma:push --accept-data-loss
           pnpm --filter api prisma:seed
 
+      - name: Run Unit Tests (financial logic)
+        run: pnpm --filter api test
+
       - name: Start API Server
         env:
           DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
