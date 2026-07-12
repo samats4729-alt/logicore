@@ -58,9 +58,9 @@ export class OrdersController {
 
     @Get('my')
     @Roles(UserRole.DRIVER)
-    @ApiOperation({ summary: 'Мои заявки (для водителя)' })
-    async myOrders(@Request() req: any) {
-        return this.ordersService.findDriverOrders(req.user.sub);
+    @ApiOperation({ summary: 'Мои заявки (для водителя); history=1 — включая завершённые' })
+    async myOrders(@Request() req: any, @Query('history') history?: string) {
+        return this.ordersService.findDriverOrders(req.user.sub, history === '1');
     }
 
     @Get(':id/power-of-attorney')

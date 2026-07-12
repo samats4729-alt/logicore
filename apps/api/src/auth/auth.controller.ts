@@ -22,6 +22,18 @@ export class AuthController {
         return this.authService.loginWithEmail(dto.email, dto.password, dto.deviceId);
     }
 
+    // ==================== Вход водителя (мобильное приложение) ====================
+
+    @Post('driver-login')
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Вход водителя по телефону и паролю' })
+    @ApiResponse({ status: 200, description: 'Успешная авторизация' })
+    @ApiResponse({ status: 401, description: 'Неверные учетные данные' })
+    async loginDriver(@Body() dto: { phone: string; password: string; deviceId: string }) {
+        return this.authService.loginDriver(dto.phone, dto.password, dto.deviceId);
+    }
+
     // ==================== Logout ====================
 
     @Post('logout')

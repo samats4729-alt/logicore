@@ -978,26 +978,30 @@ export class OrdersService implements OnModuleInit {
     /**
      * Заявки для водителя (текущие)
      */
-    async findDriverOrders(driverId: string) {
+    async findDriverOrders(driverId: string, includeHistory = false) {
+        const activeStatuses = [
+            OrderStatus.ASSIGNED,
+            OrderStatus.EN_ROUTE_PICKUP,
+            OrderStatus.AT_PICKUP,
+            OrderStatus.LOADING,
+            OrderStatus.IN_TRANSIT,
+            OrderStatus.AT_DELIVERY,
+            OrderStatus.UNLOADING,
+        ];
+        const statuses = includeHistory
+            ? [...activeStatuses, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.PROBLEM]
+            : activeStatuses;
+
         const orders = await this.prisma.order.findMany({
             where: {
                 driverId,
-                status: {
-                    in: [
-                        OrderStatus.ASSIGNED,
-                        OrderStatus.EN_ROUTE_PICKUP,
-                        OrderStatus.AT_PICKUP,
-                        OrderStatus.LOADING,
-                        OrderStatus.IN_TRANSIT,
-                        OrderStatus.AT_DELIVERY,
-                        OrderStatus.UNLOADING,
-                    ],
-                },
+                status: { in: statuses },
             },
             include: {
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
             },
             orderBy: { createdAt: 'desc' },
+            take: includeHistory ? 50 : undefined,
         });
         return orders;
     }

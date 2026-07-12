@@ -103,6 +103,68 @@ export class AuthService {
     }
 
     /**
+     * Вход водителя по телефону и паролю (мобильное приложение).
+     * Пароль водителю задаёт компания в карточке водителя.
+     */
+    async loginDriver(
+        phone: string,
+        password: string,
+        deviceId: string,
+    ): Promise<{ accessToken: string; user: any }> {
+        const normalizedPhone = (phone || '').replace(/[\s\-()]/g, '');
+
+        const user = await this.prisma.user.findFirst({
+            where: {
+                phone: normalizedPhone,
+                role: 'DRIVER',
+                isActive: true,
+            },
+            include: { company: true },
+        });
+
+        if (!user || !user.passwordHash) {
+            throw new UnauthorizedException('Неверный телефон или пароль. Пароль выдаёт ваша компания.');
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+        if (!isPasswordValid) {
+            throw new UnauthorizedException('Неверный телефон или пароль');
+        }
+
+        // Single Session Policy — как в loginWithEmail
+        try {
+            const existingSession = await this.redisService.getSession(user.id);
+            if (existingSession && existingSession.deviceId !== deviceId) {
+                await this.prisma.session.deleteMany({ where: { userId: user.id } });
+            }
+        } catch (e) {
+            console.warn('Redis getSession failed (ignoring):', e);
+        }
+
+        const payload = { sub: user.id, email: user.email, role: user.role, companyId: user.companyId };
+        const accessToken = this.jwtService.sign(payload);
+        const expiresIn = 60 * 60 * 24 * 7;
+
+        try {
+            await this.redisService.setSession(user.id, deviceId, accessToken, expiresIn);
+        } catch (e) {
+            console.warn('Redis setSession failed (ignoring):', e);
+        }
+
+        await this.prisma.session.create({
+            data: {
+                userId: user.id,
+                deviceId,
+                token: accessToken,
+                expiresAt: new Date(Date.now() + expiresIn * 1000),
+            },
+        });
+
+        const { passwordHash: _driverPwdHash, ...userWithoutPassword } = user;
+        return { accessToken, user: userWithoutPassword };
+    }
+
+    /**
      * Выход (удаление сессии)
      */
     async logout(userId: string): Promise<void> {

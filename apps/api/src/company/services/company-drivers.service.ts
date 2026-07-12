@@ -68,6 +68,7 @@ export class CompanyDriversService {
         lastName: string;
         middleName?: string;
         phone: string;
+        password?: string;
         iin?: string;
         vehicleType?: string;
         vehiclePlate?: string;
@@ -95,6 +96,10 @@ export class CompanyDriversService {
             }
         }
 
+        // Пароль для мобильного приложения хранится только в виде хеша
+        const { password, ...driverData } = data;
+        const passwordHash = password ? await bcrypt.hash(password, 12) : undefined;
+
         // Проверяем, существует ли водитель с таким телефоном или ИИН в рамках данной компании
         const orConditions: any[] = [{ phone: data.phone }];
         if (data.iin) {
@@ -114,7 +119,8 @@ export class CompanyDriversService {
             const updated = await this.prisma.user.update({
                 where: { id: existing.id },
                 data: {
-                    ...data,
+                    ...driverData,
+                    ...(passwordHash ? { passwordHash } : {}),
                     isActive: true,
                 },
                 select: this.driverSelect,
@@ -145,7 +151,8 @@ export class CompanyDriversService {
         return this.prisma.$transaction(async (tx) => {
             const user = await tx.user.create({
                 data: {
-                    ...data,
+                    ...driverData,
+                    ...(passwordHash ? { passwordHash } : {}),
                     role: UserRole.DRIVER,
                     companyId,
                     departmentId: driversDept.id,
@@ -173,6 +180,7 @@ export class CompanyDriversService {
         driverId: string,
         companyId: string,
         data: {
+            password?: string;
             firstName?: string;
             lastName?: string;
             middleName?: string;
@@ -211,10 +219,16 @@ export class CompanyDriversService {
         if (!hasAccess) {
             throw new ForbiddenException('У вас нет доступа к этому водителю');
         }
- 
+
+        const { password, ...updateData } = data;
+        const passwordHash = password ? await bcrypt.hash(password, 12) : undefined;
+
         return this.prisma.user.update({
             where: { id: driverId },
-            data,
+            data: {
+                ...updateData,
+                ...(passwordHash ? { passwordHash } : {}),
+            },
             select: this.driverSelect,
         });
     }

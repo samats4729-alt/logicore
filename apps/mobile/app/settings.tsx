@@ -1,12 +1,43 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
 import { useStore } from '@/store';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { api } from '@/lib/api';
 
 export default function SettingsScreen() {
-    const { mapTheme, setMapTheme } = useStore();
+    const { mapTheme, setMapTheme, currentOrder } = useStore();
     const { colors } = useAppTheme();
+
+    // Диагностика GPS: права → сервисы → координаты → отправка на сервер
+    const checkGps = async () => {
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Нет прав', 'Разрешите доступ к местоположению: Настройки телефона → Приложения → LogiCore Driver → Разрешения.');
+                return;
+            }
+            const enabled = await Location.hasServicesEnabledAsync();
+            if (!enabled) {
+                Alert.alert('GPS выключен', 'Включите геолокацию в шторке телефона.');
+                return;
+            }
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            await api.post('/tracking/gps', {
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+                accuracy: loc.coords.accuracy,
+                speed: loc.coords.speed,
+                heading: loc.coords.heading,
+                orderId: currentOrder?.id,
+                recordedAt: new Date().toISOString(),
+            });
+            Alert.alert('GPS работает', `Координаты получены и отправлены на сервер.\n${loc.coords.latitude.toFixed(5)}, ${loc.coords.longitude.toFixed(5)}`);
+        } catch (e: any) {
+            Alert.alert('Ошибка GPS', e.message || 'Не удалось получить координаты');
+        }
+    };
 
     const options = [
         { label: 'Автоматически (по времени)', value: 'auto', icon: 'time-outline' },
@@ -45,6 +76,19 @@ export default function SettingsScreen() {
                             )}
                         </View>
                     ))}
+                </View>
+            </View>
+
+            <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Диагностика</Text>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <TouchableOpacity style={styles.option} onPress={checkGps}>
+                        <View style={styles.optionLeft}>
+                            <Ionicons name="navigate-circle-outline" size={24} color={colors.text} />
+                            <Text style={[styles.optionText, { color: colors.text }]}>Проверить GPS</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
                 </View>
             </View>
         </View>

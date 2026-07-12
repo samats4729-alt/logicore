@@ -83,6 +83,16 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
+                name="orders"
+                options={{
+                    title: 'Рейсы',
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="documents" size={size} color={color} />
+                    ),
+                    headerTitle: 'Мои рейсы',
+                }}
+            />
+            <Tabs.Screen
                 name="profile"
                 options={{
                     title: 'Профиль',

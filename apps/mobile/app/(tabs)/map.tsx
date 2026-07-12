@@ -7,6 +7,7 @@ import { Image } from 'react-native';
 import * as Location from 'expo-location';
 import { useStore } from '@/store';
 import { featureCollection, point, lineString } from '@turf/helpers';
+import { statusMeta } from '@/lib/theme';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
 Mapbox.setAccessToken(MAPBOX_TOKEN);
@@ -128,7 +129,32 @@ export default function MapScreen() {
     // Prepare Route Line
     const routeCoordinates = currentOrder?.routePoints?.map(p => [p.location.longitude, p.location.latitude]) || [];
 
-    const routeFeature = routeCoordinates.length > 1 ? lineString(routeCoordinates) : null;
+    // Маршрут по дорогам через Mapbox Directions (фолбэк — прямые линии между точками)
+    const [roadRoute, setRoadRoute] = useState<number[][] | null>(null);
+
+    useEffect(() => {
+        let alive = true;
+        setRoadRoute(null);
+        if (routeCoordinates.length < 2 || routeCoordinates.length > 25) return;
+
+        const coordsStr = routeCoordinates.map(c => `${c[0]},${c[1]}`).join(';');
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                const geometry = data?.routes?.[0]?.geometry?.coordinates;
+                if (alive && Array.isArray(geometry) && geometry.length > 1) {
+                    setRoadRoute(geometry);
+                }
+            })
+            .catch(() => { /* остаёмся на прямых линиях */ });
+
+        return () => { alive = false; };
+    }, [JSON.stringify(routeCoordinates)]);
+
+    const lineCoords = roadRoute || routeCoordinates;
+    const routeFeature = lineCoords.length > 1 ? lineString(lineCoords) : null;
 
     // Truck location feature
     const truckFeature = useMemo(() => userLocation ? point(userLocation) : null, [userLocation]);
@@ -184,32 +210,50 @@ export default function MapScreen() {
                     </Mapbox.ShapeSource>
                 )}
 
-                {/* Route Markers */}
-                {currentOrder?.routePoints?.map((point, index) => (
-                    <Mapbox.PointAnnotation
-                        key={`${point.pointType}-${point.sequence}`}
-                        id={`point-${point.sequence}`}
-                        coordinate={[point.location.longitude, point.location.latitude]}
-                    >
-                        <View style={[styles.marker, { backgroundColor: point.pointType === 'DELIVERY' ? 'red' : 'green' }]} />
-                        <Mapbox.Callout title={point.pointType === 'DELIVERY' ? `Выгрузка ${index}` : point.pointType === 'PICKUP' ? 'Погрузка' : `Доп. погрузка ${index}`} />
-                    </Mapbox.PointAnnotation>
-                ))}
-
-                {/* Route Line */}
+                {/* Route Line — под маркерами */}
                 {routeFeature && (
                     <Mapbox.ShapeSource id="routeSource" shape={routeFeature}>
+                        <Mapbox.LineLayer
+                            id="routeCasing"
+                            style={{
+                                lineColor: 'rgba(11, 13, 18, 0.35)',
+                                lineWidth: 7,
+                                lineCap: 'round',
+                                lineJoin: 'round',
+                            }}
+                        />
                         <Mapbox.LineLayer
                             id="routeFill"
                             style={{
                                 lineColor: '#1677ff',
-                                lineWidth: 3,
+                                lineWidth: 4,
                                 lineCap: 'round',
                                 lineJoin: 'round',
                             }}
                         />
                     </Mapbox.ShapeSource>
                 )}
+
+                {/* Route Markers — фирменные пилюли */}
+                {currentOrder?.routePoints?.map((point, index) => {
+                    const isDelivery = point.pointType === 'DELIVERY';
+                    const label = isDelivery ? 'Выгрузка' : (point.pointType === 'PICKUP' ? 'Погрузка' : 'Догруз');
+                    return (
+                        <Mapbox.PointAnnotation
+                            key={`${point.pointType}-${point.sequence}`}
+                            id={`point-${point.sequence}`}
+                            coordinate={[point.location.longitude, point.location.latitude]}
+                        >
+                            <View style={styles.markerWrap}>
+                                <View style={[styles.markerPill, { backgroundColor: isDelivery ? '#dc2626' : '#16a34a' }]}>
+                                    <Text style={styles.markerText}>{index + 1}</Text>
+                                </View>
+                                <View style={[styles.markerTip, { borderTopColor: isDelivery ? '#dc2626' : '#16a34a' }]} />
+                            </View>
+                            <Mapbox.Callout title={`${label}: ${point.location.name || point.location.address}`} />
+                        </Mapbox.PointAnnotation>
+                    );
+                })}
 
             </Mapbox.MapView>
 
@@ -228,8 +272,15 @@ export default function MapScreen() {
             {/* Bottom info card */}
             {currentOrder && (
                 <View style={styles.infoCard}>
-                    <Text style={styles.infoTitle}>{currentOrder.orderNumber}</Text>
-                    <Text style={styles.infoText}>
+                    <View style={styles.infoTop}>
+                        <Text style={styles.infoTitle}>№ {currentOrder.orderNumber}</Text>
+                        <View style={[styles.infoPill, { backgroundColor: statusMeta(currentOrder.status).bg }]}>
+                            <Text style={[styles.infoPillText, { color: statusMeta(currentOrder.status).fg }]}>
+                                {statusMeta(currentOrder.status).label}
+                            </Text>
+                        </View>
+                    </View>
+                    <Text style={styles.infoText} numberOfLines={1}>
                         {currentOrder.routePoints?.[0]?.location.name || '...'} → {currentOrder.routePoints?.[currentOrder.routePoints.length - 1]?.location.name || '...'}
                     </Text>
                 </View>
@@ -266,33 +317,74 @@ const styles = StyleSheet.create({
     },
     infoCard: {
         position: 'absolute',
-        bottom: 24,
+        bottom: 110,
         left: 16,
         right: 16,
         backgroundColor: '#fff',
-        borderRadius: 12,
+        borderRadius: 20,
         padding: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.14,
+        shadowRadius: 12,
+        elevation: 5,
+    },
+    infoTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     infoTitle: {
         fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
+        fontWeight: '800',
+        color: '#0b0d12',
+        letterSpacing: -0.3,
+    },
+    infoPill: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 999,
+    },
+    infoPillText: {
+        fontSize: 11.5,
+        fontWeight: '700',
     },
     infoText: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: 4,
+        fontSize: 13.5,
+        color: '#5f6672',
+        marginTop: 6,
+        fontWeight: '500',
     },
-    marker: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        borderWidth: 2,
-        borderColor: 'white',
+    markerWrap: {
+        alignItems: 'center',
+    },
+    markerPill: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 2.5,
+        borderColor: '#ffffff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    markerText: {
+        color: '#ffffff',
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    markerTip: {
+        width: 0,
+        height: 0,
+        borderLeftWidth: 5,
+        borderRightWidth: 5,
+        borderTopWidth: 7,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        marginTop: -1,
     },
 });

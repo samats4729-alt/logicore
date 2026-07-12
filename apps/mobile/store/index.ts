@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import { api, setAuthToken, clearAuthToken } from '@/lib/api';
-import * as Device from 'expo-device';
+import { api, setAuthToken, clearAuthToken, getDeviceId } from '@/lib/api';
 
 interface User {
     id: string;
@@ -11,23 +10,32 @@ interface User {
     role: string;
     vehiclePlate?: string;
     vehicleModel?: string;
+    vehicleType?: string;
+    trailerNumber?: string;
+    avatarPath?: string | null;
+    company?: { id: string; name: string } | null;
 }
 
-interface Order {
+export interface Order {
     id: string;
     orderNumber: string;
     status: string;
     cargoDescription: string;
     cargoWeight?: number;
+    createdAt?: string;
     routePoints: Array<{
         pointType: string;
         sequence: number;
+        expectedDate?: string | null;
+        notes?: string | null;
         location: {
             id: string;
             name: string;
             address: string;
             latitude: number;
             longitude: number;
+            contactName?: string | null;
+            contactPhone?: string | null;
         };
     }>;
 }
@@ -37,14 +45,19 @@ interface AppState {
     isAuthenticated: boolean;
     isLoading: boolean;
     currentOrder: Order | null;
+    orders: Order[];
+    ordersLoading: boolean;
 
     // Auth actions
+    login: (phone: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
 
     // Order actions
     fetchCurrentOrder: () => Promise<void>;
+    fetchOrders: () => Promise<void>;
     updateOrderStatus: (orderId: string, status: string) => Promise<void>;
+    reportProblem: (orderId: string, description: string) => Promise<void>;
 
     // Settings
     mapTheme: 'auto' | 'light' | 'dark';
@@ -56,13 +69,24 @@ export const useStore = create<AppState>((set, get) => ({
     isAuthenticated: false,
     isLoading: true,
     currentOrder: null,
+    orders: [],
+    ordersLoading: false,
+
+    login: async (phone: string, password: string) => {
+        const deviceId = await getDeviceId();
+        const response = await api.post('/auth/driver-login', { phone, password, deviceId });
+        const { accessToken, user } = response.data;
+        await setAuthToken(accessToken);
+        await SecureStore.setItemAsync('user', JSON.stringify(user));
+        set({ user, isAuthenticated: true });
+    },
 
     logout: async () => {
         try {
             await api.post('/auth/logout');
         } catch { }
         await clearAuthToken();
-        set({ user: null, isAuthenticated: false, currentOrder: null });
+        set({ user: null, isAuthenticated: false, currentOrder: null, orders: [] });
     },
 
     checkAuth: async () => {
@@ -89,30 +113,39 @@ export const useStore = create<AppState>((set, get) => ({
     fetchCurrentOrder: async () => {
         try {
             const response = await api.get('/orders/my');
-            console.log('API RESPONSE:', JSON.stringify(response.data, null, 2)); // DEBUG LOG
-
             const orders = response.data;
-
             if (!Array.isArray(orders)) {
-                throw new Error(`Invalid server response: Expected array, got ${typeof orders}. Content: ${JSON.stringify(orders).substring(0, 100)}`);
+                throw new Error('Некорректный ответ сервера');
             }
-
-            // Берём первый активный заказ
             const activeOrder = orders.find((o: Order) =>
                 !['COMPLETED', 'CANCELLED'].includes(o.status)
             );
             set({ currentOrder: activeOrder || null });
-        } catch (error: any) {
-            console.error('Fetch Order Error:', error);
-            // Show error to user to debug connectivity
-            const { Alert } = require('react-native');
-            Alert.alert('Ошибка связи', error.message + '\n' + (error.response?.data?.message || ''));
+        } catch (error) {
+            console.error('Fetch order error:', error);
             set({ currentOrder: null });
+        }
+    },
+
+    fetchOrders: async () => {
+        set({ ordersLoading: true });
+        try {
+            const response = await api.get('/orders/my?history=1');
+            set({ orders: Array.isArray(response.data) ? response.data : [] });
+        } catch (error) {
+            console.error('Fetch orders error:', error);
+        } finally {
+            set({ ordersLoading: false });
         }
     },
 
     updateOrderStatus: async (orderId: string, status: string) => {
         await api.put(`/orders/${orderId}/status`, { status });
+        await get().fetchCurrentOrder();
+    },
+
+    reportProblem: async (orderId: string, description: string) => {
+        await api.post(`/orders/${orderId}/problem`, { description });
         await get().fetchCurrentOrder();
     },
 

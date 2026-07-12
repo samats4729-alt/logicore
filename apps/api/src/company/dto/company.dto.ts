@@ -159,6 +159,11 @@ export class CreateDriverDto {
     @IsNotEmpty()
     phone: string;
 
+    @ApiProperty({ description: 'Пароль для входа в мобильное приложение', required: false })
+    @IsString()
+    @IsOptional()
+    password?: string;
+
     @ApiProperty({ description: 'ИИН', example: '123456789012', required: false })
     @IsString()
     @IsOptional()
@@ -211,6 +216,11 @@ export class CreateDriverDto {
 }
 
 export class UpdateDriverDto {
+    @ApiProperty({ description: 'Пароль для входа в мобильное приложение', required: false })
+    @IsString()
+    @IsOptional()
+    password?: string;
+
     @ApiProperty({ required: false })
     @IsString()
     @IsOptional()
