@@ -2,12 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Form, Input, Button, Card, Typography, App } from 'antd';
+import { Form, Input, Button, App } from 'antd';
 import { UserOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
-import InteractiveBackground from '@/components/ui/InteractiveBackground';
-
-const { Title, Text } = Typography;
+import AuthShell from '@/components/AuthShell';
 
 export default function ForgotPasswordPage() {
     const router = useRouter();
@@ -31,28 +29,19 @@ export default function ForgotPasswordPage() {
     };
 
     return (
-        <InteractiveBackground>
-            <Card
-                style={{
-                    width: '100%',
-                    maxWidth: 420,
-                    borderRadius: 16,
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                }}
-            >
-                <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                    <Title level={3} style={{ margin: 0, color: '#1677ff' }}>
-                        Восстановление пароля
-                    </Title>
-                    <Text type="secondary">
-                        {isSent 
+        <AuthShell
+            eyebrow="(03 — Восстановление)"
+            title={<>Вернём <em>доступ</em>.</>}
+            subtitle="Пришлём на почту ссылку для сброса пароля — это занимает меньше минуты."
+        >
+                <div className="lc-auth-card-head">
+                    <div className="lc-auth-card-title">Восстановление пароля</div>
+                    <div className="lc-auth-card-sub">
+                        {isSent
                             ? 'Проверьте вашу почту'
                             : 'Введите email, указанный при регистрации'
                         }
-                    </Text>
+                    </div>
                 </div>
 
                 {!isSent ? (
@@ -103,7 +92,6 @@ export default function ForgotPasswordPage() {
                         </Button>
                     </div>
                 )}
-            </Card>
-        </InteractiveBackground>
+        </AuthShell>
     );
 }

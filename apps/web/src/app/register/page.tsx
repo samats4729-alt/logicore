@@ -2,15 +2,15 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, Form, Input, Button, Typography, message, Steps, Result, Radio, Space, Divider, Spin } from 'antd';
-import { UserOutlined, BankOutlined, CheckCircleOutlined, ShopOutlined, TruckOutlined, GoogleOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Typography, message, Steps, Result, Divider, Spin } from 'antd';
+import { UserOutlined, BankOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { GoogleLogin } from '@react-oauth/google';
-import InteractiveBackground from '@/components/ui/InteractiveBackground';
+import AuthShell from '@/components/AuthShell';
 import CompanyFormFields from '@/components/CompanyFormFields';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 function RegisterContent() {
     const router = useRouter();
@@ -100,20 +100,20 @@ function RegisterContent() {
     };
 
     return (
-        <InteractiveBackground>
-            <Card
-                style={{
-                    width: 520,
-                    borderRadius: 12,
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                }}
-            >
-                <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                    <Title level={3}>Регистрация компании</Title>
-                    <Text type="secondary">Создайте аккаунт для вашей компании</Text>
+        <AuthShell
+            eyebrow="(02 — Регистрация)"
+            title={<>Начните управлять <em>перевозками</em>.</>}
+            subtitle="Аккаунт компании создаётся за пару минут — сразу после регистрации откроется рабочий кабинет."
+            points={[
+                'Заявки и назначение водителей',
+                'Свои контрагенты и тарифы',
+                'Команда с настраиваемыми правами',
+            ]}
+            cardWidth={560}
+        >
+                <div className="lc-auth-card-head">
+                    <div className="lc-auth-card-title">Регистрация компании</div>
+                    <div className="lc-auth-card-sub">Создайте аккаунт для вашей компании</div>
                 </div>
 
                 <Steps
@@ -222,8 +222,7 @@ function RegisterContent() {
                         </Text>
                     </div>
                 )}
-            </Card>
-        </InteractiveBackground>
+        </AuthShell>
     );
 }
 

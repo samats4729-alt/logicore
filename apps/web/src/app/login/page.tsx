@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Form, Input, Button, Card, Typography, App, Divider } from 'antd';
-import { UserOutlined, LockOutlined, GoogleOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Typography, App, Divider } from 'antd';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
-import InteractiveBackground from '@/components/ui/InteractiveBackground';
+import AuthShell from '@/components/AuthShell';
 import { v4 as uuidv4 } from 'uuid';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 export default function LoginPage() {
     const router = useRouter();
@@ -119,23 +119,19 @@ export default function LoginPage() {
     };
 
     return (
-        <InteractiveBackground>
-            <Card
-                style={{
-                    width: '100%',
-                    maxWidth: 420,
-                    borderRadius: 16,
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                }}
-            >
-                <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                    <Title level={2} style={{ margin: 0, color: '#1677ff' }}>
-                        LogiCore
-                    </Title>
-                    <Text type="secondary">Система управления логистикой</Text>
+        <AuthShell
+            eyebrow="(01 — Вход)"
+            title={<>Логистика под <em>контролем</em>.</>}
+            subtitle="Заявки, GPS-мониторинг, финансы и документы вашей компании — в одной платформе."
+            points={[
+                'Живой мониторинг рейсов на карте',
+                'Финансы, счета и взаиморасчёты',
+                'Договоры и документы онлайн',
+            ]}
+        >
+                <div className="lc-auth-card-head">
+                    <div className="lc-auth-card-title">Вход в аккаунт</div>
+                    <div className="lc-auth-card-sub">Рады видеть снова</div>
                 </div>
 
                 <Form layout="vertical" onFinish={handleEmailLogin}>
@@ -198,10 +194,6 @@ export default function LoginPage() {
                         <a onClick={() => router.push('/register')}>Зарегистрировать компанию</a>
                     </Text>
                 </div>
-            </Card>
-            <div style={{ position: 'fixed', bottom: 10, right: 10, color: 'rgba(0,0,0,0.5)', fontSize: 12, background: 'yellow', padding: '4px 8px' }}>
-                v0.2.1 BUILD: 2026-02-02 16:22
-            </div>
-        </InteractiveBackground>
+        </AuthShell>
     );
 }
