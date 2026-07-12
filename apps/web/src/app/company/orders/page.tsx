@@ -23,7 +23,9 @@ import { shortenCompanyName } from '@/lib/company-helper';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import AssignDriverModal from '@/components/AssignDriverModal';
+import OrdersMobileList from '@/components/OrdersMobileList';
 import StatusPill, { STATUS_PILL, STATUS_LABELS } from '@/components/ui/StatusPill';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -126,6 +128,7 @@ interface Order {
 export default function CompanyOrdersPage() {
     const { user } = useAuthStore();
     const router = useRouter();
+    const isMobile = useIsMobile();
 
     const [activeTab, setActiveTab] = useState('all');
     const [ordersPage, setOrdersPage] = useState(1);
@@ -1357,7 +1360,22 @@ export default function CompanyOrdersPage() {
                                     )}
                                 </div>
 
-                                {/* TABLE */}
+                                {/* TABLE / MOBILE CARDS */}
+                                {isMobile ? (
+                                    <OrdersMobileList
+                                        orders={filteredOrders}
+                                        loading={loading}
+                                        userCompanyId={user?.companyId}
+                                        extractCity={extractCity}
+                                        onOpen={(id) => router.push(`/company/orders/${id}`)}
+                                        pagination={{
+                                            current: ordersPage,
+                                            pageSize: ordersPageSize,
+                                            total: totalOrders,
+                                            onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
+                                        }}
+                                    />
+                                ) : (
                                 <Table
                                     columns={columns}
                                     dataSource={filteredOrders}
@@ -1389,6 +1407,7 @@ export default function CompanyOrdersPage() {
                                         return '';
                                     }}
                                 />
+                                )}
                             </div>
                         ),
                     },
@@ -1448,7 +1467,22 @@ export default function CompanyOrdersPage() {
                                     )}
                                 </div>
 
-                                {/* TABLE */}
+                                {/* TABLE / MOBILE CARDS */}
+                                {isMobile ? (
+                                    <OrdersMobileList
+                                        orders={filteredArchiveOrders}
+                                        loading={archiveLoading}
+                                        userCompanyId={user?.companyId}
+                                        extractCity={extractCity}
+                                        onOpen={(id) => router.push(`/company/orders/${id}`)}
+                                        pagination={{
+                                            current: archivePage,
+                                            pageSize: archivePageSize,
+                                            total: totalArchiveOrders,
+                                            onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
+                                        }}
+                                    />
+                                ) : (
                                 <Table
                                     columns={archiveColumns}
                                     dataSource={filteredArchiveOrders}
@@ -1474,6 +1508,7 @@ export default function CompanyOrdersPage() {
                                     })}
                                     rowClassName={() => 'row-cancelled'}
                                 />
+                                )}
                             </div>
                         ),
                     },

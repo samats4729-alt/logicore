@@ -1130,7 +1130,7 @@ export default function CreateOrderPage() {
     ];
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1000, margin: '0 auto' }}>
+        <div className="lc-page lc-wizard" style={{ maxWidth: 1000, margin: '0 auto' }}>
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
@@ -1175,7 +1175,7 @@ export default function CreateOrderPage() {
             </Form>
             </div>
 {/* Navigation buttons */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, marginBottom: 32 }}>
+            <div className="lc-wizard-nav" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, marginBottom: 32 }}>
                 <div>
                     {currentStep > 0 && (
                         <Button size="large" onClick={goBack}>

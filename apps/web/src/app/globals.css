@@ -2396,4 +2396,188 @@ a.mapboxgl-ctrl-logo,
   100% { box-shadow: 0 0 0 6px rgba(255, 77, 79, 0), 0 0 4px rgba(255, 77, 79, 0.05); }
 }
 
-
+
+/* ==========================================
+   МОБИЛЬНАЯ АДАПТАЦИЯ: заявки и мастер создания
+   ========================================== */
+
+/* Карточки заявок (OrdersMobileList) — рендерятся только на мобиле */
+.lc-mcards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lc-mcard {
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: transform 0.12s ease;
+}
+
+.lc-mcard:active {
+  transform: scale(0.985);
+}
+
+.lc-mcard-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lc-mcard-date {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--lc-text-ter);
+}
+
+.lc-mcard-route {
+  margin-top: 8px;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--lc-text);
+}
+
+.lc-mcard-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--lc-hover);
+  margin-top: 7px;
+  margin-bottom: 2px;
+  overflow: hidden;
+}
+
+.lc-mcard-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.lc-mcard-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12.5px;
+  margin-top: 6px;
+  min-width: 0;
+}
+
+.lc-mcard-row span:first-child {
+  color: var(--lc-text-ter);
+  flex-shrink: 0;
+}
+
+.lc-mcard-row b {
+  font-weight: 500;
+  color: var(--lc-text);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lc-mcard-prices {
+  display: flex;
+  gap: 16px;
+  margin-top: 9px;
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lc-mcard-in { color: #389e0d; }
+.lc-mcard-out { color: #cf1322; }
+
+.lc-mcards-pager {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 4px;
+}
+
+@media (max-width: 1023px) {
+
+  /* Герой страницы заявок: метрики компактной сеткой, без разделителей */
+  .lc2-hero {
+    gap: 14px;
+  }
+
+  .lc2-metrics {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .lc2-metric:not(:last-child)::after {
+    display: none;
+  }
+
+  /* Панель действий: кнопка «Создать заявку» во всю ширину */
+  .lc2-actionbar .lc2-ab-right {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .lc2-actionbar .lc2-ab-right .ant-btn {
+    flex: 1 1 auto;
+  }
+
+  /* Панель фильтров: аккуратная сетка 2 колонки вместо ряда селектов */
+  .lc-page .lc-filterbar {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+  }
+
+  .lc-page .lc-filterbar > .anticon {
+    display: none;
+  }
+
+  .lc-page .lc-filterbar .ant-select,
+  .lc-page .lc-filterbar .ant-input-number {
+    width: 100% !important;
+  }
+
+  .lc-page .lc-filterbar .ant-btn {
+    grid-column: 1 / -1;
+  }
+
+  /* Мастер создания заявки: фиксированные колонки — в столбик */
+  .lc-wizard .ant-col-8,
+  .lc-wizard .ant-col-12 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  .lc-wizard .ant-steps {
+    margin-bottom: 14px !important;
+  }
+
+  /* Кнопки Назад / Отмена / Далее — крупные, во всю ширину */
+  .lc-wizard-nav {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .lc-wizard-nav > div {
+    flex: 1 1 auto;
+    display: flex;
+    gap: 8px;
+  }
+
+  .lc-wizard-nav > div:empty {
+    display: none;
+  }
+
+  .lc-wizard-nav .ant-btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+}
