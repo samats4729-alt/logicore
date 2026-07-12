@@ -135,7 +135,16 @@ export class PowerOfAttorneyService {
             if (driverTrailer && driverTrailer !== '—') vehicleParts.push(`ПП ${driverTrailer}`);
             const vehicleInfo = vehicleParts.join(' ') || '—';
 
-            const supplierNameFormatted = this.formatFullCompanyName(pickupPoint?.location?.name || '—');
+            // «На получение от» — наименование поставщика (форма М-2).
+            // Для экспедитора/перевозчика поставщик — компания-заказчик перевозки;
+            // если доверенность выписывает сам заказчик — название точки погрузки.
+            const customerName = order.customerCompany?.name || order.customer?.company?.name || '';
+            const pickupName = pickupPoint?.location?.name || '';
+            const isIssuerCustomer = !!issuerCompany?.id && issuerCompany.id === order.customerCompanyId;
+            const supplierRaw = isIssuerCustomer
+                ? (pickupName || customerName)
+                : (customerName || pickupName);
+            const supplierNameFormatted = this.formatFullCompanyName(supplierRaw || '—');
 
             // ============================================
             // 1. TOP STUB TABLE (Корешок доверенности)
