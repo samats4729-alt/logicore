@@ -21,7 +21,7 @@ export class LocationsController {
             ...dto,
             createdById: req.user.sub,
             companyId: dto.companyId || req.user.companyId,
-        });
+        }, req.user);
     }
 
     @Get()

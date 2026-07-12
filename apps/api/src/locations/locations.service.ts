@@ -1,10 +1,47 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { PartnershipStatus } from '@prisma/client';
 
 @Injectable()
 export class LocationsService {
     constructor(private prisma: PrismaService, private redis: RedisService) { }
+
+    /**
+     * Проверка: к какой компании можно привязывать адрес.
+     * Разрешено: своя компания, подтверждённый партнёр, свой внешний контрагент.
+     */
+    private async assertCompanyLinkAllowed(
+        targetCompanyId?: string | null,
+        user?: { role: string; companyId?: string },
+    ) {
+        if (!targetCompanyId || !user || user.role === 'ADMIN') return;
+        if (targetCompanyId === user.companyId) return;
+        if (!user.companyId) {
+            throw new ForbiddenException('Нет доступа к этой компании');
+        }
+
+        const target = await this.prisma.company.findUnique({
+            where: { id: targetCompanyId },
+            select: { isExternal: true, createdByCompanyId: true },
+        });
+        if (!target) throw new NotFoundException('Компания не найдена');
+        if (target.isExternal && target.createdByCompanyId === user.companyId) return;
+
+        const partnership = await this.prisma.partnership.findFirst({
+            where: {
+                status: PartnershipStatus.ACCEPTED,
+                OR: [
+                    { requesterId: user.companyId, recipientId: targetCompanyId },
+                    { requesterId: targetCompanyId, recipientId: user.companyId },
+                ],
+            },
+            select: { id: true },
+        });
+        if (!partnership) {
+            throw new ForbiddenException('Нет доступа: компания не является вашим партнёром или контрагентом');
+        }
+    }
 
     async create(data: {
         name: string;
@@ -18,7 +55,8 @@ export class LocationsService {
         city?: string;
         companyId?: string;
         emails?: string;
-    }) {
+    }, user?: { sub: string; role: string; companyId?: string }) {
+        await this.assertCompanyLinkAllowed(data.companyId, user);
         try {
             // Explicitly select fields to avoid passing unknown args (like countryId, regionId) to Prisma
             const {
@@ -154,6 +192,10 @@ export class LocationsService {
             if (!isOwner && !isCreator) {
                 throw new ForbiddenException('Нет доступа к этому адресу');
             }
+        }
+
+        if (data.companyId) {
+            await this.assertCompanyLinkAllowed(data.companyId, user);
         }
 
         try {

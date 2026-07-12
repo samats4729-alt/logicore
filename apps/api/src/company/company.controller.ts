@@ -372,7 +372,7 @@ export class CompanyController {
             docExpiresAt: dto.docExpiresAt ? new Date(dto.docExpiresAt) : undefined,
         };
         const targetCompanyId = companyId || req.user.companyId;
-        return this.companyDriversService.createDriver(targetCompanyId, createData);
+        return this.companyDriversService.createDriver(targetCompanyId, createData, req.user.companyId);
     }
 
     @Put('drivers/:id')

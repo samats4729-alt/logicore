@@ -78,7 +78,23 @@ export class CompanyDriversService {
         docIssuedAt?: Date;
         docExpiresAt?: Date;
         docIssuedBy?: string;
-    }) {
+    }, requesterCompanyId?: string) {
+        // Создавать водителей можно только в своей компании или у своего внешнего перевозчика
+        if (requesterCompanyId && companyId !== requesterCompanyId) {
+            const targetCompany = await this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: { isExternal: true, createdByCompanyId: true },
+            });
+
+            if (!targetCompany) {
+                throw new NotFoundException('Компания перевозчика не найдена');
+            }
+
+            if (!targetCompany.isExternal || targetCompany.createdByCompanyId !== requesterCompanyId) {
+                throw new ForbiddenException('У вас нет доступа к водителям этой компании');
+            }
+        }
+
         // Проверяем, существует ли водитель с таким телефоном или ИИН в рамках данной компании
         const orConditions: any[] = [{ phone: data.phone }];
         if (data.iin) {
