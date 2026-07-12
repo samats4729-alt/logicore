@@ -39,23 +39,26 @@ async function bootstrap() {
     // Global exception filter
     app.useGlobalFilters(new AllExceptionsFilter());
 
-    // Swagger API documentation
-    const config = new DocumentBuilder()
-        .setTitle('LogiCore API')
-        .setDescription('Система управления логистикой')
-        .setVersion('1.0')
-        .addBearerAuth()
-        .addTag('auth', 'Авторизация')
-        .addTag('orders', 'Заявки на перевозку')
-        .addTag('users', 'Пользователи')
-        .addTag('locations', 'Адреса и точки')
-        .addTag('documents', 'Документы')
-        .addTag('tracking', 'GPS трекинг')
-        .addTag('warehouse', 'Управление складом')
-        .build();
+    // Swagger API documentation — в проде закрыт (включается только через SWAGGER_ENABLED=true)
+    const swaggerEnabled = process.env.NODE_ENV !== 'production' || process.env.SWAGGER_ENABLED === 'true';
+    if (swaggerEnabled) {
+        const config = new DocumentBuilder()
+            .setTitle('LogiCore API')
+            .setDescription('Система управления логистикой')
+            .setVersion('1.0')
+            .addBearerAuth()
+            .addTag('auth', 'Авторизация')
+            .addTag('orders', 'Заявки на перевозку')
+            .addTag('users', 'Пользователи')
+            .addTag('locations', 'Адреса и точки')
+            .addTag('documents', 'Документы')
+            .addTag('tracking', 'GPS трекинг')
+            .addTag('warehouse', 'Управление складом')
+            .build();
 
-    const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/docs', app, document);
+        const document = SwaggerModule.createDocument(app, config);
+        SwaggerModule.setup('api/docs', app, document);
+    }
 
     // Auto-create admin user on startup (only if credentials are explicitly set)
     const prisma = app.get(PrismaService);
@@ -91,6 +94,8 @@ async function bootstrap() {
     const port = process.env.PORT || 3001;
     await app.listen(port, '0.0.0.0');
     logger.log(`🚀 LogiCore API running on http://localhost:${port}`);
-    logger.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
+    if (swaggerEnabled) {
+        logger.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
+    }
 }
 bootstrap();

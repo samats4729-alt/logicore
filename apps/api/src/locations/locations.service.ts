@@ -80,11 +80,11 @@ export class LocationsService {
                     emails: emails || null,
                 }
             });
-            await this.redis.del('locations:all');
+            await this.redis.delByPattern('locations:*');
             return location;
         } catch (error: any) {
             console.error('Failed to create location in DB:', error);
-            throw new ConflictException(`Ошибка базы данных при создании адреса: ${error.message || error}`);
+            throw new ConflictException('Не удалось создать адрес. Проверьте данные и попробуйте ещё раз.');
         }
     }
 
@@ -221,11 +221,11 @@ export class LocationsService {
                 where: { id }, 
                 data: updateData 
             });
-            await this.redis.del('locations:all');
+            await this.redis.delByPattern('locations:*');
             return updated;
         } catch (error: any) {
             console.error('Failed to update location in DB:', error);
-            throw new ConflictException(`Ошибка базы данных при изменении адреса: ${error.message || error}`);
+            throw new ConflictException('Не удалось изменить адрес. Проверьте данные и попробуйте ещё раз.');
         }
     }
 
@@ -257,7 +257,7 @@ export class LocationsService {
         }
 
         const deleted = await this.prisma.location.delete({ where: { id } });
-        await this.redis.del('locations:all');
+        await this.redis.delByPattern('locations:*');
         return deleted;
     }
 }

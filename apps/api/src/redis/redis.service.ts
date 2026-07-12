@@ -87,6 +87,19 @@ export class RedisService implements OnModuleDestroy {
         await this.client!.del(key);
     }
 
+    // Удаление всех ключей по шаблону (через SCAN, безопасно для продакшна)
+    async delByPattern(pattern: string): Promise<void> {
+        if (!this.canUseRedis()) return;
+        let cursor = '0';
+        do {
+            const [nextCursor, keys] = await this.client!.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+            cursor = nextCursor;
+            if (keys.length > 0) {
+                await this.client!.del(...keys);
+            }
+        } while (cursor !== '0');
+    }
+
     getClient(): Redis | null {
         return this.client;
     }
