@@ -13,14 +13,14 @@ export class ExternalCompaniesController {
     constructor(private readonly service: ExternalCompaniesService) { }
 
     @Get()
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER)
     @ApiOperation({ summary: 'Список внешних компаний' })
     async getAll(@Req() req: any) {
         return this.service.getExternalCompanies(req.user.companyId);
     }
 
     @Post()
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Создать внешнюю компанию' })
     async create(@Req() req: any, @Body() dto: {
         name: string;
@@ -37,7 +37,7 @@ export class ExternalCompaniesController {
     }
 
     @Patch(':id')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Обновить внешнюю компанию' })
     async update(@Req() req: any, @Param('id') id: string, @Body() dto: {
         name?: string;
@@ -53,7 +53,7 @@ export class ExternalCompaniesController {
     }
 
     @Delete(':id')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Удалить внешнюю компанию' })
     async delete(@Req() req: any, @Param('id') id: string) {
         return this.service.deleteExternalCompany(req.user.companyId, id);
