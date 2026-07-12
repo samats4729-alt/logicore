@@ -40,6 +40,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import AiButton from '@/components/ui/AiButton';
 import { LiveEventTicker } from '@/components/ui/LiveTicker';
 import GlobalSearch from '@/components/ui/GlobalSearch';
+import UserAvatar from '@/components/UserAvatar';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -402,6 +403,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 key: 'profile',
                 icon: <UserOutlined />,
                 label: 'Профиль',
+                onClick: () => router.push('/company/profile'),
             },
             {
                 key: '/company/settings',
@@ -596,9 +598,16 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 animation: hasNewUpdates ? 'profileGlow 2s infinite' : undefined,
                             }}
                         >
-                            <span className="lc2-profile-av">
-                                {((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase() || <UserOutlined />}
-                            </span>
+                            <UserAvatar
+                                userId={user.id}
+                                hasAvatar={!!(user as any).avatarPath}
+                                size={32}
+                                fallback={
+                                    <span className="lc2-profile-av">
+                                        {((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase() || <UserOutlined />}
+                                    </span>
+                                }
+                            />
                             {!isMobile && (
                                 <div style={{ lineHeight: 1.25 }}>
                                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>

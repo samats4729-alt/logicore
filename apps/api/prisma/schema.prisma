@@ -94,6 +94,7 @@ model User {
   middleName    String?
   role          UserRole
   position      String?   // Должность/роль
+  avatarPath    String?   // Фото профиля (S3-ключ или локальный путь)
   permissions   String[]  @default([])
   isActive      Boolean   @default(true)
   isTrackable   Boolean   @default(false)

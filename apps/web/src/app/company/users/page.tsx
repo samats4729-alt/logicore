@@ -14,6 +14,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { VEHICLE_TYPES } from '@/lib/constants';
+import UserAvatar from '@/components/UserAvatar';
 
 const ROLE_OPTIONS = [
     { label: 'Менеджер', value: 'LOGISTICIAN' },
@@ -43,6 +44,7 @@ interface CompanyUser {
     lastName: string;
     middleName?: string;
     role: string;
+    avatarPath?: string | null;
     permissions: string[];
     createdAt: string;
     departmentId?: string | null;
@@ -604,6 +606,23 @@ export default function CompanyUsersPage() {
         const initials = formatNameInitials(u);
         const firstLetter = u.firstName ? u.firstName[0].toUpperCase() : '?';
 
+        const avatarNode = (
+            <UserAvatar
+                userId={u.id}
+                hasAvatar={!!u.avatarPath}
+                size={48}
+                className="node-avatar node-avatar-photo"
+                fallback={
+                    <div
+                        className="node-avatar"
+                        style={{ backgroundColor: roleColor }}
+                    >
+                        {firstLetter}
+                    </div>
+                }
+            />
+        );
+
         return (
             <div className="node-card-container employee-node-container" key={u.id}>
                 {/* Actions Toolbar on Hover */}
@@ -682,12 +701,7 @@ export default function CompanyUsersPage() {
                 {u.role === 'DRIVER' ? (
                     <Tooltip title={getDriverTooltipTitle(u)} color="#1f2937" overlayStyle={{ maxWidth: '320px' }}>
                         <div className="node-card employee-card">
-                            <div 
-                                className="node-avatar"
-                                style={{ backgroundColor: roleColor }}
-                            >
-                                {firstLetter}
-                            </div>
+                            {avatarNode}
                             <div className="node-info">
                                 <span className="node-role-label" style={{ color: roleColor }}>{roleLabel}</span>
                                 <span className="node-name-label">{initials}</span>
@@ -701,12 +715,7 @@ export default function CompanyUsersPage() {
                     </Tooltip>
                 ) : (
                     <div className={`node-card employee-card ${isRoot ? 'root-admin-card' : ''}`}>
-                        <div 
-                            className="node-avatar"
-                            style={{ backgroundColor: roleColor }}
-                        >
-                            {firstLetter}
-                        </div>
+                        {avatarNode}
                         <div className="node-info">
                             <span className="node-role-label" style={{ color: roleColor }}>{roleLabel}</span>
                             <span className="node-name-label">{initials}</span>
@@ -852,7 +861,7 @@ export default function CompanyUsersPage() {
                         </div>
                         <div style={{
                             display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap',
-                            padding: 14, border: '1px dashed #d1d5db', borderRadius: 14, background: '#fafbfc',
+                            padding: 14, border: '1px dashed var(--lc-border)', borderRadius: 16, background: 'var(--lc-hover)',
                         }}>
                             {unassignedUsers.map(u => renderEmployeeNode(u, false))}
                         </div>
@@ -1111,7 +1120,7 @@ export default function CompanyUsersPage() {
                     bottom: 0;
                     width: 50%;
                     height: 2px;
-                    background: linear-gradient(90deg, #c7d2fe, #a5b4fc);
+                    background: var(--lc-border);
                 }
                 
                 .org-tree-root-card-wrapper::before {
@@ -1138,13 +1147,13 @@ export default function CompanyUsersPage() {
                 .org-tree-root-card-line {
                     width: 2px;
                     height: 28px;
-                    background: linear-gradient(180deg, #c7d2fe, #a5b4fc);
+                    background: var(--lc-border);
                 }
                 
                 .org-tree-root-to-children-line {
                     width: 2px;
                     height: 28px;
-                    background: linear-gradient(180deg, #a5b4fc, #c7d2fe);
+                    background: var(--lc-border);
                     position: relative;
                     z-index: 2;
                 }
@@ -1166,7 +1175,7 @@ export default function CompanyUsersPage() {
                     left: 50%;
                     width: 2px;
                     height: 28px;
-                    background: linear-gradient(180deg, #c7d2fe, #a5b4fc);
+                    background: var(--lc-border);
                 }
                 
                 .org-tree-child-wrapper {
@@ -1185,7 +1194,7 @@ export default function CompanyUsersPage() {
                     top: 0;
                     width: 50%;
                     height: 2px;
-                    background: linear-gradient(90deg, #c7d2fe, #a5b4fc);
+                    background: var(--lc-border);
                 }
                 
                 .org-tree-child-wrapper::before {
@@ -1207,7 +1216,7 @@ export default function CompanyUsersPage() {
                 .org-tree-child-wrapper-card-line {
                     width: 2px;
                     height: 28px;
-                    background: linear-gradient(180deg, #c7d2fe, #a5b4fc);
+                    background: var(--lc-border);
                 }
                 
                 /* Card Nodes */
@@ -1223,39 +1232,35 @@ export default function CompanyUsersPage() {
                 .node-card {
                     display: flex;
                     align-items: center;
-                    justify-content: center;
+                    justify-content: flex-start;
                     width: 240px;
                     height: 68px;
                     padding: 10px 16px;
-                    background: transparent;
-                    border: 1px solid transparent;
-                    border-radius: 16px;
-                    box-shadow: none;
+                    background: var(--lc-card);
+                    border: 1px solid var(--lc-border);
+                    border-radius: 18px;
+                    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
                     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                     cursor: default;
                 }
-                
+
                 .node-card-container:hover .node-card {
                     transform: translateY(-3px);
-                    background: rgba(255, 255, 255, 0.7);
-                    backdrop-filter: blur(8px);
-                    -webkit-backdrop-filter: blur(8px);
-                    border-color: rgba(199, 210, 254, 0.5);
-                    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.08);
+                    border-color: rgba(22, 119, 255, 0.35);
+                    box-shadow: 0 10px 28px rgba(22, 119, 255, 0.10), 0 2px 8px rgba(16, 24, 40, 0.06);
                 }
-                
-                /* Root Admin node */
+
+                /* Root Admin node — акцентное кольцо */
                 .root-admin-card {
-                    border: none;
-                    box-shadow: none;
-                    background: transparent;
+                    border-color: rgba(22, 119, 255, 0.35);
+                    box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
                 }
-                
+
                 /* Department node */
                 .dept-card {
-                    border: none;
+                    background: var(--lc-hover);
+                    border: 1px dashed var(--lc-border);
                     box-shadow: none;
-                    background: transparent;
                 }
                 
                 /* Node Avatars */
@@ -1315,11 +1320,17 @@ export default function CompanyUsersPage() {
                 .node-name-label {
                     font-size: 14px;
                     font-weight: 700;
-                    color: #111827;
+                    color: var(--lc-text);
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     line-height: 1.3;
+                }
+
+                /* Фото профиля в узле схемы */
+                .node-avatar-photo {
+                    background: var(--lc-hover);
+                    border: 1px solid var(--lc-border);
                 }
                 
                 /* Float Actions Toolbar on Hover */

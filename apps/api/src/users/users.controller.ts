@@ -1,18 +1,85 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, BadRequestException, UseInterceptors, UploadedFile, Res, NotFoundException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { UsersService } from './users.service';
+import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @ApiTags('users')
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class UsersController {
-    constructor(private usersService: UsersService) { }
+    constructor(private usersService: UsersService, private s3Service: S3Service) { }
+
+    // ==================== Фото профиля ====================
+    // Без @Roles: каждый авторизованный пользователь управляет только своим фото.
+
+    @Post('me/avatar')
+    @UseInterceptors(FileInterceptor('avatar', {
+        limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+        fileFilter: (req, file, cb) => {
+            if (!file.mimetype.match(/^image\/(png|jpeg|jpg|webp)$/)) {
+                cb(new Error('Только PNG/JPG/WEBP файлы'), false);
+            } else {
+                cb(null, true);
+            }
+        },
+    }))
+    @ApiOperation({ summary: 'Загрузить фото своего профиля' })
+    @ApiConsumes('multipart/form-data')
+    async uploadMyAvatar(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
+        if (!file) {
+            throw new BadRequestException('Файл не загружен');
+        }
+        return this.usersService.uploadAvatar(req.user.sub, file);
+    }
+
+    @Get('me/avatar')
+    @ApiOperation({ summary: 'Получить фото своего профиля' })
+    async getMyAvatar(@Request() req: any, @Res() res: Response) {
+        return this.streamAvatar(req.user.sub, req.user, res);
+    }
+
+    @Get(':id/avatar')
+    @ApiOperation({ summary: 'Получить фото профиля сотрудника своей компании' })
+    async getUserAvatar(@Param('id') id: string, @Request() req: any, @Res() res: Response) {
+        return this.streamAvatar(id, req.user, res);
+    }
+
+    private async streamAvatar(targetUserId: string, requester: any, res: Response) {
+        const avatarPath = await this.usersService.getAvatarPathFor(targetUserId, requester);
+        if (!avatarPath) {
+            return res.status(404).json({ message: 'Фото не загружено' });
+        }
+
+        if (this.s3Service.isS3Enabled()) {
+            try {
+                const { stream, mimeType } = await this.s3Service.downloadFile(avatarPath);
+                res.setHeader('Content-Type', mimeType || 'image/png');
+                return stream.pipe(res);
+            } catch (error) {
+                const absolutePath = path.join(process.cwd(), avatarPath);
+                if (fs.existsSync(absolutePath)) {
+                    return res.sendFile(absolutePath);
+                }
+                return res.status(404).json({ message: 'Файл не найден' });
+            }
+        }
+
+        const absolutePath = path.join(process.cwd(), avatarPath);
+        if (!fs.existsSync(absolutePath)) {
+            return res.status(404).json({ message: 'Файл не найден' });
+        }
+        return res.sendFile(absolutePath);
+    }
 
     @Post()
     @Roles(UserRole.ADMIN)
