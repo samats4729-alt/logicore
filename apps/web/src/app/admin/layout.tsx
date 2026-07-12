@@ -30,6 +30,7 @@ import {
     CustomerServiceOutlined,
     NotificationOutlined,
     DollarOutlined,
+    HistoryOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -79,6 +80,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             )
         },
         { key: '/admin/billing', icon: <DollarOutlined />, label: 'Биллинг' },
+        { key: '/admin/audit', icon: <HistoryOutlined />, label: 'Журнал' },
         { key: '/admin/locations', icon: <GlobalOutlined />, label: 'География' },
         { key: '/admin/settings', icon: <SettingOutlined />, label: 'Настройки' },
     ];

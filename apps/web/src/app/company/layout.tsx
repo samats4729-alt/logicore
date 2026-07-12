@@ -67,6 +67,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     const [hydrated, setHydrated] = useState(false);
     const [hasNewUpdates, setHasNewUpdates] = useState(false);
     const [billingStatus, setBillingStatus] = useState<any>(null);
+    const [auditEnabled, setAuditEnabled] = useState(false);
     const { theme, setTheme } = useTheme();
 
     useEffect(() => {
@@ -118,6 +119,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         api.get('/billing/status')
             .then((res) => setBillingStatus(res.data))
             .catch(() => setBillingStatus(null));
+        api.get('/audit/status')
+            .then((res) => setAuditEnabled(!!res.data.companiesEnabled))
+            .catch(() => setAuditEnabled(false));
     }, [user?.companyId]);
 
     // Дожидаемся гидратации хранилища Zustand из localStorage
@@ -365,6 +369,13 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 key: '/company/users',
                 icon: <UserSwitchOutlined />,
                 label: 'Сотрудники',
+            });
+        }
+        if (auditEnabled && ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
+            companyChildren.push({
+                key: '/company/audit',
+                icon: <FileProtectOutlined />,
+                label: 'Журнал действий',
             });
         }
         companyChildren.push({

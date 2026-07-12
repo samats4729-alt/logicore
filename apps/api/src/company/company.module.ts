@@ -1,5 +1,6 @@
 import { OrdersModule } from '../orders/orders.module';
 import { Module } from '@nestjs/common';
+import { BillingModule } from '../billing/billing.module';
 import { CompanyController } from './company.controller';
 import { CompanyService } from './company.service';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -14,6 +15,7 @@ import { EmailModule } from '../email/email.module';
         PrismaModule,
         OrdersModule,
         EmailModule,
+        BillingModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => {

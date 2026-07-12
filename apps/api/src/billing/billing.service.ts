@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionStatus } from '@prisma/client';
 
@@ -167,6 +167,55 @@ export class BillingService {
             periodEnd: sub?.periodEnd ?? null,
             plan: sub?.plan ?? null,
         };
+    }
+
+    // ==================== Лимиты тарифов ====================
+
+    /** Лимиты плана компании; null = без ограничений (биллинг выключен / план без лимитов / триал) */
+    private async getPlanLimits(companyId: string): Promise<{ maxUsers: number | null; maxOrdersPerMonth: number | null } | null> {
+        const { enabled } = await this.getSettings();
+        if (!enabled) return null;
+
+        const sub = await this.prisma.companySubscription.findUnique({
+            where: { companyId },
+            include: { plan: { select: { maxUsers: true, maxOrdersPerMonth: true } } },
+        });
+        if (!sub?.plan) return null; // триал или подписка без плана — не ограничиваем
+        return { maxUsers: sub.plan.maxUsers, maxOrdersPerMonth: sub.plan.maxOrdersPerMonth };
+    }
+
+    /** Проверка лимита офисных сотрудников (водители не считаются) перед добавлением нового */
+    async assertUserLimit(companyId: string): Promise<void> {
+        const limits = await this.getPlanLimits(companyId);
+        if (!limits?.maxUsers) return;
+
+        const count = await this.prisma.user.count({
+            where: { companyId, isActive: true, role: { not: 'DRIVER' } },
+        });
+        if (count >= limits.maxUsers) {
+            throw new ForbiddenException(
+                `Достигнут лимит тарифа: до ${limits.maxUsers} сотрудников. Перейдите на тариф выше, чтобы добавить больше.`,
+            );
+        }
+    }
+
+    /** Проверка лимита заявок за календарный месяц перед созданием новой */
+    async assertOrderLimit(companyId: string): Promise<void> {
+        const limits = await this.getPlanLimits(companyId);
+        if (!limits?.maxOrdersPerMonth) return;
+
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+
+        const count = await this.prisma.order.count({
+            where: { customerCompanyId: companyId, createdAt: { gte: monthStart } },
+        });
+        if (count >= limits.maxOrdersPerMonth) {
+            throw new ForbiddenException(
+                `Достигнут лимит тарифа: до ${limits.maxOrdersPerMonth} заявок в месяц. Перейдите на тариф выше, чтобы создавать больше.`,
+            );
+        }
     }
 
     // ==================== Тарифные планы ====================

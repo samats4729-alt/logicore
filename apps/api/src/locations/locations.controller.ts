@@ -5,13 +5,14 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { CreateLocationDto, UpdateLocationDto } from './dto/location.dto';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('locations')
 @Controller('locations')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class LocationsController {
-    constructor(private locationsService: LocationsService) { }
+    constructor(private locationsService: LocationsService, private auditService: AuditService) { }
 
     @Post()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
@@ -49,6 +50,11 @@ export class LocationsController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Удалить точку' })
     async delete(@Param('id') id: string, @Request() req: any) {
-        return this.locationsService.delete(id, req.user);
+        const result = await this.locationsService.delete(id, req.user);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'location',
+            entityId: id, entityLabel: `Адрес «${(result as any)?.name || id}»`,
+        });
+        return result;
     }
 }

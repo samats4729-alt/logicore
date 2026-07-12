@@ -1150,3 +1150,22 @@ model CompanySubscription {
 
   @@index([status])
 }
+
+// ==================== АУДИТ-ЛОГ ДЕЙСТВИЙ ====================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  companyId   String?  // null = платформенное событие
+  userId      String?
+  userName    String?  // снимок ФИО на момент действия
+  userRole    String?
+  action      String   // CREATE / UPDATE / DELETE / STATUS / SETTINGS
+  entity      String   // order, expense, income, payment, partner, employee, driver, subscription, ...
+  entityId    String?
+  entityLabel String?  // «Заявка №145», «Расход ГСМ 80 000 ₸»
+  details     Json?    // старые/новые значения ключевых полей
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([createdAt])
+}

@@ -4,13 +4,14 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole, SubscriptionStatus } from '@prisma/client';
 import { BillingService } from './billing.service';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('billing')
 @Controller('billing')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class BillingController {
-    constructor(private billingService: BillingService) { }
+    constructor(private billingService: BillingService, private auditService: AuditService) { }
 
     // ==================== Кабинет компании ====================
 
@@ -38,8 +39,14 @@ export class BillingController {
     @Put('admin/settings')
     @Roles(UserRole.ADMIN)
     @ApiOperation({ summary: 'Включить/выключить биллинг, пробный период' })
-    async updateSettings(@Body() body: { enabled?: boolean; trialDays?: number }) {
-        return this.billingService.updateSettings(body);
+    async updateSettings(@Request() req: any, @Body() body: { enabled?: boolean; trialDays?: number }) {
+        const result = await this.billingService.updateSettings(body);
+        await this.auditService.log({
+            user: req.user, action: 'SETTINGS', entity: 'billing',
+            entityLabel: result.enabled ? 'Биллинг включён' : 'Биллинг выключен',
+            details: { enabled: result.enabled, trialDays: result.trialDays, trialsCreated: result.trialsCreated },
+        });
+        return result;
     }
 
     @Get('admin/plans')
@@ -91,6 +98,7 @@ export class BillingController {
     @ApiOperation({ summary: 'Назначить/продлить подписку компании (после оплаты счёта)' })
     async updateSubscription(
         @Param('companyId') companyId: string,
+        @Request() req: any,
         @Body() body: {
             planId?: string | null;
             status?: SubscriptionStatus;
@@ -100,6 +108,12 @@ export class BillingController {
             note?: string | null;
         },
     ) {
-        return this.billingService.updateCompanySubscription(companyId, body);
+        const result = await this.billingService.updateCompanySubscription(companyId, body);
+        await this.auditService.log({
+            companyId, user: req.user, action: 'UPDATE', entity: 'subscription',
+            entityId: (result as any)?.id, entityLabel: 'Подписка компании изменена',
+            details: { status: body.status ?? null, months: body.months ?? null, planId: body.planId ?? null, note: body.note ?? null },
+        });
+        return result;
     }
 }

@@ -5,13 +5,14 @@ import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole } from '@prisma/client';
 import { ExternalCompaniesService } from './external-companies.service';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('external-companies')
 @Controller('external-companies')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class ExternalCompaniesController {
-    constructor(private readonly service: ExternalCompaniesService) { }
+    constructor(private readonly service: ExternalCompaniesService, private readonly auditService: AuditService) { }
 
     @Get()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER)
@@ -35,7 +36,12 @@ export class ExternalCompaniesController {
         address?: string;
         directorName?: string;
     }) {
-        return this.service.createExternalCompany(req.user.companyId, dto);
+        const result = await this.service.createExternalCompany(req.user.companyId, dto);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'partner',
+            entityId: (result as any)?.id, entityLabel: `Контрагент «${dto.name}»`,
+        });
+        return result;
     }
 
     @Patch(':id')
@@ -52,7 +58,12 @@ export class ExternalCompaniesController {
         isCustomer?: boolean;
         isCarrier?: boolean;
     }) {
-        return this.service.updateExternalCompany(req.user.companyId, id, dto);
+        const result = await this.service.updateExternalCompany(req.user.companyId, id, dto);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'partner',
+            entityId: id, entityLabel: `Контрагент «${(result as any)?.name || dto.name || id}»`,
+        });
+        return result;
     }
 
     @Delete(':id')
@@ -60,6 +71,11 @@ export class ExternalCompaniesController {
     @RequirePermissions('partners')
     @ApiOperation({ summary: 'Удалить внешнюю компанию' })
     async delete(@Req() req: any, @Param('id') id: string) {
-        return this.service.deleteExternalCompany(req.user.companyId, id);
+        const result = await this.service.deleteExternalCompany(req.user.companyId, id);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'partner',
+            entityId: id, entityLabel: `Контрагент «${(result as any)?.name || id}»`,
+        });
+        return result;
     }
 }

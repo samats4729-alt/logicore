@@ -11,6 +11,8 @@ import { UserRole, OrderStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -23,19 +25,37 @@ export class OrdersController {
         private poaService: PowerOfAttorneyService,
         private emailService: EmailService,
         private prisma: PrismaService,
+        private billingService: BillingService,
+        private auditService: AuditService,
     ) { }
 
     @Post()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Создать заявку на перевозку' })
     async create(@Body() dto: CreateOrderDto, @Request() req: any) {
-        return this.ordersService.create({
+        if (req.user.companyId) {
+            await this.billingService.assertOrderLimit(req.user.companyId);
+        }
+
+        const order = await this.ordersService.create({
             ...dto,
             customerId: dto.customerId || req.user.sub,
             responsibleManagerId: req.user.sub,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
         });
+
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'order',
+            entityId: order.id,
+            entityLabel: `Заявка №${order.orderNumber}`,
+            details: { customerPrice: dto.customerPrice ?? null, driverCost: dto.driverCost ?? null },
+        });
+
+        return order;
     }
 
     @Get()
@@ -165,7 +185,7 @@ export class OrdersController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Обновить заявку' })
     async update(@Param('id') id: string, @Body() dto: Partial<CreateOrderDto>, @Request() req: any) {
-        return this.ordersService.update(id, {
+        const updated = await this.ordersService.update(id, {
             ...dto,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
@@ -174,13 +194,45 @@ export class OrdersController {
             role: req.user.role,
             companyId: req.user.companyId,
         });
+
+        // Журналируем денежные поля — самое частое поле споров
+        const moneyChanges: Record<string, any> = {};
+        if (dto.customerPrice !== undefined) moneyChanges.customerPrice = dto.customerPrice;
+        if (dto.driverCost !== undefined) moneyChanges.driverCost = dto.driverCost;
+        if ((dto as any).subForwarderPrice !== undefined) moneyChanges.subForwarderPrice = (dto as any).subForwarderPrice;
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order',
+            entityId: id,
+            entityLabel: `Заявка №${(updated as any)?.orderNumber || id}`,
+            details: Object.keys(moneyChanges).length ? moneyChanges : null,
+        });
+
+        return updated;
     }
 
     @Put(':id/status')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Обновить статус заявки' })
     async updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Request() req: any) {
-        return this.ordersService.updateStatus(id, dto.status, dto.comment, req.user.sub, req.user.companyId, req.user.role);
+        const result = await this.ordersService.updateStatus(id, dto.status, dto.comment, req.user.sub, req.user.companyId, req.user.role);
+
+        // В журнал — только критичные переходы (отмена/проблема); рутинные статусы пишет OrderStatusHistory
+        if (dto.status === 'CANCELLED' || dto.status === 'PROBLEM') {
+            await this.auditService.log({
+                companyId: req.user.companyId,
+                user: req.user,
+                action: 'STATUS',
+                entity: 'order',
+                entityId: id,
+                entityLabel: `Заявка №${(result as any)?.orderNumber || id}`,
+                details: { status: dto.status, comment: dto.comment ?? null },
+            });
+        }
+
+        return result;
     }
 
     @Put(':id/confirm-completion')

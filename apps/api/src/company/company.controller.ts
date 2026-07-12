@@ -9,6 +9,8 @@ import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
+import { BillingService } from '../billing/billing.service';
+import { AuditService } from '../audit/audit.service';
 import { UserRole } from '@prisma/client';
 import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto, GetCompanyUsersQueryDto, CreateVehicleDto, UpdateVehicleDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
@@ -26,6 +28,8 @@ export class CompanyController {
         private ordersService: OrdersService,
         private companyDriversService: CompanyDriversService,
         private s3Service: S3Service,
+        private billingService: BillingService,
+        private auditService: AuditService,
     ) { }
 
     // ==================== Уведомления ====================
@@ -50,7 +54,13 @@ export class CompanyController {
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Создать пользователя в своей компании' })
     async createCompanyUser(@Request() req: any, @Body() dto: CreateCompanyUserDto) {
-        return this.companyService.createCompanyUser(req.user.companyId, dto);
+        await this.billingService.assertUserLimit(req.user.companyId);
+        const result = await this.companyService.createCompanyUser(req.user.companyId, dto);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'employee',
+            entityId: (result as any)?.id, entityLabel: `Сотрудник ${dto.lastName} ${dto.firstName} (${dto.role})`,
+        });
+        return result;
     }
 
     @Put('users/:id')
@@ -72,14 +82,25 @@ export class CompanyController {
         @Param('id') userId: string,
         @Body() dto: { permissions: string[] },
     ) {
-        return this.companyService.updateUserPermissions(req.user.companyId, userId, dto.permissions);
+        const result = await this.companyService.updateUserPermissions(req.user.companyId, userId, dto.permissions);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'permissions',
+            entityId: userId, entityLabel: 'Изменены права сотрудника',
+            details: { permissions: dto.permissions },
+        });
+        return result;
     }
 
     @Delete('users/:id')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Деактивировать пользователя компании' })
     async deleteCompanyUser(@Request() req: any, @Param('id') userId: string) {
-        return this.companyService.deactivateCompanyUser(req.user.companyId, userId);
+        const result = await this.companyService.deactivateCompanyUser(req.user.companyId, userId);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'employee',
+            entityId: userId, entityLabel: 'Сотрудник деактивирован',
+        });
+        return result;
     }
 
     // ==================== Приглашения ====================
@@ -98,7 +119,14 @@ export class CompanyController {
         @Request() req: any,
         @Body() dto: CreateInvitationDto,
     ) {
-        return this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions, dto.departmentId, dto.position);
+        await this.billingService.assertUserLimit(req.user.companyId);
+        const result = await this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions, dto.departmentId, dto.position);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'employee',
+            entityLabel: `Приглашение сотрудника ${dto.email} (${dto.role})`,
+            details: { permissions: dto.permissions ?? [] },
+        });
+        return result;
     }
 
     @Delete('invitations/:id')
@@ -383,7 +411,12 @@ export class CompanyController {
             docExpiresAt: dto.docExpiresAt ? new Date(dto.docExpiresAt) : undefined,
         };
         const targetCompanyId = companyId || req.user.companyId;
-        return this.companyDriversService.createDriver(targetCompanyId, createData, req.user.companyId);
+        const result = await this.companyDriversService.createDriver(targetCompanyId, createData, req.user.companyId);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'driver',
+            entityId: (result as any)?.id, entityLabel: `Водитель ${dto.lastName} ${dto.firstName}`,
+        });
+        return result;
     }
 
     @Put('drivers/:id')
@@ -400,7 +433,12 @@ export class CompanyController {
             docIssuedAt: dto.docIssuedAt ? new Date(dto.docIssuedAt) : undefined,
             docExpiresAt: dto.docExpiresAt ? new Date(dto.docExpiresAt) : undefined,
         };
-        return this.companyDriversService.updateDriver(driverId, req.user.companyId, updateData);
+        const result = await this.companyDriversService.updateDriver(driverId, req.user.companyId, updateData);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'driver',
+            entityId: driverId, entityLabel: `Водитель ${dto.lastName || ''} ${dto.firstName || ''}`.trim() || undefined,
+        });
+        return result;
     }
 
     @Delete('drivers/:id')
@@ -408,7 +446,12 @@ export class CompanyController {
     @RequirePermissions('orders', 'drivers', 'partners')
     @ApiOperation({ summary: 'Деактивировать водителя' })
     async deleteDriver(@Request() req: any, @Param('id') driverId: string) {
-        return this.companyDriversService.deactivateDriver(driverId, req.user.companyId);
+        const result = await this.companyDriversService.deactivateDriver(driverId, req.user.companyId);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'driver',
+            entityId: driverId, entityLabel: 'Водитель деактивирован',
+        });
+        return result;
     }
 
     // ==================== Отделы компании (Иерархия) ====================

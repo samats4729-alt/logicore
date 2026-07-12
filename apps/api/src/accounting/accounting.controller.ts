@@ -5,6 +5,7 @@ import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole, PaymentDirection } from '@prisma/client';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import { Response } from 'express';
 
 const FINANCE_VIEW_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER];
@@ -17,6 +18,7 @@ export class AccountingController {
     constructor(
         private readonly accountingService: AccountingService,
         private readonly emailService: EmailService,
+        private readonly auditService: AuditService,
     ) { }
 
     // ==================== ORDER FINANCIALS ====================
@@ -91,19 +93,37 @@ export class AccountingController {
     @Post('expenses')
     @Roles(...FINANCE_CHANGE_ROLES)
     async createExpense(@Request() req: any, @Body() body: any) {
-        return this.accountingService.createExpense(req.user.companyId, req.user.id, body);
+        const result = await this.accountingService.createExpense(req.user.companyId, req.user.id, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'expense',
+            entityId: (result as any)?.id, entityLabel: `Расход ${body?.amount ?? ''} ₸`,
+            details: { amount: body?.amount ?? null, category: body?.category ?? null, orderId: body?.orderId ?? null },
+        });
+        return result;
     }
 
     @Put('expenses/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async updateExpense(@Request() req: any, @Param('id') id: string, @Body() body: any) {
-        return this.accountingService.updateExpense(req.user.companyId, id, body);
+        const result = await this.accountingService.updateExpense(req.user.companyId, id, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'expense',
+            entityId: id, entityLabel: `Расход ${body?.amount ?? ''} ₸`,
+            details: { amount: body?.amount ?? null, category: body?.category ?? null },
+        });
+        return result;
     }
 
     @Delete('expenses/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async deleteExpense(@Request() req: any, @Param('id') id: string) {
-        return this.accountingService.deleteExpense(req.user.companyId, id);
+        const result = await this.accountingService.deleteExpense(req.user.companyId, id);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'expense',
+            entityId: id, entityLabel: `Расход ${(result as any)?.amount ?? ''} ₸`,
+            details: { amount: (result as any)?.amount ?? null, category: (result as any)?.category ?? null },
+        });
+        return result;
     }
 
     // ==================== INCOMES (manual) ====================
@@ -117,19 +137,37 @@ export class AccountingController {
     @Post('incomes')
     @Roles(...FINANCE_CHANGE_ROLES)
     async createIncome(@Request() req: any, @Body() body: any) {
-        return this.accountingService.createIncome(req.user.companyId, req.user.id, body);
+        const result = await this.accountingService.createIncome(req.user.companyId, req.user.id, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'income',
+            entityId: (result as any)?.id, entityLabel: `Доход ${body?.amount ?? ''} ₸`,
+            details: { amount: body?.amount ?? null, category: body?.category ?? null, orderId: body?.orderId ?? null },
+        });
+        return result;
     }
 
     @Put('incomes/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async updateIncome(@Request() req: any, @Param('id') id: string, @Body() body: any) {
-        return this.accountingService.updateIncome(req.user.companyId, id, body);
+        const result = await this.accountingService.updateIncome(req.user.companyId, id, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'income',
+            entityId: id, entityLabel: `Доход ${body?.amount ?? ''} ₸`,
+            details: { amount: body?.amount ?? null, category: body?.category ?? null },
+        });
+        return result;
     }
 
     @Delete('incomes/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async deleteIncome(@Request() req: any, @Param('id') id: string) {
-        return this.accountingService.deleteIncome(req.user.companyId, id);
+        const result = await this.accountingService.deleteIncome(req.user.companyId, id);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'income',
+            entityId: id, entityLabel: `Доход ${(result as any)?.amount ?? ''} ₸`,
+            details: { amount: (result as any)?.amount ?? null, category: (result as any)?.category ?? null },
+        });
+        return result;
     }
 
     // ==================== COUNTERPARTY REPORT ====================
@@ -210,13 +248,25 @@ export class AccountingController {
     @Post('payments')
     @Roles(...FINANCE_CHANGE_ROLES)
     async createPayment(@Request() req: any, @Body() body: any) {
-        return this.accountingService.createPayment(req.user.companyId, req.user.id, body);
+        const result = await this.accountingService.createPayment(req.user.companyId, req.user.id, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'payment',
+            entityId: (result as any)?.id, entityLabel: `Платёж ${body?.amount ?? ''} ₸`,
+            details: { amount: body?.amount ?? null, direction: body?.direction ?? null, orderId: body?.orderId ?? null },
+        });
+        return result;
     }
 
     @Delete('payments/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async deletePayment(@Request() req: any, @Param('id') id: string) {
-        return this.accountingService.deletePayment(req.user.companyId, id, req.user.id);
+        const result = await this.accountingService.deletePayment(req.user.companyId, id, req.user.id);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'payment',
+            entityId: id, entityLabel: `Платёж ${(result as any)?.amount ?? ''} ₸`,
+            details: { amount: (result as any)?.amount ?? null },
+        });
+        return result;
     }
 
     // ==================== DASHBOARD KPI SUMMARY ====================
@@ -294,7 +344,13 @@ export class AccountingController {
         @Param('id') id: string,
         @Body() body: any,
     ) {
-        return this.accountingService.updatePayment(req.user.companyId, id, req.user.id, body);
+        const result = await this.accountingService.updatePayment(req.user.companyId, id, req.user.id, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'payment',
+            entityId: id, entityLabel: `Платёж ${body?.amount ?? ''} ₸`,
+            details: { amount: body?.amount ?? null },
+        });
+        return result;
     }
 
     // ==================== FINANCE ACCOUNTS CRUD ====================
