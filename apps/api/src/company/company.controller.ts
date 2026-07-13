@@ -142,7 +142,7 @@ export class CompanyController {
     @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Получить заявки своей компании' })
     async getCompanyOrders(@Request() req: any, @Query() query: PaginationQueryDto & { type?: string; mine?: string }) {
-        return this.companyService.getCompanyOrders(req.user.companyId, query, req.user.sub);
+        return this.companyService.getCompanyOrders(req.user.companyId, query, req.user.sub, req.user.role);
     }
 
     // ==================== Профиль компании ====================
@@ -338,7 +338,7 @@ export class CompanyController {
     @RequirePermissions('orders')
     @ApiOperation({ summary: 'Принять заявку в работу' })
     async acceptOrder(@Param('id') id: string, @Request() req: any) {
-        return this.ordersService.acceptOrder(id, req.user.companyId);
+        return this.ordersService.acceptOrder(id, req.user.companyId, req.user.sub);
     }
 
     @Put('orders/:id/reject')
@@ -354,7 +354,7 @@ export class CompanyController {
     @RequirePermissions('orders')
     @ApiOperation({ summary: 'Взять заявку в работу с биржи' })
     async takeOrder(@Param('id') id: string, @Request() req: any) {
-        return this.ordersService.takeOrder(id, req.user.companyId);
+        return this.ordersService.takeOrder(id, req.user.companyId, req.user.sub);
     }
 
     @Put('orders/:id/assign-driver')
@@ -371,6 +371,23 @@ export class CompanyController {
             assignedDriverPlate: dto.assignedDriverPlate,
             assignedDriverTrailer: dto.assignedDriverTrailer,
         });
+    }
+
+    @Put('orders/:id/responsible')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Передать заявку другому менеджеру своей компании' })
+    async reassignResponsible(
+        @Param('id') id: string,
+        @Body() dto: { userId: string },
+        @Request() req: any,
+    ) {
+        const result = await this.ordersService.reassignResponsible(id, req.user.companyId, dto.userId);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'order',
+            entityId: id, entityLabel: `Заявка №${(result as any)?.orderNumber || id}`,
+            details: { responsible: (result as any)?.targetName || dto.userId },
+        });
+        return result;
     }
 
     @Put('orders/:id/assign-forwarder')

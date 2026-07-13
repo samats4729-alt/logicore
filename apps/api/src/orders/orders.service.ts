@@ -358,6 +358,12 @@ export class OrdersService implements OnModuleInit {
                 statusHistory: { orderBy: { changedAt: 'desc' } },
                 problems: true,
                 responsibleManager: { select: { companyId: true } },
+                responsibles: {
+                    include: {
+                        user: { select: { id: true, firstName: true, lastName: true } },
+                        company: { select: { id: true, name: true } },
+                    },
+                },
             },
         });
 
@@ -1009,12 +1015,72 @@ export class OrdersService implements OnModuleInit {
     /**
      * Принять заявку в работу
      */
-    async acceptOrder(orderId: string, companyId: string) {
+    // ==================== Ответственные от компаний ====================
+
+    /**
+     * Назначить ответственного менеджера от компании по заявке.
+     * onlyIfEmpty — не перезаписывать, если у компании уже есть ответственный
+     * (используется при автоназначении «кто принял — тот и ведёт»).
+     */
+    async setCompanyResponsible(orderId: string, companyId: string, userId: string, onlyIfEmpty = true) {
+        if (!orderId || !companyId || !userId) return null;
+        try {
+            const existing = await this.prisma.orderResponsible.findUnique({
+                where: { orderId_companyId: { orderId, companyId } },
+            });
+            if (existing) {
+                if (onlyIfEmpty) return existing;
+                return this.prisma.orderResponsible.update({
+                    where: { id: existing.id },
+                    data: { userId },
+                });
+            }
+            return await this.prisma.orderResponsible.create({
+                data: { orderId, companyId, userId },
+            });
+        } catch (error) {
+            // Автоназначение не должно ломать основную операцию
+            console.warn('setCompanyResponsible failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Передать заявку другому менеджеру своей компании (только админ компании).
+     */
+    async reassignResponsible(orderId: string, companyId: string, targetUserId: string) {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { id: true, orderNumber: true, customerCompanyId: true, forwarderId: true, partnerId: true, subForwarderId: true },
+        });
+        if (!order) throw new NotFoundException('Заявка не найдена');
+
+        const participates = [order.customerCompanyId, order.forwarderId, order.partnerId, order.subForwarderId].includes(companyId);
+        if (!participates) {
+            throw new ForbiddenException('Ваша компания не участвует в этой заявке');
+        }
+
+        const target = await this.prisma.user.findUnique({
+            where: { id: targetUserId },
+            select: { id: true, companyId: true, role: true, isActive: true, firstName: true, lastName: true },
+        });
+        if (!target || target.companyId !== companyId || !target.isActive) {
+            throw new BadRequestException('Менеджер не найден в вашей компании');
+        }
+        if (target.role === 'DRIVER' || target.role === 'RECIPIENT') {
+            throw new BadRequestException('Ответственным может быть только офисный сотрудник');
+        }
+
+        const result = await this.setCompanyResponsible(orderId, companyId, targetUserId, false);
+        return { ...result, orderNumber: order.orderNumber, targetName: `${target.lastName} ${target.firstName}` };
+    }
+
+    async acceptOrder(orderId: string, companyId: string, userId?: string) {
         const order = await this.findById(orderId);
         if (order.forwarderId !== companyId && order.subForwarderId !== companyId) {
             throw new ForbiddenException('Вы не можете принять эту заявку');
         }
-        return this.prisma.order.update({
+        const updated = await this.prisma.order.update({
             where: { id: orderId },
             data: {
                 isConfirmed: true,
@@ -1026,6 +1092,13 @@ export class OrdersService implements OnModuleInit {
                 },
             },
         });
+
+        // Кто принял — тот и ведёт заявку со стороны своей компании
+        if (userId) {
+            await this.setCompanyResponsible(orderId, companyId, userId, true);
+        }
+
+        return updated;
     }
 
     /**
@@ -1112,12 +1185,12 @@ export class OrdersService implements OnModuleInit {
     /**
      * Взять заявку в работу с биржи
      */
-    async takeOrder(orderId: string, companyId: string) {
+    async takeOrder(orderId: string, companyId: string, userId?: string) {
         const order = await this.findById(orderId);
         if (order.forwarderId) throw new ForbiddenException('Заявка уже занята другим экспедитором');
         if (order.status !== OrderStatus.PENDING) throw new ForbiddenException('Заявка не доступна для взятия');
 
-        return this.prisma.order.update({
+        const updated = await this.prisma.order.update({
             where: { id: orderId },
             data: {
                 forwarderId: companyId,
@@ -1131,6 +1204,13 @@ export class OrdersService implements OnModuleInit {
                 },
             },
         });
+
+        // Кто взял с биржи — тот и ведёт заявку со стороны своей компании
+        if (userId) {
+            await this.setCompanyResponsible(orderId, companyId, userId, true);
+        }
+
+        return updated;
     }
 
 }

@@ -351,7 +351,7 @@ export class CompanyService {
     /**
      * Получить заявки компании с пагинацией
      */
-    async getCompanyOrders(companyId: string, query: PaginationQueryDto & { type?: string; mine?: string } = {}, userId?: string) {
+    async getCompanyOrders(companyId: string, query: PaginationQueryDto & { type?: string; mine?: string } = {}, userId?: string, requesterRole?: string) {
         const { skip, take, page, limit } = getPaginationParams(query);
         
         let where: any = {};
@@ -441,7 +441,32 @@ export class CompanyService {
             where = {
                 AND: [
                     where,
-                    { OR: [{ responsibleManagerId: userId }, { customerId: userId }] },
+                    {
+                        OR: [
+                            { responsibleManagerId: userId },
+                            { customerId: userId },
+                            { responsibles: { some: { companyId, userId } } },
+                        ],
+                    },
+                ],
+            };
+        }
+
+        // Приватность заявок для менеджеров: видны только свои заявки и заявки,
+        // у которых от компании ещё нет ответственного (не принятые — «кто примет,
+        // тот и ведёт»). Админ, экспедитор, бухгалтер и завсклад видят всё.
+        if (requesterRole === 'LOGISTICIAN' && userId) {
+            where = {
+                AND: [
+                    where,
+                    {
+                        OR: [
+                            { responsibles: { some: { companyId, userId } } },
+                            { responsibles: { none: { companyId } } },
+                            { responsibleManagerId: userId },
+                            { customerId: userId },
+                        ],
+                    },
                 ],
             };
         }

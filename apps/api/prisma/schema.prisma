@@ -111,6 +111,7 @@ model User {
   gpsPoints     GpsPoint[]
   documents     Document[]
   orderAssignments  OrderAssignee[]  @relation("OrderAssignees")
+  orderResponsibilities OrderResponsible[] @relation("UserOrderResponsibilities")
   orderChangeLogs   OrderChangeLog[] @relation("OrderChangeLogs")
   closedPeriods     ClosedPeriod[]
   createdInvoices   Invoice[]        @relation("InvoiceCreator")
@@ -202,6 +203,7 @@ model Company {
   userCompanyRelations UserCompanyRelation[]
   documents          Document[]
   subscription       CompanySubscription?
+  orderResponsibilities OrderResponsible[] @relation("CompanyOrderResponsibilities")
 
   @@index([bin])
 }
@@ -436,6 +438,7 @@ model Order {
   bonuses         Bonus[]
   payments        Payment[]
   assignees       OrderAssignee[]
+  responsibles    OrderResponsible[]
   changeLog       OrderChangeLog[]
   incomingInvoiceId String?
   incomingInvoice   Invoice?    @relation("IncomingInvoiceOrders", fields: [incomingInvoiceId], references: [id])
@@ -1168,4 +1171,22 @@ model AuditLog {
 
   @@index([companyId, createdAt])
   @@index([createdAt])
+}
+
+
+// Ответственный менеджер от каждой компании-участника заявки
+model OrderResponsible {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company  @relation("CompanyOrderResponsibilities", fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("UserOrderResponsibilities", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderId, companyId])
+  @@index([userId])
+  @@index([companyId])
 }

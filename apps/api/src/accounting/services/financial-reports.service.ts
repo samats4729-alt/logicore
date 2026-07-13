@@ -43,6 +43,12 @@ export class FinancialReportsService {
                 forwarder: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
                 responsibleManager: { select: { id: true, firstName: true, lastName: true } },
+                responsibles: {
+                    include: {
+                        user: { select: { id: true, firstName: true, lastName: true } },
+                        company: { select: { id: true, name: true } },
+                    },
+                },
                 statusHistory: { orderBy: { changedAt: 'desc' } },
                 driver: {
                     select: {

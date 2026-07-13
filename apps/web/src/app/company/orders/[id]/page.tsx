@@ -20,7 +20,7 @@ import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
-import { resolveCompanyName, prepareCompanyOptions } from '@/lib/company-helper';
+import { resolveCompanyName, prepareCompanyOptions, shortenCompanyName } from '@/lib/company-helper';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -248,6 +248,12 @@ export default function OrderDetailPage() {
     const [shareEmailsList, setShareEmailsList] = useState<{ email: string; checked: boolean; label: string }[]>([]);
     const [customEmailInput, setCustomEmailInput] = useState('');
 
+    // Передача заявки другому менеджеру (админ компании)
+    const [transferModalOpen, setTransferModalOpen] = useState(false);
+    const [transferUsers, setTransferUsers] = useState<any[]>([]);
+    const [transferUserId, setTransferUserId] = useState<string | undefined>(undefined);
+    const [transferLoading, setTransferLoading] = useState(false);
+
     // Quick partner modal
     const [quickPartnerModalOpen, setQuickPartnerModalOpen] = useState(false);
     const [quickPartnerForm] = Form.useForm();
@@ -274,6 +280,34 @@ export default function OrderDetailPage() {
             const res = await api.get(`/documents/order/${orderId}`);
             setDocuments(res.data);
         } catch { }
+    };
+
+    // Передать заявку другому менеджеру своей компании
+    const openTransferModal = async () => {
+        setTransferModalOpen(true);
+        try {
+            const res = await api.get('/company/users', { params: { segment: 'office' } });
+            const raw = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            setTransferUsers(raw);
+        } catch {
+            message.error('Не удалось загрузить список сотрудников');
+        }
+    };
+
+    const handleTransferResponsible = async () => {
+        if (!transferUserId) return;
+        setTransferLoading(true);
+        try {
+            await api.put(`/company/orders/${orderId}/responsible`, { userId: transferUserId });
+            message.success('Заявка передана другому менеджеру');
+            setTransferModalOpen(false);
+            setTransferUserId(undefined);
+            fetchData();
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось передать заявку');
+        } finally {
+            setTransferLoading(false);
+        }
     };
 
     const fetchDrivers = async () => {
@@ -1666,6 +1700,19 @@ export default function OrderDetailPage() {
                                                         {order.responsibleManager.firstName} {order.responsibleManager.lastName}
                                                     </Descriptions.Item>
                                                 )}
+                                                {(order.responsibles || []).map((r: any) => (
+                                                    <Descriptions.Item
+                                                        key={r.id}
+                                                        label={`Ответственный · ${r.company?.name ? shortenCompanyName(r.company.name) : 'компания'}`}
+                                                    >
+                                                        <Text strong>{r.user?.lastName} {r.user?.firstName}</Text>
+                                                        {r.companyId === user?.companyId && ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '') && (
+                                                            <Button size="small" type="link" onClick={openTransferModal}>
+                                                                Передать
+                                                            </Button>
+                                                        )}
+                                                    </Descriptions.Item>
+                                                ))}
                                             </Descriptions>
                                         </Card>
                                     </Col>
@@ -1988,6 +2035,33 @@ export default function OrderDetailPage() {
 
 
             {/* =================== SHARE POA MODAL =================== */}
+            <Modal
+                title="Передать заявку другому менеджеру"
+                open={transferModalOpen}
+                onCancel={() => { setTransferModalOpen(false); setTransferUserId(undefined); }}
+                onOk={handleTransferResponsible}
+                okText="Передать"
+                cancelText="Отмена"
+                confirmLoading={transferLoading}
+                okButtonProps={{ disabled: !transferUserId }}
+                width={420}
+            >
+                <div style={{ marginBottom: 10, fontSize: 13, color: 'var(--lc-text-ter)' }}>
+                    Заявка перейдёт в «Мои заявки» выбранного менеджера. Смена ответственного записывается в журнал действий.
+                </div>
+                <Select
+                    style={{ width: '100%' }}
+                    placeholder="Выберите менеджера"
+                    showSearch
+                    optionFilterProp="label"
+                    value={transferUserId}
+                    onChange={setTransferUserId}
+                    options={transferUsers
+                        .filter((u: any) => !['DRIVER', 'RECIPIENT'].includes(u.role))
+                        .map((u: any) => ({ value: u.id, label: `${u.lastName} ${u.firstName}${u.position ? ` — ${u.position}` : ''}` }))}
+                />
+            </Modal>
+
             <Modal title="Отправить доверенность по email" open={sharePoAModalOpen} onCancel={() => setSharePoAModalOpen(false)} onOk={handleSharePoA} okText="Отправить" cancelText="Отмена" confirmLoading={sharePoALoading} width={480}>
                 <div style={{ marginBottom: 16 }}>
                     <Text type="secondary">Выберите получателей для отправки доверенности (PDF):</Text>

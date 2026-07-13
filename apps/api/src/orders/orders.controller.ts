@@ -45,6 +45,11 @@ export class OrdersController {
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
         });
 
+        // Создатель — ответственный от своей компании
+        if (req.user.companyId) {
+            await this.ordersService.setCompanyResponsible(order.id, req.user.companyId, req.user.sub, true);
+        }
+
         await this.auditService.log({
             companyId: req.user.companyId,
             user: req.user,
