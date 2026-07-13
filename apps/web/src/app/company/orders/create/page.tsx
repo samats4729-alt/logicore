@@ -668,6 +668,11 @@ export default function CreateOrderPage() {
                             </>
                         )}
                     >
+                        {pt.id && !locations.some(l => l.id === pt.id) && (
+                            <Select.Option key={pt.id} value={pt.id}>
+                                {pt.city ? `[${pt.city}] ` : ''}{pt.address || 'Выбранный адрес'}
+                            </Select.Option>
+                        )}
                         {getLocationOptions().map(group => (
                             <Select.OptGroup key={group.label} label={group.label}>
                                 {group.options.map(l => (

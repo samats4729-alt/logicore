@@ -105,10 +105,22 @@ export class LocationsService {
             });
         }
         if (companyId) {
+            // Сотрудники компании, чтобы показывать созданные ими точки
+            // независимо от привязки (например, склад контрагента)
+            const companyUsers = await this.prisma.user.findMany({
+                where: { companyId },
+                select: { id: true },
+            });
+            const companyUserIds = companyUsers.map(u => u.id);
+
             whereConditions.push({
                 OR: [
                     { companyId },
                     { companyId: null }, // Общие адреса без привязки к компании
+                    // Точки, привязанные к внешним контрагентам компании
+                    { company: { isExternal: true, createdByCompanyId: companyId } },
+                    // Точки, созданные сотрудниками компании (привязанные к партнёрам)
+                    ...(companyUserIds.length ? [{ createdById: { in: companyUserIds } }] : []),
                 ],
             });
         }
