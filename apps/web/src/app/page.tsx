@@ -411,6 +411,8 @@ export default function HomePage() {
                         <span onClick={() => router.push('/privacy')}>Конфиденциальность</span>
                         <span className={styles.footerDot}>/</span>
                         <span onClick={() => router.push('/terms')}>Оферта</span>
+                        <span className={styles.footerDot}>/</span>
+                        <a href="mailto:support@logicore.kz" style={{ color: 'inherit', textDecoration: 'none' }}>support@logicore.kz</a>
                     </span>
                 </div>
             </footer>
