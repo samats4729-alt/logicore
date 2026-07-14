@@ -7,11 +7,6 @@ export const metadata = {
 export default function TermsPage() {
     return (
         <LegalPage eyebrow="(Документы)" title="Публичная оферта" updated="14.07.2026">
-            <div className="lc-legal-note">
-                Базовая редакция. Перед началом платного использования рекомендуем
-                согласовать текст с юристом.
-            </div>
-
             <h2>1. Общие положения</h2>
             <p>
                 Настоящий документ является публичной офертой ТОО «Alfa Business Solutions»
