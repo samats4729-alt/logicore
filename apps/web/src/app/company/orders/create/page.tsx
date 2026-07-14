@@ -1,11 +1,11 @@
 'use client';
 // Trigger redeployment
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import {
     Typography, Button, Form, Input, InputNumber, Select, DatePicker,
-    message, Row, Col, Card, Modal, Steps, Divider, theme, Tag
+    message, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
@@ -216,6 +216,83 @@ export default function CreateOrderPage() {
         fetchCargoTypes();
         fetchPartners();
     }, [user]);
+
+    // Дублирование заявки: /company/orders/create?from=<orderId> — копируем все данные, кроме даты
+    const duplicateLoadedRef = useRef(false);
+    const [pendingParties, setPendingParties] = useState<{ customer?: string; carrier?: string } | null>(null);
+
+    useEffect(() => {
+        if (duplicateLoadedRef.current) return;
+        const fromId = new URLSearchParams(window.location.search).get('from');
+        if (!fromId) return;
+        duplicateLoadedRef.current = true;
+
+        (async () => {
+            try {
+                const [orderRes, myRes] = await Promise.all([
+                    api.get(`/orders/${fromId}`),
+                    api.get('/company/my-companies'),
+                ]);
+                const o = orderRes.data;
+                const myIds = new Set<string>((myRes.data || []).map((c: any) => c.id));
+
+                form.setFieldsValue({
+                    natureOfCargo: o.natureOfCargo || undefined,
+                    cargoDescription: o.cargoDescription || undefined,
+                    cargoWeight: o.cargoWeight ?? undefined,
+                    cargoVolume: o.cargoVolume ?? undefined,
+                    cargoType: o.cargoType || undefined,
+                    requirements: o.requirements || undefined,
+                    customerPrice: o.customerPrice ?? undefined,
+                    driverCost: (o.subForwarderPrice ?? o.driverCost) ?? undefined,
+                    vatRate: o.vatRate ?? undefined,
+                    hasVat: o.hasVat ?? undefined,
+                    executorVatRate: o.executorVatRate ?? undefined,
+                    executorHasVat: o.executorHasVat ?? undefined,
+                });
+
+                if (Array.isArray(o.routePoints) && o.routePoints.length > 0) {
+                    setRoutePointsState(o.routePoints.map((rp: any) => ({
+                        id: rp.locationId || rp.location?.id,
+                        city: rp.location?.city || '',
+                        address: rp.location?.address || '',
+                        latitude: rp.location?.latitude,
+                        longitude: rp.location?.longitude,
+                        pointType: rp.pointType,
+                    })));
+                }
+
+                // Стороны сделки относительно моих организаций
+                const customer = o.customerCompanyId
+                    ? (myIds.has(o.customerCompanyId) ? MY_COMPANY_VALUE : o.customerCompanyId)
+                    : undefined;
+                let carrier: string | undefined;
+                if (o.subForwarderId && !myIds.has(o.subForwarderId)) {
+                    carrier = o.subForwarderId;
+                } else if (o.forwarderId) {
+                    carrier = myIds.has(o.forwarderId) ? MY_COMPANY_VALUE : o.forwarderId;
+                }
+                setPendingParties({ customer, carrier });
+
+                message.success(`Скопированы данные заявки ${o.orderNumber}. Проверьте и укажите дату погрузки.`);
+            } catch {
+                message.error('Не удалось загрузить заявку для дублирования');
+            }
+        })();
+    }, []);
+
+    // Стороны применяем после загрузки списка контрагентов (иначе в селекте показался бы «сырой» id)
+    useEffect(() => {
+        if (!pendingParties) return;
+        const needsPartners = (v?: string) => !!v && v !== MY_COMPANY_VALUE;
+        if ((needsPartners(pendingParties.customer) || needsPartners(pendingParties.carrier)) && partners.length === 0) return;
+        const resolve = (v?: string) => (!v || v === MY_COMPANY_VALUE || partners.some(p => p.id === v)) ? v : undefined;
+        const cust = resolve(pendingParties.customer);
+        const carr = resolve(pendingParties.carrier);
+        if (cust) setSelectedCustomer(cust);
+        if (carr) setSelectedCarrier(carr);
+        setPendingParties(null);
+    }, [pendingParties, partners]);
 
     const fetchLocations = async () => {
         try {
@@ -700,14 +777,22 @@ export default function CreateOrderPage() {
         <Card size="small" style={{ marginTop: 16 }}>
             <Row gutter={16}>
                 <Col xs={24} md={12}>
-                    <Form.Item name="natureOfCargo" label="Характер груза" rules={[{ required: true, message: 'Выберите характер груза' }]}>
-                        <Select placeholder="Выберите..." showSearch optionFilterProp="children" size="large">
-                            {cargoCategories.map(cat => (
-                                <Select.OptGroup key={cat.id} label={cat.name}>
-                                    {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
-                                </Select.OptGroup>
-                            ))}
-                        </Select>
+                    <Form.Item
+                        name="natureOfCargo"
+                        label="Характер груза"
+                        rules={[{ required: true, message: 'Выберите из списка или впишите свой вариант' }]}
+                    >
+                        <AutoComplete
+                            placeholder="Выберите или впишите свой вариант..."
+                            size="large"
+                            options={cargoCategories.map(cat => ({
+                                label: cat.name,
+                                options: (cat.types || []).map((t: any) => ({ value: t.name, label: t.name })),
+                            }))}
+                            filterOption={(input, option: any) =>
+                                String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                            }
+                        />
                     </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>

@@ -6,7 +6,7 @@ import {
     Typography, Tag, Button, Descriptions, Card, Row, Col, Statistic, Table,
     Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline,
     Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip,
-    Alert, theme
+    Alert, theme, AutoComplete
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
@@ -14,7 +14,7 @@ import {
     EditOutlined, DeleteOutlined, FilePdfOutlined, UploadOutlined,
     UserAddOutlined, MailOutlined, FileTextOutlined, SwapOutlined,
     CloseCircleOutlined, CarOutlined, InboxOutlined, TeamOutlined,
-    ExclamationCircleOutlined
+    ExclamationCircleOutlined, CopyOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -1087,28 +1087,35 @@ export default function OrderDetailPage() {
                 {isEditing && (
                     <Tag color="blue" style={{ fontSize: 13, padding: '4px 12px', borderRadius: 4, margin: 0 }}>Режим редактирования</Tag>
                 )}
-                {isNotFinished && !isEditing && (
+                {!isEditing && (
                     <Space wrap size="small">
-                        {canChangeStatus && (
+                        {isNotFinished && canChangeStatus && (
                             <Button type="primary" icon={<SwapOutlined />} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
                                 Изменить статус
                             </Button>
                         )}
-                        <Button icon={<EditOutlined />} onClick={startEditing}>
-                            Редактировать
-                        </Button>
-                        <Popconfirm
-                            title="Отменить заявку?"
-                            description="Заявка будет отменена."
-                            onConfirm={handleCancelOrder}
-                            okText="Да, отменить"
-                            cancelText="Нет"
-                            okButtonProps={{ danger: true }}
-                        >
-                            <Button danger icon={<CloseCircleOutlined />}>
-                                Отменить заявку
+                        {isNotFinished && (
+                            <Button icon={<EditOutlined />} onClick={startEditing}>
+                                Редактировать
                             </Button>
-                        </Popconfirm>
+                        )}
+                        <Button icon={<CopyOutlined />} onClick={() => router.push(`/company/orders/create?from=${orderId}`)}>
+                            Дублировать
+                        </Button>
+                        {isNotFinished && (
+                            <Popconfirm
+                                title="Отменить заявку?"
+                                description="Заявка будет отменена."
+                                onConfirm={handleCancelOrder}
+                                okText="Да, отменить"
+                                cancelText="Нет"
+                                okButtonProps={{ danger: true }}
+                            >
+                                <Button danger icon={<CloseCircleOutlined />}>
+                                    Отменить заявку
+                                </Button>
+                            </Popconfirm>
+                        )}
                     </Space>
                 )}
             </div>
@@ -1291,14 +1298,18 @@ export default function OrderDetailPage() {
                                             >
                                                 <Row gutter={12}>
                                                     <Col span={12}>
-                                                        <Form.Item name="natureOfCargo" label="Характер груза" rules={[{ required: true, message: 'Выберите характер груза' }]}>
-                                                            <Select placeholder="Выберите..." showSearch optionFilterProp="children" size="large">
-                                                                {cargoCategories.map(cat => (
-                                                                    <Select.OptGroup key={cat.id} label={cat.name}>
-                                                                        {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
-                                                                    </Select.OptGroup>
-                                                                ))}
-                                                            </Select>
+                                                        <Form.Item name="natureOfCargo" label="Характер груза" rules={[{ required: true, message: 'Выберите из списка или впишите свой вариант' }]}>
+                                                            <AutoComplete
+                                                                placeholder="Выберите или впишите свой вариант..."
+                                                                size="large"
+                                                                options={cargoCategories.map(cat => ({
+                                                                    label: cat.name,
+                                                                    options: (cat.types || []).map((t: any) => ({ value: t.name, label: t.name })),
+                                                                }))}
+                                                                filterOption={(input, option: any) =>
+                                                                    String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                                                                }
+                                                            />
                                                         </Form.Item>
                                                     </Col>
                                                     <Col span={12}>
