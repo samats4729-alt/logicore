@@ -29,6 +29,7 @@ import { BillingModule } from './billing/billing.module';
 import { AuditModule } from './audit/audit.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
+import { AdminStatsModule } from './admin-stats/admin-stats.module';
 
 @Module({
     imports: [
@@ -67,6 +68,7 @@ import { GeoModule } from './geo/geo.module';
         AuditModule,
         MonitoringModule,
         GeoModule,
+        AdminStatsModule,
     ],
 })
 export class AppModule { }
