@@ -3,8 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { AutoComplete, Input, Spin } from 'antd';
 import { EnvironmentOutlined, SearchOutlined } from '@ant-design/icons';
-
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
+import { api } from '@/lib/api';
 
 interface MapboxFeature {
     id: string;
@@ -54,16 +53,10 @@ export default function AddressAutocomplete({
         }
 
         debounceRef.current = setTimeout(async () => {
-            const apiKey = process.env.NEXT_PUBLIC_2GIS_API_KEY;
-            if (!apiKey) {
-                setKeyMissing(true);
-                setOptions([]);
-                setLoading(false);
-                return;
-            }
             setLoading(true);
             try {
-                // 2GIS Geocoder API Implementation
+                // Подсказки идут через наш API (/geo/suggest): ключ 2ГИС хранится
+                // на сервере, повторные запросы отдаются из кэша Redis
 
                 let q = searchQuery;
                 // 2GIS handles city context well, but appending prevents global search
@@ -71,25 +64,14 @@ export default function AddressAutocomplete({
                     q = `${city}, ${searchQuery}`;
                 }
 
-                // 2GIS Params
-                const params = new URLSearchParams({
-                    q: q,
-                    key: apiKey,
-                    fields: 'items.point,items.address_name,items.building_name,items.full_name',
-                    page_size: '10',
-                    // Bound search to KZ or Almaty? 2GIS is usually local.
-                    // We can use 'region_id' if we know it, or view_point, but 'q' with city is usually enough.
-                });
-
-                const response = await fetch(
-                    `https://catalog.api.2gis.com/3.0/items/geocode?` + params
-                );
-
-                const data = await response.json();
-
-                // 2GIS Response Structure:
-                // { meta: { code: 200 }, result: { items: [...] } }
-                const items = data.result?.items || [];
+                const response = await api.get('/geo/suggest', { params: { q } });
+                if (response.data?.configured === false) {
+                    setKeyMissing(true);
+                    setOptions([]);
+                    return;
+                }
+                setKeyMissing(false);
+                const items = response.data?.items || [];
 
                 setOptions(
                     items.map((item: any) => {
@@ -173,7 +155,7 @@ export default function AddressAutocomplete({
                 loading
                     ? <Spin size="small" />
                     : keyMissing && searchQuery.length >= 2
-                        ? <span style={{ fontSize: 12, color: '#b45309' }}>Поиск адресов не настроен: нет NEXT_PUBLIC_2GIS_API_KEY (сервис web, нужна пересборка)</span>
+                        ? <span style={{ fontSize: 12, color: '#b45309' }}>Поиск адресов не настроен: задайте DGIS_API_KEY на api-сервисе</span>
                         : null
             }
             disabled={disabled}

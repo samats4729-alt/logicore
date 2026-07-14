@@ -237,25 +237,16 @@ export default function LocationForm({
 
     const handleManualGeocode = async () => {
         if (!lat || !lng) return;
-        const apiKey = process.env.NEXT_PUBLIC_2GIS_API_KEY;
-        if (!apiKey) {
-            message.warning('2GIS API key не сконфигурирован');
-            return;
-        }
 
         setIsFetchingAddress(true);
         try {
-            const params = new URLSearchParams({
-                key: apiKey,
-                fields: 'items.point,items.address_name,items.building_name,items.full_name,items.adm_div',
-                lon: lng.toString(),
-                lat: lat.toString(),
-                radius: '100'
-            });
-
-            const url = `https://catalog.api.2gis.com/3.0/items/geocode?${params}`;
-            const res = await fetch(url);
-            const data2gis = await res.json();
+            // Обратный геокодинг через наш API (/geo/reverse) с кэшем
+            const res = await api.get('/geo/reverse', { params: { lat, lon: lng } });
+            if (res.data?.configured === false) {
+                message.warning('Геокодер не настроен: задайте DGIS_API_KEY на api-сервисе');
+                return;
+            }
+            const data2gis = { result: { items: res.data?.items || [] } };
 
             let finalName = '';
             if (data2gis && data2gis.result && data2gis.result.items && data2gis.result.items.length > 0) {

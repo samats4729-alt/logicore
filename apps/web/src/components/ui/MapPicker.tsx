@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { EnvironmentOutlined } from '@ant-design/icons';
-import { loadMapgl, DGIS_KEY } from '@/lib/mapgl-loader';
+import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
 
 const MapPicker = ({
     initialLat,
@@ -14,92 +13,71 @@ const MapPicker = ({
     onLocationSelect: (lat: number, lng: number, pickedName?: string) => void
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const mapRef = useRef<any>(null);
-    const markerRef = useRef<any>(null);
-    const mapglRef = useRef<any>(null);
+    const mapRef = useRef<maplibregl.Map | null>(null);
+    const markerRef = useRef<maplibregl.Marker | null>(null);
     // Актуальный колбэк без пересоздания карты
     const onSelectRef = useRef(onLocationSelect);
     onSelectRef.current = onLocationSelect;
 
     const placeMarker = (lng: number, lat: number) => {
-        if (!mapglRef.current || !mapRef.current) return;
+        if (!mapRef.current) return;
         if (markerRef.current) {
-            markerRef.current.destroy();
+            markerRef.current.remove();
             markerRef.current = null;
         }
-        markerRef.current = new mapglRef.current.Marker(mapRef.current, {
-            coordinates: [lng, lat],
-        });
+        markerRef.current = new maplibregl.Marker({ color: '#1677ff' })
+            .setLngLat([lng, lat])
+            .addTo(mapRef.current);
     };
 
     // Инициализация карты
     useEffect(() => {
-        if (!DGIS_KEY || !containerRef.current) return;
+        if (!containerRef.current) return;
         let cancelled = false;
 
         // Небольшая задержка: даём анимации модалки закончиться, чтобы WebGL-инициализация не дёргала интерфейс
         const timer = window.setTimeout(() => {
-            loadMapgl().then((mapgl) => {
-                if (cancelled || !containerRef.current) return;
-                mapglRef.current = mapgl;
+            if (cancelled || !containerRef.current) return;
 
-                const hasPoint = !!(initialLat && initialLng);
-                const map = new mapgl.Map(containerRef.current, {
-                    center: [initialLng || 76.8897, initialLat || 43.2389],
-                    zoom: hasPoint ? 17.2 : 13,
-                    // Наклон камеры — включает 3D-здания 2GIS на близком зуме
-                    pitch: 45,
-                    rotation: -15,
-                    key: DGIS_KEY,
-                    lang: 'ru',
-                });
-                mapRef.current = map;
+            const hasPoint = !!(initialLat && initialLng);
+            const map = new maplibregl.Map({
+                container: containerRef.current,
+                style: MAP_STYLE_URL,
+                center: [initialLng || 76.8897, initialLat || 43.2389],
+                zoom: hasPoint ? 17.2 : 13,
+                pitch: 45,
+                bearing: -15,
+                attributionControl: { compact: true },
+            });
+            mapRef.current = map;
 
-                if (hasPoint) {
-                    placeMarker(initialLng as number, initialLat as number);
-                }
+            if (hasPoint) {
+                placeMarker(initialLng as number, initialLat as number);
+            }
 
-                map.on('click', (e: any) => {
-                    const [lng, lat] = e.lngLat;
-                    placeMarker(lng, lat);
-                    onSelectRef.current(lat, lng);
-                });
-            }).catch(() => { /* заглушка ниже уже объясняет про ключ; сеть — редкий случай */ });
+            map.on('click', (e) => {
+                const { lng, lat } = e.lngLat;
+                placeMarker(lng, lat);
+                onSelectRef.current(lat, lng);
+            });
         }, 150);
 
         return () => {
             cancelled = true;
             window.clearTimeout(timer);
-            if (markerRef.current) { markerRef.current.destroy(); markerRef.current = null; }
-            if (mapRef.current) { mapRef.current.destroy(); mapRef.current = null; }
+            if (markerRef.current) { markerRef.current.remove(); markerRef.current = null; }
+            if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Перелёт к точке из поиска адреса (зум 17+ — виден 3D-город)
+    // Перелёт к точке из поиска адреса (зум 17+ — видны номера домов)
     useEffect(() => {
         if (!mapRef.current || !initialLat || !initialLng) return;
         mapRef.current.setCenter([initialLng, initialLat]);
         mapRef.current.setZoom(17.2);
         placeMarker(initialLng, initialLat);
     }, [initialLat, initialLng]);
-
-    if (!DGIS_KEY) {
-        return (
-            <div style={{
-                height: 400, width: '100%', borderRadius: 8, background: '#f6f7f9',
-                border: '1px dashed #d9dce3', display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', gap: 8, color: '#8a91a0', fontSize: 13,
-            }}>
-                <EnvironmentOutlined style={{ fontSize: 28, color: '#c3c9d4' }} />
-                <div style={{ fontWeight: 600, color: '#5b6472' }}>Карта не настроена</div>
-                <div style={{ textAlign: 'center', maxWidth: 360 }}>
-                    Не задан NEXT_PUBLIC_2GIS_API_KEY. Переменная должна быть на сервисе web
-                    и требует пересборки (redeploy) фронтенда.
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div style={{ height: 400, width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>

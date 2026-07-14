@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { EnvironmentOutlined } from '@ant-design/icons';
-import { loadMapgl, DGIS_KEY } from '@/lib/mapgl-loader';
+import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
 
 interface TrackDriver {
     driverId: string;
@@ -37,37 +36,32 @@ export default function DgisTrackingMap({
     onReady,
 }: DgisTrackingMapProps) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const mapRef = useRef<any>(null);
-    const mapglRef = useRef<any>(null);
-    const driverMarkersRef = useRef<any[]>([]);
-    const myMarkerRef = useRef<any>(null);
+    const mapRef = useRef<maplibregl.Map | null>(null);
+    const driverMarkersRef = useRef<maplibregl.Marker[]>([]);
+    const myMarkerRef = useRef<maplibregl.Marker | null>(null);
     const onDriverClickRef = useRef(onDriverClick);
     onDriverClickRef.current = onDriverClick;
 
-    // Инициализация карты (обычная светлая 2GIS, плоская)
+    // Инициализация карты (MapLibre + OpenFreeMap, бесплатно и без ключей)
     useEffect(() => {
-        if (!DGIS_KEY || !containerRef.current) return;
-        let cancelled = false;
+        if (!containerRef.current) return;
 
-        loadMapgl().then((mapgl) => {
-            if (cancelled || !containerRef.current) return;
-            mapglRef.current = mapgl;
-            const map = new mapgl.Map(containerRef.current, {
-                center: [76.9458, 43.2389],
-                zoom: 12,
-                key: DGIS_KEY,
-                lang: 'ru',
-            });
-            mapRef.current = map;
-            onReady?.(map);
-        }).catch(() => { /* сеть/ключ — ниже есть заглушка про ключ */ });
+        const map = new maplibregl.Map({
+            container: containerRef.current,
+            style: MAP_STYLE_URL,
+            center: [76.9458, 43.2389],
+            zoom: 12,
+            attributionControl: { compact: true },
+        });
+        mapRef.current = map;
+        onReady?.(map);
 
         return () => {
-            cancelled = true;
-            driverMarkersRef.current.forEach(m => m.destroy());
+            driverMarkersRef.current.forEach(m => m.remove());
             driverMarkersRef.current = [];
-            if (myMarkerRef.current) { myMarkerRef.current.destroy(); myMarkerRef.current = null; }
-            if (mapRef.current) { mapRef.current.destroy(); mapRef.current = null; }
+            if (myMarkerRef.current) { myMarkerRef.current.remove(); myMarkerRef.current = null; }
+            map.remove();
+            mapRef.current = null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -75,10 +69,9 @@ export default function DgisTrackingMap({
     // Маркеры водителей (пересобираем при изменении данных/выбора)
     useEffect(() => {
         const map = mapRef.current;
-        const mapgl = mapglRef.current;
-        if (!map || !mapgl) return;
+        if (!map) return;
 
-        driverMarkersRef.current.forEach(m => m.destroy());
+        driverMarkersRef.current.forEach(m => m.remove());
         driverMarkersRef.current = [];
 
         drivers.forEach((driver) => {
@@ -92,11 +85,9 @@ export default function DgisTrackingMap({
             el.title = `${driver.driverName} · ${driver.vehiclePlate}`;
             el.addEventListener('click', () => onDriverClickRef.current(driver));
 
-            const marker = new mapgl.HtmlMarker(map, {
-                coordinates: [driver.longitude, driver.latitude],
-                html: el,
-                anchor: [size / 2, size / 2],
-            });
+            const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+                .setLngLat([driver.longitude, driver.latitude])
+                .addTo(map);
             driverMarkersRef.current.push(marker);
         });
     }, [drivers, selectedDriverId, getDriverColor]);
@@ -104,35 +95,16 @@ export default function DgisTrackingMap({
     // Маркер «моё место»
     useEffect(() => {
         const map = mapRef.current;
-        const mapgl = mapglRef.current;
-        if (!map || !mapgl) return;
-        if (myMarkerRef.current) { myMarkerRef.current.destroy(); myMarkerRef.current = null; }
+        if (!map) return;
+        if (myMarkerRef.current) { myMarkerRef.current.remove(); myMarkerRef.current = null; }
         if (!myLocation) return;
 
         const el = document.createElement('div');
         el.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#1677ff;border:3px solid #fff;box-shadow:0 0 0 6px rgba(22,119,255,0.25), 0 2px 6px rgba(0,0,0,0.3);';
-        myMarkerRef.current = new mapgl.HtmlMarker(map, {
-            coordinates: [myLocation.longitude, myLocation.latitude],
-            html: el,
-            anchor: [8, 8],
-        });
+        myMarkerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([myLocation.longitude, myLocation.latitude])
+            .addTo(map);
     }, [myLocation]);
-
-    if (!DGIS_KEY) {
-        return (
-            <div style={{
-                height: '100%', width: '100%', background: '#f6f7f9',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 8, color: '#8a91a0', fontSize: 13,
-            }}>
-                <EnvironmentOutlined style={{ fontSize: 28, color: '#c3c9d4' }} />
-                <div style={{ fontWeight: 600, color: '#5b6472' }}>Карта не настроена</div>
-                <div style={{ textAlign: 'center', maxWidth: 360 }}>
-                    Не задан NEXT_PUBLIC_2GIS_API_KEY (сервис web, нужна пересборка).
-                </div>
-            </div>
-        );
-    }
 
     return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }

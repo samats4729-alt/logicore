@@ -28,6 +28,7 @@ import { PayrollModule } from './payroll/payroll.module';
 import { BillingModule } from './billing/billing.module';
 import { AuditModule } from './audit/audit.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { GeoModule } from './geo/geo.module';
 
 @Module({
     imports: [
@@ -65,6 +66,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
         BillingModule,
         AuditModule,
         MonitoringModule,
+        GeoModule,
     ],
 })
 export class AppModule { }

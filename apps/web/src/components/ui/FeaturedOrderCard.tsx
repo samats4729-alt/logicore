@@ -6,7 +6,7 @@ import { RightOutlined, PhoneOutlined, EnvironmentOutlined } from '@ant-design/i
 import dayjs from 'dayjs';
 import StatusPill, { STATUS_LABELS } from './StatusPill';
 import { shortenCompanyName } from '@/lib/company-helper';
-import { loadMapgl, DGIS_KEY } from '@/lib/mapgl-loader';
+import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
 import { useTheme } from '@/components/ThemeProvider';
 
 // Грубый прогресс рейса по позиции статуса (точный % по GPS — этап 5 REDESIGN_PLAN.md)
@@ -55,61 +55,64 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
     }, [order?.routePoints]);
 
     useEffect(() => {
-        if (!DGIS_KEY || !containerRef.current) return;
+        if (!containerRef.current) return;
         if (coords.length < 1) return;
 
-        let cancelled = false;
-        loadMapgl().then((mapgl) => {
-            if (cancelled || !containerRef.current) return;
-            const map = new mapgl.Map(containerRef.current, {
-                center: coords[0],
-                zoom: 10,
-                key: DGIS_KEY,
-                lang: 'ru',
-                zoomControl: false,
-                attributionControl: false,
-            });
-            mapRef.current = map;
+        const map = new maplibregl.Map({
+            container: containerRef.current,
+            style: MAP_STYLE_URL,
+            center: coords[0],
+            zoom: 10,
+            interactive: false,
+            attributionControl: false,
+        });
+        mapRef.current = map;
 
-            // Маркеры точек
-            coords.forEach((c, i) => {
-                const isFirst = i === 0;
-                const el = document.createElement('div');
-                el.style.cssText = `width:${isFirst ? 10 : 8}px;height:${isFirst ? 10 : 8}px;border-radius:50%;background:${isFirst ? '#1677ff' : '#dc3545'};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);`;
-                new mapgl.HtmlMarker(map, { coordinates: c, html: el, anchor: [isFirst ? 5 : 4, isFirst ? 5 : 4] });
-            });
+        const markers: maplibregl.Marker[] = [];
 
-            // Линия маршрута
-            if (coords.length >= 2) {
-                new mapgl.Polyline(map, {
-                    coordinates: coords,
-                    width: 2,
-                    color: '#1677ff',
-                    dash: [4, 4],
+        // Маркеры точек
+        coords.forEach((c, i) => {
+            const isFirst = i === 0;
+            const el = document.createElement('div');
+            el.style.cssText = `width:${isFirst ? 10 : 8}px;height:${isFirst ? 10 : 8}px;border-radius:50%;background:${isFirst ? '#1677ff' : '#dc3545'};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);`;
+            markers.push(new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(c).addTo(map));
+        });
+
+        // Линия маршрута (пунктир)
+        if (coords.length >= 2) {
+            map.on('load', () => {
+                if (map.getSource('route')) return;
+                map.addSource('route', {
+                    type: 'geojson',
+                    data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } },
                 });
-            }
+                map.addLayer({
+                    id: 'route-line',
+                    type: 'line',
+                    source: 'route',
+                    paint: { 'line-color': '#1677ff', 'line-width': 2, 'line-dasharray': [2, 2] },
+                });
+            });
+        }
 
-            // Подгоняем viewport под все точки (fitBounds — правильный метод 2GIS)
-            if (coords.length >= 2) {
-                const lngs = coords.map(c => c[0]);
-                const lats = coords.map(c => c[1]);
-                map.fitBounds(
-                    {
-                        southWest: [Math.min(...lngs), Math.min(...lats)],
-                        northEast: [Math.max(...lngs), Math.max(...lats)],
-                    },
-                    { padding: { top: 24, right: 24, bottom: 24, left: 24 } },
-                );
-            }
-        }).catch(() => {});
+        // Подгоняем viewport под все точки
+        if (coords.length >= 2) {
+            const lngs = coords.map(c => c[0]);
+            const lats = coords.map(c => c[1]);
+            map.fitBounds(
+                [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+                { padding: 24, duration: 0 },
+            );
+        }
 
         return () => {
-            cancelled = true;
-            if (mapRef.current) { mapRef.current.destroy(); mapRef.current = null; }
+            markers.forEach(m => m.remove());
+            map.remove();
+            mapRef.current = null;
         };
     }, [coords]);
 
-    if (!DGIS_KEY || coords.length < 1) {
+    if (coords.length < 1) {
         const isDark = theme === 'dark';
         return (
             <div style={{
