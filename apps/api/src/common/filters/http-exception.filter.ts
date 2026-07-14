@@ -7,6 +7,7 @@ import {
     Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { captureException } from '../sentry';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -31,6 +32,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
                 `Unhandled exception on ${request.method} ${request.url}: ${exception.message}`,
                 exception.stack,
             );
+            captureException(exception, {
+                method: request.method,
+                url: request.url,
+                userId: (request as any).user?.sub,
+            });
             message = 'Internal server error';
         }
 

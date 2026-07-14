@@ -1157,7 +1157,10 @@ export default function CreateOrderPage() {
                     borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
                 }}>
                     <ExclamationCircleOutlined style={{ color: token.colorWarning }} />
-                    <span>Заполните профиль компании перед созданием заявок</span>
+                    <span>
+                        Заявку можно создать сейчас, но для формирования документов (доверенности, счета)
+                        заполните <a onClick={() => router.push('/company/settings')} style={{ fontWeight: 600 }}>профиль компании</a>
+                    </span>
                 </div>
             )}
 
@@ -1171,7 +1174,7 @@ export default function CreateOrderPage() {
             />
 
             {/* Form */}
-            <Form form={form} layout="vertical" disabled={!profileComplete}>
+            <Form form={form} layout="vertical">
                 {steps.map((step, idx) => (
                     <div key={idx} style={{ display: currentStep === idx ? 'block' : 'none' }}>
                         {step.content}
@@ -1201,7 +1204,7 @@ export default function CreateOrderPage() {
                             type="primary" size="large"
                             onClick={handleSubmit}
                             loading={submitting}
-                            disabled={!profileComplete || !selectedCustomer || !selectedCarrier}
+                            disabled={!selectedCustomer || !selectedCarrier}
                         >
                             Создать заявку
                         </Button>

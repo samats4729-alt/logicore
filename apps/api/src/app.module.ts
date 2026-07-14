@@ -27,6 +27,7 @@ import { AssistantModule } from './assistant/assistant.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { BillingModule } from './billing/billing.module';
 import { AuditModule } from './audit/audit.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 
 @Module({
     imports: [
@@ -63,6 +64,7 @@ import { AuditModule } from './audit/audit.module';
         PayrollModule,
         BillingModule,
         AuditModule,
+        MonitoringModule,
     ],
 })
 export class AppModule { }

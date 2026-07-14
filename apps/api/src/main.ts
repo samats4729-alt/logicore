@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { initSentry } from './common/sentry';
 import * as bcrypt from 'bcryptjs';
 import * as compression from 'compression';
 
@@ -11,6 +12,8 @@ import * as compression from 'compression';
 
 async function bootstrap() {
     const logger = new Logger('Bootstrap');
+
+    initSentry();
 
     const app = await NestFactory.create(AppModule);
 

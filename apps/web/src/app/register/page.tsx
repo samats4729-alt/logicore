@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Form, Input, Button, Typography, message, Steps, Result, Divider, Spin } from 'antd';
+import { Form, Input, Button, Typography, message, Steps, Result, Divider, Spin, Checkbox } from 'antd';
 import { UserOutlined, BankOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -40,6 +40,10 @@ function RegisterContent() {
     }, [searchParams]);
 
     const handleGoogleRegisterSuccess = async (credentialResponse: any) => {
+        if (!form.getFieldValue('agreement')) {
+            message.warning('Сначала примите условия Публичной оферты и Политики конфиденциальности');
+            return;
+        }
         // Проверяем что телефон заполнен
         const phone = form.getFieldValue('phone');
         if (!phone) {
@@ -189,6 +193,23 @@ function RegisterContent() {
                                 rules={[{ required: true, min: 6, message: 'Минимум 6 символов' }]}
                             >
                                 <Input.Password size="large" />
+                            </Form.Item>
+                            <Form.Item
+                                name="agreement"
+                                valuePropName="checked"
+                                rules={[{
+                                    validator: (_, value) => value
+                                        ? Promise.resolve()
+                                        : Promise.reject(new Error('Для регистрации необходимо принять условия')),
+                                }]}
+                                style={{ marginBottom: 14 }}
+                            >
+                                <Checkbox style={{ fontSize: 13 }}>
+                                    Я принимаю условия{' '}
+                                    <a href="/terms" target="_blank" rel="noopener noreferrer">Публичной оферты</a>{' '}
+                                    и{' '}
+                                    <a href="/privacy" target="_blank" rel="noopener noreferrer">Политики конфиденциальности</a>
+                                </Checkbox>
                             </Form.Item>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <Button size="large" onClick={() => setStep(0)} style={{ flex: 1 }}>

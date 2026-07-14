@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AntdProvider } from './providers';
+import ClientMonitoring from '@/components/ClientMonitoring';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({
             </head>
             <body>
                 <AntdProvider>{children}</AntdProvider>
+                <ClientMonitoring />
             </body>
         </html>
     );

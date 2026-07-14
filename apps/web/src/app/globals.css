@@ -2794,3 +2794,56 @@ a.mapboxgl-ctrl-logo,
     border-radius: 20px;
   }
 }
+
+/* Юридические документы (политика, оферта) */
+.lc-legal-doc {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 36px 34px;
+  color: #1f2430;
+  font-size: 14.5px;
+  line-height: 1.7;
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.55);
+}
+
+.lc-legal-doc h2 {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0b0d12;
+  margin: 26px 0 10px;
+}
+
+.lc-legal-doc h2:first-child {
+  margin-top: 0;
+}
+
+.lc-legal-doc p {
+  margin: 0 0 12px;
+}
+
+.lc-legal-doc ul {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.lc-legal-doc li {
+  margin-bottom: 6px;
+}
+
+.lc-legal-doc .lc-legal-note {
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #b45309;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 640px) {
+  .lc-legal-doc {
+    padding: 24px 18px;
+    border-radius: 18px;
+  }
+}

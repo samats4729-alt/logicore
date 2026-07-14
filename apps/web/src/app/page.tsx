@@ -407,6 +407,10 @@ export default function HomePage() {
                         <span onClick={() => router.push('/login')}>Войти</span>
                         <span className={styles.footerDot}>/</span>
                         <span onClick={() => router.push('/register')}>Регистрация</span>
+                        <span className={styles.footerDot}>/</span>
+                        <span onClick={() => router.push('/privacy')}>Конфиденциальность</span>
+                        <span className={styles.footerDot}>/</span>
+                        <span onClick={() => router.push('/terms')}>Оферта</span>
                     </span>
                 </div>
             </footer>
