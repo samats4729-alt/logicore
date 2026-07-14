@@ -5,7 +5,7 @@ import {
     Form, Input, InputNumber, Row, Col, Select, Typography, App, Button, FormInstance, Radio
 } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
-import { api, Country, Region, City, Location } from '@/lib/api';
+import { api, Location } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import AddressAutocomplete from './AddressAutocomplete';
 
@@ -43,17 +43,8 @@ export default function LocationForm({
     const [lng, setLng] = useState<number | undefined>();
     const [addressValue, setAddressValue] = useState('');
 
-    // Hierarchy state
-    const [countries, setCountries] = useState<Country[]>([]);
-    const [regions, setRegions] = useState<Region[]>([]);
-    const [cities, setCities] = useState<City[]>([]);
-
-    const [selectedCountryId, setSelectedCountryId] = useState<string | undefined>();
-    const [selectedRegionId, setSelectedRegionId] = useState<string | undefined>();
-
-    const [selectedCityCoords, setSelectedCityCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
-    const [selectedCityName, setSelectedCityName] = useState<string | undefined>(undefined);
-    const [loadingData, setLoadingData] = useState(false);
+    // Город определяется автоматически из ответа 2ГИС (нужен для тарифов и подписей маршрута)
+    const [city, setCity] = useState<string | undefined>(undefined);
 
     // Companies/Partners for linking
     const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
@@ -61,7 +52,6 @@ export default function LocationForm({
     const [isFetchingAddress, setIsFetchingAddress] = useState(false);
 
     useEffect(() => {
-        fetchCountries();
         if (showCompanySelect) {
             fetchCompanies();
         }
@@ -83,13 +73,12 @@ export default function LocationForm({
                 companyId: editingLocation.companyId || undefined
             });
 
-            if (editingLocation.city) {
-                void prefillCascadeByCityName(editingLocation.city);
-            }
+            setCity(editingLocation.city || undefined);
         } else {
             setAddressValue('');
             setLat(undefined);
             setLng(undefined);
+            setCity(undefined);
             form.resetFields();
             if (defaultCompanyId) {
                 form.setFieldsValue({ companyId: defaultCompanyId });
@@ -130,91 +119,15 @@ export default function LocationForm({
         }
     };
 
-    const fetchCountries = async () => {
-        try {
-            const res = await api.get('/cities/countries');
-            setCountries(res.data);
-        } catch (e) {
-            console.error('Failed to fetch countries', e);
-        }
-    };
-
-    const handleCountryChange = async (countryId: string) => {
-        setSelectedCountryId(countryId);
-        setSelectedRegionId(undefined);
-        setRegions([]);
-        setCities([]);
-        form.setFieldsValue({ regionId: undefined, city: undefined });
-
-        setLoadingData(true);
-        try {
-            const res = await api.get(`/cities/regions?countryId=${countryId}`);
-            setRegions(res.data);
-        } finally {
-            setLoadingData(false);
-        }
-    };
-
-    const handleRegionChange = async (regionId: string) => {
-        setSelectedRegionId(regionId);
-        setCities([]);
-        form.setFieldsValue({ city: undefined });
-
-        setLoadingData(true);
-        try {
-            const res = await api.get(`/cities?regionId=${regionId}`);
-            setCities(res.data);
-        } finally {
-            setLoadingData(false);
-        }
-    };
-
-    const onCityChange = (cityName: string) => {
-        const city = cities.find(c => c.name === cityName);
-        if (city) {
-            const coords = { lat: city.latitude, lng: city.longitude };
-            setSelectedCityCoords(coords);
-            setSelectedCityName(city.name);
-            setLat(city.latitude);
-            setLng(city.longitude);
-            form.setFieldsValue({ latitude: city.latitude, longitude: city.longitude });
-        }
-    };
-
-    const prefillCascadeByCityName = async (cityName?: string | null) => {
-        if (!cityName) return;
-        try {
-            const res = await api.get(`/cities?search=${encodeURIComponent(cityName)}`);
-            const foundCity = res.data.find((c: any) => c.name.toLowerCase() === cityName.toLowerCase());
-            if (!foundCity) return;
-            const { countryId, regionId } = foundCity;
-
-            setSelectedCountryId(countryId);
-            setSelectedRegionId(regionId);
-            setSelectedCityName(foundCity.name);
-            setSelectedCityCoords({ lat: foundCity.latitude, lng: foundCity.longitude });
-
-            const [regionsRes, citiesRes] = await Promise.all([
-                api.get(`/cities/regions?countryId=${countryId}`),
-                api.get(`/cities?regionId=${regionId}`),
-            ]);
-            setRegions(regionsRes.data);
-            setCities(citiesRes.data);
-
-            form.setFieldsValue({ countryId, regionId, city: foundCity.name });
-        } catch (e) {
-            console.error('Failed to prefill city cascade', e);
-        }
-    };
-
     const handleAddressSelect = (address: string, latitude: number, longitude: number) => {
         setAddressValue(address);
         setLat(latitude);
         setLng(longitude);
         form.setFieldsValue({ address, latitude, longitude });
 
+        // full_name у 2ГИС начинается с города: «Алматы, Сатпаева, 90/1»
         const cityCandidate = address.includes(',') ? address.split(',')[0].trim() : '';
-        void prefillCascadeByCityName(cityCandidate);
+        if (cityCandidate) setCity(cityCandidate);
     };
 
     const handleMapSelect = async (latitude: number, longitude: number, pickedName?: string) => {
@@ -271,7 +184,7 @@ export default function LocationForm({
                 const bestItem = data2gis.result.items[0];
                 const cityFromGeo = (bestItem.adm_div || []).find((d: any) => d.type === 'city')?.name
                     || (bestItem.full_name ? String(bestItem.full_name).split(',')[0].trim() : '');
-                void prefillCascadeByCityName(cityFromGeo);
+                if (cityFromGeo) setCity(cityFromGeo);
             }
         } catch (e) {
             console.error('Manual geocode error', e);
@@ -300,70 +213,12 @@ export default function LocationForm({
                 companyId: finalCompanyId,
                 address: addressValue,
                 latitude: lat,
-                longitude: lng
+                longitude: lng,
+                city: city || null
             });
         }}>
             <Row gutter={24}>
                 <Col span={10}>
-                    <Row gutter={12}>
-                        <Col span={24}>
-                            <Form.Item
-                                name="countryId"
-                                label="Страна"
-                                rules={[{ required: true, message: 'Выберите страну' }]}
-                            >
-                                <Select
-                                    placeholder="Страна"
-                                    onChange={handleCountryChange}
-                                    loading={loadingData}
-                                >
-                                    {countries.map(c => (
-                                        <Option key={c.id} value={c.id}>{c.name}</Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={24}>
-                            <Form.Item
-                                name="regionId"
-                                label="Область"
-                                rules={[{ required: true, message: 'Выберите область' }]}
-                            >
-                                <Select
-                                    placeholder="Область"
-                                    onChange={handleRegionChange}
-                                    disabled={!selectedCountryId}
-                                    loading={loadingData}
-                                >
-                                    {regions.map(r => (
-                                        <Option key={r.id} value={r.id}>{r.name}</Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={24}>
-                            <Form.Item
-                                name="city"
-                                label="Город"
-                                rules={[{ required: true, message: 'Выберите город' }]}
-                            >
-                                <Select
-                                    onChange={onCityChange}
-                                    placeholder="Город"
-                                    disabled={!selectedRegionId}
-                                    showSearch
-                                    optionFilterProp="children"
-                                >
-                                    {cities.map(city => (
-                                        <Option key={city.id} value={city.name}>
-                                            {city.name} {city.country?.code ? `(${city.country.code})` : ''}
-                                        </Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
                     <Form.Item
                         name="name"
                         label="Название точки"
@@ -375,7 +230,9 @@ export default function LocationForm({
                     <Form.Item
                         label="Адрес"
                         required
-                        help="Начните вводить адрес — он найдётся автоматически"
+                        help={city
+                            ? `Город: ${city} (определён автоматически)`
+                            : 'Начните вводить адрес — он найдётся автоматически'}
                     >
                         <AddressAutocomplete
                             value={addressValue}
@@ -384,9 +241,7 @@ export default function LocationForm({
                                 form.setFieldsValue({ address: val });
                             }}
                             onSelect={handleAddressSelect}
-                            placeholder={selectedCityName ? "ул. Гоголя, 1" : "Выберите город или укажите точку на карте"}
-                            proximity={selectedCityCoords}
-                            city={selectedCityName}
+                            placeholder="Например: Алматы, Сатпаева 90/1"
                         />
                     </Form.Item>
 

@@ -29,10 +29,8 @@ export default function QuickCreateLocationModal({
     const handleSubmit = async (values: any) => {
         setSubmitting(true);
         try {
-            // countryId/regionId are cascade-only helper fields, backend doesn't accept them
-            const { countryId, regionId, ...restValues } = values;
             const payload = {
-                ...restValues,
+                ...values,
                 emails: values.emails ? values.emails.join(',') : null
             };
 

@@ -79,10 +79,8 @@ export default function CompanyLocationsPage() {
 
     const handleSubmit = async (values: any) => {
         try {
-            // countryId/regionId — служебные поля каскада выбора города, бэкенд их не принимает
-            const { countryId, regionId, ...restValues } = values;
             const payload = {
-                ...restValues,
+                ...values,
                 emails: values.emails ? values.emails.join(',') : null
             };
             if (editingLocation) {
