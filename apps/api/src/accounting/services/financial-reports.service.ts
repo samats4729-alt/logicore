@@ -573,6 +573,7 @@ export class FinancialReportsService {
                 forwarder: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
                 partner: { select: { id: true, name: true } },
+                driver: { select: { firstName: true, lastName: true, vehiclePlate: true, vehicleModel: true } },
                 routePoints: {
                     select: {
                         pointType: true,
@@ -627,6 +628,12 @@ export class FinancialReportsService {
                 companyId,
             });
 
+            // Водитель и машина: приоритет — вручную назначенные поля, иначе из карточки водителя
+            const driverName = order.assignedDriverName
+                || (order.driver ? `${order.driver.lastName || ''} ${order.driver.firstName || ''}`.trim() : '')
+                || null;
+            const vehiclePlate = order.assignedDriverPlate || order.driver?.vehiclePlate || null;
+
             const orderData = {
                 id: order.id,
                 orderNumber: order.orderNumber,
@@ -634,6 +641,8 @@ export class FinancialReportsService {
                 completedAt: order.completedAt,
                 status: order.status,
                 cargoDescription: order.cargoDescription,
+                driverName,
+                vehiclePlate,
                 customerPrice: order.customerPrice,
                 isCustomerPaid: fin.isCustomerPaid,
                 customerPaidAt: order.customerPaidAt,

@@ -35,6 +35,8 @@ interface OrderItem {
     completedAt?: string;
     status: string;
     cargoDescription?: string;
+    driverName?: string | null;
+    vehiclePlate?: string | null;
     amount: number;
     isPaid: boolean;
     paidAt?: string;
@@ -248,6 +250,14 @@ export default function CounterpartyReportPage() {
         },
         {
             title: 'Груз', dataIndex: 'cargoDescription', key: 'cargo', width: 140, ellipsis: true,
+            render: (t: string) => <span style={{ fontSize: 12 }}>{t || '—'}</span>,
+        },
+        {
+            title: 'Водитель', dataIndex: 'driverName', key: 'driver', width: 150, ellipsis: true,
+            render: (t: string) => <span style={{ fontSize: 12 }}>{t || '—'}</span>,
+        },
+        {
+            title: 'Машина', dataIndex: 'vehiclePlate', key: 'vehicle', width: 110,
             render: (t: string) => <span style={{ fontSize: 12 }}>{t || '—'}</span>,
         },
         {

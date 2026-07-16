@@ -186,6 +186,21 @@ export default function SharedReportPage() {
             render: (t: string) => <span style={{ color: '#71717a' }}>{t || '—'}</span>,
         },
         {
+            title: 'Водитель',
+            dataIndex: 'driverName',
+            key: 'driver',
+            width: 160,
+            ellipsis: true,
+            render: (t: string) => <span style={{ color: '#71717a' }}>{t || '—'}</span>,
+        },
+        {
+            title: 'Машина',
+            dataIndex: 'vehiclePlate',
+            key: 'vehicle',
+            width: 120,
+            render: (t: string) => <span style={{ color: '#71717a' }}>{t || '—'}</span>,
+        },
+        {
             title: 'Статус',
             dataIndex: 'status',
             key: 'status',
