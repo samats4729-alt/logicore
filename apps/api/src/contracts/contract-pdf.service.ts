@@ -64,7 +64,7 @@ export class ContractPdfService {
             const doc = new PDFDocument({
                 size: 'A4',
                 // Нижнее поле увеличено, чтобы текст не залезал на подпись-колонтитул
-                margins: { top: 50, bottom: 75, left: 60, right: 60 },
+                margins: { top: 50, bottom: 100, left: 60, right: 60 },
                 bufferPages: true,
                 info: {
                     Title: `Договор №${contract.contractNumber}`,
@@ -401,16 +401,17 @@ export class ContractPdfService {
                 });
             }
 
-            // Печать и подпись на каждой странице (кроме последней — там уже большой блок).
+            // Подпись и печать собраны в компактный блок у строки подписи внизу
+            // (кроме последней страницы — там уже большой блок реквизитов).
             // Рисуются только если компания загрузила картинки в настройках.
-            const imgY = doc.page.height - 70;
+            const blockY = doc.page.height - 88;
+            const footerY = doc.page.height - 34;
             if (i !== lastPageIndex) {
-                this.drawFooterSignAndStamp(doc, leftX, imgY, images.forwarderSignatureBuffer, images.forwarderStampBuffer);
-                this.drawFooterSignAndStamp(doc, rightColX, imgY, images.customerSignatureBuffer, images.customerStampBuffer);
+                this.drawFooterSignAndStamp(doc, leftX, blockY, images.forwarderSignatureBuffer, images.forwarderStampBuffer);
+                this.drawFooterSignAndStamp(doc, rightColX, blockY, images.customerSignatureBuffer, images.customerStampBuffer);
             }
 
-            // Строка подписи директора внизу
-            const footerY = doc.page.height - 22;
+            // Строка подписи директора внизу блока
             doc.fontSize(8).font('Roboto').fillColor('#000000');
             doc.text(fwdDirector, leftX, footerY, { width, align: 'left', lineBreak: false });
             doc.text(custDirector, rightColX, footerY, { width, align: 'left', lineBreak: false });
@@ -419,26 +420,28 @@ export class ContractPdfService {
         }
     }
 
-    /** Небольшие подпись и печать в колонтитуле страницы */
+    /** Подпись (над строкой) и печать (справа, крупнее) в блоке подписи страницы */
     private drawFooterSignAndStamp(
         doc: PDFKit.PDFDocument,
         x: number,
-        y: number,
+        blockY: number,
         signatureBuffer: Buffer | null,
         stampBuffer: Buffer | null,
     ) {
-        if (signatureBuffer) {
-            try {
-                doc.image(signatureBuffer, x, y + 10, { width: 55, height: 22 });
-            } catch (err) {
-                this.logger.error('[ContractPdf] footer signature failed:', err);
-            }
-        }
+        // Печать — крупная, справа, чуть заходит на строку подписи (как на живом документе)
         if (stampBuffer) {
             try {
-                doc.image(stampBuffer, x + 65, y, { width: 42, height: 42 });
+                doc.image(stampBuffer, x + 95, blockY, { width: 66, height: 66 });
             } catch (err) {
                 this.logger.error('[ContractPdf] footer stamp failed:', err);
+            }
+        }
+        // Подпись — над строкой «Директор … /___/»
+        if (signatureBuffer) {
+            try {
+                doc.image(signatureBuffer, x, blockY + 26, { width: 80, height: 28 });
+            } catch (err) {
+                this.logger.error('[ContractPdf] footer signature failed:', err);
             }
         }
     }
