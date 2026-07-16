@@ -12,6 +12,8 @@ export class ContractsService {
      * Создать договор (экспедитор или заказчик)
      */
     async createContract(companyId: string, callerRole: string, data: {
+        myRole?: 'FORWARDER' | 'CUSTOMER';
+        partnerCompanyId?: string;
         customerCompanyId?: string;
         forwarderCompanyId?: string;
         contractNumber: string;
@@ -19,28 +21,35 @@ export class ContractsService {
         endDate?: Date;
         notes?: string;
     }) {
-        // Определяем кто заказчик, а кто экспедитор
+        // Определяем кто заказчик, а кто экспедитор.
+        // Приоритет — явный выбор роли в форме (myRole + partnerCompanyId);
+        // если его нет — старое поведение по глобальной роли пользователя.
         let forwarderCompanyId: string;
         let customerCompanyId: string;
         let partnerCompanyId: string;
 
-        if (callerRole === 'FORWARDER') {
-            // Экспедитор создаёт — он сам экспедитор, партнёр = заказчик
-            if (!data.customerCompanyId) {
-                throw new BadRequestException('Укажите компанию-заказчика');
-            }
-            forwarderCompanyId = companyId;
-            customerCompanyId = data.customerCompanyId;
-            partnerCompanyId = data.customerCompanyId;
-        } else {
-            // Заказчик создаёт — он сам заказчик, партнёр = экспедитор
-            if (!data.forwarderCompanyId) {
-                throw new BadRequestException('Укажите компанию-экспедитора');
-            }
-            customerCompanyId = companyId;
-            forwarderCompanyId = data.forwarderCompanyId;
-            partnerCompanyId = data.forwarderCompanyId;
+        const myRole: 'FORWARDER' | 'CUSTOMER' =
+            data.myRole || (callerRole === 'FORWARDER' ? 'FORWARDER' : 'CUSTOMER');
+        const partnerId = data.partnerCompanyId
+            || (myRole === 'FORWARDER' ? data.customerCompanyId : data.forwarderCompanyId);
+
+        if (!partnerId) {
+            throw new BadRequestException('Укажите вторую компанию договора');
         }
+        if (partnerId === companyId) {
+            throw new BadRequestException('Нельзя заключить договор с самим собой');
+        }
+
+        if (myRole === 'FORWARDER') {
+            // Моя компания — экспедитор, партнёр — заказчик
+            forwarderCompanyId = companyId;
+            customerCompanyId = partnerId;
+        } else {
+            // Моя компания — заказчик, партнёр — экспедитор
+            customerCompanyId = companyId;
+            forwarderCompanyId = partnerId;
+        }
+        partnerCompanyId = partnerId;
 
         // Проверяем что компания-партнёр существует
         const partner = await this.prisma.company.findUnique({

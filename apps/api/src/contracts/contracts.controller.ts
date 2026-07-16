@@ -26,6 +26,8 @@ export class ContractsController {
     @ApiOperation({ summary: 'Создать договор (экспедитор или заказчик)' })
     async createContract(
         @Body() dto: {
+            myRole?: 'FORWARDER' | 'CUSTOMER';
+            partnerCompanyId?: string;
             customerCompanyId?: string;
             forwarderCompanyId?: string;
             contractNumber: string;

@@ -165,8 +165,13 @@ export class ContractPdfService {
             );
 
             // Колонтитулы на КАЖДОЙ странице: сверху (со 2-й) — «Договор № … от …»,
-            // снизу — строки подписи директоров обеих сторон (как в шаблоне)
-            this.addHeadersAndFooters(doc, contractNum, dateStr, forwarder, customer);
+            // снизу — подпись и печать обеих сторон (если загружены картинки)
+            this.addHeadersAndFooters(doc, contractNum, dateStr, forwarder, customer, {
+                forwarderStampBuffer,
+                forwarderSignatureBuffer,
+                customerStampBuffer,
+                customerSignatureBuffer,
+            });
 
             doc.end();
         });
@@ -362,14 +367,21 @@ export class ContractPdfService {
         dateStr: string,
         forwarder: any,
         customer: any,
+        images: {
+            forwarderStampBuffer: Buffer | null;
+            forwarderSignatureBuffer: Buffer | null;
+            customerStampBuffer: Buffer | null;
+            customerSignatureBuffer: Buffer | null;
+        },
     ) {
         const range = doc.bufferedPageRange(); // { start, count }
         const leftX = doc.page.margins.left;
         const rightColX = 320;
         const width = 235;
+        const lastPageIndex = range.start + range.count - 1;
 
-        const fwdDirector = forwarder.directorName ? `${forwarder.directorName} /______________/` : 'Директор /______________/';
-        const custDirector = customer.directorName ? `${customer.directorName} /______________/` : 'Директор /______________/';
+        const fwdDirector = forwarder.directorName ? `${forwarder.directorName} /____/` : 'Директор /____/';
+        const custDirector = customer.directorName ? `${customer.directorName} /____/` : 'Директор /____/';
 
         for (let i = range.start; i < range.start + range.count; i++) {
             doc.switchToPage(i);
@@ -387,16 +399,47 @@ export class ContractPdfService {
                     align: 'left',
                     lineBreak: false,
                 });
-                doc.fillColor('#666666');
             }
 
-            // Нижний колонтитул — строки подписи директоров обеих сторон
-            const footerY = doc.page.height - 55;
+            // Печать и подпись на каждой странице (кроме последней — там уже большой блок).
+            // Рисуются только если компания загрузила картинки в настройках.
+            const imgY = doc.page.height - 70;
+            if (i !== lastPageIndex) {
+                this.drawFooterSignAndStamp(doc, leftX, imgY, images.forwarderSignatureBuffer, images.forwarderStampBuffer);
+                this.drawFooterSignAndStamp(doc, rightColX, imgY, images.customerSignatureBuffer, images.customerStampBuffer);
+            }
+
+            // Строка подписи директора внизу
+            const footerY = doc.page.height - 22;
             doc.fontSize(8).font('Roboto').fillColor('#000000');
             doc.text(fwdDirector, leftX, footerY, { width, align: 'left', lineBreak: false });
             doc.text(custDirector, rightColX, footerY, { width, align: 'left', lineBreak: false });
 
             doc.page.margins.bottom = savedBottom;
+        }
+    }
+
+    /** Небольшие подпись и печать в колонтитуле страницы */
+    private drawFooterSignAndStamp(
+        doc: PDFKit.PDFDocument,
+        x: number,
+        y: number,
+        signatureBuffer: Buffer | null,
+        stampBuffer: Buffer | null,
+    ) {
+        if (signatureBuffer) {
+            try {
+                doc.image(signatureBuffer, x, y + 10, { width: 55, height: 22 });
+            } catch (err) {
+                this.logger.error('[ContractPdf] footer signature failed:', err);
+            }
+        }
+        if (stampBuffer) {
+            try {
+                doc.image(stampBuffer, x + 65, y, { width: 42, height: 42 });
+            } catch (err) {
+                this.logger.error('[ContractPdf] footer stamp failed:', err);
+            }
         }
     }
 

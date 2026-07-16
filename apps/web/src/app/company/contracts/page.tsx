@@ -93,6 +93,7 @@ export default function CompanyContractsPage() {
     const [contractModalOpen, setContractModalOpen] = useState(false);
     const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
     const [contractForm] = Form.useForm();
+    const [contractMyRole, setContractMyRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
 
     // ДС и тарифы — создание
     const [agreementModalOpen, setAgreementModalOpen] = useState(false);
@@ -189,7 +190,8 @@ export default function CompanyContractsPage() {
     const handleCreateContract = async (values: any) => {
         try {
             await api.post('/contracts', {
-                forwarderCompanyId: values.forwarderCompanyId,
+                myRole: values.myRole || 'CUSTOMER',
+                partnerCompanyId: values.partnerCompanyId,
                 contractNumber: values.contractNumber,
                 startDate: values.startDate?.toISOString(),
                 endDate: values.endDate?.toISOString(),
@@ -712,15 +714,28 @@ export default function CompanyContractsPage() {
                 cancelText="Отмена"
                 destroyOnClose
             >
-                <Form form={contractForm} layout="vertical" onFinish={handleCreateContract}>
+                <Form form={contractForm} layout="vertical" onFinish={handleCreateContract} initialValues={{ myRole: 'CUSTOMER' }}>
                     <Form.Item
-                        name="forwarderCompanyId"
-                        label="Экспедитор (перевозчик)"
-                        rules={[{ required: true, message: 'Выберите перевозчика' }]}
+                        name="myRole"
+                        label="Моя роль в этом договоре"
+                        rules={[{ required: true }]}
+                    >
+                        <Select
+                            onChange={(v) => setContractMyRole(v)}
+                            options={[
+                                { label: 'Я — Заказчик (заказываю перевозку)', value: 'CUSTOMER' },
+                                { label: 'Я — Экспедитор (выполняю перевозку)', value: 'FORWARDER' },
+                            ]}
+                        />
+                    </Form.Item>
+                    <Form.Item
+                        name="partnerCompanyId"
+                        label={contractMyRole === 'CUSTOMER' ? 'Вторая сторона — Экспедитор (перевозчик)' : 'Вторая сторона — Заказчик'}
+                        rules={[{ required: true, message: 'Выберите вторую компанию договора' }]}
                     >
                         <Select
                             showSearch
-                            placeholder="Выберите перевозчика"
+                            placeholder="Выберите компанию"
                             filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
                             options={partners.map(p => ({ label: p.name, value: p.id }))}
                         />
