@@ -1063,6 +1063,11 @@ a.mapboxgl-ctrl-logo,
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
   white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 /* Строки таблицы: курсор, акцентная полоса и «подъём» на ховере */

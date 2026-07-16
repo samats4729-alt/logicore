@@ -1017,7 +1017,7 @@ export default function CompanyOrdersPage() {
             ),
         },
         {
-            title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 104,
+            title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124,
             render: (t: string) => <span className="lc-ordernum">{t}</span>,
         },
         ...orgColumn,
@@ -1131,7 +1131,7 @@ export default function CompanyOrdersPage() {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
             render: (s: string) => <StatusPill status={s} />,
         },
-        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 104, render: (t: string) => <span className="lc-ordernum">{t}</span> },
+        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, render: (t: string) => <span className="lc-ordernum">{t}</span> },
         ...orgColumn,
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
         {
@@ -1580,7 +1580,6 @@ export default function CompanyOrdersPage() {
                 }
                 .ant-table-small .ant-table-tbody > tr.row-selected > td {
                     background: rgba(22, 119, 255, 0.10) !important;
-                    box-shadow: inset 2px 0 0 #1677ff;
                 }
                 .ant-table-small .ant-pagination {
                     margin: 8px 0 !important;
