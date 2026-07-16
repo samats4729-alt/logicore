@@ -63,7 +63,9 @@ export class ContractPdfService {
         return new Promise<Buffer>((resolve, reject) => {
             const doc = new PDFDocument({
                 size: 'A4',
-                margins: { top: 50, bottom: 50, left: 60, right: 60 },
+                // Нижнее поле увеличено, чтобы текст не залезал на подпись-колонтитул
+                margins: { top: 50, bottom: 75, left: 60, right: 60 },
+                bufferPages: true,
                 info: {
                     Title: `Договор №${contract.contractNumber}`,
                     Author: forwarder.name,
@@ -162,6 +164,10 @@ export class ContractPdfService {
                 customerSignatureBuffer
             );
 
+            // Колонтитулы на КАЖДОЙ странице: сверху (со 2-й) — «Договор № … от …»,
+            // снизу — строки подписи директоров обеих сторон (как в шаблоне)
+            this.addHeadersAndFooters(doc, contractNum, dateStr, forwarder, customer);
+
             doc.end();
         });
     }
@@ -193,25 +199,28 @@ export class ContractPdfService {
         doc.text('ЗАКАЗЧИК', rightX + cellPadding, y + 7, { width: colWidth - cellPadding * 2, align: 'center' });
         y += headerHeight;
 
-        // Строки таблицы
-        const rows = [
+        // Строки таблицы: подтягиваем все реквизиты из карточек компаний
+        const rows: string[][] = [
             [
                 `ТОО «${this.stripCompanyPrefix(forwarder.name)}»`,
                 `ТОО «${this.stripCompanyPrefix(customer.name)}»`
             ],
-            [
-                forwarder.address || '',
-                customer.address || ''
-            ],
-            [
-                forwarder.bin ? `БИН ${forwarder.bin}` : '',
-                customer.bin ? `БИН ${customer.bin}` : ''
-            ],
-            [
-                forwarder.phone ? `тел.: ${forwarder.phone}` : '',
-                customer.phone ? `Тел/факс: ${customer.phone}` : ''
-            ],
         ];
+        const addRow = (label: string, fVal?: string | null, cVal?: string | null) => {
+            const l = fVal ? `${label}${fVal}` : '';
+            const r = cVal ? `${label}${cVal}` : '';
+            if (l || r) rows.push([l, r]);
+        };
+        addRow('Юр. адрес: ', forwarder.address, customer.address);
+        addRow('Факт. адрес: ', forwarder.actualAddress, customer.actualAddress);
+        addRow('БИН/ИИН: ', forwarder.bin, customer.bin);
+        addRow('р/счёт: ', forwarder.bankAccount, customer.bankAccount);
+        addRow('Банк: ', forwarder.bankName, customer.bankName);
+        addRow('БИК/SWIFT: ', forwarder.bankBic, customer.bankBic);
+        addRow('КБЕ: ', forwarder.kbe, customer.kbe);
+        addRow('тел.: ', forwarder.phone, customer.phone);
+        addRow('E-mail: ', forwarder.email, customer.email);
+        addRow('Директор: ', forwarder.directorName, customer.directorName);
 
         doc.font('Roboto').fontSize(9);
 
@@ -274,11 +283,13 @@ export class ContractPdfService {
         doc.text(`ТОО «${fClean}»`, signLeftX, compNameY, { width: signColWidth, align: 'center' });
         doc.text(`ТОО «${cClean}»`, signRightX, compNameY, { width: signColWidth, align: 'center' });
 
-        // Строки подписи - Директор__________________ 
+        // Строки подписи с ФИО директора (как в шаблоне: «Фамилия И.О. /____/»)
         const signLineY = compNameY + 50;
         doc.fontSize(10).font('Roboto-Bold');
-        doc.text('Директор__________________', signLeftX, signLineY, { width: signColWidth });
-        doc.text('Директор __________________', signRightX, signLineY, { width: signColWidth });
+        const fwdDir = forwarder.directorName ? `Директор ${forwarder.directorName}` : 'Директор';
+        const custDir = customer.directorName ? `Директор ${customer.directorName}` : 'Директор';
+        doc.text(`${fwdDir} __________`, signLeftX, signLineY, { width: signColWidth });
+        doc.text(`${custDir} __________`, signRightX, signLineY, { width: signColWidth });
 
         // ============ ПОДПИСИ РУКОВОДИТЕЛЕЙ ============
         const signatureW = 85;
@@ -342,6 +353,51 @@ export class ContractPdfService {
         }
 
         doc.y = signLineY + 30;
+    }
+
+    // ============ КОЛОНТИТУЛЫ НА КАЖДОЙ СТРАНИЦЕ ============
+    private addHeadersAndFooters(
+        doc: PDFKit.PDFDocument,
+        contractNum: string,
+        dateStr: string,
+        forwarder: any,
+        customer: any,
+    ) {
+        const range = doc.bufferedPageRange(); // { start, count }
+        const leftX = doc.page.margins.left;
+        const rightColX = 320;
+        const width = 235;
+
+        const fwdDirector = forwarder.directorName ? `${forwarder.directorName} /______________/` : 'Директор /______________/';
+        const custDirector = customer.directorName ? `${customer.directorName} /______________/` : 'Директор /______________/';
+
+        for (let i = range.start; i < range.start + range.count; i++) {
+            doc.switchToPage(i);
+
+            // Отключаем нижнее поле на время рисования колонтитула, иначе pdfkit
+            // считает запись ниже границы поля переполнением и добавляет пустые страницы
+            const savedBottom = doc.page.margins.bottom;
+            doc.page.margins.bottom = 0;
+
+            // Верхний колонтитул — со второй страницы
+            if (i > range.start) {
+                doc.fontSize(8).font('Roboto').fillColor('#666666');
+                doc.text(`Договор № ${contractNum} от ${dateStr} года`, leftX, 25, {
+                    width: doc.page.width - leftX - doc.page.margins.right,
+                    align: 'left',
+                    lineBreak: false,
+                });
+                doc.fillColor('#666666');
+            }
+
+            // Нижний колонтитул — строки подписи директоров обеих сторон
+            const footerY = doc.page.height - 55;
+            doc.fontSize(8).font('Roboto').fillColor('#000000');
+            doc.text(fwdDirector, leftX, footerY, { width, align: 'left', lineBreak: false });
+            doc.text(custDirector, rightColX, footerY, { width, align: 'left', lineBreak: false });
+
+            doc.page.margins.bottom = savedBottom;
+        }
     }
 
     // ============ HELPER METHODS ============
