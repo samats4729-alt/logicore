@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Table, Button, Tag, Space, Modal, Form, Input, message, Typography,
@@ -174,6 +174,9 @@ export default function CompanyOrdersPage() {
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
     const [assignModalOpen, setAssignModalOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    // Заявка, выбранная одним кликом для предпросмотра на карте (без перехода внутрь)
+    const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
+    const featuredCardRef = useRef<HTMLDivElement>(null);
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const [assignLoading, setAssignLoading] = useState(false);
     const [assignType, setAssignType] = useState<'driver' | 'partner' | 'partner_manual'>('driver');
@@ -1014,7 +1017,7 @@ export default function CompanyOrdersPage() {
             ),
         },
         {
-            title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60,
+            title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 104,
             render: (t: string) => <span className="lc-ordernum">{t}</span>,
         },
         ...orgColumn,
@@ -1128,7 +1131,7 @@ export default function CompanyOrdersPage() {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
             render: (s: string) => <StatusPill status={s} />,
         },
-        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 60, render: (t: string) => <span className="lc-ordernum">{t}</span> },
+        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 104, render: (t: string) => <span className="lc-ordernum">{t}</span> },
         ...orgColumn,
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
         {
@@ -1204,7 +1207,13 @@ export default function CompanyOrdersPage() {
     const inTransitCount = orders.filter(o => ['IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length;
     const pendingCount = orders.filter(o => o.status === 'PENDING').length;
     const problemCount = orders.filter(o => o.status === 'PROBLEM').length;
-    const featured = filteredOrders[0] || orders[0] || null;
+    const featured = previewOrder || filteredOrders[0] || orders[0] || null;
+
+    // Один клик по строке — показать заявку на карте (не проваливаться внутрь)
+    const handleRowSelect = (record: Order) => {
+        setPreviewOrder(record);
+        featuredCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
 
     return (
         <div className="lc-page" style={{ height: '100%' }}>
@@ -1275,8 +1284,10 @@ export default function CompanyOrdersPage() {
                 </div>
             </div>
 
-            {/* ===== FEATURED: последняя заявка ===== */}
-            <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />
+            {/* ===== FEATURED: выбранная / последняя заявка ===== */}
+            <div ref={featuredCardRef}>
+                <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />
+            </div>
 
             <Tabs
                 activeKey={activeTab}
@@ -1396,15 +1407,15 @@ export default function CompanyOrdersPage() {
                                     style={{ fontSize: 12 }}
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
-                                        onClick: () => {
-                                            router.push(`/company/orders/${record.id}`);
-                                        }
+                                        onClick: () => handleRowSelect(record),
+                                        onDoubleClick: () => router.push(`/company/orders/${record.id}`),
                                     })}
                                     rowClassName={(record) => {
-                                        if (record.status === 'COMPLETED') return 'row-completed';
-                                        if (record.status === 'PROBLEM') return 'row-problem';
-                                        if (record.status === 'CANCELLED') return 'row-cancelled';
-                                        return '';
+                                        const sel = previewOrder?.id === record.id ? 'row-selected ' : '';
+                                        if (record.status === 'COMPLETED') return sel + 'row-completed';
+                                        if (record.status === 'PROBLEM') return sel + 'row-problem';
+                                        if (record.status === 'CANCELLED') return sel + 'row-cancelled';
+                                        return sel;
                                     }}
                                 />
                                 )}
@@ -1502,11 +1513,10 @@ export default function CompanyOrdersPage() {
                                     }}
                                     onRow={(record) => ({
                                         style: { cursor: 'pointer' },
-                                        onClick: () => {
-                                            router.push(`/company/orders/${record.id}`);
-                                        }
+                                        onClick: () => handleRowSelect(record),
+                                        onDoubleClick: () => router.push(`/company/orders/${record.id}`),
                                     })}
-                                    rowClassName={() => 'row-cancelled'}
+                                    rowClassName={(record) => (previewOrder?.id === record.id ? 'row-selected row-cancelled' : 'row-cancelled')}
                                 />
                                 )}
                             </div>
@@ -1567,6 +1577,10 @@ export default function CompanyOrdersPage() {
                     background: var(--lc-border-soft) !important;
                     color: var(--lc-text-ter) !important;
                     border-color: var(--lc-border) !important;
+                }
+                .ant-table-small .ant-table-tbody > tr.row-selected > td {
+                    background: rgba(22, 119, 255, 0.10) !important;
+                    box-shadow: inset 2px 0 0 #1677ff;
                 }
                 .ant-table-small .ant-pagination {
                     margin: 8px 0 !important;
