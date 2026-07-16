@@ -97,14 +97,14 @@ export class ContractPdfService {
             doc.text('транспортной экспедиции', { align: 'center' });
             doc.moveDown(0.5);
 
-            // Город слева, дата справа
+            // Город слева, дата справа — на одной строке
             doc.fontSize(10).font('Roboto');
             const dateStr = startDate
                 ? `«${new Date(startDate).getDate()}» ${this.getMonthName(new Date(startDate))} ${new Date(startDate).getFullYear()}`
                 : '«____» ___________ 202_';
-            doc.text(city, { continued: true, align: 'left' });
-            doc.text(dateStr, { align: 'right' });
-            doc.font('Roboto-Bold').text('года', { align: 'center' });
+            const headerRowY = doc.y;
+            doc.text(city, doc.page.margins.left, headerRowY, { align: 'left' });
+            doc.text(`${dateStr} года`, doc.page.margins.left, headerRowY, { align: 'right' });
             doc.moveDown(1);
 
             // ============ ПРЕАМБУЛА (с жирными названиями компаний) ============
