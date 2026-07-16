@@ -1,13 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoiceType, InvoiceStatus } from '@prisma/client';
 import { PaymentsService } from '../accounting/services/payments.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class InvoiceService {
     constructor(
         private prisma: PrismaService,
         private paymentsService: PaymentsService,
+        private emailService: EmailService,
+        private configService: ConfigService,
     ) {}
 
     async createInvoice(
@@ -64,36 +68,76 @@ export class InvoiceService {
             }
         }
 
-        // Создаем счет и привязываем заказы
-        const invoice = await this.prisma.invoice.create({
-            data: {
-                invoiceNumber: dto.invoiceNumber,
-                type: dto.type,
-                status: InvoiceStatus.DRAFT,
-                issuerId: dto.issuerId,
-                recipientId: dto.recipientId,
-                date: new Date(dto.date),
-                dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-                amount,
-                note: dto.note,
-                createdById,
-            },
-        });
+        // Создаём счёт и привязываем заказы атомарно (в одной транзакции):
+        // либо всё вместе, либо ничего — чтобы не оставалось «полусозданных» счетов
+        let invoice;
+        try {
+            invoice = await this.prisma.$transaction(async (tx) => {
+                const created = await tx.invoice.create({
+                    data: {
+                        invoiceNumber: dto.invoiceNumber,
+                        type: dto.type,
+                        status: InvoiceStatus.DRAFT,
+                        issuerId: dto.issuerId,
+                        recipientId: dto.recipientId,
+                        date: new Date(dto.date),
+                        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+                        amount,
+                        note: dto.note,
+                        createdById,
+                    },
+                });
 
-        // Привязываем заказы к счету
-        if (dto.type === InvoiceType.OUTGOING) {
-            await this.prisma.order.updateMany({
-                where: { id: { in: dto.orderIds } },
-                data: { outgoingInvoiceId: invoice.id },
+                await tx.order.updateMany({
+                    where: { id: { in: dto.orderIds } },
+                    data: dto.type === InvoiceType.OUTGOING
+                        ? { outgoingInvoiceId: created.id }
+                        : { incomingInvoiceId: created.id },
+                });
+
+                return created;
             });
-        } else {
-            await this.prisma.order.updateMany({
-                where: { id: { in: dto.orderIds } },
-                data: { incomingInvoiceId: invoice.id },
-            });
+        } catch (e: any) {
+            // Понятное сообщение при повторном номере счёта (нарушение уникальности)
+            if (e?.code === 'P2002') {
+                throw new BadRequestException(`Счёт с номером «${dto.invoiceNumber}» уже существует. Укажите другой номер.`);
+            }
+            throw e;
         }
 
         return this.getInvoiceDetails(invoice.id, companyId);
+    }
+
+    /** Отправить счёт контрагенту по email (публичная ссылка) */
+    async sendInvoiceEmail(id: string, companyId: string, email: string) {
+        const target = (email || '').trim();
+        if (!target || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
+            throw new BadRequestException('Укажите корректный email-адрес');
+        }
+
+        const invoice = await this.prisma.invoice.findUnique({
+            where: { id },
+            include: { issuer: { select: { name: true } } },
+        });
+        if (!invoice) {
+            throw new NotFoundException('Счёт не найден');
+        }
+        if (invoice.issuerId !== companyId && invoice.recipientId !== companyId) {
+            throw new BadRequestException('У вас нет доступа к этому счёту');
+        }
+
+        const frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
+        const shareUrl = `${frontendUrl}/shared/invoice/${invoice.shareToken}`;
+
+        await this.emailService.sendInvoiceEmail(
+            target,
+            shareUrl,
+            invoice.issuer?.name || 'LogiCore',
+            invoice.invoiceNumber,
+            invoice.amount,
+        );
+
+        return { message: `Счёт отправлен на ${target}` };
     }
 
     async getInvoices(

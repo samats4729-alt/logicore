@@ -7,7 +7,7 @@ const CARRIER = 'company-carrier';
 const SUB = 'company-subforwarder';
 
 function makePrismaMock() {
-    return {
+    const mock: any = {
         order: {
             findMany: jest.fn(),
             updateMany: jest.fn(),
@@ -16,10 +16,13 @@ function makePrismaMock() {
             create: jest.fn().mockResolvedValue({ id: 'inv-1' }),
         },
     };
+    // createInvoice оборачивает создание в транзакцию — прокидываем тот же мок как tx
+    mock.$transaction = jest.fn(async (cb: any) => cb(mock));
+    return mock;
 }
 
 function makeService(prisma: ReturnType<typeof makePrismaMock>) {
-    const service = new InvoiceService(prisma as any, {} as any);
+    const service = new InvoiceService(prisma as any, {} as any, {} as any, {} as any);
     jest.spyOn(service, 'getInvoiceDetails').mockResolvedValue({ id: 'inv-1' } as any);
     return service;
 }

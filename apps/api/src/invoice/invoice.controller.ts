@@ -81,6 +81,13 @@ export class InvoiceController {
         return this.invoiceService.acceptDispute(id, req.user.companyId);
     }
 
+    @Post(':id/send-email')
+    @Roles(UserRole.ACCOUNTANT, UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Отправить счёт контрагенту по email' })
+    async sendEmail(@Param('id') id: string, @Body() dto: { email: string }, @Request() req: any) {
+        return this.invoiceService.sendInvoiceEmail(id, req.user.companyId, dto?.email);
+    }
+
     @Delete(':id')
     @Roles(UserRole.ACCOUNTANT, UserRole.FORWARDER, UserRole.COMPANY_ADMIN)
     @ApiOperation({ summary: 'Удалить счет (в статусе DRAFT)' })

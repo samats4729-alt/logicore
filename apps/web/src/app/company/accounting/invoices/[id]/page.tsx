@@ -17,7 +17,9 @@ import {
     theme,
     Spin,
     Statistic,
-    Alert
+    Alert,
+    Modal,
+    Input
 } from 'antd';
 import {
     ArrowLeftOutlined,
@@ -28,7 +30,8 @@ import {
     FileTextOutlined,
     DollarOutlined,
     ClockCircleOutlined,
-    TeamOutlined
+    TeamOutlined,
+    MailOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -63,6 +66,9 @@ export default function InvoiceDetailPage() {
     const [invoice, setInvoice] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [acceptingDispute, setAcceptingDispute] = useState(false);
+    const [emailModalOpen, setEmailModalOpen] = useState(false);
+    const [emailValue, setEmailValue] = useState('');
+    const [sendingEmail, setSendingEmail] = useState(false);
 
     const cardStyle = {
         borderRadius: 8,
@@ -98,6 +104,30 @@ export default function InvoiceDetailPage() {
         const url = `${window.location.origin}/shared/invoice/${invoice.shareToken}`;
         navigator.clipboard.writeText(url);
         message.success('Публичная ссылка скопирована!');
+    };
+
+    const openEmailModal = () => {
+        // Подставим email получателя, если он есть в карточке контрагента
+        setEmailValue(invoice?.recipient?.email || '');
+        setEmailModalOpen(true);
+    };
+
+    const handleSendEmail = async () => {
+        const email = emailValue.trim();
+        if (!email) {
+            message.warning('Введите email-адрес');
+            return;
+        }
+        try {
+            setSendingEmail(true);
+            const res = await api.post(`/invoices/${id}/send-email`, { email });
+            message.success(res.data?.message || 'Счёт отправлен');
+            setEmailModalOpen(false);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось отправить счёт');
+        } finally {
+            setSendingEmail(false);
+        }
     };
 
     const handleAcceptDispute = async () => {
@@ -242,6 +272,9 @@ export default function InvoiceDetailPage() {
                     <Button icon={<CopyOutlined />} onClick={handleCopyLink}>
                         Публичная ссылка
                     </Button>
+                    <Button icon={<MailOutlined />} onClick={openEmailModal}>
+                        Отправить на email
+                    </Button>
                     {isAccountantOrAdmin && invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && (
                         <Button type="primary" icon={<CheckOutlined />} onClick={handleMarkAsPaid}>
                             Отметить оплату
@@ -373,6 +406,29 @@ export default function InvoiceDetailPage() {
                 </Col>
             </Row>
             </div>
+
+            <Modal
+                title="Отправить счёт по email"
+                open={emailModalOpen}
+                onCancel={() => setEmailModalOpen(false)}
+                onOk={handleSendEmail}
+                confirmLoading={sendingEmail}
+                okText="Отправить"
+                cancelText="Отмена"
+            >
+                <p style={{ color: token.colorTextSecondary, marginBottom: 12 }}>
+                    Контрагенту придёт письмо со ссылкой на счёт {invoice.invoiceNumber} и суммой к оплате.
+                </p>
+                <Input
+                    type="email"
+                    prefix={<MailOutlined style={{ color: token.colorTextTertiary }} />}
+                    placeholder="client@company.kz"
+                    value={emailValue}
+                    onChange={(e) => setEmailValue(e.target.value)}
+                    onPressEnter={handleSendEmail}
+                    size="large"
+                />
+            </Modal>
         </div>
     );
 }
