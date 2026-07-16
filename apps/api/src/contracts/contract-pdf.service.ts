@@ -380,8 +380,8 @@ export class ContractPdfService {
         const width = 235;
         const lastPageIndex = range.start + range.count - 1;
 
-        const fwdDirector = forwarder.directorName ? `${forwarder.directorName} /____/` : 'Директор /____/';
-        const custDirector = customer.directorName ? `${customer.directorName} /____/` : 'Директор /____/';
+        const fwdName = forwarder.directorName ? `${forwarder.directorName} ` : 'Директор ';
+        const custName = customer.directorName ? `${customer.directorName} ` : 'Директор ';
 
         for (let i = range.start; i < range.start + range.count; i++) {
             doc.switchToPage(i);
@@ -401,47 +401,49 @@ export class ContractPdfService {
                 });
             }
 
-            // Подпись и печать собраны в компактный блок у строки подписи внизу
-            // (кроме последней страницы — там уже большой блок реквизитов).
-            // Рисуются только если компания загрузила картинки в настройках.
-            const blockY = doc.page.height - 88;
+            // Строка подписи директора + подпись поверх линии + печать справа.
+            // Печать рисуется на всех страницах, кроме последней (там большой блок).
             const footerY = doc.page.height - 34;
-            if (i !== lastPageIndex) {
-                this.drawFooterSignAndStamp(doc, leftX, blockY, images.forwarderSignatureBuffer, images.forwarderStampBuffer);
-                this.drawFooterSignAndStamp(doc, rightColX, blockY, images.customerSignatureBuffer, images.customerStampBuffer);
-            }
-
-            // Строка подписи директора внизу блока
-            doc.fontSize(8).font('Roboto').fillColor('#000000');
-            doc.text(fwdDirector, leftX, footerY, { width, align: 'left', lineBreak: false });
-            doc.text(custDirector, rightColX, footerY, { width, align: 'left', lineBreak: false });
+            const drawImages = i !== lastPageIndex;
+            this.drawFooterSignatureRow(doc, leftX, footerY, width, fwdName, drawImages ? images.forwarderSignatureBuffer : null, drawImages ? images.forwarderStampBuffer : null);
+            this.drawFooterSignatureRow(doc, rightColX, footerY, width, custName, drawImages ? images.customerSignatureBuffer : null, drawImages ? images.customerStampBuffer : null);
 
             doc.page.margins.bottom = savedBottom;
         }
     }
 
-    /** Подпись (над строкой) и печать (справа, крупнее) в блоке подписи страницы */
-    private drawFooterSignAndStamp(
+    /** Строка «ФИО директора /______________/» с подписью на линии и печатью справа */
+    private drawFooterSignatureRow(
         doc: PDFKit.PDFDocument,
         x: number,
-        blockY: number,
+        footerY: number,
+        width: number,
+        directorName: string,
         signatureBuffer: Buffer | null,
         stampBuffer: Buffer | null,
     ) {
-        // Печать — крупная, справа, чуть заходит на строку подписи (как на живом документе)
-        if (stampBuffer) {
-            try {
-                doc.image(stampBuffer, x + 95, blockY, { width: 66, height: 66 });
-            } catch (err) {
-                this.logger.error('[ContractPdf] footer stamp failed:', err);
-            }
-        }
-        // Подпись — над строкой «Директор … /___/»
+        doc.fontSize(8).font('Roboto').fillColor('#000000');
+        // Длинная линия для подписи
+        const line = `${directorName}/________________________/`;
+        doc.text(line, x, footerY, { width, align: 'left', lineBreak: false });
+
+        // Начало «бланка» линии — сразу после имени и открывающего слэша
+        const blankStartX = x + doc.widthOfString(`${directorName}/`);
+
+        // Подпись — прямо на линии
         if (signatureBuffer) {
             try {
-                doc.image(signatureBuffer, x, blockY + 26, { width: 80, height: 28 });
+                doc.image(signatureBuffer, blankStartX + 2, footerY - 18, { width: 92, height: 26 });
             } catch (err) {
                 this.logger.error('[ContractPdf] footer signature failed:', err);
+            }
+        }
+        // Печать — крупнее, справа над линией, слегка заходит на подпись
+        if (stampBuffer) {
+            try {
+                doc.image(stampBuffer, x + 130, footerY - 48, { width: 78, height: 78 });
+            } catch (err) {
+                this.logger.error('[ContractPdf] footer stamp failed:', err);
             }
         }
     }
