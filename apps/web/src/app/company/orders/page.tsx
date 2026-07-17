@@ -55,6 +55,15 @@ const STATUS_PROGRESS: Record<string, number> = {
 const progressColor = (s: string) =>
     s === 'PROBLEM' ? '#dc2626' : s === 'COMPLETED' ? '#16a34a' : s === 'CANCELLED' ? '#9ca3af' : '#1677ff';
 
+// Заявка «финансово закрыта»: заказчик заплатил И исполнителю (перевозчику/суб-экспедитору) оплачено.
+// Завершённая, но не оплаченная заявка не должна гореть зелёным.
+const isOrderSettled = (r: any): boolean => {
+    const customerSettled = !r.customerPrice || r.isCustomerPaid;
+    const executorCost = r.subForwarderId ? r.subForwarderPrice : r.driverCost;
+    const executorSettled = !executorCost || (r.subForwarderId ? r.isSubForwarderPaid : r.isDriverPaid);
+    return customerSettled && executorSettled;
+};
+
 const nameInitials = (name?: string) => {
     if (!name) return '—';
     const parts = name.trim().split(/\s+/);
@@ -1412,7 +1421,7 @@ export default function CompanyOrdersPage() {
                                     })}
                                     rowClassName={(record) => {
                                         const sel = previewOrder?.id === record.id ? 'row-selected ' : '';
-                                        if (record.status === 'COMPLETED') return sel + 'row-completed';
+                                        if (record.status === 'COMPLETED') return sel + (isOrderSettled(record) ? 'row-completed' : 'row-completed-unpaid');
                                         if (record.status === 'PROBLEM') return sel + 'row-problem';
                                         if (record.status === 'CANCELLED') return sel + 'row-cancelled';
                                         return sel;
@@ -1554,6 +1563,16 @@ export default function CompanyOrdersPage() {
                 .ant-table-small .ant-table-tbody > tr.row-completed > td div,
                 .ant-table-small .ant-table-tbody > tr.row-completed > td a {
                     color: #22c55e !important;
+                }
+                /* Завершена, но деньги ещё не закрыты — янтарный, не зелёный */
+                .ant-table-small .ant-table-tbody > tr.row-completed-unpaid > td {
+                    background: rgba(245, 158, 11, 0.12) !important;
+                    color: #b45309 !important;
+                }
+                .ant-table-small .ant-table-tbody > tr.row-completed-unpaid > td span,
+                .ant-table-small .ant-table-tbody > tr.row-completed-unpaid > td div,
+                .ant-table-small .ant-table-tbody > tr.row-completed-unpaid > td a {
+                    color: #b45309 !important;
                 }
                 .ant-table-small .ant-table-tbody > tr.row-problem > td {
                     background: rgba(239, 68, 68, 0.12) !important;
