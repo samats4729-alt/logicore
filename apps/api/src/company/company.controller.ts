@@ -145,6 +145,13 @@ export class CompanyController {
         return this.companyService.getCompanyOrders(req.user.companyId, query, req.user.sub, req.user.role);
     }
 
+    @Get('dashboard-activity')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Активность компании для дашборда: месяц к месяцу' })
+    async getDashboardActivity(@Request() req: any) {
+        return this.companyService.getDashboardActivity(req.user.companyId);
+    }
+
     // ==================== Профиль компании ====================
 
     @Get('profile')

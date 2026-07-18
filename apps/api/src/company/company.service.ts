@@ -547,6 +547,104 @@ export class CompanyService {
     }
 
     /**
+     * Активность компании для дашборда: текущий месяц против прошлого.
+     * Деньги и контрагенты считаются по месяцу создания заявки,
+     * «завершено» — по месяцу фактического завершения.
+     */
+    async getDashboardActivity(companyId: string) {
+        const now = new Date();
+        const curStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+        const participant = [
+            { customerCompanyId: companyId },
+            { forwarderId: companyId },
+            { subForwarderId: companyId },
+        ];
+        const IN_WORK = ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'] as any[];
+
+        const [monthOrders, inWorkNow, pendingNow, problemNow] = await Promise.all([
+            this.prisma.order.findMany({
+                where: {
+                    AND: [
+                        { OR: participant },
+                        { OR: [{ createdAt: { gte: prevStart } }, { completedAt: { gte: prevStart } }] },
+                    ],
+                    status: { not: 'DRAFT' },
+                },
+                select: {
+                    createdAt: true, completedAt: true, status: true,
+                    customerCompanyId: true, forwarderId: true, subForwarderId: true,
+                    customerPrice: true, subForwarderPrice: true,
+                },
+            }),
+            this.prisma.order.count({ where: { OR: participant, status: { in: IN_WORK } } }),
+            this.prisma.order.count({ where: { OR: participant, status: 'PENDING' } }),
+            this.prisma.order.count({ where: { OR: participant, status: 'PROBLEM' } }),
+        ]);
+
+        const makeBucket = () => ({
+            created: 0, completed: 0, income: 0, expense: 0,
+            customers: new Set<string>(), carriers: new Set<string>(),
+        });
+        const cur = makeBucket();
+        const prev = makeBucket();
+        const bucketOf = (d: Date) => (d >= curStart ? cur : d >= prevStart ? prev : null);
+
+        for (const o of monthOrders) {
+            const created = bucketOf(new Date(o.createdAt));
+            if (created) {
+                created.created++;
+
+                const isCust = o.customerCompanyId === companyId;
+                const isFwd = o.forwarderId === companyId;
+                const isSub = o.subForwarderId === companyId;
+
+                // Доход: нам платит заказчик (мы экспедитор) или экспедитор (мы суб-экспедитор)
+                if (isFwd && o.customerCompanyId && !isCust) {
+                    created.income += o.customerPrice || 0;
+                    created.customers.add(o.customerCompanyId);
+                }
+                if (isSub && o.forwarderId && o.forwarderId !== companyId) {
+                    created.income += o.subForwarderPrice || 0;
+                    created.customers.add(o.forwarderId);
+                }
+                // Расход: мы платим экспедитору (мы заказчик) или суб-экспедитору (мы экспедитор)
+                if (isCust && o.forwarderId && !isFwd) {
+                    created.expense += o.customerPrice || 0;
+                    created.carriers.add(o.forwarderId);
+                }
+                if (isFwd && o.subForwarderId && !isSub) {
+                    created.expense += o.subForwarderPrice || 0;
+                    created.carriers.add(o.subForwarderId);
+                }
+            }
+
+            if (o.status === 'COMPLETED' && o.completedAt) {
+                const done = bucketOf(new Date(o.completedAt));
+                if (done) done.completed++;
+            }
+        }
+
+        const pack = (b: ReturnType<typeof makeBucket>) => ({
+            created: b.created,
+            completed: b.completed,
+            income: Math.round(b.income),
+            expense: Math.round(b.expense),
+            activeCustomers: b.customers.size,
+            activeCarriers: b.carriers.size,
+        });
+
+        return {
+            current: pack(cur),
+            previous: pack(prev),
+            inWorkNow,
+            pendingNow,
+            problemNow,
+        };
+    }
+
+    /**
      * Получить профиль компании
      */
     async getCompanyProfile(companyId: string) {
