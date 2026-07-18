@@ -555,6 +555,7 @@ export class CompanyService {
         const now = new Date();
         const curStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         const participant = [
             { customerCompanyId: companyId },
@@ -587,14 +588,20 @@ export class CompanyService {
             created: 0, completed: 0, income: 0, expense: 0,
             customers: new Set<string>(), carriers: new Set<string>(),
         });
+        const today = makeBucket();
         const cur = makeBucket();
         const prev = makeBucket();
-        const bucketOf = (d: Date) => (d >= curStart ? cur : d >= prevStart ? prev : null);
+        // «Сегодня» входит и в текущий месяц — заявка попадает в оба периода
+        const bucketsOf = (d: Date) => {
+            if (d >= todayStart) return [today, cur];
+            if (d >= curStart) return [cur];
+            if (d >= prevStart) return [prev];
+            return [];
+        };
 
         for (const o of monthOrders) {
-            const created = bucketOf(new Date(o.createdAt));
-            if (created) {
-                created.created++;
+            for (const b of bucketsOf(new Date(o.createdAt))) {
+                b.created++;
 
                 const isCust = o.customerCompanyId === companyId;
                 const isFwd = o.forwarderId === companyId;
@@ -602,27 +609,26 @@ export class CompanyService {
 
                 // Доход: нам платит заказчик (мы экспедитор) или экспедитор (мы суб-экспедитор)
                 if (isFwd && o.customerCompanyId && !isCust) {
-                    created.income += o.customerPrice || 0;
-                    created.customers.add(o.customerCompanyId);
+                    b.income += o.customerPrice || 0;
+                    b.customers.add(o.customerCompanyId);
                 }
                 if (isSub && o.forwarderId && o.forwarderId !== companyId) {
-                    created.income += o.subForwarderPrice || 0;
-                    created.customers.add(o.forwarderId);
+                    b.income += o.subForwarderPrice || 0;
+                    b.customers.add(o.forwarderId);
                 }
                 // Расход: мы платим экспедитору (мы заказчик) или суб-экспедитору (мы экспедитор)
                 if (isCust && o.forwarderId && !isFwd) {
-                    created.expense += o.customerPrice || 0;
-                    created.carriers.add(o.forwarderId);
+                    b.expense += o.customerPrice || 0;
+                    b.carriers.add(o.forwarderId);
                 }
                 if (isFwd && o.subForwarderId && !isSub) {
-                    created.expense += o.subForwarderPrice || 0;
-                    created.carriers.add(o.subForwarderId);
+                    b.expense += o.subForwarderPrice || 0;
+                    b.carriers.add(o.subForwarderId);
                 }
             }
 
             if (o.status === 'COMPLETED' && o.completedAt) {
-                const done = bucketOf(new Date(o.completedAt));
-                if (done) done.completed++;
+                for (const b of bucketsOf(new Date(o.completedAt))) b.completed++;
             }
         }
 
@@ -636,6 +642,7 @@ export class CompanyService {
         });
 
         return {
+            today: pack(today),
             current: pack(cur),
             previous: pack(prev),
             inWorkNow,

@@ -38,6 +38,7 @@ interface ActivityBucket {
 }
 
 interface DashboardActivity {
+    today: ActivityBucket;
     current: ActivityBucket;
     previous: ActivityBucket;
     inWorkNow: number;
@@ -82,14 +83,13 @@ function greeting(): string {
 function Delta({ cur, prevVal, money }: { cur: number; prevVal: number; money?: boolean }) {
     const diff = cur - prevVal;
     if (diff === 0) {
-        return <span style={{ fontSize: 11.5, color: 'var(--lc-text-ter)' }}>как в прошлом месяце</span>;
+        return <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>без изменений</span>;
     }
     const up = diff > 0;
     return (
-        <span style={{ fontSize: 11.5, fontWeight: 600, color: up ? '#16a34a' : '#dc2626' }}>
-            {up ? <ArrowUpOutlined style={{ fontSize: 10 }} /> : <ArrowDownOutlined style={{ fontSize: 10 }} />}
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: up ? '#16a34a' : '#dc2626', fontVariantNumeric: 'tabular-nums' }}>
+            {up ? <ArrowUpOutlined style={{ fontSize: 11 }} /> : <ArrowDownOutlined style={{ fontSize: 11 }} />}
             {' '}{up ? '+' : '−'}{money ? fmt(Math.abs(diff)) : Math.abs(diff)}
-            <span style={{ color: 'var(--lc-text-ter)', fontWeight: 400 }}> · было {money ? fmt(prevVal) : prevVal}</span>
         </span>
     );
 }
@@ -164,46 +164,26 @@ export default function CompanyDashboard() {
 
     const cur = activity?.current;
     const prev = activity?.previous;
+    const tdy = activity?.today;
 
-    // Плитки «Активности»: показываем только осмысленные для этой компании
-    const activityTiles = useMemo(() => {
-        if (!cur || !prev) return [];
-        const tiles: any[] = [
-            {
-                label: 'Заявок за месяц', icon: <FileTextOutlined />, bg: '#e8f0fe', fg: '#1d4ed8',
-                value: cur.created, delta: <Delta cur={cur.created} prevVal={prev.created} />,
-            },
-            {
-                label: 'Завершено за месяц', icon: <CheckCircleOutlined />, bg: '#e7f8ef', fg: '#15803d',
-                value: cur.completed, delta: <Delta cur={cur.completed} prevVal={prev.completed} />,
-            },
+    // Строки таблицы «Активности»: Сегодня / Этот месяц / Прошлый месяц / Динамика
+    const activityRows = useMemo(() => {
+        if (!cur || !prev || !tdy) return [];
+        const rows = [
+            { label: 'Создано заявок', icon: <FileTextOutlined style={{ color: '#1d4ed8' }} />, key: 'created' as const },
+            { label: 'Завершено заявок', icon: <CheckCircleOutlined style={{ color: '#15803d' }} />, key: 'completed' as const },
+            { label: 'Доход, ₸', icon: <DollarOutlined style={{ color: '#059669' }} />, key: 'income' as const, money: true },
+            { label: 'Расходы, ₸', icon: <WalletOutlined style={{ color: '#dc2626' }} />, key: 'expense' as const, money: true },
+            { label: 'Активные заказчики', icon: <ShopOutlined style={{ color: '#4f46e5' }} />, key: 'activeCustomers' as const },
+            { label: 'Активные перевозчики', icon: <TeamOutlined style={{ color: '#a21caf' }} />, key: 'activeCarriers' as const },
         ];
-        if (cur.income > 0 || prev.income > 0) {
-            tiles.push({
-                label: 'Доход за месяц, ₸', icon: <DollarOutlined />, bg: '#ecfdf5', fg: '#059669',
-                value: fmt(cur.income), delta: <Delta cur={cur.income} prevVal={prev.income} money />,
-            });
-        }
-        if (cur.expense > 0 || prev.expense > 0) {
-            tiles.push({
-                label: 'Расходы за месяц, ₸', icon: <WalletOutlined />, bg: '#fef2f2', fg: '#dc2626',
-                value: fmt(cur.expense), delta: <Delta cur={cur.expense} prevVal={prev.expense} money />,
-            });
-        }
-        if (cur.activeCustomers > 0 || prev.activeCustomers > 0) {
-            tiles.push({
-                label: 'Активные заказчики', icon: <ShopOutlined />, bg: '#eef2ff', fg: '#4f46e5',
-                value: cur.activeCustomers, delta: <Delta cur={cur.activeCustomers} prevVal={prev.activeCustomers} />,
-            });
-        }
-        if (cur.activeCarriers > 0 || prev.activeCarriers > 0) {
-            tiles.push({
-                label: 'Активные перевозчики', icon: <TeamOutlined />, bg: '#fdf4ff', fg: '#a21caf',
-                value: cur.activeCarriers, delta: <Delta cur={cur.activeCarriers} prevVal={prev.activeCarriers} />,
-            });
-        }
-        return tiles;
-    }, [cur, prev]);
+        return rows.map(r => ({
+            ...r,
+            today: tdy[r.key],
+            current: cur[r.key],
+            previous: prev[r.key],
+        }));
+    }, [cur, prev, tdy]);
 
     const settingsMenu = (
         <div className="lc-card" style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -291,32 +271,50 @@ export default function CompanyDashboard() {
                     </div>
                     {activityLoading ? (
                         <div style={{ textAlign: 'center', padding: 30 }}><Spin /></div>
-                    ) : activityTiles.length === 0 ? (
+                    ) : activityRows.length === 0 ? (
                         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Пока нет данных за месяц" />
                     ) : (
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                            gap: 12,
-                        }}>
-                            {activityTiles.map((t, i) => (
-                                <div key={i} style={{
-                                    border: '1px solid var(--lc-border)',
-                                    borderRadius: 14,
-                                    padding: '14px 16px',
-                                    display: 'flex',
-                                    gap: 12,
-                                    alignItems: 'flex-start',
-                                    background: 'var(--lc-bg, transparent)',
-                                }}>
-                                    <div className="lc2-mic" style={{ background: t.bg, color: t.fg, flexShrink: 0 }}>{t.icon}</div>
-                                    <div style={{ minWidth: 0 }}>
-                                        <div className="lc2-mlabel">{t.label}</div>
-                                        <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{t.value}</div>
-                                        <div style={{ marginTop: 2 }}>{t.delta}</div>
-                                    </div>
-                                </div>
-                            ))}
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+                                <thead>
+                                    <tr>
+                                        {['Показатель', 'Сегодня', 'Этот месяц', 'Прошлый месяц', 'Динамика'].map((h, i) => (
+                                            <th key={h} style={{
+                                                textAlign: i === 0 ? 'left' : 'right',
+                                                padding: '8px 12px',
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.4px',
+                                                color: 'var(--lc-text-ter)',
+                                                borderBottom: '1px solid var(--lc-border)',
+                                                whiteSpace: 'nowrap',
+                                            }}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {activityRows.map((r, idx) => (
+                                        <tr key={r.key} style={{ borderBottom: idx < activityRows.length - 1 ? '1px solid var(--lc-border-soft, var(--lc-border))' : 'none' }}>
+                                            <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 500, color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
+                                                <span style={{ marginRight: 8 }}>{r.icon}</span>{r.label}
+                                            </td>
+                                            <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, fontWeight: 600, color: 'var(--lc-text)', fontVariantNumeric: 'tabular-nums' }}>
+                                                {r.money ? fmt(r.today) : r.today}
+                                            </td>
+                                            <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 14, fontWeight: 800, color: 'var(--lc-text)', fontVariantNumeric: 'tabular-nums' }}>
+                                                {r.money ? fmt(r.current) : r.current}
+                                            </td>
+                                            <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, color: 'var(--lc-text-sec)', fontVariantNumeric: 'tabular-nums' }}>
+                                                {r.money ? fmt(r.previous) : r.previous}
+                                            </td>
+                                            <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                <Delta cur={r.current} prevVal={r.previous} money={r.money} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>
@@ -329,7 +327,7 @@ export default function CompanyDashboard() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
                             <div>
                                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--lc-text)', letterSpacing: '-0.01em' }}>Задолженность</div>
-                                <div style={{ color: 'var(--lc-text-ter)', fontSize: 12, marginTop: 2 }}>неоплаченные суммы по контрагентам</div>
+                                <div style={{ color: 'var(--lc-text-ter)', fontSize: 12, marginTop: 2 }}>баланс взаиморасчётов с дебиторами и кредиторами</div>
                             </div>
                             <span className="lc-link" onClick={() => router.push('/company/accounting/counterparty-report')}>
                                 Взаиморасчёты <ArrowRightOutlined style={{ fontSize: 11 }} />
@@ -342,7 +340,7 @@ export default function CompanyDashboard() {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
                                     <div style={{ border: '1px solid var(--lc-border)', borderRadius: 12, padding: '10px 12px' }}>
                                         <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                                            <ArrowUpOutlined style={{ color: '#16a34a', fontSize: 10 }} /> Нам должны
+                                            <ArrowUpOutlined style={{ color: '#16a34a', fontSize: 10 }} /> Дебиторская задолженность
                                         </div>
                                         <div style={{ fontSize: 17, fontWeight: 800, color: '#16a34a', fontVariantNumeric: 'tabular-nums', marginTop: 3 }}>
                                             {fmt(debtTotals.unpaidTheyOweUs)} ₸
@@ -350,7 +348,7 @@ export default function CompanyDashboard() {
                                     </div>
                                     <div style={{ border: '1px solid var(--lc-border)', borderRadius: 12, padding: '10px 12px' }}>
                                         <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                                            <ArrowDownOutlined style={{ color: '#dc2626', fontSize: 10 }} /> Мы должны
+                                            <ArrowDownOutlined style={{ color: '#dc2626', fontSize: 10 }} /> Кредиторская задолженность
                                         </div>
                                         <div style={{ fontSize: 17, fontWeight: 800, color: '#dc2626', fontVariantNumeric: 'tabular-nums', marginTop: 3 }}>
                                             {fmt(debtTotals.unpaidWeOweThem)} ₸
@@ -358,7 +356,7 @@ export default function CompanyDashboard() {
                                     </div>
                                     <div style={{ border: '1px solid var(--lc-border)', borderRadius: 12, padding: '10px 12px' }}>
                                         <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                                            <SwapOutlined style={{ color: '#1677ff', fontSize: 10 }} /> Баланс
+                                            <SwapOutlined style={{ color: '#1677ff', fontSize: 10 }} /> Текущее сальдо
                                         </div>
                                         <div style={{ fontSize: 17, fontWeight: 800, fontVariantNumeric: 'tabular-nums', marginTop: 3, color: (debtTotals.unpaidTheyOweUs - debtTotals.unpaidWeOweThem) >= 0 ? '#16a34a' : '#dc2626' }}>
                                             {(debtTotals.unpaidTheyOweUs - debtTotals.unpaidWeOweThem) >= 0 ? '+' : ''}{fmt(debtTotals.unpaidTheyOweUs - debtTotals.unpaidWeOweThem)} ₸
@@ -368,7 +366,7 @@ export default function CompanyDashboard() {
                                 {debtors.length > 0 && (
                                     <div>
                                         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--lc-text-ter)', marginBottom: 8 }}>
-                                            Крупнейшие должники
+                                            Крупнейшие дебиторы
                                         </div>
                                         {debtors.map((d, i) => (
                                             <div
