@@ -107,6 +107,8 @@ export default function CompanyDashboard() {
     const router = useRouter();
     const { user } = useAuthStore();
     const isManager = user?.role === 'LOGISTICIAN';
+    // Полный дашборд (активность, задолженность) — только администратору компании
+    const isOwner = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
 
     const [activity, setActivity] = useState<DashboardActivity | null>(null);
     const [activityLoading, setActivityLoading] = useState(true);
@@ -134,33 +136,52 @@ export default function CompanyDashboard() {
     };
     const show = (key: string) => !hiddenBlocks.includes(key);
 
-    useEffect(() => {
-        api.get('/company/dashboard-activity')
-            .then(res => setActivity(res.data))
-            .catch(() => { })
-            .finally(() => setActivityLoading(false));
+    // Личные показатели сотрудника (не-администратора)
+    const [myStats, setMyStats] = useState<{ total: number; pending: number; inWork: number; completed: number } | null>(null);
 
-        // Задолженность — только для ролей с доступом к бухгалтерии; иначе тихо прячем блок
-        api.get('/accounting/counterparty-report')
-            .then(res => {
-                setDebtTotals(res.data?.totals || null);
-                setDebtors((res.data?.counterparties || []).filter((c: DebtCounterparty) => c.unpaidTheyOweUs > 0).slice(0, 3));
-            })
-            .catch(() => setDebtsAvailable(false));
+    useEffect(() => {
+        if (!user) return;
 
         api.get('/company/orders/events', { params: { limit: 8 } })
             .then(res => setEvents(res.data || []))
             .catch(() => { })
             .finally(() => setEventsLoading(false));
-    }, []);
 
-    useEffect(() => {
-        if (isManager) {
+        if (isOwner) {
+            api.get('/company/dashboard-activity')
+                .then(res => setActivity(res.data))
+                .catch(() => { })
+                .finally(() => setActivityLoading(false));
+
+            api.get('/accounting/counterparty-report')
+                .then(res => {
+                    setDebtTotals(res.data?.totals || null);
+                    setDebtors((res.data?.counterparties || []).filter((c: DebtCounterparty) => c.unpaidTheyOweUs > 0).slice(0, 3));
+                })
+                .catch(() => setDebtsAvailable(false));
+        } else {
+            // Сотрудник: только его заявки и его заработок
+            const mine = isManager ? '&mine=true' : '';
+            api.get(`/company/orders?limit=100${mine}`)
+                .then(res => {
+                    const raw = res.data;
+                    const list: any[] = Array.isArray(raw) ? raw : (raw?.data || []);
+                    setMyStats({
+                        total: Array.isArray(raw) ? raw.length : (raw?.total || list.length),
+                        pending: list.filter(o => o.status === 'PENDING').length,
+                        inWork: list.filter(o => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length,
+                        completed: list.filter(o => o.status === 'COMPLETED').length,
+                    });
+                })
+                .catch(() => { });
+
             api.get('/payroll/my/summary')
                 .then(res => setPayrollSummary(res.data))
                 .catch(() => { });
+
+            setActivityLoading(false);
         }
-    }, [isManager]);
+    }, [user, isOwner, isManager]);
 
     const cur = activity?.current;
     const prev = activity?.previous;
@@ -204,59 +225,94 @@ export default function CompanyDashboard() {
                     <div className="lc-eyebrow">LogiCore — обзор</div>
                     <h1 className="lc2-title">{greeting()}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        {dayjs().format('DD.MM.YYYY')} · сводка по компании за месяц
+                        {dayjs().format('DD.MM.YYYY')} · {isOwner ? 'сводка по компании за месяц' : isManager ? 'ваши заявки и заработок' : 'ваша сводка'}
                     </p>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <Button type="primary" icon={<PlusOutlined />} className="lc-cta lc-cta-shine" onClick={() => router.push('/company/orders/create')}>
-                            Создать заявку
-                        </Button>
-                        <Dropdown dropdownRender={() => settingsMenu} trigger={['click']}>
-                            <Button icon={<SettingOutlined />}>Настроить</Button>
-                        </Dropdown>
+                        {(isOwner || isManager) && (
+                            <Button type="primary" icon={<PlusOutlined />} className="lc-cta lc-cta-shine" onClick={() => router.push('/company/orders/create')}>
+                                Создать заявку
+                            </Button>
+                        )}
+                        {isOwner && (
+                            <Dropdown dropdownRender={() => settingsMenu} trigger={['click']}>
+                                <Button icon={<SettingOutlined />}>Настроить</Button>
+                            </Dropdown>
+                        )}
                     </div>
                 </div>
                 <div className="lc2-metrics">
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}><TruckOutlined /></div>
-                        <div>
-                            <div className="lc2-mlabel">Сейчас в работе</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{activity?.inWorkNow ?? '—'}</div>
-                            <div className="lc2-msub">активные перевозки</div>
-                        </div>
-                    </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#fff4e5', color: '#b45309' }}><ClockCircleOutlined /></div>
-                        <div>
-                            <div className="lc2-mlabel">Ожидают</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{activity?.pendingNow ?? '—'}</div>
-                            <div className="lc2-msub">{(activity?.pendingNow || 0) > 0 ? 'требуют внимания' : 'всё назначено'}</div>
-                        </div>
-                    </div>
-                    {(activity?.problemNow || 0) > 0 && (
-                        <div className="lc2-metric lc2-metric-alert">
-                            <div className="lc2-mic" style={{ background: '#fee2e2', color: '#dc2626' }}><ExclamationCircleOutlined /></div>
-                            <div>
-                                <div className="lc2-mlabel">Проблемы</div>
-                                <div className="lc2-mvalue" style={{ color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>{activity?.problemNow}</div>
-                                <div className="lc2-msub" style={{ color: '#dc2626' }}>требуют решения</div>
+                    {isOwner ? (
+                        <>
+                            <div className="lc2-metric">
+                                <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}><TruckOutlined /></div>
+                                <div>
+                                    <div className="lc2-mlabel">Сейчас в работе</div>
+                                    <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{activity?.inWorkNow ?? '—'}</div>
+                                    <div className="lc2-msub">активные перевозки</div>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    {isManager && payrollSummary?.hasScheme && (
-                        <div className="lc2-metric" style={{ cursor: 'pointer' }} onClick={() => router.push('/company/my-salary')}>
-                            <div className="lc2-mic" style={{ background: '#fdf2f8', color: '#db2777' }}><DollarOutlined /></div>
-                            <div>
-                                <div className="lc2-mlabel">Заработано за месяц</div>
-                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(payrollSummary.total)} ₸</div>
-                                <div className="lc2-msub">перейти к деталям</div>
+                            <div className="lc2-metric">
+                                <div className="lc2-mic" style={{ background: '#fff4e5', color: '#b45309' }}><ClockCircleOutlined /></div>
+                                <div>
+                                    <div className="lc2-mlabel">Ожидают</div>
+                                    <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{activity?.pendingNow ?? '—'}</div>
+                                    <div className="lc2-msub">{(activity?.pendingNow || 0) > 0 ? 'требуют внимания' : 'всё назначено'}</div>
+                                </div>
                             </div>
-                        </div>
+                            {(activity?.problemNow || 0) > 0 && (
+                                <div className="lc2-metric lc2-metric-alert">
+                                    <div className="lc2-mic" style={{ background: '#fee2e2', color: '#dc2626' }}><ExclamationCircleOutlined /></div>
+                                    <div>
+                                        <div className="lc2-mlabel">Проблемы</div>
+                                        <div className="lc2-mvalue" style={{ color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>{activity?.problemNow}</div>
+                                        <div className="lc2-msub" style={{ color: '#dc2626' }}>требуют решения</div>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <div className="lc2-metric">
+                                <div className="lc2-mic" style={{ background: '#e8f0fe', color: '#1d4ed8' }}><FileTextOutlined /></div>
+                                <div>
+                                    <div className="lc2-mlabel">{isManager ? 'Мои заявки' : 'Заявки'}</div>
+                                    <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{myStats?.total ?? '—'}</div>
+                                    <div className="lc2-msub">за всё время</div>
+                                </div>
+                            </div>
+                            <div className="lc2-metric">
+                                <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}><TruckOutlined /></div>
+                                <div>
+                                    <div className="lc2-mlabel">В работе</div>
+                                    <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{myStats?.inWork ?? '—'}</div>
+                                    <div className="lc2-msub">активные перевозки</div>
+                                </div>
+                            </div>
+                            <div className="lc2-metric">
+                                <div className="lc2-mic" style={{ background: '#fff4e5', color: '#b45309' }}><ClockCircleOutlined /></div>
+                                <div>
+                                    <div className="lc2-mlabel">Ожидают</div>
+                                    <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{myStats?.pending ?? '—'}</div>
+                                    <div className="lc2-msub">{(myStats?.pending || 0) > 0 ? 'требуют внимания' : 'всё назначено'}</div>
+                                </div>
+                            </div>
+                            {payrollSummary?.hasScheme && (
+                                <div className="lc2-metric" style={{ cursor: 'pointer' }} onClick={() => router.push('/company/my-salary')}>
+                                    <div className="lc2-mic" style={{ background: '#fdf2f8', color: '#db2777' }}><DollarOutlined /></div>
+                                    <div>
+                                        <div className="lc2-mlabel">Заработано за месяц</div>
+                                        <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(payrollSummary.total)} ₸</div>
+                                        <div className="lc2-msub">перейти к деталям</div>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
 
-            {/* ===== АКТИВНОСТЬ ===== */}
-            {show('activity') && (
+            {/* ===== АКТИВНОСТЬ (только администратор компании) ===== */}
+            {isOwner && show('activity') && (
                 <div className="lc-card" style={{ padding: '18px 20px', marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
                         <div>
@@ -321,8 +377,8 @@ export default function CompanyDashboard() {
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
-                {/* ===== ЗАДОЛЖЕННОСТЬ ===== */}
-                {show('debts') && debtsAvailable && (
+                {/* ===== ЗАДОЛЖЕННОСТЬ (только администратор компании) ===== */}
+                {isOwner && show('debts') && debtsAvailable && (
                     <div className="lc-card" style={{ padding: '18px 20px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
                             <div>
@@ -393,8 +449,8 @@ export default function CompanyDashboard() {
                     </div>
                 )}
 
-                {/* ===== УВЕДОМЛЕНИЯ ===== */}
-                {show('events') && (
+                {/* ===== УВЕДОМЛЕНИЯ (видят все сотрудники) ===== */}
+                {(isOwner ? show('events') : true) && (
                     <div className="lc-card" style={{ padding: '18px 20px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
                             <div>

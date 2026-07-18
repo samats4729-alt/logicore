@@ -146,8 +146,8 @@ export class CompanyController {
     }
 
     @Get('dashboard-activity')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
-    @ApiOperation({ summary: 'Активность компании для дашборда: месяц к месяцу' })
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Активность компании для дашборда (только администратор компании)' })
     async getDashboardActivity(@Request() req: any) {
         return this.companyService.getDashboardActivity(req.user.companyId);
     }
