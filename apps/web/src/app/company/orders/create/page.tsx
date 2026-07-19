@@ -864,7 +864,12 @@ export default function CreateOrderPage() {
                     value={responsibleChoice}
                     onChange={setResponsibleChoice}
                     options={[
-                        { value: 'SELF', label: 'Я (по умолчанию)' },
+                        {
+                            value: 'SELF',
+                            label: user?.firstName
+                                ? `${user.lastName || ''} ${user.firstName} (я)`.trim()
+                                : 'Я (по умолчанию)',
+                        },
                         { value: 'NONE', label: 'Не назначать — заявку возьмёт любой менеджер' },
                         ...officeUsers
                             .filter(u => u.id !== user?.id)
