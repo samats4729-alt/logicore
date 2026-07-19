@@ -867,8 +867,8 @@ export default function CreateOrderPage() {
                         {
                             value: 'SELF',
                             label: user?.firstName
-                                ? `${user.lastName || ''} ${user.firstName} (я)`.trim()
-                                : 'Я (по умолчанию)',
+                                ? `${user.lastName || ''} ${user.firstName}`.trim()
+                                : 'Текущий пользователь',
                         },
                         { value: 'NONE', label: 'Не назначать — заявку возьмёт любой менеджер' },
                         ...officeUsers
