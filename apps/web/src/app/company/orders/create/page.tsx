@@ -66,6 +66,10 @@ export default function CreateOrderPage() {
     // Parties
     const [selectedCustomer, setSelectedCustomer] = useState<string>(MY_COMPANY_VALUE);
     const [selectedCarrier, setSelectedCarrier] = useState<string>('');
+
+    // Ответственный менеджер от нашей компании: SELF — я, NONE — не назначать, иначе userId
+    const [responsibleChoice, setResponsibleChoice] = useState<string>('SELF');
+    const [officeUsers, setOfficeUsers] = useState<{ id: string; firstName: string; lastName: string; role: string }[]>([]);
     const [quickPartnerTarget, setQuickPartnerTarget] = useState<'CUSTOMER' | 'CARRIER' | null>(null);
 
     const isOwnOrExternalCarrier = selectedCarrier === MY_COMPANY_VALUE || 
@@ -215,6 +219,9 @@ export default function CreateOrderPage() {
         fetchLocations();
         fetchCargoTypes();
         fetchPartners();
+        api.get('/company/managers')
+            .then(res => setOfficeUsers(res.data || []))
+            .catch(() => { });
     }, [user]);
 
     // Дублирование заявки: /company/orders/create?from=<orderId> — копируем все данные, кроме даты
@@ -584,6 +591,7 @@ export default function CreateOrderPage() {
                 customerPriceType: values.customerPriceType || 'FIXED',
                 routePoints,
                 customerId: user?.id,
+                responsibleUserId: responsibleChoice === 'SELF' ? undefined : responsibleChoice,
                 appliedTariffId: appliedTariff?.id || undefined,
                 vatRate: values.vatRate ?? 0,
                 hasVat: values.hasVat ?? false,
@@ -845,6 +853,29 @@ export default function CreateOrderPage() {
             }}>
                 <CheckCircleOutlined style={{ color: roleInfo.color, fontSize: 16 }} />
                 <Text style={{ color: roleInfo.color, fontWeight: 500, fontSize: 13 }}>{roleInfo.text}</Text>
+            </div>
+
+            {/* Ответственный менеджер: помощник может вбить заявку на коллегу или оставить свободной */}
+            <div style={{ marginBottom: 20 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Ответственный менеджер</div>
+                <Select
+                    style={{ width: '100%' }}
+                    size="large"
+                    value={responsibleChoice}
+                    onChange={setResponsibleChoice}
+                    options={[
+                        { value: 'SELF', label: 'Я (по умолчанию)' },
+                        { value: 'NONE', label: 'Не назначать — заявку возьмёт любой менеджер' },
+                        ...officeUsers
+                            .filter(u => u.id !== user?.id)
+                            .map(u => ({ value: u.id, label: `${u.lastName} ${u.firstName}${u.role === 'LOGISTICIAN' ? '' : ' (админ)'}` })),
+                    ]}
+                />
+                {responsibleChoice !== 'SELF' && responsibleChoice !== 'NONE' && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                        Заявка будет закреплена за выбранным менеджером, вы останетесь её создателем и сохраните доступ
+                    </Text>
+                )}
             </div>
 
             <Row gutter={24}>

@@ -6,14 +6,32 @@ export class ExternalCompaniesService {
     constructor(private prisma: PrismaService) { }
 
     /**
-     * Получить список внешних компаний, созданных текущей компанией
+     * Получить список внешних компаний, созданных текущей компанией.
+     * Если в настройках компании включено «менеджеры видят только своих
+     * контрагентов», LOGISTICIAN получает лишь контрагентов, где он
+     * ответственный менеджер (или ответственный не назначен).
      */
-    async getExternalCompanies(companyId: string) {
+    async getExternalCompanies(companyId: string, userId?: string, role?: string) {
+        const where: any = {
+            isExternal: true,
+            createdByCompanyId: companyId,
+        };
+
+        if (role === 'LOGISTICIAN' && userId) {
+            const owner = await this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: { managersSeeOwnPartnersOnly: true },
+            });
+            if (owner?.managersSeeOwnPartnersOnly) {
+                where.OR = [
+                    { responsibleManagerId: userId },
+                    { responsibleManagerId: null },
+                ];
+            }
+        }
+
         return this.prisma.company.findMany({
-            where: {
-                isExternal: true,
-                createdByCompanyId: companyId,
-            },
+            where,
             orderBy: { createdAt: 'desc' },
             select: {
                 id: true,
@@ -28,6 +46,8 @@ export class ExternalCompaniesService {
                 directorName: true,
                 isActive: true,
                 createdAt: true,
+                responsibleManagerId: true,
+                responsibleManager: { select: { id: true, firstName: true, lastName: true } },
             },
         });
     }
@@ -45,7 +65,7 @@ export class ExternalCompaniesService {
         isCarrier?: boolean;
         address?: string;
         directorName?: string;
-    }) {
+    }, creatorUserId?: string) {
         const isCustomer = data.isCustomer !== undefined ? data.isCustomer : (data.type === 'CUSTOMER');
         const isCarrier = data.isCarrier !== undefined ? data.isCarrier : (data.type === 'FORWARDER');
 
@@ -63,6 +83,8 @@ export class ExternalCompaniesService {
                 isExternal: true,
                 isOurCompany: false,
                 createdByCompanyId: companyId,
+                // Кто вбил контрагента — тот и ответственный по умолчанию (как в УЛ)
+                responsibleManagerId: creatorUserId || null,
             },
         });
     }
@@ -79,6 +101,7 @@ export class ExternalCompaniesService {
         directorName?: string;
         isCustomer?: boolean;
         isCarrier?: boolean;
+        responsibleManagerId?: string | null;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: externalId },
@@ -86,6 +109,19 @@ export class ExternalCompaniesService {
         if (!company) throw new NotFoundException('Компания не найдена');
         if (!company.isExternal || company.createdByCompanyId !== companyId) {
             throw new ForbiddenException('Нет доступа');
+        }
+
+        // Ответственным можно назначить только офисного сотрудника своей компании
+        if (data.responsibleManagerId) {
+            const target = await this.prisma.user.findFirst({
+                where: {
+                    id: data.responsibleManagerId,
+                    companyId,
+                    role: { in: ['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN', 'ACCOUNTANT'] as any },
+                },
+                select: { id: true },
+            });
+            if (!target) throw new ForbiddenException('Ответственным может быть только сотрудник вашей компании');
         }
 
         return this.prisma.company.update({

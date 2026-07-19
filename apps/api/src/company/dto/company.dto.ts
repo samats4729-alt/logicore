@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional, IsIn } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional, IsIn, IsBoolean } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -131,6 +131,16 @@ export class UpdateCompanyProfileDto {
     @IsString()
     @IsOptional()
     kbe?: string;
+
+    @ApiProperty({ description: 'Менеджеры видят только свои заявки', required: false })
+    @IsBoolean()
+    @IsOptional()
+    managersSeeOwnOrdersOnly?: boolean;
+
+    @ApiProperty({ description: 'Менеджеры видят только своих контрагентов', required: false })
+    @IsBoolean()
+    @IsOptional()
+    managersSeeOwnPartnersOnly?: boolean;
 }
 
 export class CreateDriverDto {

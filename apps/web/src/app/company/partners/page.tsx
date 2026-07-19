@@ -34,6 +34,9 @@ export default function PartnersPage() {
     // Modal & Form States
     const [modalOpen, setModalOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<any | null>(null);
+    // Офисные сотрудники — для назначения ответственного менеджера (только админ)
+    const [officeUsers, setOfficeUsers] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+    const isCompanyAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
     const [form] = Form.useForm();
 
     // Loading States
@@ -43,6 +46,9 @@ export default function PartnersPage() {
     useEffect(() => {
         fetchCounterparties();
         fetchRequests();
+        api.get('/company/managers')
+            .then(res => setOfficeUsers(res.data || []))
+            .catch(() => { });
     }, []);
 
     // Initial load when switching to search tab
@@ -167,12 +173,16 @@ export default function PartnersPage() {
         const isCustomer = roles?.includes('customer') ?? true;
         const isCarrier = roles?.includes('carrier') ?? false;
         
-        const body = {
+        const body: any = {
             ...rest,
             isCustomer,
             isCarrier,
             type: isCustomer ? 'CUSTOMER' : 'FORWARDER'
         };
+        // Пустое значение = снять ответственного (иначе undefined не уйдёт на сервер)
+        if (isCompanyAdmin && editingCompany) {
+            body.responsibleManagerId = rest.responsibleManagerId ?? null;
+        }
 
         try {
             if (editingCompany) {
@@ -277,6 +287,17 @@ export default function PartnersPage() {
                     <Tag color="green">В системе</Tag>
                 )
             )
+        },
+        {
+            title: 'Ответственный',
+            key: 'responsible',
+            render: (_: any, record: any) => {
+                if (!record.isExternal) return <span style={{ color: 'var(--lc-text-ter)' }}>—</span>;
+                const m = record.responsibleManager;
+                return m
+                    ? <span style={{ fontSize: 12 }}>{m.lastName} {m.firstName?.[0] ? `${m.firstName[0]}.` : ''}</span>
+                    : <span style={{ color: 'var(--lc-text-ter)', fontSize: 12 }}>не назначен</span>;
+            }
         },
         {
             title: 'Действия',
@@ -651,6 +672,19 @@ export default function PartnersPage() {
                     <Form.Item name="directorName" label="ФИО директора">
                         <Input placeholder="Иванов Иван Иванович" />
                     </Form.Item>
+                    {isCompanyAdmin && (
+                        <Form.Item
+                            name="responsibleManagerId"
+                            label="Ответственный менеджер"
+                            help="Кто ведёт этого контрагента. Если включена настройка «менеджеры видят только своих контрагентов», его будет видеть только ответственный"
+                        >
+                            <Select
+                                allowClear
+                                placeholder="Не назначен (виден всем менеджерам)"
+                                options={officeUsers.map(u => ({ value: u.id, label: `${u.lastName} ${u.firstName}` }))}
+                            />
+                        </Form.Item>
+                    )}
                 </Form>
             </Modal>
         </div>

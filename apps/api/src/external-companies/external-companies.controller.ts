@@ -16,9 +16,9 @@ export class ExternalCompaniesController {
 
     @Get()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER)
-    @ApiOperation({ summary: 'Список внешних компаний' })
+    @ApiOperation({ summary: 'Список внешних компаний (менеджер — только своих, если включена настройка)' })
     async getAll(@Req() req: any) {
-        return this.service.getExternalCompanies(req.user.companyId);
+        return this.service.getExternalCompanies(req.user.companyId, req.user.sub || req.user.id, req.user.role);
     }
 
     @Post()
@@ -36,7 +36,7 @@ export class ExternalCompaniesController {
         address?: string;
         directorName?: string;
     }) {
-        const result = await this.service.createExternalCompany(req.user.companyId, dto);
+        const result = await this.service.createExternalCompany(req.user.companyId, dto, req.user.sub || req.user.id);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'partner',
             entityId: (result as any)?.id, entityLabel: `Контрагент «${dto.name}»`,
@@ -57,7 +57,12 @@ export class ExternalCompaniesController {
         directorName?: string;
         isCustomer?: boolean;
         isCarrier?: boolean;
+        responsibleManagerId?: string | null;
     }) {
+        // Переназначать ответственного менеджера может только администратор компании
+        if (dto.responsibleManagerId !== undefined && !['COMPANY_ADMIN', 'FORWARDER', 'ADMIN'].includes(req.user.role)) {
+            delete dto.responsibleManagerId;
+        }
         const result = await this.service.updateExternalCompany(req.user.companyId, id, dto);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'partner',

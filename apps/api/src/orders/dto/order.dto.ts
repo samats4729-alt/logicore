@@ -33,6 +33,11 @@ export class CreateOrderDto {
     @IsOptional()
     customerCompanyId?: string;
 
+    @ApiProperty({ required: false, description: 'Ответственный менеджер от компании создателя: userId, "NONE" — не назначать (возьмёт любой), пусто — создатель' })
+    @IsString()
+    @IsOptional()
+    responsibleUserId?: string;
+
     @ApiProperty({ required: true, type: [Object], description: 'Массив точек маршрута (Погрузка, Догруз, Выгрузка)' })
     @IsArray()
     @IsNotEmpty()

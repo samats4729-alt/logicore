@@ -455,20 +455,27 @@ export class CompanyService {
         // Приватность заявок для менеджеров: видны только свои заявки и заявки,
         // у которых от компании ещё нет ответственного (не принятые — «кто примет,
         // тот и ведёт»). Админ, экспедитор, бухгалтер и завсклад видят всё.
+        // Управляется настройкой компании managersSeeOwnOrdersOnly (по умолчанию включена).
         if (requesterRole === 'LOGISTICIAN' && userId) {
-            where = {
-                AND: [
-                    where,
-                    {
-                        OR: [
-                            { responsibles: { some: { companyId, userId } } },
-                            { responsibles: { none: { companyId } } },
-                            { responsibleManagerId: userId },
-                            { customerId: userId },
-                        ],
-                    },
-                ],
-            };
+            const owner = await this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: { managersSeeOwnOrdersOnly: true },
+            });
+            if (owner?.managersSeeOwnOrdersOnly !== false) {
+                where = {
+                    AND: [
+                        where,
+                        {
+                            OR: [
+                                { responsibles: { some: { companyId, userId } } },
+                                { responsibles: { none: { companyId } } },
+                                { responsibleManagerId: userId },
+                                { customerId: userId },
+                            ],
+                        },
+                    ],
+                };
+            }
         }
 
         const [data, total] = await Promise.all([
@@ -544,6 +551,22 @@ export class CompanyService {
             limit,
             totalPages: Math.ceil(total / limit)
         };
+    }
+
+    /**
+     * Офисные сотрудники компании — для выбора ответственного менеджера
+     * (только имена и роли, без чувствительных данных)
+     */
+    async getCompanyManagers(companyId: string) {
+        return this.prisma.user.findMany({
+            where: {
+                companyId,
+                isActive: true,
+                role: { in: ['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN'] as any },
+            },
+            select: { id: true, firstName: true, lastName: true, role: true },
+            orderBy: { firstName: 'asc' },
+        });
     }
 
     /**
@@ -679,6 +702,8 @@ export class CompanyService {
         bankName?: string;
         bankBic?: string;
         kbe?: string;
+        managersSeeOwnOrdersOnly?: boolean;
+        managersSeeOwnPartnersOnly?: boolean;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },

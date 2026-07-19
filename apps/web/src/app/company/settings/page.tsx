@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Select, Popconfirm, Tag } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Select, Popconfirm, Tag, Switch } from 'antd';
+import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import CompanyFormFields from '@/components/CompanyFormFields';
@@ -123,10 +123,35 @@ export default function SettingsPage() {
         loadCompanies();
     }, []);
 
+    // Права менеджеров (тумблеры видимости)
+    const [managerToggles, setManagerToggles] = useState({ orders: true, partners: false });
+    const [toggleSaving, setToggleSaving] = useState(false);
+
+    const saveManagerToggle = async (key: 'orders' | 'partners', value: boolean) => {
+        const prev = managerToggles;
+        setManagerToggles({ ...prev, [key]: value });
+        setToggleSaving(true);
+        try {
+            await api.put('/company/profile', key === 'orders'
+                ? { managersSeeOwnOrdersOnly: value }
+                : { managersSeeOwnPartnersOnly: value });
+            message.success('Настройка сохранена');
+        } catch (e: any) {
+            setManagerToggles(prev);
+            message.error(e.response?.data?.message || 'Не удалось сохранить настройку');
+        } finally {
+            setToggleSaving(false);
+        }
+    };
+
     const loadCompanyProfile = async () => {
         try {
             const response = await api.get('/company/profile');
             const company = response.data;
+            setManagerToggles({
+                orders: company.managersSeeOwnOrdersOnly !== false,
+                partners: company.managersSeeOwnPartnersOnly === true,
+            });
             companyForm.setFieldsValue({
                 name: company.name,
                 bin: company.bin,
@@ -504,6 +529,34 @@ export default function SettingsPage() {
                             </Button>
                         </Form.Item>
                     </Form>
+
+                    {/* Права менеджеров */}
+                    <div className="lc-card lc-pad">
+                        <div className="lc-sec-title"><TeamOutlined style={{ marginRight: 8 }} />Права менеджеров</div>
+                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>
+                            Что видят сотрудники с ролью «Логист/Менеджер». Администраторов и бухгалтеров эти ограничения не касаются
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                                <div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--lc-text)' }}>Менеджеры видят только свои заявки</div>
+                                    <div style={{ fontSize: 12, color: 'var(--lc-text-ter)', marginTop: 2 }}>
+                                        Свои — где менеджер ответственный или создатель, плюс непринятые заявки. Выключено — видят все заявки компании
+                                    </div>
+                                </div>
+                                <Switch checked={managerToggles.orders} loading={toggleSaving} onChange={(v) => saveManagerToggle('orders', v)} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                                <div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--lc-text)' }}>Менеджеры видят только своих контрагентов</div>
+                                    <div style={{ fontSize: 12, color: 'var(--lc-text-ter)', marginTop: 2 }}>
+                                        Свои — где менеджер назначен ответственным (по умолчанию — кто добавил контрагента). Ответственного меняет администратор в справочнике
+                                    </div>
+                                </div>
+                                <Switch checked={managerToggles.partners} loading={toggleSaving} onChange={(v) => saveManagerToggle('partners', v)} />
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Печать и подпись */}
                     <div className="lc-card lc-pad">

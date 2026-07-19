@@ -145,6 +145,13 @@ export class CompanyController {
         return this.companyService.getCompanyOrders(req.user.companyId, query, req.user.sub, req.user.role);
     }
 
+    @Get('managers')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Офисные сотрудники компании (для выбора ответственного)' })
+    async getCompanyManagers(@Request() req: any) {
+        return this.companyService.getCompanyManagers(req.user.companyId);
+    }
+
     @Get('dashboard-activity')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Активность компании для дашборда (только администратор компании)' })

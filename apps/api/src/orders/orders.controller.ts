@@ -37,17 +37,26 @@ export class OrdersController {
             await this.billingService.assertOrderLimit(req.user.companyId);
         }
 
+        const { responsibleUserId, ...orderDto } = dto as any;
         const order = await this.ordersService.create({
-            ...dto,
+            ...orderDto,
             customerId: dto.customerId || req.user.sub,
             responsibleManagerId: req.user.sub,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
         });
 
-        // Создатель — ответственный от своей компании
+        // Ответственный от компании создателя: по умолчанию — сам создатель;
+        // можно назначить другого менеджера (помощник вбивает заявки) или
+        // "NONE" — не назначать, тогда заявку видят все менеджеры («кто возьмёт»)
         if (req.user.companyId) {
-            await this.ordersService.setCompanyResponsible(order.id, req.user.companyId, req.user.sub, true);
+            if (responsibleUserId === 'NONE') {
+                // без ответственного
+            } else if (responsibleUserId && responsibleUserId !== req.user.sub) {
+                await this.ordersService.reassignResponsible(order.id, req.user.companyId, responsibleUserId);
+            } else {
+                await this.ordersService.setCompanyResponsible(order.id, req.user.companyId, req.user.sub, true);
+            }
         }
 
         await this.auditService.log({

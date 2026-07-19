@@ -112,6 +112,7 @@ model User {
   documents     Document[]
   orderAssignments  OrderAssignee[]  @relation("OrderAssignees")
   orderResponsibilities OrderResponsible[] @relation("UserOrderResponsibilities")
+  managedExternalCompanies Company[] @relation("ExternalCompanyManager")
   orderChangeLogs   OrderChangeLog[] @relation("OrderChangeLogs")
   closedPeriods     ClosedPeriod[]
   createdInvoices   Invoice[]        @relation("InvoiceCreator")
@@ -169,11 +170,19 @@ model Company {
   isActive       Boolean     @default(true)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
-  
+
+  // Настройки видимости для менеджеров (LOGISTICIAN) этой компании
+  managersSeeOwnOrdersOnly   Boolean @default(true)   // менеджер видит только свои заявки
+  managersSeeOwnPartnersOnly Boolean @default(false)  // менеджер видит только своих контрагентов
+
   // Кто создал внешнюю компанию
   createdByCompanyId String?
   createdByCompany   Company?  @relation("ExternalCompanies", fields: [createdByCompanyId], references: [id])
   externalCompanies  Company[] @relation("ExternalCompanies")
+
+  // Ответственный менеджер за внешнего контрагента (кто ведёт клиента)
+  responsibleManagerId String?
+  responsibleManager   User?   @relation("ExternalCompanyManager", fields: [responsibleManagerId], references: [id])
 
   users             User[]
   ordersAsPartner   Order[]   @relation("PartnerOrders")
