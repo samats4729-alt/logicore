@@ -73,22 +73,32 @@ export class ContractsService {
             }
         }
 
-        return this.prisma.contract.create({
-            data: {
-                contractNumber: data.contractNumber,
-                customerCompanyId,
-                forwarderCompanyId,
-                startDate: data.startDate,
-                endDate: data.endDate,
-                notes: data.notes,
-                content: getDefaultContractTemplate() as any,
-                status: 'ACTIVE',
-            },
-            include: {
-                customerCompany: { select: { id: true, name: true } },
-                forwarderCompany: { select: { id: true, name: true } },
-            },
-        });
+        try {
+            return await this.prisma.contract.create({
+                data: {
+                    contractNumber: data.contractNumber,
+                    customerCompanyId,
+                    forwarderCompanyId,
+                    startDate: data.startDate,
+                    endDate: data.endDate,
+                    notes: data.notes,
+                    content: getDefaultContractTemplate() as any,
+                    status: 'ACTIVE',
+                },
+                include: {
+                    customerCompany: { select: { id: true, name: true } },
+                    forwarderCompany: { select: { id: true, name: true } },
+                },
+            });
+        } catch (e: any) {
+            // Понятное сообщение вместо сырой ошибки при дубле (уникальность пары компаний + номера)
+            if (e?.code === 'P2002') {
+                throw new BadRequestException(
+                    `Договор № ${data.contractNumber} между этими компаниями уже существует. Укажите другой номер или откройте существующий договор.`,
+                );
+            }
+            throw e;
+        }
     }
 
     /**
