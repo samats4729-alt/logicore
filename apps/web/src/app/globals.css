@@ -622,6 +622,10 @@ a.mapboxgl-ctrl-logo,
   padding: 6px !important;
   box-shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.55) !important;
   min-width: 208px;
+  /* Длинные меню (Финансы) не должны уходить за нижний край экрана */
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .lc-nav-pop .ant-menu-item {
