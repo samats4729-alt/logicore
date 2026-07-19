@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip, Segmented } from 'antd';
+import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip, Segmented, Switch } from 'antd';
 import dayjs from 'dayjs';
 import { 
     MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, 
@@ -238,8 +238,36 @@ export default function CompanyUsersPage() {
         }
     };
 
+    // Права менеджеров (что видят логисты) — настройки компании
+    const [rightsModalOpen, setRightsModalOpen] = useState(false);
+    const [managerToggles, setManagerToggles] = useState({ orders: true, partners: false });
+    const [toggleSaving, setToggleSaving] = useState(false);
+
+    const saveManagerToggle = async (key: 'orders' | 'partners', value: boolean) => {
+        const prev = managerToggles;
+        setManagerToggles({ ...prev, [key]: value });
+        setToggleSaving(true);
+        try {
+            await api.put('/company/profile', key === 'orders'
+                ? { managersSeeOwnOrdersOnly: value }
+                : { managersSeeOwnPartnersOnly: value });
+            message.success('Настройка сохранена');
+        } catch (e: any) {
+            setManagerToggles(prev);
+            message.error(e.response?.data?.message || 'Не удалось сохранить настройку');
+        } finally {
+            setToggleSaving(false);
+        }
+    };
+
     useEffect(() => {
         fetchData();
+        api.get('/company/profile')
+            .then(res => setManagerToggles({
+                orders: res.data?.managersSeeOwnOrdersOnly !== false,
+                partners: res.data?.managersSeeOwnPartnersOnly === true,
+            }))
+            .catch(() => { });
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const seg = params.get('segment');
@@ -1435,6 +1463,11 @@ export default function CompanyUsersPage() {
                                 Пригласить
                             </Button>
                         )}
+                        {activeSegment === 'office' && (
+                            <Button icon={<SettingOutlined />} onClick={() => setRightsModalOpen(true)}>
+                                Права менеджеров
+                            </Button>
+                        )}
                     </Space>
                 </div>
                 <div className="lc2-metrics">
@@ -2043,6 +2076,38 @@ export default function CompanyUsersPage() {
                         <Checkbox.Group options={MODULE_PERMISSIONS} />
                     </Form.Item>
                 </Form>
+            </Modal>
+
+            {/* ===== Права менеджеров (настройки видимости) ===== */}
+            <Modal
+                title="Права менеджеров"
+                open={rightsModalOpen}
+                onCancel={() => setRightsModalOpen(false)}
+                footer={<Button type="primary" onClick={() => setRightsModalOpen(false)}>Готово</Button>}
+            >
+                <p style={{ color: 'var(--lc-text-ter)', fontSize: 12.5, marginBottom: 18 }}>
+                    Действует на сотрудников с ролью «Логист/Менеджер». Администраторов и бухгалтеров не ограничивает. Настройка применяется сразу.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                        <div>
+                            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Менеджеры видят только свои заявки</div>
+                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)', marginTop: 2 }}>
+                                Свои — где менеджер ответственный или создатель, плюс свободные (без ответственного). Выключено — видят все заявки компании
+                            </div>
+                        </div>
+                        <Switch checked={managerToggles.orders} loading={toggleSaving} onChange={(v) => saveManagerToggle('orders', v)} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                        <div>
+                            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Менеджеры видят только своих контрагентов</div>
+                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)', marginTop: 2 }}>
+                                Свои — где менеджер назначен ответственным (по умолчанию — кто добавил контрагента). Ответственного меняют в справочнике контрагентов
+                            </div>
+                        </div>
+                        <Switch checked={managerToggles.partners} loading={toggleSaving} onChange={(v) => saveManagerToggle('partners', v)} />
+                    </div>
+                </div>
             </Modal>
         </div>
     );
