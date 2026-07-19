@@ -680,6 +680,11 @@ export default function PartnersPage() {
                         >
                             <Select
                                 allowClear
+                                showSearch
+                                optionFilterProp="label"
+                                filterOption={(input, option) =>
+                                    String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
                                 placeholder="Не назначен (виден всем менеджерам)"
                                 options={officeUsers.map(u => ({ value: u.id, label: `${u.lastName} ${u.firstName}` }))}
                             />

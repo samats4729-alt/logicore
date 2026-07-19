@@ -863,6 +863,11 @@ export default function CreateOrderPage() {
                     size="large"
                     value={responsibleChoice}
                     onChange={setResponsibleChoice}
+                    showSearch
+                    optionFilterProp="label"
+                    filterOption={(input, option) =>
+                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
                     options={[
                         {
                             value: 'SELF',
