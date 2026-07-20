@@ -81,8 +81,10 @@ function RegisterContent() {
     const handleRegister = async (values: any) => {
         setLoading(true);
         try {
+            // agreement — только для формы (галочка согласия), бэкенд это поле не принимает
+            const { agreement, ...payload } = values;
             const response = await api.post('/auth/register-company', {
-                ...values,
+                ...payload,
                 companyType: 'CUSTOMER',
             });
 
