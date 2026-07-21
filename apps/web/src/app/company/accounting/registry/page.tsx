@@ -499,7 +499,7 @@ export default function FinancialRegistryPage() {
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
-                    <div className="lc-eyebrow">Бухгалтерия · Финансы</div>
+                    <div className="lc-eyebrow">Финансы · Реестр</div>
                     <h1 className="lc2-title">Реестр заявок</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Маржа, учет оплат и сверка взаиморасчетов по рейсам

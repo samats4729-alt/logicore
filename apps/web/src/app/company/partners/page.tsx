@@ -446,7 +446,7 @@ export default function PartnersPage() {
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
-                    <div className="lc-eyebrow">Транспорт · Партнёры</div>
+                    <div className="lc-eyebrow">Справочники · Контрагенты</div>
                     <h1 className="lc2-title">Контрагенты</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление заказчиками, перевозчиками и входящими запросами на партнерство

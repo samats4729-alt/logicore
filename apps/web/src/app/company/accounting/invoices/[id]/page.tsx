@@ -260,7 +260,7 @@ export default function InvoiceDetailPage() {
                     >
                         Назад к реестру
                     </Button>
-                    <div className="lc-eyebrow">Бухгалтерия · Счета</div>
+                    <div className="lc-eyebrow">Финансы · Счета</div>
                     <h1 className="lc2-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
                         Счет {invoice.invoiceNumber}
                         <Tag color={statusColors[invoice.status]} style={{ fontSize: 13, padding: '2px 8px', verticalAlign: 'middle' }}>

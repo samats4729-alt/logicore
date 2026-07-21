@@ -502,7 +502,7 @@ export default function PartnerDetailPage() {
                         {initials}
                     </span>
                     <div>
-                        <div className="lc-eyebrow">Транспорт · Контрагенты</div>
+                        <div className="lc-eyebrow">Справочники · Контрагенты</div>
                         <h1 className="lc2-title" style={{ marginBottom: 4 }}>{partner.name}</h1>
                         <Space size={4}>
                             {partner.bin && <span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>БИН: {partner.bin}</span>}

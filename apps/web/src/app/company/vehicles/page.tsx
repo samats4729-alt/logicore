@@ -345,7 +345,7 @@ export default function VehiclesPage() {
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
-                    <div className="lc-eyebrow">Транспорт · Автопарк</div>
+                    <div className="lc-eyebrow">Справочники · Автопарк</div>
                     <h1 className="lc2-title">Автопарк</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Собственный транспорт и транспорт от перевозчиков

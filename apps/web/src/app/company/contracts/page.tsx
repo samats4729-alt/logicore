@@ -397,7 +397,7 @@ export default function CompanyContractsPage() {
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
-                    <div className="lc-eyebrow">Документы · Договоры</div>
+                    <div className="lc-eyebrow">Справочники · Договоры</div>
                     <h1 className="lc2-title">Договоры и тарифы</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление договорами, доп. соглашениями и тарифными сетками

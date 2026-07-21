@@ -90,7 +90,7 @@ export default function CompanyAuditPage() {
             {/* ===== HERO ===== */}
             <div className="lc2-hero">
                 <div>
-                    <div className="lc-eyebrow">Компания</div>
+                    <div className="lc-eyebrow">Кабинет · Журнал</div>
                     <h1 className="lc2-title">Журнал действий</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0' }}>
                         Кто и когда менял данные компании: заявки, финансы, контрагенты, сотрудники

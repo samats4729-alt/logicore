@@ -1428,7 +1428,7 @@ export default function CompanyUsersPage() {
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
-                    <div className="lc-eyebrow">Компания · Персонал</div>
+                    <div className="lc-eyebrow">Кабинет · Сотрудники</div>
                     <h1 className="lc2-title">Персонал</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Управление структурой, сотрудниками и водителями

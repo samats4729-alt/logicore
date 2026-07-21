@@ -308,7 +308,7 @@ export default function CounterpartyReportPage() {
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
-                    <div className="lc-eyebrow">Бухгалтерия · Финансы</div>
+                    <div className="lc-eyebrow">Финансы · Взаиморасчёты</div>
                     <h1 className="lc2-title">Взаиморасчёты</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Финансовая отчётность по всем контрагентам — как заказчик, экспедитор или суб-экспедитор

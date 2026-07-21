@@ -181,7 +181,7 @@ export default function EditContractContentPage() {
                     <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} style={{ marginBottom: 8 }}>
                         Назад
                     </Button>
-                    <div className="lc-eyebrow">Транспорт · Договоры</div>
+                    <div className="lc-eyebrow">Справочники · Договоры</div>
                     <h1 className="lc2-title">
                         <EditOutlined style={{ marginRight: 8 }} />
                         {contractNumber ? `Договор №${contractNumber}` : 'Редактирование договора'}
