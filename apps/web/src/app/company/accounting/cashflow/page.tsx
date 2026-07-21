@@ -235,7 +235,7 @@ export default function CashflowReportPage() {
             <div className="lc2-hero">
                 <div>
                     <div className="lc-eyebrow">
-                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: '4px 8px', marginRight: 8 }} />
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/finance')} style={{ padding: '4px 8px', marginRight: 8 }} />
                         Бухгалтерия · ДДС
                     </div>
                     <h1 className="lc2-title">Движение денежных средств</h1>

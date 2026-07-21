@@ -129,7 +129,7 @@ export default function CompanyExpensesPage() {
             <div className="lc2-hero">
                 <div>
                     <div className="lc-eyebrow">
-                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting')} style={{ padding: 0, marginRight: 8, height: 'auto' }} />
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/finance')} style={{ padding: 0, marginRight: 8, height: 'auto' }} />
                         Финансы · Расходы
                     </div>
                     <h1 className="lc2-title">Расходы</h1>
