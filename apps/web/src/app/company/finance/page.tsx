@@ -107,7 +107,8 @@ export default function FinanceHubPage() {
                 { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin },
                 { label: 'Моя зарплата', href: '/company/my-salary', show: user?.role === 'LOGISTICIAN' },
                 { label: 'Калькулятор', href: '/company/calculator', show: true },
-                { label: 'Статьи доходов и расходов', href: '/company/accounting/settings', show: acc },
+                { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc },
+                { label: 'Статьи доходов/расходов', href: '/company/accounting/settings?tab=categories', show: acc },
             ],
         },
     ]

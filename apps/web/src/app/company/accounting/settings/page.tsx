@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, Select, Space, App, Tag, theme, Spin } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 
 const { Text } = Typography;
@@ -28,9 +28,15 @@ interface FinanceCategory {
 export default function FinanceSettingsPage() {
     const { token } = theme.useToken();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { message } = App.useApp();
     const { user } = useAuthStore();
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
+
+    // Вкладку можно задать ссылкой: ?tab=accounts | categories
+    const rawTab = searchParams?.get('tab') || '';
+    const initialTab = rawTab === 'categories' ? 'categories' : 'accounts';
+    const [activeTab, setActiveTab] = useState(initialTab);
 
     const [loading, setLoading] = useState(false);
     const [accounts, setAccounts] = useState<FinanceAccount[]>([]);
@@ -215,7 +221,7 @@ export default function FinanceSettingsPage() {
                 <div>
                     <div className="lc-eyebrow">
                         <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/finance')} style={{ padding: '4px 8px', marginRight: 8 }} />
-                        Бухгалтерия · Настройки
+                        Финансы · Настройки
                     </div>
                     <h1 className="lc2-title">Настройки финансовых справочников</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
@@ -236,7 +242,7 @@ export default function FinanceSettingsPage() {
                 </div>
             ) : (
             <div className="lc-card" style={{ padding: 20 }}>
-                <Tabs defaultActiveKey="accounts" size="large" type="line" items={[
+                <Tabs activeKey={activeTab} onChange={setActiveTab} size="large" type="line" items={[
                     {
                         key: 'accounts',
                         label: 'Счета и кассы',
