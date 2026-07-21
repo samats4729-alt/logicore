@@ -43,6 +43,12 @@ interface AffOverview {
     multiCompanyPersons: { personId: string; fullName: string; companyCount: number; companies: { name: string; roles: string[] }[] }[];
 }
 
+interface VehOverview {
+    total: number;
+    linkedToDriver: number;
+    sample: { plate: string; model: string; company: string; driver: string | null }[];
+}
+
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
     LOGISTICIAN: 'Менеджер',
@@ -66,6 +72,30 @@ export default function AdminIdentityPage() {
     const [reverting, setReverting] = useState<string | null>(null);
     const [aff, setAff] = useState<AffOverview | null>(null);
     const [backfillingAff, setBackfillingAff] = useState(false);
+    const [veh, setVeh] = useState<VehOverview | null>(null);
+    const [backfillingVeh, setBackfillingVeh] = useState(false);
+
+    const loadVeh = async () => {
+        try {
+            const res = await api.get('/admin/identity/vehicles-overview');
+            setVeh(res.data);
+        } catch {
+            /* обзор недоступен — не критично */
+        }
+    };
+
+    const runBackfillVeh = async () => {
+        setBackfillingVeh(true);
+        try {
+            const res = await api.post('/admin/identity/backfill-vehicle-drivers');
+            message.success(`Транспорт: связано машин с водителями ${res.data?.linked ?? 0} из ${res.data?.candidates ?? 0}`);
+            loadVeh();
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Ошибка бэкфилла транспорта');
+        } finally {
+            setBackfillingVeh(false);
+        }
+    };
 
     const loadAff = async () => {
         try {
@@ -129,6 +159,7 @@ export default function AdminIdentityPage() {
         loadReport();
         loadHistory();
         loadAff();
+        loadVeh();
     }, []);
 
     const mergeGroup = async (g: DupGroup, gk: string) => {
@@ -410,6 +441,56 @@ export default function AdminIdentityPage() {
                                             </Space>
                                         ),
                                     },
+                                ]}
+                            />
+                        )}
+                    </>
+                )}
+            </Card>
+
+            <Card
+                title={<span>Шаг 5. Транспорт как актив (Фаза 3)</span>}
+                style={{ marginTop: 16 }}
+                extra={<Button icon={<ReloadOutlined />} onClick={loadVeh}>Обновить</Button>}
+            >
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="Связь машина ↔ водитель настоящей ссылкой"
+                    description="Раньше транспорт «переезжал» копированием госномера в карточку водителя. Здесь машина получает реальную ссылку на водителя (по совпадению госномера), НИЧЕГО не меняя в существующих полях. Задел под владельца-физлицо и историю рейсов."
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                    <div>
+                        <Text strong>Связать машины с водителями</Text>
+                        <div style={{ color: '#8a91a0', fontSize: 13 }}>
+                            Безопасно и идемпотентно. Требует, чтобы сначала были созданы личности (Шаг 1).
+                        </div>
+                    </div>
+                    <Button type="primary" loading={backfillingVeh} onClick={runBackfillVeh}>
+                        Запустить бэкфилл транспорта
+                    </Button>
+                </div>
+
+                {veh && (
+                    <>
+                        <Row gutter={16} style={{ marginBottom: 16 }}>
+                            <Col><Statistic title="Всего машин" value={veh.total} /></Col>
+                            <Col><Statistic title="С привязанным водителем" value={veh.linkedToDriver} /></Col>
+                        </Row>
+                        {veh.sample.length === 0 ? (
+                            <Alert type="info" showIcon message="Пока нет машин, связанных с водителем ссылкой" />
+                        ) : (
+                            <Table
+                                size="small"
+                                pagination={{ pageSize: 10 }}
+                                rowKey={(r: VehOverview['sample'][number]) => `${r.company}-${r.plate}`}
+                                dataSource={veh.sample}
+                                columns={[
+                                    { title: 'Госномер', dataIndex: 'plate', key: 'plate' },
+                                    { title: 'Модель', dataIndex: 'model', key: 'model' },
+                                    { title: 'Компания', dataIndex: 'company', key: 'company' },
+                                    { title: 'Водитель', dataIndex: 'driver', key: 'driver', render: (d: string) => d || <Text type="secondary">—</Text> },
                                 ]}
                             />
                         )}

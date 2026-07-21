@@ -407,6 +407,81 @@ export class IdentityService {
         };
     }
 
+    // ==================== ФАЗА 3: транспорт как актив ====================
+
+    /**
+     * Восстановить связь машина↔водитель реальной ссылкой (Vehicle.driverPersonId),
+     * исходя из текущего «копированного» назначения (совпадение госномера в рамках компании).
+     * Существующие поля в User и Vehicle не меняются — добавляется только driverPersonId.
+     * Идемпотентно (заполняет только пустые driverPersonId).
+     */
+    async backfillVehicleDrivers() {
+        const norm = (p?: string | null) => (p || '').replace(/\s+/g, '').toUpperCase();
+
+        const [vehicles, drivers] = await Promise.all([
+            this.prisma.vehicle.findMany({
+                where: { driverPersonId: null },
+                select: { id: true, companyId: true, plate: true },
+            }),
+            this.prisma.user.findMany({
+                where: { role: 'DRIVER', vehiclePlate: { not: null }, personId: { not: null } },
+                select: { companyId: true, vehiclePlate: true, personId: true },
+            }),
+        ]);
+
+        const map = new Map<string, string>(); // `${companyId}|${plate}` -> personId
+        for (const d of drivers) {
+            if (!d.companyId || !d.vehiclePlate || !d.personId) continue;
+            const key = `${d.companyId}|${norm(d.vehiclePlate)}`;
+            if (!map.has(key)) map.set(key, d.personId);
+        }
+
+        let linked = 0;
+        for (const v of vehicles) {
+            const pid = map.get(`${v.companyId}|${norm(v.plate)}`);
+            if (pid) {
+                await this.prisma.vehicle.update({ where: { id: v.id }, data: { driverPersonId: pid } });
+                linked++;
+            }
+        }
+
+        this.logger.log(`backfillVehicleDrivers: candidates=${vehicles.length}, linked=${linked}`);
+        return { candidates: vehicles.length, linked };
+    }
+
+    /**
+     * Обзор транспорта-актива: сколько машин и у скольких проставлен водитель ссылкой.
+     */
+    async getVehicleOverview() {
+        const [total, linkedToDriver, sample] = await Promise.all([
+            this.prisma.vehicle.count(),
+            this.prisma.vehicle.count({ where: { driverPersonId: { not: null } } }),
+            this.prisma.vehicle.findMany({
+                where: { driverPersonId: { not: null } },
+                take: 50,
+                orderBy: { updatedAt: 'desc' },
+                select: {
+                    id: true,
+                    plate: true,
+                    model: true,
+                    company: { select: { name: true } },
+                    driverPerson: { select: { firstName: true, lastName: true } },
+                },
+            }),
+        ]);
+
+        return {
+            total,
+            linkedToDriver,
+            sample: sample.map((v) => ({
+                plate: v.plate,
+                model: v.model,
+                company: v.company?.name || '—',
+                driver: v.driverPerson ? `${v.driverPerson.lastName || ''} ${v.driverPerson.firstName || ''}`.trim() : null,
+            })),
+        };
+    }
+
     /**
      * История активных объединений (для кнопки «Разъединить»).
      */

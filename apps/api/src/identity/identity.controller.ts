@@ -58,6 +58,20 @@ export class IdentityController {
         return this.identityService.getAffiliationOverview();
     }
 
+    @Post('backfill-vehicle-drivers')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Связать машины с водителями реальной ссылкой (из текущих данных)' })
+    async backfillVehicleDrivers() {
+        return this.identityService.backfillVehicleDrivers();
+    }
+
+    @Get('vehicles-overview')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Обзор транспорта-актива' })
+    async getVehiclesOverview() {
+        return this.identityService.getVehicleOverview();
+    }
+
     @Post('merges/:id/revert')
     @Roles(UserRole.ADMIN)
     @ApiOperation({ summary: 'Полностью отменить (разъединить) объединение' })

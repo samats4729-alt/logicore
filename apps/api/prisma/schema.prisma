@@ -180,8 +180,10 @@ model Person {
   mergedInto   Person?  @relation("PersonMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   mergedFrom   Person[] @relation("PersonMerge")
 
-  users        User[]
-  affiliations Affiliation[]
+  users            User[]
+  affiliations     Affiliation[]
+  ownedVehicles    Vehicle[] @relation("PersonOwnedVehicles")
+  operatedVehicles Vehicle[] @relation("PersonOperatedVehicles")
 
   @@index([phone])
   @@index([iin])
@@ -473,9 +475,14 @@ model Order {
   // Данные водителя от экспедитора (заполняет экспедитор)
   assignedDriverName    String?   // ФИО водителя
   assignedDriverPhone   String?   // Телефон водителя
-  assignedDriverPlate   String?   // Госномер авто
+  assignedDriverPlate   String?   // Госномер авто (снимок на момент рейса)
   assignedDriverTrailer String?   // Номер прицепа
   assignedAt            DateTime? // Когда назначен водитель
+
+  // Фаза 3: ссылка на конкретную машину (актив). Nullable, пока не пишется существующей
+  // логикой — текстовые поля assignedDriver* остаются снимком. Задел под историю/переиспользование.
+  vehicleId             String?
+  vehicle               Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   
   // Финансы
   customerPrice   Float?      // Цена для клиента (видит клиент)
@@ -1057,7 +1064,19 @@ model Vehicle {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Фаза 3: транспорт как актив. Пока НЕ используется существующей логикой —
+  // заполняется бэкфиллом (связь водитель↔машина реальной ссылкой вместо копирования).
+  vin            String?  // задел под глобальную идентичность актива
+  ownerPersonId  String?  // владелец-физлицо (частный перевозчик), если машина не компании
+  ownerPerson    Person?  @relation("PersonOwnedVehicles", fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  driverPersonId String?  // текущий водитель (реальная ссылка, а не копия полей в User)
+  driverPerson   Person?  @relation("PersonOperatedVehicles", fields: [driverPersonId], references: [id], onDelete: SetNull)
+
+  orders        Order[]
+
   @@index([companyId])
+  @@index([ownerPersonId])
+  @@index([driverPersonId])
 }
 
 // ==================== INVOICES ====================
