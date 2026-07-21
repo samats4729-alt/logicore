@@ -181,10 +181,17 @@ export default function CompanyUsersPage() {
     const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');
     const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
     const [activeSegment, setActiveSegment] = useState<'office' | 'drivers'>('office');
-    
+    const [zoom, setZoom] = useState(1);
+
     const treeContainerRef = useRef<HTMLDivElement>(null);
 
+    const ZOOM_MIN = 0.4;
+    const ZOOM_MAX = 1.6;
+    const zoomIn = () => setZoom(z => Math.min(ZOOM_MAX, +(z + 0.1).toFixed(2)));
+    const zoomOut = () => setZoom(z => Math.max(ZOOM_MIN, +(z - 0.1).toFixed(2)));
+
     const handleCenterView = () => {
+        setZoom(1);
         if (treeContainerRef.current) {
             const container = treeContainerRef.current;
             const scrollWidth = container.scrollWidth;
@@ -357,17 +364,27 @@ export default function CompanyUsersPage() {
             container.scrollTop = scrollTop - walkY;
         };
 
+        // Масштабирование колесом с зажатым Ctrl/⌘ (как в Figma/Miro)
+        const handleWheel = (e: WheelEvent) => {
+            if (!(e.ctrlKey || e.metaKey)) return;
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            setZoom(z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, +(z + delta).toFixed(2))));
+        };
+
         container.style.cursor = 'grab';
         container.addEventListener('mousedown', handleMouseDown);
         container.addEventListener('mouseleave', handleMouseLeave);
         container.addEventListener('mouseup', handleMouseUp);
         container.addEventListener('mousemove', handleMouseMove);
+        container.addEventListener('wheel', handleWheel, { passive: false });
 
         return () => {
             container.removeEventListener('mousedown', handleMouseDown);
             container.removeEventListener('mouseleave', handleMouseLeave);
             container.removeEventListener('mouseup', handleMouseUp);
             container.removeEventListener('mousemove', handleMouseMove);
+            container.removeEventListener('wheel', handleWheel);
         };
     }, [viewMode]);
 
@@ -1130,6 +1147,9 @@ export default function CompanyUsersPage() {
                     margin: 0 auto;
                     width: max-content;
                     min-width: 100%;
+                    transform: scale(var(--tree-zoom, 1));
+                    transform-origin: top center;
+                    transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
                 }
                 
                 /* Root administrators row */
@@ -1257,6 +1277,20 @@ export default function CompanyUsersPage() {
                     width: 2px;
                     height: 28px;
                     background: var(--lc-border);
+                    position: relative;
+                }
+                /* Стрелка вниз — в блок отдела */
+                .org-tree-child-wrapper-card-line::after {
+                    content: '';
+                    position: absolute;
+                    bottom: -1px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 0;
+                    height: 0;
+                    border-left: 4px solid transparent;
+                    border-right: 4px solid transparent;
+                    border-top: 6px solid var(--lc-border);
                 }
                 
                 /* Card Nodes */
@@ -1568,6 +1602,55 @@ export default function CompanyUsersPage() {
                 .center-view-btn {
                     animation: centerBtnPulse 3s ease-in-out infinite;
                 }
+
+                /* Зум-контролы схемы */
+                .org-zoom-ctrl {
+                    position: absolute;
+                    bottom: 20px;
+                    left: 20px;
+                    z-index: 10;
+                    display: flex;
+                    align-items: center;
+                    gap: 2px;
+                    padding: 4px;
+                    background: var(--lc-card);
+                    border: 1px solid var(--lc-border);
+                    border-radius: 12px;
+                    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.10);
+                }
+                .org-zoom-ctrl button {
+                    width: 28px;
+                    height: 28px;
+                    border: none;
+                    background: transparent;
+                    border-radius: 8px;
+                    font-size: 18px;
+                    line-height: 1;
+                    color: var(--lc-text-sec, var(--lc-text));
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: background 0.15s ease;
+                }
+                .org-zoom-ctrl button:hover:not(:disabled) {
+                    background: var(--lc-hover);
+                    color: var(--lc-primary, #1677ff);
+                }
+                .org-zoom-ctrl button:disabled {
+                    opacity: 0.35;
+                    cursor: default;
+                }
+                .org-zoom-val {
+                    min-width: 46px;
+                    text-align: center;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: var(--lc-text);
+                    cursor: pointer;
+                    font-variant-numeric: tabular-nums;
+                    user-select: none;
+                }
             `}</style>
 
             {/* ===== HERO 2026 ===== */}
@@ -1666,7 +1749,11 @@ export default function CompanyUsersPage() {
                 <Row gutter={20}>
                     <Col xs={24} lg={18}>
                         <div style={{ position: 'relative', width: '100%', border: 'none' }}>
-                            <div className="org-tree-container" ref={treeContainerRef}>
+                            <div
+                                className="org-tree-container"
+                                ref={treeContainerRef}
+                                style={{ ['--tree-zoom' as any]: zoom }}
+                            >
                                 {users.length === 0 ? (
                                     <Empty
                                         image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -1676,6 +1763,14 @@ export default function CompanyUsersPage() {
                                     renderRootNode()
                                 )}
                             </div>
+
+                            {/* Зум-контролы (слева снизу) */}
+                            <div className="org-zoom-ctrl">
+                                <button type="button" onClick={zoomOut} disabled={zoom <= ZOOM_MIN} title="Уменьшить">−</button>
+                                <span className="org-zoom-val" onClick={() => setZoom(1)} title="Сбросить масштаб">{Math.round(zoom * 100)}%</span>
+                                <button type="button" onClick={zoomIn} disabled={zoom >= ZOOM_MAX} title="Увеличить">+</button>
+                            </div>
+
                             <Button
                                 type="default"
                                 shape="circle"
@@ -1695,7 +1790,7 @@ export default function CompanyUsersPage() {
                                     border: '1px solid rgba(99, 102, 241, 0.2)',
                                     color: '#6366f1',
                                 }}
-                                title="Центрировать схему"
+                                title="Центрировать и сбросить масштаб"
                             />
                         </div>
                     </Col>
