@@ -31,7 +31,22 @@ export class CompanyService {
 
     async getCompanyUsers(companyId: string, query: any = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
-        const where: any = { companyId, isActive: true };
+
+        // Участники компании = её собственные пользователи (User.companyId)
+        // + пользователи, привязанные к ней через мультикомпанию (UserCompanyRelation).
+        // Так владелец и общая команда видны во всех своих организациях.
+        const relations = await this.prisma.userCompanyRelation.findMany({
+            where: { companyId },
+            select: { userId: true },
+        });
+        const relatedUserIds = relations.map(r => r.userId);
+
+        const membershipOr: any[] = [{ companyId }];
+        if (relatedUserIds.length) {
+            membershipOr.push({ id: { in: relatedUserIds } });
+        }
+
+        const where: any = { isActive: true, OR: membershipOr };
 
         if (query.role) {
             where.role = query.role;
@@ -60,6 +75,7 @@ export class CompanyService {
                     avatarPath: true,
                     permissions: true,
                     createdAt: true,
+                    companyId: true,
                     departmentId: true,
                     department: {
                         select: {
@@ -83,8 +99,18 @@ export class CompanyService {
             this.prisma.user.count({ where })
         ]);
 
+        // Отделы привязаны к конкретной компании. Для «гостевых» участников
+        // (их домашняя компания — другая) отдел в этой компании не показываем,
+        // чтобы они корректно отображались в схеме (например, владелец в корне).
+        const normalized = data.map((u: any) => {
+            const { companyId: homeCompanyId, ...rest } = u;
+            return homeCompanyId === companyId
+                ? rest
+                : { ...rest, departmentId: null, department: null };
+        });
+
         return {
-            data,
+            data: normalized,
             total,
             page,
             limit,
@@ -558,11 +584,24 @@ export class CompanyService {
      * (только имена и роли, без чувствительных данных)
      */
     async getCompanyManagers(companyId: string) {
+        // Как и в списке сотрудников — учитываем и связанных через мультикомпанию,
+        // чтобы владельца/общую команду можно было назначать ответственными во всех организациях.
+        const relations = await this.prisma.userCompanyRelation.findMany({
+            where: { companyId },
+            select: { userId: true },
+        });
+        const relatedUserIds = relations.map(r => r.userId);
+
+        const membershipOr: any[] = [{ companyId }];
+        if (relatedUserIds.length) {
+            membershipOr.push({ id: { in: relatedUserIds } });
+        }
+
         return this.prisma.user.findMany({
             where: {
-                companyId,
                 isActive: true,
                 role: { in: ['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN'] as any },
+                OR: membershipOr,
             },
             select: { id: true, firstName: true, lastName: true, role: true },
             orderBy: { firstName: 'asc' },
