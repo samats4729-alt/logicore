@@ -217,148 +217,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // --- СПРАВОЧНИКИ (бывш. «Транспорт»: контрагенты, договоры, адреса, автопарк, документы) ---
-        const directoryChildren: any[] = [];
-        if (hasPerm('partners')) {
-            directoryChildren.push({
-                key: '/company/partners',
-                icon: <TeamOutlined />,
-                label: 'Контрагенты',
-            });
-            directoryChildren.push({
-                key: '/company/contracts',
-                icon: <FileProtectOutlined />,
-                label: 'Договоры',
-            });
-        }
-        directoryChildren.push({
-            key: '/company/locations',
-            icon: <PushpinOutlined />,
-            label: 'Адреса',
-        });
-        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            directoryChildren.push({
-                key: '/company/vehicles',
-                icon: <CarOutlined />,
-                label: 'Автопарк',
-            });
-        }
-        if (hasPerm('documents')) {
-            directoryChildren.push({
-                key: '/company/documents',
-                icon: <InboxOutlined />,
-                label: 'Документы',
-            });
-        }
+        // --- СПРАВОЧНИКИ (хаб-страница: контрагенты, договоры, адреса, автопарк, документы) ---
         items.push({
-            key: 'directory_group',
-            popupClassName: 'lc-nav-pop',
+            key: '/company/directory',
             icon: <DatabaseOutlined />,
             label: 'Справочники',
-            children: directoryChildren,
         });
 
-        // --- ФИНАНСЫ (секции: Операции / Отчёты / Инструменты) ---
-        const financeChildren: any[] = [];
-        if (hasPerm('accounting')) {
-            financeChildren.push({
-                type: 'group',
-                label: 'Операции',
-                children: [
-                    {
-                        key: '/company/accounting/invoices',
-                        icon: <FileOutlined />,
-                        label: 'Счета',
-                    },
-                    {
-                        key: '/company/accounting/incomes',
-                        icon: <ArrowUpOutlined />,
-                        label: 'Поступления',
-                    },
-                    {
-                        key: '/company/accounting/expenses',
-                        icon: <ArrowDownOutlined />,
-                        label: 'Расходы',
-                    },
-                    {
-                        key: '/company/accounting/registry',
-                        icon: <ArrowUpOutlined />,
-                        label: 'Реестр заявок',
-                    },
-                ],
-            });
-            financeChildren.push({
-                type: 'group',
-                label: 'Отчёты',
-                children: [
-                    {
-                        key: '/company/accounting',
-                        icon: <BarChartOutlined />,
-                        label: 'Бухгалтерия',
-                    },
-                    {
-                        key: '/company/accounting/cashflow',
-                        icon: <FileExcelOutlined />,
-                        label: 'ДДС',
-                    },
-                    {
-                        key: '/company/accounting/pnl',
-                        icon: <RiseOutlined />,
-                        label: 'P&L',
-                    },
-                    {
-                        key: '/company/accounting/counterparty-report',
-                        icon: <TeamOutlined />,
-                        label: 'Взаиморасчёты',
-                    },
-                    {
-                        key: '/company/reports',
-                        icon: <BarChartOutlined />,
-                        label: 'Отчёты',
-                    },
-                ],
-            });
-        }
-        // Инструменты: зарплата, калькулятор, статьи (калькулятор доступен всем)
-        const financeTools: any[] = [];
-        if (hasPerm('accounting') && ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            financeTools.push({
-                key: '/company/payroll',
-                icon: <DollarOutlined />,
-                label: 'Зарплата',
-            });
-        }
-        if (user.role === 'LOGISTICIAN') {
-            financeTools.push({
-                key: '/company/my-salary',
-                icon: <DollarOutlined />,
-                label: 'Моя зарплата',
-            });
-        }
-        financeTools.push({
-            key: '/company/calculator',
-            icon: <CalculatorOutlined />,
-            label: 'Калькулятор',
-        });
-        if (hasPerm('accounting')) {
-            financeTools.push({
-                key: '/company/accounting/settings',
-                icon: <SettingOutlined />,
-                label: 'Статьи',
-            });
-        }
-        financeChildren.push({
-            type: 'group',
-            label: 'Инструменты',
-            children: financeTools,
-        });
-
+        // --- ФИНАНСЫ (хаб-страница: операции, отчёты, инструменты) ---
         items.push({
-            key: 'finance_group',
-            popupClassName: 'lc-nav-pop',
+            key: '/company/finance',
             icon: <DollarOutlined />,
             label: 'Финансы',
-            children: financeChildren,
         });
 
         // --- КАБИНЕТ (страница-хаб: сотрудники, настройки, журнал) ---
@@ -504,12 +374,19 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 .flatMap((c: any) => (c?.type === 'group' && Array.isArray(c.children)) ? c.children : [c])
                                 .filter((c: any) => c?.key && String(c.key).startsWith('/'))
                                 .map((c: any) => String(c.key));
-                            // «Кабинет» подсвечивается и на своих подстраницах (сотрудники, настройки, журнал)
+                            // Хаб-страницы подсвечиваются и на своих подстраницах
                             const cabinetRoutes = ['/company/cabinet', '/company/users', '/company/settings', '/company/audit'];
+                            const directoryRoutes = ['/company/directory', '/company/partners', '/company/contracts', '/company/locations', '/company/vehicles', '/company/documents'];
+                            const financeRoutes = ['/company/finance', '/company/accounting', '/company/payroll', '/company/my-salary', '/company/calculator', '/company/reports'];
+                            const hubRoutes: Record<string, string[]> = {
+                                '/company/cabinet': cabinetRoutes,
+                                '/company/directory': directoryRoutes,
+                                '/company/finance': financeRoutes,
+                            };
                             const active = item.key === '/company'
                                 ? pathname === '/company'
-                                : item.key === '/company/cabinet'
-                                    ? cabinetRoutes.some(k => pathname === k || pathname.startsWith(k + '/'))
+                                : hubRoutes[item.key as string]
+                                    ? hubRoutes[item.key as string].some(k => pathname === k || pathname.startsWith(k + '/'))
                                     : String(item.key).startsWith('/')
                                         ? (pathname === item.key || pathname.startsWith(item.key + '/'))
                                         : childKeys.some(k => pathname === k || pathname.startsWith(k + '/'));

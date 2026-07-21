@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
 interface Link {
@@ -15,48 +13,41 @@ interface Group {
     links: Link[];
 }
 
-export default function CabinetPage() {
+export default function FinanceHubPage() {
     const router = useRouter();
     const { user } = useAuthStore();
-    const [auditEnabled, setAuditEnabled] = useState(false);
 
     const isAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
-
-    useEffect(() => {
-        api.get('/audit/status')
-            .then(res => setAuditEnabled(!!res.data?.companiesEnabled))
-            .catch(() => setAuditEnabled(false));
-    }, []);
+    const hasPerm = (perm: string) => isAdmin || (user?.permissions || []).includes(perm);
+    const acc = hasPerm('accounting');
 
     const groups: Group[] = [
         {
-            title: 'Организация',
+            title: 'Операции',
             links: [
-                { label: 'Основная информация', href: '/company/settings?tab=company&sub=main', show: isAdmin },
-                { label: 'Банковские реквизиты', href: '/company/settings?tab=company&sub=bank', show: isAdmin },
-                { label: 'Печать и подпись', href: '/company/settings?tab=company&sub=stamp', show: isAdmin },
-                { label: 'Мои организации', href: '/company/settings?tab=company&sub=orgs', show: isAdmin },
+                { label: 'Счета', href: '/company/accounting/invoices', show: acc },
+                { label: 'Поступления', href: '/company/accounting/incomes', show: acc },
+                { label: 'Расходы', href: '/company/accounting/expenses', show: acc },
+                { label: 'Реестр заявок', href: '/company/accounting/registry', show: acc },
             ],
         },
         {
-            title: 'Сотрудники',
+            title: 'Отчёты',
             links: [
-                { label: 'Список сотрудников', href: '/company/users', show: isAdmin },
-                { label: 'Права доступа', href: '/company/users?rights=1', show: isAdmin },
-                { label: 'Водители', href: '/company/users?segment=drivers', show: isAdmin },
+                { label: 'Бухгалтерия', href: '/company/accounting', show: acc },
+                { label: 'ДДС', href: '/company/accounting/cashflow', show: acc },
+                { label: 'P&L', href: '/company/accounting/pnl', show: acc },
+                { label: 'Взаиморасчёты', href: '/company/accounting/counterparty-report', show: acc },
+                { label: 'Отчёты', href: '/company/reports', show: acc },
             ],
         },
         {
-            title: 'Аккаунт',
+            title: 'Инструменты',
             links: [
-                { label: 'Мой профиль', href: '/company/settings?tab=profile', show: true },
-                { label: 'Изменить пароль', href: '/company/settings?tab=profile', show: true },
-            ],
-        },
-        {
-            title: 'Журнал и контроль',
-            links: [
-                { label: 'Журнал действий', href: '/company/audit', show: isAdmin && auditEnabled },
+                { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin },
+                { label: 'Моя зарплата', href: '/company/my-salary', show: user?.role === 'LOGISTICIAN' },
+                { label: 'Калькулятор', href: '/company/calculator', show: true },
+                { label: 'Статьи доходов и расходов', href: '/company/accounting/settings', show: acc },
             ],
         },
     ]
@@ -67,8 +58,8 @@ export default function CabinetPage() {
         <div className="lc-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div className="lc2-hero" style={{ marginBottom: 24 }}>
                 <div>
-                    <div className="lc-eyebrow">Кабинет</div>
-                    <h1 className="lc2-title">Управление компанией</h1>
+                    <div className="lc-eyebrow">Финансы</div>
+                    <h1 className="lc2-title">Учёт и финансы компании</h1>
                 </div>
             </div>
 

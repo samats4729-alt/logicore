@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
 interface Link {
@@ -15,48 +13,32 @@ interface Group {
     links: Link[];
 }
 
-export default function CabinetPage() {
+export default function DirectoryHubPage() {
     const router = useRouter();
     const { user } = useAuthStore();
-    const [auditEnabled, setAuditEnabled] = useState(false);
 
     const isAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
-
-    useEffect(() => {
-        api.get('/audit/status')
-            .then(res => setAuditEnabled(!!res.data?.companiesEnabled))
-            .catch(() => setAuditEnabled(false));
-    }, []);
+    const hasPerm = (perm: string) => isAdmin || (user?.permissions || []).includes(perm);
 
     const groups: Group[] = [
         {
-            title: 'Организация',
+            title: 'Контрагенты',
             links: [
-                { label: 'Основная информация', href: '/company/settings?tab=company&sub=main', show: isAdmin },
-                { label: 'Банковские реквизиты', href: '/company/settings?tab=company&sub=bank', show: isAdmin },
-                { label: 'Печать и подпись', href: '/company/settings?tab=company&sub=stamp', show: isAdmin },
-                { label: 'Мои организации', href: '/company/settings?tab=company&sub=orgs', show: isAdmin },
+                { label: 'Контрагенты', href: '/company/partners', show: hasPerm('partners') },
+                { label: 'Договоры', href: '/company/contracts', show: hasPerm('partners') },
             ],
         },
         {
-            title: 'Сотрудники',
+            title: 'Ресурсы',
             links: [
-                { label: 'Список сотрудников', href: '/company/users', show: isAdmin },
-                { label: 'Права доступа', href: '/company/users?rights=1', show: isAdmin },
-                { label: 'Водители', href: '/company/users?segment=drivers', show: isAdmin },
+                { label: 'Адреса', href: '/company/locations', show: true },
+                { label: 'Автопарк', href: '/company/vehicles', show: isAdmin },
             ],
         },
         {
-            title: 'Аккаунт',
+            title: 'Документы',
             links: [
-                { label: 'Мой профиль', href: '/company/settings?tab=profile', show: true },
-                { label: 'Изменить пароль', href: '/company/settings?tab=profile', show: true },
-            ],
-        },
-        {
-            title: 'Журнал и контроль',
-            links: [
-                { label: 'Журнал действий', href: '/company/audit', show: isAdmin && auditEnabled },
+                { label: 'Документы', href: '/company/documents', show: hasPerm('documents') },
             ],
         },
     ]
@@ -67,8 +49,8 @@ export default function CabinetPage() {
         <div className="lc-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div className="lc2-hero" style={{ marginBottom: 24 }}>
                 <div>
-                    <div className="lc-eyebrow">Кабинет</div>
-                    <h1 className="lc2-title">Управление компанией</h1>
+                    <div className="lc-eyebrow">Справочники</div>
+                    <h1 className="lc2-title">Данные и ресурсы компании</h1>
                 </div>
             </div>
 

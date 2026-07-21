@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import CompanyFormFields from '@/components/CompanyFormFields';
@@ -16,10 +16,14 @@ export default function SettingsPage() {
     const { user, setUser } = useAuthStore();
     const searchParams = useSearchParams();
     // Активная вкладка можно задать ссылкой: /company/settings?tab=company
-    const initialTab = ['profile', 'company', 'password'].includes(searchParams?.get('tab') || '')
-        ? (searchParams!.get('tab') as string)
-        : 'profile';
+    // Пароль теперь внутри профиля, поэтому старую ссылку ?tab=password ведём в профиль
+    const rawTab = searchParams?.get('tab') || '';
+    const initialTab = rawTab === 'company' ? 'company' : 'profile';
     const [activeTab, setActiveTab] = useState(initialTab);
+    // Под-вкладка внутри «Организации»: orgs | main | bank | stamp
+    const rawSub = searchParams?.get('sub') || '';
+    const initialSub = ['orgs', 'main', 'bank', 'stamp'].includes(rawSub) ? rawSub : 'orgs';
+    const [companySubTab, setCompanySubTab] = useState(initialSub);
     const [loading, setLoading] = useState(false);
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [companyLoading, setCompanyLoading] = useState(false);
@@ -260,61 +264,108 @@ export default function SettingsPage() {
                 <span><UserOutlined style={{ marginRight: 6 }} />Профиль</span>
             ),
             children: (
-                <div className="lc-card lc-pad" style={{ maxWidth: 860 }}>
-                    <div className="lc-sec-title">Личные данные</div>
-                    <div className="lc-sec-hint">Имя и контакты, которые видят коллеги и контрагенты</div>
-                    <Form
-                        form={profileForm}
-                        layout="vertical"
-                        onFinish={handleProfileUpdate}
-                        style={{ marginTop: 18 }}
-                        initialValues={{
-                            firstName: user?.firstName,
-                            lastName: user?.lastName,
-                            email: user?.email,
-                            phone: user?.phone,
-                        }}
-                    >
-                        <Row gutter={24}>
-                            <Col xs={24} md={12}>
+                <div className="lc-stack" style={{ maxWidth: 860 }}>
+                    <div className="lc-card lc-pad">
+                        <div className="lc-sec-title">Личные данные</div>
+                        <div className="lc-sec-hint">Имя и контакты, которые видят коллеги и контрагенты</div>
+                        <Form
+                            form={profileForm}
+                            layout="vertical"
+                            onFinish={handleProfileUpdate}
+                            style={{ marginTop: 18 }}
+                            initialValues={{
+                                firstName: user?.firstName,
+                                lastName: user?.lastName,
+                                email: user?.email,
+                                phone: user?.phone,
+                            }}
+                        >
+                            <Row gutter={24}>
+                                <Col xs={24} md={12}>
+                                    <Form.Item
+                                        name="firstName"
+                                        label="Имя"
+                                        rules={[{ required: true, message: 'Введите имя' }]}
+                                    >
+                                        <Input prefix={<UserOutlined />} size="large" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item
+                                        name="lastName"
+                                        label="Фамилия"
+                                        rules={[{ required: true, message: 'Введите фамилию' }]}
+                                    >
+                                        <Input prefix={<UserOutlined />} size="large" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item
+                                        name="email"
+                                        label="Email"
+                                        rules={[{ type: 'email', message: 'Неверный формат email' }]}
+                                    >
+                                        <Input prefix={<MailOutlined />} size="large" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="phone" label="Телефон">
+                                        <Input prefix={<PhoneOutlined />} size="large" disabled />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Form.Item style={{ marginBottom: 0 }}>
+                                <Button type="primary" htmlType="submit" loading={loading} className="lc-cta">
+                                    Сохранить изменения
+                                </Button>
+                            </Form.Item>
+                        </Form>
+                    </div>
+
+                    <div className="lc-card lc-pad" style={{ maxWidth: 560 }}>
+                        <div className="lc-sec-title"><LockOutlined style={{ marginRight: 8 }} />Изменить пароль</div>
+                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Минимум 6 символов. После смены текущая сессия сохранится</div>
+                        <Form
+                            form={passwordForm}
+                            layout="vertical"
+                            onFinish={handlePasswordChange}
+                        >
+                            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                                 <Form.Item
-                                    name="firstName"
-                                    label="Имя"
-                                    rules={[{ required: true, message: 'Введите имя' }]}
+                                    name="currentPassword"
+                                    label="Текущий пароль"
+                                    rules={[{ required: true, message: 'Введите текущий пароль' }]}
                                 >
-                                    <Input prefix={<UserOutlined />} size="large" />
+                                    <Input.Password prefix={<LockOutlined />} size="large" />
                                 </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
+
                                 <Form.Item
-                                    name="lastName"
-                                    label="Фамилия"
-                                    rules={[{ required: true, message: 'Введите фамилию' }]}
+                                    name="newPassword"
+                                    label="Новый пароль"
+                                    rules={[
+                                        { required: true, message: 'Введите новый пароль' },
+                                        { min: 6, message: 'Минимум 6 символов' },
+                                    ]}
                                 >
-                                    <Input prefix={<UserOutlined />} size="large" />
+                                    <Input.Password prefix={<LockOutlined />} size="large" />
                                 </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
+
                                 <Form.Item
-                                    name="email"
-                                    label="Email"
-                                    rules={[{ type: 'email', message: 'Неверный формат email' }]}
+                                    name="confirmPassword"
+                                    label="Подтвердите новый пароль"
+                                    rules={[{ required: true, message: 'Подтвердите пароль' }]}
                                 >
-                                    <Input prefix={<MailOutlined />} size="large" />
+                                    <Input.Password prefix={<LockOutlined />} size="large" />
                                 </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="phone" label="Телефон">
-                                    <Input prefix={<PhoneOutlined />} size="large" disabled />
+
+                                <Form.Item style={{ marginBottom: 0 }}>
+                                    <Button type="primary" htmlType="submit" loading={passwordLoading} className="lc-cta">
+                                        Изменить пароль
+                                    </Button>
                                 </Form.Item>
-                            </Col>
-                        </Row>
-                        <Form.Item style={{ marginBottom: 0 }}>
-                            <Button type="primary" htmlType="submit" loading={loading} className="lc-cta">
-                                Сохранить изменения
-                            </Button>
-                        </Form.Item>
-                    </Form>
+                            </Space>
+                        </Form>
+                    </div>
                 </div>
             ),
         },
@@ -325,75 +376,6 @@ export default function SettingsPage() {
             ),
             children: (
                 <div className="lc-stack">
-                    {/* Мои организации — список карточек */}
-                    <div className="lc-card lc-pad">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-                            <div>
-                                <div className="lc-sec-title">Мои организации</div>
-                                <div className="lc-sec-hint">Все ваши компании. Текущая — та, с данными которой вы сейчас работаете</div>
-                            </div>
-                            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
-                                Добавить организацию
-                            </Button>
-                        </div>
-
-                        {myCompaniesLoading ? (
-                            <Text type="secondary">Загрузка…</Text>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                {(myCompanies.length ? myCompanies : (user?.company ? [user.company] : [])).map((c: any) => {
-                                    const isCurrent = c.id === user?.companyId;
-                                    return (
-                                        <div
-                                            key={c.id}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-                                                padding: '14px 16px', borderRadius: 14,
-                                                border: `1px solid ${isCurrent ? 'var(--lc-primary, #1677ff)' : 'var(--lc-border)'}`,
-                                                background: isCurrent ? 'rgba(22,119,255,0.05)' : 'transparent',
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                                                <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
-                                                    {(c.name || 'О').slice(0, 2).toUpperCase()}
-                                                </span>
-                                                <div style={{ minWidth: 0 }}>
-                                                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--lc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        {c.name || 'Без названия'}
-                                                    </div>
-                                                    <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
-                                                        {c.bin ? `БИН ${c.bin}` : 'реквизиты не заполнены'}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                                {isCurrent
-                                                    ? <Tag color="blue" style={{ margin: 0 }}>Текущая</Tag>
-                                                    : <Button size="small" onClick={() => handleSwitchCompany(c.id)}>Переключиться</Button>}
-                                                {user?.role === 'COMPANY_ADMIN' && (myCompanies.length > 1) && (
-                                                    <Popconfirm
-                                                        title="Удалить организацию?"
-                                                        description="Доступ к её данным для вас будет закрыт."
-                                                        okText="Да, удалить"
-                                                        cancelText="Отмена"
-                                                        onConfirm={() => handleDeleteCompany(c.id)}
-                                                        okButtonProps={{ danger: true, loading: submitLoading }}
-                                                    >
-                                                        <Button size="small" danger icon={<DeleteOutlined />} />
-                                                    </Popconfirm>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="lc-sec-hint" style={{ margin: '4px 2px' }}>
-                        Ниже — реквизиты текущей организации. Чтобы изменить другую, сначала переключитесь на неё.
-                    </div>
-
                     <Form
                         form={companyForm}
                         layout="vertical"
@@ -412,7 +394,7 @@ export default function SettingsPage() {
                                         if (res.data.directorName) updateObj.directorName = res.data.directorName;
                                         if (res.data.phone) updateObj.phone = res.data.phone;
                                         if (res.data.email) updateObj.email = res.data.email;
-                                        
+
                                         companyForm.setFieldsValue(updateObj);
                                         message.success('Реквизиты компании подтянуты');
                                     }
@@ -422,165 +404,260 @@ export default function SettingsPage() {
                             }
                         }}
                     >
-                        <div className="lc-card lc-pad">
-                        <div className="lc-sec-title">Основная информация</div>
-                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Реквизиты подтягиваются автоматически по БИН</div>
-                        <Row gutter={24}>
-                            <Col xs={24} md={12}>
-                                <Form.Item
-                                    name="name"
-                                    label="Название компании"
-                                    rules={[{ required: true, message: 'Введите название' }]}
-                                >
-                                    <Input size="large" placeholder="ТОО КазЛогистик" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item
-                                    name="bin"
-                                    label="БИН"
-                                    rules={[
-                                        { required: true, message: 'Введите БИН' },
-                                        { pattern: /^\d+$/, message: 'Только цифры' },
-                                    ]}
-                                >
-                                    <Input size="large" placeholder="123456789012" maxLength={12} 
-                                        onKeyPress={(e) => { if (!/\d/.test(e.key)) e.preventDefault(); }} 
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item 
-                                    name="address" 
-                                    label="Юридический адрес"
-                                    rules={[{ required: true, message: 'Введите юридический адрес' }]}
-                                >
-                                    <Input size="large" placeholder="г. Алматы, ул. ..." />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item 
-                                    name="actualAddress" 
-                                    label="Фактический адрес"
-                                    rules={[{ required: true, message: 'Введите фактический адрес' }]}
-                                >
-                                    <Input size="large" placeholder="г. Алматы, ул. ..." />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="phone" label="Телефон компании">
-                                    <Input size="large" placeholder="+77001234567" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="email" label="Email компании">
-                                    <Input size="large" placeholder="info@company.kz" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item 
-                                    name="directorName" 
-                                    label="ФИО директора"
-                                    rules={[{ required: true, message: 'Введите ФИО директора' }]}
-                                >
-                                    <Input size="large" placeholder="Иванов И.И." />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        </div>
+                    <Tabs
+                        activeKey={companySubTab}
+                        onChange={setCompanySubTab}
+                        tabPosition="top"
+                        items={[
+                            {
+                                key: 'orgs',
+                                label: 'Мои организации',
+                                children: (
+                                    <div className="lc-card lc-pad">
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                                            <div>
+                                                <div className="lc-sec-title">Мои организации</div>
+                                                <div className="lc-sec-hint">Все ваши компании. Текущая — та, с данными которой вы сейчас работаете</div>
+                                            </div>
+                                            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
+                                                Добавить организацию
+                                            </Button>
+                                        </div>
 
-                        <div className="lc-card lc-pad" style={{ marginTop: 16 }}>
-                        <div className="lc-sec-title"><BankOutlined style={{ marginRight: 8 }} />Банковские реквизиты</div>
-                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Используются для формирования счёта на оплату. Все поля обязательны для юрлиц</div>
-                        <Row gutter={24}>
-                            <Col xs={24} md={12}>
-                                <Form.Item
-                                    name="bankAccount"
-                                    label="Расчётный счёт (IBAN)"
-                                    rules={[{ required: true, message: 'Введите расчётный счёт' }]}
-                                >
-                                    <Input size="large" placeholder="KZ123456789012345678" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item
-                                    name="bankName"
-                                    label="Название банка"
-                                    rules={[{ required: true, message: 'Введите название банка' }]}
-                                >
-                                    <Input size="large" placeholder="АО Народный Банк" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item
-                                    name="bankBic"
-                                    label="БИК"
-                                    rules={[{ required: true, message: 'Введите БИК' }]}
-                                >
-                                    <Input size="large" placeholder="NBRKKZKA" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item
-                                    name="kbe"
-                                    label="КБЕ"
-                                    rules={[{ required: true, message: 'Введите КБЕ' }]}
-                                >
-                                    <Input size="large" placeholder="17" maxLength={2} />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        </div>
-                        <Form.Item style={{ margin: '16px 0 0' }}>
+                                        {myCompaniesLoading ? (
+                                            <Text type="secondary">Загрузка…</Text>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                {(myCompanies.length ? myCompanies : (user?.company ? [user.company] : [])).map((c: any) => {
+                                                    const isCurrent = c.id === user?.companyId;
+                                                    return (
+                                                        <div
+                                                            key={c.id}
+                                                            style={{
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                                                                padding: '14px 16px', borderRadius: 14,
+                                                                border: `1px solid ${isCurrent ? 'var(--lc-primary, #1677ff)' : 'var(--lc-border)'}`,
+                                                                background: isCurrent ? 'rgba(22,119,255,0.05)' : 'transparent',
+                                                            }}
+                                                        >
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                                                                <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                                                                    {(c.name || 'О').slice(0, 2).toUpperCase()}
+                                                                </span>
+                                                                <div style={{ minWidth: 0 }}>
+                                                                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--lc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {c.name || 'Без названия'}
+                                                                    </div>
+                                                                    <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
+                                                                        {c.bin ? `БИН ${c.bin}` : 'реквизиты не заполнены'}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                                                {isCurrent
+                                                                    ? <Tag color="blue" style={{ margin: 0 }}>Текущая</Tag>
+                                                                    : <Button size="small" onClick={() => handleSwitchCompany(c.id)}>Переключиться</Button>}
+                                                                {user?.role === 'COMPANY_ADMIN' && (myCompanies.length > 1) && (
+                                                                    <Popconfirm
+                                                                        title="Удалить организацию?"
+                                                                        description="Доступ к её данным для вас будет закрыт."
+                                                                        okText="Да, удалить"
+                                                                        cancelText="Отмена"
+                                                                        onConfirm={() => handleDeleteCompany(c.id)}
+                                                                        okButtonProps={{ danger: true, loading: submitLoading }}
+                                                                    >
+                                                                        <Button size="small" danger icon={<DeleteOutlined />} />
+                                                                    </Popconfirm>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                ),
+                            },
+                            {
+                                key: 'main',
+                                label: 'Основная информация',
+                                children: (
+                                    <div className="lc-card lc-pad">
+                                        <div className="lc-sec-title">Основная информация</div>
+                                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Реквизиты текущей организации подтягиваются автоматически по БИН</div>
+                                        <Row gutter={24}>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="name"
+                                                    label="Название компании"
+                                                    rules={[{ required: true, message: 'Введите название' }]}
+                                                >
+                                                    <Input size="large" placeholder="ТОО КазЛогистик" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="bin"
+                                                    label="БИН"
+                                                    rules={[
+                                                        { required: true, message: 'Введите БИН' },
+                                                        { pattern: /^\d+$/, message: 'Только цифры' },
+                                                    ]}
+                                                >
+                                                    <Input size="large" placeholder="123456789012" maxLength={12}
+                                                        onKeyPress={(e) => { if (!/\d/.test(e.key)) e.preventDefault(); }}
+                                                    />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="address"
+                                                    label="Юридический адрес"
+                                                    rules={[{ required: true, message: 'Введите юридический адрес' }]}
+                                                >
+                                                    <Input size="large" placeholder="г. Алматы, ул. ..." />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="actualAddress"
+                                                    label="Фактический адрес"
+                                                    rules={[{ required: true, message: 'Введите фактический адрес' }]}
+                                                >
+                                                    <Input size="large" placeholder="г. Алматы, ул. ..." />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item name="phone" label="Телефон компании">
+                                                    <Input size="large" placeholder="+77001234567" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item name="email" label="Email компании">
+                                                    <Input size="large" placeholder="info@company.kz" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="directorName"
+                                                    label="ФИО директора"
+                                                    rules={[{ required: true, message: 'Введите ФИО директора' }]}
+                                                >
+                                                    <Input size="large" placeholder="Иванов И.И." />
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
+                                    </div>
+                                ),
+                            },
+                            {
+                                key: 'bank',
+                                label: 'Банковские реквизиты',
+                                children: (
+                                    <div className="lc-card lc-pad">
+                                        <div className="lc-sec-title"><BankOutlined style={{ marginRight: 8 }} />Банковские реквизиты</div>
+                                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Используются для формирования счёта на оплату. Все поля обязательны для юрлиц</div>
+                                        <Row gutter={24}>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="bankAccount"
+                                                    label="Расчётный счёт (IBAN)"
+                                                    rules={[{ required: true, message: 'Введите расчётный счёт' }]}
+                                                >
+                                                    <Input size="large" placeholder="KZ123456789012345678" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="bankName"
+                                                    label="Название банка"
+                                                    rules={[{ required: true, message: 'Введите название банка' }]}
+                                                >
+                                                    <Input size="large" placeholder="АО Народный Банк" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="bankBic"
+                                                    label="БИК"
+                                                    rules={[{ required: true, message: 'Введите БИК' }]}
+                                                >
+                                                    <Input size="large" placeholder="NBRKKZKA" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="kbe"
+                                                    label="КБЕ"
+                                                    rules={[{ required: true, message: 'Введите КБЕ' }]}
+                                                >
+                                                    <Input size="large" placeholder="17" maxLength={2} />
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
+                                    </div>
+                                ),
+                            },
+                            {
+                                key: 'stamp',
+                                label: 'Печать и подпись',
+                                children: (
+                                    <div className="lc-card lc-pad">
+                                        <div className="lc-sec-title">Печать и подпись</div>
+                                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Подставляются в доверенности, счета и договоры. PNG с прозрачным фоном, до 5 МБ</div>
+                                        <Row gutter={[16, 16]}>
+                                            <Col xs={24} md={12}>
+                                                <div className="lc-upload-tile">
+                                                    <div className="lc-upload-preview">
+                                                        {stampUrl
+                                                            ? <Image src={stampUrl} alt="Печать" width={120} />
+                                                            : <span className="lc-upload-empty"><UploadOutlined /> Печать не загружена</span>}
+                                                    </div>
+                                                    <Upload
+                                                        accept=".png,.jpg,.jpeg"
+                                                        showUploadList={false}
+                                                        beforeUpload={handleStampUpload}
+                                                    >
+                                                        <Button icon={<UploadOutlined />} loading={stampLoading}>
+                                                            {stampUrl ? 'Заменить печать' : 'Загрузить печать'}
+                                                        </Button>
+                                                    </Upload>
+                                                </div>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <div className="lc-upload-tile">
+                                                    <div className="lc-upload-preview">
+                                                        {signatureUrl
+                                                            ? <Image src={signatureUrl} alt="Подпись" width={120} />
+                                                            : <span className="lc-upload-empty"><UploadOutlined /> Подпись не загружена</span>}
+                                                    </div>
+                                                    <Upload
+                                                        accept=".png,.jpg,.jpeg"
+                                                        showUploadList={false}
+                                                        beforeUpload={handleSignatureUpload}
+                                                    >
+                                                        <Button icon={<UploadOutlined />} loading={signatureLoading}>
+                                                            {signatureUrl ? 'Заменить подпись' : 'Загрузить подпись'}
+                                                        </Button>
+                                                    </Upload>
+                                                </div>
+                                            </Col>
+                                        </Row>
+                                    </div>
+                                ),
+                            },
+                        ]}
+                    />
+
+                    {(companySubTab === 'main' || companySubTab === 'bank') && (
+                        <Form.Item style={{ margin: '4px 0 0' }}>
                             <Button type="primary" htmlType="submit" loading={companyLoading} className="lc-cta">
                                 Сохранить данные компании
                             </Button>
                         </Form.Item>
+                    )}
                     </Form>
 
-                    {/* Печать и подпись */}
-                    <div className="lc-card lc-pad">
-                        <div className="lc-sec-title">Печать и подпись</div>
-                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Подставляются в доверенности, счета и договоры. PNG с прозрачным фоном, до 5 МБ</div>
-                        <Row gutter={[16, 16]}>
-                            <Col xs={24} md={12}>
-                                <div className="lc-upload-tile">
-                                    <div className="lc-upload-preview">
-                                        {stampUrl
-                                            ? <Image src={stampUrl} alt="Печать" width={120} />
-                                            : <span className="lc-upload-empty"><UploadOutlined /> Печать не загружена</span>}
-                                    </div>
-                                    <Upload
-                                        accept=".png,.jpg,.jpeg"
-                                        showUploadList={false}
-                                        beforeUpload={handleStampUpload}
-                                    >
-                                        <Button icon={<UploadOutlined />} loading={stampLoading}>
-                                            {stampUrl ? 'Заменить печать' : 'Загрузить печать'}
-                                        </Button>
-                                    </Upload>
-                                </div>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <div className="lc-upload-tile">
-                                    <div className="lc-upload-preview">
-                                        {signatureUrl
-                                            ? <Image src={signatureUrl} alt="Подпись" width={120} />
-                                            : <span className="lc-upload-empty"><UploadOutlined /> Подпись не загружена</span>}
-                                    </div>
-                                    <Upload
-                                        accept=".png,.jpg,.jpeg"
-                                        showUploadList={false}
-                                        beforeUpload={handleSignatureUpload}
-                                    >
-                                        <Button icon={<UploadOutlined />} loading={signatureLoading}>
-                                            {signatureUrl ? 'Заменить подпись' : 'Загрузить подпись'}
-                                        </Button>
-                                    </Upload>
-                                </div>
-                            </Col>
-                        </Row>
-                    </div>
                     <Modal
                         title="Добавить организацию"
                         open={modalVisible}
@@ -607,58 +684,6 @@ export default function SettingsPage() {
                 </div>
             ),
         }] : []),
-        {
-            key: 'password',
-            label: (
-                <span><SafetyOutlined style={{ marginRight: 6 }} />Изменить пароль</span>
-            ),
-            children: (
-                <div className="lc-card lc-pad" style={{ maxWidth: 560 }}>
-                    <div className="lc-sec-title"><LockOutlined style={{ marginRight: 8 }} />Смена пароля</div>
-                    <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Минимум 6 символов. После смены текущая сессия сохранится</div>
-                    <Form
-                        form={passwordForm}
-                        layout="vertical"
-                        onFinish={handlePasswordChange}
-                    >
-                        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                            <Form.Item
-                                name="currentPassword"
-                                label="Текущий пароль"
-                                rules={[{ required: true, message: 'Введите текущий пароль' }]}
-                            >
-                                <Input.Password prefix={<LockOutlined />} size="large" />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="newPassword"
-                                label="Новый пароль"
-                                rules={[
-                                    { required: true, message: 'Введите новый пароль' },
-                                    { min: 6, message: 'Минимум 6 символов' },
-                                ]}
-                            >
-                                <Input.Password prefix={<LockOutlined />} size="large" />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="confirmPassword"
-                                label="Подтвердите новый пароль"
-                                rules={[{ required: true, message: 'Подтвердите пароль' }]}
-                            >
-                                <Input.Password prefix={<LockOutlined />} size="large" />
-                            </Form.Item>
-
-                            <Form.Item style={{ marginBottom: 0 }}>
-                                <Button type="primary" htmlType="submit" loading={passwordLoading} className="lc-cta">
-                                    Изменить пароль
-                                </Button>
-                            </Form.Item>
-                        </Space>
-                    </Form>
-                </div>
-            ),
-        },
     ];
 
     return (

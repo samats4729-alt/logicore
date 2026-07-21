@@ -1470,7 +1470,7 @@ export default function CompanyUsersPage() {
                         )}
                         {activeSegment === 'office' && (
                             <Button icon={<SettingOutlined />} onClick={() => setRightsModalOpen(true)}>
-                                Права менеджеров
+                                Права доступа
                             </Button>
                         )}
                     </Space>
@@ -2083,9 +2083,9 @@ export default function CompanyUsersPage() {
                 </Form>
             </Modal>
 
-            {/* ===== Права менеджеров (настройки видимости) ===== */}
+            {/* ===== Права доступа (настройки видимости) ===== */}
             <Modal
-                title="Права менеджеров"
+                title="Права доступа"
                 open={rightsModalOpen}
                 onCancel={() => setRightsModalOpen(false)}
                 footer={<Button type="primary" onClick={() => setRightsModalOpen(false)}>Готово</Button>}
