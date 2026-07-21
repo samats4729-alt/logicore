@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Select, Popconfirm, Tag } from 'antd';
+import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
 import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -314,51 +314,77 @@ export default function SettingsPage() {
         ...(user?.role === 'COMPANY_ADMIN' || user?.role === 'FORWARDER' ? [{
             key: 'company',
             label: (
-                <span><BankOutlined style={{ marginRight: 6 }} />Данные компании</span>
+                <span><BankOutlined style={{ marginRight: 6 }} />Организация</span>
             ),
             children: (
                 <div className="lc-stack">
-                    {/* Организации */}
+                    {/* Мои организации — список карточек */}
                     <div className="lc-card lc-pad">
-                        <div className="lc-sec-title">Организации</div>
-                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Переключайтесь между своими организациями или добавьте новую</div>
-                        <Space wrap style={{ marginBottom: 16 }}>
-                            <Select
-                                placeholder="Переключить организацию"
-                                style={{ minWidth: 280 }}
-                                loading={myCompaniesLoading}
-                                onChange={handleSwitchCompany}
-                                options={myCompanies.map((c: any) => ({
-                                    label: c.name,
-                                    value: c.id,
-                                }))}
-                                size="large"
-                            />
-                            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setModalVisible(true)} size="large">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                            <div>
+                                <div className="lc-sec-title">Мои организации</div>
+                                <div className="lc-sec-hint">Все ваши компании. Текущая — та, с данными которой вы сейчас работаете</div>
+                            </div>
+                            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
                                 Добавить организацию
                             </Button>
-                        </Space>
-                        {myCompanies.length > 1 && user?.companyId ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <Tag color="blue" style={{ padding: '2px 8px', fontSize: 13 }}>
-                                    {user?.company?.name || 'Текущая организация'}
-                                </Tag>
-                                {user.role === 'COMPANY_ADMIN' && (
-                                    <Popconfirm
-                                        title="Удалить организацию?"
-                                        description="Вы действительно хотите удалить эту организацию? Доступ к её данным для вас будет закрыт."
-                                        okText="Да, удалить"
-                                        cancelText="Отмена"
-                                        onConfirm={() => user?.companyId && handleDeleteCompany(user.companyId)}
-                                        okButtonProps={{ danger: true, loading: submitLoading }}
-                                    >
-                                        <Button danger icon={<DeleteOutlined />} size="large" />
-                                    </Popconfirm>
-                                )}
-                            </div>
+                        </div>
+
+                        {myCompaniesLoading ? (
+                            <Text type="secondary">Загрузка…</Text>
                         ) : (
-                            <Text strong style={{ fontSize: 15 }}>{user?.company?.name || 'Ваша организация'}</Text>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {(myCompanies.length ? myCompanies : (user?.company ? [user.company] : [])).map((c: any) => {
+                                    const isCurrent = c.id === user?.companyId;
+                                    return (
+                                        <div
+                                            key={c.id}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                                                padding: '14px 16px', borderRadius: 14,
+                                                border: `1px solid ${isCurrent ? 'var(--lc-primary, #1677ff)' : 'var(--lc-border)'}`,
+                                                background: isCurrent ? 'rgba(22,119,255,0.05)' : 'transparent',
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                                                <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                                                    {(c.name || 'О').slice(0, 2).toUpperCase()}
+                                                </span>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--lc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {c.name || 'Без названия'}
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
+                                                        {c.bin ? `БИН ${c.bin}` : 'реквизиты не заполнены'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                                {isCurrent
+                                                    ? <Tag color="blue" style={{ margin: 0 }}>Текущая</Tag>
+                                                    : <Button size="small" onClick={() => handleSwitchCompany(c.id)}>Переключиться</Button>}
+                                                {user?.role === 'COMPANY_ADMIN' && (myCompanies.length > 1) && (
+                                                    <Popconfirm
+                                                        title="Удалить организацию?"
+                                                        description="Доступ к её данным для вас будет закрыт."
+                                                        okText="Да, удалить"
+                                                        cancelText="Отмена"
+                                                        onConfirm={() => handleDeleteCompany(c.id)}
+                                                        okButtonProps={{ danger: true, loading: submitLoading }}
+                                                    >
+                                                        <Button size="small" danger icon={<DeleteOutlined />} />
+                                                    </Popconfirm>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
+                    </div>
+
+                    <div className="lc-sec-hint" style={{ margin: '4px 2px' }}>
+                        Ниже — реквизиты текущей организации. Чтобы изменить другую, сначала переключитесь на неё.
                     </div>
 
                     <Form

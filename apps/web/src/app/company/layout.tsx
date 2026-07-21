@@ -26,7 +26,6 @@ import {
     FileExcelOutlined,
     RiseOutlined,
     FileProtectOutlined,
-    UserSwitchOutlined,
     CalculatorOutlined,
     BarChartOutlined,
     NotificationOutlined,
@@ -362,33 +361,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             children: financeChildren,
         });
 
-        // --- КОМПАНИЯ (сотрудники, настройки) ---
-        const companyChildren: any[] = [];
-        if (['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            companyChildren.push({
-                key: '/company/users',
-                icon: <UserSwitchOutlined />,
-                label: 'Сотрудники',
-            });
-        }
-        if (auditEnabled && ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            companyChildren.push({
-                key: '/company/audit',
-                icon: <FileProtectOutlined />,
-                label: 'Журнал действий',
-            });
-        }
-        companyChildren.push({
-            key: '/company/settings',
-            icon: <SettingOutlined />,
-            label: 'Настройки',
-        });
+        // --- КАБИНЕТ (страница-хаб: сотрудники, настройки, журнал) ---
         items.push({
-            key: 'company_group',
-            popupClassName: 'lc-nav-pop',
+            key: '/company/cabinet',
             icon: <ApartmentOutlined />,
-            label: 'Компания',
-            children: companyChildren,
+            label: 'Кабинет',
         });
 
         return items;
@@ -527,11 +504,15 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 .flatMap((c: any) => (c?.type === 'group' && Array.isArray(c.children)) ? c.children : [c])
                                 .filter((c: any) => c?.key && String(c.key).startsWith('/'))
                                 .map((c: any) => String(c.key));
+                            // «Кабинет» подсвечивается и на своих подстраницах (сотрудники, настройки, журнал)
+                            const cabinetRoutes = ['/company/cabinet', '/company/users', '/company/settings', '/company/audit'];
                             const active = item.key === '/company'
                                 ? pathname === '/company'
-                                : String(item.key).startsWith('/')
-                                    ? (pathname === item.key || pathname.startsWith(item.key + '/'))
-                                    : childKeys.some(k => pathname === k || pathname.startsWith(k + '/'));
+                                : item.key === '/company/cabinet'
+                                    ? cabinetRoutes.some(k => pathname === k || pathname.startsWith(k + '/'))
+                                    : String(item.key).startsWith('/')
+                                        ? (pathname === item.key || pathname.startsWith(item.key + '/'))
+                                        : childKeys.some(k => pathname === k || pathname.startsWith(k + '/'));
 
                             if (item.children) {
                                 return (
