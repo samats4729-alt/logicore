@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Form, Input, Button, message, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
-import { UserOutlined, UploadOutlined, BankOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { UploadOutlined, BankOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import CompanyFormFields from '@/components/CompanyFormFields';
@@ -543,17 +543,6 @@ export default function SettingsPage() {
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Данные и реквизиты вашей организации
                     </p>
-                </div>
-                <div className="lc2-metrics">
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
-                            <UserOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Пользователь</div>
-                            <div className="lc2-mvalue">{user?.firstName} {user?.lastName}</div>
-                        </div>
-                    </div>
                 </div>
             </div>
             {tabItems.length > 0 ? (
