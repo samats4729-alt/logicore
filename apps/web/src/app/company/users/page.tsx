@@ -853,13 +853,13 @@ export default function CompanyUsersPage() {
                             <div className="dept-card2-title">{dept.name}</div>
                         </div>
                         <div className="dept-card2-row">
-                            <span className="dept-card2-row-label">Подчинённые</span>
+                            <span className="dept-card2-row-label">Сотрудники</span>
                             <span className="dept-card2-row-badge">{deptUsers.length}</span>
                         </div>
                         <div className="dept-card2-foot">
                             {subDepts.length > 0
-                                ? `${subDepts.length} ${pluralizeDepartments(subDepts.length)} в подчинении`
-                                : 'нет отделов в подчинении'}
+                                ? `${subDepts.length} ${pluralizeDepartments(subDepts.length)} внутри`
+                                : 'нет вложенных отделов'}
                         </div>
                     </div>
                 </div>
@@ -1101,12 +1101,12 @@ export default function CompanyUsersPage() {
                     height: 600px;
                     overflow: auto;
                     padding: 60px 40px;
-                    background-color: #ffffff;
+                    background-color: var(--lc-card);
                     border: none;
                     min-height: 480px;
                     border-radius: 16px;
                 }
-                
+
                 .org-tree-container-bg {
                     position: absolute;
                     top: 0;
@@ -1114,7 +1114,7 @@ export default function CompanyUsersPage() {
                     right: 0;
                     bottom: 0;
                     pointer-events: none;
-                    background-image: radial-gradient(rgba(0, 0, 0, 0.18) 1.2px, transparent 1.2px);
+                    background-image: radial-gradient(rgba(140, 140, 140, 0.20) 1.2px, transparent 1.2px);
                     background-size: 22px 22px;
                     z-index: 1;
                     mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
@@ -1212,6 +1212,7 @@ export default function CompanyUsersPage() {
                     position: absolute;
                     top: 0;
                     left: 50%;
+                    transform: translateX(-50%);
                     width: 2px;
                     height: 28px;
                     background: var(--lc-border);
