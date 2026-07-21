@@ -33,7 +33,7 @@ export default function CabinetPage() {
         {
             title: 'Мои организации',
             links: [
-                { label: 'Мои организации', href: '/company/settings', show: isAdmin },
+                { label: 'Организации', href: '/company/settings', show: isAdmin },
             ],
         },
         {
