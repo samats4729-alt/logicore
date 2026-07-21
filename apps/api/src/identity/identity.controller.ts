@@ -72,6 +72,13 @@ export class IdentityController {
         return this.identityService.getVehicleOverview();
     }
 
+    @Get('reconcile')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Сверка нового фундамента со старыми данными (read-only)' })
+    async reconcile() {
+        return this.identityService.reconcile();
+    }
+
     @Post('merges/:id/revert')
     @Roles(UserRole.ADMIN)
     @ApiOperation({ summary: 'Полностью отменить (разъединить) объединение' })

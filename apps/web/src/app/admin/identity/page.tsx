@@ -49,6 +49,13 @@ interface VehOverview {
     sample: { plate: string; model: string; company: string; driver: string | null }[];
 }
 
+interface Reconcile {
+    ok: boolean;
+    persons: { activeUsers: number; withPerson: number; withoutPerson: number; withoutPersonSample: { userId: string; fullName: string }[] };
+    affiliations: { expected: number; inNew: number; missingInNew: number; extraInNew: number; missingSample: { person: string; company: string; role: string }[]; extraSample: { person: string; company: string; role: string }[] };
+    vehicles: { total: number; expectedLinks: number; linkedOk: number; missingLinks: number; mismatched: number; missingSample: string[]; mismatchSample: string[] };
+}
+
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
     LOGISTICIAN: 'Менеджер',
@@ -74,6 +81,20 @@ export default function AdminIdentityPage() {
     const [backfillingAff, setBackfillingAff] = useState(false);
     const [veh, setVeh] = useState<VehOverview | null>(null);
     const [backfillingVeh, setBackfillingVeh] = useState(false);
+    const [recon, setRecon] = useState<Reconcile | null>(null);
+    const [reconLoading, setReconLoading] = useState(false);
+
+    const loadRecon = async () => {
+        setReconLoading(true);
+        try {
+            const res = await api.get('/admin/identity/reconcile');
+            setRecon(res.data);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось выполнить сверку');
+        } finally {
+            setReconLoading(false);
+        }
+    };
 
     const loadVeh = async () => {
         try {
@@ -160,6 +181,7 @@ export default function AdminIdentityPage() {
         loadHistory();
         loadAff();
         loadVeh();
+        loadRecon();
     }, []);
 
     const mergeGroup = async (g: DupGroup, gk: string) => {
@@ -220,6 +242,78 @@ export default function AdminIdentityPage() {
                 компаниями. Существующие данные и логика не меняются. Слияние дубликатов здесь не выполняется —
                 только показывается для вашего решения.
             </Paragraph>
+
+            {/* Сверка — готовность к переключению */}
+            <Card
+                style={{ marginBottom: 16 }}
+                title={<span>Сверка: новый фундамент == старые данные</span>}
+                extra={<Button icon={<ReloadOutlined />} onClick={loadRecon} loading={reconLoading}>Пересчитать</Button>}
+            >
+                {!recon ? (
+                    <div style={{ textAlign: 'center', padding: 20 }}>{reconLoading ? <Spin /> : <Text type="secondary">Нажмите «Пересчитать»</Text>}</div>
+                ) : (
+                    <>
+                        <Alert
+                            style={{ marginBottom: 16 }}
+                            type={recon.ok ? 'success' : 'warning'}
+                            showIcon
+                            message={recon.ok ? 'Полное совпадение — можно переключаться' : 'Есть расхождения — переключаться пока рано'}
+                            description={recon.ok
+                                ? 'Новый слой (Личности, Членство, Транспорт) полностью соответствует старым данным.'
+                                : 'Ниже показано, где новое расходится со старым. Обычно достаточно догнать бэкфиллами (Шаги 1, 4, 5) и пересчитать.'}
+                        />
+                        <Row gutter={[16, 16]}>
+                            <Col xs={24} md={8}>
+                                <Card size="small" title="Личности">
+                                    <Statistic title="Активных пользователей" value={recon.persons.activeUsers} />
+                                    <div style={{ marginTop: 8 }}>
+                                        С личностью: <b>{recon.persons.withPerson}</b> · без личности:{' '}
+                                        <b style={{ color: recon.persons.withoutPerson ? '#dc2626' : undefined }}>{recon.persons.withoutPerson}</b>
+                                    </div>
+                                </Card>
+                            </Col>
+                            <Col xs={24} md={8}>
+                                <Card size="small" title="Членство">
+                                    <div>Ожидается: <b>{recon.affiliations.expected}</b> · в новом: <b>{recon.affiliations.inNew}</b></div>
+                                    <div style={{ marginTop: 8 }}>
+                                        Нет в новом: <b style={{ color: recon.affiliations.missingInNew ? '#dc2626' : undefined }}>{recon.affiliations.missingInNew}</b>{' '}
+                                        · лишних: <b style={{ color: recon.affiliations.extraInNew ? '#dc2626' : undefined }}>{recon.affiliations.extraInNew}</b>
+                                    </div>
+                                </Card>
+                            </Col>
+                            <Col xs={24} md={8}>
+                                <Card size="small" title="Транспорт">
+                                    <div>Ожидается связей: <b>{recon.vehicles.expectedLinks}</b> · связано: <b>{recon.vehicles.linkedOk}</b></div>
+                                    <div style={{ marginTop: 8 }}>
+                                        Не хватает: <b style={{ color: recon.vehicles.missingLinks ? '#dc2626' : undefined }}>{recon.vehicles.missingLinks}</b>{' '}
+                                        · расхождений: <b style={{ color: recon.vehicles.mismatched ? '#dc2626' : undefined }}>{recon.vehicles.mismatched}</b>
+                                    </div>
+                                </Card>
+                            </Col>
+                        </Row>
+
+                        {!recon.ok && (
+                            <div style={{ marginTop: 16 }}>
+                                {recon.persons.withoutPersonSample.length > 0 && (
+                                    <Alert style={{ marginBottom: 8 }} type="warning" message={`Без личности: ${recon.persons.withoutPersonSample.map(u => u.fullName).join(', ')}`} />
+                                )}
+                                {recon.affiliations.missingSample.length > 0 && (
+                                    <Alert style={{ marginBottom: 8 }} type="warning" message={`Членство не создано: ${recon.affiliations.missingSample.map(m => `${m.person} → ${m.company} (${ROLE_LABELS[m.role] || m.role})`).join('; ')}`} />
+                                )}
+                                {recon.affiliations.extraSample.length > 0 && (
+                                    <Alert style={{ marginBottom: 8 }} type="warning" message={`Лишнее членство: ${recon.affiliations.extraSample.map(m => `${m.person} → ${m.company} (${ROLE_LABELS[m.role] || m.role})`).join('; ')}`} />
+                                )}
+                                {recon.vehicles.missingSample.length > 0 && (
+                                    <Alert style={{ marginBottom: 8 }} type="warning" message={`Транспорт без связи: ${recon.vehicles.missingSample.join(', ')}`} />
+                                )}
+                                {recon.vehicles.mismatchSample.length > 0 && (
+                                    <Alert style={{ marginBottom: 8 }} type="error" message={`Транспорт — расхождение водителя: ${recon.vehicles.mismatchSample.join(', ')}`} />
+                                )}
+                            </div>
+                        )}
+                    </>
+                )}
+            </Card>
 
             <Card style={{ marginBottom: 16 }}>
                 <Space direction="vertical" style={{ width: '100%' }} size="middle">

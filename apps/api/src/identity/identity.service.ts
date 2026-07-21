@@ -407,6 +407,129 @@ export class IdentityService {
         };
     }
 
+    // ==================== СВЕРКА: новый фундамент == старые данные ====================
+
+    /**
+     * Read-only сверка перед переключением чтения: сравнивает новый слой
+     * (Person / Affiliation / Vehicle.driverPersonId) со старым источником истины
+     * (User.companyId + UserCompanyRelation + копированный госномер). Ничего не меняет.
+     * ok=true означает полное совпадение и готовность к переключению.
+     */
+    async reconcile() {
+        const norm = (p?: string | null) => (p || '').replace(/\s+/g, '').toUpperCase();
+
+        const [activeUsers, relations, affs, vehicles, drivers] = await Promise.all([
+            this.prisma.user.findMany({
+                where: { isActive: true },
+                select: { id: true, personId: true, companyId: true, role: true, firstName: true, lastName: true },
+            }),
+            this.prisma.userCompanyRelation.findMany({ select: { userId: true, companyId: true, role: true } }),
+            this.prisma.affiliation.findMany({ select: { personId: true, companyId: true, role: true } }),
+            this.prisma.vehicle.findMany({ select: { id: true, companyId: true, plate: true, driverPersonId: true } }),
+            this.prisma.user.findMany({
+                where: { role: 'DRIVER', vehiclePlate: { not: null }, personId: { not: null } },
+                select: { companyId: true, vehiclePlate: true, personId: true },
+            }),
+        ]);
+
+        // ---- 1. Личности: каждый активный пользователь должен иметь personId ----
+        const usersWithoutPerson = activeUsers
+            .filter((u) => !u.personId)
+            .map((u) => ({ userId: u.id, fullName: `${u.lastName || ''} ${u.firstName || ''}`.trim() }));
+
+        // ---- 2. Членство: ожидаемое из старых данных == Affiliation ----
+        const personByUser = new Map(activeUsers.map((u) => [u.id, u.personId]));
+        const expected = new Set<string>();
+        for (const u of activeUsers) {
+            if (u.personId && u.companyId) expected.add(`${u.personId}|${u.companyId}|${u.role}`);
+        }
+        for (const r of relations) {
+            const pid = personByUser.get(r.userId);
+            if (pid) expected.add(`${pid}|${r.companyId}|${r.role}`);
+        }
+        const newSet = new Set(affs.map((a) => `${a.personId}|${a.companyId}|${a.role}`));
+        const missingInNew = [...expected].filter((k) => !newSet.has(k));
+        const extraInNew = [...newSet].filter((k) => !expected.has(k));
+
+        // Резолвим ключи в читаемые имена (ограниченно, для показа)
+        const idsFromKeys = (keys: string[]) => {
+            const persons = new Set<string>();
+            const companies = new Set<string>();
+            for (const k of keys) {
+                const [p, c] = k.split('|');
+                persons.add(p);
+                companies.add(c);
+            }
+            return { persons: [...persons], companies: [...companies] };
+        };
+        const sampleKeys = [...missingInNew.slice(0, 100), ...extraInNew.slice(0, 100)];
+        const { persons: pIds, companies: cIds } = idsFromKeys(sampleKeys);
+        const [pNames, cNames] = await Promise.all([
+            this.prisma.person.findMany({ where: { id: { in: pIds } }, select: { id: true, firstName: true, lastName: true } }),
+            this.prisma.company.findMany({ where: { id: { in: cIds } }, select: { id: true, name: true } }),
+        ]);
+        const pName = new Map(pNames.map((p) => [p.id, `${p.lastName || ''} ${p.firstName || ''}`.trim()]));
+        const cName = new Map(cNames.map((c) => [c.id, c.name]));
+        const describe = (k: string) => {
+            const [p, c, role] = k.split('|');
+            return { person: pName.get(p) || p, company: cName.get(c) || c, role };
+        };
+
+        // ---- 3. Транспорт: ожидаемая связь по госномеру == Vehicle.driverPersonId ----
+        const dmap = new Map<string, string>();
+        for (const d of drivers) {
+            if (!d.companyId || !d.vehiclePlate || !d.personId) continue;
+            const key = `${d.companyId}|${norm(d.vehiclePlate)}`;
+            if (!dmap.has(key)) dmap.set(key, d.personId);
+        }
+        let vehExpected = 0;
+        let vehLinkedOk = 0;
+        const vehMissing: string[] = [];
+        const vehMismatch: string[] = [];
+        for (const v of vehicles) {
+            const expectedPid = dmap.get(`${v.companyId}|${norm(v.plate)}`);
+            if (!expectedPid) continue;
+            vehExpected++;
+            if (v.driverPersonId === expectedPid) vehLinkedOk++;
+            else if (!v.driverPersonId) vehMissing.push(v.plate);
+            else vehMismatch.push(v.plate);
+        }
+
+        const ok =
+            usersWithoutPerson.length === 0 &&
+            missingInNew.length === 0 &&
+            extraInNew.length === 0 &&
+            vehMissing.length === 0 &&
+            vehMismatch.length === 0;
+
+        return {
+            ok,
+            persons: {
+                activeUsers: activeUsers.length,
+                withPerson: activeUsers.length - usersWithoutPerson.length,
+                withoutPerson: usersWithoutPerson.length,
+                withoutPersonSample: usersWithoutPerson.slice(0, 100),
+            },
+            affiliations: {
+                expected: expected.size,
+                inNew: newSet.size,
+                missingInNew: missingInNew.length,
+                extraInNew: extraInNew.length,
+                missingSample: missingInNew.slice(0, 50).map(describe),
+                extraSample: extraInNew.slice(0, 50).map(describe),
+            },
+            vehicles: {
+                total: vehicles.length,
+                expectedLinks: vehExpected,
+                linkedOk: vehLinkedOk,
+                missingLinks: vehMissing.length,
+                mismatched: vehMismatch.length,
+                missingSample: vehMissing.slice(0, 50),
+                mismatchSample: vehMismatch.slice(0, 50),
+            },
+        };
+    }
+
     // ==================== ФАЗА 3: транспорт как актив ====================
 
     /**
