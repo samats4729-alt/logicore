@@ -36,6 +36,13 @@ interface MergeRow {
     users: { userId: string; fullName: string; companyName: string | null }[];
 }
 
+interface AffOverview {
+    totalAffiliations: number;
+    totalPersons: number;
+    multiCompanyCount: number;
+    multiCompanyPersons: { personId: string; fullName: string; companyCount: number; companies: { name: string; roles: string[] }[] }[];
+}
+
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
     LOGISTICIAN: 'Менеджер',
@@ -57,6 +64,31 @@ export default function AdminIdentityPage() {
     const [merging, setMerging] = useState<string | null>(null);
     const [history, setHistory] = useState<MergeRow[]>([]);
     const [reverting, setReverting] = useState<string | null>(null);
+    const [aff, setAff] = useState<AffOverview | null>(null);
+    const [backfillingAff, setBackfillingAff] = useState(false);
+
+    const loadAff = async () => {
+        try {
+            const res = await api.get('/admin/identity/affiliations-overview');
+            setAff(res.data);
+        } catch {
+            /* обзор недоступен — не критично */
+        }
+    };
+
+    const runBackfillAff = async () => {
+        setBackfillingAff(true);
+        try {
+            const res = await api.post('/admin/identity/backfill-affiliations');
+            const { created, desired, skippedUsersWithoutPerson } = res.data || {};
+            message.success(`Членство: создано ${created} из ${desired}${skippedUsersWithoutPerson ? `, пропущено без личности ${skippedUsersWithoutPerson}` : ''}`);
+            loadAff();
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Ошибка бэкфилла членства');
+        } finally {
+            setBackfillingAff(false);
+        }
+    };
 
     const loadHistory = async () => {
         try {
@@ -96,6 +128,7 @@ export default function AdminIdentityPage() {
     useEffect(() => {
         loadReport();
         loadHistory();
+        loadAff();
     }, []);
 
     const mergeGroup = async (g: DupGroup, gk: string) => {
@@ -320,6 +353,67 @@ export default function AdminIdentityPage() {
                             },
                         ]}
                     />
+                )}
+            </Card>
+
+            <Card
+                title={<span>Шаг 4. Членство в компаниях (Affiliation)</span>}
+                style={{ marginTop: 16 }}
+                extra={<Button icon={<ReloadOutlined />} onClick={loadAff}>Обновить</Button>}
+            >
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="Фаза 2 — фундамент «один человек в нескольких компаниях»"
+                    description="Заполняет новую таблицу членства из текущих данных (домашняя компания + мультикомпания), НИЧЕГО не меняя в существующей логике. Ниже видно людей, которые работают сразу в нескольких компаниях как одна личность — без дублей."
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                    <div>
+                        <Text strong>Заполнить членство</Text>
+                        <div style={{ color: '#8a91a0', fontSize: 13 }}>
+                            Безопасно и идемпотентно. Требует, чтобы сначала были созданы личности (Шаг 1).
+                        </div>
+                    </div>
+                    <Button type="primary" loading={backfillingAff} onClick={runBackfillAff}>
+                        Запустить бэкфилл членства
+                    </Button>
+                </div>
+
+                {aff && (
+                    <>
+                        <Row gutter={16} style={{ marginBottom: 16 }}>
+                            <Col><Statistic title="Всего связей" value={aff.totalAffiliations} /></Col>
+                            <Col><Statistic title="Личностей" value={aff.totalPersons} /></Col>
+                            <Col><Statistic title="В нескольких компаниях" value={aff.multiCompanyCount} /></Col>
+                        </Row>
+
+                        {aff.multiCompanyPersons.length === 0 ? (
+                            <Alert type="info" showIcon message="Пока нет людей, работающих в нескольких компаниях" />
+                        ) : (
+                            <Table
+                                size="small"
+                                pagination={{ pageSize: 10 }}
+                                rowKey="personId"
+                                dataSource={aff.multiCompanyPersons}
+                                columns={[
+                                    { title: 'Человек', dataIndex: 'fullName', key: 'fullName' },
+                                    { title: 'Компаний', dataIndex: 'companyCount', key: 'companyCount', width: 100 },
+                                    {
+                                        title: 'Где работает',
+                                        key: 'companies',
+                                        render: (_: any, r: AffOverview['multiCompanyPersons'][number]) => (
+                                            <Space size={[6, 6]} wrap>
+                                                {r.companies.map((c, idx) => (
+                                                    <Tag key={idx}>{c.name}{c.roles.length ? ` · ${c.roles.map(x => ROLE_LABELS[x] || x).join(', ')}` : ''}</Tag>
+                                                ))}
+                                            </Space>
+                                        ),
+                                    },
+                                ]}
+                            />
+                        )}
+                    </>
                 )}
             </Card>
         </div>

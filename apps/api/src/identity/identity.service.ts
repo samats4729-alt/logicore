@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { AffiliationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -270,6 +271,140 @@ export class IdentityService {
 
         this.logger.log(`revertMerge: merge=${mergeId}, restoredUsers=${result.restoredUsers}, restoredPersons=${result.restoredPersons}`);
         return { mergeId, ...result };
+    }
+
+    // ==================== ФАЗА 2: членство (Affiliation) ====================
+
+    /**
+     * Заполнить Affiliation из существующих данных (User.companyId + UserCompanyRelation),
+     * не меняя их. Идемпотентно (createMany skipDuplicates). Тип по умолчанию EMPLOYEE —
+     * распознавание частных перевозчиков сделаем отдельным шагом. Существующая логика
+     * эту таблицу пока не читает.
+     */
+    async backfillAffiliations() {
+        const [users, relations] = await Promise.all([
+            this.prisma.user.findMany({
+                where: { isActive: true },
+                select: { id: true, personId: true, companyId: true, role: true, position: true, departmentId: true },
+            }),
+            this.prisma.userCompanyRelation.findMany({
+                select: { userId: true, companyId: true, role: true },
+            }),
+        ]);
+
+        const personByUser = new Map(users.map((u) => [u.id, u.personId]));
+        let skippedUsersWithoutPerson = 0;
+
+        // Дедуп в памяти по (personId, companyId, role); домашняя связь = isPrimary
+        const map = new Map<string, any>();
+        const put = (
+            personId: string | null,
+            companyId: string | null,
+            role: any,
+            extra: { isPrimary?: boolean; position?: string | null; departmentId?: string | null; sourceUserId?: string | null },
+        ) => {
+            if (!personId || !companyId || !role) return;
+            const key = `${personId}|${companyId}|${role}`;
+            const cur = map.get(key);
+            if (!cur) {
+                map.set(key, {
+                    personId,
+                    companyId,
+                    role,
+                    type: AffiliationType.EMPLOYEE,
+                    isPrimary: !!extra.isPrimary,
+                    position: extra.position ?? null,
+                    departmentId: extra.departmentId ?? null,
+                    sourceUserId: extra.sourceUserId ?? null,
+                    status: 'ACTIVE',
+                });
+            } else {
+                if (extra.isPrimary) cur.isPrimary = true;
+                if (!cur.position && extra.position) cur.position = extra.position;
+                if (!cur.departmentId && extra.departmentId) cur.departmentId = extra.departmentId;
+            }
+        };
+
+        for (const u of users) {
+            if (!u.personId) {
+                skippedUsersWithoutPerson++;
+                continue;
+            }
+            put(u.personId, u.companyId, u.role, {
+                isPrimary: true,
+                position: u.position,
+                departmentId: u.departmentId,
+                sourceUserId: u.id,
+            });
+        }
+        for (const r of relations) {
+            const pid = personByUser.get(r.userId);
+            if (!pid) continue;
+            put(pid, r.companyId, r.role, { isPrimary: false, sourceUserId: r.userId });
+        }
+
+        const rows = [...map.values()];
+        const res = await this.prisma.affiliation.createMany({ data: rows, skipDuplicates: true });
+
+        this.logger.log(`backfillAffiliations: desired=${rows.length}, created=${res.count}, skippedNoPerson=${skippedUsersWithoutPerson}`);
+        return { desired: rows.length, created: res.count, skippedUsersWithoutPerson };
+    }
+
+    /**
+     * Обзор членства: сколько связей, и главное — люди, работающие в НЕСКОЛЬКИХ компаниях
+     * (наглядно показывает, что один человек = одна личность в разных компаниях, без дублей).
+     */
+    async getAffiliationOverview() {
+        const affs = await this.prisma.affiliation.findMany({
+            select: {
+                personId: true,
+                companyId: true,
+                role: true,
+                type: true,
+                isPrimary: true,
+                person: { select: { firstName: true, lastName: true } },
+                company: { select: { name: true } },
+            },
+        });
+
+        const byPerson = new Map<
+            string,
+            { fullName: string; companies: Map<string, { name: string; roles: Set<string> }> }
+        >();
+
+        for (const a of affs) {
+            let p = byPerson.get(a.personId);
+            if (!p) {
+                p = {
+                    fullName: `${a.person?.lastName || ''} ${a.person?.firstName || ''}`.trim(),
+                    companies: new Map(),
+                };
+                byPerson.set(a.personId, p);
+            }
+            let c = p.companies.get(a.companyId);
+            if (!c) {
+                c = { name: a.company?.name || '—', roles: new Set() };
+                p.companies.set(a.companyId, c);
+            }
+            c.roles.add(a.role);
+        }
+
+        const multiCompanyPersons = [...byPerson.entries()]
+            .filter(([, p]) => p.companies.size > 1)
+            .map(([personId, p]) => ({
+                personId,
+                fullName: p.fullName,
+                companyCount: p.companies.size,
+                companies: [...p.companies.values()].map((c) => ({ name: c.name, roles: [...c.roles] })),
+            }))
+            .sort((a, b) => b.companyCount - a.companyCount);
+
+        return {
+            totalAffiliations: affs.length,
+            totalPersons: byPerson.size,
+            multiCompanyCount: multiCompanyPersons.length,
+            multiCompanyPersons,
+        };
     }
 
     /**

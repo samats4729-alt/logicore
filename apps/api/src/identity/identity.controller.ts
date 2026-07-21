@@ -44,6 +44,20 @@ export class IdentityController {
         return this.identityService.getMergeHistory();
     }
 
+    @Post('backfill-affiliations')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Заполнить членство (Affiliation) из текущих данных, ничего не меняя' })
+    async backfillAffiliations() {
+        return this.identityService.backfillAffiliations();
+    }
+
+    @Get('affiliations-overview')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Обзор членства: люди, работающие в нескольких компаниях' })
+    async getAffiliationsOverview() {
+        return this.identityService.getAffiliationOverview();
+    }
+
     @Post('merges/:id/revert')
     @Roles(UserRole.ADMIN)
     @ApiOperation({ summary: 'Полностью отменить (разъединить) объединение' })

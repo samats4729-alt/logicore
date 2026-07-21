@@ -81,6 +81,13 @@ enum AgreementStatus {
   EXPIRED     // Истекло
 }
 
+// Фаза 2: тип членства человека в компании
+enum AffiliationType {
+  EMPLOYEE         // штатный сотрудник/водитель
+  PRIVATE_CARRIER  // частный перевозчик (физлицо со своей машиной)
+  COLLABORATOR     // приглашённый/внешний (задел на будущее)
+}
+
 // ==================== MODELS ====================
 
 model User {
@@ -173,11 +180,41 @@ model Person {
   mergedInto   Person?  @relation("PersonMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   mergedFrom   Person[] @relation("PersonMerge")
 
-  users      User[]
+  users        User[]
+  affiliations Affiliation[]
 
   @@index([phone])
   @@index([iin])
   @@index([mergedIntoId])
+}
+
+// Фаза 2: членство человека в компании (обобщает User.companyId + UserCompanyRelation).
+// Один человек может иметь несколько affiliation'ов: штатный в одной, частный перевозчик в
+// другой, и т.д. — без дублирования. На этом этапе таблица ЗАПОЛНЯЕТСЯ бэкфиллом и НЕ читается
+// существующей логикой — ничего не ломает. Переключение чтения на неё — отдельная будущая фаза.
+model Affiliation {
+  id           String          @id @default(cuid())
+  personId     String
+  person       Person          @relation(fields: [personId], references: [id], onDelete: Cascade)
+  companyId    String
+  company      Company         @relation("CompanyAffiliations", fields: [companyId], references: [id], onDelete: Cascade)
+  type         AffiliationType @default(EMPLOYEE)
+  role         UserRole
+  position     String?
+  departmentId String?
+  status       String          @default("ACTIVE") // ACTIVE | ARCHIVED
+  isPrimary    Boolean         @default(false)     // домашняя компания (соответствует User.companyId)
+  rate         Float?          // задел под кадры (ставка) — пока не используется
+  startedAt    DateTime?
+  endedAt      DateTime?
+  sourceUserId String?         // из какого User сгенерирована связь (для сверки бэкфилла)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([personId, companyId, role])
+  @@index([personId])
+  @@index([companyId])
+  @@index([companyId, role])
 }
 
 // Журнал объединений личностей — чтобы любое слияние можно было полностью откатить.
@@ -270,6 +307,7 @@ model Company {
   issuedInvoices     Invoice[]         @relation("InvoiceIssuer")
   receivedInvoices   Invoice[]         @relation("InvoiceRecipient")
   userCompanyRelations UserCompanyRelation[]
+  affiliations       Affiliation[]     @relation("CompanyAffiliations")
   documents          Document[]
   subscription       CompanySubscription?
   orderResponsibilities OrderResponsible[] @relation("CompanyOrderResponsibilities")
