@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -156,5 +156,51 @@ export class IdentityService {
             totalUsersInvolved: new Set(groups.flatMap((g) => g.users.map((u) => u.userId))).size,
             groups,
         };
+    }
+
+    /**
+     * Ручное слияние личностей (только по явному подтверждению админа).
+     * Пользователи, указывавшие на sourcePersonIds, перецепляются на targetPersonId,
+     * после чего осиротевшие Person удаляются. Затрагивается ТОЛЬКО поле User.personId —
+     * заявки, компании, связи и прочие данные не меняются.
+     */
+    async mergePersons(targetPersonId: string, sourcePersonIds: string[]) {
+        const sources = (sourcePersonIds || []).filter((id) => id && id !== targetPersonId);
+        if (!targetPersonId) {
+            throw new BadRequestException('Не указана основная личность (target)');
+        }
+        if (sources.length === 0) {
+            throw new BadRequestException('Не выбрано ни одной личности для присоединения');
+        }
+
+        const ids = [targetPersonId, ...sources];
+        const found = await this.prisma.person.findMany({
+            where: { id: { in: ids } },
+            select: { id: true },
+        });
+        const foundIds = new Set(found.map((p) => p.id));
+        if (!foundIds.has(targetPersonId)) {
+            throw new NotFoundException('Основная личность не найдена');
+        }
+        const missing = sources.filter((id) => !foundIds.has(id));
+        if (missing.length) {
+            throw new NotFoundException(`Личности не найдены: ${missing.join(', ')}`);
+        }
+
+        const result = await this.prisma.$transaction(async (tx) => {
+            const repointed = await tx.user.updateMany({
+                where: { personId: { in: sources } },
+                data: { personId: targetPersonId },
+            });
+            const removed = await tx.person.deleteMany({
+                where: { id: { in: sources } },
+            });
+            return { repointedUsers: repointed.count, removedPersons: removed.count };
+        });
+
+        this.logger.log(
+            `mergePersons: target=${targetPersonId}, sources=[${sources.join(',')}], repointed=${result.repointedUsers}, removed=${result.removedPersons}`,
+        );
+        return { targetPersonId, ...result };
     }
 }

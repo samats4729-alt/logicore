@@ -1,4 +1,4 @@
-import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
@@ -28,5 +28,12 @@ export class IdentityController {
     @ApiOperation({ summary: 'Показать возможные дубликаты (совпадение телефона/ИИН). Ничего не объединяет' })
     async getDuplicates() {
         return this.identityService.getPotentialDuplicates();
+    }
+
+    @Post('merge-persons')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Объединить выбранные личности в одну (по явному подтверждению)' })
+    async mergePersons(@Body() dto: { targetPersonId: string; sourcePersonIds: string[] }) {
+        return this.identityService.mergePersons(dto.targetPersonId, dto.sourcePersonIds || []);
     }
 }
