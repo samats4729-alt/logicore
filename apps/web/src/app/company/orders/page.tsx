@@ -55,14 +55,20 @@ const STATUS_PROGRESS: Record<string, number> = {
 const progressColor = (s: string) =>
     s === 'PROBLEM' ? '#dc2626' : s === 'COMPLETED' ? '#16a34a' : s === 'CANCELLED' ? '#9ca3af' : '#1677ff';
 
+// Заказчик рассчитался с нами (либо ставки заказчика ещё нет — тогда долга нет).
+const isCustomerSettled = (r: any): boolean => !r.customerPrice || r.isCustomerPaid;
+// Мы рассчитались с исполнителем (перевозчиком/суб-экспедитором).
+const isExecutorSettled = (r: any): boolean => {
+    const executorCost = r.subForwarderId ? r.subForwarderPrice : r.driverCost;
+    return !executorCost || (r.subForwarderId ? r.isSubForwarderPaid : r.isDriverPaid);
+};
+
 // Заявка «финансово закрыта»: заказчик заплатил И исполнителю (перевозчику/суб-экспедитору) оплачено.
 // Завершённая, но не оплаченная заявка не должна гореть зелёным.
-const isOrderSettled = (r: any): boolean => {
-    const customerSettled = !r.customerPrice || r.isCustomerPaid;
-    const executorCost = r.subForwarderId ? r.subForwarderPrice : r.driverCost;
-    const executorSettled = !executorCost || (r.subForwarderId ? r.isSubForwarderPaid : r.isDriverPaid);
-    return customerSettled && executorSettled;
-};
+const isOrderSettled = (r: any): boolean => isCustomerSettled(r) && isExecutorSettled(r);
+
+// Цвет «горящей» задолженности для названий контрагентов в таблице
+const DEBT_RED = '#dc2626';
 
 const nameInitials = (name?: string) => {
     if (!name) return '—';
@@ -1048,9 +1054,10 @@ export default function CompanyOrdersPage() {
             title: 'Заказчик', key: 'customer', width: 130, ellipsis: true,
             render: (_: any, r: Order) => {
                 const name = r.customerCompany?.name || '—';
+                const owesUs = !isCustomerSettled(r);
                 return (
-                    <Tooltip title={name}>
-                        <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{shortenCompanyName(name)}</span>
+                    <Tooltip title={owesUs ? `${name} — не оплатил` : name}>
+                        <span style={{ fontSize: 12, fontWeight: owesUs ? 600 : (r.customerCompanyId === user?.companyId ? 600 : undefined), color: owesUs ? DEBT_RED : undefined }}>{shortenCompanyName(name)}</span>
                     </Tooltip>
                 );
             },
@@ -1059,9 +1066,10 @@ export default function CompanyOrdersPage() {
             title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true,
             render: (_: any, r: Order) => {
                 const name = (r.forwarderId === user?.companyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—');
+                const weOwe = !isExecutorSettled(r);
                 return (
-                    <Tooltip title={name}>
-                        <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{shortenCompanyName(name)}</span>
+                    <Tooltip title={weOwe ? `${name} — не оплачено` : name}>
+                        <span style={{ fontSize: 12, fontWeight: weOwe ? 600 : (r.forwarderId === user?.companyId ? 600 : undefined), color: weOwe ? DEBT_RED : undefined }}>{shortenCompanyName(name)}</span>
                     </Tooltip>
                 );
             },
@@ -1155,20 +1163,22 @@ export default function CompanyOrdersPage() {
             title: 'Заказчик', key: 'customer', width: 130, ellipsis: true,
             render: (_: any, r: Order) => {
                 const name = r.customerCompany?.name || '—';
+                const owesUs = !isCustomerSettled(r);
                 return (
-                    <Tooltip title={name}>
-                        <span style={{ fontSize: 12, fontWeight: r.customerCompanyId === user?.companyId ? 600 : undefined }}>{shortenCompanyName(name)}</span>
+                    <Tooltip title={owesUs ? `${name} — не оплатил` : name}>
+                        <span style={{ fontSize: 12, fontWeight: owesUs ? 600 : (r.customerCompanyId === user?.companyId ? 600 : undefined), color: owesUs ? DEBT_RED : undefined }}>{shortenCompanyName(name)}</span>
                     </Tooltip>
                 );
             }
         },
-        { 
-            title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true, 
+        {
+            title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true,
             render: (_: any, r: Order) => {
                 const name = (r.forwarderId === user?.companyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—');
+                const weOwe = !isExecutorSettled(r);
                 return (
-                    <Tooltip title={name}>
-                        <span style={{ fontSize: 12, fontWeight: r.forwarderId === user?.companyId ? 600 : undefined }}>{shortenCompanyName(name)}</span>
+                    <Tooltip title={weOwe ? `${name} — не оплачено` : name}>
+                        <span style={{ fontSize: 12, fontWeight: weOwe ? 600 : (r.forwarderId === user?.companyId ? 600 : undefined), color: weOwe ? DEBT_RED : undefined }}>{shortenCompanyName(name)}</span>
                     </Tooltip>
                 );
             }
