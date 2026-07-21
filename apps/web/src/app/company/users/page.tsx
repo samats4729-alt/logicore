@@ -99,13 +99,13 @@ const formatNameInitials = (user: { firstName: string; lastName: string; middleN
     return `${last} ${firstI}${middleI}`.trim();
 };
 
-// Склонение слова «сотрудник» по числу: 1 сотрудник, 2 сотрудника, 5 сотрудников
-const pluralizeEmployees = (n: number) => {
+// Склонение слова «отдел» по числу: 1 отдел, 2 отдела, 5 отделов
+const pluralizeDepartments = (n: number) => {
     const mod10 = n % 10;
     const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'сотрудник';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'сотрудника';
-    return 'сотрудников';
+    if (mod10 === 1 && mod100 !== 11) return 'отдел';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'отдела';
+    return 'отделов';
 };
 
 const deptIconComponents: Record<string, any> = {
@@ -837,31 +837,29 @@ export default function CompanyUsersPage() {
                         </Space>
                     </div>
 
-                    {/* Node Card UI — клик открывает список сотрудников справа */}
+                    {/* Карточка отдела — клик открывает список сотрудников справа */}
                     <div
-                        className="node-card dept-card"
+                        className={`dept-card2${isSelected ? ' dept-card2-selected' : ''}`}
                         onClick={() => setSelectedDeptId(isSelected ? null : dept.id)}
-                        style={{
-                            cursor: 'pointer',
-                            ...(isSelected ? { boxShadow: `0 0 0 2px ${iconColor}`, borderColor: iconColor } : {}),
-                        }}
+                        style={{ ['--dept-accent' as any]: iconColor }}
                     >
-                        <div
-                            className="node-avatar dept-icon-avatar"
-                            style={{
-                                backgroundColor: avatarBgColor,
-                                borderColor: avatarBorderColor,
-                                color: iconColor
-                            }}
-                        >
-                            {renderDeptIcon(dept.icon, 18)}
+                        <div className="dept-card2-head">
+                            <div
+                                className="dept-card2-icon"
+                                style={{ backgroundColor: avatarBgColor, borderColor: avatarBorderColor, color: iconColor }}
+                            >
+                                {renderDeptIcon(dept.icon, 18)}
+                            </div>
+                            <div className="dept-card2-title">{dept.name}</div>
                         </div>
-                        <div className="node-info">
-                            <span className="node-role-label dept-role-label" style={{ color: iconColor }}>Отдел</span>
-                            <span className="node-name-label">{dept.name}</span>
-                            <span style={{ fontSize: 10, color: 'var(--lc-text-ter)', marginTop: 1, fontWeight: 500 }}>
-                                {deptUsers.length} {pluralizeEmployees(deptUsers.length)}
-                            </span>
+                        <div className="dept-card2-row">
+                            <span className="dept-card2-row-label">Подчинённые</span>
+                            <span className="dept-card2-row-badge">{deptUsers.length}</span>
+                        </div>
+                        <div className="dept-card2-foot">
+                            {subDepts.length > 0
+                                ? `${subDepts.length} ${pluralizeDepartments(subDepts.length)} в подчинении`
+                                : 'нет отделов в подчинении'}
                         </div>
                     </div>
                 </div>
@@ -1303,6 +1301,144 @@ export default function CompanyUsersPage() {
                     border: 1px dashed var(--lc-border);
                     box-shadow: none;
                 }
+
+                /* Карточка отдела 2.0 — структурированный вид (ближе к 1С/Битрикс) */
+                .dept-card2 {
+                    width: 264px;
+                    background: var(--lc-card);
+                    border: 1px solid var(--lc-border);
+                    border-radius: 16px;
+                    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+                    padding: 14px 16px 12px;
+                    cursor: pointer;
+                    text-align: left;
+                    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+                }
+                .node-card-container:hover .dept-card2 {
+                    transform: translateY(-3px);
+                    border-color: rgba(22, 119, 255, 0.35);
+                    box-shadow: 0 10px 28px rgba(22, 119, 255, 0.10), 0 2px 8px rgba(16, 24, 40, 0.06);
+                }
+                .dept-card2-selected {
+                    border-color: var(--dept-accent, #1677ff);
+                    box-shadow: 0 0 0 2px var(--dept-accent, #1677ff), 0 8px 22px rgba(22, 119, 255, 0.10);
+                }
+                .dept-card2-head {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin-bottom: 12px;
+                }
+                .dept-card2-icon {
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 10px;
+                    border: 1px solid;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                }
+                .dept-card2-title {
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: var(--lc-text);
+                    letter-spacing: -0.01em;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .dept-card2-row {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 7px 12px;
+                    background: var(--lc-hover);
+                    border-radius: 10px;
+                }
+                .dept-card2-row-label {
+                    font-size: 12px;
+                    color: var(--lc-text-ter);
+                }
+                .dept-card2-row-badge {
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: var(--lc-text);
+                    background: var(--lc-card);
+                    border: 1px solid var(--lc-border);
+                    border-radius: 8px;
+                    padding: 1px 10px;
+                    min-width: 24px;
+                    text-align: center;
+                }
+                .dept-card2-foot {
+                    margin-top: 10px;
+                    padding-top: 9px;
+                    border-top: 1px dashed var(--lc-border);
+                    font-size: 11px;
+                    color: var(--lc-text-ter);
+                }
+
+                /* Правая панель — список людей отдела */
+                .org-side-group {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                    color: var(--lc-text-ter);
+                    margin-bottom: 8px;
+                }
+                .org-side-group span {
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: var(--lc-text-ter);
+                    background: var(--lc-hover);
+                    border-radius: 999px;
+                    padding: 0 7px;
+                    line-height: 16px;
+                }
+                .org-side-person {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 7px 8px;
+                    border-radius: 12px;
+                    margin-bottom: 2px;
+                    transition: background 0.15s ease;
+                }
+                .org-side-person:hover {
+                    background: var(--lc-hover);
+                }
+                .org-side-person-av {
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #fff;
+                    font-weight: 700;
+                    font-size: 13px;
+                    flex-shrink: 0;
+                }
+                .org-side-person-name {
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: var(--lc-text);
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .org-side-person-sub {
+                    font-size: 11px;
+                    color: var(--lc-text-ter);
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
                 
                 /* Node Avatars */
                 .node-avatar {
@@ -1586,53 +1722,49 @@ export default function CompanyUsersPage() {
                                             : 'Сотрудники и водители без привязки к отделам. Нажмите на отдел в схеме, чтобы увидеть его состав.'}
                                     </Text>
 
-                                    <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                                    <div style={{ maxHeight: 440, overflowY: 'auto', margin: '0 -4px', padding: '0 4px' }}>
                                         {panelUsers.length === 0 ? (
                                             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={selectedDept ? 'В отделе нет сотрудников' : 'Все распределены'} style={{ marginTop: 40 }} />
-                                        ) : (
-                                            panelUsers.map(u => (
-                                                <div
-                                                    key={u.id}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between',
-                                                        padding: '6px 8px',
-                                                        background: 'var(--lc-card)',
-                                                        border: '1px solid var(--lc-border)',
-                                                        borderRadius: 8,
-                                                        marginBottom: 6
-                                                    }}
-                                                >
-                                                    <Space size={8}>
-                                                        <div
-                                                            style={{
-                                                                width: 20,
-                                                                height: 20,
-                                                                borderRadius: '50%',
-                                                                background: roleColors[u.role] || '#6b7280',
-                                                                color: '#fff',
-                                                                fontSize: 9,
-                                                                fontWeight: 'bold',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center'
-                                                            }}
-                                                        >
-                                                            {u.firstName?.[0] || '?'}
-                                                        </div>
-                                                        <div>
-                                                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--lc-text)' }}>
-                                                                {u.lastName} {u.firstName}
-                                                            </div>
-                                                            <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 4px', lineHeight: '12px', height: '14px', borderRadius: 4 }}>
-                                                                {u.position || roleLabels[u.role] || u.role}
-                                                            </Tag>
-                                                        </div>
-                                                    </Space>
+                                        ) : (() => {
+                                            const leaders = panelUsers.filter(u => u.role === 'COMPANY_ADMIN' || u.role === 'FORWARDER');
+                                            const members = panelUsers.filter(u => u.role !== 'COMPANY_ADMIN' && u.role !== 'FORWARDER');
+                                            const renderPerson = (u: any) => (
+                                                <div key={u.id} className="org-side-person">
+                                                    <UserAvatar
+                                                        userId={u.id}
+                                                        hasAvatar={!!u.avatarPath}
+                                                        size={34}
+                                                        fallback={
+                                                            <span className="org-side-person-av" style={{ background: roleColors[u.role] || '#6b7280' }}>
+                                                                {(u.firstName?.[0] || '?').toUpperCase()}
+                                                            </span>
+                                                        }
+                                                    />
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div className="org-side-person-name">{u.lastName} {u.firstName}</div>
+                                                        <div className="org-side-person-sub">{u.position || roleLabels[u.role] || u.role}</div>
+                                                    </div>
                                                 </div>
-                                            ))
-                                        )}
+                                            );
+                                            return (
+                                                <>
+                                                    {leaders.length > 0 && (
+                                                        <>
+                                                            <div className="org-side-group">Руководители<span>{leaders.length}</span></div>
+                                                            {leaders.map(renderPerson)}
+                                                        </>
+                                                    )}
+                                                    {members.length > 0 && (
+                                                        <>
+                                                            <div className="org-side-group" style={{ marginTop: leaders.length ? 14 : 0 }}>
+                                                                {leaders.length ? 'Сотрудники' : 'Все'}<span>{members.length}</span>
+                                                            </div>
+                                                            {members.map(renderPerson)}
+                                                        </>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             );
