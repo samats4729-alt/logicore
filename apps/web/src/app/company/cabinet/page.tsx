@@ -2,21 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    TeamOutlined,
-    SettingOutlined,
-    FileProtectOutlined,
-    RightOutlined,
-} from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
-interface CabinetItem {
-    key: string;
+interface Link {
+    label: string;
     href: string;
-    icon: React.ReactNode;
+    show: boolean;
+}
+interface Group {
     title: string;
-    desc: string;
+    links: Link[];
 }
 
 export default function CabinetPage() {
@@ -25,6 +21,7 @@ export default function CabinetPage() {
     const [auditEnabled, setAuditEnabled] = useState(false);
 
     const isAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
+    const hasAccounting = isAdmin || (user?.permissions || []).includes('accounting');
 
     useEffect(() => {
         api.get('/audit/status')
@@ -32,80 +29,109 @@ export default function CabinetPage() {
             .catch(() => setAuditEnabled(false));
     }, []);
 
-    const items: CabinetItem[] = [];
-
-    if (isAdmin) {
-        items.push({
-            key: 'users',
-            href: '/company/users',
-            icon: <TeamOutlined />,
-            title: 'Сотрудники',
-            desc: 'Команда, отделы, права доступа и водители',
-        });
-    }
-
-    items.push({
-        key: 'settings',
-        href: '/company/settings',
-        icon: <SettingOutlined />,
-        title: 'Настройки',
-        desc: isAdmin ? 'Профиль, организации, реквизиты, печать и подпись' : 'Личные данные и смена пароля',
-    });
-
-    if (isAdmin && auditEnabled) {
-        items.push({
-            key: 'audit',
-            href: '/company/audit',
-            icon: <FileProtectOutlined />,
-            title: 'Журнал действий',
-            desc: 'Кто, что и когда менял в компании',
-        });
-    }
+    const groups: Group[] = [
+        {
+            title: 'Мои организации',
+            links: [
+                { label: 'Организации', href: '/company/settings?tab=company', show: isAdmin },
+                { label: 'Сотрудники', href: '/company/users', show: isAdmin },
+                { label: 'Отделы компании', href: '/company/users', show: isAdmin },
+                { label: 'Водители', href: '/company/users?segment=drivers', show: isAdmin },
+            ],
+        },
+        {
+            title: 'Настройки',
+            links: [
+                { label: 'Мой профиль', href: '/company/settings?tab=profile', show: true },
+                { label: 'Реквизиты организации', href: '/company/settings?tab=company', show: isAdmin },
+                { label: 'Печать и подпись', href: '/company/settings?tab=company', show: isAdmin },
+                { label: 'Права менеджеров', href: '/company/users?rights=1', show: isAdmin },
+                { label: 'Смена пароля', href: '/company/settings?tab=password', show: true },
+            ],
+        },
+        {
+            title: 'Учёт и финансы',
+            links: [
+                { label: 'Статьи доходов и расходов', href: '/company/accounting/settings', show: hasAccounting },
+                { label: 'Счета и кассы', href: '/company/accounting/settings', show: hasAccounting },
+            ],
+        },
+        {
+            title: 'Журнал и контроль',
+            links: [
+                { label: 'Журнал действий', href: '/company/audit', show: isAdmin && auditEnabled },
+            ],
+        },
+    ]
+        .map(g => ({ ...g, links: g.links.filter(l => l.show) }))
+        .filter(g => g.links.length > 0);
 
     return (
-        <div className="lc-page" style={{ maxWidth: 720, margin: '0 auto' }}>
-            <div className="lc2-hero" style={{ marginBottom: 20 }}>
+        <div className="lc-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
+            <div className="lc2-hero" style={{ marginBottom: 24 }}>
                 <div>
                     <div className="lc-eyebrow">Кабинет</div>
                     <h1 className="lc2-title">Управление компанией</h1>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {items.map(it => (
-                    <button
-                        key={it.key}
-                        type="button"
-                        onClick={() => router.push(it.href)}
-                        className="lc-cabinet-row"
-                    >
-                        <span className="lc2-mic"><span style={{ fontSize: 16 }}>{it.icon}</span></span>
-                        <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                            <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--lc-text)' }}>{it.title}</span>
-                            <span style={{ display: 'block', fontSize: 12, color: 'var(--lc-text-ter)', marginTop: 2 }}>{it.desc}</span>
-                        </span>
-                        <RightOutlined style={{ fontSize: 12, color: 'var(--lc-text-ter)' }} />
-                    </button>
+            <div className="lc-cabinet-grid">
+                {groups.map(g => (
+                    <div key={g.title} className="lc-cabinet-group">
+                        <div className="lc-cabinet-group-title">{g.title}</div>
+                        <ul className="lc-cabinet-links">
+                            {g.links.map(l => (
+                                <li key={l.label}>
+                                    <button type="button" onClick={() => router.push(l.href)}>
+                                        {l.label}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 ))}
             </div>
 
             <style jsx>{`
-                .lc-cabinet-row {
-                    display: flex;
-                    align-items: center;
-                    gap: 14px;
-                    width: 100%;
-                    padding: 14px 16px;
-                    background: var(--lc-card);
-                    border: 1px solid var(--lc-border);
-                    border-radius: 14px;
-                    cursor: pointer;
-                    transition: border-color .15s ease, background .15s ease, transform .15s ease;
+                .lc-cabinet-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+                    gap: 28px 40px;
                 }
-                .lc-cabinet-row:hover {
-                    border-color: var(--lc-primary, #1677ff);
+                .lc-cabinet-group-title {
+                    font-size: 11px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    color: var(--lc-text-ter);
+                    padding-bottom: 8px;
+                    margin-bottom: 8px;
+                    border-bottom: 1px solid var(--lc-border);
+                }
+                .lc-cabinet-links {
+                    list-style: none;
+                    margin: 0;
+                    padding: 0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                }
+                .lc-cabinet-links button {
+                    background: none;
+                    border: none;
+                    padding: 6px 8px;
+                    margin: 0 -8px;
+                    width: calc(100% + 16px);
+                    text-align: left;
+                    font-size: 13.5px;
+                    color: var(--lc-text-sec);
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: background .12s ease, color .12s ease;
+                }
+                .lc-cabinet-links button:hover {
                     background: var(--lc-hover);
-                    transform: translateY(-1px);
+                    color: var(--lc-primary, #1677ff);
                 }
             `}</style>
         </div>

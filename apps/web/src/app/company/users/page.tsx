@@ -277,6 +277,11 @@ export default function CompanyUsersPage() {
             } else if (seg === 'office') {
                 setActiveSegment('office');
             }
+            // Открыть окно «Права менеджеров» по ссылке из Кабинета
+            if (params.get('rights') === '1') {
+                setActiveSegment('office');
+                setRightsModalOpen(true);
+            }
         }
     }, []);
 

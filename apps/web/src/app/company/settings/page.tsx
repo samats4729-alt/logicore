@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, Form, Input, Button, message, Typography, Space, Upload, Image, Divider, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
 import { LockOutlined, UserOutlined, PhoneOutlined, MailOutlined, UploadOutlined, BankOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
@@ -13,6 +14,12 @@ const { Title, Text } = Typography;
 
 export default function SettingsPage() {
     const { user, setUser } = useAuthStore();
+    const searchParams = useSearchParams();
+    // Активная вкладка можно задать ссылкой: /company/settings?tab=company
+    const initialTab = ['profile', 'company', 'password'].includes(searchParams?.get('tab') || '')
+        ? (searchParams!.get('tab') as string)
+        : 'profile';
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [loading, setLoading] = useState(false);
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [companyLoading, setCompanyLoading] = useState(false);
@@ -678,7 +685,8 @@ export default function SettingsPage() {
                 </div>
             </div>
             <Tabs
-                defaultActiveKey="profile"
+                activeKey={activeTab}
+                onChange={setActiveTab}
                 items={tabItems}
                 tabPosition="top"
                 style={{ minHeight: 400 }}
