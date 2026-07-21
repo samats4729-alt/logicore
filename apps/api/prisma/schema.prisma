@@ -121,7 +121,12 @@ model User {
   // Компания (для PARTNER и WAREHOUSE)
   companyId     String?
   company       Company?   @relation(fields: [companyId], references: [id])
-  
+
+  // Фаза 1 (мультикомпанийная архитектура): ссылка на глобальную личность.
+  // Пока НЕ используется существующей логикой — заполняется бэкфиллом, служит фундаментом.
+  personId      String?
+  person        Person?    @relation(fields: [personId], references: [id], onDelete: SetNull)
+
   // Отдел сотрудника
   departmentId  String?
   department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
@@ -145,6 +150,27 @@ model User {
   @@index([phone])
   @@index([role])
   @@index([departmentId])
+  @@index([personId])
+}
+
+// ==================== ФАЗА 1: Личность (глобальная идентичность человека) ====================
+// Отдельная сущность «человек», не привязанная к компании. Фундамент для того, чтобы один
+// физический водитель/сотрудник не дублировался между компаниями. На этом этапе создаётся
+// бэкфиллом 1:1 и НЕ участвует в существующей логике — ничего не ломает.
+model Person {
+  id         String   @id @default(cuid())
+  firstName  String
+  lastName   String
+  middleName String?
+  phone      String?
+  iin        String?  // ИИН
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users      User[]
+
+  @@index([phone])
+  @@index([iin])
 }
 
 model Company {

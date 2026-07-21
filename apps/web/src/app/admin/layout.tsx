@@ -82,6 +82,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { key: '/admin/billing', icon: <DollarOutlined />, label: 'Биллинг' },
         { key: '/admin/audit', icon: <HistoryOutlined />, label: 'Журнал' },
         { key: '/admin/locations', icon: <GlobalOutlined />, label: 'География' },
+        { key: '/admin/identity', icon: <TeamOutlined />, label: 'Личности' },
         { key: '/admin/settings', icon: <SettingOutlined />, label: 'Настройки' },
     ];
 

@@ -30,6 +30,7 @@ import { AuditModule } from './audit/audit.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
 import { AdminStatsModule } from './admin-stats/admin-stats.module';
+import { IdentityModule } from './identity/identity.module';
 
 @Module({
     imports: [
@@ -69,6 +70,7 @@ import { AdminStatsModule } from './admin-stats/admin-stats.module';
         MonitoringModule,
         GeoModule,
         AdminStatsModule,
+        IdentityModule,
     ],
 })
 export class AppModule { }
