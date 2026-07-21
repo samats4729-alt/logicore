@@ -28,6 +28,14 @@ interface DupReport {
     groups: DupGroup[];
 }
 
+interface MergeRow {
+    mergeId: string;
+    createdAt: string;
+    targetName: string;
+    mergedCount: number;
+    users: { userId: string; fullName: string; companyName: string | null }[];
+}
+
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
     LOGISTICIAN: 'Менеджер',
@@ -47,6 +55,31 @@ export default function AdminIdentityPage() {
     const [sel, setSel] = useState<Record<string, string[]>>({});
     const [surv, setSurv] = useState<Record<string, string>>({});
     const [merging, setMerging] = useState<string | null>(null);
+    const [history, setHistory] = useState<MergeRow[]>([]);
+    const [reverting, setReverting] = useState<string | null>(null);
+
+    const loadHistory = async () => {
+        try {
+            const res = await api.get('/admin/identity/merges');
+            setHistory(res.data || []);
+        } catch {
+            /* история недоступна — не критично */
+        }
+    };
+
+    const revertMerge = async (mergeId: string) => {
+        setReverting(mergeId);
+        try {
+            const res = await api.post(`/admin/identity/merges/${mergeId}/revert`);
+            message.success(`Разъединено: возвращено пользователей ${res.data?.restoredUsers ?? 0}, восстановлено личностей ${res.data?.restoredPersons ?? 0}`);
+            loadHistory();
+            loadReport();
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Ошибка отката');
+        } finally {
+            setReverting(null);
+        }
+    };
 
     const loadReport = async () => {
         setLoading(true);
@@ -62,6 +95,7 @@ export default function AdminIdentityPage() {
 
     useEffect(() => {
         loadReport();
+        loadHistory();
     }, []);
 
     const mergeGroup = async (g: DupGroup, gk: string) => {
@@ -86,10 +120,11 @@ export default function AdminIdentityPage() {
                 targetPersonId: survivor.personId,
                 sourcePersonIds,
             });
-            message.success(`Объединено: перецеплено пользователей ${res.data?.repointedUsers ?? 0}, удалено личностей ${res.data?.removedPersons ?? 0}`);
+            message.success(`Объединено: перецеплено пользователей ${res.data?.repointedUsers ?? 0}. Объединение можно отменить ниже.`);
             setSel(prev => { const n = { ...prev }; delete n[gk]; return n; });
             setSurv(prev => { const n = { ...prev }; delete n[gk]; return n; });
             loadReport();
+            loadHistory();
         } catch (e: any) {
             message.error(e.response?.data?.message || 'Ошибка слияния');
         } finally {
@@ -238,6 +273,53 @@ export default function AdminIdentityPage() {
                     </>
                 ) : (
                     <Alert type="warning" showIcon message="Отчёт недоступен" />
+                )}
+            </Card>
+
+            <Card title={<span>Шаг 3. История объединений (можно отменить)</span>} style={{ marginTop: 16 }}>
+                <Alert
+                    type="success"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="Любое объединение полностью обратимо"
+                    description="Кнопка «Разъединить» вернёт пользователей на прежние личности. Ничего, кроме связи с личностью, при этом не менялось и не восстанавливается — все данные на месте."
+                />
+                {history.length === 0 ? (
+                    <Alert type="info" showIcon message="Активных объединений пока нет" />
+                ) : (
+                    <Table
+                        size="small"
+                        pagination={false}
+                        rowKey="mergeId"
+                        dataSource={history}
+                        columns={[
+                            { title: 'Когда', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => new Date(d).toLocaleString('ru-RU') },
+                            { title: 'Основная личность', dataIndex: 'targetName', key: 'targetName' },
+                            {
+                                title: 'Присоединено',
+                                key: 'users',
+                                render: (_: any, r: MergeRow) => (
+                                    <span>{r.users.map(u => `${u.fullName}${u.companyName ? ` (${u.companyName})` : ''}`).join(', ') || `${r.mergedCount}`}</span>
+                                ),
+                            },
+                            {
+                                title: '',
+                                key: 'action',
+                                width: 130,
+                                render: (_: any, r: MergeRow) => (
+                                    <Popconfirm
+                                        title="Разъединить это объединение?"
+                                        description="Пользователи вернутся на свои прежние личности."
+                                        okText="Да, разъединить"
+                                        cancelText="Отмена"
+                                        onConfirm={() => revertMerge(r.mergeId)}
+                                    >
+                                        <Button danger size="small" loading={reverting === r.mergeId}>Разъединить</Button>
+                                    </Popconfirm>
+                                ),
+                            },
+                        ]}
+                    />
                 )}
             </Card>
         </div>

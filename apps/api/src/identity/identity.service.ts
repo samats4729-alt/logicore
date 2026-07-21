@@ -159,12 +159,13 @@ export class IdentityService {
     }
 
     /**
-     * Ручное слияние личностей (только по явному подтверждению админа).
-     * Пользователи, указывавшие на sourcePersonIds, перецепляются на targetPersonId,
-     * после чего осиротевшие Person удаляются. Затрагивается ТОЛЬКО поле User.personId —
-     * заявки, компании, связи и прочие данные не меняются.
+     * Ручное слияние личностей (только по явному подтверждению админа) — ОБРАТИМОЕ.
+     * Пользователи, указывавшие на sourcePersonIds, перецепляются на targetPersonId.
+     * Исходные Person НЕ удаляются, а помечаются mergedIntoId=target; в журнал
+     * (PersonMerge/PersonMergeItem) пишется, кого и откуда перецепили — чтобы можно было
+     * полностью откатить. Затрагивается только User.personId — прочие данные не меняются.
      */
-    async mergePersons(targetPersonId: string, sourcePersonIds: string[]) {
+    async mergePersons(targetPersonId: string, sourcePersonIds: string[], actorUserId?: string) {
         const sources = (sourcePersonIds || []).filter((id) => id && id !== targetPersonId);
         if (!targetPersonId) {
             throw new BadRequestException('Не указана основная личность (target)');
@@ -187,20 +188,129 @@ export class IdentityService {
             throw new NotFoundException(`Личности не найдены: ${missing.join(', ')}`);
         }
 
+        // Пользователи, которых перецепим, и их прежние личности — для журнала/отката
+        const affectedUsers = await this.prisma.user.findMany({
+            where: { personId: { in: sources } },
+            select: { id: true, personId: true },
+        });
+
         const result = await this.prisma.$transaction(async (tx) => {
+            const merge = await tx.personMerge.create({
+                data: {
+                    targetPersonId,
+                    createdById: actorUserId ?? null,
+                    status: 'ACTIVE',
+                    items: {
+                        create: affectedUsers.map((u) => ({
+                            userId: u.id,
+                            previousPersonId: u.personId as string,
+                        })),
+                    },
+                },
+            });
+
             const repointed = await tx.user.updateMany({
                 where: { personId: { in: sources } },
                 data: { personId: targetPersonId },
             });
-            const removed = await tx.person.deleteMany({
+
+            // Помечаем исходные личности как слитые (не удаляем — нужно для отката)
+            await tx.person.updateMany({
                 where: { id: { in: sources } },
+                data: { mergedIntoId: targetPersonId },
             });
-            return { repointedUsers: repointed.count, removedPersons: removed.count };
+
+            return { mergeId: merge.id, repointedUsers: repointed.count };
         });
 
         this.logger.log(
-            `mergePersons: target=${targetPersonId}, sources=[${sources.join(',')}], repointed=${result.repointedUsers}, removed=${result.removedPersons}`,
+            `mergePersons: merge=${result.mergeId}, target=${targetPersonId}, sources=[${sources.join(',')}], repointed=${result.repointedUsers}`,
         );
-        return { targetPersonId, ...result };
+        return { targetPersonId, mergedPersons: sources.length, ...result };
+    }
+
+    /**
+     * Полный откат объединения: возвращает пользователей на прежние личности,
+     * снимает пометку «слита» с исходных, помечает журнал как REVERTED.
+     */
+    async revertMerge(mergeId: string) {
+        const merge = await this.prisma.personMerge.findUnique({
+            where: { id: mergeId },
+            include: { items: true },
+        });
+        if (!merge) {
+            throw new NotFoundException('Запись об объединении не найдена');
+        }
+        if (merge.status !== 'ACTIVE') {
+            throw new BadRequestException('Это объединение уже отменено');
+        }
+
+        const distinctSourceIds = Array.from(new Set(merge.items.map((it) => it.previousPersonId)));
+
+        const result = await this.prisma.$transaction(async (tx) => {
+            let restored = 0;
+            for (const it of merge.items) {
+                await tx.user.update({
+                    where: { id: it.userId },
+                    data: { personId: it.previousPersonId },
+                });
+                restored++;
+            }
+            // Снимаем пометку «слита» с восстановленных исходных личностей
+            await tx.person.updateMany({
+                where: { id: { in: distinctSourceIds } },
+                data: { mergedIntoId: null },
+            });
+            await tx.personMerge.update({
+                where: { id: mergeId },
+                data: { status: 'REVERTED', revertedAt: new Date() },
+            });
+            return { restoredUsers: restored, restoredPersons: distinctSourceIds.length };
+        });
+
+        this.logger.log(`revertMerge: merge=${mergeId}, restoredUsers=${result.restoredUsers}, restoredPersons=${result.restoredPersons}`);
+        return { mergeId, ...result };
+    }
+
+    /**
+     * История активных объединений (для кнопки «Разъединить»).
+     */
+    async getMergeHistory() {
+        const merges = await this.prisma.personMerge.findMany({
+            where: { status: 'ACTIVE' },
+            orderBy: { createdAt: 'desc' },
+            include: { items: true },
+        });
+
+        const targetIds = merges.map((m) => m.targetPersonId);
+        const userIds = merges.flatMap((m) => m.items.map((it) => it.userId));
+
+        const [targets, users] = await Promise.all([
+            this.prisma.person.findMany({ where: { id: { in: targetIds } }, select: { id: true, firstName: true, lastName: true } }),
+            this.prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { id: true, firstName: true, lastName: true, company: { select: { name: true } } },
+            }),
+        ]);
+        const targetById = new Map(targets.map((p) => [p.id, p]));
+        const userById = new Map(users.map((u) => [u.id, u]));
+
+        return merges.map((m) => {
+            const t = targetById.get(m.targetPersonId);
+            return {
+                mergeId: m.id,
+                createdAt: m.createdAt,
+                targetName: t ? `${t.lastName || ''} ${t.firstName || ''}`.trim() : '—',
+                mergedCount: m.items.length,
+                users: m.items.map((it) => {
+                    const u = userById.get(it.userId);
+                    return {
+                        userId: it.userId,
+                        fullName: u ? `${u.lastName || ''} ${u.firstName || ''}`.trim() : it.userId,
+                        companyName: u?.company?.name || null,
+                    };
+                }),
+            };
+        });
     }
 }

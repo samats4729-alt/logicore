@@ -167,10 +167,44 @@ model Person {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  // Обратимое слияние: исходная личность не удаляется, а помечается «слита в …».
+  // При откате пометка снимается, пользователи возвращаются на свои прежние личности.
+  mergedIntoId String?
+  mergedInto   Person?  @relation("PersonMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom   Person[] @relation("PersonMerge")
+
   users      User[]
 
   @@index([phone])
   @@index([iin])
+  @@index([mergedIntoId])
+}
+
+// Журнал объединений личностей — чтобы любое слияние можно было полностью откатить.
+model PersonMerge {
+  id             String    @id @default(cuid())
+  targetPersonId String    // основная личность, в которую объединяли
+  status         String    @default("ACTIVE") // ACTIVE | REVERTED
+  createdById    String?   // кто выполнил объединение
+  createdAt      DateTime  @default(now())
+  revertedAt     DateTime?
+
+  items          PersonMergeItem[]
+
+  @@index([targetPersonId])
+  @@index([status])
+}
+
+// Пооперационная запись: какой пользователь и с какой прежней личности был перецеплен.
+model PersonMergeItem {
+  id               String      @id @default(cuid())
+  mergeId          String
+  merge            PersonMerge @relation(fields: [mergeId], references: [id], onDelete: Cascade)
+  userId           String      // перецепленный пользователь
+  previousPersonId String      // личность, на которую вернуть при откате
+
+  @@index([mergeId])
+  @@index([userId])
 }
 
 model Company {
