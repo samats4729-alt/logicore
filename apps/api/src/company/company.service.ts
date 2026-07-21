@@ -121,10 +121,34 @@ export class CompanyService {
     /**
      * Создать приглашение для сотрудника
      */
-    async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = [], departmentId?: string, position?: string) {
+    /**
+     * Все организации, к которым принадлежит пользователь (домашняя + мультикомпания)
+     */
+    private async getUserCompanyIds(userId: string): Promise<string[]> {
+        const [user, relations] = await Promise.all([
+            this.prisma.user.findUnique({ where: { id: userId }, select: { companyId: true } }),
+            this.prisma.userCompanyRelation.findMany({ where: { userId }, select: { companyId: true } }),
+        ]);
+        const ids = new Set<string>();
+        if (user?.companyId) ids.add(user.companyId);
+        for (const r of relations) ids.add(r.companyId);
+        return [...ids];
+    }
+
+    async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = [], departmentId?: string, position?: string, inviterUserId?: string, sharedCompanyIds?: string[]) {
         // Платформенного ADMIN нельзя назначить через приглашение компании
         if (role === UserRole.ADMIN) {
             throw new ForbiddenException('Недопустимая роль для приглашения');
+        }
+
+        // Мультикомпания: в какие ещё организации владельца дать доступ новому сотруднику.
+        // По умолчанию (список не передан) — во все организации владельца («общая команда»).
+        // Водителей не расшариваем — они привязаны к конкретному перевозчику.
+        let extraCompanyIds: string[] = [];
+        if (inviterUserId && role !== UserRole.DRIVER) {
+            const ownerCompanyIds = await this.getUserCompanyIds(inviterUserId);
+            const candidate = Array.isArray(sharedCompanyIds) ? sharedCompanyIds : ownerCompanyIds;
+            extraCompanyIds = candidate.filter(id => id !== companyId && ownerCompanyIds.includes(id));
         }
 
         // Создаем случайный токен, например, 32 символа
@@ -155,6 +179,7 @@ export class CompanyService {
                 permissions,
                 expiresAt,
                 departmentId: departmentId || null,
+                sharedCompanyIds: extraCompanyIds,
             },
         });
 
@@ -1308,6 +1333,62 @@ export class CompanyService {
     /**
      * Создать дополнительную организацию и привязать к текущему пользователю
      */
+    /**
+     * Организации админа, в которых состоит сотрудник (для настройки «Доступ в организациях»)
+     */
+    async getUserCompanies(adminUserId: string, targetUserId: string): Promise<string[]> {
+        const [adminCompanyIds, targetCompanyIds] = await Promise.all([
+            this.getUserCompanyIds(adminUserId),
+            this.getUserCompanyIds(targetUserId),
+        ]);
+        return targetCompanyIds.filter(id => adminCompanyIds.includes(id));
+    }
+
+    /**
+     * Задать, в каких организациях админа работает сотрудник (мультикомпания).
+     * Меняются только организации админа; домашняя компания сотрудника всегда остаётся.
+     */
+    async setUserCompanies(adminUserId: string, targetUserId: string, companyIds: string[]) {
+        const adminCompanyIds = await this.getUserCompanyIds(adminUserId);
+        const target = await this.prisma.user.findUnique({
+            where: { id: targetUserId },
+            select: { id: true, companyId: true, role: true },
+        });
+        if (!target) {
+            throw new NotFoundException('Сотрудник не найден');
+        }
+        if (target.role === UserRole.DRIVER) {
+            throw new BadRequestException('Водителя нельзя привязать к нескольким организациям');
+        }
+
+        // Админ может управлять только «своими» сотрудниками
+        const targetCompanyIds = await this.getUserCompanyIds(targetUserId);
+        if (!targetCompanyIds.some(id => adminCompanyIds.includes(id))) {
+            throw new ForbiddenException('Нет доступа к этому сотруднику');
+        }
+
+        const desired = new Set(companyIds.filter(id => adminCompanyIds.includes(id)));
+        if (target.companyId) desired.add(target.companyId); // домашнюю всегда сохраняем
+
+        for (const cid of adminCompanyIds) {
+            if (cid === target.companyId) continue; // домашнюю компанию не трогаем
+            const existing = await this.prisma.userCompanyRelation.findUnique({
+                where: { userId_companyId: { userId: targetUserId, companyId: cid } },
+            });
+            if (desired.has(cid) && !existing) {
+                await this.prisma.userCompanyRelation.create({
+                    data: { userId: targetUserId, companyId: cid, role: target.role },
+                });
+            } else if (!desired.has(cid) && existing) {
+                await this.prisma.userCompanyRelation.delete({
+                    where: { userId_companyId: { userId: targetUserId, companyId: cid } },
+                });
+            }
+        }
+
+        return this.getUserCompanies(adminUserId, targetUserId);
+    }
+
     async addMyCompany(userId: string, data: { companyName: string; bin: string }) {
         const existingCompanies = await this.prisma.company.findMany({
             where: { bin: data.bin },
@@ -1316,6 +1397,28 @@ export class CompanyService {
         if (registeredCompany) {
             throw new BadRequestException('Компания с таким БИН уже зарегистрирована в системе');
         }
+
+        // «Общая команда по умолчанию»: переносим офисную команду владельца
+        // (сотрудников его текущих организаций) в новую компанию. Водителей не трогаем.
+        const ownerCompanyIds = await this.getUserCompanyIds(userId);
+        const teamRelations = ownerCompanyIds.length
+            ? await this.prisma.userCompanyRelation.findMany({
+                where: { companyId: { in: ownerCompanyIds } },
+                select: { userId: true },
+            })
+            : [];
+        const relatedTeamUserIds = teamRelations.map(r => r.userId);
+        const teamUsers = await this.prisma.user.findMany({
+            where: {
+                isActive: true,
+                role: { not: UserRole.DRIVER },
+                OR: [
+                    ...(ownerCompanyIds.length ? [{ companyId: { in: ownerCompanyIds } }] : []),
+                    ...(relatedTeamUserIds.length ? [{ id: { in: relatedTeamUserIds } }] : []),
+                ],
+            },
+            select: { id: true, role: true },
+        });
 
         const result = await this.prisma.$transaction(async (tx) => {
             const company = await tx.company.create({
@@ -1327,12 +1430,20 @@ export class CompanyService {
                 },
             });
 
-            await tx.userCompanyRelation.create({
-                data: {
-                    userId,
+            // Владелец + вся офисная команда получают доступ в новую организацию
+            const teamRoles = new Map<string, UserRole>();
+            teamRoles.set(userId, UserRole.COMPANY_ADMIN);
+            for (const u of teamUsers) {
+                if (!teamRoles.has(u.id)) teamRoles.set(u.id, u.role);
+            }
+
+            await tx.userCompanyRelation.createMany({
+                data: [...teamRoles].map(([uid, role]) => ({
+                    userId: uid,
                     companyId: company.id,
-                    role: UserRole.COMPANY_ADMIN,
-                },
+                    role,
+                })),
+                skipDuplicates: true,
             });
 
             return company;

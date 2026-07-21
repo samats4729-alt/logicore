@@ -91,6 +91,30 @@ export class CompanyController {
         return result;
     }
 
+    @Get('users/:id/companies')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Организации, в которых работает сотрудник (мультикомпания)' })
+    async getUserCompanies(@Request() req: any, @Param('id') userId: string) {
+        return this.companyService.getUserCompanies(req.user.sub, userId);
+    }
+
+    @Put('users/:id/companies')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Задать организации сотрудника (мультикомпания)' })
+    async setUserCompanies(
+        @Request() req: any,
+        @Param('id') userId: string,
+        @Body() dto: { companyIds: string[] },
+    ) {
+        const result = await this.companyService.setUserCompanies(req.user.sub, userId, dto.companyIds || []);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'employee',
+            entityId: userId, entityLabel: 'Изменён доступ сотрудника к организациям',
+            details: { companyIds: dto.companyIds ?? [] },
+        });
+        return result;
+    }
+
     @Delete('users/:id')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Деактивировать пользователя компании' })
@@ -120,7 +144,7 @@ export class CompanyController {
         @Body() dto: CreateInvitationDto,
     ) {
         await this.billingService.assertUserLimit(req.user.companyId);
-        const result = await this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions, dto.departmentId, dto.position);
+        const result = await this.companyService.createInvitation(req.user.companyId, dto.email, dto.role, dto.permissions, dto.departmentId, dto.position, req.user.sub, dto.sharedCompanyIds);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'employee',
             entityLabel: `Приглашение сотрудника ${dto.email} (${dto.role})`,

@@ -880,6 +880,9 @@ model Invitation {
   companyId    String
   token        String      @unique
   permissions  String[]    @default([])
+  // Дополнительные организации, в которые сотрудник получит доступ при принятии
+  // приглашения (мультикомпания). Основная — companyId. По умолчанию — все компании владельца.
+  sharedCompanyIds String[] @default([])
   isUsed       Boolean     @default(false)
   expiresAt    DateTime
   createdAt    DateTime    @default(now())

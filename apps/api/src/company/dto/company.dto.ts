@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional, IsIn, IsBoolean } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional, IsIn, IsBoolean, IsArray } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -361,6 +361,11 @@ export class CreateInvitationDto {
     @IsString()
     @IsOptional()
     position?: string;
+
+    @ApiProperty({ description: 'Организации, в которые дать доступ (мультикомпания). Не передан — во все компании владельца', type: [String], required: false })
+    @IsArray()
+    @IsOptional()
+    sharedCompanyIds?: string[];
 }
 
 export class CreateVehicleDto {

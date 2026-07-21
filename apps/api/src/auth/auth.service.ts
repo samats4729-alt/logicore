@@ -933,7 +933,7 @@ export class AuthService {
                 data: { isUsed: true },
             });
 
-            // Создаём связь UserCompanyRelation
+            // Создаём связь UserCompanyRelation с основной организацией
             await tx.userCompanyRelation.create({
                 data: {
                     userId: user.id,
@@ -941,6 +941,21 @@ export class AuthService {
                     role: invitation.role,
                 },
             });
+
+            // Мультикомпания: доступ в дополнительные организации владельца («общая команда»)
+            const extraCompanyIds = (invitation.sharedCompanyIds || []).filter(
+                (cid) => cid && cid !== invitation.companyId,
+            );
+            if (extraCompanyIds.length) {
+                await tx.userCompanyRelation.createMany({
+                    data: extraCompanyIds.map((cid) => ({
+                        userId: user.id,
+                        companyId: cid,
+                        role: invitation.role,
+                    })),
+                    skipDuplicates: true,
+                });
+            }
 
             return user;
         });
