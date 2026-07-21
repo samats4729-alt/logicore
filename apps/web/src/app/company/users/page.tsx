@@ -99,6 +99,15 @@ const formatNameInitials = (user: { firstName: string; lastName: string; middleN
     return `${last} ${firstI}${middleI}`.trim();
 };
 
+// Склонение слова «сотрудник» по числу: 1 сотрудник, 2 сотрудника, 5 сотрудников
+const pluralizeEmployees = (n: number) => {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'сотрудник';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'сотрудника';
+    return 'сотрудников';
+};
+
 const deptIconComponents: Record<string, any> = {
     FolderOpenOutlined,
     DollarOutlined,
@@ -170,6 +179,7 @@ export default function CompanyUsersPage() {
     const [companyName, setCompanyName] = useState<string>('Наша Компания');
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');
+    const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
     const [activeSegment, setActiveSegment] = useState<'office' | 'drivers'>('office');
     
     const treeContainerRef = useRef<HTMLDivElement>(null);
@@ -771,7 +781,10 @@ export default function CompanyUsersPage() {
     const renderDeptNode = (dept: any) => {
         const subDepts = getSubDepartments(dept.id);
         const deptUsers = dept.users || [];
-        const hasChildren = subDepts.length > 0 || deptUsers.length > 0;
+        // Сотрудники больше не «висят» в схеме — они показываются в панели справа
+        // при клике на отдел. В самом дереве строятся только подотделы.
+        const hasChildren = subDepts.length > 0;
+        const isSelected = selectedDeptId === dept.id;
         const iconColor = deptIconColors[dept.icon] || '#3b82f6';
         const avatarBgColor = `${iconColor}12`; // ~7% opacity
         const avatarBorderColor = `${iconColor}24`; // ~14% opacity
@@ -824,9 +837,16 @@ export default function CompanyUsersPage() {
                         </Space>
                     </div>
 
-                    {/* Node Card UI */}
-                    <div className="node-card dept-card">
-                        <div 
+                    {/* Node Card UI — клик открывает список сотрудников справа */}
+                    <div
+                        className="node-card dept-card"
+                        onClick={() => setSelectedDeptId(isSelected ? null : dept.id)}
+                        style={{
+                            cursor: 'pointer',
+                            ...(isSelected ? { boxShadow: `0 0 0 2px ${iconColor}`, borderColor: iconColor } : {}),
+                        }}
+                    >
+                        <div
                             className="node-avatar dept-icon-avatar"
                             style={{
                                 backgroundColor: avatarBgColor,
@@ -839,21 +859,16 @@ export default function CompanyUsersPage() {
                         <div className="node-info">
                             <span className="node-role-label dept-role-label" style={{ color: iconColor }}>Отдел</span>
                             <span className="node-name-label">{dept.name}</span>
+                            <span style={{ fontSize: 10, color: 'var(--lc-text-ter)', marginTop: 1, fontWeight: 500 }}>
+                                {deptUsers.length} {pluralizeEmployees(deptUsers.length)}
+                            </span>
                         </div>
                     </div>
                 </div>
 
-                {/* Subdepartments and employees rendered recursively below */}
+                {/* В дереве строятся только подотделы; сотрудники — в панели справа */}
                 {hasChildren && (
                     <div className="org-tree-children-container">
-                        {/* Render employees first */}
-                        {deptUsers.map((u: any) => (
-                            <div className="org-tree-child-wrapper" key={u.id}>
-                                <div className="org-tree-child-wrapper-card-line"></div>
-                                {renderEmployeeNode(u, false)}
-                            </div>
-                        ))}
-                        {/* Render subdepartments next */}
                         {subDepts.map(sd => renderDeptNode(sd))}
                     </div>
                 )}
@@ -865,8 +880,6 @@ export default function CompanyUsersPage() {
         const rootDepts = getSubDepartments(null);
         // В корне — только админы БЕЗ отдела; админ, назначенный в отдел, отображается внутри него
         const adminUsers = users.filter(u => u.role === 'COMPANY_ADMIN' && !(u as any).departmentId);
-        // Офисные сотрудники без отдела — отдельная группа, чтобы не «выпадали» из схемы
-        const unassignedUsers = users.filter(u => u.role !== 'COMPANY_ADMIN' && u.role !== 'DRIVER' && !(u as any).departmentId);
 
         return (
             <div className="org-tree">
@@ -894,20 +907,6 @@ export default function CompanyUsersPage() {
                             {rootDepts.map(sd => renderDeptNode(sd))}
                         </div>
                     </>
-                )}
-
-                {unassignedUsers.length > 0 && (
-                    <div style={{ marginTop: 20 }}>
-                        <div style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
-                            Без отдела
-                        </div>
-                        <div style={{
-                            display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap',
-                            padding: 14, border: '1px dashed var(--lc-border)', borderRadius: 16, background: 'var(--lc-hover)',
-                        }}>
-                            {unassignedUsers.map(u => renderEmployeeNode(u, false))}
-                        </div>
-                    </div>
                 )}
             </div>
         );
@@ -1564,64 +1563,80 @@ export default function CompanyUsersPage() {
                         </div>
                     </Col>
                     <Col xs={24} lg={6}>
-                        <div className="lc-card" style={{ padding: 12, minHeight: 480, borderRadius: 16 }}>
-                            <div style={{ fontWeight: 600, color: 'var(--lc-text)', fontSize: 13, marginBottom: 12 }}>
-                                <UserOutlined style={{ marginRight: 6, color: 'var(--lc-text-ter)' }} />
-                                Нераспределенные ({unassignedUsers.length})
-                            </div>
-                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 12 }}>
-                                Сотрудники и водители без привязки к отделам. Вы можете назначить их из карточки нужного отдела.
-                            </Text>
-                            
-                            <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-                                {unassignedUsers.length === 0 ? (
-                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Все распределены" style={{ marginTop: 40 }} />
-                                ) : (
-                                    unassignedUsers.map(u => (
-                                        <div
-                                            key={u.id}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                padding: '6px 8px',
-                                                background: 'var(--lc-card)',
-                                                border: '1px solid var(--lc-border)',
-                                                borderRadius: 8,
-                                                marginBottom: 6
-                                            }}
-                                        >
-                                            <Space size={8}>
+                        {(() => {
+                            const selectedDept = selectedDeptId ? departments.find((d: any) => d.id === selectedDeptId) : null;
+                            const panelUsers: any[] = selectedDept ? (selectedDept.users || []) : unassignedUsers;
+                            return (
+                                <div className="lc-card" style={{ padding: 12, minHeight: 480, borderRadius: 16 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                                        <div style={{ fontWeight: 600, color: 'var(--lc-text)', fontSize: 13, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {selectedDept ? (
+                                                <><ApartmentOutlined style={{ marginRight: 6, color: 'var(--lc-text-ter)' }} />{selectedDept.name} ({panelUsers.length})</>
+                                            ) : (
+                                                <><UserOutlined style={{ marginRight: 6, color: 'var(--lc-text-ter)' }} />Нераспределенные ({unassignedUsers.length})</>
+                                            )}
+                                        </div>
+                                        {selectedDept && (
+                                            <Button type="text" size="small" onClick={() => setSelectedDeptId(null)} style={{ flexShrink: 0 }}>✕</Button>
+                                        )}
+                                    </div>
+                                    <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 12 }}>
+                                        {selectedDept
+                                            ? 'Сотрудники этого отдела. Нажмите на другой отдел в схеме, чтобы посмотреть его.'
+                                            : 'Сотрудники и водители без привязки к отделам. Нажмите на отдел в схеме, чтобы увидеть его состав.'}
+                                    </Text>
+
+                                    <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                                        {panelUsers.length === 0 ? (
+                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={selectedDept ? 'В отделе нет сотрудников' : 'Все распределены'} style={{ marginTop: 40 }} />
+                                        ) : (
+                                            panelUsers.map(u => (
                                                 <div
+                                                    key={u.id}
                                                     style={{
-                                                        width: 20,
-                                                        height: 20,
-                                                        borderRadius: '50%',
-                                                        background: roleColors[u.role] || '#6b7280',
-                                                        color: '#fff',
-                                                        fontSize: 9,
-                                                        fontWeight: 'bold',
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        justifyContent: 'center'
+                                                        justifyContent: 'space-between',
+                                                        padding: '6px 8px',
+                                                        background: 'var(--lc-card)',
+                                                        border: '1px solid var(--lc-border)',
+                                                        borderRadius: 8,
+                                                        marginBottom: 6
                                                     }}
                                                 >
-                                                    {u.firstName[0]}
+                                                    <Space size={8}>
+                                                        <div
+                                                            style={{
+                                                                width: 20,
+                                                                height: 20,
+                                                                borderRadius: '50%',
+                                                                background: roleColors[u.role] || '#6b7280',
+                                                                color: '#fff',
+                                                                fontSize: 9,
+                                                                fontWeight: 'bold',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center'
+                                                            }}
+                                                        >
+                                                            {u.firstName?.[0] || '?'}
+                                                        </div>
+                                                        <div>
+                                                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--lc-text)' }}>
+                                                                {u.lastName} {u.firstName}
+                                                            </div>
+                                                            <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 4px', lineHeight: '12px', height: '14px', borderRadius: 4 }}>
+                                                                {u.position || roleLabels[u.role] || u.role}
+                                                            </Tag>
+                                                        </div>
+                                                    </Space>
                                                 </div>
-                                                <div>
-                                                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--lc-text)' }}>
-                                                        {u.lastName} {u.firstName}
-                                                    </div>
-                                                    <Tag color={roleColors[u.role]} style={{ fontSize: 8, margin: 0, padding: '0 4px', lineHeight: '12px', height: '14px', borderRadius: 4 }}>
-                                                        {roleLabels[u.role] || u.role}
-                                                    </Tag>
-                                                </div>
-                                            </Space>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </Col>
                 </Row>
             ) : (
