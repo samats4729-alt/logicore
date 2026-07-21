@@ -21,6 +21,7 @@ export default function CabinetPage() {
     const [auditEnabled, setAuditEnabled] = useState(false);
 
     const isAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
+    const hasPerm = (perm: string) => isAdmin || (user?.permissions || []).includes(perm);
 
     useEffect(() => {
         api.get('/audit/status')
@@ -44,6 +45,16 @@ export default function CabinetPage() {
                 { label: 'Список сотрудников', href: '/company/users', show: isAdmin },
                 { label: 'Права доступа', href: '/company/users?rights=1', show: isAdmin },
                 { label: 'Водители', href: '/company/users?segment=drivers', show: isAdmin },
+            ],
+        },
+        {
+            title: 'Справочники',
+            links: [
+                { label: 'Контрагенты', href: '/company/partners', show: hasPerm('partners') },
+                { label: 'Договоры', href: '/company/contracts', show: hasPerm('partners') },
+                { label: 'Адреса', href: '/company/locations', show: true },
+                { label: 'Автопарк', href: '/company/vehicles', show: isAdmin },
+                { label: 'Документы', href: '/company/documents', show: hasPerm('documents') },
             ],
         },
         {

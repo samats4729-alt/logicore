@@ -17,7 +17,6 @@ import {
     SettingOutlined,
     DollarOutlined,
     CarOutlined,
-    DatabaseOutlined,
     ApartmentOutlined,
     CompassOutlined,
     HomeOutlined,
@@ -217,13 +216,6 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // --- СПРАВОЧНИКИ (хаб-страница: контрагенты, договоры, адреса, автопарк, документы) ---
-        items.push({
-            key: '/company/directory',
-            icon: <DatabaseOutlined />,
-            label: 'Справочники',
-        });
-
         // --- ФИНАНСЫ (хаб-страница: операции, отчёты, инструменты) ---
         items.push({
             key: '/company/finance',
@@ -375,12 +367,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 .filter((c: any) => c?.key && String(c.key).startsWith('/'))
                                 .map((c: any) => String(c.key));
                             // Хаб-страницы подсвечиваются и на своих подстраницах
-                            const cabinetRoutes = ['/company/cabinet', '/company/users', '/company/settings', '/company/audit'];
-                            const directoryRoutes = ['/company/directory', '/company/partners', '/company/contracts', '/company/locations', '/company/vehicles', '/company/documents'];
+                            const cabinetRoutes = ['/company/cabinet', '/company/users', '/company/settings', '/company/audit', '/company/partners', '/company/contracts', '/company/locations', '/company/vehicles', '/company/documents'];
                             const financeRoutes = ['/company/finance', '/company/accounting', '/company/payroll', '/company/my-salary', '/company/calculator', '/company/reports'];
                             const hubRoutes: Record<string, string[]> = {
                                 '/company/cabinet': cabinetRoutes,
-                                '/company/directory': directoryRoutes,
                                 '/company/finance': financeRoutes,
                             };
                             const active = item.key === '/company'
