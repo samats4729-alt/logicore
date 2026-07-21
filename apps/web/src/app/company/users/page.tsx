@@ -193,6 +193,7 @@ export default function CompanyUsersPage() {
     const [editingRecord, setEditingRecord] = useState<CompanyUser | null>(null);
     const [generatedLink, setGeneratedLink] = useState<string | null>(null);
     const [unifiedForm] = Form.useForm();
+    const [myCompanies, setMyCompanies] = useState<any[]>([]);
 
     // Original modals state
     const [editModalOpen, setEditModalOpen] = useState(false);
@@ -219,15 +220,17 @@ export default function CompanyUsersPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [usersRes, invRes, deptsRes, profileRes] = await Promise.all([
+            const [usersRes, invRes, deptsRes, profileRes, companiesRes] = await Promise.all([
                 api.get('/company/users'),
                 api.get('/company/invitations'),
                 api.get('/company/departments').catch(() => ({ data: [] })),
                 api.get('/company/profile').catch(() => ({ data: null })),
+                api.get('/company/my-companies').catch(() => ({ data: [] })),
             ]);
             setUsers(Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data.data || []));
             setInvitations(invRes.data || []);
             setDepartments(deptsRes.data || []);
+            setMyCompanies(Array.isArray(companiesRes.data) ? companiesRes.data : []);
             if (profileRes.data && profileRes.data.name) {
                 setCompanyName(profileRes.data.name);
             }
@@ -503,13 +506,17 @@ export default function CompanyUsersPage() {
             const perms = values.permissions || [];
             let systemRole = selectedRole;
 
-            const payload = {
+            const payload: any = {
                 email: values.email,
                 role: systemRole,
                 position: values.position,
                 departmentId: values.departmentId,
                 permissions: perms,
             };
+            // Мультикомпания: в какие организации дать доступ (если у владельца их несколько)
+            if (myCompanies.length > 1 && Array.isArray(values.sharedCompanyIds)) {
+                payload.sharedCompanyIds = values.sharedCompanyIds;
+            }
 
             try {
                 const res = await api.post('/company/invitations', payload);
@@ -550,6 +557,8 @@ export default function CompanyUsersPage() {
             unifiedForm.setFieldsValue({
                 role: defaultRole,
                 permissions: ['orders'],
+                // По умолчанию доступ во все организации владельца («общая команда»)
+                sharedCompanyIds: myCompanies.map((c: any) => c.id),
             });
         }
         setUnifiedModalOpen(true);
@@ -2054,6 +2063,19 @@ export default function CompanyUsersPage() {
                                 <Form.Item name="permissions" label="Права доступа (для левого меню)">
                                     <Checkbox.Group options={MODULE_PERMISSIONS} />
                                 </Form.Item>
+                                {myCompanies.length > 1 && (
+                                    <Form.Item
+                                        name="sharedCompanyIds"
+                                        label="Доступ в организациях"
+                                        extra="По умолчанию сотрудник работает во всех ваших организациях. Снимите лишние, если нужно ограничить."
+                                    >
+                                        <Select
+                                            mode="multiple"
+                                            placeholder="Выберите организации"
+                                            options={myCompanies.map((c: any) => ({ label: c.name || 'Без названия', value: c.id }))}
+                                        />
+                                    </Form.Item>
+                                )}
                                 <Alert
                                     message="Сотрудник сам введёт свои данные"
                                     description="По этой ссылке сотрудник сможет сам задать себе ФИО, телефон и пароль для входа."
