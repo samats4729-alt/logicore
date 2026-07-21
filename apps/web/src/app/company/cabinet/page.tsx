@@ -31,12 +31,9 @@ export default function CabinetPage() {
 
     const groups: Group[] = [
         {
-            title: 'Организация',
+            title: 'Мои организации',
             links: [
-                { label: 'Основная информация', href: '/company/settings?tab=company&sub=main', show: isAdmin },
-                { label: 'Банковские реквизиты', href: '/company/settings?tab=company&sub=bank', show: isAdmin },
-                { label: 'Печать и подпись', href: '/company/settings?tab=company&sub=stamp', show: isAdmin },
-                { label: 'Мои организации', href: '/company/settings?tab=company&sub=orgs', show: isAdmin },
+                { label: 'Мои организации', href: '/company/settings', show: isAdmin },
             ],
         },
         {
@@ -60,8 +57,8 @@ export default function CabinetPage() {
         {
             title: 'Аккаунт',
             links: [
-                { label: 'Мой профиль', href: '/company/settings?tab=profile', show: true },
-                { label: 'Изменить пароль', href: '/company/settings?tab=profile', show: true },
+                { label: 'Мой профиль', href: '/company/profile', show: true },
+                { label: 'Изменить пароль', href: '/company/profile', show: true },
             ],
         },
         {
