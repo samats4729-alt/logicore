@@ -305,16 +305,16 @@ export default function PartnersPage() {
             render: (_: any, record: any) => (
                 record.isExternal ? (
                     <Space>
-                        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                        <Button type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); openEdit(record); }}>
                             Изменить
                         </Button>
-                        <Popconfirm 
-                            title="Удалить контрагента?" 
+                        <Popconfirm
+                            title="Удалить контрагента?"
                             onConfirm={() => handleDelete(record.id)}
                             okText="Да"
                             cancelText="Нет"
                         >
-                            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>
                                 Удалить
                             </Button>
                         </Popconfirm>
@@ -329,26 +329,13 @@ export default function PartnersPage() {
         
         return (
             <div style={{ minHeight: 400, paddingTop: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+                <div style={{ marginBottom: 16 }}>
                     <Title level={4} style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
                         {tabType === 'customers' ? 'Список заказчиков' : 'Список перевозчиков'}
                     </Title>
-                    <Space>
-                        <Button 
-                            type="primary" 
-                            icon={<PlusOutlined />} 
-                            className="lc-cta"
-                            onClick={() => {
-                                setEditingCompany(null);
-                                form.resetFields();
-                                form.setFieldsValue({ roles: [tabType === 'customers' ? 'customer' : 'carrier'] });
-                                setModalOpen(true);
-                            }}
-                        >
-                            Добавить {tabType === 'customers' ? 'заказчика' : 'перевозчика'}
-                        </Button>
-                        <Button onClick={fetchCounterparties}>Обновить</Button>
-                    </Space>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                        Нажмите на строку — откроется карточка контрагента. «Изменить» — правка данных и роли.
+                    </Text>
                 </div>
                 <Table
                     columns={columns}
@@ -507,7 +494,6 @@ export default function PartnersPage() {
                 <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
-                type="card"
                 items={[
                     {
                         key: 'customers',
