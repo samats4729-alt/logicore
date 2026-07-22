@@ -341,6 +341,10 @@ export class AccountingService {
         return this.settingsService.deactivateServiceItem(companyId, id, active);
     }
 
+    async getActsJournal(companyId: string) {
+        return this.reportsService.getActsJournal(companyId);
+    }
+
     async getActOfWork(companyId: string, orderId: string) {
         return this.reportsService.getActOfWork(companyId, orderId);
     }

@@ -1022,6 +1022,54 @@ export class FinancialReportsService {
         };
     }
 
+    // ==================== ЖУРНАЛ АКТОВ ====================
+
+    // Список заявок, по которым можно выставить акт выполненных работ (мы — исполнитель для заказчика)
+    async getActsJournal(companyId: string) {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+                customerCompanyId: { not: null },
+                OR: [
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                ],
+                NOT: { customerCompanyId: companyId },
+            },
+            select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                createdAt: true,
+                completedAt: true,
+                customerPrice: true,
+                customerCompany: { select: { id: true, name: true } },
+                routePoints: {
+                    select: { pointType: true, sequence: true, location: { select: { city: true, address: true } } },
+                    orderBy: { sequence: 'asc' },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        return orders.map((o) => {
+            const pts = o.routePoints || [];
+            const pickup = pts.find((p) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
+            const delivery = [...pts].reverse().find((p) => p.pointType === 'DELIVERY');
+            const from = pickup?.location?.city || pickup?.location?.address || '';
+            const to = delivery?.location?.city || delivery?.location?.address || '';
+            return {
+                id: o.id,
+                orderNumber: o.orderNumber,
+                status: o.status,
+                date: o.completedAt || o.createdAt,
+                customerName: o.customerCompany?.name || '—',
+                route: from && to ? `${from} — ${to}` : (from || to || ''),
+                amount: o.customerPrice || 0,
+            };
+        });
+    }
+
     // ==================== АКТ ВЫПОЛНЕННЫХ РАБОТ ====================
 
     async getActOfWork(companyId: string, orderId: string) {

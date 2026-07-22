@@ -88,7 +88,7 @@ export default function FinanceHubPage() {
             title: 'Документы',
             links: [
                 { label: 'Счета', href: '/company/accounting/invoices', show: acc, desc: 'Счета покупателям и от поставщиков — создание и журнал' },
-                { label: 'Акты и сверка', href: '/company/accounting/counterparty-report', show: acc, desc: 'Акт выполненных работ — из заявки; акт сверки — из взаиморасчётов' },
+                { label: 'Акты выполненных работ', href: '/company/accounting/acts', show: acc, desc: 'Журнал актов по заявкам: открыть, проверить, распечатать' },
             ],
         },
         {

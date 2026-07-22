@@ -491,6 +491,12 @@ export class AccountingController {
 
     // ==================== АКТ ВЫПОЛНЕННЫХ РАБОТ ====================
 
+    @Get('acts-journal')
+    @Roles(...FINANCE_VIEW_ROLES)
+    async getActsJournal(@Request() req: any) {
+        return this.accountingService.getActsJournal(req.user.companyId);
+    }
+
     @Get('act-of-work/:orderId')
     @Roles(...FINANCE_VIEW_ROLES)
     async getActOfWork(@Request() req: any, @Param('orderId') orderId: string) {
