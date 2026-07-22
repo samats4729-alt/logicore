@@ -348,7 +348,7 @@ export default function InvoiceDetailPage() {
                         <Text strong style={{ fontSize: 15, display: 'block', marginBottom: 12 }}>Информация о счете</Text>
                         <Descriptions column={1} size="small" bordered>
                             <Descriptions.Item label="Тип счета">
-                                {invoice.issuerId === user?.companyId ? 'Исходящий (нам заплатят)' : 'Входящий (мы платим)'}
+                                {invoice.issuerId === user?.companyId ? 'Исходящий · счёт покупателю' : 'Входящий · счёт поставщика'}
                             </Descriptions.Item>
                             <Descriptions.Item label="Дата выставления">
                                 {dayjs(invoice.date).format('DD.MM.YYYY')}

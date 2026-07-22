@@ -290,8 +290,8 @@ export default function CreateInvoicePage() {
                                         form.setFieldsValue({ counterpartyId: undefined });
                                     }}
                                     options={[
-                                        { value: 'OUTGOING', label: 'Исходящий (доход заказчику)' },
-                                        { value: 'INCOMING', label: 'Входящий (расход от партнера)' },
+                                        { value: 'OUTGOING', label: 'Исходящий — счёт покупателю' },
+                                        { value: 'INCOMING', label: 'Входящий — счёт от поставщика' },
                                     ]}
                                 />
                             </Form.Item>
