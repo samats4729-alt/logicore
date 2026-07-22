@@ -409,7 +409,7 @@ export class IdentityService {
 
     // ==================== ПЕРЕКЛЮЧЕНИЕ ЧТЕНИЯ (за флагом) ====================
 
-    private static readonly READ_FLAG_KEYS = ['identity_reads_managers'] as const;
+    private static readonly READ_FLAG_KEYS = ['identity_reads_managers', 'identity_reads_employees', 'identity_reads_drivers'] as const;
 
     /** Текущее состояние фиче-флагов чтения. */
     async getReadFlags(): Promise<Record<string, boolean>> {
@@ -436,11 +436,11 @@ export class IdentityService {
     }
 
     /**
-     * Проверка паритета ЧТЕНИЯ для «менеджеров»: по каждой компании сравнивает список,
-     * который вернёт старый путь, с тем, что вернёт новый (через Affiliation). Read-only.
-     * diffs пуст => включать флаг безопасно (вывод не изменится).
+     * Проверка паритета ЧТЕНИЯ по всем трём областям (менеджеры/сотрудники/водители):
+     * по каждой компании сравнивает список старого пути со списком нового (через Affiliation).
+     * Read-only. Область ok=true => включать её флаг безопасно (вывод не изменится).
      */
-    async reconcileManagerReads() {
+    async reconcileReads() {
         const MANAGER_ROLES = new Set(['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN']);
 
         const [users, relations, affs, companies] = await Promise.all([
@@ -449,54 +449,127 @@ export class IdentityService {
                 select: { id: true, companyId: true, role: true, firstName: true, lastName: true },
             }),
             this.prisma.userCompanyRelation.findMany({ select: { userId: true, companyId: true } }),
-            this.prisma.affiliation.findMany({ where: { sourceUserId: { not: null } }, select: { companyId: true, sourceUserId: true } }),
+            this.prisma.affiliation.findMany({ where: { sourceUserId: { not: null } }, select: { companyId: true, role: true, sourceUserId: true } }),
             this.prisma.company.findMany({ select: { id: true, name: true } }),
         ]);
 
-        const isMgr = new Map<string, { name: string } | null>();
-        for (const u of users) {
-            isMgr.set(u.id, MANAGER_ROLES.has(u.role as string) ? { name: `${u.lastName || ''} ${u.firstName || ''}`.trim() } : null);
-        }
+        const userById = new Map(users.map((u) => [u.id, u]));
+        const nameOf = (id: string) => {
+            const u = userById.get(id);
+            return u ? `${u.lastName || ''} ${u.firstName || ''}`.trim() : id;
+        };
         const companyName = new Map(companies.map((c) => [c.id, c.name]));
 
-        // Старый набор менеджеров по компаниям
-        const oldSet = new Map<string, Set<string>>();
-        const add = (companyId: string | null, userId: string) => {
-            if (!companyId) return;
-            if (!isMgr.get(userId)) return;
-            if (!oldSet.has(companyId)) oldSet.set(companyId, new Set());
-            oldSet.get(companyId)!.add(userId);
+        // Общее членство (companyId + relations) — база для сотрудников и менеджеров
+        const oldMembers = new Map<string, Set<string>>();
+        const addMember = (companyId: string | null, userId: string) => {
+            if (!companyId || !userById.has(userId)) return;
+            if (!oldMembers.has(companyId)) oldMembers.set(companyId, new Set());
+            oldMembers.get(companyId)!.add(userId);
         };
-        for (const u of users) add(u.companyId, u.id);
-        for (const r of relations) add(r.companyId, r.userId);
+        for (const u of users) addMember(u.companyId, u.id);
+        for (const r of relations) addMember(r.companyId, r.userId);
 
-        // Новый набор — из Affiliation (sourceUserId), фильтр по роли менеджера
-        const newSet = new Map<string, Set<string>>();
+        // Новое членство — из Affiliation (sourceUserId, любая роль)
+        const newMembers = new Map<string, Set<string>>();
         for (const a of affs) {
             const uid = a.sourceUserId as string;
-            if (!isMgr.get(uid)) continue;
-            if (!newSet.has(a.companyId)) newSet.set(a.companyId, new Set());
-            newSet.get(a.companyId)!.add(uid);
+            if (!userById.has(uid)) continue;
+            if (!newMembers.has(a.companyId)) newMembers.set(a.companyId, new Set());
+            newMembers.get(a.companyId)!.add(uid);
         }
 
-        const allCompanyIds = new Set<string>([...oldSet.keys(), ...newSet.keys()]);
-        const diffs: Array<{ companyId: string; companyName: string; onlyOld: string[]; onlyNew: string[] }> = [];
-        for (const cid of allCompanyIds) {
-            const o = oldSet.get(cid) || new Set();
-            const n = newSet.get(cid) || new Set();
-            const onlyOld = [...o].filter((id) => !n.has(id)).map((id) => isMgr.get(id)?.name || id);
-            const onlyNew = [...n].filter((id) => !o.has(id)).map((id) => isMgr.get(id)?.name || id);
-            if (onlyOld.length || onlyNew.length) {
-                diffs.push({ companyId: cid, companyName: companyName.get(cid) || cid, onlyOld, onlyNew });
+        // Старые водители — companyId + role DRIVER (без relations, как в getDriversFiltered)
+        const oldDrivers = new Map<string, Set<string>>();
+        for (const u of users) {
+            if (u.role === 'DRIVER' && u.companyId) {
+                if (!oldDrivers.has(u.companyId)) oldDrivers.set(u.companyId, new Set());
+                oldDrivers.get(u.companyId)!.add(u.id);
             }
         }
+        // Новые водители — Affiliation role DRIVER
+        const newDrivers = new Map<string, Set<string>>();
+        for (const a of affs) {
+            if (a.role !== 'DRIVER') continue;
+            const uid = a.sourceUserId as string;
+            const u = userById.get(uid);
+            if (!u || u.role !== 'DRIVER') continue;
+            if (!newDrivers.has(a.companyId)) newDrivers.set(a.companyId, new Set());
+            newDrivers.get(a.companyId)!.add(uid);
+        }
+
+        // Сравнение двух карт множеств с опциональным фильтром по пользователю
+        const compare = (
+            oldMap: Map<string, Set<string>>,
+            newMap: Map<string, Set<string>>,
+            filter?: (id: string) => boolean,
+        ) => {
+            const ids = new Set<string>([...oldMap.keys(), ...newMap.keys()]);
+            const diffs: Array<{ companyId: string; companyName: string; onlyOld: string[]; onlyNew: string[] }> = [];
+            for (const cid of ids) {
+                const o = [...(oldMap.get(cid) || new Set())].filter((id) => (filter ? filter(id) : true));
+                const n = [...(newMap.get(cid) || new Set())].filter((id) => (filter ? filter(id) : true));
+                const os = new Set(o);
+                const ns = new Set(n);
+                const onlyOld = o.filter((id) => !ns.has(id)).map(nameOf);
+                const onlyNew = n.filter((id) => !os.has(id)).map(nameOf);
+                if (onlyOld.length || onlyNew.length) {
+                    diffs.push({ companyId: cid, companyName: companyName.get(cid) || cid, onlyOld, onlyNew });
+                }
+            }
+            return { ok: diffs.length === 0, companiesChecked: ids.size, companiesWithDiff: diffs.length, diffs: diffs.slice(0, 50) };
+        };
+
+        const isMgr = (id: string) => MANAGER_ROLES.has((userById.get(id)?.role as string) || '');
+
+        const managers = compare(oldMembers, newMembers, isMgr);
+        const employees = compare(oldMembers, newMembers);
+        const drivers = compare(oldDrivers, newDrivers);
 
         return {
-            ok: diffs.length === 0,
-            companiesChecked: allCompanyIds.size,
-            companiesWithDiff: diffs.length,
-            diffs: diffs.slice(0, 50),
+            allOk: managers.ok && employees.ok && drivers.ok,
+            managers,
+            employees,
+            drivers,
         };
+    }
+
+    /**
+     * Включить чтение из нового слоя — БЕЗОПАСНО: включает флаг только там, где паритет полный.
+     * Если где-то есть расхождение, эту область оставляет на старом пути.
+     */
+    async enableReads() {
+        const rec = await this.reconcileReads();
+        const plan: Array<[string, boolean]> = [
+            ['identity_reads_managers', rec.managers.ok],
+            ['identity_reads_employees', rec.employees.ok],
+            ['identity_reads_drivers', rec.drivers.ok],
+        ];
+        for (const [key, ok] of plan) {
+            if (ok) {
+                await this.prisma.platformSetting.upsert({
+                    where: { key },
+                    create: { key, value: 'true' },
+                    update: { value: 'true' },
+                });
+            }
+        }
+        const enabled = Object.fromEntries(plan.map(([k, ok]) => [k, ok]));
+        this.logger.log(`enableReads: ${JSON.stringify(enabled)}`);
+        return { allOk: rec.allOk, enabled, reconcile: rec };
+    }
+
+    /** Вернуть всё на старое чтение (мгновенно). */
+    async disableReads() {
+        for (const key of IdentityService.READ_FLAG_KEYS) {
+            await this.prisma.platformSetting.upsert({
+                where: { key },
+                create: { key, value: 'false' },
+                update: { value: 'false' },
+            });
+        }
+        this.logger.log('disableReads: all off');
+        return { disabled: true };
     }
 
     // ==================== СВЕРКА: новый фундамент == старые данные ====================

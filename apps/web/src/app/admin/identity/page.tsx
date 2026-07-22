@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Card, Button, Table, Tag, Space, Alert, message, Spin, Statistic, Row, Col, Select, Popconfirm, Switch } from 'antd';
+import { Typography, Card, Button, Table, Tag, Space, Alert, message, Spin, Statistic, Row, Col, Select, Popconfirm } from 'antd';
 import { ReloadOutlined, TeamOutlined, MergeCellsOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 
@@ -56,11 +56,17 @@ interface Reconcile {
     vehicles: { total: number; expectedLinks: number; linkedOk: number; missingLinks: number; mismatched: number; missingSample: string[]; mismatchSample: string[] };
 }
 
-interface ReadReconcile {
+interface ReadArea {
     ok: boolean;
     companiesChecked: number;
     companiesWithDiff: number;
     diffs: { companyId: string; companyName: string; onlyOld: string[]; onlyNew: string[] }[];
+}
+interface ReadReconcile {
+    allOk: boolean;
+    managers: ReadArea;
+    employees: ReadArea;
+    drivers: ReadArea;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -114,14 +120,30 @@ export default function AdminIdentityPage() {
         }
     };
 
-    const setFlag = async (key: string, enabled: boolean) => {
+    const enableAll = async () => {
         setFlagSaving(true);
         try {
-            await api.post('/admin/identity/read-flags', { key, enabled });
-            setFlags(prev => ({ ...prev, [key]: enabled }));
-            message.success(enabled ? 'Новое чтение включено' : 'Возврат на старое чтение');
+            const res = await api.post('/admin/identity/reads/enable-all');
+            const en = res.data?.enabled || {};
+            const onCount = Object.values(en).filter(Boolean).length;
+            message.success(res.data?.allOk ? 'Переключено на новый слой полностью' : `Переключено частично (${onCount}/3): включено только там, где сверка идеальная`);
+            await loadFlags();
+            await loadReadRecon();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось изменить флаг');
+            message.error(e.response?.data?.message || 'Не удалось переключить');
+        } finally {
+            setFlagSaving(false);
+        }
+    };
+
+    const disableAll = async () => {
+        setFlagSaving(true);
+        try {
+            await api.post('/admin/identity/reads/disable-all');
+            message.success('Возврат на старое чтение');
+            await loadFlags();
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось вернуть');
         } finally {
             setFlagSaving(false);
         }
@@ -638,7 +660,7 @@ export default function AdminIdentityPage() {
             </Card>
 
             <Card
-                title={<span>Шаг 7. Переключение чтения «менеджеры» (за флагом)</span>}
+                title={<span>Шаг 7. Переключить всё на новый слой (за флагами)</span>}
                 style={{ marginTop: 16, borderColor: '#1677ff' }}
                 extra={<Button icon={<ReloadOutlined />} onClick={loadReadRecon} loading={readReconLoading}>Проверить паритет</Button>}
             >
@@ -646,51 +668,58 @@ export default function AdminIdentityPage() {
                     type="warning"
                     showIcon
                     style={{ marginBottom: 16 }}
-                    message="Это первый шаг, который меняет поведение — поэтому за флагом"
-                    description="Ниже показано, совпадает ли список «менеджеров» (выбор ответственного) при старом и новом чтении. Включать флаг стоит только при «0 расхождений». Выключение мгновенно возвращает старое поведение."
+                    message="Это шаг, который меняет поведение — поэтому со страховкой"
+                    description="«Переключить всё» включает новый слой сразу для менеджеров, сотрудников и водителей — но ТОЛЬКО там, где сверка списков идеальна (0 расхождений). Если где-то не совпадает, эта область остаётся на старом. «Вернуть как было» мгновенно откатывает всё."
                 />
 
                 {readRecon && (
-                    <Alert
-                        style={{ marginBottom: 16 }}
-                        type={readRecon.ok ? 'success' : 'error'}
-                        showIcon
-                        message={readRecon.ok
-                            ? `Паритет чтения полный: проверено компаний ${readRecon.companiesChecked}, расхождений 0`
-                            : `Есть расхождения в ${readRecon.companiesWithDiff} компаниях — включать флаг рано`}
-                    />
+                    <>
+                        <Alert
+                            style={{ marginBottom: 16 }}
+                            type={readRecon.allOk ? 'success' : 'error'}
+                            showIcon
+                            message={readRecon.allOk
+                                ? 'Паритет чтения полный по всем спискам — переключать безопасно'
+                                : 'Есть расхождения — часть списков включать пока рано'}
+                        />
+                        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+                            {([['Менеджеры', readRecon.managers, 'identity_reads_managers'], ['Сотрудники', readRecon.employees, 'identity_reads_employees'], ['Водители', readRecon.drivers, 'identity_reads_drivers']] as [string, ReadArea, string][]).map(([label, area, key]) => (
+                                <Col xs={24} md={8} key={key}>
+                                    <Card size="small" title={label}>
+                                        <div>Паритет: {area.ok ? <Tag color="green">полный</Tag> : <Tag color="red">расхождений {area.companiesWithDiff}</Tag>}</div>
+                                        <div style={{ marginTop: 8 }}>Сейчас читается: {flags[key] ? <Tag color="blue">новый слой</Tag> : <Tag>старый</Tag>}</div>
+                                        {!area.ok && area.diffs.length > 0 && (
+                                            <div style={{ marginTop: 8, fontSize: 12, color: '#8a91a0' }}>
+                                                {area.diffs.slice(0, 3).map((d, i) => (
+                                                    <div key={i}>{d.companyName}: {[...d.onlyOld.map(x => `−${x}`), ...d.onlyNew.map(x => `+${x}`)].join(', ')}</div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </Card>
+                                </Col>
+                            ))}
+                        </Row>
+                    </>
                 )}
 
-                {readRecon && !readRecon.ok && readRecon.diffs.length > 0 && (
-                    <Table
-                        size="small"
-                        pagination={false}
-                        rowKey="companyId"
-                        style={{ marginBottom: 16 }}
-                        dataSource={readRecon.diffs}
-                        columns={[
-                            { title: 'Компания', dataIndex: 'companyName', key: 'companyName' },
-                            { title: 'Только в старом', key: 'onlyOld', render: (_: any, r: ReadReconcile['diffs'][number]) => r.onlyOld.join(', ') || '—' },
-                            { title: 'Только в новом', key: 'onlyNew', render: (_: any, r: ReadReconcile['diffs'][number]) => r.onlyNew.join(', ') || '—' },
-                        ]}
-                    />
-                )}
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
-                    <Switch
-                        checked={!!flags['identity_reads_managers']}
-                        loading={flagSaving}
-                        disabled={!readRecon?.ok && !flags['identity_reads_managers']}
-                        onChange={(v) => setFlag('identity_reads_managers', v)}
-                    />
-                    <div>
-                        <Text strong>Читать «менеджеров» из нового слоя (Affiliation)</Text>
-                        <div style={{ color: '#8a91a0', fontSize: 13 }}>
-                            {flags['identity_reads_managers']
-                                ? 'Включено. Выключатель мгновенно вернёт старое чтение.'
-                                : (readRecon?.ok ? 'Паритет полный — можно включать.' : 'Включение доступно только при полном паритете чтения.')}
-                        </div>
-                    </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                    <Popconfirm
+                        title="Переключить всё на новый слой?"
+                        description="Включится только там, где сверка идеальна. Откатить можно кнопкой рядом."
+                        okText="Да, переключить"
+                        cancelText="Отмена"
+                        onConfirm={enableAll}
+                    >
+                        <Button type="primary" loading={flagSaving}>Переключить всё</Button>
+                    </Popconfirm>
+                    <Popconfirm
+                        title="Вернуть всё на старое чтение?"
+                        okText="Да, вернуть"
+                        cancelText="Отмена"
+                        onConfirm={disableAll}
+                    >
+                        <Button danger loading={flagSaving}>Вернуть как было</Button>
+                    </Popconfirm>
                 </div>
             </Card>
         </div>

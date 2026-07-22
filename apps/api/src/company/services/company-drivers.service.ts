@@ -7,6 +7,23 @@ import * as bcrypt from 'bcryptjs';
 export class CompanyDriversService {
     constructor(private prisma: PrismaService) { }
 
+    // Фиче-флаг чтения водителей из нового слоя (Affiliation). По умолчанию ВЫКЛ, кэш 30с.
+    private driverFlagCache: { value: boolean; expiresAt: number } | null = null;
+    private async isAffiliationDriverReads(): Promise<boolean> {
+        if (this.driverFlagCache && this.driverFlagCache.expiresAt > Date.now()) {
+            return this.driverFlagCache.value;
+        }
+        let value = false;
+        try {
+            const row = await this.prisma.platformSetting.findUnique({ where: { key: 'identity_reads_drivers' } });
+            value = row?.value === 'true';
+        } catch {
+            value = false;
+        }
+        this.driverFlagCache = { value, expiresAt: Date.now() + 30000 };
+        return value;
+    }
+
     private readonly driverSelect = {
         id: true,
         firstName: true,
@@ -49,6 +66,21 @@ export class CompanyDriversService {
             }
         }
 
+        // Новый путь (за флагом): членство водителей — из Affiliation (sourceUserId).
+        if (await this.isAffiliationDriverReads()) {
+            const affs = await this.prisma.affiliation.findMany({
+                where: { companyId: targetCompanyId, role: UserRole.DRIVER, sourceUserId: { not: null } },
+                select: { sourceUserId: true },
+            });
+            const ids = Array.from(new Set(affs.map(a => a.sourceUserId).filter(Boolean))) as string[];
+            return this.prisma.user.findMany({
+                where: { id: { in: ids }, role: UserRole.DRIVER, isActive: true },
+                select: this.driverSelect,
+                orderBy: { createdAt: 'desc' },
+            });
+        }
+
+        // Старый путь (по умолчанию).
         return this.prisma.user.findMany({
             where: {
                 companyId: targetCompanyId,

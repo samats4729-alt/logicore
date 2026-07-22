@@ -32,18 +32,22 @@ export class CompanyService {
     async getCompanyUsers(companyId: string, query: any = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
 
-        // Участники компании = её собственные пользователи (User.companyId)
-        // + пользователи, привязанные к ней через мультикомпанию (UserCompanyRelation).
-        // Так владелец и общая команда видны во всех своих организациях.
-        const relations = await this.prisma.userCompanyRelation.findMany({
-            where: { companyId },
-            select: { userId: true },
-        });
-        const relatedUserIds = relations.map(r => r.userId);
-
-        const membershipOr: any[] = [{ companyId }];
-        if (relatedUserIds.length) {
-            membershipOr.push({ id: { in: relatedUserIds } });
+        // Участники компании. Новый путь (за флагом) — через Affiliation (sourceUserId);
+        // старый путь (по умолчанию) — User.companyId + UserCompanyRelation. Набор совпадает.
+        let membershipOr: any[];
+        if (await this.isFlagOn('identity_reads_employees')) {
+            const ids = await this.affiliationMemberUserIds(companyId);
+            membershipOr = [{ id: { in: ids } }];
+        } else {
+            const relations = await this.prisma.userCompanyRelation.findMany({
+                where: { companyId },
+                select: { userId: true },
+            });
+            const relatedUserIds = relations.map(r => r.userId);
+            membershipOr = [{ companyId }];
+            if (relatedUserIds.length) {
+                membershipOr.push({ id: { in: relatedUserIds } });
+            }
         }
 
         const where: any = { isActive: true, OR: membershipOr };
@@ -608,33 +612,37 @@ export class CompanyService {
      * Офисные сотрудники компании — для выбора ответственного менеджера
      * (только имена и роли, без чувствительных данных)
      */
-    // Фиче-флаг: читать членство из Affiliation вместо User.companyId+UserCompanyRelation.
-    // По умолчанию ВЫКЛ. Кэш на 30с. Включается в админке (мгновенно откатывается).
-    private managerReadsCache: { value: boolean; expiresAt: number } | null = null;
-    private async isAffiliationManagerReads(): Promise<boolean> {
-        if (this.managerReadsCache && this.managerReadsCache.expiresAt > Date.now()) {
-            return this.managerReadsCache.value;
-        }
+    // Фиче-флаги: читать членство из Affiliation вместо User.companyId+UserCompanyRelation.
+    // По умолчанию ВЫКЛ. Кэш на 30с. Включаются в админке (мгновенно откатываются).
+    private flagCache = new Map<string, { value: boolean; expiresAt: number }>();
+    private async isFlagOn(key: string): Promise<boolean> {
+        const c = this.flagCache.get(key);
+        if (c && c.expiresAt > Date.now()) return c.value;
         let value = false;
         try {
-            const row = await this.prisma.platformSetting.findUnique({ where: { key: 'identity_reads_managers' } });
+            const row = await this.prisma.platformSetting.findUnique({ where: { key } });
             value = row?.value === 'true';
         } catch {
             value = false;
         }
-        this.managerReadsCache = { value, expiresAt: Date.now() + 30000 };
+        this.flagCache.set(key, { value, expiresAt: Date.now() + 30000 });
         return value;
+    }
+
+    /** Пользователи-участники компании по новому слою (Affiliation → sourceUserId). */
+    private async affiliationMemberUserIds(companyId: string): Promise<string[]> {
+        const affs = await this.prisma.affiliation.findMany({
+            where: { companyId, sourceUserId: { not: null } },
+            select: { sourceUserId: true },
+        });
+        return Array.from(new Set(affs.map(a => a.sourceUserId).filter(Boolean))) as string[];
     }
 
     async getCompanyManagers(companyId: string) {
         // Новый путь (за флагом): членство берём из Affiliation через sourceUserId,
         // фильтр роли — как в старом (по User.role). Даёт тот же набор, но через новый слой.
-        if (await this.isAffiliationManagerReads()) {
-            const affs = await this.prisma.affiliation.findMany({
-                where: { companyId, sourceUserId: { not: null } },
-                select: { sourceUserId: true },
-            });
-            const ids = Array.from(new Set(affs.map(a => a.sourceUserId).filter(Boolean))) as string[];
+        if (await this.isFlagOn('identity_reads_managers')) {
+            const ids = await this.affiliationMemberUserIds(companyId);
             return this.prisma.user.findMany({
                 where: {
                     id: { in: ids },

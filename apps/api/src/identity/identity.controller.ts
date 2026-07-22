@@ -102,8 +102,22 @@ export class IdentityController {
 
     @Get('reconcile-reads')
     @Roles(UserRole.ADMIN)
-    @ApiOperation({ summary: 'Паритет чтения «менеджеры»: старый путь vs новый (read-only)' })
+    @ApiOperation({ summary: 'Паритет чтения (менеджеры/сотрудники/водители): старое vs новое' })
     async reconcileReads() {
-        return this.identityService.reconcileManagerReads();
+        return this.identityService.reconcileReads();
+    }
+
+    @Post('reads/enable-all')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Переключить всё на новый слой — только там, где паритет полный' })
+    async enableReads() {
+        return this.identityService.enableReads();
+    }
+
+    @Post('reads/disable-all')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Вернуть всё на старое чтение (мгновенно)' })
+    async disableReads() {
+        return this.identityService.disableReads();
     }
 }
