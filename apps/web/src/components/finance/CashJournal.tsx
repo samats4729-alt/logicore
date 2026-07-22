@@ -154,12 +154,12 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
                 accountId: values.accountId || undefined,
                 method: values.method || 'BANK',
                 note: values.note || undefined,
+                orderId: values.orderId || null,
             };
             if (editing) {
                 await api.put(`/accounting/payments/${editing.id}`, payload);
                 message.success('Документ обновлён');
             } else {
-                payload.orderId = needsOrder ? (values.orderId || undefined) : (values.orderId || undefined);
                 await api.post('/accounting/payments', payload);
                 message.success(isIn ? 'Поступление создано' : 'Расход создан');
             }
@@ -315,7 +315,6 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
                         <Select
                             placeholder="Выберите заявку (по номеру)"
                             showSearch optionFilterProp="label" allowClear
-                            disabled={!!editing}
                             options={orders.map(o => ({ value: o.id, label: o.orderNumber }))}
                         />
                     </Form.Item>

@@ -311,6 +311,7 @@ export class PaymentsService {
         counterpartyId?: string;
         accountId?: string;
         categoryId?: string;
+        orderId?: string;
     }) {
         const payment = await this.prisma.payment.findFirst({
             where: { id: paymentId, companyId, isDeleted: false },
@@ -323,6 +324,7 @@ export class PaymentsService {
         }
 
         const amt = data.amount !== undefined ? money(data.amount) : payment.amount;
+        const oldOrderId = payment.orderId;
 
         const updated = await this.prisma.payment.update({
             where: { id: paymentId },
@@ -334,17 +336,22 @@ export class PaymentsService {
                 ...(data.counterpartyId !== undefined && { counterpartyId: data.counterpartyId || null }),
                 ...(data.accountId !== undefined && { accountId: data.accountId || null }),
                 ...(data.categoryId !== undefined && { categoryId: data.categoryId || null }),
+                ...(data.orderId !== undefined && { orderId: data.orderId || null }),
             },
             include: {
                 order: { select: { orderNumber: true } },
             }
         });
 
-        if (updated.orderId) {
-            await this.syncOrderPaymentFlags(updated.orderId);
+        // Пересчитываем флаги оплаты: и у прежней заявки (если отвязали/сменили), и у новой
+        const affected = new Set<string>();
+        if (oldOrderId) affected.add(oldOrderId);
+        if (updated.orderId) affected.add(updated.orderId);
+        for (const oid of affected) {
+            await this.syncOrderPaymentFlags(oid);
             await this.prisma.orderChangeLog.create({
                 data: {
-                    orderId: updated.orderId,
+                    orderId: oid,
                     userId,
                     action: 'payment_updated',
                     details: `Обновлен платеж: ${updated.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${updated.amount} ₸ (${updated.note || 'без примечания'}).`

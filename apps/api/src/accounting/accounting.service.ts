@@ -231,6 +231,7 @@ export class AccountingService {
         counterpartyId?: string;
         accountId?: string;
         categoryId?: string;
+        orderId?: string;
     }) {
         return this.paymentsService.updatePayment(companyId, paymentId, userId, data);
     }
