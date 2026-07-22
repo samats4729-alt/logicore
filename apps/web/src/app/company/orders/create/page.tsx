@@ -73,6 +73,9 @@ export default function CreateOrderPage() {
     const [responsibleChoice, setResponsibleChoice] = useState<string>('SELF');
     const [officeUsers, setOfficeUsers] = useState<{ id: string; firstName: string; lastName: string; role: string }[]>([]);
     const [quickPartnerTarget, setQuickPartnerTarget] = useState<'CUSTOMER' | 'CARRIER' | null>(null);
+    // Справочники условий и форм оплаты (для заявки)
+    const [paymentConditions, setPaymentConditions] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
+    const [paymentForms, setPaymentForms] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
 
     const isOwnOrExternalCarrier = selectedCarrier === MY_COMPANY_VALUE || 
         (selectedCarrier && partners.find(p => p.id === selectedCarrier)?.isExternal === true);
@@ -312,6 +315,26 @@ export default function CreateOrderPage() {
         if (carr) setSelectedCarrier(carr);
         setPendingParties(null);
     }, [pendingParties, partners]);
+
+    // Загрузка справочников условий и форм оплаты + подстановка значений по умолчанию
+    useEffect(() => {
+        const activeOnly = (arr: any[]) => (arr || []).filter((x: any) => x.isActive !== false);
+        Promise.all([
+            api.get('/accounting/dictionaries/payment-condition').catch(() => ({ data: [] })),
+            api.get('/accounting/dictionaries/payment-form').catch(() => ({ data: [] })),
+        ]).then(([condRes, formRes]) => {
+            const conds = activeOnly(condRes.data);
+            const forms = activeOnly(formRes.data);
+            setPaymentConditions(conds);
+            setPaymentForms(forms);
+            const defCond = conds.find((c: any) => c.isDefault)?.name;
+            const defForm = forms.find((f: any) => f.isDefault)?.name;
+            const patch: any = {};
+            if (defCond) { if (!form.getFieldValue('customerPaymentCondition')) patch.customerPaymentCondition = defCond; if (!form.getFieldValue('driverPaymentCondition')) patch.driverPaymentCondition = defCond; }
+            if (defForm) { if (!form.getFieldValue('customerPaymentForm')) patch.customerPaymentForm = defForm; if (!form.getFieldValue('driverPaymentForm')) patch.driverPaymentForm = defForm; }
+            if (Object.keys(patch).length) form.setFieldsValue(patch);
+        });
+    }, []);
 
     const fetchLocations = async () => {
         try {
@@ -618,6 +641,10 @@ export default function CreateOrderPage() {
                 customerPriceType: values.customerPriceType || 'FIXED',
                 customerPaymentDate: values.customerPaymentDate ? values.customerPaymentDate.toISOString() : undefined,
                 driverPaymentDate: values.driverPaymentDate ? values.driverPaymentDate.toISOString() : undefined,
+                customerPaymentCondition: values.customerPaymentCondition || undefined,
+                customerPaymentForm: values.customerPaymentForm || undefined,
+                driverPaymentCondition: values.driverPaymentCondition || undefined,
+                driverPaymentForm: values.driverPaymentForm || undefined,
                 routePoints,
                 customerId: user?.id,
                 responsibleUserId: responsibleChoice === 'SELF' ? undefined : responsibleChoice,
@@ -1136,6 +1163,42 @@ export default function CreateOrderPage() {
                             <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" size="large" placeholder="Когда оплатим перевозчику" />
                         </Form.Item>
                     </Col>
+                )}
+            </Row>
+
+            {/* Условия и формы оплаты (из справочников) */}
+            <Row gutter={24}>
+                {showCustomerPriceField && (
+                    <>
+                        <Col xs={24} md={6}>
+                            <Form.Item name="customerPaymentCondition" label="Условие оплаты (заказчик)">
+                                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                    options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={6}>
+                            <Form.Item name="customerPaymentForm" label="Форма оплаты (заказчик)">
+                                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                    options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
+                            </Form.Item>
+                        </Col>
+                    </>
+                )}
+                {showDriverCostField && (
+                    <>
+                        <Col xs={24} md={6}>
+                            <Form.Item name="driverPaymentCondition" label="Условие оплаты (перевозчик)">
+                                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                    options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={6}>
+                            <Form.Item name="driverPaymentForm" label="Форма оплаты (перевозчик)">
+                                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                    options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
+                            </Form.Item>
+                        </Col>
+                    </>
                 )}
             </Row>
 
