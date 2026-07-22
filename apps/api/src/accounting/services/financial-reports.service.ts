@@ -1138,6 +1138,7 @@ export class FinancialReportsService {
             id: c.id, name: c.name, bin: c.bin, address: c.address || c.actualAddress || null,
             directorName: c.directorName || null, bankAccount: c.bankAccount || null,
             bankName: c.bankName || null, bankBic: c.bankBic || null, kbe: c.kbe || null,
+            phone: c.phone || null, email: c.email || null,
         } : null;
 
         return {

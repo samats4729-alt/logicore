@@ -17,6 +17,8 @@ interface Party {
     bankName: string | null;
     bankBic: string | null;
     kbe: string | null;
+    phone: string | null;
+    email: string | null;
 }
 interface ActData {
     order: { id: string; orderNumber: string; createdAt: string; completedAt: string | null; cargoDescription: string | null; route: string };
@@ -31,6 +33,17 @@ interface ActData {
 }
 
 const fmt = (n: number) => (n || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// «полное наименование, адрес, данные о средствах связи»
+const partyLine = (p: Party | null) => {
+    if (!p) return '';
+    const bits = [p.name];
+    if (p.bin) bits.push(`ИИН/БИН ${p.bin}`);
+    if (p.address) bits.push(p.address);
+    if (p.phone) bits.push(`тел. ${p.phone}`);
+    if (p.email) bits.push(p.email);
+    return bits.join(', ');
+};
 
 function ActOfWorkInner() {
     const router = useRouter();
@@ -59,36 +72,21 @@ function ActOfWorkInner() {
     useEffect(() => { fetchAct(); }, [fetchAct]);
 
     if (!orderId) {
-        return <div className="lc-page" style={{ maxWidth: 900, margin: '0 auto' }}><Empty description="Заявка не выбрана" /></div>;
+        return <div className="lc-page" style={{ maxWidth: 960, margin: '0 auto' }}><Empty description="Заявка не выбрана" /></div>;
     }
 
-    const requisites = (p: Party | null) => {
-        if (!p) return null;
-        const lines: string[] = [];
-        if (p.bin) lines.push(`БИН/ИИН: ${p.bin}`);
-        if (p.address) lines.push(`Адрес: ${p.address}`);
-        if (p.bankAccount) lines.push(`ИИК: ${p.bankAccount}${p.bankBic ? `, БИК: ${p.bankBic}` : ''}`);
-        if (p.bankName) lines.push(`Банк: ${p.bankName}${p.kbe ? `, КБе: ${p.kbe}` : ''}`);
-        return lines;
-    };
+    const workDate = data?.order.completedAt ? dayjs(data.order.completedAt).format('DD.MM.YYYY') : (data ? dayjs(data.actDate).format('DD.MM.YYYY') : '');
 
     return (
-        <div className="lc-page act-wrap" style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div className="lc-page act-wrap" style={{ maxWidth: 960, margin: '0 auto' }}>
             {/* Управление — не печатается */}
             <div className="act-controls" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-                <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push(`/company/orders/${orderId}`)}>
-                    К заявке
-                </Button>
+                <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push(`/company/orders/${orderId}`)}>К заявке</Button>
                 {data && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 13, color: 'var(--lc-text-ter)' }}>Наименование услуги:</span>
-                        <Select
-                            value={serviceName}
-                            onChange={setServiceName}
-                            style={{ minWidth: 320 }}
-                            showSearch
-                            options={data.services.map(s => ({ value: s.name, label: s.name }))}
-                        />
+                        <Select value={serviceName} onChange={setServiceName} style={{ minWidth: 340 }} showSearch
+                            options={data.services.map(s => ({ value: s.name, label: s.name }))} />
                     </span>
                 )}
                 <Button type="primary" icon={<PrinterOutlined />} onClick={() => window.print()} disabled={!data} style={{ marginLeft: 'auto' }}>
@@ -102,111 +100,167 @@ function ActOfWorkInner() {
                 <Empty description="Нет данных" />
             ) : (
                 <div className="act-doc lc-card" style={{ padding: 40 }}>
-                    <h1 style={{ textAlign: 'center', fontSize: 19, fontWeight: 700, margin: '0 0 2px' }}>
-                        Акт выполненных работ (оказанных услуг) № {data.actNumber}
-                    </h1>
-                    <p style={{ textAlign: 'center', color: 'var(--lc-text-ter)', margin: '0 0 24px', fontSize: 13 }}>
-                        от {dayjs(data.actDate).format('DD.MM.YYYY')}
-                    </p>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, marginBottom: 18, fontSize: 12.5 }}>
-                        <div style={{ flex: 1 }}>
-                            <div style={{ color: 'var(--lc-text-ter)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 }}>Исполнитель</div>
-                            <div style={{ fontWeight: 700, fontSize: 14 }}>{data.issuer?.name || '—'}</div>
-                            {requisites(data.issuer)?.map((l, i) => <div key={i} style={{ color: 'var(--lc-text-sec)' }}>{l}</div>)}
+                    {/* Шапка формы Р-1 */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+                        <div style={{ textAlign: 'right', fontSize: 10.5, lineHeight: 1.35, color: 'var(--lc-text-sec)' }}>
+                            <div>Приложение 50</div>
+                            <div>к приказу Министра финансов</div>
+                            <div>Республики Казахстан</div>
+                            <div>от 20 декабря 2012 года № 562</div>
                         </div>
-                        <div style={{ flex: 1 }}>
-                            <div style={{ color: 'var(--lc-text-ter)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 }}>Заказчик</div>
-                            <div style={{ fontWeight: 700, fontSize: 14 }}>{data.recipient?.name || '—'}</div>
-                            {requisites(data.recipient)?.map((l, i) => <div key={i} style={{ color: 'var(--lc-text-sec)' }}>{l}</div>)}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700 }}>Форма Р-1</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                            <span>ИИН/БИН</span>
+                            <span style={{ border: '1px solid #333', padding: '2px 12px', minWidth: 130, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{data.issuer?.bin || ''}</span>
                         </div>
                     </div>
 
-                    <div style={{ fontSize: 12.5, color: 'var(--lc-text-sec)', margin: '0 0 12px' }}>
-                        Основание: заявка № {data.order.orderNumber}{data.order.route ? `, маршрут: ${data.order.route}` : ''}{data.order.cargoDescription ? `, груз: ${data.order.cargoDescription}` : ''}.
+                    {/* Заказчик / Исполнитель */}
+                    <div style={{ marginBottom: 6 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                            <span style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>Заказчик</span>
+                            <span style={{ flex: 1, borderBottom: '1px solid #333', fontSize: 12.5, paddingBottom: 1 }}>{partyLine(data.recipient)}</span>
+                        </div>
+                        <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--lc-text-ter)', fontStyle: 'italic' }}>полное наименование, адрес, данные о средствах связи</div>
+                    </div>
+                    <div style={{ marginBottom: 14 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                            <span style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>Исполнитель</span>
+                            <span style={{ flex: 1, borderBottom: '1px solid #333', fontSize: 12.5, paddingBottom: 1 }}>{partyLine(data.issuer)}</span>
+                        </div>
+                        <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--lc-text-ter)', fontStyle: 'italic' }}>полное наименование, адрес, данные о средствах связи</div>
                     </div>
 
-                    <table className="act-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    {/* Договор / номер / дата */}
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 14, fontSize: 11.5 }}>
+                        <tbody>
+                            <tr>
+                                <td style={{ border: '1px solid #333', padding: '4px 8px', width: '60%' }}>
+                                    Договор (контракт){data.order.orderNumber ? ` — основание: заявка № ${data.order.orderNumber}` : ''}
+                                </td>
+                                <td style={{ border: '1px solid #333', padding: '4px 8px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: 9.5, color: 'var(--lc-text-ter)' }}>Номер документа</div>
+                                    <div style={{ fontWeight: 600 }}>{data.actNumber}</div>
+                                </td>
+                                <td style={{ border: '1px solid #333', padding: '4px 8px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: 9.5, color: 'var(--lc-text-ter)' }}>Дата составления</div>
+                                    <div style={{ fontWeight: 600 }}>{dayjs(data.actDate).format('DD.MM.YYYY')}</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h1 style={{ textAlign: 'center', fontSize: 15, fontWeight: 700, margin: '0 0 14px' }}>АКТ ВЫПОЛНЕННЫХ РАБОТ (ОКАЗАННЫХ УСЛУГ)</h1>
+
+                    {/* Основная таблица формы Р-1 */}
+                    <table className="act-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
                         <thead>
                             <tr>
-                                <th style={{ width: 36, textAlign: 'center' }}>№</th>
-                                <th style={{ textAlign: 'left' }}>Наименование работ, услуг</th>
-                                <th style={{ width: 70, textAlign: 'center' }}>Кол-во</th>
-                                <th style={{ width: 70, textAlign: 'center' }}>Ед.</th>
-                                <th style={{ width: 130, textAlign: 'right' }}>Цена, ₸</th>
-                                <th style={{ width: 130, textAlign: 'right' }}>Сумма, ₸</th>
+                                <th style={{ width: 34 }}>Номер по порядку</th>
+                                <th>Наименование работ (услуг)</th>
+                                <th style={{ width: 82 }}>Дата выполнения работ (оказания услуг)</th>
+                                <th style={{ width: 90 }}>Сведения об отчёте (при наличии)</th>
+                                <th style={{ width: 60 }}>Единица измерения</th>
+                                <th style={{ width: 58 }}>Количество</th>
+                                <th style={{ width: 90 }}>Цена за единицу</th>
+                                <th style={{ width: 100 }}>Стоимость</th>
+                            </tr>
+                            <tr className="act-numrow">
+                                <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td style={{ textAlign: 'center' }}>1</td>
-                                <td>{serviceName || data.service.name}</td>
-                                <td style={{ textAlign: 'center' }}>1</td>
+                                <td>{serviceName || data.service.name}{data.order.route ? ` (${data.order.route})` : ''}</td>
+                                <td style={{ textAlign: 'center' }}>{workDate}</td>
+                                <td style={{ textAlign: 'center' }}>—</td>
                                 <td style={{ textAlign: 'center' }}>{data.service.unit}</td>
-                                <td style={{ textAlign: 'right' }}>{fmt(data.amount.net)}</td>
-                                <td style={{ textAlign: 'right' }}>{fmt(data.amount.net)}</td>
+                                <td style={{ textAlign: 'center' }}>1</td>
+                                <td style={{ textAlign: 'right' }}>{fmt(data.amount.gross)}</td>
+                                <td style={{ textAlign: 'right' }}>{fmt(data.amount.gross)}</td>
+                            </tr>
+                            <tr className="act-total">
+                                <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Итого</td>
+                                <td style={{ textAlign: 'center' }}>х</td>
+                                <td style={{ textAlign: 'center' }}>1</td>
+                                <td style={{ textAlign: 'center' }}>х</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(data.amount.gross)}</td>
                             </tr>
                         </tbody>
                     </table>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                        <table style={{ fontSize: 13, borderCollapse: 'collapse' }}>
-                            <tbody>
-                                <tr>
-                                    <td style={{ padding: '3px 16px 3px 0', color: 'var(--lc-text-sec)' }}>Итого без НДС:</td>
-                                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(data.amount.net)} ₸</td>
-                                </tr>
-                                <tr>
-                                    <td style={{ padding: '3px 16px 3px 0', color: 'var(--lc-text-sec)' }}>
-                                        НДС {data.amount.hasVat ? `${data.amount.vatRate}%` : '(не облагается)'}:
-                                    </td>
-                                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(data.amount.vat)} ₸</td>
-                                </tr>
-                                <tr>
-                                    <td style={{ padding: '6px 16px 3px 0', fontWeight: 700, borderTop: '1px solid #333' }}>Итого к оплате:</td>
-                                    <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', borderTop: '1px solid #333' }}>{fmt(data.amount.gross)} ₸</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <p style={{ fontSize: 11.5, margin: '10px 0 0' }}>
+                        Всего оказано услуг на сумму: <strong>{fmt(data.amount.gross)} ₸</strong>
+                        {data.amount.hasVat
+                            ? <>, в том числе НДС {data.amount.vatRate}% — {fmt(data.amount.vat)} ₸</>
+                            : <> (без НДС)</>}.
+                    </p>
+
+                    <div style={{ fontSize: 11, marginTop: 12 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                            <span style={{ whiteSpace: 'nowrap' }}>Сведения об использовании запасов, полученных от заказчика:</span>
+                            <span style={{ flex: 1, borderBottom: '1px solid #333' }}>&nbsp;</span>
+                        </div>
+                        <div style={{ textAlign: 'right', fontSize: 9.5, color: 'var(--lc-text-ter)', fontStyle: 'italic', marginRight: 90 }}>наименование, количество, стоимость</div>
                     </div>
 
-                    <p style={{ fontSize: 12.5, margin: '18px 0 0' }}>
-                        Всего оказано услуг на сумму <strong>{fmt(data.amount.gross)} ₸</strong>
-                        {data.amount.hasVat ? <>, в том числе НДС {data.amount.vatRate}% — {fmt(data.amount.vat)} ₸</> : ' (без НДС)'}.
-                    </p>
-                    <p style={{ fontSize: 12, color: 'var(--lc-text-ter)', margin: '4px 0 0' }}>
-                        Вышеперечисленные услуги выполнены полностью и в срок. Заказчик претензий по объёму, качеству и срокам оказания услуг не имеет.
-                    </p>
+                    <div style={{ fontSize: 11, marginTop: 8, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                        <span>Приложение: Перечень документации (при наличии) на</span>
+                        <span style={{ borderBottom: '1px solid #333', minWidth: 40, textAlign: 'center' }}>&nbsp;</span>
+                        <span>страниц</span>
+                    </div>
 
-                    <div className="act-signs" style={{ display: 'flex', justifyContent: 'space-between', gap: 40, marginTop: 44 }}>
+                    {/* Подписи */}
+                    <div className="act-signs" style={{ display: 'flex', justifyContent: 'space-between', gap: 40, marginTop: 30 }}>
                         <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, fontSize: 12.5 }}>Исполнитель</div>
-                            <div style={{ marginTop: 30, borderTop: '1px solid #333', paddingTop: 4, fontSize: 11, color: 'var(--lc-text-ter)' }}>
-                                {data.issuer?.directorName || 'подпись'} · М.П.
+                            <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 6 }}>Сдал (Исполнитель)</div>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', fontSize: 11 }}>
+                                <span style={{ flex: 1, borderBottom: '1px solid #333', textAlign: 'center', paddingBottom: 1 }}>&nbsp;</span>
+                                <span>/</span>
+                                <span style={{ flex: 1, borderBottom: '1px solid #333' }}>&nbsp;</span>
+                                <span>/</span>
+                                <span style={{ flex: 1.4, borderBottom: '1px solid #333', textAlign: 'center', paddingBottom: 1 }}>{data.issuer?.directorName || ''}</span>
                             </div>
+                            <div style={{ display: 'flex', gap: 6, fontSize: 8.5, color: 'var(--lc-text-ter)', marginTop: 2 }}>
+                                <span style={{ flex: 1, textAlign: 'center' }}>должность</span><span>&nbsp;</span>
+                                <span style={{ flex: 1, textAlign: 'center' }}>подпись</span><span>&nbsp;</span>
+                                <span style={{ flex: 1.4, textAlign: 'center' }}>расшифровка подписи</span>
+                            </div>
+                            <div style={{ marginTop: 14, fontSize: 11 }}>М.П.</div>
                         </div>
                         <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, fontSize: 12.5 }}>Заказчик</div>
-                            <div style={{ marginTop: 30, borderTop: '1px solid #333', paddingTop: 4, fontSize: 11, color: 'var(--lc-text-ter)' }}>
-                                {data.recipient?.directorName || 'подпись'} · М.П.
+                            <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 6 }}>Принял (Заказчик)</div>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', fontSize: 11 }}>
+                                <span style={{ flex: 1, borderBottom: '1px solid #333', textAlign: 'center', paddingBottom: 1 }}>&nbsp;</span>
+                                <span>/</span>
+                                <span style={{ flex: 1, borderBottom: '1px solid #333' }}>&nbsp;</span>
+                                <span>/</span>
+                                <span style={{ flex: 1.4, borderBottom: '1px solid #333', textAlign: 'center', paddingBottom: 1 }}>{data.recipient?.directorName || ''}</span>
                             </div>
+                            <div style={{ display: 'flex', gap: 6, fontSize: 8.5, color: 'var(--lc-text-ter)', marginTop: 2 }}>
+                                <span style={{ flex: 1, textAlign: 'center' }}>должность</span><span>&nbsp;</span>
+                                <span style={{ flex: 1, textAlign: 'center' }}>подпись</span><span>&nbsp;</span>
+                                <span style={{ flex: 1.4, textAlign: 'center' }}>расшифровка подписи</span>
+                            </div>
+                            <div style={{ marginTop: 14, fontSize: 11 }}>М.П.</div>
                         </div>
+                    </div>
+
+                    <div style={{ fontSize: 11, marginTop: 18, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                        <span>Дата подписания (принятия) работ (услуг):</span>
+                        <span style={{ borderBottom: '1px solid #333', minWidth: 120 }}>&nbsp;</span>
                     </div>
                 </div>
             )}
 
             <style jsx global>{`
-                .act-table th {
-                    border: 1px solid #333;
-                    padding: 6px 8px;
-                    font-size: 11px;
-                    background: var(--lc-hover);
-                }
-                .act-table td {
-                    border: 1px solid #333;
-                    padding: 6px 8px;
-                    font-variant-numeric: tabular-nums;
-                }
+                .act-table th, .act-table td { border: 1px solid #333; padding: 4px 6px; vertical-align: middle; }
+                .act-table th { background: var(--lc-hover); font-weight: 600; text-align: center; line-height: 1.2; }
+                .act-table tr.act-numrow th { font-weight: 400; font-style: italic; }
+                .act-table td { font-variant-numeric: tabular-nums; }
                 @media print {
                     .act-controls, .lc-app-nav, nav, header, .ant-layout-sider, .ant-layout-header { display: none !important; }
                     .act-doc { box-shadow: none !important; border: none !important; padding: 0 !important; }
