@@ -1458,10 +1458,11 @@ export default function OrderDetailPage() {
                                                             </Form.Item>
                                                         </Col>
                                                         <Col span={6}>
-                                                            <Form.Item name="vatRate" label="Ставка" initialValue={12}>
+                                                            <Form.Item name="vatRate" label="Ставка" initialValue={16}>
                                                                 <Select size="large" disabled={!canEditFinance}>
                                                                     <Select.Option value={0}>0%</Select.Option>
                                                                     <Select.Option value={12}>12%</Select.Option>
+                                                                    <Select.Option value={16}>16%</Select.Option>
                                                                 </Select>
                                                             </Form.Item>
                                                         </Col>
@@ -1484,10 +1485,11 @@ export default function OrderDetailPage() {
                                                             </Form.Item>
                                                         </Col>
                                                         <Col span={6}>
-                                                            <Form.Item name="executorVatRate" label="Ставка" initialValue={12}>
+                                                            <Form.Item name="executorVatRate" label="Ставка" initialValue={16}>
                                                                 <Select size="large" disabled={!canEditFinance}>
                                                                     <Select.Option value={0}>0%</Select.Option>
                                                                     <Select.Option value={12}>12%</Select.Option>
+                                                                    <Select.Option value={16}>16%</Select.Option>
                                                                 </Select>
                                                             </Form.Item>
                                                         </Col>

@@ -1000,7 +1000,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="hasVat" label="НДС заказчика" initialValue={false}>
-                                <Select size="large" onChange={(val: boolean) => { form.setFieldsValue({ vatRate: val ? 12 : 0 }); }}>
+                                <Select size="large" onChange={(val: boolean) => { form.setFieldsValue({ vatRate: val ? 16 : 0 }); }}>
                                     <Select.Option value={false}>Без НДС</Select.Option>
                                     <Select.Option value={true}>С НДС</Select.Option>
                                 </Select>
@@ -1011,6 +1011,7 @@ export default function CreateOrderPage() {
                                 <Select size="large">
                                     <Select.Option value={0}>0%</Select.Option>
                                     <Select.Option value={12}>12%</Select.Option>
+                                    <Select.Option value={16}>16%</Select.Option>
                                 </Select>
                             </Form.Item>
                         </Col>
@@ -1028,7 +1029,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="executorHasVat" label="НДС перевозчика" initialValue={false}>
-                                <Select size="large" onChange={(val: boolean) => { form.setFieldsValue({ executorVatRate: val ? 12 : 0 }); }}>
+                                <Select size="large" onChange={(val: boolean) => { form.setFieldsValue({ executorVatRate: val ? 16 : 0 }); }}>
                                     <Select.Option value={false}>Без НДС</Select.Option>
                                     <Select.Option value={true}>С НДС</Select.Option>
                                 </Select>
@@ -1039,6 +1040,7 @@ export default function CreateOrderPage() {
                                 <Select size="large">
                                     <Select.Option value={0}>0%</Select.Option>
                                     <Select.Option value={12}>12%</Select.Option>
+                                    <Select.Option value={16}>16%</Select.Option>
                                 </Select>
                             </Form.Item>
                         </Col>
