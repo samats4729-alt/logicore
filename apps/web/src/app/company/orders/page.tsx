@@ -1836,7 +1836,9 @@ export default function CompanyOrdersPage() {
                             {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
                                 <Popconfirm
                                     title="Отменить заявку?"
-                                    description="Вы уверены, что хотите отменить эту заявку?"
+                                    description={((selectedOrder as any).isCustomerPaid || (selectedOrder as any).isExecutorPaid)
+                                        ? 'По заявке есть проведённые оплаты. При отмене они останутся в учёте — при необходимости оформите возврат или спишите как убыток.'
+                                        : 'Вы уверены, что хотите отменить эту заявку?'}
                                     onConfirm={async () => {
                                         try {
                                             await api.put(`/orders/${selectedOrder.id}/status`, { status: 'CANCELLED', comment: 'Отменено пользователем' });

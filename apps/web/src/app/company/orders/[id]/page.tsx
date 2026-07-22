@@ -2092,6 +2092,18 @@ export default function OrderDetailPage() {
                             />
                         ) : null;
                     })()}
+                    {selectedStatusInModal === 'CANCELLED' && payments.length > 0 && (() => {
+                        const paidTotal = payments.reduce((s: number, p: any) => s + (p.amount || 0), 0);
+                        return (
+                            <Alert
+                                type="warning"
+                                showIcon
+                                style={{ marginBottom: 16 }}
+                                message={`По заявке проведены оплаты на ${paidTotal.toLocaleString('ru-RU')} ₸`}
+                                description="При отмене они останутся в учёте (в «Все операции» и ДДС) — деньги не пропадут. Если сумму вернут — оформите возврат (входящий платёж) по контрагенту; если нет — спишите как убыток в «Расходах»."
+                            />
+                        );
+                    })()}
                     <Form.Item name="comment" label="Комментарий">
                         <TextArea rows={3} placeholder="Причина..." />
                     </Form.Item>
