@@ -283,8 +283,12 @@ export class AccountingService {
         return this.settingsService.getFinanceAccounts(companyId);
     }
 
-    async updateFinanceAccount(companyId: string, id: string, data: { name: string }) {
+    async updateFinanceAccount(companyId: string, id: string, data: { name?: string; openingBalance?: number; openingDate?: string | null }) {
         return this.settingsService.updateFinanceAccount(companyId, id, data);
+    }
+
+    async getAccountBalances(companyId: string) {
+        return this.settingsService.getAccountBalances(companyId);
     }
 
     async getFinanceCategories(companyId: string) {

@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, Select, Space, App, Tag, theme, Spin } from 'antd';
+import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, InputNumber, DatePicker, Select, Space, App, Tag, theme, Spin } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import dayjs from 'dayjs';
 
 const { Text } = Typography;
 
@@ -15,6 +16,8 @@ interface FinanceAccount {
     kind: 'CASH' | 'BANK';
     isDefault: boolean;
     isActive: boolean;
+    openingBalance?: number;
+    openingDate?: string | null;
 }
 
 type CostType = 'PER_ORDER' | 'PER_VEHICLE' | 'GENERAL';
@@ -89,20 +92,28 @@ export default function FinanceSettingsPage() {
     const handleEditAccount = (record: FinanceAccount) => {
         if (!canEditFinance) return;
         setEditingAccount(record);
-        accountForm.setFieldsValue({ name: record.name });
+        accountForm.setFieldsValue({
+            name: record.name,
+            openingBalance: record.openingBalance || 0,
+            openingDate: record.openingDate ? dayjs(record.openingDate) : null,
+        });
         setAccountModalOpen(true);
     };
 
-    const handleSaveAccount = async (values: { name: string }) => {
+    const handleSaveAccount = async (values: { name: string; openingBalance?: number; openingDate?: dayjs.Dayjs | null }) => {
         if (!editingAccount) return;
         setSaving(true);
         try {
-            await api.put(`/accounting/finance-accounts/${editingAccount.id}`, values);
-            message.success('Счет переименован');
+            await api.put(`/accounting/finance-accounts/${editingAccount.id}`, {
+                name: values.name,
+                openingBalance: values.openingBalance ?? 0,
+                openingDate: values.openingDate ? values.openingDate.toISOString() : null,
+            });
+            message.success('Счёт сохранён');
             setAccountModalOpen(false);
             fetchSettings();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка переименования');
+            message.error(err.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setSaving(false);
         }
@@ -349,6 +360,13 @@ export default function FinanceSettingsPage() {
                 <Form form={accountForm} layout="vertical" onFinish={handleSaveAccount}>
                     <Form.Item name="name" label="Название" rules={[{ required: true, message: 'Укажите название' }]}>
                         <Input size="large" maxLength={60} />
+                    </Form.Item>
+                    <div style={{ fontWeight: 600, fontSize: 13, margin: '4px 0 10px', color: 'var(--lc-text-sec)' }}>Ввод остатка</div>
+                    <Form.Item name="openingBalance" label="Начальный остаток (₸)" extra="Сколько денег уже есть на этом счёте/в кассе на старте">
+                        <InputNumber size="large" style={{ width: '100%' }} min={0} placeholder="0" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
+                    </Form.Item>
+                    <Form.Item name="openingDate" label="На дату" extra="Движения с этой даты прибавляются к остатку">
+                        <DatePicker size="large" style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="Дата начала учёта" />
                     </Form.Item>
                 </Form>
             </Modal>

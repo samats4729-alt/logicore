@@ -119,7 +119,7 @@ export class FinancialSettingsService {
         });
     }
 
-    async updateFinanceAccount(companyId: string, id: string, data: { name: string }) {
+    async updateFinanceAccount(companyId: string, id: string, data: { name?: string; openingBalance?: number; openingDate?: string | null }) {
         await this.ensureCompanyFinanceSettings(companyId);
         const account = await this.prisma.financeAccount.findFirst({
             where: { id, companyId },
@@ -128,8 +128,73 @@ export class FinancialSettingsService {
 
         return this.prisma.financeAccount.update({
             where: { id },
-            data: { name: data.name },
+            data: {
+                ...(data.name !== undefined && { name: data.name }),
+                ...(data.openingBalance !== undefined && { openingBalance: data.openingBalance || 0 }),
+                ...(data.openingDate !== undefined && { openingDate: data.openingDate ? new Date(data.openingDate) : null }),
+            },
         });
+    }
+
+    /** Остатки по кассам и счетам: начальный остаток + приход − расход = текущий остаток */
+    async getAccountBalances(companyId: string) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const accounts = await this.prisma.financeAccount.findMany({
+            where: { companyId, isActive: true },
+            orderBy: { kind: 'asc' },
+        });
+
+        const rows = await Promise.all(accounts.map(async (acc) => {
+            // Движения на этом счёте с даты ввода остатка (если задана)
+            const dateFilter = acc.openingDate ? { date: { gte: acc.openingDate } } : {};
+
+            const [payAgg, incAgg, expAgg] = await Promise.all([
+                this.prisma.payment.findMany({
+                    where: { companyId, accountId: acc.id, isDeleted: false, ...dateFilter },
+                    select: { direction: true, amount: true },
+                }),
+                this.prisma.income.aggregate({
+                    where: { companyId, accountId: acc.id, isDeleted: false, ...dateFilter },
+                    _sum: { amount: true },
+                }),
+                this.prisma.expense.aggregate({
+                    where: { companyId, accountId: acc.id, isDeleted: false, ...dateFilter },
+                    _sum: { amount: true },
+                }),
+            ]);
+
+            const payIn = payAgg.filter(p => p.direction === 'IN').reduce((s, p) => s + p.amount, 0);
+            const payOut = payAgg.filter(p => p.direction === 'OUT').reduce((s, p) => s + p.amount, 0);
+            const incomeSum = incAgg._sum.amount || 0;
+            const expenseSum = expAgg._sum.amount || 0;
+
+            const totalIn = payIn + incomeSum;
+            const totalOut = payOut + expenseSum;
+            const balance = (acc.openingBalance || 0) + totalIn - totalOut;
+
+            return {
+                id: acc.id,
+                name: acc.name,
+                kind: acc.kind,
+                openingBalance: acc.openingBalance || 0,
+                openingDate: acc.openingDate,
+                totalIn,
+                totalOut,
+                balance,
+            };
+        }));
+
+        const totals = rows.reduce(
+            (t, r) => ({
+                openingBalance: t.openingBalance + r.openingBalance,
+                totalIn: t.totalIn + r.totalIn,
+                totalOut: t.totalOut + r.totalOut,
+                balance: t.balance + r.balance,
+            }),
+            { openingBalance: 0, totalIn: 0, totalOut: 0, balance: 0 },
+        );
+
+        return { accounts: rows, totals };
     }
 
     async getFinanceCategories(companyId: string) {

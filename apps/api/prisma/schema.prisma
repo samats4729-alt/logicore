@@ -926,14 +926,16 @@ model FinanceAccount {
   id          String      @id @default(cuid())
   companyId   String
   company     Company     @relation("CompanyFinanceAccounts", fields: [companyId], references: [id], onDelete: Cascade)
-  name        String
-  kind        AccountKind
-  isDefault   Boolean     @default(false)
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  payments    Payment[]   @relation("AccountPayments")
-  incomes     Income[]    @relation("AccountIncomes")
+  name           String
+  kind           AccountKind
+  isDefault      Boolean     @default(false)
+  isActive       Boolean     @default(true)
+  openingBalance Float       @default(0)  // Начальный остаток (ввод остатков)
+  openingDate    DateTime?                // Дата, на которую введён начальный остаток
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  payments       Payment[]   @relation("AccountPayments")
+  incomes        Income[]    @relation("AccountIncomes")
   expenses    Expense[]   @relation("AccountExpenses")
 
   @@unique([companyId, name, kind])

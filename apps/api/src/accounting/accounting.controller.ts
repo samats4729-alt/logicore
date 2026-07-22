@@ -362,12 +362,18 @@ export class AccountingController {
         return this.accountingService.getFinanceAccounts(req.user.companyId);
     }
 
+    @Get('account-balances')
+    @Roles(...FINANCE_VIEW_ROLES)
+    async getAccountBalances(@Request() req: any) {
+        return this.accountingService.getAccountBalances(req.user.companyId);
+    }
+
     @Put('finance-accounts/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async updateFinanceAccount(
         @Request() req: any,
         @Param('id') id: string,
-        @Body() body: { name: string },
+        @Body() body: { name?: string; openingBalance?: number; openingDate?: string | null },
     ) {
         return this.accountingService.updateFinanceAccount(req.user.companyId, id, body);
     }
