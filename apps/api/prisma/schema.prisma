@@ -437,6 +437,10 @@ model Order {
   cargoDescription String?
   cargoWeight     Float?      // кг
   cargoVolume     Float?      // м³
+  cargoLength     Float?      // Длина груза, м
+  cargoWidth      Float?      // Ширина груза, м
+  cargoHeight     Float?      // Высота груза, м
+  palletCount     Int?        // Количество палет
   cargoType       String?     // Тип транспорта (Тент, Реф и т.д.)
   natureOfCargo   String?     // Характер груза (Сыпучие, Твердые и т.д.)
   requirements    String?     // Особые требования

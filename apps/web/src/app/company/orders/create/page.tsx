@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import {
     Typography, Button, Form, Input, InputNumber, Select, DatePicker,
-    message, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete
+    message, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
@@ -166,6 +166,9 @@ export default function CreateOrderPage() {
     const customerPriceLabel = (isMeCustomer && isMeCarrier) ? "Ставка (₸)" : "Ставка от заказчика (₸)";
     const driverCostLabel = isMarketplace ? "Ставка для биржи (₸)" : "Ставка перевозчику (₸)";
 
+    // Габариты груза (по галочке)
+    const [showDims, setShowDims] = useState(false);
+
     // Tariff
     const [appliedTariff, setAppliedTariff] = useState<any>(null);
 
@@ -243,11 +246,18 @@ export default function CreateOrderPage() {
                 const o = orderRes.data;
                 const myIds = new Set<string>((myRes.data || []).map((c: any) => c.id));
 
+                if (o.cargoLength != null || o.cargoWidth != null || o.cargoHeight != null) {
+                    setShowDims(true);
+                }
                 form.setFieldsValue({
                     natureOfCargo: o.natureOfCargo || undefined,
                     cargoDescription: o.cargoDescription || undefined,
                     cargoWeight: o.cargoWeight ?? undefined,
                     cargoVolume: o.cargoVolume ?? undefined,
+                    cargoLength: o.cargoLength ?? undefined,
+                    cargoWidth: o.cargoWidth ?? undefined,
+                    cargoHeight: o.cargoHeight ?? undefined,
+                    palletCount: o.palletCount ?? undefined,
                     cargoType: o.cargoType || undefined,
                     requirements: o.requirements || undefined,
                     customerPrice: o.customerPrice ?? undefined,
@@ -585,6 +595,10 @@ export default function CreateOrderPage() {
                 natureOfCargo: values.natureOfCargo,
                 cargoWeight: values.cargoWeight,
                 cargoVolume: values.cargoVolume,
+                cargoLength: showDims ? values.cargoLength : undefined,
+                cargoWidth: showDims ? values.cargoWidth : undefined,
+                cargoHeight: showDims ? values.cargoHeight : undefined,
+                palletCount: values.palletCount,
                 cargoType: values.cargoType,
                 requirements: values.requirements,
                 customerPrice: finalCustomerPrice,
@@ -817,9 +831,42 @@ export default function CreateOrderPage() {
                         <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
                     </Form.Item>
                 </Col>
+                <Col xs={12} md={8}>
+                    <Form.Item name="palletCount" label="Количество палет">
+                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                    </Form.Item>
+                </Col>
             </Row>
-            <Form.Item name="requirements" label="Доп. требования">
-                <TextArea rows={2} placeholder="Ремни, коники, гидроборт..." />
+
+            <Checkbox
+                checked={showDims}
+                onChange={e => setShowDims(e.target.checked)}
+                style={{ marginBottom: showDims ? 12 : 16 }}
+            >
+                Указать габариты груза (Длина × Ширина × Высота, м)
+            </Checkbox>
+            {showDims && (
+                <Row gutter={16}>
+                    <Col xs={8}>
+                        <Form.Item name="cargoLength" label="Длина, м">
+                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                        </Form.Item>
+                    </Col>
+                    <Col xs={8}>
+                        <Form.Item name="cargoWidth" label="Ширина, м">
+                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                        </Form.Item>
+                    </Col>
+                    <Col xs={8}>
+                        <Form.Item name="cargoHeight" label="Высота, м">
+                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                        </Form.Item>
+                    </Col>
+                </Row>
+            )}
+
+            <Form.Item name="requirements" label="Дополнительная информация">
+                <TextArea rows={2} placeholder="Ремни, коники, гидроборт, особые пожелания..." />
             </Form.Item>
         </Card>
     );

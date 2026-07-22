@@ -130,6 +130,10 @@ export class OrdersService implements OnModuleInit {
         cargoDescription?: string;
         cargoWeight?: number;
         cargoVolume?: number;
+        cargoLength?: number;
+        cargoWidth?: number;
+        cargoHeight?: number;
+        palletCount?: number;
         cargoType?: string;
         requirements?: string;
         customerPrice?: number;
@@ -225,6 +229,10 @@ export class OrdersService implements OnModuleInit {
                 cargoDescription: data.cargoDescription || '',
                 cargoWeight: data.cargoWeight,
                 cargoVolume: data.cargoVolume,
+                cargoLength: data.cargoLength,
+                cargoWidth: data.cargoWidth,
+                cargoHeight: data.cargoHeight,
+                palletCount: data.palletCount,
                 cargoType: data.cargoType,
                 requirements: data.requirements,
                 customerPrice: data.customerPrice,
@@ -810,6 +818,10 @@ export class OrdersService implements OnModuleInit {
         cargoDescription?: string;
         cargoWeight?: number;
         cargoVolume?: number;
+        cargoLength?: number;
+        cargoWidth?: number;
+        cargoHeight?: number;
+        palletCount?: number;
         cargoType?: string;
         requirements?: string;
         customerPrice?: number;

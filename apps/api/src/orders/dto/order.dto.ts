@@ -58,6 +58,26 @@ export class CreateOrderDto {
     @IsOptional()
     cargoVolume?: number;
 
+    @ApiProperty({ required: false, example: 1.2, description: 'Длина груза, м' })
+    @IsNumber()
+    @IsOptional()
+    cargoLength?: number;
+
+    @ApiProperty({ required: false, example: 0.8, description: 'Ширина груза, м' })
+    @IsNumber()
+    @IsOptional()
+    cargoWidth?: number;
+
+    @ApiProperty({ required: false, example: 1.5, description: 'Высота груза, м' })
+    @IsNumber()
+    @IsOptional()
+    cargoHeight?: number;
+
+    @ApiProperty({ required: false, example: 12, description: 'Количество палет' })
+    @IsNumber()
+    @IsOptional()
+    palletCount?: number;
+
     @ApiProperty({ required: false, example: 'Строительные материалы' })
     @IsString()
     @IsOptional()

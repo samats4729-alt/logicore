@@ -690,6 +690,10 @@ export default function OrderDetailPage() {
             cargoDescription: order.cargoDescription,
             cargoWeight: order.cargoWeight,
             cargoVolume: order.cargoVolume,
+            cargoLength: order.cargoLength,
+            cargoWidth: order.cargoWidth,
+            cargoHeight: order.cargoHeight,
+            palletCount: order.palletCount,
             cargoType: order.cargoType,
             natureOfCargo: order.natureOfCargo,
             requirements: order.requirements,
@@ -782,6 +786,10 @@ export default function OrderDetailPage() {
                 natureOfCargo: values.natureOfCargo,
                 cargoWeight: values.cargoWeight,
                 cargoVolume: values.cargoVolume,
+                cargoLength: values.cargoLength,
+                cargoWidth: values.cargoWidth,
+                cargoHeight: values.cargoHeight,
+                palletCount: values.palletCount,
                 cargoType: values.cargoType,
                 requirements: values.requirements,
                 customerPrice: finalCustomerPrice,
@@ -1342,6 +1350,28 @@ export default function OrderDetailPage() {
                                                         </Form.Item>
                                                     </Col>
                                                 </Row>
+                                                <Row gutter={12}>
+                                                    <Col span={6}>
+                                                        <Form.Item name="cargoLength" label="Длина (м)">
+                                                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                                                        </Form.Item>
+                                                    </Col>
+                                                    <Col span={6}>
+                                                        <Form.Item name="cargoWidth" label="Ширина (м)">
+                                                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                                                        </Form.Item>
+                                                    </Col>
+                                                    <Col span={6}>
+                                                        <Form.Item name="cargoHeight" label="Высота (м)">
+                                                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                                                        </Form.Item>
+                                                    </Col>
+                                                    <Col span={6}>
+                                                        <Form.Item name="palletCount" label="Палет">
+                                                            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                                                        </Form.Item>
+                                                    </Col>
+                                                </Row>
                                                 <Form.Item name="requirements" label="Доп. требования">
                                                     <TextArea rows={2} placeholder="Ремни, коники, гидроборт..." />
                                                 </Form.Item>
@@ -1615,6 +1645,14 @@ export default function OrderDetailPage() {
                                                 <Descriptions.Item label="Характер груза">{order.natureOfCargo || '—'}</Descriptions.Item>
                                                 <Descriptions.Item label="Вес">{order.cargoWeight ? `${fmt(order.cargoWeight)} кг` : '—'}</Descriptions.Item>
                                                 <Descriptions.Item label="Объем">{order.cargoVolume ? `${order.cargoVolume} м³` : '—'}</Descriptions.Item>
+                                                {(order.cargoLength || order.cargoWidth || order.cargoHeight) && (
+                                                    <Descriptions.Item label="Габариты (Д×Ш×В)">
+                                                        {`${order.cargoLength ?? '—'} × ${order.cargoWidth ?? '—'} × ${order.cargoHeight ?? '—'} м`}
+                                                    </Descriptions.Item>
+                                                )}
+                                                {order.palletCount ? (
+                                                    <Descriptions.Item label="Палет">{order.palletCount}</Descriptions.Item>
+                                                ) : null}
                                                 <Descriptions.Item label="Тип кузова">{order.cargoType || '—'}</Descriptions.Item>
                                                 <Descriptions.Item label="Доп. требования">{order.requirements || '—'}</Descriptions.Item>
                                             </Descriptions>
