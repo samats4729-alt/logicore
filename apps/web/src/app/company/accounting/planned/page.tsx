@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Typography, Tag, Segmented, message } from 'antd';
-import { ArrowLeftOutlined, ArrowDownOutlined, ArrowUpOutlined, CalendarOutlined } from '@ant-design/icons';
+import { Table, Button, Typography, Tag, Segmented, Space, message } from 'antd';
+import { ArrowLeftOutlined, ArrowDownOutlined, ArrowUpOutlined, CalendarOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { downloadCsv } from '@/lib/exportCsv';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -135,15 +136,26 @@ export default function PlannedPaymentsPage() {
             </div>
 
             <div className="lc-card" style={{ padding: 16, marginBottom: 12 }}>
-                <Segmented
-                    value={typeFilter}
-                    onChange={(v) => setTypeFilter(v as 'all' | 'IN' | 'OUT')}
-                    options={[
-                        { label: 'Все', value: 'all' },
-                        { label: 'Нам должны', value: 'IN' },
-                        { label: 'Мы должны', value: 'OUT' },
-                    ]}
-                />
+                <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Segmented
+                        value={typeFilter}
+                        onChange={(v) => setTypeFilter(v as 'all' | 'IN' | 'OUT')}
+                        options={[
+                            { label: 'Все', value: 'all' },
+                            { label: 'Нам должны', value: 'IN' },
+                            { label: 'Мы должны', value: 'OUT' },
+                        ]}
+                    />
+                    <Button icon={<DownloadOutlined />} disabled={filtered.length === 0} onClick={() => downloadCsv(
+                        `Планируемые_платежи_${dayjs().format('YYYY-MM-DD')}`,
+                        ['Срок оплаты', 'Тип', 'Заявка', 'Контрагент', 'Сумма'],
+                        filtered.map(r => [
+                            r.dueDate ? dayjs(r.dueDate).format('DD.MM.YYYY') : 'не указана',
+                            r.direction === 'IN' ? 'Нам должны' : 'Мы должны',
+                            r.orderNumber, r.party, r.amount,
+                        ]),
+                    )}>Экспорт</Button>
+                </Space>
             </div>
 
             <div className="lc-card" style={{ padding: 0 }}>

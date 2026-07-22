@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Table, Button, DatePicker, Tag, App } from 'antd';
-import { ArrowLeftOutlined, CalendarOutlined, WalletOutlined, BarChartOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, CalendarOutlined, WalletOutlined, BarChartOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { downloadCsv } from '@/lib/exportCsv';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
@@ -62,7 +63,7 @@ export default function CarrierProfitPage() {
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 12px' }}>
                         Сколько заработано на каждом перевозчике: выручка от заказчиков минус оплата перевозчику.
                     </p>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <CalendarOutlined style={{ color: 'var(--lc-text-ter)' }} />
                         <RangePicker value={dates} onChange={(v) => setDates(v as any)} format="DD.MM.YYYY" presets={[
                             { label: 'Текущий месяц', value: [dayjs().startOf('month'), dayjs().endOf('month')] },
@@ -70,6 +71,12 @@ export default function CarrierProfitPage() {
                             { label: 'Квартал', value: [dayjs().startOf('quarter'), dayjs().endOf('quarter')] },
                             { label: 'Год', value: [dayjs().startOf('year'), dayjs().endOf('year')] },
                         ]} />
+                        <Button icon={<DownloadOutlined />} disabled={rows.length === 0} onClick={() => downloadCsv(
+                            `Прибыль_по_перевозчику_${dayjs().format('YYYY-MM-DD')}`,
+                            ['Перевозчик', 'Заявок', 'Выручка', 'Оплата перевозчику', 'Маржа', 'Маржа %'],
+                            [...rows.map(r => [r.carrier, r.orders, r.revenue, r.cost, r.margin, r.marginPct]),
+                            ['ИТОГО', totals.orders, totals.revenue, totals.cost, totals.margin, totals.revenue > 0 ? Math.round((totals.margin / totals.revenue) * 100) : 0]],
+                        )}>Экспорт</Button>
                     </span>
                 </div>
                 <div className="lc2-metrics">

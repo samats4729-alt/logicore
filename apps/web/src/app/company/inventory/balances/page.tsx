@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { Table, Button, Select, Space, Tag, App } from 'antd';
-import { ArrowLeftOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DatabaseOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { downloadCsv } from '@/lib/exportCsv';
 import { useRouter } from 'next/navigation';
+import dayjs from 'dayjs';
 
 interface Row { warehouseId: string; warehouse: string; nomenclatureId: string; nomenclature: string; unit: string; quantity: number; avgCost: number; value: number }
 interface Wh { id: string; name: string }
@@ -64,9 +66,14 @@ export default function StockBalancesPage() {
             </div>
 
             <div className="lc-card" style={{ padding: 16, marginBottom: 12 }}>
-                <Space wrap>
+                <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
                     <Select placeholder="Все склады" value={whFilter} onChange={setWhFilter} allowClear style={{ width: 260 }}
                         options={warehouses.map(w => ({ value: w.id, label: w.name }))} />
+                    <Button icon={<DownloadOutlined />} disabled={rows.length === 0} onClick={() => downloadCsv(
+                        `Остатки_ТМЦ_${dayjs().format('YYYY-MM-DD')}`,
+                        ['Склад', 'Номенклатура', 'Остаток', 'Ед.', 'Ср. цена', 'Сумма'],
+                        [...rows.map(r => [r.warehouse, r.nomenclature, r.quantity, r.unit, r.avgCost, r.value]), ['', 'ИТОГО', '', '', '', totalValue]],
+                    )}>Экспорт</Button>
                 </Space>
             </div>
 
