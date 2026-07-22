@@ -64,7 +64,7 @@ export default function CreateOrderPage() {
     const [vehiclesLoading, setVehiclesLoading] = useState(false);
 
     // Parties
-    const [selectedCustomer, setSelectedCustomer] = useState<string>(MY_COMPANY_VALUE);
+    const [selectedCustomer, setSelectedCustomer] = useState<string>('');
     const [selectedCarrier, setSelectedCarrier] = useState<string>('');
 
     // Ответственный менеджер от нашей компании: SELF — я, NONE — не назначать, иначе userId
@@ -857,7 +857,7 @@ export default function CreateOrderPage() {
             <Row gutter={24}>
                 <Col xs={24} md={12}>
                     <div className="lc-wiz-field">
-                        <div className="lc-wiz-lbl">Кто заказчик?</div>
+                        <div className="lc-wiz-lbl">Заказчик</div>
                         <Select
                             placeholder="Выберите заказчика"
                             style={{ width: '100%' }}
@@ -896,7 +896,7 @@ export default function CreateOrderPage() {
                 </Col>
                 <Col xs={24} md={12}>
                     <div className="lc-wiz-field">
-                        <div className="lc-wiz-lbl">Кто перевозчик?</div>
+                        <div className="lc-wiz-lbl">Перевозчик</div>
                         <Select
                             placeholder="Выберите перевозчика"
                             style={{ width: '100%' }}
