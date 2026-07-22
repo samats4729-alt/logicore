@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Modal, Form, App } from 'antd';
+import { EnvironmentOutlined } from '@ant-design/icons';
 import LocationForm from './LocationForm';
 import { api, Location } from '@/lib/api';
 
@@ -47,7 +48,23 @@ export default function QuickCreateLocationModal({
 
     return (
         <Modal
-            title="Добавление нового адреса"
+            title={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{
+                        width: 36, height: 36, borderRadius: 10,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        background: '#eef4ff', color: '#1677ff', fontSize: 18,
+                    }}>
+                        <EnvironmentOutlined />
+                    </span>
+                    <div>
+                        <div style={{ fontWeight: 700, fontSize: 16 }}>Новый адрес</div>
+                        <div style={{ fontSize: 12, color: 'var(--lc-text-ter)', fontWeight: 400 }}>
+                            Страна, город и улица — карта сама найдёт точку
+                        </div>
+                    </div>
+                </div>
+            }
             open={open}
             onCancel={() => {
                 form.resetFields();
@@ -55,6 +72,8 @@ export default function QuickCreateLocationModal({
             }}
             onOk={() => form.submit()}
             confirmLoading={submitting}
+            okText="Сохранить адрес"
+            cancelText="Отмена"
             width={850}
             centered
             destroyOnClose

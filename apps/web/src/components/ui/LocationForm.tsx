@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-    Form, Input, InputNumber, Row, Col, Select, Typography, App, Button, FormInstance, Radio, Spin
+    Form, Input, Row, Col, Select, Typography, App, Button, FormInstance, Radio, Spin
 } from 'antd';
-import { EnvironmentOutlined } from '@ant-design/icons';
+import { EnvironmentOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api, Location, Country, City } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import AddressAutocomplete from './AddressAutocomplete';
@@ -260,6 +260,10 @@ export default function LocationForm({
 
     return (
         <Form form={form} layout="vertical" onFinish={(values) => {
+            if (!lat || !lng) {
+                message.error('Укажите адрес или точку на карте');
+                return;
+            }
             let finalCompanyId = values.companyId;
             if (customerCompany || carrierCompany) {
                 if (values.bindingType === 'customer') {
@@ -355,18 +359,23 @@ export default function LocationForm({
                         />
                     </Form.Item>
 
-                    <Row gutter={12}>
-                        <Col span={12}>
-                            <Form.Item name="latitude" label="Широта" rules={[{ required: true, message: 'Выберите адрес или укажите на карте' }]}>
-                                <InputNumber style={{ width: '100%' }} value={lat} readOnly placeholder="—" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="longitude" label="Долгота" rules={[{ required: true, message: '' }]}>
-                                <InputNumber style={{ width: '100%' }} value={lng} readOnly placeholder="—" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        marginBottom: 16,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        background: (lat && lng) ? '#ecfdf5' : 'var(--lc-card-2)',
+                        border: `1px solid ${(lat && lng) ? '#a7f3d0' : 'var(--lc-border)'}`,
+                        color: (lat && lng) ? '#059669' : 'var(--lc-text-ter)',
+                    }}>
+                        {(lat && lng)
+                            ? <><CheckCircleOutlined /> Точка на карте определена</>
+                            : <><EnvironmentOutlined /> Выберите адрес или укажите точку на карте</>}
+                    </div>
 
                     { (customerCompany?.id || carrierCompany?.id) ? (
                         <Form.Item name="bindingType" label="Привязать адрес к участнику заявки" initialValue="none">
@@ -402,10 +411,11 @@ export default function LocationForm({
                     </Form.Item>
                 </Col>
                 <Col span={14}>
-                    <div style={{ marginBottom: 8 }}>
-                        <Text strong>Или укажите точку на карте:</Text>
+                    <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text strong style={{ fontSize: 14 }}>Точка на карте</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>можно кликнуть по карте вручную</Text>
                     </div>
-                    <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+                    <div style={{ border: '1px solid var(--lc-border)', borderRadius: 14, overflow: 'hidden', position: 'relative', boxShadow: '0 10px 28px -18px rgba(16,24,40,0.3)' }}>
                         <MapPicker
                             onLocationSelect={handleMapSelect}
                             initialLat={lat}
