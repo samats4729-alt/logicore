@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PaymentDirection, AccountKind, CostType } from '@prisma/client';
+import { PaymentDirection, AccountKind, CostType, DictionaryKind } from '@prisma/client';
 
 @Injectable()
 export class FinancialSettingsService {
@@ -362,5 +362,90 @@ export class FinancialSettingsService {
         const item = await this.prisma.serviceCatalogItem.findFirst({ where: { id, companyId } });
         if (!item) throw new NotFoundException('Услуга не найдена');
         return this.prisma.serviceCatalogItem.update({ where: { id }, data: { isActive: active } });
+    }
+
+    // ==================== УНИВЕРСАЛЬНЫЕ СПРАВОЧНИКИ ====================
+
+    private readonly DICTIONARY_DEFAULTS: Record<DictionaryKind, { name: string; code?: string; isDefault?: boolean }[]> = {
+        [DictionaryKind.PAYMENT_CONDITION]: [
+            { name: 'Предоплата 100%' },
+            { name: 'Оплата по факту выгрузки', isDefault: true },
+            { name: 'Отсрочка 3 банковских дня' },
+            { name: 'Отсрочка 5 банковских дней' },
+            { name: 'Отсрочка 7 банковских дней' },
+            { name: 'Отсрочка 10 банковских дней' },
+            { name: 'По оригиналам документов' },
+        ],
+        [DictionaryKind.PAYMENT_FORM]: [
+            { name: 'Безналичный расчёт', isDefault: true },
+            { name: 'Наличный расчёт' },
+            { name: 'Банковская карта' },
+        ],
+        [DictionaryKind.OWNERSHIP_TYPE]: [
+            { name: 'ТОО', isDefault: true },
+            { name: 'ИП' },
+            { name: 'АО' },
+            { name: 'ГП' },
+            { name: 'КХ' },
+            { name: 'Физическое лицо' },
+        ],
+        [DictionaryKind.BANK]: [
+            { name: 'Народный банк Казахстана (Halyk Bank)', code: 'HSBKKZKX' },
+            { name: 'Kaspi Bank', code: 'CASPKZKA' },
+            { name: 'ForteBank', code: 'IRTYKZKA' },
+            { name: 'Bank CenterCredit', code: 'KCJBKZKX' },
+            { name: 'Jusan Bank', code: 'TSESKZKA' },
+            { name: 'Bereke Bank', code: 'BRKEKZKA' },
+            { name: 'Freedom Bank Kazakhstan', code: 'KSNBKZKA' },
+        ],
+    };
+
+    async getDictionary(companyId: string, kind: DictionaryKind) {
+        const count = await this.prisma.dictionaryItem.count({ where: { companyId, kind } });
+        if (count === 0 && this.DICTIONARY_DEFAULTS[kind]) {
+            await this.prisma.dictionaryItem.createMany({
+                data: this.DICTIONARY_DEFAULTS[kind].map((d, i) => ({ companyId, kind, name: d.name, code: d.code || null, isDefault: !!d.isDefault, sortOrder: i })),
+                skipDuplicates: true,
+            });
+        }
+        return this.prisma.dictionaryItem.findMany({
+            where: { companyId, kind },
+            orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+        });
+    }
+
+    async createDictionaryItem(companyId: string, kind: DictionaryKind, data: { name: string; code?: string; isDefault?: boolean }) {
+        const name = (data.name || '').trim();
+        if (!name) throw new BadRequestException('Укажите наименование');
+        const existing = await this.prisma.dictionaryItem.findFirst({ where: { companyId, kind, name } });
+        if (existing) {
+            if (!existing.isActive) return this.prisma.dictionaryItem.update({ where: { id: existing.id }, data: { isActive: true } });
+            throw new BadRequestException('Запись с таким наименованием уже существует');
+        }
+        if (data.isDefault) {
+            await this.prisma.dictionaryItem.updateMany({ where: { companyId, kind, isDefault: true }, data: { isDefault: false } });
+        }
+        return this.prisma.dictionaryItem.create({
+            data: { companyId, kind, name, code: data.code?.trim() || null, isDefault: !!data.isDefault },
+        });
+    }
+
+    async updateDictionaryItem(companyId: string, id: string, data: { name?: string; code?: string; isDefault?: boolean }) {
+        const item = await this.prisma.dictionaryItem.findFirst({ where: { id, companyId } });
+        if (!item) throw new NotFoundException('Запись не найдена');
+        if (data.isDefault) {
+            await this.prisma.dictionaryItem.updateMany({ where: { companyId, kind: item.kind, isDefault: true, NOT: { id } }, data: { isDefault: false } });
+        }
+        const patch: { name?: string; code?: string | null; isDefault?: boolean } = {};
+        if (data.name !== undefined) patch.name = data.name.trim();
+        if (data.code !== undefined) patch.code = data.code.trim() || null;
+        if (data.isDefault !== undefined) patch.isDefault = data.isDefault;
+        return this.prisma.dictionaryItem.update({ where: { id }, data: patch });
+    }
+
+    async deactivateDictionaryItem(companyId: string, id: string, active: boolean) {
+        const item = await this.prisma.dictionaryItem.findFirst({ where: { id, companyId } });
+        if (!item) throw new NotFoundException('Запись не найдена');
+        return this.prisma.dictionaryItem.update({ where: { id }, data: { isActive: active } });
     }
 }

@@ -123,6 +123,10 @@ export default function FinanceHubPage() {
             links: [
                 { label: 'Статьи доходов и расходов', href: '/company/accounting/settings?tab=categories', show: acc, desc: 'Статьи движения денег и затрат для платежей и отчётов' },
                 { label: 'Наименование услуг', href: '/company/accounting/settings?tab=services', show: acc, desc: 'Формулировки услуг для счетов и актов' },
+                { label: 'Условия оплаты', href: '/company/accounting/payment-conditions', show: acc, desc: 'Условия оплаты для заявок: предоплата, по факту, отсрочка' },
+                { label: 'Формы оплаты', href: '/company/accounting/payment-forms', show: acc, desc: 'Формы оплаты для заявок: безнал, наличные, карта' },
+                { label: 'Формы собственности', href: '/company/accounting/ownership-types', show: acc, desc: 'Организационно-правовые формы контрагентов: ТОО, ИП, АО' },
+                { label: 'Банки', href: '/company/accounting/banks', show: acc, desc: 'Справочник банков и БИК для реквизитов' },
                 { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
             ],
         },

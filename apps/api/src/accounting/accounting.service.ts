@@ -5,7 +5,7 @@ import { FinancialSettingsService } from './services/financial-settings.service'
 import { PaymentsService } from './services/payments.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentDirection, PaymentMethod, CostType } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, CostType, DictionaryKind } from '@prisma/client';
 
 @Injectable()
 export class AccountingService {
@@ -339,6 +339,24 @@ export class AccountingService {
 
     async deactivateServiceItem(companyId: string, id: string, active: boolean) {
         return this.settingsService.deactivateServiceItem(companyId, id, active);
+    }
+
+    // ==================== DICTIONARIES ====================
+
+    async getDictionary(companyId: string, kind: DictionaryKind) {
+        return this.settingsService.getDictionary(companyId, kind);
+    }
+
+    async createDictionaryItem(companyId: string, kind: DictionaryKind, data: { name: string; code?: string; isDefault?: boolean }) {
+        return this.settingsService.createDictionaryItem(companyId, kind, data);
+    }
+
+    async updateDictionaryItem(companyId: string, id: string, data: { name?: string; code?: string; isDefault?: boolean }) {
+        return this.settingsService.updateDictionaryItem(companyId, id, data);
+    }
+
+    async deactivateDictionaryItem(companyId: string, id: string, active: boolean) {
+        return this.settingsService.deactivateDictionaryItem(companyId, id, active);
     }
 
     async getActsJournal(companyId: string) {

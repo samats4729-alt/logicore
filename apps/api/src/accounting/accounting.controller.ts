@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Query, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Query, Res, BadRequestException } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
-import { UserRole, PaymentDirection, CostType } from '@prisma/client';
+import { UserRole, PaymentDirection, CostType, DictionaryKind } from '@prisma/client';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { Response } from 'express';
@@ -487,6 +487,57 @@ export class AccountingController {
         @Body() body: { active: boolean },
     ) {
         return this.accountingService.deactivateServiceItem(req.user.companyId, id, body.active);
+    }
+
+    // ==================== СПРАВОЧНИКИ ====================
+
+    @Get('dictionaries/:kind')
+    @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions('accounting', 'orders')
+    async getDictionary(@Request() req: any, @Param('kind') kind: string) {
+        return this.accountingService.getDictionary(req.user.companyId, this.parseDictKind(kind));
+    }
+
+    @Post('dictionaries/:kind')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    async createDictionaryItem(
+        @Request() req: any,
+        @Param('kind') kind: string,
+        @Body() body: { name: string; code?: string; isDefault?: boolean },
+    ) {
+        return this.accountingService.createDictionaryItem(req.user.companyId, this.parseDictKind(kind), body);
+    }
+
+    @Put('dictionaries/item/:id')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    async updateDictionaryItem(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { name?: string; code?: string; isDefault?: boolean },
+    ) {
+        return this.accountingService.updateDictionaryItem(req.user.companyId, id, body);
+    }
+
+    @Put('dictionaries/item/:id/deactivate')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    async deactivateDictionaryItem(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { active: boolean },
+    ) {
+        return this.accountingService.deactivateDictionaryItem(req.user.companyId, id, body.active);
+    }
+
+    private parseDictKind(kind: string): DictionaryKind {
+        const map: Record<string, DictionaryKind> = {
+            'payment-condition': DictionaryKind.PAYMENT_CONDITION,
+            'payment-form': DictionaryKind.PAYMENT_FORM,
+            'ownership-type': DictionaryKind.OWNERSHIP_TYPE,
+            'bank': DictionaryKind.BANK,
+        };
+        const resolved = map[kind] || (DictionaryKind as any)[kind];
+        if (!resolved) throw new BadRequestException('Неизвестный справочник');
+        return resolved;
     }
 
     // ==================== АКТ ВЫПОЛНЕННЫХ РАБОТ ====================

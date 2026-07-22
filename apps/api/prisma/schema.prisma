@@ -316,6 +316,7 @@ model Company {
   counterpartyOpenings   CounterpartyOpeningBalance[] @relation("CompanyCounterpartyOpenings")
   openingsAsCounterparty CounterpartyOpeningBalance[] @relation("CounterpartyOpenings")
   serviceCatalog         ServiceCatalogItem[] @relation("CompanyServiceCatalog")
+  dictionaries           DictionaryItem[]     @relation("CompanyDictionaries")
 
   @@index([bin])
 }
@@ -966,6 +967,31 @@ model FinanceCategory {
 
   @@unique([companyId, name, direction])
   @@index([companyId])
+}
+
+// Универсальные справочники (условия/формы оплаты, формы собственности, банки)
+enum DictionaryKind {
+  PAYMENT_CONDITION // Условия оплаты (для заявок)
+  PAYMENT_FORM      // Формы оплаты (для заявок)
+  OWNERSHIP_TYPE    // Формы собственности контрагентов
+  BANK              // Банки
+}
+
+model DictionaryItem {
+  id        String         @id @default(cuid())
+  companyId String
+  company   Company        @relation("CompanyDictionaries", fields: [companyId], references: [id], onDelete: Cascade)
+  kind      DictionaryKind
+  name      String
+  code      String?        // Доп. код: БИК банка и т.п.
+  isActive  Boolean        @default(true)
+  isDefault Boolean        @default(false)
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([companyId, kind, name])
+  @@index([companyId, kind])
 }
 
 // Справочник наименований услуг (для актов выполненных работ и счетов)
