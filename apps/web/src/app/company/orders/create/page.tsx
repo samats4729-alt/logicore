@@ -616,6 +616,8 @@ export default function CreateOrderPage() {
                 requirements: values.requirements,
                 customerPrice: finalCustomerPrice,
                 customerPriceType: values.customerPriceType || 'FIXED',
+                customerPaymentDate: values.customerPaymentDate ? values.customerPaymentDate.toISOString() : undefined,
+                driverPaymentDate: values.driverPaymentDate ? values.driverPaymentDate.toISOString() : undefined,
                 routePoints,
                 customerId: user?.id,
                 responsibleUserId: responsibleChoice === 'SELF' ? undefined : responsibleChoice,
@@ -1118,6 +1120,23 @@ export default function CreateOrderPage() {
                         </Select>
                     </Form.Item>
                 </Col>
+            </Row>
+
+            <Row gutter={24}>
+                {showCustomerPriceField && (
+                    <Col xs={24} md={12}>
+                        <Form.Item name="customerPaymentDate" label="Плановая дата оплаты заказчиком">
+                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" size="large" placeholder="Когда заказчик оплатит" />
+                        </Form.Item>
+                    </Col>
+                )}
+                {showDriverCostField && (
+                    <Col xs={24} md={12}>
+                        <Form.Item name="driverPaymentDate" label="Плановая дата оплаты перевозчику">
+                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" size="large" placeholder="Когда оплатим перевозчику" />
+                        </Form.Item>
+                    </Col>
+                )}
             </Row>
 
             {/* Margin preview */}

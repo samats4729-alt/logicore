@@ -70,6 +70,10 @@ export class AccountingService {
         return this.reportsService.getFinancialRegistry(companyId);
     }
 
+    async getPlannedPayments(companyId: string) {
+        return this.reportsService.getPlannedPayments(companyId);
+    }
+
     // ==================== PAYMENT JOURNAL ====================
 
     async getIncomesJournal(companyId: string) {

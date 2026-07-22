@@ -89,6 +89,7 @@ export default function FinanceHubPage() {
             links: [
                 { label: 'Все операции', href: '/company/accounting/operations', show: acc, desc: 'Вся история денег в одном месте: платежи, доходы, расходы' },
                 { label: 'Остатки по кассам', href: '/company/accounting/balances', show: acc, desc: 'Сколько денег сейчас на счетах и в кассах' },
+                { label: 'Планируемые платежи', href: '/company/accounting/planned', show: acc, desc: 'Что предстоит: кто должен нам и кому должны мы — с плановой датой' },
                 { label: 'Реестр заявок', href: '/company/accounting/registry', show: acc, desc: 'Деньги по каждой заявке: доход, себестоимость, маржа, оплаты' },
                 { label: 'Счета', href: '/company/accounting/invoices', show: acc, desc: 'Счета-документы покупателям и от поставщиков' },
                 { label: 'Поступления', href: '/company/accounting/incomes', show: acc, desc: 'Прочие доходы, не привязанные к заявке' },

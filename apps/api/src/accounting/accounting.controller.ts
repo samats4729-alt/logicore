@@ -38,6 +38,12 @@ export class AccountingController {
         return this.accountingService.getFinancialRegistry(req.user.companyId);
     }
 
+    @Get('planned-payments')
+    @Roles(...FINANCE_VIEW_ROLES)
+    async getPlannedPayments(@Request() req: any) {
+        return this.accountingService.getPlannedPayments(req.user.companyId);
+    }
+
     // ==================== PAYMENT JOURNAL ====================
 
     @Get('incomes-journal')

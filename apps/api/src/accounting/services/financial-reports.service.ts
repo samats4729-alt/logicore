@@ -370,6 +370,101 @@ export class FinancialReportsService {
         });
     }
 
+    /**
+     * Планируемые платежи: что нам должны заплатить (приход) и что должны мы (расход),
+     * по незакрытым долгам заявок, с плановой датой оплаты.
+     */
+    async getPlannedPayments(companyId: string) {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            { responsibleManager: { companyId: companyId } },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { isConfirmed: true },
+                            { status: { not: 'PENDING' } },
+                        ],
+                    },
+                ],
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+            },
+            include: {
+                customerCompany: { select: { id: true, name: true } },
+                forwarder: { select: { id: true, name: true } },
+                partner: { select: { id: true, name: true } },
+                subForwarder: { select: { id: true, name: true } },
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        const rows: any[] = [];
+
+        for (const order of orders) {
+            const fin = this.calculator.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+
+            // Нам должен заказчик (приход)
+            if (fin.customerDebt > 0 && order.customerCompany) {
+                rows.push({
+                    orderId: order.id,
+                    orderNumber: order.orderNumber,
+                    direction: 'IN',
+                    party: order.customerCompany.name,
+                    amount: fin.customerDebt,
+                    dueDate: order.customerPaymentDate,
+                });
+            }
+
+            // Мы должны перевозчику/исполнителю (расход) — только если исполнитель внешний
+            if (fin.executorDebt > 0) {
+                const externalParty = order.subForwarder?.name
+                    || (order.forwarder && order.forwarder.id !== companyId ? order.forwarder.name : null)
+                    || order.partner?.name
+                    || order.assignedDriverName
+                    || null;
+                if (externalParty) {
+                    rows.push({
+                        orderId: order.id,
+                        orderNumber: order.orderNumber,
+                        direction: 'OUT',
+                        party: externalParty,
+                        amount: fin.executorDebt,
+                        dueDate: order.driverPaymentDate,
+                    });
+                }
+            }
+        }
+
+        // Сортировка: сперва с датой (по возрастанию), потом без даты
+        rows.sort((a, b) => {
+            if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            if (a.dueDate) return -1;
+            if (b.dueDate) return 1;
+            return 0;
+        });
+
+        const totalIn = rows.filter(r => r.direction === 'IN').reduce((s, r) => s + r.amount, 0);
+        const totalOut = rows.filter(r => r.direction === 'OUT').reduce((s, r) => s + r.amount, 0);
+
+        return { rows, totals: { totalIn, totalOut } };
+    }
+
     // ==================== PAYMENT JOURNAL ====================
 
     async getIncomesJournal(companyId: string) {
