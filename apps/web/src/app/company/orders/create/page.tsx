@@ -647,26 +647,6 @@ export default function CreateOrderPage() {
 
     const stepRoute = (
         <Card size="small" style={{ marginTop: 16 }}>
-            {myCompanies.length > 1 && (
-                <Form.Item label="Организация" required style={{ marginBottom: 16 }}>
-                    <Select
-                        size="large"
-                        value={selectedMyCompanyId}
-                        onChange={value => {
-                            setSelectedMyCompanyId(value);
-                            setSelectedDriverId('');
-                            form.setFieldsValue({
-                                firstName: '', lastName: '', middleName: '', phone: '', iin: '',
-                                vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
-                                docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: '',
-                                vehicleSelect: undefined, driverSelect: undefined
-                            });
-                        }}
-                        optionLabelProp="label"
-                        options={myCompanies.map(c => ({ value: c.id, label: c.name?.trim() || 'Без названия' }))}
-                    />
-                </Form.Item>
-            )}
             <Form.Item name="pickupDate" label="Дата и время погрузки" rules={[{ required: true, message: 'Укажите дату' }]}>
                 <DatePicker
                     style={{ width: '100%' }}
@@ -748,7 +728,7 @@ export default function CreateOrderPage() {
                                     }}
                                     style={{ textAlign: 'left', padding: '4px 12px', height: 'auto', color: '#1677ff' }}
                                 >
-                                    + Добавить новый адрес
+                                    Добавить новый адрес
                                 </Button>
                             </>
                         )}
@@ -840,6 +820,26 @@ export default function CreateOrderPage() {
 
     const stepParties = (
         <Card size="small" style={{ marginTop: 16 }}>
+            {myCompanies.length > 1 && (
+                <Form.Item label="Организация" required style={{ marginBottom: 20 }}>
+                    <Select
+                        size="large"
+                        value={selectedMyCompanyId}
+                        onChange={value => {
+                            setSelectedMyCompanyId(value);
+                            setSelectedDriverId('');
+                            form.setFieldsValue({
+                                firstName: '', lastName: '', middleName: '', phone: '', iin: '',
+                                vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
+                                docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: '',
+                                vehicleSelect: undefined, driverSelect: undefined
+                            });
+                        }}
+                        optionLabelProp="label"
+                        options={myCompanies.map(c => ({ value: c.id, label: c.name?.trim() || 'Без названия' }))}
+                    />
+                </Form.Item>
+            )}
             {/* Role auto-detection indicator */}
             <div style={{
                 padding: '10px 16px',
@@ -912,7 +912,7 @@ export default function CreateOrderPage() {
                                         }}
                                         style={{ textAlign: 'left', padding: '8px 12px', height: 'auto', color: '#1677ff', fontWeight: 500 }}
                                     >
-                                        + Добавить контрагента
+                                        Добавить контрагента
                                     </Button>
                                     <Divider style={{ margin: '4px 0' }} />
                                     {menu}
@@ -960,7 +960,7 @@ export default function CreateOrderPage() {
                                         }}
                                         style={{ textAlign: 'left', padding: '8px 12px', height: 'auto', color: '#1677ff', fontWeight: 500 }}
                                     >
-                                        + Добавить контрагента
+                                        Добавить контрагента
                                     </Button>
                                     <Divider style={{ margin: '4px 0' }} />
                                     {menu}
