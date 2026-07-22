@@ -107,6 +107,53 @@ export class InventoryService {
         });
     }
 
+    // Остатки конкретного склада (для контроля списаний/перемещений), можно исключить документ (при редактировании)
+    private async getWarehouseStock(companyId: string, warehouseId: string, excludeMoveId?: string): Promise<Map<string, number>> {
+        const moves = await this.prisma.stockMove.findMany({
+            where: {
+                companyId,
+                ...(excludeMoveId && { id: { not: excludeMoveId } }),
+                OR: [{ warehouseId }, { toWarehouseId: warehouseId }],
+            },
+            include: { lines: true },
+        });
+        const map = new Map<string, number>();
+        const bump = (nomId: string, d: number) => map.set(nomId, round((map.get(nomId) || 0) + d));
+        for (const m of moves) {
+            for (const l of m.lines) {
+                if (m.type === StockMoveType.RECEIPT && m.warehouseId === warehouseId) bump(l.nomenclatureId, l.quantity);
+                else if (m.type === StockMoveType.WRITEOFF && m.warehouseId === warehouseId) bump(l.nomenclatureId, -l.quantity);
+                else if (m.type === StockMoveType.TRANSFER) {
+                    if (m.warehouseId === warehouseId) bump(l.nomenclatureId, -l.quantity);
+                    if (m.toWarehouseId === warehouseId) bump(l.nomenclatureId, l.quantity);
+                }
+            }
+        }
+        return map;
+    }
+
+    // Проверка достаточности остатков для списания/перемещения
+    private async assertStockAvailable(companyId: string, type: StockMoveType, warehouseId: string, lines: MoveLineInput[], excludeMoveId?: string) {
+        if (type !== StockMoveType.WRITEOFF && type !== StockMoveType.TRANSFER) return;
+        const stock = await this.getWarehouseStock(companyId, warehouseId, excludeMoveId);
+        const requested = new Map<string, number>();
+        for (const l of lines) requested.set(l.nomenclatureId, round((requested.get(l.nomenclatureId) || 0) + l.quantity));
+
+        const shortages = Array.from(requested.entries()).filter(([nomId, qty]) => qty > (stock.get(nomId) || 0) + 1e-6);
+        if (shortages.length === 0) return;
+
+        const names = await this.prisma.nomenclatureItem.findMany({
+            where: { id: { in: shortages.map(([nomId]) => nomId) } },
+            select: { id: true, name: true, unit: true },
+        });
+        const nameMap = new Map(names.map(n => [n.id, n]));
+        const msg = shortages.map(([nomId, qty]) => {
+            const n = nameMap.get(nomId);
+            return `«${n?.name || nomId}»: нужно ${round(qty)}, на складе ${round(stock.get(nomId) || 0)} ${n?.unit || ''}`.trim();
+        }).join('; ');
+        throw new BadRequestException(`Недостаточно на складе — ${msg}`);
+    }
+
     private validateMove(data: MoveInput) {
         if (!data.warehouseId) throw new BadRequestException('Укажите склад');
         if (data.type === StockMoveType.TRANSFER) {
@@ -120,6 +167,7 @@ export class InventoryService {
 
     async createMove(companyId: string, userId: string, data: MoveInput) {
         const lines = this.validateMove(data);
+        await this.assertStockAvailable(companyId, data.type, data.warehouseId, lines);
         const number = await this.generateMoveNumber(companyId, data.type);
         return this.prisma.stockMove.create({
             data: {
@@ -146,6 +194,7 @@ export class InventoryService {
         const move = await this.prisma.stockMove.findFirst({ where: { id, companyId } });
         if (!move) throw new NotFoundException('Документ не найден');
         const lines = this.validateMove({ ...data, type: move.type });
+        await this.assertStockAvailable(companyId, move.type, data.warehouseId, lines, id);
         // Перезаписываем строки целиком
         await this.prisma.stockMoveLine.deleteMany({ where: { moveId: id } });
         return this.prisma.stockMove.update({
