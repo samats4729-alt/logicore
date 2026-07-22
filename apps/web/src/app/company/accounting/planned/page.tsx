@@ -110,6 +110,9 @@ export default function PlannedPaymentsPage() {
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Что предстоит по деньгам: кто должен заплатить нам и кому должны мы — с плановой датой оплаты по заявке.
                     </p>
+                    <Button icon={<CalendarOutlined />} onClick={() => router.push('/company/accounting/calendar')}>
+                        Открыть календарём
+                    </Button>
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
