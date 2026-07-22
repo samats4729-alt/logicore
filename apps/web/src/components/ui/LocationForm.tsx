@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-    Form, Input, InputNumber, Row, Col, Select, Typography, App, Button, FormInstance, Radio
+    Form, Input, InputNumber, Row, Col, Select, Typography, App, Button, FormInstance, Radio, Spin
 } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
-import { api, Location } from '@/lib/api';
+import { api, Location, Country, City } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import AddressAutocomplete from './AddressAutocomplete';
 
@@ -46,6 +46,15 @@ export default function LocationForm({
     // Город определяется автоматически из ответа 2ГИС (нужен для тарифов и подписей маршрута)
     const [city, setCity] = useState<string | undefined>(undefined);
 
+    // Страна/город: сперва выбираем их, карта центрируется на городе, затем ищем улицу внутри города
+    const [countries, setCountries] = useState<Country[]>([]);
+    const [selectedCountryId, setSelectedCountryId] = useState<string | undefined>(undefined);
+    const [cityOptions, setCityOptions] = useState<City[]>([]);
+    const [cityLoading, setCityLoading] = useState(false);
+    const [selectedCityId, setSelectedCityId] = useState<string | undefined>(undefined);
+    const [cityFocus, setCityFocus] = useState<{ lat: number; lng: number } | undefined>(undefined);
+    const cityDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     // Companies/Partners for linking
     const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
     const [companiesLoading, setCompaniesLoading] = useState(false);
@@ -74,11 +83,17 @@ export default function LocationForm({
             });
 
             setCity(editingLocation.city || undefined);
+            setSelectedCityId(undefined);
+            setCityOptions([]);
+            setCityFocus(undefined);
         } else {
             setAddressValue('');
             setLat(undefined);
             setLng(undefined);
             setCity(undefined);
+            setSelectedCityId(undefined);
+            setCityOptions([]);
+            setCityFocus(undefined);
             form.resetFields();
             if (defaultCompanyId) {
                 form.setFieldsValue({ companyId: defaultCompanyId });
@@ -117,6 +132,55 @@ export default function LocationForm({
         } finally {
             setCompaniesLoading(false);
         }
+    };
+
+    // Список стран (по умолчанию — Казахстан)
+    useEffect(() => {
+        api.get('/cities/countries').then(res => {
+            const list: Country[] = res.data || [];
+            setCountries(list);
+            setSelectedCountryId(prev => prev ?? (list.find(c => c.code === 'KZ' || /казах/i.test(c.name))?.id));
+        }).catch(() => { });
+    }, []);
+
+    // Поиск городов по мере ввода (сервер отдаёт города с координатами)
+    const searchCities = (q: string) => {
+        if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+        if (!q || q.trim().length < 1) { setCityOptions([]); return; }
+        cityDebounceRef.current = setTimeout(async () => {
+            setCityLoading(true);
+            try {
+                const res = await api.get('/cities', { params: { search: q.trim() } });
+                let list: City[] = res.data || [];
+                if (selectedCountryId) {
+                    list = list.filter((c: any) => {
+                        const cid = c.country?.id || c.countryId;
+                        return !cid || cid === selectedCountryId;
+                    });
+                }
+                setCityOptions(list);
+            } catch {
+                setCityOptions([]);
+            } finally {
+                setCityLoading(false);
+            }
+        }, 350);
+    };
+
+    // Выбор города: центрируем карту на городе и очищаем адрес для ввода улицы
+    const handleCitySelect = (cityId: string) => {
+        setSelectedCityId(cityId);
+        const c = cityOptions.find(o => o.id === cityId);
+        if (!c) return;
+        setCity(c.name);
+        if (c.latitude && c.longitude) {
+            setCityFocus({ lat: c.latitude, lng: c.longitude });
+        }
+        // Улицу вводим заново — внутри выбранного города
+        setAddressValue('');
+        setLat(undefined);
+        setLng(undefined);
+        form.setFieldsValue({ address: '', latitude: undefined, longitude: undefined });
     };
 
     const handleAddressSelect = (address: string, latitude: number, longitude: number) => {
@@ -227,12 +291,56 @@ export default function LocationForm({
                         <Input placeholder="Склад №1" size="large" />
                     </Form.Item>
 
+                    <Row gutter={12}>
+                        <Col span={10}>
+                            <Form.Item label="Страна">
+                                <Select
+                                    size="large"
+                                    placeholder="Страна"
+                                    value={selectedCountryId}
+                                    onChange={(v) => {
+                                        setSelectedCountryId(v);
+                                        setSelectedCityId(undefined);
+                                        setCity(undefined);
+                                        setCityOptions([]);
+                                        setCityFocus(undefined);
+                                    }}
+                                    showSearch
+                                    optionFilterProp="children"
+                                >
+                                    {countries.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={14}>
+                            <Form.Item label="Город">
+                                <Select
+                                    size="large"
+                                    placeholder="Начните вводить город"
+                                    value={selectedCityId}
+                                    onChange={handleCitySelect}
+                                    onSearch={searchCities}
+                                    showSearch
+                                    filterOption={false}
+                                    loading={cityLoading}
+                                    notFoundContent={cityLoading ? <Spin size="small" /> : null}
+                                >
+                                    {cityOptions.map(c => (
+                                        <Option key={c.id} value={c.id}>
+                                            {c.name}{(c as any).region?.name ? `, ${(c as any).region.name}` : ''}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
                     <Form.Item
-                        label="Адрес"
+                        label="Адрес улицы"
                         required
                         help={city
-                            ? `Город: ${city} (определён автоматически)`
-                            : 'Начните вводить адрес — он найдётся автоматически'}
+                            ? `Поиск улицы в городе: ${city}`
+                            : 'Сначала выберите город, затем введите улицу и номер дома'}
                     >
                         <AddressAutocomplete
                             value={addressValue}
@@ -241,7 +349,9 @@ export default function LocationForm({
                                 form.setFieldsValue({ address: val });
                             }}
                             onSelect={handleAddressSelect}
-                            placeholder="Например: Алматы, Сатпаева 90/1"
+                            city={city}
+                            proximity={cityFocus}
+                            placeholder={city ? 'Улица и дом, напр.: Сатпаева 90/1' : 'Например: Алматы, Сатпаева 90/1'}
                         />
                     </Form.Item>
 
@@ -300,6 +410,8 @@ export default function LocationForm({
                             onLocationSelect={handleMapSelect}
                             initialLat={lat}
                             initialLng={lng}
+                            focusLat={cityFocus?.lat}
+                            focusLng={cityFocus?.lng}
                         />
                         <div style={{
                             position: 'absolute',

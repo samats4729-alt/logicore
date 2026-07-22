@@ -6,10 +6,16 @@ import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
 const MapPicker = ({
     initialLat,
     initialLng,
+    focusLat,
+    focusLng,
+    focusZoom,
     onLocationSelect
 }: {
     initialLat?: number,
     initialLng?: number,
+    focusLat?: number,
+    focusLng?: number,
+    focusZoom?: number,
     onLocationSelect: (lat: number, lng: number, pickedName?: string) => void
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -78,6 +84,12 @@ const MapPicker = ({
         mapRef.current.setZoom(17.2);
         placeMarker(initialLng, initialLat);
     }, [initialLat, initialLng]);
+
+    // Обзор выбранного города (без маркера — точку ставит поиск улицы/клик)
+    useEffect(() => {
+        if (!mapRef.current || focusLat == null || focusLng == null) return;
+        mapRef.current.flyTo({ center: [focusLng, focusLat], zoom: focusZoom ?? 11.5, essential: true });
+    }, [focusLat, focusLng, focusZoom]);
 
     return (
         <div style={{ height: 400, width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
