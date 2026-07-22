@@ -84,6 +84,9 @@ interface Driver {
 interface Partner {
     id: string;
     name: string;
+    isExternal?: boolean;
+    isCustomer?: boolean;
+    isCarrier?: boolean;
 }
 
 interface LocationState {
@@ -230,8 +233,8 @@ export default function OrderDetailPage() {
 
     const roleInfo = getRoleDescription();
 
-    const getCustomerOptions = () => {
-        const list = [...partners];
+    const getPartyOptions = (role: 'customer' | 'carrier') => {
+        const list = partners.filter((p: any) => role === 'customer' ? p.isCustomer !== false : p.isCarrier !== false);
         const order = data?.order;
         if (order) {
             const candidates = [
@@ -342,20 +345,27 @@ export default function OrderDetailPage() {
                 api.get('/company/profile'),
                 api.get('/company/my-companies'),
             ]);
-            const partnersList = partnersRes.data.filter((p: any) => p.isCarrier);
+            const partnersList = partnersRes.data.map((p: any) => ({
+                ...p,
+                isCustomer: p.isCustomer ?? true,
+                isCarrier: p.isCarrier ?? true,
+            }));
             const externalList = externalRes.data
-                .filter((e: any) => e.isCarrier)
-                .map((e: any) => ({ id: e.id, name: e.name }));
-            
+                .map((e: any) => ({ id: e.id, name: e.name, isExternal: true, isCustomer: !!e.isCustomer, isCarrier: !!e.isCarrier }));
+
             const ownCompanies = (myCompaniesRes.data || []).map((c: any) => ({
                 id: c.id,
-                name: `${c.name} (Моя компания)`
+                name: `${c.name} (Моя компания)`,
+                isCustomer: true,
+                isCarrier: true,
             }));
 
             if (profileRes.data && !ownCompanies.some((c: any) => c.id === profileRes.data.id)) {
                 ownCompanies.push({
                     id: profileRes.data.id,
-                    name: `${profileRes.data.name} (Моя компания)`
+                    name: `${profileRes.data.name} (Моя компания)`,
+                    isCustomer: true,
+                    isCarrier: true,
                 });
             }
 
@@ -1412,7 +1422,7 @@ export default function OrderDetailPage() {
                                                         optionLabelProp="label"
                                                         options={[
                                                             { value: MY_COMPANY_VALUE, label: `${myCompanyName || 'Моя компания'} (Моя компания)` },
-                                                            ...prepareCompanyOptions(getCustomerOptions(), selectedCustomer)
+                                                            ...prepareCompanyOptions(getPartyOptions('customer'), selectedCustomer)
                                                         ]}
                                                         dropdownRender={(menu) => (
                                                             <>
@@ -1448,7 +1458,7 @@ export default function OrderDetailPage() {
                                                         options={[
                                                             { value: MY_COMPANY_VALUE, label: `${myCompanyName || 'Моя компания'} (Моя компания)` },
                                                             ...(selectedCarrier === MARKETPLACE_VALUE ? [{ value: MARKETPLACE_VALUE, label: '📢 Опубликовать на бирже' }] : []),
-                                                            ...prepareCompanyOptions(getCustomerOptions(), selectedCarrier)
+                                                            ...prepareCompanyOptions(getPartyOptions('carrier'), selectedCarrier)
                                                         ]}
                                                         dropdownRender={(menu) => (
                                                             <>

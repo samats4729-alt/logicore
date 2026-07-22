@@ -23,6 +23,8 @@ interface Partner {
     id: string;
     name: string;
     isExternal?: boolean;
+    isCustomer?: boolean;
+    isCarrier?: boolean;
 }
 
 interface LocationState {
@@ -332,10 +334,21 @@ export default function CreateOrderPage() {
                 api.get('/external-companies'),
                 api.get('/company/profile'),
             ]);
-            const partnersList = partnersRes.data.filter((p: any) => p.isCarrier).map((p: any) => ({ ...p, isExternal: false }));
-            const externalList = externalRes.data
-                .filter((e: any) => e.isCarrier)
-                .map((e: any) => ({ id: e.id, name: e.name, isExternal: true }));
+            // Зарегистрированные партнёры могут выступать и заказчиком, и перевозчиком
+            const partnersList = partnersRes.data.map((p: any) => ({
+                ...p,
+                isExternal: false,
+                isCustomer: p.isCustomer ?? true,
+                isCarrier: p.isCarrier ?? true,
+            }));
+            // Офлайн-контрагенты — по своим ролям (заказчик/перевозчик), как заведены
+            const externalList = externalRes.data.map((e: any) => ({
+                id: e.id,
+                name: e.name,
+                isExternal: true,
+                isCustomer: !!e.isCustomer,
+                isCarrier: !!e.isCarrier,
+            }));
             const combined = [...partnersList, ...externalList];
             setPartners(combined);
             if (profileRes.data?.name) {
@@ -939,7 +952,7 @@ export default function CreateOrderPage() {
                                 <span style={{ fontWeight: 600 }}>{myCompanyLabel}</span>
                             </Select.Option>
                             <Select.OptGroup label="Контрагенты">
-                                {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                {partners.filter(p => p.isCustomer).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                             </Select.OptGroup>
                         </Select>
                     </div>
@@ -988,7 +1001,7 @@ export default function CreateOrderPage() {
                             </Select.Option>
                             {/* Биржа временно отключена до запуска (перевёрнутая цепочка ролей при takeOrder) */}
                             <Select.OptGroup label="Контрагенты">
-                                {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                {partners.filter(p => p.isCarrier).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                             </Select.OptGroup>
                         </Select>
                     </div>

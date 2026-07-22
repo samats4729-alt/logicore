@@ -90,6 +90,9 @@ interface Driver {
 interface Partner {
     id: string;
     name: string;
+    isExternal?: boolean;
+    isCustomer?: boolean;
+    isCarrier?: boolean;
 }
 
 interface LocationState {
@@ -315,7 +318,7 @@ export default function CompanyOrdersPage() {
         { city: '', address: '', pointType: 'PICKUP' },
         { city: '', address: '', pointType: 'DELIVERY' }
     ]);
-    const [forwarders, setForwarders] = useState<{ id: string; name: string }[]>([]);
+    const [forwarders, setForwarders] = useState<Partner[]>([]);
     const [isMarketplace, setIsMarketplace] = useState(false);
     const [appliedTariff, setAppliedTariff] = useState<any>(null);
     const [tariffLoading, setTariffLoading] = useState(false);
@@ -487,14 +490,19 @@ export default function CompanyOrdersPage() {
                 api.get('/external-companies'),
                 api.get('/company/profile'),
             ]);
-            const partnersList = partnersRes.data.filter((p: any) => p.isCarrier);
-            const externalList = externalRes.data
-                .filter((e: any) => e.isCarrier)
-                .map((e: any) => ({
-                    id: e.id,
-                    name: e.name,
-                }));
-            const ownCompany = profileRes.data ? [{ id: profileRes.data.id, name: `${profileRes.data.name} (Моя компания)` }] : [];
+            const partnersList = partnersRes.data.map((p: any) => ({
+                ...p,
+                isCustomer: p.isCustomer ?? true,
+                isCarrier: p.isCarrier ?? true,
+            }));
+            const externalList = externalRes.data.map((e: any) => ({
+                id: e.id,
+                name: e.name,
+                isExternal: true,
+                isCustomer: !!e.isCustomer,
+                isCarrier: !!e.isCarrier,
+            }));
+            const ownCompany = profileRes.data ? [{ id: profileRes.data.id, name: `${profileRes.data.name} (Моя компания)`, isCustomer: true, isCarrier: true }] : [];
             const combined = [...ownCompany, ...partnersList, ...externalList];
             setPartners(combined);
             setForwarders(combined);
@@ -2073,7 +2081,7 @@ export default function CompanyOrdersPage() {
                                             }
                                         >
                                             <Select placeholder="Выберите компанию заказчика" allowClear showSearch optionFilterProp="children">
-                                                {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+                                                {partners.filter(p => p.isCustomer !== false).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                                             </Select>
                                         </Form.Item>
                                     </Col>
@@ -2096,7 +2104,7 @@ export default function CompanyOrdersPage() {
                                                 }
                                             >
                                                 <Select placeholder="Выберите компанию исполнителя" allowClear showSearch optionFilterProp="children">
-                                                    {forwarders.map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
+                                                    {forwarders.filter(f => f.isCarrier !== false).map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
                                                 </Select>
                                             </Form.Item>
                                         </Col>
