@@ -31,11 +31,13 @@ export default function CompanyIncomesPage() {
     const router = useRouter();
 
     const [accounts, setAccounts] = useState<any[]>([]);
-    useEffect(() => { fetchManual(); fetchAccounts(); }, []);
+    const [categories, setCategories] = useState<{ id: string; name: string; direction: 'IN' | 'OUT'; isActive: boolean }[]>([]);
+    useEffect(() => { fetchManual(); fetchAccounts(); fetchCategories(); }, []);
     const fetchManual = async () => { setLoading(true); try { const res = await api.get('/accounting/incomes'); setManualIncomes(res.data); } catch {} finally { setLoading(false); } };
     const fetchAccounts = async () => { try { const res = await api.get('/accounting/finance-accounts'); setAccounts((res.data || []).filter((a: any) => a.isActive !== false)); } catch {} };
+    const fetchCategories = async () => { try { const res = await api.get('/accounting/finance-categories'); setCategories((res.data || []).filter((c: any) => c.isActive !== false)); } catch {} };
 
-    const handleSaveManual = async (values: any) => { try { const label = INCOME_CATEGORIES.find(c => c.value === values.category)?.label || values.category; const payload = { ...values, description: label, date: values.date.toISOString() }; if (editingIncome) { await api.put(`/accounting/incomes/${editingIncome.id}`, payload); message.success('Обновлено'); } else { await api.post('/accounting/incomes', payload); message.success('Добавлено'); } setModalOpen(false); setEditingIncome(null); form.resetFields(); fetchManual(); } catch { message.error('Ошибка сохранения'); } };
+    const handleSaveManual = async (values: any) => { try { const payload = { category: values.category, description: values.category, amount: values.amount, date: values.date.toISOString(), accountId: values.accountId || undefined, note: values.note }; if (editingIncome) { await api.put(`/accounting/incomes/${editingIncome.id}`, payload); message.success('Обновлено'); } else { await api.post('/accounting/incomes', payload); message.success('Добавлено'); } setModalOpen(false); setEditingIncome(null); form.resetFields(); fetchManual(); } catch { message.error('Ошибка сохранения'); } };
     const handleDeleteManual = async (id: string) => { try { await api.delete(`/accounting/incomes/${id}`); message.success('Удалено'); fetchManual(); } catch { message.error('Ошибка удаления'); } };
 
     const orderIncomes = manualIncomes.filter(inc => {
@@ -143,7 +145,9 @@ export default function CompanyIncomesPage() {
             <Modal title={editingIncome ? 'Редактировать' : 'Новое поступление'} open={modalOpen} onCancel={() => { setModalOpen(false); setEditingIncome(null); }} footer={null} destroyOnClose>
                 <Form form={form} layout="vertical" onFinish={handleSaveManual} initialValues={{ date: dayjs() }}>
                     <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
-                    <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={INCOME_CATEGORIES} placeholder="Выберите" /></Form.Item>
+                    <Form.Item name="category" label="Статья" rules={[{ required: true }]} extra="Не хватает статьи? Финансы → Статьи">
+                        <Select placeholder="Выберите статью" showSearch optionFilterProp="label" options={categories.filter(c => c.direction === 'IN').map(c => ({ value: c.name, label: c.name }))} />
+                    </Form.Item>
                     <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} /></Form.Item>
                     <Form.Item name="accountId" label="Касса / счёт" extra="Нужно для остатков по кассам"><Select placeholder="Выберите кассу или счёт" allowClear options={accounts.map(a => ({ value: a.id, label: `${a.name} · ${a.kind === 'CASH' ? 'касса' : 'счёт'}` }))} /></Form.Item>
                     <Form.Item name="note" label="Примечание"><Input.TextArea rows={2} placeholder="Доп. информация" /></Form.Item>

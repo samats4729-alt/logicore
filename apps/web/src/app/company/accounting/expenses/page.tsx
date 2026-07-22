@@ -54,18 +54,32 @@ export default function CompanyExpensesPage() {
     const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
 
     const [accounts, setAccounts] = useState<any[]>([]);
-    useEffect(() => { fetchJournal(); fetchManual(); fetchAccounts(); }, []);
+    const [categories, setCategories] = useState<{ id: string; name: string; direction: 'IN' | 'OUT'; costType?: string | null; isActive: boolean }[]>([]);
+    const [orders, setOrders] = useState<{ id: string; orderNumber: string }[]>([]);
+    const watchedCategory = Form.useWatch('category', form);
+    const selectedCat = categories.find(c => c.direction === 'OUT' && c.name === watchedCategory);
+    const needsOrder = selectedCat?.costType === 'PER_ORDER';
+    useEffect(() => { fetchJournal(); fetchManual(); fetchAccounts(); fetchCategories(); fetchOrders(); }, []);
     const fetchJournal = async () => { setLoading(true); try { const res = await api.get('/accounting/customer-expenses-journal'); setEntries(res.data); } catch {} finally { setLoading(false); } };
     const fetchManual = async () => { try { const res = await api.get('/accounting/expenses'); setManualExpenses(res.data); } catch {} };
     const fetchAccounts = async () => { try { const res = await api.get('/accounting/finance-accounts'); setAccounts((res.data || []).filter((a: any) => a.isActive !== false)); } catch {} };
+    const fetchCategories = async () => { try { const res = await api.get('/accounting/finance-categories'); setCategories((res.data || []).filter((c: any) => c.isActive !== false)); } catch {} };
+    const fetchOrders = async () => { try { const res = await api.get('/orders', { params: { limit: 300 } }); const list = res.data?.data || res.data || []; setOrders(list.map((o: any) => ({ id: o.id, orderNumber: o.orderNumber }))); } catch {} };
 
     const getCarrierName = (e: JournalEntry): string => { if (e.forwarder) return e.forwarder.name; return '—'; };
     const openDetail = (entry: JournalEntry) => { setSelectedEntry(entry); setDrawerOpen(true); };
 
     const handleSaveManual = async (values: any) => {
         try {
-            const label = EXPENSE_CATEGORIES.find(c => c.value === values.category)?.label || values.category;
-            const payload = { ...values, description: label, date: values.date.toISOString() };
+            const payload = {
+                category: values.category,
+                description: values.category,
+                amount: values.amount,
+                date: values.date.toISOString(),
+                accountId: values.accountId || undefined,
+                orderId: needsOrder ? (values.orderId || undefined) : undefined,
+                note: values.note,
+            };
             if (editingExpense) { await api.put(`/accounting/expenses/${editingExpense.id}`, payload); message.success('Обновлено'); }
             else { await api.post('/accounting/expenses', payload); message.success('Добавлено'); }
             setModalOpen(false); setEditingExpense(null); form.resetFields(); fetchManual();
@@ -216,7 +230,23 @@ export default function CompanyExpensesPage() {
             <Modal title={editingExpense ? 'Редактировать' : 'Новый расход'} open={modalOpen} onCancel={() => { setModalOpen(false); setEditingExpense(null); }} footer={null} destroyOnClose>
                 <Form form={form} layout="vertical" onFinish={handleSaveManual} initialValues={{ date: dayjs() }}>
                     <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
-                    <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={EXPENSE_CATEGORIES} placeholder="Выберите" /></Form.Item>
+                    <Form.Item name="category" label="Статья" rules={[{ required: true }]} extra="Не хватает статьи? Финансы → Статьи">
+                        <Select
+                            placeholder="Выберите статью"
+                            showSearch
+                            optionFilterProp="label"
+                            onChange={() => form.setFieldsValue({ orderId: undefined })}
+                            options={categories.filter(c => c.direction === 'OUT').map(c => ({
+                                value: c.name,
+                                label: c.costType === 'PER_ORDER' ? `${c.name} · по заявке` : c.costType === 'PER_VEHICLE' ? `${c.name} · по машине` : c.name,
+                            }))}
+                        />
+                    </Form.Item>
+                    {needsOrder && (
+                        <Form.Item name="orderId" label="Заявка" rules={[{ required: true, message: 'Статья «по заявке» — укажите заявку' }]} extra="Расход отнесётся к заявке и уменьшит её маржу">
+                            <Select placeholder="Выберите заявку" showSearch optionFilterProp="label" options={orders.map(o => ({ value: o.id, label: o.orderNumber }))} />
+                        </Form.Item>
+                    )}
                     <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} /></Form.Item>
                     <Form.Item name="accountId" label="Касса / счёт" extra="Нужно для остатков по кассам"><Select placeholder="Выберите кассу или счёт" allowClear options={accounts.map(a => ({ value: a.id, label: `${a.name} · ${a.kind === 'CASH' ? 'касса' : 'счёт'}` }))} /></Form.Item>
                     <Form.Item name="note" label="Примечание"><Input.TextArea rows={2} placeholder="Доп. информация" /></Form.Item>
