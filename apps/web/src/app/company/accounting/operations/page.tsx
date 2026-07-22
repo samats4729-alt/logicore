@@ -58,8 +58,16 @@ export default function AllOperationsPage() {
     const [addDir, setAddDir] = useState<'IN' | 'OUT'>('OUT');
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm();
+    const [accounts, setAccounts] = useState<{ id: string; name: string; kind: string; isDefault: boolean }[]>([]);
 
-    useEffect(() => { fetchAll(); }, []);
+    useEffect(() => { fetchAll(); fetchAccounts(); }, []);
+
+    const fetchAccounts = async () => {
+        try {
+            const res = await api.get('/accounting/finance-accounts');
+            setAccounts((res.data || []).filter((a: any) => a.isActive !== false));
+        } catch { /* необязательно */ }
+    };
 
     const fetchAll = async () => {
         setLoading(true);
@@ -93,6 +101,7 @@ export default function AllOperationsPage() {
                 kindLabel: 'Прочий доход',
                 title: INCOME_CATEGORIES[i.category] || i.description || i.category,
                 orderNumber: i.order?.orderNumber,
+                account: i.account?.name,
                 note: i.note,
             }));
 
@@ -105,6 +114,7 @@ export default function AllOperationsPage() {
                 kindLabel: 'Прочий расход',
                 title: EXPENSE_CATEGORIES[e.category] || e.description || e.category,
                 orderNumber: e.order?.orderNumber,
+                account: e.account?.name,
                 note: e.note,
             }));
 
@@ -142,7 +152,7 @@ export default function AllOperationsPage() {
     const openAdd = (dir: 'IN' | 'OUT') => {
         setAddDir(dir);
         form.resetFields();
-        form.setFieldsValue({ date: dayjs() });
+        form.setFieldsValue({ date: dayjs(), accountId: accounts.find(a => a.isDefault)?.id ?? accounts[0]?.id });
         setAddOpen(true);
     };
 
@@ -156,6 +166,7 @@ export default function AllOperationsPage() {
                 description: label,
                 amount: values.amount,
                 date: values.date.toISOString(),
+                accountId: values.accountId || undefined,
                 note: values.note,
             };
             if (addDir === 'IN') await api.post('/accounting/incomes', payload);
@@ -346,6 +357,13 @@ export default function AllOperationsPage() {
                     </Form.Item>
                     <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>
                         <InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
+                    </Form.Item>
+                    <Form.Item name="accountId" label="Касса / счёт" extra="Откуда/куда идут деньги — нужно для остатков по кассам">
+                        <Select
+                            placeholder="Выберите кассу или счёт"
+                            allowClear
+                            options={accounts.map(a => ({ value: a.id, label: `${a.name} · ${a.kind === 'CASH' ? 'касса' : 'счёт'}` }))}
+                        />
                     </Form.Item>
                     <Form.Item name="note" label="Примечание">
                         <Input.TextArea rows={2} placeholder="Доп. информация" />

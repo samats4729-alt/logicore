@@ -827,9 +827,13 @@ model Expense {
   // Привязка к заявке (опционально)
   orderId     String?
   order       Order?   @relation(fields: [orderId], references: [id])
-  
+
+  // Касса / расчётный счёт, с которого ушли деньги (опционально)
+  accountId   String?
+  account     FinanceAccount? @relation("AccountExpenses", fields: [accountId], references: [id], onDelete: SetNull)
+
   createdById String?  // Кто создал
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   isDeleted   Boolean  @default(false)
@@ -838,6 +842,7 @@ model Expense {
   @@index([companyId, date])
   @@index([category])
   @@index([orderId])
+  @@index([accountId])
 }
 
 model Income {
@@ -853,9 +858,13 @@ model Income {
   // Привязка к заявке (опционально)
   orderId     String?
   order       Order?   @relation(fields: [orderId], references: [id])
-  
+
+  // Касса / расчётный счёт, на который пришли деньги (опционально)
+  accountId   String?
+  account     FinanceAccount? @relation("AccountIncomes", fields: [accountId], references: [id], onDelete: SetNull)
+
   createdById String?  // Кто создал
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   isDeleted   Boolean  @default(false)
@@ -864,6 +873,7 @@ model Income {
   @@index([companyId, date])
   @@index([category])
   @@index([orderId])
+  @@index([accountId])
 }
 
 enum PaymentDirection {
@@ -923,6 +933,8 @@ model FinanceAccount {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   payments    Payment[]   @relation("AccountPayments")
+  incomes     Income[]    @relation("AccountIncomes")
+  expenses    Expense[]   @relation("AccountExpenses")
 
   @@unique([companyId, name, kind])
   @@index([companyId])

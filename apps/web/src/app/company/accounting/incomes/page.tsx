@@ -30,8 +30,10 @@ export default function CompanyIncomesPage() {
     const [form] = Form.useForm();
     const router = useRouter();
 
-    useEffect(() => { fetchManual(); }, []);
+    const [accounts, setAccounts] = useState<any[]>([]);
+    useEffect(() => { fetchManual(); fetchAccounts(); }, []);
     const fetchManual = async () => { setLoading(true); try { const res = await api.get('/accounting/incomes'); setManualIncomes(res.data); } catch {} finally { setLoading(false); } };
+    const fetchAccounts = async () => { try { const res = await api.get('/accounting/finance-accounts'); setAccounts((res.data || []).filter((a: any) => a.isActive !== false)); } catch {} };
 
     const handleSaveManual = async (values: any) => { try { const label = INCOME_CATEGORIES.find(c => c.value === values.category)?.label || values.category; const payload = { ...values, description: label, date: values.date.toISOString() }; if (editingIncome) { await api.put(`/accounting/incomes/${editingIncome.id}`, payload); message.success('Обновлено'); } else { await api.post('/accounting/incomes', payload); message.success('Добавлено'); } setModalOpen(false); setEditingIncome(null); form.resetFields(); fetchManual(); } catch { message.error('Ошибка сохранения'); } };
     const handleDeleteManual = async (id: string) => { try { await api.delete(`/accounting/incomes/${id}`); message.success('Удалено'); fetchManual(); } catch { message.error('Ошибка удаления'); } };
@@ -83,7 +85,7 @@ export default function CompanyIncomesPage() {
                         Прочие доходы, не связанные с заявками (разовые поступления, возвраты). Деньги по заявкам ведутся в «Реестре заявок».
                     </p>
                     {tab === 'other_incomes' && canEditFinance && (
-                        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIncome(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }} className="lc-cta">
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIncome(null); form.resetFields(); form.setFieldsValue({ date: dayjs(), accountId: accounts.find(a => a.isDefault)?.id ?? accounts[0]?.id }); setModalOpen(true); }} className="lc-cta">
                             Добавить поступление
                         </Button>
                     )}
@@ -143,6 +145,7 @@ export default function CompanyIncomesPage() {
                     <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
                     <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={INCOME_CATEGORIES} placeholder="Выберите" /></Form.Item>
                     <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} /></Form.Item>
+                    <Form.Item name="accountId" label="Касса / счёт" extra="Нужно для остатков по кассам"><Select placeholder="Выберите кассу или счёт" allowClear options={accounts.map(a => ({ value: a.id, label: `${a.name} · ${a.kind === 'CASH' ? 'касса' : 'счёт'}` }))} /></Form.Item>
                     <Form.Item name="note" label="Примечание"><Input.TextArea rows={2} placeholder="Доп. информация" /></Form.Item>
                     <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}><Space><Button onClick={() => { setModalOpen(false); setEditingIncome(null); }}>Отмена</Button><Button type="primary" htmlType="submit">{editingIncome ? 'Сохранить' : 'Добавить'}</Button></Space></Form.Item>
                 </Form>

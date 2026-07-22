@@ -53,9 +53,11 @@ export default function CompanyExpensesPage() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
 
-    useEffect(() => { fetchJournal(); fetchManual(); }, []);
+    const [accounts, setAccounts] = useState<any[]>([]);
+    useEffect(() => { fetchJournal(); fetchManual(); fetchAccounts(); }, []);
     const fetchJournal = async () => { setLoading(true); try { const res = await api.get('/accounting/customer-expenses-journal'); setEntries(res.data); } catch {} finally { setLoading(false); } };
     const fetchManual = async () => { try { const res = await api.get('/accounting/expenses'); setManualExpenses(res.data); } catch {} };
+    const fetchAccounts = async () => { try { const res = await api.get('/accounting/finance-accounts'); setAccounts((res.data || []).filter((a: any) => a.isActive !== false)); } catch {} };
 
     const getCarrierName = (e: JournalEntry): string => { if (e.forwarder) return e.forwarder.name; return '—'; };
     const openDetail = (entry: JournalEntry) => { setSelectedEntry(entry); setDrawerOpen(true); };
@@ -137,7 +139,7 @@ export default function CompanyExpensesPage() {
                         Затраты, не связанные с заявками: аренда, зарплата, топливо, налоги. Оплаты перевозчикам по заявке вносятся в «Реестре заявок», а не здесь.
                     </p>
                     {tab !== 'journal' && canEditFinance && (
-                        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingExpense(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }} className="lc-cta">
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingExpense(null); form.resetFields(); form.setFieldsValue({ date: dayjs(), accountId: accounts.find(a => a.isDefault)?.id ?? accounts[0]?.id }); setModalOpen(true); }} className="lc-cta">
                             Добавить расход
                         </Button>
                     )}
@@ -216,6 +218,7 @@ export default function CompanyExpensesPage() {
                     <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
                     <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={EXPENSE_CATEGORIES} placeholder="Выберите" /></Form.Item>
                     <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} /></Form.Item>
+                    <Form.Item name="accountId" label="Касса / счёт" extra="Нужно для остатков по кассам"><Select placeholder="Выберите кассу или счёт" allowClear options={accounts.map(a => ({ value: a.id, label: `${a.name} · ${a.kind === 'CASH' ? 'касса' : 'счёт'}` }))} /></Form.Item>
                     <Form.Item name="note" label="Примечание"><Input.TextArea rows={2} placeholder="Доп. информация" /></Form.Item>
                     <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}><Space><Button onClick={() => { setModalOpen(false); setEditingExpense(null); }}>Отмена</Button><Button type="primary" htmlType="submit">{editingExpense ? 'Сохранить' : 'Добавить'}</Button></Space></Form.Item>
                 </Form>

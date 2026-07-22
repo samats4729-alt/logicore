@@ -109,6 +109,7 @@ export class AccountingService {
         amount: number;
         note?: string;
         orderId?: string;
+        accountId?: string;
     }) {
         return this.paymentsService.createExpense(companyId, userId, data);
     }
@@ -119,6 +120,7 @@ export class AccountingService {
         description?: string;
         amount?: number;
         note?: string;
+        accountId?: string;
     }) {
         return this.paymentsService.updateExpense(companyId, expenseId, data);
     }
@@ -140,6 +142,7 @@ export class AccountingService {
         amount: number;
         note?: string;
         orderId?: string;
+        accountId?: string;
     }) {
         return this.paymentsService.createIncome(companyId, userId, data);
     }
@@ -150,6 +153,7 @@ export class AccountingService {
         description?: string;
         amount?: number;
         note?: string;
+        accountId?: string;
     }) {
         return this.paymentsService.updateIncome(companyId, incomeId, data);
     }

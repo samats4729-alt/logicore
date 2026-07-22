@@ -25,7 +25,7 @@ export class PaymentsService {
     async getExpenses(companyId: string) {
         return this.prisma.expense.findMany({
             where: { companyId, isDeleted: false },
-            include: { order: { select: { orderNumber: true } } },
+            include: { order: { select: { orderNumber: true } }, account: true },
             orderBy: { date: 'desc' },
         });
     }
@@ -37,6 +37,7 @@ export class PaymentsService {
         amount: number;
         note?: string;
         orderId?: string;
+        accountId?: string;
     }) {
         await this.periodClosingService.checkPeriodNotClosed(companyId, data.date);
         return this.prisma.expense.create({
@@ -49,6 +50,7 @@ export class PaymentsService {
                 amount: data.amount,
                 note: data.note || null,
                 orderId: data.orderId || null,
+                accountId: data.accountId || null,
             },
         });
     }
@@ -59,6 +61,7 @@ export class PaymentsService {
         description?: string;
         amount?: number;
         note?: string;
+        accountId?: string;
     }) {
         const expense = await this.prisma.expense.findFirst({
             where: { id: expenseId, companyId },
@@ -79,6 +82,7 @@ export class PaymentsService {
                 ...(data.description && { description: data.description }),
                 ...(data.amount !== undefined && { amount: data.amount }),
                 ...(data.note !== undefined && { note: data.note || null }),
+                ...(data.accountId !== undefined && { accountId: data.accountId || null }),
             },
         });
     }
@@ -113,6 +117,7 @@ export class PaymentsService {
                         status: true,
                     },
                 },
+                account: true,
             },
         });
     }
@@ -124,6 +129,7 @@ export class PaymentsService {
         amount: number;
         note?: string;
         orderId?: string;
+        accountId?: string;
     }) {
         await this.periodClosingService.checkPeriodNotClosed(companyId, data.date);
         return this.prisma.income.create({
@@ -136,6 +142,7 @@ export class PaymentsService {
                 amount: data.amount,
                 note: data.note || null,
                 orderId: data.orderId || null,
+                accountId: data.accountId || null,
             },
         });
     }
@@ -146,6 +153,7 @@ export class PaymentsService {
         description?: string;
         amount?: number;
         note?: string;
+        accountId?: string;
     }) {
         const income = await this.prisma.income.findFirst({
             where: { id: incomeId, companyId },
@@ -166,6 +174,7 @@ export class PaymentsService {
                 ...(data.description && { description: data.description }),
                 ...(data.amount !== undefined && { amount: data.amount }),
                 ...(data.note !== undefined && { note: data.note || null }),
+                ...(data.accountId !== undefined && { accountId: data.accountId || null }),
             },
         });
     }
