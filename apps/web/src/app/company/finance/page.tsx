@@ -96,9 +96,9 @@ export default function FinanceHubPage() {
             links: [
                 { label: 'Платёжный календарь', href: '/company/accounting/calendar', show: acc, desc: 'Приходы и оплаты по дням — что и когда движется по деньгам' },
                 { label: 'Планируемые платежи', href: '/company/accounting/planned', show: acc, desc: 'Что предстоит: кто должен нам и кому должны мы — с плановой датой' },
-                { label: 'Поступления денег', href: '/company/accounting/incomes', show: acc, desc: 'Приход денег: оплаты от заказчиков и прочие доходы' },
-                { label: 'Расход денег', href: '/company/accounting/expenses', show: acc, desc: 'Оплаты перевозчикам и затраты: аренда, зарплата, топливо, налоги' },
-                { label: 'Все операции', href: '/company/accounting/operations', show: acc, desc: 'Вся история денег в одном месте: платежи, доходы, расходы' },
+                { label: 'Поступление денежных средств', href: '/company/accounting/cash-in', show: acc, desc: 'Журнал поступлений: создать документ, выбрать статью, счёт, контрагента, заявку' },
+                { label: 'Расход денежных средств', href: '/company/accounting/cash-out', show: acc, desc: 'Журнал расходов: создать документ, выбрать статью, счёт, контрагента, заявку' },
+                { label: 'Все операции', href: '/company/accounting/operations', show: acc, desc: 'Вся история денег в одном месте: приходы и расходы' },
                 { label: 'Остатки по кассам', href: '/company/accounting/balances', show: acc, desc: 'Сколько денег сейчас на счетах и в кассах' },
                 { label: 'Движение денег (ДДС)', href: '/company/accounting/cashflow', show: acc, desc: 'Куда пришли и ушли живые деньги за период' },
                 { label: 'Ввод начальных остатков', href: '/company/accounting/opening-balances', show: acc, desc: 'Стартовые суммы на счетах и долги контрагентов при запуске учёта' },
