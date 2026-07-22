@@ -1818,6 +1818,16 @@ export default function OrderDetailPage() {
                         ),
                         children: (
                             <div>
+                                {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                                        <Button
+                                            icon={<FileTextOutlined />}
+                                            onClick={() => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank')}
+                                        >
+                                            Акт выполненных работ
+                                        </Button>
+                                    </div>
+                                )}
                                 {/* Financial Summary */}
                                 <Card bordered={false} className="premium-card" style={{ marginBottom: 20 }}>
                                     {(() => {

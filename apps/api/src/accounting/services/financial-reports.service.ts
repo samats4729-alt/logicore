@@ -1022,6 +1022,99 @@ export class FinancialReportsService {
         };
     }
 
+    // ==================== АКТ ВЫПОЛНЕННЫХ РАБОТ ====================
+
+    async getActOfWork(companyId: string, orderId: string) {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+                customerCompany: true,
+                forwarder: true,
+                partner: true,
+                subForwarder: true,
+                routePoints: { include: { location: { select: { city: true, address: true } } }, orderBy: { sequence: 'asc' } },
+            },
+        });
+        if (!order) throw new NotFoundException('Заявка не найдена');
+
+        // Определяем исполнителя (мы) и заказчика (кому выставляем акт)
+        let issuer: any = null;
+        let recipient: any = null;
+        let amountGross = 0;
+        let vatRate = 0;
+        let hasVat = false;
+
+        if (order.forwarderId === companyId || order.partnerId === companyId) {
+            issuer = order.forwarder && order.forwarderId === companyId ? order.forwarder : (order.partner && order.partnerId === companyId ? order.partner : null);
+            issuer = issuer || await this.prisma.company.findUnique({ where: { id: companyId } });
+            recipient = order.customerCompany;
+            amountGross = order.customerPrice || 0;
+            vatRate = order.vatRate ?? 0;
+            hasVat = order.hasVat ?? false;
+        } else if (order.subForwarderId === companyId) {
+            issuer = order.subForwarder || await this.prisma.company.findUnique({ where: { id: companyId } });
+            recipient = order.forwarder;
+            amountGross = order.subForwarderPrice || 0;
+            vatRate = order.executorVatRate ?? 0;
+            hasVat = order.executorHasVat ?? false;
+        } else {
+            issuer = await this.prisma.company.findUnique({ where: { id: companyId } });
+            recipient = order.customerCompany;
+            amountGross = order.customerPrice || 0;
+            vatRate = order.vatRate ?? 0;
+            hasVat = order.hasVat ?? false;
+        }
+
+        if (!recipient) throw new BadRequestException('У заявки не указан заказчик — акт выставить некому');
+
+        // Маршрут
+        const pts = order.routePoints || [];
+        const pickup = pts.find((p) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
+        const delivery = [...pts].reverse().find((p) => p.pointType === 'DELIVERY');
+        const from = pickup?.location?.city || pickup?.location?.address || '';
+        const to = delivery?.location?.city || delivery?.location?.address || '';
+        const route = from && to ? `${from} — ${to}` : (from || to || '');
+
+        // НДС (сумма включает НДС)
+        const net = hasVat && vatRate > 0 ? money(amountGross / (1 + vatRate / 100)) : money(amountGross);
+        const vat = money(amountGross - net);
+
+        // Наименование услуги по умолчанию
+        const services = await this.prisma.serviceCatalogItem.findMany({
+            where: { companyId, isActive: true },
+            orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+        });
+        const defaultService = services.find((s) => s.isDefault) || services[0] || null;
+
+        const pick = (c: any) => c ? {
+            id: c.id, name: c.name, bin: c.bin, address: c.address || c.actualAddress || null,
+            directorName: c.directorName || null, bankAccount: c.bankAccount || null,
+            bankName: c.bankName || null, bankBic: c.bankBic || null, kbe: c.kbe || null,
+        } : null;
+
+        return {
+            order: {
+                id: order.id,
+                orderNumber: order.orderNumber,
+                createdAt: order.createdAt,
+                completedAt: order.completedAt,
+                cargoDescription: order.cargoDescription || null,
+                route,
+            },
+            issuer: pick(issuer),
+            recipient: pick(recipient),
+            service: {
+                name: defaultService?.name || 'Транспортно-экспедиционные услуги',
+                unit: defaultService?.unit || 'услуга',
+            },
+            services: services.map((s) => ({ id: s.id, name: s.name, unit: s.unit })),
+            amount: { net, vat, gross: money(amountGross), hasVat, vatRate },
+            actNumber: order.orderNumber,
+            actDate: order.completedAt || order.createdAt,
+            generatedAt: new Date().toISOString(),
+        };
+    }
+
     // ==================== SHARE REPORT ====================
 
     async generateShareToken(companyId: string, counterpartyId: string, ourRole: string): Promise<{ token: string; shareUrl: string }> {

@@ -323,6 +323,28 @@ export class AccountingService {
         return this.settingsService.deactivateFinanceCategory(companyId, id, active);
     }
 
+    // ==================== SERVICE CATALOG ====================
+
+    async getServiceCatalog(companyId: string) {
+        return this.settingsService.getServiceCatalog(companyId);
+    }
+
+    async createServiceItem(companyId: string, data: { name: string; unit?: string; isDefault?: boolean }) {
+        return this.settingsService.createServiceItem(companyId, data);
+    }
+
+    async updateServiceItem(companyId: string, id: string, data: { name?: string; unit?: string; isDefault?: boolean }) {
+        return this.settingsService.updateServiceItem(companyId, id, data);
+    }
+
+    async deactivateServiceItem(companyId: string, id: string, active: boolean) {
+        return this.settingsService.deactivateServiceItem(companyId, id, active);
+    }
+
+    async getActOfWork(companyId: string, orderId: string) {
+        return this.reportsService.getActOfWork(companyId, orderId);
+    }
+
     async getCashflowReport(companyId: string, query: { startDate?: string; endDate?: string }) {
         return this.reportsService.getCashflowReport(companyId, query);
     }

@@ -111,6 +111,7 @@ export default function FinanceHubPage() {
             links: [
                 { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
                 { label: 'Статьи доходов и расходов', href: '/company/accounting/settings?tab=categories', show: acc, desc: 'Категории для платежей и отчётов' },
+                { label: 'Наименование услуг', href: '/company/accounting/settings?tab=services', show: acc, desc: 'Формулировки услуг для актов и счетов' },
                 { label: 'Ввод начальных остатков', href: '/company/accounting/opening-balances', show: acc, desc: 'Стартовые суммы на счетах и долги контрагентов при запуске учёта' },
                 { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin, desc: 'Начисления и выплаты сотрудникам' },
                 { label: 'Моя зарплата', href: '/company/my-salary', show: user?.role === 'LOGISTICIAN', desc: 'Ваши начисления' },

@@ -451,6 +451,52 @@ export class AccountingController {
         return this.accountingService.deactivateFinanceCategory(req.user.companyId, id, body.active);
     }
 
+    // ==================== СПРАВОЧНИК УСЛУГ ====================
+
+    @Get('service-catalog')
+    @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions('accounting', 'orders')
+    async getServiceCatalog(@Request() req: any) {
+        return this.accountingService.getServiceCatalog(req.user.companyId);
+    }
+
+    @Post('service-catalog')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    async createServiceItem(
+        @Request() req: any,
+        @Body() body: { name: string; unit?: string; isDefault?: boolean },
+    ) {
+        return this.accountingService.createServiceItem(req.user.companyId, body);
+    }
+
+    @Put('service-catalog/:id')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    async updateServiceItem(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { name?: string; unit?: string; isDefault?: boolean },
+    ) {
+        return this.accountingService.updateServiceItem(req.user.companyId, id, body);
+    }
+
+    @Put('service-catalog/:id/deactivate')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    async deactivateServiceItem(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { active: boolean },
+    ) {
+        return this.accountingService.deactivateServiceItem(req.user.companyId, id, body.active);
+    }
+
+    // ==================== АКТ ВЫПОЛНЕННЫХ РАБОТ ====================
+
+    @Get('act-of-work/:orderId')
+    @Roles(...FINANCE_VIEW_ROLES)
+    async getActOfWork(@Request() req: any, @Param('orderId') orderId: string) {
+        return this.accountingService.getActOfWork(req.user.companyId, orderId);
+    }
+
     // ==================== CASH FLOW & P&L REPORTS ====================
 
     @Get('cashflow')

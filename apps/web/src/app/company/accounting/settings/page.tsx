@@ -31,6 +31,14 @@ interface FinanceCategory {
     isActive: boolean;
 }
 
+interface ServiceItem {
+    id: string;
+    name: string;
+    unit: string;
+    isActive: boolean;
+    isDefault: boolean;
+}
+
 const COST_TYPE_OPTIONS: { value: CostType; label: string; hint: string }[] = [
     { value: 'PER_ORDER', label: 'По заявке', hint: 'Себестоимость рейса — уменьшает маржу заявки' },
     { value: 'PER_VEHICLE', label: 'По машине', hint: 'Расход конкретного грузовика' },
@@ -47,14 +55,19 @@ export default function FinanceSettingsPage() {
     const { user } = useAuthStore();
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
 
-    // Вкладку можно задать ссылкой: ?tab=accounts | categories
+    // Вкладку можно задать ссылкой: ?tab=accounts | categories | services
     const rawTab = searchParams?.get('tab') || '';
-    const initialTab = rawTab === 'categories' ? 'categories' : 'accounts';
+    const initialTab = rawTab === 'categories' ? 'categories' : rawTab === 'services' ? 'services' : 'accounts';
     const [activeTab, setActiveTab] = useState(initialTab);
 
     const [loading, setLoading] = useState(false);
     const [accounts, setAccounts] = useState<FinanceAccount[]>([]);
     const [categories, setCategories] = useState<FinanceCategory[]>([]);
+    const [services, setServices] = useState<ServiceItem[]>([]);
+
+    const [serviceModalOpen, setServiceModalOpen] = useState(false);
+    const [editingService, setEditingService] = useState<ServiceItem | null>(null);
+    const [serviceForm] = Form.useForm();
 
     // Modals
     const [accountModalOpen, setAccountModalOpen] = useState(false);
@@ -76,12 +89,14 @@ export default function FinanceSettingsPage() {
     const fetchSettings = async () => {
         setLoading(true);
         try {
-            const [accRes, catRes] = await Promise.all([
+            const [accRes, catRes, svcRes] = await Promise.all([
                 api.get('/accounting/finance-accounts'),
                 api.get('/accounting/finance-categories'),
+                api.get('/accounting/service-catalog'),
             ]);
             setAccounts(accRes.data || []);
             setCategories(catRes.data || []);
+            setServices(svcRes.data || []);
         } catch {
             message.error('Не удалось загрузить настройки');
         } finally {
@@ -168,6 +183,76 @@ export default function FinanceSettingsPage() {
             message.error(err.response?.data?.message || 'Не удалось изменить статус статьи');
         }
     };
+
+    const handleCreateService = () => {
+        if (!canEditFinance) return;
+        setEditingService(null);
+        serviceForm.resetFields();
+        serviceForm.setFieldsValue({ unit: 'услуга', isDefault: false });
+        setServiceModalOpen(true);
+    };
+
+    const handleEditService = (record: ServiceItem) => {
+        if (!canEditFinance) return;
+        setEditingService(record);
+        serviceForm.setFieldsValue({ name: record.name, unit: record.unit, isDefault: record.isDefault });
+        setServiceModalOpen(true);
+    };
+
+    const handleSaveService = async (values: { name: string; unit?: string; isDefault?: boolean }) => {
+        setSaving(true);
+        try {
+            if (editingService) {
+                await api.put(`/accounting/service-catalog/${editingService.id}`, values);
+                message.success('Услуга обновлена');
+            } else {
+                await api.post('/accounting/service-catalog', values);
+                message.success('Услуга добавлена');
+            }
+            setServiceModalOpen(false);
+            fetchSettings();
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Ошибка сохранения услуги');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleToggleServiceActive = async (id: string, active: boolean) => {
+        try {
+            await api.put(`/accounting/service-catalog/${id}/deactivate`, { active });
+            message.success(active ? 'Услуга активирована' : 'Услуга скрыта');
+            fetchSettings();
+        } catch (err: any) {
+            message.error(err.response?.data?.message || 'Не удалось изменить статус услуги');
+        }
+    };
+
+    const serviceColumns = [
+        {
+            title: 'Наименование услуги',
+            dataIndex: 'name',
+            key: 'name',
+            render: (val: string, r: ServiceItem) => (
+                <Text style={{ fontSize: 13, color: r.isActive ? undefined : token.colorTextDescription }}>
+                    {val}{r.isDefault && <Tag color="green" style={{ marginLeft: 8 }}>по умолчанию</Tag>}
+                </Text>
+            )
+        },
+        { title: 'Ед. изм.', dataIndex: 'unit', key: 'unit', width: 130, render: (v: string) => <Text type="secondary">{v}</Text> },
+        {
+            title: 'Статус', dataIndex: 'isActive', key: 'active', width: 120,
+            render: (val: boolean, r: ServiceItem) => (
+                <Switch checked={val} disabled={!canEditFinance} onChange={(checked) => handleToggleServiceActive(r.id, checked)} size="small" />
+            )
+        },
+        {
+            title: '', key: 'actions', width: 80,
+            render: (_: any, r: ServiceItem) => (
+                canEditFinance && <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEditService(r)} />
+            )
+        }
+    ];
 
     const accountColumns = [
         {
@@ -268,7 +353,7 @@ export default function FinanceSettingsPage() {
                     </div>
                     <h1 className="lc2-title">Настройки финансовых справочников</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Управление счетами, кассами и статьями доходов и расходов
+                        Управление счетами, кассами, статьями доходов и расходов и наименованиями услуг
                     </p>
                 </div>
             </div>
@@ -341,6 +426,29 @@ export default function FinanceSettingsPage() {
                                 ]} />
                             </div>
                         )
+                    },
+                    {
+                        key: 'services',
+                        label: 'Наименование услуг',
+                        children: (
+                            <div style={{ marginTop: 8 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                    <Text type="secondary" style={{ fontSize: 12.5 }}>
+                                        Формулировки услуг для актов выполненных работ и счетов. Услуга «по умолчанию» подставляется в акт автоматически.
+                                    </Text>
+                                    {canEditFinance && (
+                                        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateService}>Добавить услугу</Button>
+                                    )}
+                                </div>
+                                <Table
+                                    columns={serviceColumns}
+                                    dataSource={services}
+                                    rowKey="id"
+                                    size="small"
+                                    pagination={false}
+                                />
+                            </div>
+                        )
                     }
                 ]} />
             </div>
@@ -410,6 +518,36 @@ export default function FinanceSettingsPage() {
                             </Select>
                         </Form.Item>
                     )}
+                </Form>
+            </Modal>
+
+            {/* Service Modal */}
+            <Modal
+                title={editingService ? 'Редактировать услугу' : 'Новая услуга'}
+                open={serviceModalOpen}
+                onCancel={() => setServiceModalOpen(false)}
+                onOk={() => serviceForm.submit()}
+                confirmLoading={saving}
+                okText={editingService ? 'Сохранить' : 'Создать'}
+                cancelText="Отмена"
+                destroyOnClose
+            >
+                <Form form={serviceForm} layout="vertical" onFinish={handleSaveService}>
+                    <Form.Item name="name" label="Наименование услуги" rules={[{ required: true, message: 'Укажите наименование' }]}
+                        extra="Как услуга будет написана в акте, например «Транспортно-экспедиционные услуги»">
+                        <Input size="large" maxLength={120} />
+                    </Form.Item>
+                    <Form.Item name="unit" label="Единица измерения">
+                        <Select size="large" options={[
+                            { value: 'услуга', label: 'услуга' },
+                            { value: 'рейс', label: 'рейс' },
+                            { value: 'км', label: 'км' },
+                            { value: 'т', label: 'т' },
+                        ]} />
+                    </Form.Item>
+                    <Form.Item name="isDefault" label="Услуга по умолчанию" valuePropName="checked" extra="Подставляется в акт автоматически (может быть только одна)">
+                        <Switch />
+                    </Form.Item>
                 </Form>
             </Modal>
         </div>

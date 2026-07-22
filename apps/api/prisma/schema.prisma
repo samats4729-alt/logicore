@@ -315,6 +315,7 @@ model Company {
   orderResponsibilities OrderResponsible[] @relation("CompanyOrderResponsibilities")
   counterpartyOpenings   CounterpartyOpeningBalance[] @relation("CompanyCounterpartyOpenings")
   openingsAsCounterparty CounterpartyOpeningBalance[] @relation("CounterpartyOpenings")
+  serviceCatalog         ServiceCatalogItem[] @relation("CompanyServiceCatalog")
 
   @@index([bin])
 }
@@ -964,6 +965,22 @@ model FinanceCategory {
   payments    Payment[]        @relation("CategoryPayments")
 
   @@unique([companyId, name, direction])
+  @@index([companyId])
+}
+
+// Справочник наименований услуг (для актов выполненных работ и счетов)
+model ServiceCatalogItem {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation("CompanyServiceCatalog", fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  unit      String   @default("услуга") // Единица измерения: услуга, рейс, км, т и т.д.
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)     // Подставляется в акт по умолчанию
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
   @@index([companyId])
 }
 

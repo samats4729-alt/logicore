@@ -307,4 +307,60 @@ export class FinancialSettingsService {
             update: { openingReceivable: receivable, openingPayable: payable, openingDate, note },
         });
     }
+
+    // ==================== СПРАВОЧНИК НАИМЕНОВАНИЙ УСЛУГ ====================
+
+    private readonly DEFAULT_SERVICES = [
+        { name: 'Транспортно-экспедиционные услуги', unit: 'услуга', isDefault: true },
+        { name: 'Перевозка груза автомобильным транспортом', unit: 'рейс', isDefault: false },
+    ];
+
+    async getServiceCatalog(companyId: string) {
+        const count = await this.prisma.serviceCatalogItem.count({ where: { companyId } });
+        if (count === 0) {
+            await this.prisma.serviceCatalogItem.createMany({
+                data: this.DEFAULT_SERVICES.map((s) => ({ companyId, ...s })),
+                skipDuplicates: true,
+            });
+        }
+        return this.prisma.serviceCatalogItem.findMany({
+            where: { companyId },
+            orderBy: [{ isActive: 'desc' }, { isDefault: 'desc' }, { name: 'asc' }],
+        });
+    }
+
+    async createServiceItem(companyId: string, data: { name: string; unit?: string; isDefault?: boolean }) {
+        const name = (data.name || '').trim();
+        if (!name) throw new BadRequestException('Укажите наименование услуги');
+        const existing = await this.prisma.serviceCatalogItem.findFirst({ where: { companyId, name } });
+        if (existing) {
+            if (!existing.isActive) return this.prisma.serviceCatalogItem.update({ where: { id: existing.id }, data: { isActive: true } });
+            throw new BadRequestException('Услуга с таким наименованием уже существует');
+        }
+        if (data.isDefault) {
+            await this.prisma.serviceCatalogItem.updateMany({ where: { companyId, isDefault: true }, data: { isDefault: false } });
+        }
+        return this.prisma.serviceCatalogItem.create({
+            data: { companyId, name, unit: (data.unit || 'услуга').trim() || 'услуга', isDefault: !!data.isDefault },
+        });
+    }
+
+    async updateServiceItem(companyId: string, id: string, data: { name?: string; unit?: string; isDefault?: boolean }) {
+        const item = await this.prisma.serviceCatalogItem.findFirst({ where: { id, companyId } });
+        if (!item) throw new NotFoundException('Услуга не найдена');
+        if (data.isDefault) {
+            await this.prisma.serviceCatalogItem.updateMany({ where: { companyId, isDefault: true, NOT: { id } }, data: { isDefault: false } });
+        }
+        const patch: { name?: string; unit?: string; isDefault?: boolean } = {};
+        if (data.name !== undefined) patch.name = data.name.trim();
+        if (data.unit !== undefined) patch.unit = data.unit.trim() || 'услуга';
+        if (data.isDefault !== undefined) patch.isDefault = data.isDefault;
+        return this.prisma.serviceCatalogItem.update({ where: { id }, data: patch });
+    }
+
+    async deactivateServiceItem(companyId: string, id: string, active: boolean) {
+        const item = await this.prisma.serviceCatalogItem.findFirst({ where: { id, companyId } });
+        if (!item) throw new NotFoundException('Услуга не найдена');
+        return this.prisma.serviceCatalogItem.update({ where: { id }, data: { isActive: active } });
+    }
 }
