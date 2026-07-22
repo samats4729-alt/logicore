@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { IdentityService } from '../../identity/identity.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class CompanyDriversService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private identityService: IdentityService) { }
 
     // Фиче-флаг чтения водителей из нового слоя (Affiliation). По умолчанию ВЫКЛ, кэш 30с.
     private driverFlagCache: { value: boolean; expiresAt: number } | null = null;
@@ -66,26 +67,24 @@ export class CompanyDriversService {
             }
         }
 
-        // Новый путь (за флагом): членство водителей — из Affiliation (sourceUserId).
+        // Членство водителей: всегда старое (companyId), а при флаге дополнительно
+        // новый слой (Affiliation) — ОБЪЕДИНЕНИЕ, чтобы только что добавленный водитель
+        // никогда не пропал.
+        const membershipOr: any[] = [{ companyId: targetCompanyId }];
         if (await this.isAffiliationDriverReads()) {
             const affs = await this.prisma.affiliation.findMany({
                 where: { companyId: targetCompanyId, role: UserRole.DRIVER, sourceUserId: { not: null } },
                 select: { sourceUserId: true },
             });
-            const ids = Array.from(new Set(affs.map(a => a.sourceUserId).filter(Boolean))) as string[];
-            return this.prisma.user.findMany({
-                where: { id: { in: ids }, role: UserRole.DRIVER, isActive: true },
-                select: this.driverSelect,
-                orderBy: { createdAt: 'desc' },
-            });
+            const affIds = Array.from(new Set(affs.map(a => a.sourceUserId).filter(Boolean))) as string[];
+            if (affIds.length) membershipOr.push({ id: { in: affIds } });
         }
 
-        // Старый путь (по умолчанию).
         return this.prisma.user.findMany({
             where: {
-                companyId: targetCompanyId,
                 role: UserRole.DRIVER,
                 isActive: true,
+                OR: membershipOr,
             },
             select: this.driverSelect,
             orderBy: { createdAt: 'desc' },
@@ -158,6 +157,13 @@ export class CompanyDriversService {
                 select: this.driverSelect,
             });
 
+            // Двойная запись в новый слой (не должна ломать основную операцию)
+            try {
+                await this.identityService.syncMembership(existing.id, companyId, UserRole.DRIVER, { isPrimary: true });
+            } catch (e) {
+                console.warn('syncMembership (driver update) failed:', e);
+            }
+
             return {
                 ...updated,
                 alreadyExists: true,
@@ -180,7 +186,7 @@ export class CompanyDriversService {
         }
 
         // Создаём водителя
-        return this.prisma.$transaction(async (tx) => {
+        const created = await this.prisma.$transaction(async (tx) => {
             const user = await tx.user.create({
                 data: {
                     ...driverData,
@@ -203,6 +209,15 @@ export class CompanyDriversService {
 
             return user;
         });
+
+        // Двойная запись в новый слой (не должна ломать основную операцию)
+        try {
+            await this.identityService.syncMembership(created.id, companyId, UserRole.DRIVER, { isPrimary: true });
+        } catch (e) {
+            console.warn('syncMembership (driver create) failed:', e);
+        }
+
+        return created;
     }
 
     /**

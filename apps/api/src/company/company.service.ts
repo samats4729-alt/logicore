@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { IdentityService } from '../identity/identity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
@@ -27,27 +28,27 @@ export class CompanyService {
         private jwtService: JwtService,
         private redisService: RedisService,
         private emailService: EmailService,
+        private identityService: IdentityService,
     ) { }
 
     async getCompanyUsers(companyId: string, query: any = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
 
-        // Участники компании. Новый путь (за флагом) — через Affiliation (sourceUserId);
-        // старый путь (по умолчанию) — User.companyId + UserCompanyRelation. Набор совпадает.
-        let membershipOr: any[];
+        // Участники компании: всегда старое (User.companyId + UserCompanyRelation),
+        // а при флаге дополнительно новый слой (Affiliation) — ОБЪЕДИНЕНИЕ, чтобы
+        // никого не потерять, из какого бы слоя он ни пришёл.
+        const relations = await this.prisma.userCompanyRelation.findMany({
+            where: { companyId },
+            select: { userId: true },
+        });
+        const relatedUserIds = relations.map(r => r.userId);
+        const membershipOr: any[] = [{ companyId }];
+        if (relatedUserIds.length) {
+            membershipOr.push({ id: { in: relatedUserIds } });
+        }
         if (await this.isFlagOn('identity_reads_employees')) {
-            const ids = await this.affiliationMemberUserIds(companyId);
-            membershipOr = [{ id: { in: ids } }];
-        } else {
-            const relations = await this.prisma.userCompanyRelation.findMany({
-                where: { companyId },
-                select: { userId: true },
-            });
-            const relatedUserIds = relations.map(r => r.userId);
-            membershipOr = [{ companyId }];
-            if (relatedUserIds.length) {
-                membershipOr.push({ id: { in: relatedUserIds } });
-            }
+            const affIds = await this.affiliationMemberUserIds(companyId);
+            if (affIds.length) membershipOr.push({ id: { in: affIds } });
         }
 
         const where: any = { isActive: true, OR: membershipOr };
@@ -287,6 +288,13 @@ export class CompanyService {
 
             return user;
         });
+
+        // Двойная запись в новый слой (не должна ломать создание)
+        try {
+            await this.identityService.syncMembership(result.id, companyId, data.role as UserRole, { isPrimary: true });
+        } catch (e) {
+            console.warn('syncMembership (createCompanyUser) failed:', e);
+        }
 
         return {
             id: result.id,
@@ -639,22 +647,9 @@ export class CompanyService {
     }
 
     async getCompanyManagers(companyId: string) {
-        // Новый путь (за флагом): членство берём из Affiliation через sourceUserId,
-        // фильтр роли — как в старом (по User.role). Даёт тот же набор, но через новый слой.
-        if (await this.isFlagOn('identity_reads_managers')) {
-            const ids = await this.affiliationMemberUserIds(companyId);
-            return this.prisma.user.findMany({
-                where: {
-                    id: { in: ids },
-                    isActive: true,
-                    role: { in: ['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN'] as any },
-                },
-                select: { id: true, firstName: true, lastName: true, role: true },
-                orderBy: { firstName: 'asc' },
-            });
-        }
-
-        // Старый путь (по умолчанию): User.companyId + UserCompanyRelation.
+        // Членство: всегда старое (User.companyId + UserCompanyRelation), а при флаге
+        // дополнительно новый слой (Affiliation) — ОБЪЕДИНЕНИЕ. Так даже только что
+        // добавленный человек никогда не «пропадёт», из какого бы слоя он ни пришёл.
         const relations = await this.prisma.userCompanyRelation.findMany({
             where: { companyId },
             select: { userId: true },
@@ -664,6 +659,10 @@ export class CompanyService {
         const membershipOr: any[] = [{ companyId }];
         if (relatedUserIds.length) {
             membershipOr.push({ id: { in: relatedUserIds } });
+        }
+        if (await this.isFlagOn('identity_reads_managers')) {
+            const affIds = await this.affiliationMemberUserIds(companyId);
+            if (affIds.length) membershipOr.push({ id: { in: affIds } });
         }
 
         return this.prisma.user.findMany({
@@ -1423,10 +1422,14 @@ export class CompanyService {
                 await this.prisma.userCompanyRelation.create({
                     data: { userId: targetUserId, companyId: cid, role: target.role },
                 });
+                try { await this.identityService.syncMembership(targetUserId, cid, target.role, { isPrimary: false }); }
+                catch (e) { console.warn('syncMembership (setUserCompanies add) failed:', e); }
             } else if (!desired.has(cid) && existing) {
                 await this.prisma.userCompanyRelation.delete({
                     where: { userId_companyId: { userId: targetUserId, companyId: cid } },
                 });
+                try { await this.identityService.removeMembership(targetUserId, cid); }
+                catch (e) { console.warn('removeMembership (setUserCompanies remove) failed:', e); }
             }
         }
 
@@ -1464,6 +1467,13 @@ export class CompanyService {
             select: { id: true, role: true },
         });
 
+        // Владелец + вся офисная команда получают доступ в новую организацию
+        const teamRoles = new Map<string, UserRole>();
+        teamRoles.set(userId, UserRole.COMPANY_ADMIN);
+        for (const u of teamUsers) {
+            if (!teamRoles.has(u.id)) teamRoles.set(u.id, u.role);
+        }
+
         const result = await this.prisma.$transaction(async (tx) => {
             const company = await tx.company.create({
                 data: {
@@ -1473,13 +1483,6 @@ export class CompanyService {
                     isExternal: false,
                 },
             });
-
-            // Владелец + вся офисная команда получают доступ в новую организацию
-            const teamRoles = new Map<string, UserRole>();
-            teamRoles.set(userId, UserRole.COMPANY_ADMIN);
-            for (const u of teamUsers) {
-                if (!teamRoles.has(u.id)) teamRoles.set(u.id, u.role);
-            }
 
             await tx.userCompanyRelation.createMany({
                 data: [...teamRoles].map(([uid, role]) => ({
@@ -1492,6 +1495,15 @@ export class CompanyService {
 
             return company;
         });
+
+        // Двойная запись в новый слой для всей команды (не должна ломать создание компании)
+        try {
+            for (const [uid, role] of teamRoles) {
+                await this.identityService.syncMembership(uid, result.id, role, { isPrimary: false });
+            }
+        } catch (e) {
+            console.warn('syncMembership (addMyCompany) failed:', e);
+        }
 
         return result;
     }

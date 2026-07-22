@@ -9,6 +9,7 @@ import { CompanyTrackingService } from './services/company-tracking.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EmailModule } from '../email/email.module';
+import { IdentityModule } from '../identity/identity.module';
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { EmailModule } from '../email/email.module';
         OrdersModule,
         EmailModule,
         BillingModule,
+        IdentityModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => {

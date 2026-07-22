@@ -1,5 +1,5 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
-import { AffiliationType } from '@prisma/client';
+import { AffiliationType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -405,6 +405,73 @@ export class IdentityService {
             multiCompanyCount: multiCompanyPersons.length,
             multiCompanyPersons,
         };
+    }
+
+    // ==================== ДВОЙНАЯ ЗАПИСЬ (поддержка нового слоя при создании) ====================
+
+    /**
+     * При создании/изменении членства поддерживать новый слой: у пользователя есть Person,
+     * и есть Affiliation (человек ↔ компания ↔ роль). Идемпотентно и безопасно.
+     * Вызывается ПОСЛЕ основной операции; ошибки не должны ронять основную операцию.
+     */
+    async syncMembership(
+        userId: string,
+        companyId: string,
+        role: UserRole,
+        opts?: { isPrimary?: boolean; position?: string | null; departmentId?: string | null },
+    ) {
+        if (!userId || !companyId || !role) return;
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, personId: true, firstName: true, lastName: true, middleName: true, phone: true, iin: true },
+        });
+        if (!user) return;
+
+        // Гарантируем личность (без авто-слияния — 1:1, как бэкфилл)
+        let personId = user.personId;
+        if (!personId) {
+            const person = await this.prisma.person.create({
+                data: {
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    middleName: user.middleName ?? null,
+                    phone: user.phone ?? null,
+                    iin: user.iin ?? null,
+                },
+            });
+            personId = person.id;
+            await this.prisma.user.update({ where: { id: userId }, data: { personId } });
+        }
+
+        await this.prisma.affiliation.upsert({
+            where: { personId_companyId_role: { personId, companyId, role } },
+            create: {
+                personId,
+                companyId,
+                role,
+                type: AffiliationType.EMPLOYEE,
+                sourceUserId: userId,
+                isPrimary: opts?.isPrimary ?? false,
+                position: opts?.position ?? null,
+                departmentId: opts?.departmentId ?? null,
+                status: 'ACTIVE',
+            },
+            update: {
+                sourceUserId: userId,
+                status: 'ACTIVE',
+                ...(opts?.isPrimary ? { isPrimary: true } : {}),
+            },
+        });
+    }
+
+    /** Убрать членство в новом слое (при снятии доступа/удалении связи). */
+    async removeMembership(userId: string, companyId: string) {
+        if (!userId || !companyId) return;
+        const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { personId: true } });
+        if (!user?.personId) return;
+        await this.prisma.affiliation.deleteMany({
+            where: { personId: user.personId, companyId, sourceUserId: userId },
+        });
     }
 
     // ==================== ПЕРЕКЛЮЧЕНИЕ ЧТЕНИЯ (за флагом) ====================

@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
+import { IdentityService } from '../identity/identity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
@@ -17,6 +18,7 @@ export class AuthService {
         private configService: ConfigService,
         private redisService: RedisService,
         private emailService: EmailService,
+        private identityService: IdentityService,
     ) { }
 
     // ==================== EMAIL AUTH (для остальных ролей) ====================
@@ -505,6 +507,13 @@ export class AuthService {
             return { company, admin };
         });
 
+        // Двойная запись в новый слой (не должна ломать регистрацию)
+        try {
+            await this.identityService.syncMembership(result.admin.id, result.company.id, userRole as any, { isPrimary: true });
+        } catch (e) {
+            console.warn('syncMembership (register-company) failed:', e);
+        }
+
         // Генерируем токен
         const payload = {
             sub: result.admin.id,
@@ -850,6 +859,13 @@ export class AuthService {
             return { company, admin };
         });
 
+        // Двойная запись в новый слой (не должна ломать регистрацию)
+        try {
+            await this.identityService.syncMembership(result.admin.id, result.company.id, userRole as any, { isPrimary: true });
+        } catch (e) {
+            console.warn('syncMembership (google register) failed:', e);
+        }
+
         const payload = {
             sub: result.admin.id,
             role: result.admin.role,
@@ -959,6 +975,17 @@ export class AuthService {
 
             return user;
         });
+
+        // Двойная запись в новый слой (не должна ломать регистрацию)
+        try {
+            await this.identityService.syncMembership(result.id, invitation.companyId, invitation.role as any, { isPrimary: true, position: invitation.position });
+            const extra = (invitation.sharedCompanyIds || []).filter((cid) => cid && cid !== invitation.companyId);
+            for (const cid of extra) {
+                await this.identityService.syncMembership(result.id, cid, invitation.role as any, { isPrimary: false });
+            }
+        } catch (e) {
+            console.warn('syncMembership (invited user) failed:', e);
+        }
 
         const payload = {
             sub: result.id,
