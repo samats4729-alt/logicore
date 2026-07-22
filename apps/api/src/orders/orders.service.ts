@@ -998,6 +998,50 @@ export class OrdersService implements OnModuleInit {
     }
 
     /**
+     * Одноразовая перенумерация всех заявок компании под текущий формат нумерации.
+     * Присваивает последовательные номера по дате создания. Затрагивает только
+     * заявки, созданные этой компанией (ответственный менеджер из компании).
+     */
+    async renumberAllOrders(companyId: string) {
+        const cfg = await this.prisma.orderNumbering.upsert({ where: { companyId }, create: { companyId }, update: {} });
+
+        const mine = await this.prisma.order.findMany({
+            where: { responsibleManager: { companyId } },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
+        });
+        if (mine.length === 0) return { renumbered: 0, nextNumber: cfg.nextNumber };
+
+        const myIds = new Set(mine.map((o) => o.id));
+
+        // Номера, занятые чужими заявками (orderNumber уникален глобально)
+        const all = await this.prisma.order.findMany({ select: { id: true, orderNumber: true } });
+        const taken = new Set(all.filter((o) => !myIds.has(o.id)).map((o) => o.orderNumber));
+
+        // Фаза 1: временные уникальные номера, чтобы не ловить коллизии между своими же
+        await this.prisma.$transaction(
+            mine.map((o) => this.prisma.order.update({ where: { id: o.id }, data: { orderNumber: `__renum_${o.id}` } })),
+        );
+
+        // Фаза 2: финальные последовательные номера (пропуская занятые чужими)
+        let seq = 1;
+        const finalUpdates = mine.map((o) => {
+            let candidate = `${cfg.prefix}${String(seq).padStart(cfg.padding, '0')}`;
+            while (taken.has(candidate)) {
+                seq++;
+                candidate = `${cfg.prefix}${String(seq).padStart(cfg.padding, '0')}`;
+            }
+            taken.add(candidate);
+            seq++;
+            return this.prisma.order.update({ where: { id: o.id }, data: { orderNumber: candidate } });
+        });
+        await this.prisma.$transaction(finalUpdates);
+
+        const updatedCfg = await this.prisma.orderNumbering.update({ where: { companyId }, data: { nextNumber: seq } });
+        return { renumbered: mine.length, nextNumber: updatedCfg.nextNumber };
+    }
+
+    /**
      * Генерация номера заявки.
      * Если у компании настроена нумерация — формат как в 1С: {prefix}{0…0N}.
      * Иначе — устаревший формат LC-YYYYMMDD-XXXX.

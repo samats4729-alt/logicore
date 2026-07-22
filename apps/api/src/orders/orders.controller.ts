@@ -87,6 +87,13 @@ export class OrdersController {
         return this.ordersService.updateNumberingSettings(req.user.companyId, body);
     }
 
+    @Post('renumber')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Перенумеровать существующие заявки под текущий формат' })
+    async renumberOrders(@Request() req: any) {
+        return this.ordersService.renumberAllOrders(req.user.companyId);
+    }
+
     @Get()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Получить список заявок' })

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Button, Typography, Form, Input, InputNumber, App, Spin } from 'antd';
-import { ArrowLeftOutlined, NumberOutlined, SaveOutlined } from '@ant-design/icons';
+import { Button, Typography, Form, Input, InputNumber, App, Spin, Divider } from 'antd';
+import { ArrowLeftOutlined, NumberOutlined, SaveOutlined, RetweetOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -11,12 +11,13 @@ const { Text } = Typography;
 
 export default function OrderNumberingPage() {
     const router = useRouter();
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const { user } = useAuthStore();
     const canEdit = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT' || user?.role === 'ADMIN';
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [renumbering, setRenumbering] = useState(false);
     const [form] = Form.useForm();
 
     const prefix = Form.useWatch('prefix', form);
@@ -38,6 +39,32 @@ export default function OrderNumberingPage() {
     };
 
     const preview = (n: number) => `${prefix || ''}${String(Math.max(Number(n) || 1, 1)).padStart(Math.min(Math.max(Number(padding) || 9, 1), 12), '0')}`;
+
+    const handleRenumber = () => {
+        modal.confirm({
+            title: 'Перенумеровать существующие заявки?',
+            width: 520,
+            content: (
+                <div style={{ fontSize: 13 }}>
+                    <p>Все заявки вашей компании получат новые номера по текущему формату (<strong>{preview(1)}, {preview(2)}…</strong>) по дате создания. Счётчик продолжится с последнего.</p>
+                    <p style={{ color: 'var(--lc-text-ter)' }}>В уже распечатанных документах и старых записях истории останется прежний номер. Отменить перенумерацию нельзя.</p>
+                </div>
+            ),
+            okText: 'Перенумеровать', okButtonProps: { danger: true }, cancelText: 'Отмена',
+            onOk: async () => {
+                setRenumbering(true);
+                try {
+                    const res = await api.post('/orders/renumber');
+                    message.success(`Перенумеровано заявок: ${res.data?.renumbered ?? 0}`);
+                    fetchSettings();
+                } catch (e: any) {
+                    message.error(e.response?.data?.message || 'Не удалось перенумеровать');
+                } finally {
+                    setRenumbering(false);
+                }
+            },
+        });
+    };
 
     const handleSave = async (values: any) => {
         setSaving(true);
@@ -112,8 +139,21 @@ export default function OrderNumberingPage() {
                     </Form>
 
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 12, margin: '16px 0 0' }}>
-                        Ранее созданные заявки сохраняют свои номера. Новый формат применяется к заявкам, созданным после сохранения.
+                        Новый формат применяется к заявкам, созданным после сохранения. Существующие заявки можно перенумеровать разом кнопкой ниже.
                     </p>
+
+                    {canEdit && (
+                        <>
+                            <Divider style={{ margin: '20px 0 16px' }} />
+                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Перенумеровать существующие заявки</div>
+                            <p style={{ color: 'var(--lc-text-ter)', fontSize: 12.5, margin: '0 0 12px', maxWidth: 560 }}>
+                                Разово присвоит всем ранее созданным заявкам номера по текущему формату (по дате создания). Полезно при переходе на новую нумерацию.
+                            </p>
+                            <Button danger icon={<RetweetOutlined />} loading={renumbering} onClick={handleRenumber}>
+                                Перенумеровать существующие заявки
+                            </Button>
+                        </>
+                    )}
                 </div>
             )}
         </div>
