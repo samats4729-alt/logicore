@@ -269,4 +269,42 @@ export class FinancialSettingsService {
             data: { isActive: active },
         });
     }
+
+    // ==================== НАЧАЛЬНЫЕ ДОЛГИ КОНТРАГЕНТОВ ====================
+
+    async getCounterpartyOpenings(companyId: string) {
+        const records = await this.prisma.counterpartyOpeningBalance.findMany({
+            where: { companyId },
+        });
+        return records.map((r) => ({
+            counterpartyId: r.counterpartyId,
+            openingReceivable: r.openingReceivable || 0,
+            openingPayable: r.openingPayable || 0,
+            openingDate: r.openingDate,
+            note: r.note,
+        }));
+    }
+
+    async upsertCounterpartyOpening(
+        companyId: string,
+        counterpartyId: string,
+        data: { openingReceivable?: number; openingPayable?: number; openingDate?: string | null; note?: string | null },
+    ) {
+        if (counterpartyId === companyId) {
+            throw new BadRequestException('Нельзя ввести долг самому себе');
+        }
+        const counterparty = await this.prisma.company.findUnique({ where: { id: counterpartyId }, select: { id: true } });
+        if (!counterparty) throw new NotFoundException('Контрагент не найден');
+
+        const receivable = Math.max(data.openingReceivable ?? 0, 0);
+        const payable = Math.max(data.openingPayable ?? 0, 0);
+        const openingDate = data.openingDate ? new Date(data.openingDate) : null;
+        const note = data.note ?? null;
+
+        return this.prisma.counterpartyOpeningBalance.upsert({
+            where: { companyId_counterpartyId: { companyId, counterpartyId } },
+            create: { companyId, counterpartyId, openingReceivable: receivable, openingPayable: payable, openingDate, note },
+            update: { openingReceivable: receivable, openingPayable: payable, openingDate, note },
+        });
+    }
 }

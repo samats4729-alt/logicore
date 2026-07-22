@@ -313,6 +313,8 @@ model Company {
   documents          Document[]
   subscription       CompanySubscription?
   orderResponsibilities OrderResponsible[] @relation("CompanyOrderResponsibilities")
+  counterpartyOpenings   CounterpartyOpeningBalance[] @relation("CompanyCounterpartyOpenings")
+  openingsAsCounterparty CounterpartyOpeningBalance[] @relation("CounterpartyOpenings")
 
   @@index([bin])
 }
@@ -962,6 +964,24 @@ model FinanceCategory {
   payments    Payment[]        @relation("CategoryPayments")
 
   @@unique([companyId, name, direction])
+  @@index([companyId])
+}
+
+// Начальные долги контрагентов на дату старта учёта (ввод остатков → заказчики/перевозчики)
+model CounterpartyOpeningBalance {
+  id                String    @id @default(cuid())
+  companyId         String
+  company           Company   @relation("CompanyCounterpartyOpenings", fields: [companyId], references: [id], onDelete: Cascade)
+  counterpartyId    String
+  counterparty      Company   @relation("CounterpartyOpenings", fields: [counterpartyId], references: [id], onDelete: Cascade)
+  openingReceivable Float     @default(0)  // Они нам должны на дату начала
+  openingPayable    Float     @default(0)  // Мы им должны на дату начала
+  openingDate       DateTime?              // Дата, на которую введён начальный долг
+  note              String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([companyId, counterpartyId])
   @@index([companyId])
 }
 

@@ -295,6 +295,14 @@ export class AccountingService {
         return this.settingsService.getAccountBalances(companyId);
     }
 
+    async getCounterpartyOpenings(companyId: string) {
+        return this.settingsService.getCounterpartyOpenings(companyId);
+    }
+
+    async upsertCounterpartyOpening(companyId: string, counterpartyId: string, data: { openingReceivable?: number; openingPayable?: number; openingDate?: string | null; note?: string | null }) {
+        return this.settingsService.upsertCounterpartyOpening(companyId, counterpartyId, data);
+    }
+
     async getFinanceCategories(companyId: string) {
         return this.settingsService.getFinanceCategories(companyId);
     }

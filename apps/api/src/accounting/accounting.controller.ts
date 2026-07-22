@@ -374,6 +374,24 @@ export class AccountingController {
         return this.accountingService.getAccountBalances(req.user.companyId);
     }
 
+    // ==================== НАЧАЛЬНЫЕ ДОЛГИ КОНТРАГЕНТОВ ====================
+
+    @Get('counterparty-openings')
+    @Roles(...FINANCE_VIEW_ROLES)
+    async getCounterpartyOpenings(@Request() req: any) {
+        return this.accountingService.getCounterpartyOpenings(req.user.companyId);
+    }
+
+    @Put('counterparty-openings/:counterpartyId')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    async upsertCounterpartyOpening(
+        @Request() req: any,
+        @Param('counterpartyId') counterpartyId: string,
+        @Body() body: { openingReceivable?: number; openingPayable?: number; openingDate?: string | null; note?: string | null },
+    ) {
+        return this.accountingService.upsertCounterpartyOpening(req.user.companyId, counterpartyId, body);
+    }
+
     @Put('finance-accounts/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async updateFinanceAccount(
