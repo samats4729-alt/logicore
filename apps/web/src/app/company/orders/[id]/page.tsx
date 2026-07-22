@@ -177,6 +177,8 @@ export default function OrderDetailPage() {
     const [forwarders, setForwarders] = useState<{ id: string; name: string }[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
     const [cargoCategories, setCargoCategories] = useState<any[]>([]);
+    const [paymentConditions, setPaymentConditions] = useState<{ id: string; name: string }[]>([]);
+    const [paymentForms, setPaymentForms] = useState<{ id: string; name: string }[]>([]);
 
     // Income modal
     const [incomeModalOpen, setIncomeModalOpen] = useState(false);
@@ -423,6 +425,12 @@ export default function OrderDetailPage() {
         fetchLocations();
         fetchCargoTypes();
     }, [orderId]);
+
+    useEffect(() => {
+        const activeOnly = (arr: any[]) => (arr || []).filter((x: any) => x.isActive !== false);
+        api.get('/accounting/dictionaries/payment-condition').then(r => setPaymentConditions(activeOnly(r.data))).catch(() => { });
+        api.get('/accounting/dictionaries/payment-form').then(r => setPaymentForms(activeOnly(r.data))).catch(() => { });
+    }, []);
 
     // =================== LOCATION OPTIONS ===================
 
@@ -724,6 +732,10 @@ export default function OrderDetailPage() {
             hasVat: order.hasVat ?? false,
             executorVatRate: order.executorVatRate ?? 0,
             executorHasVat: order.executorHasVat ?? false,
+            customerPaymentCondition: order.customerPaymentCondition || undefined,
+            customerPaymentForm: order.customerPaymentForm || undefined,
+            driverPaymentCondition: order.driverPaymentCondition || undefined,
+            driverPaymentForm: order.driverPaymentForm || undefined,
         });
 
         if (order.routePoints && order.routePoints.length > 0) {
@@ -809,6 +821,10 @@ export default function OrderDetailPage() {
                 requirements: values.requirements,
                 customerPrice: finalCustomerPrice,
                 customerPriceType: values.customerPriceType || 'FIXED',
+                customerPaymentCondition: values.customerPaymentCondition ?? null,
+                customerPaymentForm: values.customerPaymentForm ?? null,
+                driverPaymentCondition: values.driverPaymentCondition ?? null,
+                driverPaymentForm: values.driverPaymentForm ?? null,
                 routePoints,
                 customerCompanyId: null,
                 forwarderId: null,
@@ -1550,6 +1566,33 @@ export default function OrderDetailPage() {
                                                     </Select>
                                                 </Form.Item>
 
+                                                <Row gutter={16}>
+                                                    <Col xs={24} md={12}>
+                                                        <Form.Item name="customerPaymentCondition" label="Условие оплаты (заказчик)">
+                                                            <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                                                options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
+                                                        </Form.Item>
+                                                    </Col>
+                                                    <Col xs={24} md={12}>
+                                                        <Form.Item name="customerPaymentForm" label="Форма оплаты (заказчик)">
+                                                            <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                                                options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
+                                                        </Form.Item>
+                                                    </Col>
+                                                    <Col xs={24} md={12}>
+                                                        <Form.Item name="driverPaymentCondition" label="Условие оплаты (перевозчик)">
+                                                            <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                                                options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
+                                                        </Form.Item>
+                                                    </Col>
+                                                    <Col xs={24} md={12}>
+                                                        <Form.Item name="driverPaymentForm" label="Форма оплаты (перевозчик)">
+                                                            <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                                                options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
+                                                        </Form.Item>
+                                                    </Col>
+                                                </Row>
+
                                                 {/* Margin preview */}
                                                 <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'hasVat', 'vatRate', 'executorHasVat', 'executorVatRate']}>
                                                     {({ getFieldValue }) => {
@@ -1828,6 +1871,32 @@ export default function OrderDetailPage() {
                                         </Button>
                                     </div>
                                 )}
+                                {/* Условия и формы оплаты */}
+                                {(order.customerPaymentCondition || order.customerPaymentForm || order.driverPaymentCondition || order.driverPaymentForm) && (
+                                    <Card bordered={false} className="premium-card" style={{ marginBottom: 20 }}>
+                                        <Row gutter={[16, 12]}>
+                                            {(order.customerPaymentCondition || order.customerPaymentForm) && (
+                                                <Col xs={24} md={12}>
+                                                    <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Оплата от заказчика</div>
+                                                    <div style={{ fontSize: 14 }}>
+                                                        {order.customerPaymentCondition && <Tag color="blue">{order.customerPaymentCondition}</Tag>}
+                                                        {order.customerPaymentForm && <Tag>{order.customerPaymentForm}</Tag>}
+                                                    </div>
+                                                </Col>
+                                            )}
+                                            {(order.driverPaymentCondition || order.driverPaymentForm) && (
+                                                <Col xs={24} md={12}>
+                                                    <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Оплата перевозчику</div>
+                                                    <div style={{ fontSize: 14 }}>
+                                                        {order.driverPaymentCondition && <Tag color="blue">{order.driverPaymentCondition}</Tag>}
+                                                        {order.driverPaymentForm && <Tag>{order.driverPaymentForm}</Tag>}
+                                                    </div>
+                                                </Col>
+                                            )}
+                                        </Row>
+                                    </Card>
+                                )}
+
                                 {/* Financial Summary */}
                                 <Card bordered={false} className="premium-card" style={{ marginBottom: 20 }}>
                                     {(() => {
