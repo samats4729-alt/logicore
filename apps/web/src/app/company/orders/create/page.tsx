@@ -741,14 +741,14 @@ export default function CreateOrderPage() {
                     >
                         {pt.id && !locations.some(l => l.id === pt.id) && (
                             <Select.Option key={pt.id} value={pt.id}>
-                                {pt.city ? `[${pt.city}] ` : ''}{pt.address || 'Выбранный адрес'}
+                                Казахстан{pt.city ? `, ${pt.city}` : ''}, {pt.address || 'Выбранный адрес'}
                             </Select.Option>
                         )}
                         {getLocationOptions().map(group => (
                             <Select.OptGroup key={group.label} label={group.label}>
                                 {group.options.map(l => (
                                     <Select.Option key={l.id} value={l.id}>
-                                        {l.city ? `[${l.city}] ` : ''}{l.name} ({l.address})
+                                        {l.name}, Казахстан{l.city ? `, ${l.city}` : ''}, {l.address}
                                     </Select.Option>
                                 ))}
                             </Select.OptGroup>

@@ -1935,7 +1935,7 @@ export default function CompanyOrdersPage() {
                                                 <Select.OptGroup key={group.label} label={group.label}>
                                                     {group.options.map(l => (
                                                         <Select.Option key={l.id} value={l.id}>
-                                                            {l.city ? `[${l.city}] ` : ''}{l.name} ({l.address})
+                                                            {l.name}, Казахстан{l.city ? `, ${l.city}` : ''}, {l.address}
                                                         </Select.Option>
                                                     ))}
                                                 </Select.OptGroup>
