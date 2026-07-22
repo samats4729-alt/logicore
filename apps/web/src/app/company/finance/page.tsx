@@ -34,6 +34,7 @@ interface Link {
     label: string;
     href: string;
     show: boolean;
+    desc?: string;
 }
 interface Group {
     title: string;
@@ -86,29 +87,29 @@ export default function FinanceHubPage() {
         {
             title: 'Операции',
             links: [
-                { label: 'Счета', href: '/company/accounting/invoices', show: acc },
-                { label: 'Поступления', href: '/company/accounting/incomes', show: acc },
-                { label: 'Расходы', href: '/company/accounting/expenses', show: acc },
-                { label: 'Реестр заявок', href: '/company/accounting/registry', show: acc },
+                { label: 'Реестр заявок', href: '/company/accounting/registry', show: acc, desc: 'Деньги по каждой заявке: доход, себестоимость, маржа, оплаты' },
+                { label: 'Счета', href: '/company/accounting/invoices', show: acc, desc: 'Счета-документы покупателям и от поставщиков' },
+                { label: 'Поступления', href: '/company/accounting/incomes', show: acc, desc: 'Прочие доходы, не привязанные к заявке' },
+                { label: 'Расходы', href: '/company/accounting/expenses', show: acc, desc: 'Затраты не по заявке: аренда, зарплата, топливо, налоги' },
             ],
         },
         {
             title: 'Отчёты',
             links: [
-                { label: 'ДДС', href: '/company/accounting/cashflow', show: acc },
-                { label: 'P&L', href: '/company/accounting/pnl', show: acc },
-                { label: 'Взаиморасчёты', href: '/company/accounting/counterparty-report', show: acc },
-                { label: 'Отчёты', href: '/company/reports', show: acc },
+                { label: 'Движение денег (ДДС)', href: '/company/accounting/cashflow', show: acc, desc: 'Куда пришли и ушли живые деньги за период' },
+                { label: 'Прибыли и убытки', href: '/company/accounting/pnl', show: acc, desc: 'Заработок: доход − себестоимость − расходы' },
+                { label: 'Взаиморасчёты', href: '/company/accounting/counterparty-report', show: acc, desc: 'Кто кому должен — по каждому контрагенту' },
+                { label: 'Все отчёты', href: '/company/reports', show: acc, desc: 'Сводки, аналитика, экспорт' },
             ],
         },
         {
-            title: 'Инструменты',
+            title: 'Настройки и инструменты',
             links: [
-                { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin },
-                { label: 'Моя зарплата', href: '/company/my-salary', show: user?.role === 'LOGISTICIAN' },
-                { label: 'Калькулятор', href: '/company/calculator', show: true },
-                { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc },
-                { label: 'Статьи доходов/расходов', href: '/company/accounting/settings?tab=categories', show: acc },
+                { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
+                { label: 'Статьи доходов и расходов', href: '/company/accounting/settings?tab=categories', show: acc, desc: 'Категории для платежей и отчётов' },
+                { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin, desc: 'Начисления и выплаты сотрудникам' },
+                { label: 'Моя зарплата', href: '/company/my-salary', show: user?.role === 'LOGISTICIAN', desc: 'Ваши начисления' },
+                { label: 'Калькулятор', href: '/company/calculator', show: true, desc: 'Быстрый расчёт стоимости перевозки' },
             ],
         },
     ]
@@ -233,7 +234,8 @@ export default function FinanceHubPage() {
                             {g.links.map(l => (
                                 <li key={l.label}>
                                     <button type="button" onClick={() => router.push(l.href)}>
-                                        {l.label}
+                                        <span className="l">{l.label}</span>
+                                        {l.desc && <span className="d">{l.desc}</span>}
                                     </button>
                                 </li>
                             ))}
@@ -269,18 +271,32 @@ export default function FinanceHubPage() {
                 .lc-cabinet-links button {
                     background: none;
                     border: none;
-                    padding: 6px 8px;
+                    padding: 8px 8px;
                     margin: 0 -8px;
                     width: calc(100% + 16px);
                     text-align: left;
-                    font-size: 13.5px;
-                    color: var(--lc-text-sec);
                     border-radius: 8px;
                     cursor: pointer;
-                    transition: background .12s ease, color .12s ease;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                    transition: background .12s ease;
+                }
+                .lc-cabinet-links button .l {
+                    font-size: 13.5px;
+                    font-weight: 600;
+                    color: var(--lc-text-sec);
+                    transition: color .12s ease;
+                }
+                .lc-cabinet-links button .d {
+                    font-size: 11.5px;
+                    color: var(--lc-text-ter);
+                    line-height: 1.35;
                 }
                 .lc-cabinet-links button:hover {
                     background: var(--lc-hover);
+                }
+                .lc-cabinet-links button:hover .l {
                     color: var(--lc-primary, #1677ff);
                 }
             `}</style>

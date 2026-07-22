@@ -175,7 +175,7 @@ export default function PnLReportPage() {
                     </div>
                     <h1 className="lc2-title">Прибыли и убытки (P&L)</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Финансовые результаты на основе начислений по закрытым сделкам
+                        Заработок по начислению: доход по заявкам − себестоимость перевозок − прочие расходы. Считается по заявкам, а не по факту оплаты.
                     </p>
                     <Space wrap>
                         <RangePicker

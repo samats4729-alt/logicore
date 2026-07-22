@@ -317,7 +317,7 @@ export default function InvoicesPage() {
                     <div className="lc-eyebrow">Финансы · Счета</div>
                     <h1 className="lc2-title">Реестр счетов</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Группировка выполненных рейсов и сделок для взаимных расчетов с заказчиками и партнерами
+                        Счета-документы: исходящие — покупателям, входящие — от поставщиков. Это документы на оплату, а не сами деньги (оплаты — в реестре заявок и ДДС).
                     </p>
                     {isAccountantOrAdmin && (
                         <Button

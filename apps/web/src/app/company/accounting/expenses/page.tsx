@@ -134,7 +134,7 @@ export default function CompanyExpensesPage() {
                     </div>
                     <h1 className="lc2-title">Расходы</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Учёт исходящих платежей по заявкам и прочих расходов
+                        Затраты, не связанные с заявками: аренда, зарплата, топливо, налоги. Оплаты перевозчикам по заявке вносятся в «Реестре заявок», а не здесь.
                     </p>
                     {tab !== 'journal' && canEditFinance && (
                         <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingExpense(null); form.resetFields(); form.setFieldsValue({ date: dayjs() }); setModalOpen(true); }} className="lc-cta">

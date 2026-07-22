@@ -240,7 +240,7 @@ export default function CashflowReportPage() {
                     </div>
                     <h1 className="lc2-title">Движение денежных средств</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Фактическое движение денег по счетам и кассам
+                        Живые деньги: сколько фактически пришло и ушло по счетам и кассам за период — все оплаты, доходы и расходы вместе.
                     </p>
                     <Space wrap>
                         <RangePicker
