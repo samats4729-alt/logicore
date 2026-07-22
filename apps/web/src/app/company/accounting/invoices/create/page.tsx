@@ -16,7 +16,8 @@ import {
     Col,
     message,
     theme,
-    Spin
+    Spin,
+    Switch
 } from 'antd';
 import {
     ArrowLeftOutlined,
@@ -24,6 +25,7 @@ import {
     FileTextOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import StatusPill from '@/components/ui/StatusPill';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 
@@ -42,6 +44,8 @@ export default function CreateInvoicePage() {
     const [loadingOrders, setLoadingOrders] = useState(false);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const [submitting, setSubmitting] = useState(false);
+    // По умолчанию — только завершённые. Галочка добавляет заявки «в работе» (для аванса)
+    const [includeInProgress, setIncludeInProgress] = useState(false);
 
     // Form watch values
     const [invoiceType, setInvoiceType] = useState<'OUTGOING' | 'INCOMING'>('OUTGOING');
@@ -112,6 +116,7 @@ export default function CreateInvoicePage() {
                     params: {
                         type: invoiceType,
                         counterpartyId: selectedCounterpartyId,
+                        includeInProgress: includeInProgress ? 'true' : 'false',
                     }
                 });
                 setOrders(res.data || []);
@@ -123,7 +128,7 @@ export default function CreateInvoicePage() {
         };
 
         loadUninvoicedOrders();
-    }, [invoiceType, selectedCounterpartyId]);
+    }, [invoiceType, selectedCounterpartyId, includeInProgress]);
 
     // Calculate sum of selected orders
     const selectedAmount = useMemo(() => {
@@ -180,6 +185,12 @@ export default function CreateInvoicePage() {
             dataIndex: 'orderNumber',
             key: 'orderNumber',
             render: (t: string) => <span style={{ fontWeight: 600 }}>{t}</span>,
+        },
+        {
+            title: 'Статус',
+            dataIndex: 'status',
+            key: 'status',
+            render: (s: string) => <StatusPill status={s} />,
         },
         {
             title: 'Дата создания',
@@ -352,11 +363,23 @@ export default function CreateInvoicePage() {
                 </Col>
 
                 <Col xs={24} lg={16}>
-                    <div style={{ marginBottom: 16 }}>
-                        <Text strong style={{ fontSize: 15 }}>Доступные рейсы для включения в счет</Text>
-                        <Text type="secondary" style={{ fontSize: 12, marginLeft: 12 }}>
-                            Показываются только завершенные (COMPLETED) рейсы
-                        </Text>
+                    <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        <div>
+                            <Text strong style={{ fontSize: 15 }}>Доступные рейсы для включения в счет</Text>
+                            <Text type="secondary" style={{ fontSize: 12, marginLeft: 12 }}>
+                                {includeInProgress
+                                    ? 'Завершённые и заявки в работе (для аванса)'
+                                    : 'Показываются только завершённые рейсы'}
+                            </Text>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Switch
+                                size="small"
+                                checked={includeInProgress}
+                                onChange={setIncludeInProgress}
+                            />
+                            <Text style={{ fontSize: 13 }}>Показать заявки в работе (для аванса)</Text>
+                        </div>
                     </div>
                         {!selectedCounterpartyId ? (
                             <div style={{ textAlign: 'center', padding: '40px 0', color: token.colorTextDescription }}>
@@ -369,7 +392,9 @@ export default function CreateInvoicePage() {
                             </div>
                         ) : orders.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '40px 0', color: token.colorTextDescription }}>
-                                Нет завершенных рейсов без выставленного счета для данного контрагента
+                                {includeInProgress
+                                    ? 'Нет заявок (в работе или завершённых) без выставленного счёта для данного контрагента'
+                                    : 'Нет завершённых рейсов без выставленного счёта для данного контрагента'}
                             </div>
                         ) : (
                             <Table

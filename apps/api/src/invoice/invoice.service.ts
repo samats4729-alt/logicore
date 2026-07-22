@@ -555,9 +555,17 @@ export class InvoiceService {
         companyId: string,
         type: InvoiceType,
         counterpartyId: string,
+        includeInProgress = false,
     ) {
+        // По умолчанию — только завершённые заявки. С флагом includeInProgress
+        // добавляем заявки «в работе» (для аванса/предоплаты): исключены только
+        // черновики, ожидающие назначения и отменённые — по ним счёт выставлять рано/незачем.
+        const IN_PROGRESS_STATUSES = [
+            'ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING',
+            'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING', 'COMPLETED', 'PROBLEM',
+        ];
         const whereClause: any = {
-            status: 'COMPLETED',
+            status: includeInProgress ? { in: IN_PROGRESS_STATUSES } : 'COMPLETED',
         };
 
         if (type === InvoiceType.OUTGOING) {

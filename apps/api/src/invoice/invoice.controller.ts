@@ -47,13 +47,19 @@ export class InvoiceController {
 
     @Get('uninvoiced-orders')
     @Roles(UserRole.ACCOUNTANT, UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
-    @ApiOperation({ summary: 'Получить завершенные рейсы контрагента без счета' })
+    @ApiOperation({ summary: 'Получить рейсы контрагента без счета (завершённые, опц. в работе)' })
     async getUninvoicedOrders(
         @Query('type') type: InvoiceType,
         @Query('counterpartyId') counterpartyId: string,
+        @Query('includeInProgress') includeInProgress: string,
         @Request() req: any,
     ) {
-        return this.invoiceService.getUninvoicedOrders(req.user.companyId, type, counterpartyId);
+        return this.invoiceService.getUninvoicedOrders(
+            req.user.companyId,
+            type,
+            counterpartyId,
+            includeInProgress === 'true',
+        );
     }
 
     @Get(':id')
