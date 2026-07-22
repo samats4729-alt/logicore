@@ -57,7 +57,14 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
         OrderStatus.PROBLEM,
         ...STATUS_CHAIN.slice(STATUS_CHAIN.indexOf(OrderStatus.UNLOADING) + 1)
     ],
-    COMPLETED: [],
+    // Завершённую заявку можно переоткрыть на любой активный этап (или отменить/проблема).
+    // Разрешено только когда контрагентов нет на платформе — это проверяется отдельно в updateStatus.
+    COMPLETED: [
+        ...STATUS_CHAIN.slice(0, STATUS_CHAIN.indexOf(OrderStatus.COMPLETED)),
+        OrderStatus.PENDING,
+        OrderStatus.PROBLEM,
+        OrderStatus.CANCELLED,
+    ],
     CANCELLED: [],
     PROBLEM: [
         OrderStatus.ASSIGNED,
@@ -538,6 +545,24 @@ export class OrdersService implements OnModuleInit {
             }
         }
 
+        // Возврат статуса с «Завершён»: свободно, если контрагентов нет на платформе;
+        // если в заявке есть другая зарегистрированная компания — только по согласованию с ней.
+        if (order.status === OrderStatus.COMPLETED && status !== OrderStatus.COMPLETED) {
+            let initiatorCompanyId = companyId;
+            if (!initiatorCompanyId && changedById) {
+                const userObj = await this.prisma.user.findUnique({
+                    where: { id: changedById },
+                    select: { companyId: true },
+                });
+                initiatorCompanyId = userObj?.companyId || undefined;
+            }
+            const registered = await this.getRegisteredParticipants(order);
+            const otherSide = registered.filter(id => id !== initiatorCompanyId);
+            if (otherSide.length > 0) {
+                throw new BadRequestException('Заявка завершена с участием зарегистрированной на платформе компании. Изменить её можно только по согласованию с этой компанией.');
+            }
+        }
+
         // Если целевой статус COMPLETED, проверяем необходимость подтверждения второй зарегистрированной стороной
         if (status === OrderStatus.COMPLETED) {
             let initiatorCompanyId = companyId;
@@ -593,7 +618,10 @@ export class OrdersService implements OnModuleInit {
             where: { id: orderId },
             data: {
                 status,
-                completedAt: status === OrderStatus.COMPLETED ? new Date() : undefined,
+                // Завершаем → ставим дату; переоткрываем с «Завершён» → очищаем дату
+                completedAt: status === OrderStatus.COMPLETED
+                    ? new Date()
+                    : (order.status === OrderStatus.COMPLETED ? null : undefined),
                 pendingStatus: null,
                 pendingStatusById: null,
                 pendingStatusAt: null,

@@ -884,7 +884,13 @@ export default function CompanyOrdersPage() {
         if (s === 'PROBLEM') {
             return chain;
         }
-        
+
+        // Завершённую заявку можно «вернуть» на любой активный этап (переоткрыть).
+        // Бэкенд разрешит это, если контрагентов нет на платформе; иначе — через согласование.
+        if (s === 'COMPLETED') {
+            return chain.slice(0, chain.length - 1);
+        }
+
         const idx = chain.findIndex(item => item.value === s);
         if (idx === -1) return [];
         return chain.slice(idx + 1);
@@ -1431,7 +1437,8 @@ export default function CompanyOrdersPage() {
                                     })}
                                     rowClassName={(record) => {
                                         const sel = previewOrder?.id === record.id ? 'row-selected ' : '';
-                                        if (record.status === 'COMPLETED') return sel + (isOrderSettled(record) ? 'row-completed' : 'row-completed-unpaid');
+                                        // Завершённую заявку строкой не подсвечиваем — статус виден по тегу,
+                                        // а долг (если есть) горит красным на названии контрагента.
                                         if (record.status === 'PROBLEM') return sel + 'row-problem';
                                         if (record.status === 'CANCELLED') return sel + 'row-cancelled';
                                         return sel;
