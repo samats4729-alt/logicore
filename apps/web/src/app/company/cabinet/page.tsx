@@ -73,10 +73,10 @@ export default function CabinetPage() {
 
     return (
         <div className="lc-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <div className="lc2-hero" style={{ marginBottom: 24 }}>
+            <div className="lc2-hero" style={{ marginBottom: 10 }}>
                 <div>
                     <div className="lc-eyebrow">Кабинет</div>
-                    <h1 className="lc2-title">Управление компанией</h1>
+                    <h1 className="lc2-title" style={{ maxWidth: 'none', margin: 0 }}>Управление компанией</h1>
                 </div>
             </div>
 
