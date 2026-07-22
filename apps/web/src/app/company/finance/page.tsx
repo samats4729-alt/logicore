@@ -127,6 +127,7 @@ export default function FinanceHubPage() {
                 { label: 'Формы оплаты', href: '/company/accounting/payment-forms', show: acc, desc: 'Формы оплаты для заявок: безнал, наличные, карта' },
                 { label: 'Формы собственности', href: '/company/accounting/ownership-types', show: acc, desc: 'Организационно-правовые формы контрагентов: ТОО, ИП, АО' },
                 { label: 'Банки', href: '/company/accounting/banks', show: acc, desc: 'Справочник банков и БИК для реквизитов' },
+                { label: 'Нумерация заявок', href: '/company/accounting/order-numbering', show: acc, desc: 'Формат номера как в 1С (000000001) и стартовый номер' },
                 { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
             ],
         },

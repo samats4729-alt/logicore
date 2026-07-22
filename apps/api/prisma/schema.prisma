@@ -317,6 +317,7 @@ model Company {
   openingsAsCounterparty CounterpartyOpeningBalance[] @relation("CounterpartyOpenings")
   serviceCatalog         ServiceCatalogItem[] @relation("CompanyServiceCatalog")
   dictionaries           DictionaryItem[]     @relation("CompanyDictionaries")
+  orderNumbering         OrderNumbering?      @relation("CompanyOrderNumbering")
 
   @@index([bin])
 }
@@ -967,6 +968,18 @@ model FinanceCategory {
 
   @@unique([companyId, name, direction])
   @@index([companyId])
+}
+
+// Настройка нумерации заявок (как в 1С: префикс + ведущие нули + стартовый номер)
+model OrderNumbering {
+  id         String   @id @default(cuid())
+  companyId  String   @unique
+  company    Company  @relation("CompanyOrderNumbering", fields: [companyId], references: [id], onDelete: Cascade)
+  prefix     String   @default("")   // Префикс перед номером (может быть пустым)
+  padding    Int      @default(9)    // Длина числовой части (ведущие нули)
+  nextNumber Int      @default(1)    // Следующий номер, который будет присвоен
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // Универсальные справочники (условия/формы оплаты, формы собственности, банки)

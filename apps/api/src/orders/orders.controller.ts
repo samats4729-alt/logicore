@@ -42,6 +42,7 @@ export class OrdersController {
             ...orderDto,
             customerId: dto.customerId || req.user.sub,
             responsibleManagerId: req.user.sub,
+            ownerCompanyId: req.user.companyId || undefined,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,
             driverPaymentDate: dto.driverPaymentDate ? new Date(dto.driverPaymentDate) : undefined,
         });
@@ -70,6 +71,20 @@ export class OrdersController {
         });
 
         return order;
+    }
+
+    @Get('numbering-settings')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Настройка нумерации заявок' })
+    async getNumberingSettings(@Request() req: any) {
+        return this.ordersService.getNumberingSettings(req.user.companyId);
+    }
+
+    @Put('numbering-settings')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Сохранить настройку нумерации заявок' })
+    async updateNumberingSettings(@Request() req: any, @Body() body: { prefix?: string; padding?: number; nextNumber?: number }) {
+        return this.ordersService.updateNumberingSettings(req.user.companyId, body);
     }
 
     @Get()

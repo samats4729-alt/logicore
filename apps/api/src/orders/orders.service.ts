@@ -165,9 +165,10 @@ export class OrdersService implements OnModuleInit {
         responsibleManagerId?: string;
         natureOfCargo?: string;
         customerPriceType?: 'FIXED' | 'PER_KM' | 'PER_TON';
+        ownerCompanyId?: string;
     }) {
-        // Генерация номера заявки
-        const orderNumber = await this.generateOrderNumber();
+        // Генерация номера заявки (по настройке нумерации компании-создателя)
+        const orderNumber = await this.generateOrderNumber(data.ownerCompanyId);
 
         // Проверяем: если экспедитор — внешняя компания, пропускаем PENDING
         let isForwarderExternal = false;
@@ -968,10 +969,63 @@ export class OrdersService implements OnModuleInit {
         });
     }
 
+    // ==================== НУМЕРАЦИЯ ЗАЯВОК ====================
+
+    async getNumberingSettings(companyId: string) {
+        const cfg = await this.prisma.orderNumbering.upsert({
+            where: { companyId },
+            create: { companyId },
+            update: {},
+        });
+        return {
+            prefix: cfg.prefix,
+            padding: cfg.padding,
+            nextNumber: cfg.nextNumber,
+            preview: `${cfg.prefix}${String(cfg.nextNumber).padStart(cfg.padding, '0')}`,
+        };
+    }
+
+    async updateNumberingSettings(companyId: string, data: { prefix?: string; padding?: number; nextNumber?: number }) {
+        const padding = data.padding !== undefined ? Math.min(Math.max(Math.trunc(data.padding), 1), 12) : undefined;
+        const nextNumber = data.nextNumber !== undefined ? Math.max(Math.trunc(data.nextNumber), 1) : undefined;
+        const prefix = data.prefix !== undefined ? data.prefix.trim().slice(0, 20) : undefined;
+        await this.prisma.orderNumbering.upsert({
+            where: { companyId },
+            create: { companyId, ...(prefix !== undefined && { prefix }), ...(padding !== undefined && { padding }), ...(nextNumber !== undefined && { nextNumber }) },
+            update: { ...(prefix !== undefined && { prefix }), ...(padding !== undefined && { padding }), ...(nextNumber !== undefined && { nextNumber }) },
+        });
+        return this.getNumberingSettings(companyId);
+    }
+
     /**
-     * Генерация номера заявки (формат: LC-YYYYMMDD-XXXX)
+     * Генерация номера заявки.
+     * Если у компании настроена нумерация — формат как в 1С: {prefix}{0…0N}.
+     * Иначе — устаревший формат LC-YYYYMMDD-XXXX.
      */
-    private async generateOrderNumber(): Promise<string> {
+    private async generateOrderNumber(companyId?: string): Promise<string> {
+        if (companyId) {
+            // Гарантируем наличие конфигурации
+            await this.prisma.orderNumbering.upsert({ where: { companyId }, create: { companyId }, update: {} });
+            for (let attempts = 0; attempts < 500; attempts++) {
+                // Атомарный инкремент счётчика (UPDATE … SET nextNumber = nextNumber + 1)
+                const updated = await this.prisma.orderNumbering.update({
+                    where: { companyId },
+                    data: { nextNumber: { increment: 1 } },
+                });
+                const seq = updated.nextNumber - 1; // значение до инкремента
+                const candidate = `${updated.prefix}${String(seq).padStart(updated.padding, '0')}`;
+                const exists = await this.prisma.order.findUnique({ where: { orderNumber: candidate }, select: { id: true } });
+                if (!exists) return candidate;
+            }
+            throw new Error('Не удалось сгенерировать номер заявки');
+        }
+        return this.generateLegacyOrderNumber();
+    }
+
+    /**
+     * Устаревшая генерация номера заявки (формат: LC-YYYYMMDD-XXXX)
+     */
+    private async generateLegacyOrderNumber(): Promise<string> {
         const today = new Date();
         const datePrefix = today.toISOString().slice(0, 10).replace(/-/g, '');
         const redisKey = `order_counter:${datePrefix}`;
