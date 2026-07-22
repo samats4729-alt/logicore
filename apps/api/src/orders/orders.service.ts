@@ -65,7 +65,13 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
         OrderStatus.PROBLEM,
         OrderStatus.CANCELLED,
     ],
-    CANCELLED: [],
+    // Отменённую заявку можно вернуть в работу (например, отменили по ошибке):
+    // на любой активный этап или в «Ожидание». Сразу «Завершён» — нельзя.
+    CANCELLED: [
+        ...STATUS_CHAIN.slice(0, STATUS_CHAIN.indexOf(OrderStatus.COMPLETED)),
+        OrderStatus.PENDING,
+        OrderStatus.PROBLEM,
+    ],
     PROBLEM: [
         OrderStatus.ASSIGNED,
         OrderStatus.EN_ROUTE_PICKUP,

@@ -119,6 +119,11 @@ const getNextStatuses = (s: string) => {
         return chain.slice(0, chain.length - 1);
     }
 
+    // Отменённую заявку можно вернуть в работу (кроме сразу «Завершён»)
+    if (s === 'CANCELLED') {
+        return chain.slice(0, chain.length - 1);
+    }
+
     const idx = chain.findIndex(item => item.value === s);
     if (idx === -1) return [];
     // На любом активном этапе (погрузка/выгрузка и т.д.) можно отметить «Проблема»
@@ -1116,7 +1121,7 @@ export default function OrderDetailPage() {
                     <Space wrap size="small">
                         {canChangeStatus && (
                             <Button type="primary" icon={<SwapOutlined />} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
-                                {order.status === 'COMPLETED' ? 'Вернуть / изменить статус' : 'Изменить статус'}
+                                {order.status === 'CANCELLED' ? 'Вернуть заявку в работу' : order.status === 'COMPLETED' ? 'Вернуть / изменить статус' : 'Изменить статус'}
                             </Button>
                         )}
                         {isNotFinished && (

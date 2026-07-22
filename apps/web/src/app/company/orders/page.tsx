@@ -899,6 +899,11 @@ export default function CompanyOrdersPage() {
             return chain.slice(0, chain.length - 1);
         }
 
+        // Отменённую заявку можно вернуть в работу (кроме сразу «Завершён»)
+        if (s === 'CANCELLED') {
+            return chain.slice(0, chain.length - 1);
+        }
+
         const idx = chain.findIndex(item => item.value === s);
         if (idx === -1) return [];
         // На любом активном этапе (погрузка/выгрузка и т.д.) можно отметить «Проблема»
