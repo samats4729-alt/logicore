@@ -354,7 +354,7 @@ export default function CreateOrderPage() {
             groups.push({ label: `Склады заказчика [${name}]`, options: customerLocs });
         }
         if (carrierLocs.length > 0) {
-            const name = selectedCarrier === MY_COMPANY_VALUE ? myCompanyName : partners.find(p => p.id === selectedCarrier)?.name || 'Перевозчик';
+            const name = selectedCarrier === MY_COMPANY_VALUE ? (myCompanies.find(c => c.id === selectedMyCompanyId)?.name?.trim() || myCompanyName) : partners.find(p => p.id === selectedCarrier)?.name || 'Перевозчик';
             groups.push({ label: `Склады перевозчика [${name}]`, options: carrierLocs });
         }
         if (otherLocs.length > 0) {
@@ -643,6 +643,9 @@ export default function CreateOrderPage() {
 
     const roleInfo = getRoleDescription();
 
+    // Название организации, от лица которой создаётся заявка (обновляется при смене организации)
+    const myCompanyLabel = myCompanies.find(c => c.id === selectedMyCompanyId)?.name?.trim() || myCompanyName || 'Моя компания';
+
     // =================== STEP CONTENT ===================
 
     const stepRoute = (
@@ -886,7 +889,7 @@ export default function CreateOrderPage() {
                             )}
                         >
                             <Select.Option value={MY_COMPANY_VALUE}>
-                                <span style={{ fontWeight: 600 }}>{myCompanyName || 'Моя компания'}</span>
+                                <span style={{ fontWeight: 600 }}>{myCompanyLabel}</span>
                             </Select.Option>
                             <Select.OptGroup label="Контрагенты">
                                 {partners.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
@@ -934,7 +937,7 @@ export default function CreateOrderPage() {
                             )}
                         >
                             <Select.Option value={MY_COMPANY_VALUE}>
-                                <span style={{ fontWeight: 600 }}>{myCompanyName || 'Моя компания'}</span>
+                                <span style={{ fontWeight: 600 }}>{myCompanyLabel}</span>
                             </Select.Option>
                             {/* Биржа временно отключена до запуска (перевёрнутая цепочка ролей при takeOrder) */}
                             <Select.OptGroup label="Контрагенты">
