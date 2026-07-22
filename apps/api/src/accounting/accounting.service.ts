@@ -374,4 +374,12 @@ export class AccountingService {
     async getPnLReport(companyId: string, query: { startDate?: string; endDate?: string }) {
         return this.reportsService.getPnLReport(companyId, query);
     }
+
+    async getCarrierProfitReport(companyId: string, query: { startDate?: string; endDate?: string }) {
+        return this.reportsService.getCarrierProfitReport(companyId, query);
+    }
+
+    async getExpensesByCategoryReport(companyId: string, query: { startDate?: string; endDate?: string }) {
+        return this.reportsService.getExpensesByCategoryReport(companyId, query);
+    }
 }

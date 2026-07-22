@@ -1022,6 +1022,94 @@ export class FinancialReportsService {
         };
     }
 
+    // ==================== ПРИБЫЛЬ ПО ПЕРЕВОЗЧИКУ ====================
+
+    async getCarrierProfitReport(companyId: string, query: { startDate?: string; endDate?: string }) {
+        const start = query.startDate ? new Date(query.startDate) : null;
+        const end = query.endDate ? new Date(query.endDate) : null;
+        const dateFilter = start && end ? { createdAt: { gte: start, lte: end } } : {};
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                AND: [
+                    { OR: [{ forwarderId: companyId }, { partnerId: companyId }] },
+                    { OR: [{ isConfirmed: true }, { status: { not: 'PENDING' } }] },
+                    dateFilter,
+                ],
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+            },
+            include: {
+                subForwarder: { select: { name: true } },
+                driver: { select: { firstName: true, lastName: true } },
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
+            },
+        });
+
+        const map = new Map<string, { carrier: string; orders: number; revenue: number; cost: number; margin: number }>();
+        for (const order of orders) {
+            const fin = this.calculator.computeOrderFinance({
+                order, payments: order.payments, incomes: order.incomes, expenses: order.expenses, companyId,
+            });
+            const carrier = order.subForwarder?.name
+                || order.assignedDriverName
+                || (order.driver ? `${order.driver.lastName || ''} ${order.driver.firstName || ''}`.trim() : '')
+                || 'Свой транспорт / без перевозчика';
+            const cur = map.get(carrier) || { carrier, orders: 0, revenue: 0, cost: 0, margin: 0 };
+            cur.orders += 1;
+            cur.revenue = money(cur.revenue + fin.revenue);
+            cur.cost = money(cur.cost + fin.executorCost);
+            cur.margin = money(cur.margin + fin.margin);
+            map.set(carrier, cur);
+        }
+
+        const rows = Array.from(map.values())
+            .map(r => ({ ...r, marginPct: r.revenue > 0 ? Math.round((r.margin / r.revenue) * 100) : 0 }))
+            .sort((a, b) => b.margin - a.margin);
+
+        const totals = {
+            orders: rows.reduce((s, r) => s + r.orders, 0),
+            revenue: money(rows.reduce((s, r) => s + r.revenue, 0)),
+            cost: money(rows.reduce((s, r) => s + r.cost, 0)),
+            margin: money(rows.reduce((s, r) => s + r.margin, 0)),
+        };
+        return { rows, totals };
+    }
+
+    // ==================== РАСХОДЫ ПО СТАТЬЯМ ====================
+
+    async getExpensesByCategoryReport(companyId: string, query: { startDate?: string; endDate?: string }) {
+        const start = query.startDate ? new Date(query.startDate) : null;
+        const end = query.endDate ? new Date(query.endDate) : null;
+        const period = start && end ? { date: { gte: start, lte: end } } : {};
+
+        const [payments, expenses] = await Promise.all([
+            this.prisma.payment.findMany({
+                where: { companyId, direction: 'OUT', isDeleted: false, ...period },
+                include: { category: { select: { name: true } } },
+            }),
+            this.prisma.expense.findMany({
+                where: { companyId, isDeleted: false, ...period },
+            }),
+        ]);
+
+        const map = new Map<string, { category: string; amount: number; count: number }>();
+        const add = (name: string, amount: number) => {
+            const key = name || 'Без статьи';
+            const cur = map.get(key) || { category: key, amount: 0, count: 0 };
+            cur.amount = money(cur.amount + amount);
+            cur.count += 1;
+            map.set(key, cur);
+        };
+        for (const p of payments) add(p.category?.name || 'Без статьи', p.amount);
+        for (const e of expenses) add(e.category || 'Без статьи', e.amount);
+
+        const rows = Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+        const total = money(rows.reduce((s, r) => s + r.amount, 0));
+        return { rows: rows.map(r => ({ ...r, pct: total > 0 ? Math.round((r.amount / total) * 100) : 0 })), total };
+    }
+
     // ==================== ЖУРНАЛ АКТОВ ====================
 
     // Список заявок, по которым можно выставить акт выполненных работ (мы — исполнитель для заказчика)

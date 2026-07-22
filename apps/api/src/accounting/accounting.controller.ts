@@ -590,6 +590,24 @@ export class AccountingController {
         return this.accountingService.getPnLReport(req.user.companyId, query);
     }
 
+    @Get('carrier-profit')
+    @Roles(...FINANCE_VIEW_ROLES)
+    async getCarrierProfitReport(
+        @Request() req: any,
+        @Query() query: { startDate?: string; endDate?: string },
+    ) {
+        return this.accountingService.getCarrierProfitReport(req.user.companyId, query);
+    }
+
+    @Get('expenses-by-category')
+    @Roles(...FINANCE_VIEW_ROLES)
+    async getExpensesByCategoryReport(
+        @Request() req: any,
+        @Query() query: { startDate?: string; endDate?: string },
+    ) {
+        return this.accountingService.getExpensesByCategoryReport(req.user.companyId, query);
+    }
+
     @Get('pnl/export')
     @Roles(...FINANCE_VIEW_ROLES)
     async exportPnLReport(
