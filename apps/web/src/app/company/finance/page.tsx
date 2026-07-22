@@ -85,34 +85,50 @@ export default function FinanceHubPage() {
 
     const groups: Group[] = [
         {
-            title: 'Операции',
+            title: 'Документы',
             links: [
-                { label: 'Все операции', href: '/company/accounting/operations', show: acc, desc: 'Вся история денег в одном месте: платежи, доходы, расходы' },
-                { label: 'Остатки по кассам', href: '/company/accounting/balances', show: acc, desc: 'Сколько денег сейчас на счетах и в кассах' },
-                { label: 'Планируемые платежи', href: '/company/accounting/planned', show: acc, desc: 'Что предстоит: кто должен нам и кому должны мы — с плановой датой' },
-                { label: 'Платёжный календарь', href: '/company/accounting/calendar', show: acc, desc: 'Приходы и оплаты по дням — что и когда движется по деньгам' },
-                { label: 'Реестр заявок', href: '/company/accounting/registry', show: acc, desc: 'Деньги по каждой заявке: доход, себестоимость, маржа, оплаты' },
-                { label: 'Счета', href: '/company/accounting/invoices', show: acc, desc: 'Счета-документы покупателям и от поставщиков' },
-                { label: 'Поступления', href: '/company/accounting/incomes', show: acc, desc: 'Прочие доходы, не привязанные к заявке' },
-                { label: 'Расходы', href: '/company/accounting/expenses', show: acc, desc: 'Затраты не по заявке: аренда, зарплата, топливо, налоги' },
+                { label: 'Счета', href: '/company/accounting/invoices', show: acc, desc: 'Счета покупателям и от поставщиков — создание и журнал' },
+                { label: 'Акты и сверка', href: '/company/accounting/counterparty-report', show: acc, desc: 'Акт выполненных работ — из заявки; акт сверки — из взаиморасчётов' },
             ],
         },
         {
-            title: 'Отчёты',
+            title: 'Деньги',
             links: [
+                { label: 'Платёжный календарь', href: '/company/accounting/calendar', show: acc, desc: 'Приходы и оплаты по дням — что и когда движется по деньгам' },
+                { label: 'Планируемые платежи', href: '/company/accounting/planned', show: acc, desc: 'Что предстоит: кто должен нам и кому должны мы — с плановой датой' },
+                { label: 'Поступления денег', href: '/company/accounting/incomes', show: acc, desc: 'Приход денег: оплаты от заказчиков и прочие доходы' },
+                { label: 'Расход денег', href: '/company/accounting/expenses', show: acc, desc: 'Оплаты перевозчикам и затраты: аренда, зарплата, топливо, налоги' },
+                { label: 'Все операции', href: '/company/accounting/operations', show: acc, desc: 'Вся история денег в одном месте: платежи, доходы, расходы' },
+                { label: 'Остатки по кассам', href: '/company/accounting/balances', show: acc, desc: 'Сколько денег сейчас на счетах и в кассах' },
                 { label: 'Движение денег (ДДС)', href: '/company/accounting/cashflow', show: acc, desc: 'Куда пришли и ушли живые деньги за период' },
+                { label: 'Ввод начальных остатков', href: '/company/accounting/opening-balances', show: acc, desc: 'Стартовые суммы на счетах и долги контрагентов при запуске учёта' },
+            ],
+        },
+        {
+            title: 'Задолженность',
+            links: [
+                { label: 'Взаиморасчёты', href: '/company/accounting/counterparty-report', show: acc, desc: 'Кто кому должен — по каждому контрагенту, с просрочкой и актом сверки' },
+                { label: 'Реестр заявок', href: '/company/accounting/registry', show: acc, desc: 'Деньги по каждой заявке: доход, себестоимость, маржа, оплаты' },
+            ],
+        },
+        {
+            title: 'Прибыль',
+            links: [
                 { label: 'Прибыли и убытки', href: '/company/accounting/pnl', show: acc, desc: 'Заработок: доход − себестоимость − расходы' },
-                { label: 'Взаиморасчёты', href: '/company/accounting/counterparty-report', show: acc, desc: 'Кто кому должен — по каждому контрагенту' },
                 { label: 'Все отчёты', href: '/company/reports', show: acc, desc: 'Сводки, аналитика, экспорт' },
             ],
         },
         {
-            title: 'Настройки и инструменты',
+            title: 'Справочники',
             links: [
+                { label: 'Статьи доходов и расходов', href: '/company/accounting/settings?tab=categories', show: acc, desc: 'Статьи движения денег и затрат для платежей и отчётов' },
+                { label: 'Наименование услуг', href: '/company/accounting/settings?tab=services', show: acc, desc: 'Формулировки услуг для счетов и актов' },
                 { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
-                { label: 'Статьи доходов и расходов', href: '/company/accounting/settings?tab=categories', show: acc, desc: 'Категории для платежей и отчётов' },
-                { label: 'Наименование услуг', href: '/company/accounting/settings?tab=services', show: acc, desc: 'Формулировки услуг для актов и счетов' },
-                { label: 'Ввод начальных остатков', href: '/company/accounting/opening-balances', show: acc, desc: 'Стартовые суммы на счетах и долги контрагентов при запуске учёта' },
+            ],
+        },
+        {
+            title: 'Зарплата и инструменты',
+            links: [
                 { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin, desc: 'Начисления и выплаты сотрудникам' },
                 { label: 'Моя зарплата', href: '/company/my-salary', show: user?.role === 'LOGISTICIAN', desc: 'Ваши начисления' },
                 { label: 'Калькулятор', href: '/company/calculator', show: true, desc: 'Быстрый расчёт стоимости перевозки' },
