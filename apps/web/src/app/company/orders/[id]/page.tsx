@@ -14,7 +14,7 @@ import {
     EditOutlined, DeleteOutlined, FilePdfOutlined, UploadOutlined,
     UserAddOutlined, MailOutlined, FileTextOutlined, SwapOutlined,
     CloseCircleOutlined, CarOutlined, InboxOutlined, TeamOutlined,
-    ExclamationCircleOutlined, CopyOutlined
+    ExclamationCircleOutlined, CopyOutlined, WhatsAppOutlined
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -118,7 +118,8 @@ const getNextStatuses = (s: string) => {
 
     const idx = chain.findIndex(item => item.value === s);
     if (idx === -1) return [];
-    return chain.slice(idx + 1);
+    // На любом активном этапе (погрузка/выгрузка и т.д.) можно отметить «Проблема»
+    return [...chain.slice(idx + 1), { value: 'PROBLEM', label: '⚠ Проблема' }];
 };
 
 export default function OrderDetailPage() {
@@ -1634,7 +1635,22 @@ export default function OrderDetailPage() {
                                                         <Descriptions.Item label="ФИО">{driverName || '—'}</Descriptions.Item>
                                                         <Descriptions.Item label="Телефон">
                                                             {driverPhone ? (
-                                                                <a href={`tel:${driverPhone}`} style={{ color: '#1677ff' }}>{driverPhone}</a>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+                                                                    <a href={`tel:${driverPhone}`} style={{ color: '#1677ff' }}>{driverPhone}</a>
+                                                                    <Tooltip title="Написать в WhatsApp">
+                                                                        <a href={`https://wa.me/${String(driverPhone).replace(/[^\d]/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', fontSize: 16 }}>
+                                                                            <WhatsAppOutlined />
+                                                                        </a>
+                                                                    </Tooltip>
+                                                                    <Tooltip title="Скопировать номер">
+                                                                        <a
+                                                                            onClick={() => { navigator.clipboard?.writeText(String(driverPhone)); message.success('Номер водителя скопирован'); }}
+                                                                            style={{ color: 'var(--lc-text-ter)', cursor: 'pointer', fontSize: 15 }}
+                                                                        >
+                                                                            <CopyOutlined />
+                                                                        </a>
+                                                                    </Tooltip>
+                                                                </span>
                                                             ) : '—'}
                                                         </Descriptions.Item>
                                                         <Descriptions.Item label="Автомобиль">{driverPlate || '—'}</Descriptions.Item>

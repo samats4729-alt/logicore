@@ -1666,31 +1666,29 @@ export class CompanyService {
 
     /** Получить последние события (смены статусов) по заявкам компании — для живого тикера */
     async getOrderEvents(companyId: string, limit = 20) {
-        const events = await this.prisma.orderStatusHistory.findMany({
+        // Живая лента = только активные заявки, каждая один раз (без дублей).
+        // Исключаем черновики, завершённые и отменённые.
+        const orders = await this.prisma.order.findMany({
             where: {
-                order: {
-                    OR: [
-                        { customerCompanyId: companyId },
-                        { forwarderId: companyId },
-                        { partnerId: companyId },
-                        { responsibleManager: { companyId } },
-                    ],
-                },
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { responsibleManager: { companyId } },
+                        ],
+                    },
+                    { status: { notIn: ['DRAFT', 'COMPLETED', 'CANCELLED'] } },
+                ],
             },
-            orderBy: { changedAt: 'desc' },
+            orderBy: { updatedAt: 'desc' },
             take: limit,
-            select: {
-                id: true,
-                status: true,
-                changedAt: true,
-                order: {
-                    select: { id: true, orderNumber: true },
-                },
-            },
+            select: { id: true, orderNumber: true, status: true, updatedAt: true },
         });
-        return events.map((e) => ({
-            orderId: e.order.id, orderNumber: e.order.orderNumber,
-            status: e.status, changedAt: e.changedAt.toISOString(),
+        return orders.map((o) => ({
+            orderId: o.id, orderNumber: o.orderNumber,
+            status: o.status, changedAt: o.updatedAt.toISOString(),
         }));
     }
 

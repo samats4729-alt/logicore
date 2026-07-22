@@ -893,7 +893,8 @@ export default function CompanyOrdersPage() {
 
         const idx = chain.findIndex(item => item.value === s);
         if (idx === -1) return [];
-        return chain.slice(idx + 1);
+        // На любом активном этапе (погрузка/выгрузка и т.д.) можно отметить «Проблема»
+        return [...chain.slice(idx + 1), { value: 'PROBLEM', label: '⚠ Проблема' }];
     };
 
     const handleStatusChange = async (values: { status: string; comment?: string }) => {

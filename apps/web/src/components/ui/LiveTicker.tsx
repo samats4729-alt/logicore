@@ -69,7 +69,7 @@ export function LiveEventTicker({ fallback = [] }: { fallback?: TickerItem[] }) 
     return (
         <div className="lc2-ticker" aria-hidden="true">
             <div className="lc2-ticker-track">
-                {[...shown, ...shown].map((t, i) => (
+                {shown.map((t, i) => (
                     <span className="lc2-tick" key={i}>
                         <i style={{ background: t.color }} />
                         <b>{t.num}</b>

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useMemo } from 'react';
-import { Button } from 'antd';
-import { RightOutlined, PhoneOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { Button, Dropdown, message } from 'antd';
+import { RightOutlined, PhoneOutlined, EnvironmentOutlined, WhatsAppOutlined, CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import StatusPill, { STATUS_LABELS } from './StatusPill';
 import { shortenCompanyName } from '@/lib/company-helper';
@@ -202,11 +202,42 @@ export default function FeaturedOrderCard({ order, onOpen }: { order: any; onOpe
                             Водитель · {order.assignedDriverPlate || order.driver?.vehiclePlate || '—'}
                         </div>
                     </div>
-                    {order.assignedDriverPhone && (
-                        <a className="lc2-callbtn" href={`tel:${order.assignedDriverPhone}`} aria-label="Позвонить водителю">
-                            <PhoneOutlined />
-                        </a>
-                    )}
+                    {order.assignedDriverPhone && (() => {
+                        const raw = String(order.assignedDriverPhone);
+                        const digits = raw.replace(/[^\d]/g, '');
+                        return (
+                            <Dropdown
+                                trigger={['click']}
+                                placement="topRight"
+                                menu={{
+                                    items: [
+                                        { key: 'wa', icon: <WhatsAppOutlined style={{ color: '#25D366' }} />, label: 'Написать в WhatsApp' },
+                                        { key: 'call', icon: <PhoneOutlined />, label: `Позвонить · ${raw}` },
+                                        { key: 'copy', icon: <CopyOutlined />, label: 'Скопировать номер' },
+                                    ],
+                                    onClick: ({ key, domEvent }) => {
+                                        domEvent?.stopPropagation?.();
+                                        if (key === 'wa') window.open(`https://wa.me/${digits}`, '_blank');
+                                        else if (key === 'call') window.location.href = `tel:${raw}`;
+                                        else if (key === 'copy') {
+                                            navigator.clipboard?.writeText(raw);
+                                            message.success('Номер водителя скопирован');
+                                        }
+                                    },
+                                }}
+                            >
+                                <a
+                                    className="lc2-callbtn"
+                                    role="button"
+                                    aria-label="Связаться с водителем"
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <PhoneOutlined />
+                                </a>
+                            </Dropdown>
+                        );
+                    })()}
                 </div>
                 {onOpen && (
                     <Button block className="lc2-openbtn" onClick={() => onOpen(order.id)}>
