@@ -37,9 +37,6 @@ const INCOME_CATEGORIES: Record<string, string> = {
     order_payment: 'Оплата по заявке', prepayment: 'Предоплата', refund: 'Возврат', other: 'Прочее',
 };
 
-const EXPENSE_OPTIONS = Object.entries(EXPENSE_CATEGORIES).map(([value, label]) => ({ value, label }));
-const INCOME_OPTIONS = Object.entries(INCOME_CATEGORIES).map(([value, label]) => ({ value, label }));
-
 export default function AllOperationsPage() {
     const router = useRouter();
     const { user } = useAuthStore();
@@ -59,13 +56,34 @@ export default function AllOperationsPage() {
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm();
     const [accounts, setAccounts] = useState<{ id: string; name: string; kind: string; isDefault: boolean }[]>([]);
+    const [categories, setCategories] = useState<{ id: string; name: string; direction: 'IN' | 'OUT'; costType?: string | null; isActive: boolean }[]>([]);
+    const [orders, setOrders] = useState<{ id: string; orderNumber: string }[]>([]);
+    // Отслеживаем выбранную статью, чтобы понять её тип (по заявке / общий)
+    const watchedCategory = Form.useWatch('category', form);
+    const selectedCat = categories.find(c => c.direction === addDir && c.name === watchedCategory);
+    const needsOrder = addDir === 'OUT' && selectedCat?.costType === 'PER_ORDER';
 
-    useEffect(() => { fetchAll(); fetchAccounts(); }, []);
+    useEffect(() => { fetchAll(); fetchAccounts(); fetchCategories(); fetchOrders(); }, []);
 
     const fetchAccounts = async () => {
         try {
             const res = await api.get('/accounting/finance-accounts');
             setAccounts((res.data || []).filter((a: any) => a.isActive !== false));
+        } catch { /* необязательно */ }
+    };
+
+    const fetchCategories = async () => {
+        try {
+            const res = await api.get('/accounting/finance-categories');
+            setCategories((res.data || []).filter((c: any) => c.isActive !== false));
+        } catch { /* необязательно */ }
+    };
+
+    const fetchOrders = async () => {
+        try {
+            const res = await api.get('/orders', { params: { limit: 300 } });
+            const list = res.data?.data || res.data || [];
+            setOrders(list.map((o: any) => ({ id: o.id, orderNumber: o.orderNumber })));
         } catch { /* необязательно */ }
     };
 
@@ -159,14 +177,13 @@ export default function AllOperationsPage() {
     const handleSaveOp = async (values: any) => {
         setSaving(true);
         try {
-            const catOptions = addDir === 'IN' ? INCOME_OPTIONS : EXPENSE_OPTIONS;
-            const label = catOptions.find(c => c.value === values.category)?.label || values.category;
             const payload = {
                 category: values.category,
-                description: label,
+                description: values.category,
                 amount: values.amount,
                 date: values.date.toISOString(),
                 accountId: values.accountId || undefined,
+                orderId: needsOrder ? (values.orderId || undefined) : undefined,
                 note: values.note,
             };
             if (addDir === 'IN') await api.post('/accounting/incomes', payload);
@@ -352,9 +369,30 @@ export default function AllOperationsPage() {
                     <Form.Item name="date" label="Дата" rules={[{ required: true, message: 'Укажите дату' }]}>
                         <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
                     </Form.Item>
-                    <Form.Item name="category" label="Категория" rules={[{ required: true, message: 'Выберите категорию' }]}>
-                        <Select placeholder="Выберите" options={addDir === 'IN' ? INCOME_OPTIONS : EXPENSE_OPTIONS} />
+                    <Form.Item name="category" label="Статья" rules={[{ required: true, message: 'Выберите статью' }]} extra="Не хватает статьи? Добавьте в справочнике: Финансы → Статьи">
+                        <Select
+                            placeholder="Выберите статью"
+                            showSearch
+                            optionFilterProp="label"
+                            options={categories
+                                .filter(c => c.direction === addDir)
+                                .map(c => ({
+                                    value: c.name,
+                                    label: c.costType === 'PER_ORDER' ? `${c.name} · по заявке` : c.costType === 'PER_VEHICLE' ? `${c.name} · по машине` : c.name,
+                                }))}
+                            onChange={() => form.setFieldsValue({ orderId: undefined })}
+                        />
                     </Form.Item>
+                    {needsOrder && (
+                        <Form.Item name="orderId" label="Заявка" rules={[{ required: true, message: 'Статья «по заявке» — укажите заявку' }]} extra="Расход отнесётся к этой заявке и уменьшит её маржу">
+                            <Select
+                                placeholder="Выберите заявку"
+                                showSearch
+                                optionFilterProp="label"
+                                options={orders.map(o => ({ value: o.id, label: o.orderNumber }))}
+                            />
+                        </Form.Item>
+                    )}
                     <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>
                         <InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
                     </Form.Item>
