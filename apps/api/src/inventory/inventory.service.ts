@@ -211,18 +211,40 @@ export class InventoryService {
         const whMap = new Map(warehouses.map(w => [w.id, w.name]));
         const nomMap = new Map(nomenclature.map(n => [n.id, n]));
 
+        // Средняя цена по номенклатуре из поступлений (для денежной оценки остатков)
+        const recvQty = new Map<string, number>();
+        const recvSum = new Map<string, number>();
+        for (const m of moves) {
+            if (m.type !== StockMoveType.RECEIPT) continue;
+            for (const l of m.lines) {
+                if (l.amount == null) continue;
+                recvQty.set(l.nomenclatureId, (recvQty.get(l.nomenclatureId) || 0) + l.quantity);
+                recvSum.set(l.nomenclatureId, (recvSum.get(l.nomenclatureId) || 0) + l.amount);
+            }
+        }
+        const avgCost = (nomId: string) => {
+            const q = recvQty.get(nomId) || 0;
+            return q > 0 ? (recvSum.get(nomId) || 0) / q : 0;
+        };
+
         const rows = Array.from(balances.values())
             .filter(b => (!warehouseId || b.warehouseId === warehouseId) && Math.abs(b.quantity) > 0.0001)
-            .map(b => ({
-                warehouseId: b.warehouseId,
-                warehouse: whMap.get(b.warehouseId) || '—',
-                nomenclatureId: b.nomenclatureId,
-                nomenclature: nomMap.get(b.nomenclatureId)?.name || '—',
-                unit: nomMap.get(b.nomenclatureId)?.unit || '',
-                quantity: b.quantity,
-            }))
+            .map(b => {
+                const cost = avgCost(b.nomenclatureId);
+                return {
+                    warehouseId: b.warehouseId,
+                    warehouse: whMap.get(b.warehouseId) || '—',
+                    nomenclatureId: b.nomenclatureId,
+                    nomenclature: nomMap.get(b.nomenclatureId)?.name || '—',
+                    unit: nomMap.get(b.nomenclatureId)?.unit || '',
+                    quantity: b.quantity,
+                    avgCost: round(cost),
+                    value: round(b.quantity * cost),
+                };
+            })
             .sort((a, b) => a.warehouse.localeCompare(b.warehouse) || a.nomenclature.localeCompare(b.nomenclature));
 
-        return { rows, warehouses, positions: rows.length };
+        const totalValue = round(rows.reduce((s, r) => s + r.value, 0));
+        return { rows, warehouses, positions: rows.length, totalValue };
     }
 }
