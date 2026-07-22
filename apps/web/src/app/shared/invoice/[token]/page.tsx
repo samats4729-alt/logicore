@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
+import { amountToWordsKzt } from '@/lib/amountToWords';
 import {
     Typography,
     Card,
@@ -334,6 +335,9 @@ export default function PublicInvoicePage() {
                                 suffix="₸"
                                 valueStyle={{ fontWeight: 800, color: themeToken.colorPrimary }}
                             />
+                            <div style={{ fontSize: 11.5, color: themeToken.colorTextTertiary, marginTop: 4, fontStyle: 'italic' }}>
+                                {amountToWordsKzt(invoice.amount)}
+                            </div>
                         </Card>
                     </Col>
 

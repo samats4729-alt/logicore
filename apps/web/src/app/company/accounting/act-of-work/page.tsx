@@ -5,6 +5,7 @@ import { Button, Select, Spin, Empty, App } from 'antd';
 import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { amountToWordsKzt } from '@/lib/amountToWords';
 import dayjs from 'dayjs';
 
 interface Party {
@@ -197,6 +198,9 @@ function ActOfWorkInner() {
                         {data.amount.hasVat
                             ? <>, в том числе НДС {data.amount.vatRate}% — {fmt(data.amount.vat)} ₸</>
                             : <> (без НДС)</>}.
+                    </p>
+                    <p style={{ fontSize: 11.5, margin: '4px 0 0', fontStyle: 'italic' }}>
+                        {amountToWordsKzt(data.amount.gross)}.
                     </p>
 
                     <div style={{ fontSize: 11, marginTop: 12 }}>

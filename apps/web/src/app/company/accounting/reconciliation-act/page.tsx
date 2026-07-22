@@ -5,6 +5,7 @@ import { Button, DatePicker, Spin, Empty, App } from 'antd';
 import { ArrowLeftOutlined, PrinterOutlined, CalendarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { amountToWordsKzt } from '@/lib/amountToWords';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
@@ -172,6 +173,11 @@ function ReconciliationActInner() {
                         На {data.period.end ? dayjs(data.period.end).format('DD.MM.YYYY') : dayjs().format('DD.MM.YYYY')} {data.closingBalance === 0 ? '' : <>по данным {data.company.name} </>}
                         <strong>{balanceWord(data.closingBalance)}{data.closingBalance !== 0 ? `: ${fmt(Math.abs(data.closingBalance))} ₸` : ''}</strong>.
                     </p>
+                    {data.closingBalance !== 0 && (
+                        <p style={{ fontSize: 12.5, margin: '0 0 6px', fontStyle: 'italic' }}>
+                            {amountToWordsKzt(Math.abs(data.closingBalance))}.
+                        </p>
+                    )}
                     <p style={{ fontSize: 11.5, color: 'var(--lc-text-ter)', margin: 0 }}>
                         Скобки означают долг в обратную сторону (мы должны контрагенту).
                     </p>
