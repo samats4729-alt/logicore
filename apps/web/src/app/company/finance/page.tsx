@@ -134,6 +134,17 @@ export default function FinanceHubPage() {
             ],
         },
         {
+            title: 'ТМЦ (склад)',
+            links: [
+                { label: 'Ведомость по остаткам', href: '/company/inventory/balances', show: acc, desc: 'Сколько и чего сейчас на складах' },
+                { label: 'Поступление товаров', href: '/company/inventory/receipts', show: acc, desc: 'Приход ТМЦ на склад от поставщика' },
+                { label: 'Перемещение товаров', href: '/company/inventory/transfers', show: acc, desc: 'Перемещение ТМЦ между складами' },
+                { label: 'Списание материалов', href: '/company/inventory/writeoffs', show: acc, desc: 'Списание ТМЦ со склада (расход, износ, недостача)' },
+                { label: 'Номенклатура', href: '/company/inventory/nomenclature', show: acc, desc: 'Справочник товаров и материалов' },
+                { label: 'Склады', href: '/company/inventory/warehouses', show: acc, desc: 'Места хранения ТМЦ' },
+            ],
+        },
+        {
             title: 'Зарплата и инструменты',
             links: [
                 { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin, desc: 'Начисления и выплаты сотрудникам' },

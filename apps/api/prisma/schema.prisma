@@ -318,6 +318,9 @@ model Company {
   serviceCatalog         ServiceCatalogItem[] @relation("CompanyServiceCatalog")
   dictionaries           DictionaryItem[]     @relation("CompanyDictionaries")
   orderNumbering         OrderNumbering?      @relation("CompanyOrderNumbering")
+  nomenclature           NomenclatureItem[]   @relation("CompanyNomenclature")
+  stockWarehouses        StockWarehouse[]     @relation("CompanyWarehouses")
+  stockMoves             StockMove[]          @relation("CompanyStockMoves")
 
   @@index([bin])
 }
@@ -968,6 +971,81 @@ model FinanceCategory {
 
   @@unique([companyId, name, direction])
   @@index([companyId])
+}
+
+// ==================== ТМЦ (товарно-материальные ценности) ====================
+
+enum StockMoveType {
+  RECEIPT   // Поступление товаров и услуг
+  TRANSFER  // Перемещение между складами
+  WRITEOFF  // Списание материалов
+}
+
+model NomenclatureItem {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation("CompanyNomenclature", fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  unit      String   @default("шт")
+  sku       String?  // Артикул
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lines     StockMoveLine[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model StockWarehouse {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation("CompanyWarehouses", fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  movesFrom StockMove[] @relation("MoveWarehouse")
+  movesTo   StockMove[] @relation("MoveToWarehouse")
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model StockMove {
+  id            String        @id @default(cuid())
+  companyId     String
+  company       Company       @relation("CompanyStockMoves", fields: [companyId], references: [id], onDelete: Cascade)
+  type          StockMoveType
+  number        String
+  date          DateTime
+  warehouseId   String
+  warehouse     StockWarehouse @relation("MoveWarehouse", fields: [warehouseId], references: [id])
+  toWarehouseId String?
+  toWarehouse   StockWarehouse? @relation("MoveToWarehouse", fields: [toWarehouseId], references: [id])
+  counterparty  String?       // Поставщик (для поступления) — свободный текст
+  note          String?
+  createdById   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  lines         StockMoveLine[]
+
+  @@index([companyId, type])
+  @@index([companyId, date])
+}
+
+model StockMoveLine {
+  id             String   @id @default(cuid())
+  moveId         String
+  move           StockMove @relation(fields: [moveId], references: [id], onDelete: Cascade)
+  nomenclatureId String
+  nomenclature   NomenclatureItem @relation(fields: [nomenclatureId], references: [id])
+  quantity       Float
+  price          Float?
+  amount         Float?
+
+  @@index([moveId])
+  @@index([nomenclatureId])
 }
 
 // Настройка нумерации заявок (как в 1С: префикс + ведущие нули + стартовый номер)
