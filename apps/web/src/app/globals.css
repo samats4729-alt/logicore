@@ -2509,6 +2509,78 @@ a.mapboxgl-ctrl-logo,
   padding: 12px 0 4px;
 }
 
+/* ==========================================
+   LC 2026 — Мастер создания заявки (премиум-скин)
+   ========================================== */
+
+/* Оболочка мастера: одна чистая карточка с воздухом */
+.lc-wiz .lc-wiz-shell {
+  background: var(--lc-card);
+  border: 1px solid var(--lc-border);
+  border-radius: 22px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 24px 56px -34px rgba(16, 24, 40, 0.24);
+  padding: 26px 30px 10px;
+}
+
+/* Прогресс-шаги — крупнее и мягче */
+.lc-wiz-steps.ant-steps { margin: 2px 0 24px; }
+.lc-wiz-steps .ant-steps-item-title { font-weight: 600 !important; font-size: 13.5px; }
+.lc-wiz-steps .ant-steps-item-icon { border-radius: 12px !important; }
+.lc-wiz-steps .ant-steps-item-process .ant-steps-item-icon {
+  box-shadow: 0 6px 16px -6px rgba(22, 119, 255, 0.55);
+}
+
+/* Панель одного шага — без вложенной рамки */
+.lc-wiz-panel.ant-card {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  margin-top: 0;
+}
+.lc-wiz-panel.ant-card > .ant-card-body { padding: 0; }
+
+/* Заголовок логической секции + тонкая линия-разделитель */
+.lc-wiz-head {
+  margin: 4px 0 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--lc-border);
+}
+.lc-wiz-head.is-first { border-top: none; padding-top: 4px; margin-top: 0; }
+.lc-wiz-head .t {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  color: var(--lc-text);
+}
+.lc-wiz-head .h {
+  font-size: 12px;
+  color: var(--lc-text-ter);
+  margin-top: 3px;
+}
+
+/* Подпись поля и компактный интервал между полями */
+.lc-wiz-lbl {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--lc-text-sec);
+  margin-bottom: 7px;
+}
+.lc-wiz-field { margin-bottom: 14px; }
+
+/* Слим-индикатор роли (пилюля вместо крупного баннера) */
+.lc-wiz-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 18px;
+  margin-bottom: 16px;
+  max-width: 100%;
+}
+
 @media (max-width: 1023px) {
 
   /* Герой страницы заявок: метрики компактной сеткой, без разделителей */
@@ -2564,6 +2636,11 @@ a.mapboxgl-ctrl-logo,
   .lc-wizard .ant-col-12 {
     flex: 0 0 100%;
     max-width: 100%;
+  }
+
+  .lc-wiz .lc-wiz-shell {
+    padding: 18px 16px 6px;
+    border-radius: 18px;
   }
 
   .lc-wizard .ant-steps {

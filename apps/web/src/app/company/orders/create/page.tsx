@@ -646,7 +646,7 @@ export default function CreateOrderPage() {
     // =================== STEP CONTENT ===================
 
     const stepRoute = (
-        <Card size="small" style={{ marginTop: 16 }}>
+        <Card size="small" className="lc-wiz-panel">
             <Form.Item name="pickupDate" label="Дата и время погрузки" rules={[{ required: true, message: 'Укажите дату' }]}>
                 <DatePicker
                     style={{ width: '100%' }}
@@ -657,7 +657,10 @@ export default function CreateOrderPage() {
                 />
             </Form.Item>
 
-            <Divider style={{ margin: '16px 0 12px' }}>Точки маршрута</Divider>
+            <div className="lc-wiz-head">
+                <div className="t">Точки маршрута</div>
+                <div className="h">Погрузка, выгрузка и промежуточные точки по порядку</div>
+            </div>
 
             {routePointsState.map((pt, i) => (
                 <div key={i} style={{
@@ -762,7 +765,7 @@ export default function CreateOrderPage() {
     );
 
     const stepCargo = (
-        <Card size="small" style={{ marginTop: 16 }}>
+        <Card size="small" className="lc-wiz-panel">
             <Row gutter={16}>
                 <Col xs={24} md={12}>
                     <Form.Item
@@ -819,9 +822,9 @@ export default function CreateOrderPage() {
     );
 
     const stepParties = (
-        <Card size="small" style={{ marginTop: 16 }}>
+        <Card size="small" className="lc-wiz-panel">
             {myCompanies.length > 1 && (
-                <Form.Item label="Организация" required style={{ marginBottom: 20 }}>
+                <Form.Item label="Организация" required style={{ marginBottom: 16 }}>
                     <Select
                         size="large"
                         value={selectedMyCompanyId}
@@ -840,58 +843,21 @@ export default function CreateOrderPage() {
                     />
                 </Form.Item>
             )}
-            {/* Role auto-detection indicator */}
-            <div style={{
-                padding: '10px 16px',
-                background: `${roleInfo.color}10`,
-                border: `1px solid ${roleInfo.color}40`,
-                borderRadius: 8,
-                marginBottom: 20,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-            }}>
-                <CheckCircleOutlined style={{ color: roleInfo.color, fontSize: 16 }} />
-                <Text style={{ color: roleInfo.color, fontWeight: 500, fontSize: 13 }}>{roleInfo.text}</Text>
+            <div className={myCompanies.length > 1 ? 'lc-wiz-head' : 'lc-wiz-head is-first'}>
+                <div className="t">Стороны сделки</div>
+                <div className="h">Кто заказчик и кто выполняет перевозку</div>
             </div>
 
-            {/* Ответственный менеджер: помощник может вбить заявку на коллегу или оставить свободной */}
-            <div style={{ marginBottom: 20 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Ответственный менеджер</div>
-                <Select
-                    style={{ width: '100%' }}
-                    size="large"
-                    value={responsibleChoice}
-                    onChange={setResponsibleChoice}
-                    showSearch
-                    optionFilterProp="label"
-                    filterOption={(input, option) =>
-                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                    }
-                    options={[
-                        {
-                            value: 'SELF',
-                            label: user?.firstName
-                                ? `${user.lastName || ''} ${user.firstName}`.trim()
-                                : 'Текущий пользователь',
-                        },
-                        { value: 'NONE', label: 'Не назначать — заявку возьмёт любой менеджер' },
-                        ...officeUsers
-                            .filter(u => u.id !== user?.id)
-                            .map(u => ({ value: u.id, label: `${u.lastName} ${u.firstName}${u.role === 'LOGISTICIAN' ? '' : ' (админ)'}` })),
-                    ]}
-                />
-                {responsibleChoice !== 'SELF' && responsibleChoice !== 'NONE' && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                        Заявка будет закреплена за выбранным менеджером, вы останетесь её создателем и сохраните доступ
-                    </Text>
-                )}
+            {/* Role auto-detection indicator — слим-пилюля */}
+            <div className="lc-wiz-role" style={{ background: `${roleInfo.color}14`, color: roleInfo.color, border: `1px solid ${roleInfo.color}33` }}>
+                <CheckCircleOutlined style={{ fontSize: 14 }} />
+                <span>{roleInfo.text}</span>
             </div>
 
             <Row gutter={24}>
                 <Col xs={24} md={12}>
-                    <div style={{ marginBottom: 20 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Кто заказчик?</div>
+                    <div className="lc-wiz-field">
+                        <div className="lc-wiz-lbl">Кто заказчик?</div>
                         <Select
                             placeholder="Выберите заказчика"
                             style={{ width: '100%' }}
@@ -929,8 +895,8 @@ export default function CreateOrderPage() {
                     </div>
                 </Col>
                 <Col xs={24} md={12}>
-                    <div style={{ marginBottom: 20 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Кто перевозчик?</div>
+                    <div className="lc-wiz-field">
+                        <div className="lc-wiz-lbl">Кто перевозчик?</div>
                         <Select
                             placeholder="Выберите перевозчика"
                             style={{ width: '100%' }}
@@ -979,7 +945,42 @@ export default function CreateOrderPage() {
                 </Col>
             </Row>
 
-            <Divider style={{ margin: '8px 0 16px' }}>Ставки и НДС</Divider>
+            <div className="lc-wiz-field" style={{ marginTop: 4 }}>
+                <div className="lc-wiz-lbl">Ответственный менеджер</div>
+                <Select
+                    style={{ width: '100%' }}
+                    size="large"
+                    value={responsibleChoice}
+                    onChange={setResponsibleChoice}
+                    showSearch
+                    optionFilterProp="label"
+                    filterOption={(input, option) =>
+                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                    options={[
+                        {
+                            value: 'SELF',
+                            label: user?.firstName
+                                ? `${user.lastName || ''} ${user.firstName}`.trim()
+                                : 'Текущий пользователь',
+                        },
+                        { value: 'NONE', label: 'Не назначать — заявку возьмёт любой менеджер' },
+                        ...officeUsers
+                            .filter(u => u.id !== user?.id)
+                            .map(u => ({ value: u.id, label: `${u.lastName} ${u.firstName}${u.role === 'LOGISTICIAN' ? '' : ' (админ)'}` })),
+                    ]}
+                />
+                {responsibleChoice !== 'SELF' && responsibleChoice !== 'NONE' && (
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
+                        Заявка будет закреплена за выбранным менеджером, вы останетесь её создателем и сохраните доступ
+                    </Text>
+                )}
+            </div>
+
+            <div className="lc-wiz-head">
+                <div className="t">Ставки и НДС</div>
+                <div className="h">Стоимость перевозки и налоговые условия</div>
+            </div>
 
             <Row gutter={24}>
                 {showCustomerPriceField && (
@@ -1094,7 +1095,10 @@ export default function CreateOrderPage() {
 
             {isOwnOrExternalCarrier && (
                 <>
-                    <Divider style={{ margin: '16px 0 12px' }}>Назначение водителя и ТС</Divider>
+                    <div className="lc-wiz-head">
+                        <div className="t">Водитель и транспорт</div>
+                        <div className="h">Можно назначить сейчас или позже — это необязательно</div>
+                    </div>
                     {selectedCarrier === MY_COMPANY_VALUE && vehicles.length > 0 && (
                         <Form.Item label="Выбрать ТС из автопарка (опционально)">
                             <Select
@@ -1268,7 +1272,7 @@ export default function CreateOrderPage() {
                     <div className="lc-eyebrow">Заявки</div>
                     <h1 className="lc2-title">Новая заявка</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Создание заявки на перевозку — 3 шага
+                        Шаг {currentStep + 1} из {steps.length} · {steps[currentStep].title}
                     </p>
                     <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>
                         Назад к заявкам
@@ -1291,12 +1295,11 @@ export default function CreateOrderPage() {
             )}
 
             {/* ===== WIZARD CARD ===== */}
-            <div className="lc-card" style={{ padding: '8px 8px 4px' }}>
-            {currentStep < steps.length - 1 && <div style={{ marginBottom: 16, color: 'var(--lc-text-ter)', fontSize: 13 }}>Шаг {currentStep + 1} из {steps.length}</div>}
+            <div className="lc-wiz-shell">
             <Steps
+                className="lc-wiz-steps"
                 current={currentStep}
                 items={steps.map(s => ({ title: s.title, icon: s.icon }))}
-                style={{ marginBottom: 8 }}
             />
 
             {/* Form */}
