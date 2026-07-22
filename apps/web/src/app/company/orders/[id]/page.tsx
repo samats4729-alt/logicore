@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-    Typography, Tag, Button, Descriptions, Card, Row, Col, Statistic, Table,
+    Typography, Tag, Button, Descriptions, Card, Row, Col, Table,
     Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline,
     Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip,
     Alert, theme, AutoComplete
@@ -1873,12 +1873,12 @@ export default function OrderDetailPage() {
                                 )}
                                 {/* Условия и формы оплаты */}
                                 {(order.customerPaymentCondition || order.customerPaymentForm || order.driverPaymentCondition || order.driverPaymentForm) && (
-                                    <Card bordered={false} className="premium-card" style={{ marginBottom: 20 }}>
+                                    <div className="lc-card" style={{ padding: 16, marginBottom: 16 }}>
                                         <Row gutter={[16, 12]}>
                                             {(order.customerPaymentCondition || order.customerPaymentForm) && (
                                                 <Col xs={24} md={12}>
-                                                    <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Оплата от заказчика</div>
-                                                    <div style={{ fontSize: 14 }}>
+                                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Оплата от заказчика</div>
+                                                    <div>
                                                         {order.customerPaymentCondition && <Tag color="blue">{order.customerPaymentCondition}</Tag>}
                                                         {order.customerPaymentForm && <Tag>{order.customerPaymentForm}</Tag>}
                                                     </div>
@@ -1886,166 +1886,117 @@ export default function OrderDetailPage() {
                                             )}
                                             {(order.driverPaymentCondition || order.driverPaymentForm) && (
                                                 <Col xs={24} md={12}>
-                                                    <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Оплата перевозчику</div>
-                                                    <div style={{ fontSize: 14 }}>
+                                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Оплата перевозчику</div>
+                                                    <div>
                                                         {order.driverPaymentCondition && <Tag color="blue">{order.driverPaymentCondition}</Tag>}
                                                         {order.driverPaymentForm && <Tag>{order.driverPaymentForm}</Tag>}
                                                     </div>
                                                 </Col>
                                             )}
                                         </Row>
-                                    </Card>
+                                    </div>
                                 )}
 
                                 {/* Financial Summary */}
-                                <Card bordered={false} className="premium-card" style={{ marginBottom: 20 }}>
-                                    {(() => {
-                                        const isClient = order.customerCompanyId === user?.companyId;
-                                        const isExecutorPaid = order.subForwarderId ? order.isSubForwarderPaid : order.isDriverPaid;
-                                        const executorDebt = summary.executorDebt !== undefined
-                                            ? summary.executorDebt
-                                            : (order.subForwarderId
-                                                ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
-                                                : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses));
+                                {(() => {
+                                    const isClient = order.customerCompanyId === user?.companyId;
+                                    const isExecutorPaid = order.subForwarderId ? order.isSubForwarderPaid : order.isDriverPaid;
+                                    const executorDebt = summary.executorDebt !== undefined
+                                        ? summary.executorDebt
+                                        : (order.subForwarderId
+                                            ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
+                                            : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses));
 
-                                        if (isClient) {
-                                            return (
-                                                <div>
-                                                    <Row gutter={[16, 16]}>
-                                                        <Col xs={12} sm={6}>
-                                                            <Statistic title="Стоимость перевозки" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
-                                                            <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                                                {order.isCustomerPaid ? 'Оплачено экспедитору' : 'Не оплачено экспедитору'}
-                                                            </Tag>
-                                                        </Col>
-                                                        <Col xs={12} sm={6}>
-                                                            <Statistic title="Ваши Поступления" value={summary.totalIncomes} suffix="₸" valueStyle={{ fontSize: 18, color: '#389e0d' }} prefix={<WalletOutlined />} />
-                                                        </Col>
-                                                        <Col xs={12} sm={6}>
-                                                            <Statistic title="Ваши Расходы" value={summary.totalExpenses} suffix="₸" valueStyle={{ fontSize: 18, color: '#cf1322' }} prefix={<DollarOutlined />} />
-                                                        </Col>
-                                                        <Col xs={12} sm={6}>
-                                                            <Statistic title="Долг экспедитору" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#faad14' : '#389e0d' }} />
-                                                        </Col>
-                                                    </Row>
-                                                    <Row gutter={[16, 16]} style={{ marginTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 16 }}>
-                                                        <Col xs={24} md={12}>
-                                                            <div style={{ padding: 12, borderRadius: 8, background: '#f6ffed', border: `1px solid ${token.colorSuccessBorder}` }}>
-                                                                <div style={{ fontWeight: 600, marginBottom: 8, color: token.colorSuccess }}>Расчеты с экспедитором</div>
-                                                                <Row gutter={[8, 8]}>
-                                                                    <Col span={12}><Text type="secondary">Всего (Gross):</Text></Col>
-                                                                    <Col span={12} style={{ textAlign: 'right' }}><Text strong>{fmt(summary.customerPrice)} ₸</Text></Col>
-                                                                    <Col span={12}><Text type="secondary">Без НДС (Net):</Text></Col>
-                                                                    <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.revenueNet || 0)} ₸</Text></Col>
-                                                                    <Col span={12}><Text type="secondary">НДС ({order.vatRate || 0}%):</Text></Col>
-                                                                    <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.revenueVat || 0)} ₸</Text></Col>
-                                                                    <Col span={12}><Text strong style={{ color: token.colorError }}>Оставшийся долг:</Text></Col>
-                                                                    <Col span={12} style={{ textAlign: 'right' }}><Text strong style={{ color: token.colorError }}>{fmt(summary.customerDebt || 0)} ₸</Text></Col>
-                                                                </Row>
-                                                            </div>
-                                                        </Col>
-                                                    </Row>
-                                                </div>
-                                            );
-                                        }
-                                        return (
+                                    const Metric = ({ label, value, color, bg, icon, sub }: any) => (
+                                        <div className="lc2-metric">
+                                            <div className="lc2-mic" style={{ background: bg, color }}>{icon}</div>
                                             <div>
-                                                <Row gutter={[16, 16]}>
-                                                    <Col xs={12} md={5}>
-                                                        <Statistic title="Стоимость от заказчика" value={summary.customerPrice} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
-                                                        <Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                                            {order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено заказчиком'}
-                                                        </Tag>
-                                                    </Col>
-                                                    <Col xs={12} md={5}>
-                                                        <Statistic title="Ставка исполнителю" value={summary.executorCost} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 600 }} />
-                                                        <Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ marginTop: 4 }}>
-                                                            {isExecutorPaid ? 'Оплачено исполнителю' : 'Не оплачено исполнителю'}
-                                                        </Tag>
-                                                    </Col>
-                                                    <Col xs={12} md={5}>
-                                                        <Statistic title="Долг заказчика" value={summary.customerDebt} suffix="₸" valueStyle={{ fontSize: 18, color: summary.customerDebt > 0 ? '#cf1322' : '#389e0d' }} />
-                                                    </Col>
-                                                    <Col xs={12} md={5}>
-                                                        <Statistic title="Наш долг исполнителю" value={executorDebt} suffix="₸" valueStyle={{ fontSize: 18, color: executorDebt > 0 ? '#cf1322' : '#389e0d' }} />
-                                                    </Col>
-                                                    <Col xs={12} md={4}>
-                                                        <Statistic title="Ожидаемая маржа" value={summary.margin} suffix="₸" valueStyle={{ fontSize: 18, fontWeight: 700, color: summary.margin >= 0 ? '#389e0d' : '#cf1322' }} prefix={<DollarOutlined />} />
-                                                    </Col>
-                                                </Row>
-                                                <Row gutter={[16, 16]} style={{ marginTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 16 }}>
-                                                    <Col xs={24} md={12}>
-                                                        <div style={{ padding: 12, borderRadius: 8, background: '#f6ffed', border: `1px solid ${token.colorSuccessBorder}` }}>
-                                                            <div style={{ fontWeight: 600, marginBottom: 8, color: token.colorSuccess }}>Расчеты с Заказчиком</div>
-                                                            <Row gutter={[8, 8]}>
-                                                                <Col span={12}><Text type="secondary">Всего (Gross):</Text></Col>
-                                                                <Col span={12} style={{ textAlign: 'right' }}><Text strong>{fmt(summary.customerPrice)} ₸</Text></Col>
-                                                                <Col span={12}><Text type="secondary">Без НДС (Net):</Text></Col>
-                                                                <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.revenueNet || 0)} ₸</Text></Col>
-                                                                <Col span={12}><Text type="secondary">НДС ({order.vatRate || 0}%):</Text></Col>
-                                                                <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.revenueVat || 0)} ₸</Text></Col>
-                                                                <Col span={12}><Text strong style={{ color: token.colorError }}>Оставшийся долг:</Text></Col>
-                                                                <Col span={12} style={{ textAlign: 'right' }}><Text strong style={{ color: token.colorError }}>{fmt(summary.customerDebt || 0)} ₸</Text></Col>
-                                                            </Row>
-                                                        </div>
-                                                    </Col>
-                                                    <Col xs={24} md={12}>
-                                                        <div style={{ padding: 12, borderRadius: 8, background: '#fff7e6', border: `1px solid ${token.colorWarningBorder}` }}>
-                                                            <div style={{ fontWeight: 600, marginBottom: 8, color: token.colorWarning }}>Расчеты с Исполнителем</div>
-                                                            <Row gutter={[8, 8]}>
-                                                                <Col span={12}><Text type="secondary">Всего (Gross):</Text></Col>
-                                                                <Col span={12} style={{ textAlign: 'right' }}><Text strong>{fmt(summary.executorCost)} ₸</Text></Col>
-                                                                <Col span={12}><Text type="secondary">Без НДС (Net):</Text></Col>
-                                                                <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.executorCostNet || 0)} ₸</Text></Col>
-                                                                <Col span={12}><Text type="secondary">НДС ({order.executorVatRate || 0}%):</Text></Col>
-                                                                <Col span={12} style={{ textAlign: 'right' }}><Text>{fmt(summary.executorCostVat || 0)} ₸</Text></Col>
-                                                                <Col span={12}><Text strong style={{ color: token.colorError }}>Оставшийся долг:</Text></Col>
-                                                                <Col span={12} style={{ textAlign: 'right' }}><Text strong style={{ color: token.colorError }}>{fmt(executorDebt || 0)} ₸</Text></Col>
-                                                            </Row>
-                                                        </div>
-                                                    </Col>
-                                                </Row>
+                                                <div className="lc2-mlabel">{label}</div>
+                                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color }}>{fmt(value)} ₸</div>
+                                                {sub && <div className="lc2-msub">{sub}</div>}
                                             </div>
-                                        );
-                                    })()}
-                                </Card>
+                                        </div>
+                                    );
 
-                                {/* Unified Payments Card */}
-                                <Card
-                                    size="small"
-                                    title={<span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: token.colorPrimary, marginRight: 6 }} />Платежи по заявке ({payments.length})</span>}
-                                    extra={canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={handleAddPaymentClick}>Зарегистрировать платеж</Button>}
-                                    bordered={false}
-                                    className="premium-card"
-                                    style={{ marginBottom: 20 }}
-                                >
+                                    const Breakdown = ({ title, accent, gross, net, vat, vatRate, debt }: any) => (
+                                        <div className="lc-card" style={{ padding: 14, height: '100%' }}>
+                                            <div style={{ fontWeight: 600, marginBottom: 10, color: accent, fontSize: 13 }}>{title}</div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Всего с НДС</Text><Text strong>{fmt(gross)} ₸</Text></div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Без НДС</Text><Text>{fmt(net)} ₸</Text></div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">НДС ({vatRate}%)</Text><Text>{fmt(vat)} ₸</Text></div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--lc-border)', paddingTop: 6, marginTop: 2 }}><Text strong style={{ color: '#dc2626' }}>Остаток долга</Text><Text strong style={{ color: '#dc2626' }}>{fmt(debt)} ₸</Text></div>
+                                            </div>
+                                        </div>
+                                    );
+
+                                    return (
+                                        <div style={{ marginBottom: 16 }}>
+                                            <div className="lc2-metrics" style={{ marginBottom: 14 }}>
+                                                {isClient ? (
+                                                    <>
+                                                        <Metric label="Стоимость перевозки" value={summary.customerPrice} color="#0369a1" bg="#e0f2fe" icon={<WalletOutlined />} sub={<Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{order.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}</Tag>} />
+                                                        <Metric label="Поступления" value={summary.totalIncomes} color="#16a34a" bg="#e6ffed" icon={<WalletOutlined />} />
+                                                        <Metric label="Расходы" value={summary.totalExpenses} color="#dc2626" bg="#ffeef0" icon={<DollarOutlined />} />
+                                                        <Metric label="Долг экспедитору" value={summary.customerDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Metric label="Стоимость от заказчика" value={summary.customerPrice} color="#0369a1" bg="#e0f2fe" icon={<WalletOutlined />} sub={<Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено'}</Tag>} />
+                                                        <Metric label="Ставка исполнителю" value={summary.executorCost} color="#5f6672" bg="#f1f2f5" icon={<CarOutlined />} sub={<Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{isExecutorPaid ? 'Оплачено' : 'Не оплачено'}</Tag>} />
+                                                        <Metric label="Долг заказчика" value={summary.customerDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
+                                                        <Metric label="Наш долг исполнителю" value={executorDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
+                                                        <Metric label="Ожидаемая маржа" value={summary.margin} color={summary.margin >= 0 ? '#16a34a' : '#dc2626'} bg="#e6ffed" icon={<SwapOutlined />} />
+                                                    </>
+                                                )}
+                                            </div>
+                                            <Row gutter={[16, 16]}>
+                                                {isClient ? (
+                                                    <Col xs={24} md={12}>
+                                                        <Breakdown title="Расчёты с экспедитором" accent="#16a34a" gross={summary.customerPrice} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
+                                                    </Col>
+                                                ) : (
+                                                    <>
+                                                        <Col xs={24} md={12}>
+                                                            <Breakdown title="Расчёты с заказчиком" accent="#16a34a" gross={summary.customerPrice} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
+                                                        </Col>
+                                                        <Col xs={24} md={12}>
+                                                            <Breakdown title="Расчёты с исполнителем" accent="#e67e22" gross={summary.executorCost} net={summary.executorCostNet || 0} vat={summary.executorCostVat || 0} vatRate={order.executorVatRate || 0} debt={executorDebt || 0} />
+                                                        </Col>
+                                                    </>
+                                                )}
+                                            </Row>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* Платежи по заявке */}
+                                <div className="lc-card" style={{ padding: 0, marginBottom: 16 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
+                                        <span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: token.colorPrimary, marginRight: 6 }} />Платежи по заявке ({payments.length})</span>
+                                        {canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={handleAddPaymentClick}>Зарегистрировать платёж</Button>}
+                                    </div>
                                     <Table columns={paymentColumns} dataSource={payments} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет зарегистрированных платежей' }} scroll={{ x: true }} />
-                                </Card>
+                                </div>
 
-                                <Row gutter={[24, 24]}>
+                                <Row gutter={[16, 16]}>
                                     <Col xs={24} lg={12}>
-                                        {/* Incomes Card */}
-                                        <Card
-                                            size="small"
-                                            title={<span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: '#389e0d', marginRight: 6 }} />Поступления ({incomes.length})</span>}
-                                            extra={canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); setIncomeModalOpen(true); }}>Добавить</Button>}
-                                            bordered={false}
-                                            className="premium-card"
-                                        >
+                                        <div className="lc-card" style={{ padding: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
+                                                <span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: '#16a34a', marginRight: 6 }} />Поступления ({incomes.length})</span>
+                                                {canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); setIncomeModalOpen(true); }}>Добавить</Button>}
+                                            </div>
                                             <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
-                                        </Card>
+                                        </div>
                                     </Col>
                                     <Col xs={24} lg={12}>
-                                        {/* Expenses Card */}
-                                        <Card
-                                            size="small"
-                                            title={<span style={{ fontWeight: 600 }}><DollarOutlined style={{ color: '#cf1322', marginRight: 6 }} />Расходы ({expenses.length})</span>}
-                                            extra={canEditFinance && <Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); setExpenseModalOpen(true); }}>Добавить</Button>}
-                                            bordered={false}
-                                            className="premium-card"
-                                        >
+                                        <div className="lc-card" style={{ padding: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
+                                                <span style={{ fontWeight: 600 }}><DollarOutlined style={{ color: '#dc2626', marginRight: 6 }} />Расходы ({expenses.length})</span>
+                                                {canEditFinance && <Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); setExpenseModalOpen(true); }}>Добавить</Button>}
+                                            </div>
                                             <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
-                                        </Card>
+                                        </div>
                                     </Col>
                                 </Row>
                             </div>
