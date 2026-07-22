@@ -928,12 +928,19 @@ model FinanceAccount {
   @@index([companyId])
 }
 
+enum CostType {
+  PER_ORDER   // По заявке — себестоимость рейса (режет маржу заявки)
+  PER_VEHICLE // По машине — расход конкретного ТС
+  GENERAL     // Общехозяйственный — общий расход фирмы
+}
+
 model FinanceCategory {
   id          String           @id @default(cuid())
   companyId   String
   company     Company          @relation("CompanyFinanceCategories", fields: [companyId], references: [id], onDelete: Cascade)
   name        String
   direction   PaymentDirection
+  costType    CostType?        // Тип статьи затрат (только для расходных, direction=OUT)
   isSystem    Boolean          @default(false)
   isActive    Boolean          @default(true)
   createdAt   DateTime         @default(now())

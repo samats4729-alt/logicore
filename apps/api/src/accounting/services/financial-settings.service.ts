@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PaymentDirection, AccountKind } from '@prisma/client';
+import { PaymentDirection, AccountKind, CostType } from '@prisma/client';
 
 @Injectable()
 export class FinancialSettingsService {
@@ -51,17 +51,39 @@ export class FinancialSettingsService {
             { name: 'Расчетный счет', kind: AccountKind.BANK }
         ].filter(acc => !existingAccounts.some(ea => ea.name === acc.name && ea.kind === acc.kind));
 
+        // Типы затрат по умолчанию для расходных статей (по заявке / по машине / общий)
+        const DEFAULT_COST_TYPES: Record<string, CostType> = {
+            'ГСМ': CostType.PER_ORDER,
+            'Ремонт': CostType.PER_VEHICLE,
+            'Зарплата': CostType.GENERAL,
+            'Аренда': CostType.GENERAL,
+            'Налоги': CostType.GENERAL,
+            'Прочие расходы': CostType.GENERAL,
+            'Оплата исполнителю': CostType.PER_ORDER,
+        };
+
         const categoriesToCreate = [
-            { name: 'Оплата за рейс', direction: PaymentDirection.IN, isSystem: true },
-            { name: 'Прочие поступления', direction: PaymentDirection.IN, isSystem: true },
-            { name: 'ГСМ', direction: PaymentDirection.OUT, isSystem: true },
-            { name: 'Ремонт', direction: PaymentDirection.OUT, isSystem: true },
-            { name: 'Зарплата', direction: PaymentDirection.OUT, isSystem: true },
-            { name: 'Аренда', direction: PaymentDirection.OUT, isSystem: true },
-            { name: 'Налоги', direction: PaymentDirection.OUT, isSystem: true },
-            { name: 'Прочие расходы', direction: PaymentDirection.OUT, isSystem: true },
-            { name: 'Оплата исполнителю', direction: PaymentDirection.OUT, isSystem: true },
+            { name: 'Оплата за рейс', direction: PaymentDirection.IN, isSystem: true, costType: null },
+            { name: 'Прочие поступления', direction: PaymentDirection.IN, isSystem: true, costType: null },
+            { name: 'ГСМ', direction: PaymentDirection.OUT, isSystem: true, costType: CostType.PER_ORDER },
+            { name: 'Ремонт', direction: PaymentDirection.OUT, isSystem: true, costType: CostType.PER_VEHICLE },
+            { name: 'Зарплата', direction: PaymentDirection.OUT, isSystem: true, costType: CostType.GENERAL },
+            { name: 'Аренда', direction: PaymentDirection.OUT, isSystem: true, costType: CostType.GENERAL },
+            { name: 'Налоги', direction: PaymentDirection.OUT, isSystem: true, costType: CostType.GENERAL },
+            { name: 'Прочие расходы', direction: PaymentDirection.OUT, isSystem: true, costType: CostType.GENERAL },
+            { name: 'Оплата исполнителю', direction: PaymentDirection.OUT, isSystem: true, costType: CostType.PER_ORDER },
         ].filter(cat => !existingCategories.some(ec => ec.name === cat.name && ec.direction === cat.direction));
+
+        // Бэкфилл: у уже заведённых системных расходных статей проставим тип, если он пустой
+        const needCostType = existingCategories.filter(
+            ec => ec.direction === PaymentDirection.OUT && !ec.costType && DEFAULT_COST_TYPES[ec.name]
+        );
+        for (const ec of needCostType) {
+            await this.prisma.financeCategory.update({
+                where: { id: ec.id },
+                data: { costType: DEFAULT_COST_TYPES[ec.name] },
+            });
+        }
 
         if (accountsToCreate.length > 0) {
             await this.prisma.financeAccount.createMany({
@@ -81,6 +103,7 @@ export class FinancialSettingsService {
                     companyId,
                     name: c.name,
                     direction: c.direction,
+                    costType: c.costType,
                     isSystem: c.isSystem,
                     isActive: true
                 }))
@@ -117,7 +140,7 @@ export class FinancialSettingsService {
         });
     }
 
-    async createFinanceCategory(companyId: string, data: { name: string; direction: PaymentDirection }) {
+    async createFinanceCategory(companyId: string, data: { name: string; direction: PaymentDirection; costType?: CostType | null }) {
         await this.ensureCompanyFinanceSettings(companyId);
         const existing = await this.prisma.financeCategory.findFirst({
             where: { companyId, name: data.name, direction: data.direction },
@@ -132,18 +155,22 @@ export class FinancialSettingsService {
             throw new BadRequestException('Статья с таким названием уже существует');
         }
 
+        // Тип затрат имеет смысл только для расходных статей
+        const costType = data.direction === PaymentDirection.OUT ? (data.costType ?? null) : null;
+
         return this.prisma.financeCategory.create({
             data: {
                 companyId,
                 name: data.name,
                 direction: data.direction,
+                costType,
                 isSystem: false,
                 isActive: true,
             },
         });
     }
 
-    async updateFinanceCategory(companyId: string, id: string, data: { name: string }) {
+    async updateFinanceCategory(companyId: string, id: string, data: { name?: string; costType?: CostType | null }) {
         await this.ensureCompanyFinanceSettings(companyId);
         const category = await this.prisma.financeCategory.findFirst({
             where: { id, companyId },
@@ -151,9 +178,16 @@ export class FinancialSettingsService {
         if (!category) throw new NotFoundException('Статья не найдена');
         if (category.isSystem) throw new BadRequestException('Системные статьи нельзя редактировать');
 
+        const patch: { name?: string; costType?: CostType | null } = {};
+        if (data.name !== undefined) patch.name = data.name;
+        // Тип затрат меняем только у расходных статей
+        if (data.costType !== undefined && category.direction === PaymentDirection.OUT) {
+            patch.costType = data.costType;
+        }
+
         return this.prisma.financeCategory.update({
             where: { id },
-            data: { name: data.name },
+            data: patch,
         });
     }
 

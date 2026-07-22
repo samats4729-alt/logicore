@@ -17,13 +17,24 @@ interface FinanceAccount {
     isActive: boolean;
 }
 
+type CostType = 'PER_ORDER' | 'PER_VEHICLE' | 'GENERAL';
+
 interface FinanceCategory {
     id: string;
     name: string;
     direction: 'IN' | 'OUT';
+    costType?: CostType | null;
     isSystem: boolean;
     isActive: boolean;
 }
+
+const COST_TYPE_OPTIONS: { value: CostType; label: string; hint: string }[] = [
+    { value: 'PER_ORDER', label: 'По заявке', hint: 'Себестоимость рейса — уменьшает маржу заявки' },
+    { value: 'PER_VEHICLE', label: 'По машине', hint: 'Расход конкретного грузовика' },
+    { value: 'GENERAL', label: 'Общехозяйственный', hint: 'Общий расход фирмы (аренда, зарплата…)' },
+];
+const COST_TYPE_LABELS: Record<string, string> = { PER_ORDER: 'По заявке', PER_VEHICLE: 'По машине', GENERAL: 'Общехозяйственный' };
+const COST_TYPE_COLORS: Record<string, string> = { PER_ORDER: 'blue', PER_VEHICLE: 'purple', GENERAL: 'default' };
 
 export default function FinanceSettingsPage() {
     const { token } = theme.useToken();
@@ -51,6 +62,9 @@ export default function FinanceSettingsPage() {
     const [editingCategory, setEditingCategory] = useState<FinanceCategory | null>(null);
     const [categoryForm] = Form.useForm();
     const [saving, setSaving] = useState(false);
+    const watchedDirection = Form.useWatch('direction', categoryForm);
+    // Тип затрат нужен только для расходных статей (OUT)
+    const categoryDirection = editingCategory ? editingCategory.direction : watchedDirection;
 
     useEffect(() => {
         fetchSettings();
@@ -104,18 +118,25 @@ export default function FinanceSettingsPage() {
     const handleEditCategory = (record: FinanceCategory) => {
         if (!canEditFinance) return;
         setEditingCategory(record);
-        categoryForm.setFieldsValue({ name: record.name });
+        categoryForm.setFieldsValue({ name: record.name, costType: record.costType ?? undefined });
         setCategoryModalOpen(true);
     };
 
-    const handleSaveCategory = async (values: { name: string; direction?: 'IN' | 'OUT' }) => {
+    const handleSaveCategory = async (values: { name: string; direction?: 'IN' | 'OUT'; costType?: CostType }) => {
         setSaving(true);
         try {
             if (editingCategory) {
-                await api.put(`/accounting/finance-categories/${editingCategory.id}`, { name: values.name });
+                await api.put(`/accounting/finance-categories/${editingCategory.id}`, {
+                    name: values.name,
+                    ...(editingCategory.direction === 'OUT' ? { costType: values.costType ?? null } : {}),
+                });
                 message.success('Статья обновлена');
             } else {
-                await api.post('/accounting/finance-categories', values);
+                await api.post('/accounting/finance-categories', {
+                    name: values.name,
+                    direction: values.direction,
+                    ...(values.direction === 'OUT' ? { costType: values.costType ?? null } : {}),
+                });
                 message.success('Статья добавлена');
             }
             setCategoryModalOpen(false);
@@ -182,7 +203,18 @@ export default function FinanceSettingsPage() {
             )
         },
         {
-            title: 'Тип',
+            title: 'Тип затрат',
+            dataIndex: 'costType',
+            key: 'costType',
+            width: 190,
+            render: (val: CostType | null | undefined, r: FinanceCategory) => (
+                r.direction === 'OUT'
+                    ? (val ? <Tag color={COST_TYPE_COLORS[val]}>{COST_TYPE_LABELS[val]}</Tag> : <Tag color="warning">не задан</Tag>)
+                    : <Text type="secondary">—</Text>
+            )
+        },
+        {
+            title: 'Источник',
             dataIndex: 'isSystem',
             key: 'system',
             width: 150,
@@ -342,6 +374,21 @@ export default function FinanceSettingsPage() {
                             <Select size="large">
                                 <Select.Option value="IN">Поступление</Select.Option>
                                 <Select.Option value="OUT">Расход</Select.Option>
+                            </Select>
+                        </Form.Item>
+                    )}
+
+                    {categoryDirection === 'OUT' && (
+                        <Form.Item
+                            name="costType"
+                            label="Тип затрат"
+                            rules={[{ required: true, message: 'Выберите тип' }]}
+                            extra="К чему относится расход: к заявке (режет её маржу), к машине (расход ТС) или общий по фирме."
+                        >
+                            <Select size="large" placeholder="Выберите">
+                                {COST_TYPE_OPTIONS.map(o => (
+                                    <Select.Option key={o.value} value={o.value}>{o.label} — <span style={{ color: 'var(--lc-text-ter)' }}>{o.hint}</span></Select.Option>
+                                ))}
                             </Select>
                         </Form.Item>
                     )}

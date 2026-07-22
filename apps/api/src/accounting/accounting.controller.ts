@@ -3,7 +3,7 @@ import { AccountingService } from './accounting.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
-import { UserRole, PaymentDirection } from '@prisma/client';
+import { UserRole, PaymentDirection, CostType } from '@prisma/client';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { Response } from 'express';
@@ -385,7 +385,7 @@ export class AccountingController {
     @Roles(...FINANCE_CHANGE_ROLES)
     async createFinanceCategory(
         @Request() req: any,
-        @Body() body: { name: string; direction: PaymentDirection },
+        @Body() body: { name: string; direction: PaymentDirection; costType?: CostType | null },
     ) {
         return this.accountingService.createFinanceCategory(req.user.companyId, body);
     }
@@ -395,7 +395,7 @@ export class AccountingController {
     async updateFinanceCategory(
         @Request() req: any,
         @Param('id') id: string,
-        @Body() body: { name: string },
+        @Body() body: { name?: string; costType?: CostType | null },
     ) {
         return this.accountingService.updateFinanceCategory(req.user.companyId, id, body);
     }

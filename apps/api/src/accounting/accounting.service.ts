@@ -5,7 +5,7 @@ import { FinancialSettingsService } from './services/financial-settings.service'
 import { PaymentsService } from './services/payments.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentDirection, PaymentMethod } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, CostType } from '@prisma/client';
 
 @Injectable()
 export class AccountingService {
@@ -287,11 +287,11 @@ export class AccountingService {
         return this.settingsService.getFinanceCategories(companyId);
     }
 
-    async createFinanceCategory(companyId: string, data: { name: string; direction: PaymentDirection }) {
+    async createFinanceCategory(companyId: string, data: { name: string; direction: PaymentDirection; costType?: CostType | null }) {
         return this.settingsService.createFinanceCategory(companyId, data);
     }
 
-    async updateFinanceCategory(companyId: string, id: string, data: { name: string }) {
+    async updateFinanceCategory(companyId: string, id: string, data: { name?: string; costType?: CostType | null }) {
         return this.settingsService.updateFinanceCategory(companyId, id, data);
     }
 
