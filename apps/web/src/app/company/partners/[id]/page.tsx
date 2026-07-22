@@ -10,10 +10,11 @@ import {
 import {
     ShopOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined,
     PlusOutlined, UserOutlined, UserAddOutlined, CarOutlined,
-    FileTextOutlined, IdcardOutlined
+    FileTextOutlined, IdcardOutlined, EnvironmentOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
+import LocationForm from '@/components/ui/LocationForm';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -46,6 +47,14 @@ export default function PartnerDetailPage() {
     const [contracts, setContracts] = useState<any[]>([]);
     const [contractsLoading, setContractsLoading] = useState(false);
 
+    // Addresses (адреса этого контрагента)
+    const [addresses, setAddresses] = useState<any[]>([]);
+    const [addressesLoading, setAddressesLoading] = useState(false);
+    const [addressesLoaded, setAddressesLoaded] = useState(false);
+    const [addressModalOpen, setAddressModalOpen] = useState(false);
+    const [editingAddress, setEditingAddress] = useState<any | null>(null);
+    const [addressForm] = Form.useForm();
+
     // Active tab
     const [activeTab, setActiveTab] = useState('profile');
 
@@ -62,6 +71,9 @@ export default function PartnerDetailPage() {
     useEffect(() => {
         if (activeTab === 'contracts' && contracts.length === 0) {
             fetchContracts();
+        }
+        if (activeTab === 'addresses' && !addressesLoaded) {
+            fetchAddresses();
         }
     }, [activeTab]);
 
@@ -120,6 +132,60 @@ export default function PartnerDetailPage() {
             console.error('Failed to fetch contracts:', error);
         } finally {
             setContractsLoading(false);
+        }
+    };
+
+    // ===== Addresses =====
+    const fetchAddresses = async () => {
+        setAddressesLoading(true);
+        try {
+            const res = await api.get('/locations');
+            setAddresses((res.data || []).filter((l: any) => l.companyId === partnerId));
+            setAddressesLoaded(true);
+        } catch (error) {
+            message.error('Ошибка загрузки адресов');
+        } finally {
+            setAddressesLoading(false);
+        }
+    };
+
+    const openAddressCreate = () => {
+        setEditingAddress(null);
+        addressForm.resetFields();
+        setAddressModalOpen(true);
+    };
+
+    const openAddressEdit = (record: any) => {
+        setEditingAddress(record);
+        setAddressModalOpen(true);
+    };
+
+    const handleAddressSubmit = async (values: any) => {
+        try {
+            const payload = { ...values, emails: values.emails ? values.emails.join(',') : null };
+            if (editingAddress) {
+                await api.put(`/locations/${editingAddress.id}`, payload);
+                message.success('Адрес обновлён');
+            } else {
+                await api.post('/locations', payload);
+                message.success('Адрес добавлен');
+            }
+            setAddressModalOpen(false);
+            setEditingAddress(null);
+            addressForm.resetFields();
+            fetchAddresses();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка сохранения адреса');
+        }
+    };
+
+    const handleAddressDelete = async (id: string) => {
+        try {
+            await api.delete(`/locations/${id}`);
+            message.success('Адрес удалён');
+            fetchAddresses();
+        } catch (error: any) {
+            message.error(error.response?.data?.message || 'Ошибка удаления адреса');
         }
     };
 
@@ -472,10 +538,75 @@ export default function PartnerDetailPage() {
         </div>
     );
 
+    // ===== Addresses Tab =====
+    const addressColumns = [
+        {
+            title: 'Адрес',
+            dataIndex: 'name',
+            key: 'name',
+            render: (text: string, record: any) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Space size={6}>
+                        <EnvironmentOutlined style={{ color: '#1677ff' }} />
+                        <Text strong>{text}</Text>
+                    </Space>
+                    {record.address && (
+                        <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
+                            {record.city ? `${record.city}, ` : ''}{record.address}
+                        </span>
+                    )}
+                </div>
+            ),
+        },
+        {
+            title: 'Контакт',
+            key: 'contact',
+            render: (_: any, r: any) => (r.contactName || r.contactPhone) ? (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {r.contactName && <span style={{ fontSize: 13 }}>{r.contactName}</span>}
+                    {r.contactPhone && <span style={{ fontSize: 12, color: '#8c8c8c' }}>{r.contactPhone}</span>}
+                </div>
+            ) : <Text type="secondary">—</Text>,
+        },
+        {
+            title: '',
+            key: 'actions',
+            width: 100,
+            align: 'right' as const,
+            render: (_: any, r: any) => (
+                <Space>
+                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openAddressEdit(r)} style={{ padding: 0 }} />
+                    <Popconfirm title="Удалить адрес?" onConfirm={() => handleAddressDelete(r.id)} okText="Да" cancelText="Нет">
+                        <Button type="link" size="small" danger icon={<DeleteOutlined />} style={{ padding: 0 }} />
+                    </Popconfirm>
+                </Space>
+            ),
+        },
+    ];
+
+    const addressesContent = (
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+                <Text strong style={{ fontSize: 15 }}>Адреса контрагента «{partner.name}»</Text>
+                <Button type="primary" icon={<PlusOutlined />} onClick={openAddressCreate}>
+                    Добавить адрес контрагенту
+                </Button>
+            </div>
+            <Table
+                columns={addressColumns}
+                dataSource={addresses}
+                rowKey="id"
+                loading={addressesLoading}
+                locale={{ emptyText: <Empty description="У этого контрагента пока нет адресов" /> }}
+            />
+        </div>
+    );
+
     // ===== Tab items =====
     const tabItems: any[] = [
         { key: 'profile', label: 'Профиль', children: profileContent },
         { key: 'contracts', label: 'Договоры', children: contractsContent },
+        { key: 'addresses', label: `Адреса${addressesLoaded ? ` (${addresses.length})` : ''}`, children: addressesContent },
     ];
 
     if (partner.isCarrier) {
@@ -526,7 +657,6 @@ export default function PartnerDetailPage() {
                 <Tabs
                     activeKey={activeTab}
                     onChange={setActiveTab}
-                    type="card"
                     items={tabItems}
                 />
             </div>
@@ -702,6 +832,29 @@ export default function PartnerDetailPage() {
                         </Col>
                     </Row>
                 </Form>
+            </Modal>
+
+            {/* Address Add/Edit Modal */}
+            <Modal
+                title={editingAddress ? 'Редактирование адреса' : 'Добавление нового адреса'}
+                open={addressModalOpen}
+                onCancel={() => { setAddressModalOpen(false); setEditingAddress(null); addressForm.resetFields(); }}
+                onOk={() => addressForm.submit()}
+                okText="Сохранить адрес"
+                cancelText="Отмена"
+                width={850}
+                centered
+                destroyOnClose
+            >
+                <div style={{ marginTop: 16 }}>
+                    <LocationForm
+                        form={addressForm}
+                        editingLocation={editingAddress}
+                        defaultCompanyId={editingAddress ? undefined : partnerId}
+                        onFinish={handleAddressSubmit}
+                        showCompanySelect={true}
+                    />
+                </div>
             </Modal>
         </div>
     );
