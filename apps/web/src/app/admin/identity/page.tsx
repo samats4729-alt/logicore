@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Card, Button, Table, Tag, Space, Alert, message, Spin, Statistic, Row, Col, Select, Popconfirm } from 'antd';
+import { Typography, Card, Button, Table, Tag, Space, Alert, message, Spin, Statistic, Row, Col, Select, Popconfirm, Switch } from 'antd';
 import { ReloadOutlined, TeamOutlined, MergeCellsOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 
@@ -56,6 +56,13 @@ interface Reconcile {
     vehicles: { total: number; expectedLinks: number; linkedOk: number; missingLinks: number; mismatched: number; missingSample: string[]; mismatchSample: string[] };
 }
 
+interface ReadReconcile {
+    ok: boolean;
+    companiesChecked: number;
+    companiesWithDiff: number;
+    diffs: { companyId: string; companyName: string; onlyOld: string[]; onlyNew: string[] }[];
+}
+
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
     LOGISTICIAN: 'Менеджер',
@@ -83,6 +90,42 @@ export default function AdminIdentityPage() {
     const [backfillingVeh, setBackfillingVeh] = useState(false);
     const [recon, setRecon] = useState<Reconcile | null>(null);
     const [reconLoading, setReconLoading] = useState(false);
+    const [readRecon, setReadRecon] = useState<ReadReconcile | null>(null);
+    const [readReconLoading, setReadReconLoading] = useState(false);
+    const [flags, setFlags] = useState<Record<string, boolean>>({});
+    const [flagSaving, setFlagSaving] = useState(false);
+
+    const loadFlags = async () => {
+        try {
+            const res = await api.get('/admin/identity/read-flags');
+            setFlags(res.data || {});
+        } catch { /* ignore */ }
+    };
+
+    const loadReadRecon = async () => {
+        setReadReconLoading(true);
+        try {
+            const res = await api.get('/admin/identity/reconcile-reads');
+            setReadRecon(res.data);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось проверить паритет чтения');
+        } finally {
+            setReadReconLoading(false);
+        }
+    };
+
+    const setFlag = async (key: string, enabled: boolean) => {
+        setFlagSaving(true);
+        try {
+            await api.post('/admin/identity/read-flags', { key, enabled });
+            setFlags(prev => ({ ...prev, [key]: enabled }));
+            message.success(enabled ? 'Новое чтение включено' : 'Возврат на старое чтение');
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось изменить флаг');
+        } finally {
+            setFlagSaving(false);
+        }
+    };
 
     const loadRecon = async () => {
         setReconLoading(true);
@@ -182,6 +225,8 @@ export default function AdminIdentityPage() {
         loadAff();
         loadVeh();
         loadRecon();
+        loadFlags();
+        loadReadRecon();
     }, []);
 
     const mergeGroup = async (g: DupGroup, gk: string) => {
@@ -590,6 +635,63 @@ export default function AdminIdentityPage() {
                         )}
                     </>
                 )}
+            </Card>
+
+            <Card
+                title={<span>Шаг 7. Переключение чтения «менеджеры» (за флагом)</span>}
+                style={{ marginTop: 16, borderColor: '#1677ff' }}
+                extra={<Button icon={<ReloadOutlined />} onClick={loadReadRecon} loading={readReconLoading}>Проверить паритет</Button>}
+            >
+                <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="Это первый шаг, который меняет поведение — поэтому за флагом"
+                    description="Ниже показано, совпадает ли список «менеджеров» (выбор ответственного) при старом и новом чтении. Включать флаг стоит только при «0 расхождений». Выключение мгновенно возвращает старое поведение."
+                />
+
+                {readRecon && (
+                    <Alert
+                        style={{ marginBottom: 16 }}
+                        type={readRecon.ok ? 'success' : 'error'}
+                        showIcon
+                        message={readRecon.ok
+                            ? `Паритет чтения полный: проверено компаний ${readRecon.companiesChecked}, расхождений 0`
+                            : `Есть расхождения в ${readRecon.companiesWithDiff} компаниях — включать флаг рано`}
+                    />
+                )}
+
+                {readRecon && !readRecon.ok && readRecon.diffs.length > 0 && (
+                    <Table
+                        size="small"
+                        pagination={false}
+                        rowKey="companyId"
+                        style={{ marginBottom: 16 }}
+                        dataSource={readRecon.diffs}
+                        columns={[
+                            { title: 'Компания', dataIndex: 'companyName', key: 'companyName' },
+                            { title: 'Только в старом', key: 'onlyOld', render: (_: any, r: ReadReconcile['diffs'][number]) => r.onlyOld.join(', ') || '—' },
+                            { title: 'Только в новом', key: 'onlyNew', render: (_: any, r: ReadReconcile['diffs'][number]) => r.onlyNew.join(', ') || '—' },
+                        ]}
+                    />
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                    <Switch
+                        checked={!!flags['identity_reads_managers']}
+                        loading={flagSaving}
+                        disabled={!readRecon?.ok && !flags['identity_reads_managers']}
+                        onChange={(v) => setFlag('identity_reads_managers', v)}
+                    />
+                    <div>
+                        <Text strong>Читать «менеджеров» из нового слоя (Affiliation)</Text>
+                        <div style={{ color: '#8a91a0', fontSize: 13 }}>
+                            {flags['identity_reads_managers']
+                                ? 'Включено. Выключатель мгновенно вернёт старое чтение.'
+                                : (readRecon?.ok ? 'Паритет полный — можно включать.' : 'Включение доступно только при полном паритете чтения.')}
+                        </div>
+                    </div>
+                </div>
             </Card>
         </div>
     );

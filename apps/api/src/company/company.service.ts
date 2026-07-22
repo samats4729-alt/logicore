@@ -608,9 +608,45 @@ export class CompanyService {
      * Офисные сотрудники компании — для выбора ответственного менеджера
      * (только имена и роли, без чувствительных данных)
      */
+    // Фиче-флаг: читать членство из Affiliation вместо User.companyId+UserCompanyRelation.
+    // По умолчанию ВЫКЛ. Кэш на 30с. Включается в админке (мгновенно откатывается).
+    private managerReadsCache: { value: boolean; expiresAt: number } | null = null;
+    private async isAffiliationManagerReads(): Promise<boolean> {
+        if (this.managerReadsCache && this.managerReadsCache.expiresAt > Date.now()) {
+            return this.managerReadsCache.value;
+        }
+        let value = false;
+        try {
+            const row = await this.prisma.platformSetting.findUnique({ where: { key: 'identity_reads_managers' } });
+            value = row?.value === 'true';
+        } catch {
+            value = false;
+        }
+        this.managerReadsCache = { value, expiresAt: Date.now() + 30000 };
+        return value;
+    }
+
     async getCompanyManagers(companyId: string) {
-        // Как и в списке сотрудников — учитываем и связанных через мультикомпанию,
-        // чтобы владельца/общую команду можно было назначать ответственными во всех организациях.
+        // Новый путь (за флагом): членство берём из Affiliation через sourceUserId,
+        // фильтр роли — как в старом (по User.role). Даёт тот же набор, но через новый слой.
+        if (await this.isAffiliationManagerReads()) {
+            const affs = await this.prisma.affiliation.findMany({
+                where: { companyId, sourceUserId: { not: null } },
+                select: { sourceUserId: true },
+            });
+            const ids = Array.from(new Set(affs.map(a => a.sourceUserId).filter(Boolean))) as string[];
+            return this.prisma.user.findMany({
+                where: {
+                    id: { in: ids },
+                    isActive: true,
+                    role: { in: ['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN'] as any },
+                },
+                select: { id: true, firstName: true, lastName: true, role: true },
+                orderBy: { firstName: 'asc' },
+            });
+        }
+
+        // Старый путь (по умолчанию): User.companyId + UserCompanyRelation.
         const relations = await this.prisma.userCompanyRelation.findMany({
             where: { companyId },
             select: { userId: true },

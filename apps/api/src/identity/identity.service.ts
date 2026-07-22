@@ -407,6 +407,98 @@ export class IdentityService {
         };
     }
 
+    // ==================== ПЕРЕКЛЮЧЕНИЕ ЧТЕНИЯ (за флагом) ====================
+
+    private static readonly READ_FLAG_KEYS = ['identity_reads_managers'] as const;
+
+    /** Текущее состояние фиче-флагов чтения. */
+    async getReadFlags(): Promise<Record<string, boolean>> {
+        const rows = await this.prisma.platformSetting.findMany({
+            where: { key: { in: [...IdentityService.READ_FLAG_KEYS] } },
+        });
+        const map = new Map(rows.map((r) => [r.key, r.value === 'true']));
+        const out: Record<string, boolean> = {};
+        for (const k of IdentityService.READ_FLAG_KEYS) out[k] = map.get(k) ?? false;
+        return out;
+    }
+
+    /** Включить/выключить флаг чтения (мгновенный откат). */
+    async setReadFlag(key: string, enabled: boolean) {
+        if (!(IdentityService.READ_FLAG_KEYS as readonly string[]).includes(key)) {
+            throw new BadRequestException('Неизвестный флаг');
+        }
+        await this.prisma.platformSetting.upsert({
+            where: { key },
+            create: { key, value: String(enabled) },
+            update: { value: String(enabled) },
+        });
+        return { key, enabled };
+    }
+
+    /**
+     * Проверка паритета ЧТЕНИЯ для «менеджеров»: по каждой компании сравнивает список,
+     * который вернёт старый путь, с тем, что вернёт новый (через Affiliation). Read-only.
+     * diffs пуст => включать флаг безопасно (вывод не изменится).
+     */
+    async reconcileManagerReads() {
+        const MANAGER_ROLES = new Set(['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN']);
+
+        const [users, relations, affs, companies] = await Promise.all([
+            this.prisma.user.findMany({
+                where: { isActive: true },
+                select: { id: true, companyId: true, role: true, firstName: true, lastName: true },
+            }),
+            this.prisma.userCompanyRelation.findMany({ select: { userId: true, companyId: true } }),
+            this.prisma.affiliation.findMany({ where: { sourceUserId: { not: null } }, select: { companyId: true, sourceUserId: true } }),
+            this.prisma.company.findMany({ select: { id: true, name: true } }),
+        ]);
+
+        const isMgr = new Map<string, { name: string } | null>();
+        for (const u of users) {
+            isMgr.set(u.id, MANAGER_ROLES.has(u.role as string) ? { name: `${u.lastName || ''} ${u.firstName || ''}`.trim() } : null);
+        }
+        const companyName = new Map(companies.map((c) => [c.id, c.name]));
+
+        // Старый набор менеджеров по компаниям
+        const oldSet = new Map<string, Set<string>>();
+        const add = (companyId: string | null, userId: string) => {
+            if (!companyId) return;
+            if (!isMgr.get(userId)) return;
+            if (!oldSet.has(companyId)) oldSet.set(companyId, new Set());
+            oldSet.get(companyId)!.add(userId);
+        };
+        for (const u of users) add(u.companyId, u.id);
+        for (const r of relations) add(r.companyId, r.userId);
+
+        // Новый набор — из Affiliation (sourceUserId), фильтр по роли менеджера
+        const newSet = new Map<string, Set<string>>();
+        for (const a of affs) {
+            const uid = a.sourceUserId as string;
+            if (!isMgr.get(uid)) continue;
+            if (!newSet.has(a.companyId)) newSet.set(a.companyId, new Set());
+            newSet.get(a.companyId)!.add(uid);
+        }
+
+        const allCompanyIds = new Set<string>([...oldSet.keys(), ...newSet.keys()]);
+        const diffs: Array<{ companyId: string; companyName: string; onlyOld: string[]; onlyNew: string[] }> = [];
+        for (const cid of allCompanyIds) {
+            const o = oldSet.get(cid) || new Set();
+            const n = newSet.get(cid) || new Set();
+            const onlyOld = [...o].filter((id) => !n.has(id)).map((id) => isMgr.get(id)?.name || id);
+            const onlyNew = [...n].filter((id) => !o.has(id)).map((id) => isMgr.get(id)?.name || id);
+            if (onlyOld.length || onlyNew.length) {
+                diffs.push({ companyId: cid, companyName: companyName.get(cid) || cid, onlyOld, onlyNew });
+            }
+        }
+
+        return {
+            ok: diffs.length === 0,
+            companiesChecked: allCompanyIds.size,
+            companiesWithDiff: diffs.length,
+            diffs: diffs.slice(0, 50),
+        };
+    }
+
     // ==================== СВЕРКА: новый фундамент == старые данные ====================
 
     /**

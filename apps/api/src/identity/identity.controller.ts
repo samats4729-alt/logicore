@@ -85,4 +85,25 @@ export class IdentityController {
     async revertMerge(@Param('id') id: string) {
         return this.identityService.revertMerge(id);
     }
+
+    @Get('read-flags')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Состояние фиче-флагов чтения' })
+    async getReadFlags() {
+        return this.identityService.getReadFlags();
+    }
+
+    @Post('read-flags')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Включить/выключить флаг чтения (мгновенный откат)' })
+    async setReadFlag(@Body() dto: { key: string; enabled: boolean }) {
+        return this.identityService.setReadFlag(dto.key, !!dto.enabled);
+    }
+
+    @Get('reconcile-reads')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Паритет чтения «менеджеры»: старый путь vs новый (read-only)' })
+    async reconcileReads() {
+        return this.identityService.reconcileManagerReads();
+    }
 }
