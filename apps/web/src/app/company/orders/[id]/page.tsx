@@ -109,7 +109,13 @@ const getNextStatuses = (s: string) => {
     if (s === 'PROBLEM') {
         return chain;
     }
-    
+
+    // Завершённую заявку можно «вернуть» на любой активный этап (переоткрыть).
+    // Бэкенд разрешит это, если контрагентов нет на платформе; иначе — через согласование.
+    if (s === 'COMPLETED') {
+        return chain.slice(0, chain.length - 1);
+    }
+
     const idx = chain.findIndex(item => item.value === s);
     if (idx === -1) return [];
     return chain.slice(idx + 1);
@@ -1089,9 +1095,9 @@ export default function OrderDetailPage() {
                 )}
                 {!isEditing && (
                     <Space wrap size="small">
-                        {isNotFinished && canChangeStatus && (
+                        {canChangeStatus && (
                             <Button type="primary" icon={<SwapOutlined />} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
-                                Изменить статус
+                                {order.status === 'COMPLETED' ? 'Вернуть / изменить статус' : 'Изменить статус'}
                             </Button>
                         )}
                         {isNotFinished && (
