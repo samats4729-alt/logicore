@@ -892,6 +892,136 @@ export class FinancialReportsService {
         return { counterparties, totals };
     }
 
+    // ==================== АКТ СВЕРКИ ====================
+
+    // Акт сверки взаимных расчётов с контрагентом.
+    // Сальдо в перспективе «они нам должны»: положительное = долг контрагента перед нами.
+    async getReconciliationAct(companyId: string, counterpartyId: string, query: { startDate?: string; endDate?: string }) {
+        const [company, counterparty] = await Promise.all([
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, bin: true } }),
+            this.prisma.company.findUnique({ where: { id: counterpartyId }, select: { id: true, name: true, bin: true } }),
+        ]);
+        if (!company) throw new NotFoundException('Компания не найдена');
+        if (!counterparty) throw new NotFoundException('Контрагент не найден');
+
+        const start = query.startDate ? new Date(query.startDate) : null;
+        const end = query.endDate ? new Date(query.endDate) : null;
+
+        // Заявки, где участвуют обе стороны
+        const orders = await this.prisma.order.findMany({
+            where: {
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+                OR: [
+                    { customerCompanyId: companyId, forwarderId: counterpartyId },
+                    { forwarderId: companyId, customerCompanyId: counterpartyId },
+                    { partnerId: companyId, customerCompanyId: counterpartyId },
+                    { forwarderId: companyId, subForwarderId: counterpartyId },
+                    { subForwarderId: companyId, forwarderId: counterpartyId },
+                ],
+            },
+            include: {
+                payments: { where: { isDeleted: false } },
+                incomes: { where: { isDeleted: false } },
+                expenses: { where: { isDeleted: false } },
+            },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        type Op = { date: Date; doc: string; description: string; debit: number; credit: number };
+        const ops: Op[] = [];
+
+        for (const order of orders) {
+            const fin = this.calculator.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+            const accrualDate = order.completedAt || order.createdAt;
+            const weAreForwarder = (order.forwarderId === companyId || order.partnerId === companyId) && order.customerCompanyId === counterpartyId;
+            const weAreCustomer = order.customerCompanyId === companyId && order.forwarderId === counterpartyId;
+            const weAreForwarderOverSub = order.forwarderId === companyId && order.subForwarderId === counterpartyId;
+            const weAreSub = order.subForwarderId === companyId && order.forwarderId === counterpartyId;
+
+            // Начисление (реализация услуг)
+            if (weAreForwarder || weAreSub) {
+                // Контрагент должен нам за перевозку — дебет
+                if (fin.revenue > 0) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: money(fin.revenue), credit: 0 });
+            } else if (weAreCustomer || weAreForwarderOverSub) {
+                // Мы должны контрагенту за перевозку — кредит
+                if (fin.executorCost > 0) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: 0, credit: money(fin.executorCost) });
+            }
+        }
+
+        // Реальные оплаты между сторонами
+        const payments = await this.prisma.payment.findMany({
+            where: { companyId, counterpartyId, isDeleted: false },
+            include: { order: { select: { orderNumber: true } } },
+            orderBy: { date: 'asc' },
+        });
+        for (const p of payments) {
+            const doc = p.order?.orderNumber ? `Оплата по заявке №${p.order.orderNumber}` : 'Оплата';
+            if (p.direction === PaymentDirection.IN) {
+                // Контрагент оплатил нам — уменьшает его долг — кредит
+                ops.push({ date: p.date, doc, description: 'Поступление оплаты', debit: 0, credit: money(p.amount) });
+            } else {
+                // Мы оплатили контрагенту — уменьшает наш долг — дебет
+                ops.push({ date: p.date, doc, description: 'Оплата контрагенту', debit: money(p.amount), credit: 0 });
+            }
+        }
+
+        ops.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        // Начальный долг (ввод остатков)
+        const opening = await this.prisma.counterpartyOpeningBalance.findUnique({
+            where: { companyId_counterpartyId: { companyId, counterpartyId } },
+        });
+        const openingNet = money((opening?.openingReceivable || 0) - (opening?.openingPayable || 0));
+
+        // Сальдо на начало периода = начальный долг + движения до начала периода
+        let openingBalance = openingNet;
+        const periodOps: Op[] = [];
+        for (const op of ops) {
+            const d = new Date(op.date);
+            if (start && d < start) {
+                openingBalance = money(openingBalance + op.debit - op.credit);
+            } else if (end && d > end) {
+                // после периода — игнорируем
+            } else {
+                periodOps.push(op);
+            }
+        }
+
+        let running = openingBalance;
+        const rows = periodOps.map((op) => {
+            running = money(running + op.debit - op.credit);
+            return {
+                date: op.date,
+                doc: op.doc,
+                description: op.description,
+                debit: op.debit,
+                credit: op.credit,
+                balance: running,
+            };
+        });
+
+        const totalDebit = money(periodOps.reduce((s, o) => s + o.debit, 0));
+        const totalCredit = money(periodOps.reduce((s, o) => s + o.credit, 0));
+        const closingBalance = money(openingBalance + totalDebit - totalCredit);
+
+        return {
+            company,
+            counterparty,
+            period: { start: start ? start.toISOString() : null, end: end ? end.toISOString() : null },
+            openingBalance,
+            rows,
+            totals: { debit: totalDebit, credit: totalCredit },
+            closingBalance,
+            generatedAt: new Date().toISOString(),
+        };
+    }
+
     // ==================== SHARE REPORT ====================
 
     async generateShareToken(companyId: string, counterpartyId: string, ourRole: string): Promise<{ token: string; shareUrl: string }> {

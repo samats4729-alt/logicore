@@ -532,6 +532,18 @@ export default function CounterpartyReportPage() {
                                             {cp.balance >= 0 ? '+' : ''}{fmt(cp.balance)} ₸
                                         </div>
                                     </div>
+                                    {/* Акт сверки */}
+                                    <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<FileTextOutlined />}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open(`/company/accounting/reconciliation-act?cp=${cp.counterparty.id}`, '_blank');
+                                        }}
+                                        style={{ marginLeft: 8, color: token.colorPrimary, borderRadius: 6 }}
+                                        title="Акт сверки"
+                                    />
                                     {/* Share button */}
                                     <Button
                                         type="text"
@@ -541,7 +553,7 @@ export default function CounterpartyReportPage() {
                                             e.stopPropagation();
                                             handleShare(cp.counterparty.id, cp.ourRole, cp.counterparty.name);
                                         }}
-                                        style={{ marginLeft: 8, color: token.colorPrimary, borderRadius: 6 }}
+                                        style={{ color: token.colorPrimary, borderRadius: 6 }}
                                         title="Поделиться отчётом"
                                     />
                                 </div>

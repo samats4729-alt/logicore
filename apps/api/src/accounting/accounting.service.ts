@@ -172,6 +172,10 @@ export class AccountingService {
         return this.reportsService.getCounterpartyReport(companyId);
     }
 
+    async getReconciliationAct(companyId: string, counterpartyId: string, query: { startDate?: string; endDate?: string }) {
+        return this.reportsService.getReconciliationAct(companyId, counterpartyId, query);
+    }
+
     // ==================== SHARE REPORT ====================
 
     async generateShareToken(companyId: string, counterpartyId: string, ourRole: string) {

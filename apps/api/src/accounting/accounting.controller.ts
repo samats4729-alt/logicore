@@ -184,6 +184,17 @@ export class AccountingController {
         return this.accountingService.getCounterpartyReport(req.user.companyId);
     }
 
+    @Get('reconciliation-act/:counterpartyId')
+    @Roles(...FINANCE_VIEW_ROLES)
+    async getReconciliationAct(
+        @Request() req: any,
+        @Param('counterpartyId') counterpartyId: string,
+        @Query('startDate') startDate?: string,
+        @Query('endDate') endDate?: string,
+    ) {
+        return this.accountingService.getReconciliationAct(req.user.companyId, counterpartyId, { startDate, endDate });
+    }
+
     // ==================== SHARE REPORT ====================
 
     @Post('share-report')
