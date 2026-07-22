@@ -684,6 +684,13 @@ export class FinancialReportsService {
             orderBy: { createdAt: 'desc' },
         });
 
+        // Начальные долги контрагентов (ввод остатков)
+        const openings = await this.prisma.counterpartyOpeningBalance.findMany({ where: { companyId } });
+        const openingMap = new Map(openings.map(o => [o.counterpartyId, o]));
+
+        const now = new Date();
+        const isOverdue = (date: Date | null | undefined, paid: boolean) => !!date && !paid && new Date(date) < now;
+
         const counterpartyMap = new Map<string, {
             counterparty: { id: string; name: string };
             ourRole: string;
@@ -692,6 +699,8 @@ export class FinancialReportsService {
             theyOweUsPaid: number;
             weOweThem: number;
             weOweThemPaid: number;
+            overdueTheyOweUs: number;
+            overdueWeOweThem: number;
         }>();
 
         const getOrCreateEntry = (counterpartyId: string, counterpartyName: string, ourRole: string) => {
@@ -705,6 +714,8 @@ export class FinancialReportsService {
                     theyOweUsPaid: 0,
                     weOweThem: 0,
                     weOweThemPaid: 0,
+                    overdueTheyOweUs: 0,
+                    overdueWeOweThem: 0,
                 });
             }
             return counterpartyMap.get(key)!;
@@ -753,14 +764,18 @@ export class FinancialReportsService {
                 const entry = getOrCreateEntry(order.forwarder.id, order.forwarder.name, 'Заказчик');
                 const amount = fin.executorCost;
                 const paid = fin.paidOut;
+                const overdue = isOverdue(order.driverPaymentDate, fin.isExecutorPaid);
                 entry.weOweThem += amount;
                 entry.weOweThemPaid += paid;
+                if (overdue) entry.overdueWeOweThem += Math.max(amount - paid, 0);
                 entry.orders.push({
                     ...orderData,
                     amount,
                     isPaid: fin.isExecutorPaid,
                     paidAt: order.customerPaidAt,
                     direction: 'weOwe',
+                    dueDate: order.driverPaymentDate,
+                    isOverdue: overdue,
                 });
             }
 
@@ -768,14 +783,18 @@ export class FinancialReportsService {
                 const entry = getOrCreateEntry(order.customerCompany.id, order.customerCompany.name, 'Экспедитор');
                 const amount = fin.revenue;
                 const paid = fin.paidIn;
+                const overdue = isOverdue(order.customerPaymentDate, fin.isCustomerPaid);
                 entry.theyOweUs += amount;
                 entry.theyOweUsPaid += paid;
+                if (overdue) entry.overdueTheyOweUs += Math.max(amount - paid, 0);
                 entry.orders.push({
                     ...orderData,
                     amount,
                     isPaid: fin.isCustomerPaid,
                     paidAt: order.customerPaidAt,
                     direction: 'theyOwe',
+                    dueDate: order.customerPaymentDate,
+                    isOverdue: overdue,
                 });
             }
 
@@ -783,14 +802,18 @@ export class FinancialReportsService {
                 const entry = getOrCreateEntry(order.subForwarder.id, order.subForwarder.name, 'Экспедитор');
                 const amount = fin.executorCost;
                 const paid = fin.paidOut;
+                const overdue = isOverdue(order.driverPaymentDate, fin.isExecutorPaid);
                 entry.weOweThem += amount;
                 entry.weOweThemPaid += paid;
+                if (overdue) entry.overdueWeOweThem += Math.max(amount - paid, 0);
                 entry.orders.push({
                     ...orderData,
                     amount,
                     isPaid: fin.isExecutorPaid,
                     paidAt: order.subForwarderPaidAt || order.driverPaidAt,
                     direction: 'weOwe',
+                    dueDate: order.driverPaymentDate,
+                    isOverdue: overdue,
                 });
             }
 
@@ -798,25 +821,53 @@ export class FinancialReportsService {
                 const entry = getOrCreateEntry(order.forwarder.id, order.forwarder.name, 'Суб-экспедитор');
                 const amount = fin.revenue;
                 const paid = fin.paidIn;
+                const overdue = isOverdue(order.customerPaymentDate, fin.isCustomerPaid);
                 entry.theyOweUs += amount;
                 entry.theyOweUsPaid += paid;
+                if (overdue) entry.overdueTheyOweUs += Math.max(amount - paid, 0);
                 entry.orders.push({
                     ...orderData,
                     amount,
                     isPaid: fin.isCustomerPaid,
                     paidAt: order.subForwarderPaidAt,
                     direction: 'theyOwe',
+                    dueDate: order.customerPaymentDate,
+                    isOverdue: overdue,
                 });
             }
         }
 
-        const counterparties = Array.from(counterpartyMap.values()).map(entry => ({
-            ...entry,
-            balance: money(entry.theyOweUs - entry.weOweThem),
-            unpaidTheyOweUs: money(Math.max(entry.theyOweUs - entry.theyOweUsPaid, 0)),
-            unpaidWeOweThem: money(Math.max(entry.weOweThem - entry.weOweThemPaid, 0)),
-            totalOrders: entry.orders.length,
-        }));
+        // Начальные долги применяем один раз на контрагента (запись хранит обе стороны)
+        const appliedRecv = new Set<string>();
+        const appliedPay = new Set<string>();
+
+        const counterparties = Array.from(counterpartyMap.values()).map(entry => {
+            const op = openingMap.get(entry.counterparty.id);
+            let openingReceivable = 0;
+            let openingPayable = 0;
+            if (op) {
+                if ((op.openingReceivable || 0) > 0 && !appliedRecv.has(entry.counterparty.id)) {
+                    openingReceivable = op.openingReceivable;
+                    appliedRecv.add(entry.counterparty.id);
+                }
+                if ((op.openingPayable || 0) > 0 && !appliedPay.has(entry.counterparty.id)) {
+                    openingPayable = op.openingPayable;
+                    appliedPay.add(entry.counterparty.id);
+                }
+            }
+            return {
+                ...entry,
+                openingReceivable: money(openingReceivable),
+                openingPayable: money(openingPayable),
+                overdueTheyOweUs: money(entry.overdueTheyOweUs),
+                overdueWeOweThem: money(entry.overdueWeOweThem),
+                // Текущий долг = начальный + начислено − оплачено
+                balance: money((entry.theyOweUs + openingReceivable) - (entry.weOweThem + openingPayable)),
+                unpaidTheyOweUs: money(Math.max(entry.theyOweUs - entry.theyOweUsPaid, 0) + openingReceivable),
+                unpaidWeOweThem: money(Math.max(entry.weOweThem - entry.weOweThemPaid, 0) + openingPayable),
+                totalOrders: entry.orders.length,
+            };
+        });
 
         counterparties.sort((a, b) => {
             const aUnpaid = a.unpaidTheyOweUs + a.unpaidWeOweThem;
@@ -829,6 +880,10 @@ export class FinancialReportsService {
             totalWeOweThem: money(counterparties.reduce((s, c) => s + c.weOweThem, 0)),
             unpaidTheyOweUs: money(counterparties.reduce((s, c) => s + c.unpaidTheyOweUs, 0)),
             unpaidWeOweThem: money(counterparties.reduce((s, c) => s + c.unpaidWeOweThem, 0)),
+            overdueTheyOweUs: money(counterparties.reduce((s, c) => s + c.overdueTheyOweUs, 0)),
+            overdueWeOweThem: money(counterparties.reduce((s, c) => s + c.overdueWeOweThem, 0)),
+            openingReceivable: money(counterparties.reduce((s, c) => s + c.openingReceivable, 0)),
+            openingPayable: money(counterparties.reduce((s, c) => s + c.openingPayable, 0)),
             balance: money(counterparties.reduce((s, c) => s + c.balance, 0)),
             totalCounterparties: counterparties.length,
             totalOrders: counterparties.reduce((s, c) => s + c.totalOrders, 0),

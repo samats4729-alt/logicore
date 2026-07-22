@@ -41,6 +41,8 @@ interface OrderItem {
     isPaid: boolean;
     paidAt?: string;
     direction: 'theyOwe' | 'weOwe';
+    dueDate?: string | null;
+    isOverdue?: boolean;
     routePoints?: { pointType: string; location?: { city?: string; address?: string } }[];
 }
 
@@ -55,6 +57,10 @@ interface CounterpartyEntry {
     balance: number;
     unpaidTheyOweUs: number;
     unpaidWeOweThem: number;
+    overdueTheyOweUs: number;
+    overdueWeOweThem: number;
+    openingReceivable: number;
+    openingPayable: number;
     totalOrders: number;
 }
 
@@ -63,6 +69,10 @@ interface Totals {
     totalWeOweThem: number;
     unpaidTheyOweUs: number;
     unpaidWeOweThem: number;
+    overdueTheyOweUs: number;
+    overdueWeOweThem: number;
+    openingReceivable: number;
+    openingPayable: number;
     balance: number;
     totalCounterparties: number;
     totalOrders: number;
@@ -217,6 +227,8 @@ export default function CounterpartyReportPage() {
             result = result.filter(c => c.unpaidWeOweThem > 0);
         } else if (paymentFilter === 'settled') {
             result = result.filter(c => c.unpaidTheyOweUs === 0 && c.unpaidWeOweThem === 0);
+        } else if (paymentFilter === 'overdue') {
+            result = result.filter(c => (c.overdueTheyOweUs || 0) > 0 || (c.overdueWeOweThem || 0) > 0);
         }
 
         return result;
@@ -229,6 +241,8 @@ export default function CounterpartyReportPage() {
             totalWeOweThem: filtered.reduce((s, c) => s + c.weOweThem, 0),
             unpaidTheyOweUs: filtered.reduce((s, c) => s + c.unpaidTheyOweUs, 0),
             unpaidWeOweThem: filtered.reduce((s, c) => s + c.unpaidWeOweThem, 0),
+            overdueTheyOweUs: filtered.reduce((s, c) => s + (c.overdueTheyOweUs || 0), 0),
+            overdueWeOweThem: filtered.reduce((s, c) => s + (c.overdueWeOweThem || 0), 0),
             balance: filtered.reduce((s, c) => s + c.balance, 0),
         };
     }, [filtered]);
@@ -278,12 +292,14 @@ export default function CounterpartyReportPage() {
             render: (v: number) => v ? <span style={{ fontSize: 12, fontWeight: 600 }}>{fmt(v)}</span> : <span style={{ color: token.colorTextDisabled }}>—</span>,
         },
         {
-            title: 'Оплата', key: 'paid', width: 90, align: 'center' as const,
+            title: 'Оплата', key: 'paid', width: 110, align: 'center' as const,
             render: (_: any, r: OrderItem) => (
                 <Space size={4}>
                     {r.isPaid
                         ? <Tag color="green" style={{ fontSize: 11, margin: 0 }}><CheckCircleOutlined /> Да</Tag>
-                        : <Tag color="red" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Нет</Tag>
+                        : r.isOverdue
+                            ? <Tag color="red" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Просрочено</Tag>
+                            : <Tag color="orange" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Нет</Tag>
                     }
                 </Space>
             ),
@@ -311,7 +327,7 @@ export default function CounterpartyReportPage() {
                     <div className="lc-eyebrow">Финансы · Взаиморасчёты</div>
                     <h1 className="lc2-title">Взаиморасчёты</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Кто кому должен: по каждому контрагенту — сколько начислено, сколько оплачено и остаток долга.
+                        Кто кому должен: начальный долг + начислено − оплачено = текущий долг. Просроченные платежи выделены красным.
                     </p>
                     <Button
                         type="default"
@@ -340,7 +356,9 @@ export default function CounterpartyReportPage() {
                                 {fmt(filteredTotals.unpaidTheyOweUs)} ₸
                             </div>
                             <div className="lc2-msub">
-                                всего: {fmt(filteredTotals.totalTheyOweUs)} ₸
+                                {filteredTotals.overdueTheyOweUs > 0
+                                    ? <span style={{ color: '#dc3545', fontWeight: 600 }}>просрочено: {fmt(filteredTotals.overdueTheyOweUs)} ₸</span>
+                                    : <>всего: {fmt(filteredTotals.totalTheyOweUs)} ₸</>}
                             </div>
                         </div>
                     </div>
@@ -354,7 +372,9 @@ export default function CounterpartyReportPage() {
                                 {fmt(filteredTotals.unpaidWeOweThem)} ₸
                             </div>
                             <div className="lc2-msub">
-                                всего: {fmt(filteredTotals.totalWeOweThem)} ₸
+                                {filteredTotals.overdueWeOweThem > 0
+                                    ? <span style={{ color: '#dc3545', fontWeight: 600 }}>просрочено: {fmt(filteredTotals.overdueWeOweThem)} ₸</span>
+                                    : <>всего: {fmt(filteredTotals.totalWeOweThem)} ₸</>}
                             </div>
                         </div>
                     </div>
@@ -406,6 +426,7 @@ export default function CounterpartyReportPage() {
                             { value: 'all', label: 'Все контрагенты' },
                             { value: 'unpaid_them', label: 'Нам должны' },
                             { value: 'unpaid_us', label: 'Мы должны' },
+                            { value: 'overdue', label: 'Просроченные' },
                             { value: 'settled', label: 'Все оплачено' },
                         ]}
                     />
@@ -474,6 +495,11 @@ export default function CounterpartyReportPage() {
                                             <Tag color="processing" style={{ fontSize: 10, margin: 0, padding: '0 6px', lineHeight: '16px' }}>
                                                 {roleInfo.label}
                                             </Tag>
+                                            {(cp.overdueTheyOweUs > 0 || cp.overdueWeOweThem > 0) && (
+                                                <Tag color="error" style={{ fontSize: 10, margin: 0, padding: '0 6px', lineHeight: '16px' }}>
+                                                    Просрочено {fmt(cp.overdueTheyOweUs + cp.overdueWeOweThem)} ₸
+                                                </Tag>
+                                            )}
                                         </div>
                                         <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
                                             {cp.totalOrders} заяв{cp.totalOrders === 1 ? 'ка' : cp.totalOrders < 5 ? 'ки' : 'ок'}
@@ -526,6 +552,13 @@ export default function CounterpartyReportPage() {
                                 <div style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}>
                                     {/* Detailed stats bar */}
                                     <div style={{ display: 'flex', gap: 16, padding: '8px 16px', background: token.colorFillAlter, borderBottom: `1px solid ${token.colorBorderSecondary}`, flexWrap: 'wrap' }}>
+                                        {(cp.openingReceivable > 0 || cp.openingPayable > 0) && (
+                                            <div style={{ fontSize: 12 }}>
+                                                <span style={{ color: token.colorTextSecondary }}>Начальный долг: </span>
+                                                {cp.openingReceivable > 0 && <span style={{ fontWeight: 600, color: token.colorSuccess }}>нам {fmt(cp.openingReceivable)} ₸ </span>}
+                                                {cp.openingPayable > 0 && <span style={{ fontWeight: 600, color: token.colorError }}>мы {fmt(cp.openingPayable)} ₸</span>}
+                                            </div>
+                                        )}
                                         <div style={{ fontSize: 12 }}>
                                             <span style={{ color: token.colorTextSecondary }}>Нам должны всего: </span>
                                             <span style={{ fontWeight: 600, color: token.colorSuccess }}>{fmt(cp.theyOweUs)} ₸</span>
@@ -550,6 +583,7 @@ export default function CounterpartyReportPage() {
                                             onClick: () => setSelectedOrder(record),
                                         })}
                                         rowClassName={(record) => {
+                                            if (!record.isPaid && record.isOverdue) return 'row-overdue';
                                             if (record.status === 'COMPLETED') return 'row-completed';
                                             if (record.status === 'PROBLEM') return 'row-problem';
                                             return '';
@@ -729,6 +763,10 @@ export default function CounterpartyReportPage() {
                 }
                 .ant-table-small .ant-table-tbody > tr.row-problem > td {
                     background: ${token.colorErrorBg} !important;
+                }
+                .ant-table-small .ant-table-tbody > tr.row-overdue > td {
+                    background: ${token.colorErrorBg} !important;
+                    box-shadow: inset 3px 0 0 ${token.colorError};
                 }
             `}</style>
         </div>
