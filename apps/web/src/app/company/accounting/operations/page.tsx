@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Typography, Space, Tag, DatePicker, Input, Segmented, message } from 'antd';
-import { SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined } from '@ant-design/icons';
+import { Table, Button, Typography, Space, Tag, DatePicker, Input, Segmented, message, Modal, Form, InputNumber, Select } from 'antd';
+import { SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -36,8 +37,13 @@ const INCOME_CATEGORIES: Record<string, string> = {
     order_payment: 'Оплата по заявке', prepayment: 'Предоплата', refund: 'Возврат', other: 'Прочее',
 };
 
+const EXPENSE_OPTIONS = Object.entries(EXPENSE_CATEGORIES).map(([value, label]) => ({ value, label }));
+const INCOME_OPTIONS = Object.entries(INCOME_CATEGORIES).map(([value, label]) => ({ value, label }));
+
 export default function AllOperationsPage() {
     const router = useRouter();
+    const { user } = useAuthStore();
+    const canEdit = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState<OpRow[]>([]);
     const [typeFilter, setTypeFilter] = useState<'all' | 'IN' | 'OUT'>('all');
@@ -46,6 +52,12 @@ export default function AllOperationsPage() {
         dayjs().startOf('month'),
         dayjs().endOf('month'),
     ]);
+
+    // Добавление ручной операции (доход / расход)
+    const [addOpen, setAddOpen] = useState(false);
+    const [addDir, setAddDir] = useState<'IN' | 'OUT'>('OUT');
+    const [saving, setSaving] = useState(false);
+    const [form] = Form.useForm();
 
     useEffect(() => { fetchAll(); }, []);
 
@@ -126,6 +138,62 @@ export default function AllOperationsPage() {
     const balance = totalIn - totalOut;
 
     const money = (v: number) => v.toLocaleString('ru-RU') + ' ₸';
+
+    const openAdd = (dir: 'IN' | 'OUT') => {
+        setAddDir(dir);
+        form.resetFields();
+        form.setFieldsValue({ date: dayjs() });
+        setAddOpen(true);
+    };
+
+    const handleSaveOp = async (values: any) => {
+        setSaving(true);
+        try {
+            const catOptions = addDir === 'IN' ? INCOME_OPTIONS : EXPENSE_OPTIONS;
+            const label = catOptions.find(c => c.value === values.category)?.label || values.category;
+            const payload = {
+                category: values.category,
+                description: label,
+                amount: values.amount,
+                date: values.date.toISOString(),
+                note: values.note,
+            };
+            if (addDir === 'IN') await api.post('/accounting/incomes', payload);
+            else await api.post('/accounting/expenses', payload);
+            message.success('Операция добавлена');
+            setAddOpen(false);
+            form.resetFields();
+            fetchAll();
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Ошибка сохранения');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const exportCsv = () => {
+        const header = ['Дата', 'Тип', 'Основание', 'Контрагент', 'Заявка', 'Счёт/касса', 'Сумма', 'Примечание'];
+        const lines = filtered.map(r => [
+            dayjs(r.date).format('DD.MM.YYYY'),
+            r.direction === 'IN' ? 'Поступление' : 'Списание',
+            r.title,
+            r.counterparty || '',
+            r.orderNumber || '',
+            r.account || '',
+            (r.direction === 'IN' ? '' : '-') + r.amount,
+            (r.note || '').replace(/\n/g, ' '),
+        ]);
+        const csv = [header, ...lines]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+            .join('\n');
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Операции_${dayjs().format('YYYY-MM-DD')}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
 
     const columns = [
         {
@@ -230,8 +298,15 @@ export default function AllOperationsPage() {
                             { label: 'Списания', value: 'OUT' },
                         ]}
                     />
-                    <Input placeholder="Поиск: контрагент, заявка, примечание..." prefix={<SearchOutlined />} value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 300 }} allowClear />
+                    <Input placeholder="Поиск: контрагент, заявка, примечание..." prefix={<SearchOutlined />} value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 260 }} allowClear />
                     <RangePicker value={dateRange} onChange={(d) => setDateRange(d as any)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} />
+                    <Button icon={<DownloadOutlined />} onClick={exportCsv} disabled={filtered.length === 0}>Экспорт</Button>
+                    {canEdit && (
+                        <>
+                            <Button type="primary" ghost icon={<ArrowDownOutlined />} onClick={() => openAdd('IN')}>Доход</Button>
+                            <Button danger icon={<ArrowUpOutlined />} onClick={() => openAdd('OUT')}>Расход</Button>
+                        </>
+                    )}
                 </Space>
             </div>
 
@@ -246,6 +321,37 @@ export default function AllOperationsPage() {
                     pagination={{ pageSize: 30, showSizeChanger: true }}
                 />
             </div>
+
+            <Modal
+                title={addDir === 'IN' ? 'Новый доход' : 'Новый расход'}
+                open={addOpen}
+                onCancel={() => setAddOpen(false)}
+                onOk={() => form.submit()}
+                okText="Добавить"
+                cancelText="Отмена"
+                confirmLoading={saving}
+                destroyOnClose
+            >
+                <p style={{ color: 'var(--lc-text-ter)', fontSize: 12, marginTop: 0 }}>
+                    {addDir === 'IN'
+                        ? 'Прочий доход, не связанный с заявкой. Оплаты по заявкам вносятся в самой заявке или реестре.'
+                        : 'Прочий расход, не связанный с заявкой (аренда, зарплата, топливо, налоги).'}
+                </p>
+                <Form form={form} layout="vertical" onFinish={handleSaveOp} initialValues={{ date: dayjs() }}>
+                    <Form.Item name="date" label="Дата" rules={[{ required: true, message: 'Укажите дату' }]}>
+                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                    </Form.Item>
+                    <Form.Item name="category" label="Категория" rules={[{ required: true, message: 'Выберите категорию' }]}>
+                        <Select placeholder="Выберите" options={addDir === 'IN' ? INCOME_OPTIONS : EXPENSE_OPTIONS} />
+                    </Form.Item>
+                    <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>
+                        <InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
+                    </Form.Item>
+                    <Form.Item name="note" label="Примечание">
+                        <Input.TextArea rows={2} placeholder="Доп. информация" />
+                    </Form.Item>
+                </Form>
+            </Modal>
         </div>
     );
 }
