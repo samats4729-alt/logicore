@@ -42,6 +42,32 @@ function cityOf(order: any, type: 'pickup' | 'delivery'): string {
     return loc?.name || '';
 }
 
+// Упрощённый контур Казахстана (Natural Earth) — для проверки, не ушёл ли маршрут за границу
+const KZ_BOUNDARY: [number, number][] = [[70.962,42.266],[70.389,42.081],[69.07,41.384],[68.632,40.669],[68.26,40.662],[67.986,41.136],[66.714,41.168],[66.511,41.988],[66.023,41.995],[66.098,42.998],[64.901,43.728],[63.186,43.65],[62.013,43.504],[61.058,44.406],[60.24,44.784],[58.69,45.5],[58.503,45.587],[55.929,44.996],[55.968,41.309],[55.455,41.26],[54.755,42.044],[54.079,42.324],[52.944,42.116],[52.502,41.783],[52.446,42.027],[52.692,42.444],[52.501,42.792],[51.342,43.133],[50.891,44.031],[50.339,44.284],[50.306,44.61],[51.279,44.515],[51.317,45.246],[52.167,45.408],[53.041,45.259],[53.221,46.235],[53.043,46.853],[52.042,46.805],[51.192,47.049],[50.034,46.609],[49.101,46.399],[48.593,46.561],[48.695,47.076],[48.057,47.744],[47.315,47.716],[46.466,48.394],[47.044,49.152],[46.752,49.356],[47.549,50.455],[48.578,49.875],[48.702,50.605],[50.767,51.693],[52.329,51.719],[54.533,51.026],[55.717,50.622],[56.778,51.044],[58.363,51.064],[59.642,50.545],[59.933,50.842],[61.337,50.799],[61.588,51.273],[59.968,51.96],[60.927,52.448],[60.74,52.72],[61.7,52.98],[60.978,53.665],[61.437,54.006],[65.179,54.354],[65.667,54.601],[68.169,54.97],[69.068,55.385],[70.865,55.17],[71.18,54.133],[72.224,54.377],[73.509,54.036],[73.426,53.49],[74.385,53.547],[76.891,54.491],[76.525,54.177],[77.801,53.404],[80.036,50.865],[80.568,51.388],[81.946,50.812],[83.383,51.069],[83.935,50.889],[84.416,50.311],[85.116,50.117],[85.541,49.693],[86.829,49.827],[87.36,49.215],[86.599,48.549],[85.768,48.456],[85.72,47.453],[85.164,47.001],[83.18,47.33],[82.459,45.54],[81.947,45.317],[79.966,44.918],[80.866,43.18],[80.18,42.92],[80.26,42.35],[79.644,42.497],[79.142,42.856],[77.658,42.961],[76,42.988],[75.637,42.878],[74.213,43.298],[73.645,43.091],[73.49,42.501],[71.845,42.845],[71.186,42.704],[70.962,42.266]];
+
+function pointInKz([x, y]: [number, number]): boolean {
+    let inside = false;
+    for (let i = 0, j = KZ_BOUNDARY.length - 1; i < KZ_BOUNDARY.length; j = i++) {
+        const [xi, yi] = KZ_BOUNDARY[i];
+        const [xj, yj] = KZ_BOUNDARY[j];
+        if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+}
+
+function haversineKm(a: [number, number], b: [number, number]): number {
+    const R = 6371, toRad = Math.PI / 180;
+    const dLat = (b[1] - a[1]) * toRad, dLng = (b[0] - a[0]) * toRad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * toRad) * Math.cos(b[1] * toRad) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function straightKm(pts: [number, number][]): number {
+    let d = 0;
+    for (let i = 1; i < pts.length; i++) d += haversineKm(pts[i - 1], pts[i]);
+    return d;
+}
+
 // Мини-карта маршрута (точки погрузки → выгрузки)
 function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -115,16 +141,33 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
 
         if (coords.length >= 2) {
             drawRoute(straight, false); // мгновенно показываем прямую, пока грузится маршрут
+            // Заявка внутри Казахстана, если ВСЕ точки маршрута внутри страны.
+            // Если хоть одна точка за границей — груз едет за рубеж, маршрут через границу разрешён.
+            const domestic = coords.every(pointInKz);
             const path = coords.map(c => `${c[0]},${c[1]}`).join(';');
             fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`)
                 .then(r => r.ok ? r.json() : Promise.reject())
                 .then(json => {
                     const route = json?.routes?.[0];
                     if (cancelled || !route?.geometry) return;
+                    const line = (route.geometry.coordinates || []) as [number, number][];
+
+                    // Для внутренних заявок проверяем, не увёл ли OSRM маршрут за границу
+                    if (domestic && line.length > 1) {
+                        const stepN = Math.max(1, Math.floor(line.length / 200));
+                        const sample = line.filter((_, i) => i % stepN === 0);
+                        const outside = sample.filter(p => !pointInKz(p)).length;
+                        // заметный кусок за пределами страны (>6% точек) — это заезд через границу
+                        if (outside / sample.length > 0.06) {
+                            setDistanceKm(straightKm(coords)); // держим прямую внутри страны + приблизительный км
+                            return;
+                        }
+                    }
+
                     drawRoute({ type: 'Feature', properties: {}, geometry: route.geometry }, true);
                     if (typeof route.distance === 'number') setDistanceKm(route.distance / 1000);
                 })
-                .catch(() => { /* остаётся прямой пунктир */ });
+                .catch(() => { setDistanceKm(straightKm(coords)); /* OSRM недоступен — прямой км */ });
         }
 
         // Подгоняем вид под все точки (маршрут + водитель)
