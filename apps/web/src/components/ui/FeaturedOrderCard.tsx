@@ -54,29 +54,42 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
             .map((p: any) => [p.location.longitude, p.location.latitude] as [number, number]);
     }, [order?.routePoints]);
 
+    const driver: [number, number] | null = (order?.driverLat != null && order?.driverLng != null)
+        ? [order.driverLng, order.driverLat] : null;
+
     useEffect(() => {
         if (!containerRef.current) return;
-        if (coords.length < 1) return;
+        const allPts = [...coords, ...(driver ? [driver] : [])];
+        if (allPts.length < 1) return;
 
         const map = new maplibregl.Map({
             container: containerRef.current,
             style: MAP_STYLE_URL,
-            center: coords[0],
-            zoom: 10,
-            interactive: false,
+            center: driver || coords[0],
+            zoom: 11,
+            interactive: true,           // можно двигать и масштабировать
             attributionControl: false,
         });
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
         mapRef.current = map;
 
         const markers: maplibregl.Marker[] = [];
 
-        // Маркеры точек
+        // Маркеры точек маршрута
         coords.forEach((c, i) => {
             const isFirst = i === 0;
             const el = document.createElement('div');
             el.style.cssText = `width:${isFirst ? 10 : 8}px;height:${isFirst ? 10 : 8}px;border-radius:50%;background:${isFirst ? '#1677ff' : '#dc3545'};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);`;
             markers.push(new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(c).addTo(map));
         });
+
+        // Грузовик водителя
+        if (driver) {
+            const el = document.createElement('div');
+            el.style.cssText = 'width:30px;height:30px;border-radius:50%;background:#16a34a;border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;';
+            el.textContent = '🚚';
+            markers.push(new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(driver).addTo(map));
+        }
 
         // Линия маршрута (пунктир)
         if (coords.length >= 2) {
@@ -95,13 +108,13 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
             });
         }
 
-        // Подгоняем viewport под все точки
-        if (coords.length >= 2) {
-            const lngs = coords.map(c => c[0]);
-            const lats = coords.map(c => c[1]);
+        // Подгоняем вид под все точки (маршрут + водитель)
+        if (allPts.length >= 2) {
+            const lngs = allPts.map(c => c[0]);
+            const lats = allPts.map(c => c[1]);
             map.fitBounds(
                 [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-                { padding: 24, duration: 0 },
+                { padding: 34, maxZoom: 13, duration: 0 },
             );
         }
 
@@ -110,9 +123,10 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
             map.remove();
             mapRef.current = null;
         };
-    }, [coords]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [coords, order?.driverLat, order?.driverLng]);
 
-    if (coords.length < 1) {
+    if (coords.length < 1 && !driver) {
         const isDark = theme === 'dark';
         return (
             <div style={{
