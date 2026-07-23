@@ -51,7 +51,7 @@ export class DriverService {
     // ==================== ПУБЛИЧНАЯ ЧАСТЬ (для водителя) ====================
 
     private async findByToken(token: string) {
-        const order = await this.prisma.order.findUnique({
+        const order = await this.prisma.order.findFirst({
             where: { driverToken: token },
             include: {
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
@@ -130,7 +130,7 @@ export class DriverService {
         if (typeof data?.latitude !== 'number' || typeof data?.longitude !== 'number') {
             throw new BadRequestException('Нет координат');
         }
-        const order = await this.prisma.order.findUnique({ where: { driverToken: token }, select: { id: true, driverId: true } });
+        const order = await this.prisma.order.findFirst({ where: { driverToken: token }, select: { id: true, driverId: true } });
         if (!order) throw new NotFoundException('Ссылка недействительна');
 
         await this.prisma.order.update({
@@ -164,7 +164,7 @@ export class DriverService {
 
     async uploadTtn(token: string, file: Express.Multer.File) {
         if (!file) throw new BadRequestException('Файл не найден');
-        const order = await this.prisma.order.findUnique({
+        const order = await this.prisma.order.findFirst({
             where: { driverToken: token },
             select: { id: true, driverId: true, responsibleManagerId: true, customerId: true },
         });

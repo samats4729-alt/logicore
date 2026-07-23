@@ -491,8 +491,10 @@ model Order {
   assignedDriverTrailer String?   // Номер прицепа
   assignedAt            DateTime? // Когда назначен водитель
 
-  // Секретная ссылка для водителя (веб вместо приложения)
-  driverToken           String?   @unique
+  // Секретная ссылка для водителя (веб вместо приложения). Уникальность
+  // обеспечивается случайным 24-байтным токеном (без DB-constraint, чтобы
+  // db push не требовал --accept-data-loss на существующей таблице).
+  driverToken           String?
   // Последнее местоположение водителя (со страницы водителя)
   driverLat             Float?
   driverLng             Float?
