@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { Button, Dropdown, message } from 'antd';
 import { RightOutlined, PhoneOutlined, EnvironmentOutlined, WhatsAppOutlined, CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -46,6 +46,7 @@ function cityOf(order: any, type: 'pickup' | 'delivery'): string {
 function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
+    const [distanceKm, setDistanceKm] = useState<number | null>(null);
 
     const coords = useMemo(() => {
         const pts = (order?.routePoints || []) as any[];
@@ -91,21 +92,39 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
             markers.push(new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(driver).addTo(map));
         }
 
-        // Линия маршрута (пунктир)
+        // Маршрут по дорогам (бесплатный OSRM, без ключа) + запасной прямой пунктир
+        let cancelled = false;
+        const straight = { type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: coords } };
+        const drawRoute = (data: any, solid: boolean) => {
+            if (!map || cancelled) return;
+            const apply = () => {
+                if (map.getSource('route')) {
+                    (map.getSource('route') as any).setData(data);
+                    map.setPaintProperty('route-line', 'line-dasharray', solid ? [1, 0] : [2, 2]);
+                } else {
+                    map.addSource('route', { type: 'geojson', data });
+                    map.addLayer({
+                        id: 'route-line', type: 'line', source: 'route',
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: { 'line-color': '#1677ff', 'line-width': 3.5, 'line-dasharray': solid ? [1, 0] : [2, 2] },
+                    });
+                }
+            };
+            if (map.isStyleLoaded()) apply(); else map.once('load', apply);
+        };
+
         if (coords.length >= 2) {
-            map.on('load', () => {
-                if (map.getSource('route')) return;
-                map.addSource('route', {
-                    type: 'geojson',
-                    data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } },
-                });
-                map.addLayer({
-                    id: 'route-line',
-                    type: 'line',
-                    source: 'route',
-                    paint: { 'line-color': '#1677ff', 'line-width': 2, 'line-dasharray': [2, 2] },
-                });
-            });
+            drawRoute(straight, false); // мгновенно показываем прямую, пока грузится маршрут
+            const path = coords.map(c => `${c[0]},${c[1]}`).join(';');
+            fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`)
+                .then(r => r.ok ? r.json() : Promise.reject())
+                .then(json => {
+                    const route = json?.routes?.[0];
+                    if (cancelled || !route?.geometry) return;
+                    drawRoute({ type: 'Feature', properties: {}, geometry: route.geometry }, true);
+                    if (typeof route.distance === 'number') setDistanceKm(route.distance / 1000);
+                })
+                .catch(() => { /* остаётся прямой пунктир */ });
         }
 
         // Подгоняем вид под все точки (маршрут + водитель)
@@ -119,6 +138,7 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
         }
 
         return () => {
+            cancelled = true;
             markers.forEach(m => m.remove());
             map.remove();
             mapRef.current = null;
@@ -152,11 +172,25 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
         : 'none';
 
     return (
-        <div ref={containerRef} style={{
-            flex: 1, minHeight: 140, borderRadius: 12, overflow: 'hidden', marginBottom: 12,
-            filter: mapFilter,
-            background: theme === 'dark' ? '#1a1e26' : '#f1f5f9',
-        }} />
+        <div style={{ position: 'relative', flex: 1, minHeight: 140, marginBottom: 12 }}>
+            <div ref={containerRef} style={{
+                position: 'absolute', inset: 0, borderRadius: 12, overflow: 'hidden',
+                filter: mapFilter,
+                background: theme === 'dark' ? '#1a1e26' : '#f1f5f9',
+            }} />
+            {distanceKm != null && (
+                <div style={{
+                    position: 'absolute', top: 7, left: 7, zIndex: 2, pointerEvents: 'none',
+                    padding: '2px 7px', borderRadius: 7,
+                    fontSize: 10.5, fontWeight: 600, letterSpacing: '0.02em',
+                    color: theme === 'dark' ? 'rgba(255,255,255,0.55)' : 'rgba(11,13,18,0.5)',
+                    background: theme === 'dark' ? 'rgba(20,24,32,0.55)' : 'rgba(255,255,255,0.6)',
+                    backdropFilter: 'blur(3px)',
+                }}>
+                    ≈ {Math.round(distanceKm).toLocaleString('ru-RU')} км
+                </div>
+            )}
+        </div>
     );
 }
 
