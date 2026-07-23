@@ -1726,6 +1726,59 @@ export default function OrderDetailPage() {
                                                     };
                                                 })}
                                             />
+
+                                            {/* Карта маршрута + местоположение водителя */}
+                                            {(() => {
+                                                const routePts = (order.routePoints || [])
+                                                    .filter((p: any) => p.location?.latitude && p.location?.longitude)
+                                                    .map((p: any) => ({
+                                                        latitude: p.location.latitude,
+                                                        longitude: p.location.longitude,
+                                                        label: p.location.city || p.location.address,
+                                                        color: p.pointType === 'DELIVERY' ? '#dc2626' : '#2563eb',
+                                                    }));
+                                                const hasDriverLoc = order.driverLat != null && order.driverLng != null;
+                                                if (routePts.length === 0 && !hasDriverLoc) return null;
+                                                return (
+                                                    <div style={{ marginTop: 16 }}>
+                                                        {hasDriverLoc && (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 13 }}>
+                                                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
+                                                                <span style={{ fontWeight: 600 }}>Водитель на карте</span>
+                                                                <span style={{ color: 'var(--lc-text-ter)' }}>
+                                                                    {order.driverLocationAt ? (() => { const m = dayjs().diff(dayjs(order.driverLocationAt), 'minute'); return `· ${m < 1 ? 'только что' : m < 60 ? `${m} мин назад` : `${Math.floor(m / 60)} ч назад`}`; })() : ''}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <div style={{ height: 320, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--lc-border)' }}>
+                                                            <DgisTrackingMap
+                                                                drivers={hasDriverLoc ? [{
+                                                                    driverId: order.id,
+                                                                    driverName: driverName || 'Водитель',
+                                                                    vehiclePlate: driverPlate || '',
+                                                                    latitude: order.driverLat,
+                                                                    longitude: order.driverLng,
+                                                                    speed: order.driverSpeed || 0,
+                                                                    heading: order.driverHeading || 0,
+                                                                    updatedAt: order.driverLocationAt || new Date().toISOString(),
+                                                                    orderNumber: order.orderNumber,
+                                                                }] : []}
+                                                                selectedDriverId={order.id}
+                                                                onDriverClick={() => { }}
+                                                                myLocation={null}
+                                                                getDriverColor={() => '#16a34a'}
+                                                                autoFit
+                                                                extraPoints={routePts}
+                                                            />
+                                                        </div>
+                                                        {!hasDriverLoc && (
+                                                            <div style={{ fontSize: 12.5, color: 'var(--lc-text-ter)', marginTop: 6 }}>
+                                                                Местоположение водителя появится, когда он откроет ссылку и включит геолокацию.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </Card>
 
                                         {/* Cargo Card */}
@@ -1788,45 +1841,6 @@ export default function OrderDetailPage() {
                                                         <Descriptions.Item label="Автомобиль">{driverPlate || '—'}</Descriptions.Item>
                                                         <Descriptions.Item label="Прицеп">{driverTrailer || '—'}</Descriptions.Item>
                                                     </Descriptions>
-
-                                                    {order.driverLat != null && order.driverLng != null && (
-                                                        <div style={{ marginTop: 12 }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                                                <span style={{ fontSize: 13, fontWeight: 600 }}><EnvironmentOutlined style={{ color: '#16a34a', marginRight: 6 }} />Местоположение водителя</span>
-                                                                <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
-                                                                    {order.driverLocationAt ? (() => { const m = dayjs().diff(dayjs(order.driverLocationAt), 'minute'); return `обновлено ${m < 1 ? 'только что' : m < 60 ? `${m} мин назад` : `${Math.floor(m / 60)} ч назад`}`; })() : ''}
-                                                                </span>
-                                                            </div>
-                                                            <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--lc-border)' }}>
-                                                                <DgisTrackingMap
-                                                                    drivers={[{
-                                                                        driverId: order.id,
-                                                                        driverName: driverName || 'Водитель',
-                                                                        vehiclePlate: driverPlate || '',
-                                                                        latitude: order.driverLat,
-                                                                        longitude: order.driverLng,
-                                                                        speed: order.driverSpeed || 0,
-                                                                        heading: order.driverHeading || 0,
-                                                                        updatedAt: order.driverLocationAt || new Date().toISOString(),
-                                                                        orderNumber: order.orderNumber,
-                                                                    }]}
-                                                                    selectedDriverId={order.id}
-                                                                    onDriverClick={() => { }}
-                                                                    myLocation={null}
-                                                                    getDriverColor={() => '#16a34a'}
-                                                                    autoFit
-                                                                    extraPoints={(order.routePoints || [])
-                                                                        .filter((p: any) => p.location?.latitude && p.location?.longitude)
-                                                                        .map((p: any) => ({
-                                                                            latitude: p.location.latitude,
-                                                                            longitude: p.location.longitude,
-                                                                            label: p.location.city || p.location.address,
-                                                                            color: p.pointType === 'DELIVERY' ? '#dc2626' : '#2563eb',
-                                                                        }))}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    )}
 
                                                     <Divider style={{ margin: '12px 0' }} />
 
