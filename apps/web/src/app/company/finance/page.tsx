@@ -286,9 +286,16 @@ export default function FinanceHubPage() {
 
             <style jsx>{`
                 .lc-cabinet-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-                    gap: 28px 40px;
+                    column-width: 250px;
+                    column-gap: 44px;
+                }
+                .lc-cabinet-group {
+                    break-inside: avoid;
+                    -webkit-column-break-inside: avoid;
+                    page-break-inside: avoid;
+                    display: inline-block;
+                    width: 100%;
+                    margin-bottom: 26px;
                 }
                 .lc-cabinet-group-title {
                     font-size: 11px;
