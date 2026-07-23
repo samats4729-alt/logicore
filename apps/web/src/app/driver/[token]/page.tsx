@@ -56,7 +56,7 @@ function isMobile() {
     return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
 }
 
-const BRAND = '#1677ff';
+const BLUE = '#1677ff';
 const GREEN = '#16a34a';
 const RED = '#dc2626';
 
@@ -174,9 +174,9 @@ export default function DriverPage() {
         return (
             <div style={wrap}>
                 <div style={{ ...card, textAlign: 'center', marginTop: 48 }}>
-                    <div style={{ fontSize: 44 }}>📱</div>
-                    <div style={{ fontSize: 19, fontWeight: 700, marginTop: 8, color: 'var(--lc-text)' }}>Откройте на телефоне</div>
-                    <div style={{ color: 'var(--lc-text-sec)', fontSize: 15, marginTop: 4 }}>Эта страница для водителя. Откройте ссылку на своём телефоне.</div>
+                    <div style={{ fontSize: 40 }}>📱</div>
+                    <div style={{ ...title, fontSize: 22, marginTop: 8 }}>Откройте на телефоне</div>
+                    <div style={{ color: 'var(--lc-text-sec)', fontSize: 15, marginTop: 6 }}>Эта страница для водителя. Откройте ссылку на своём телефоне.</div>
                 </div>
             </div>
         );
@@ -185,21 +185,20 @@ export default function DriverPage() {
     if (err || !order) return <div style={wrap}><div style={{ ...card, textAlign: 'center', color: RED, fontSize: 16, marginTop: 48 }}>{err || 'Ошибка'}</div></div>;
 
     const step = stepIndex(order.status);
+    const statusTint = order.isProblem ? RED : order.isFinished ? GREEN : BLUE;
 
     return (
         <div style={wrap}>
-            {/* Шапка — фирменная */}
-            <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-                <div style={{ background: `linear-gradient(135deg, ${BRAND}, #0958d9)`, color: '#fff', padding: '16px 18px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, opacity: 0.85 }}>LOGICORE · РЕЙС</div>
-                        <span style={{ padding: '5px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700, background: order.isProblem ? RED : order.isFinished ? GREEN : 'rgba(255,255,255,0.22)', color: '#fff' }}>
-                            {STATUS_LABEL[order.status] || order.status}
-                        </span>
-                    </div>
-                    <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, letterSpacing: 0.5 }}>{order.orderNumber}</div>
-                    {order.driverName && <div style={{ marginTop: 6, fontSize: 14, opacity: 0.92 }}>{order.driverName}{order.vehiclePlate ? ` · ${order.vehiclePlate}` : ''}</div>}
+            {/* Шапка — LogiCore */}
+            <div style={card}>
+                <div style={eyebrow}>LogiCore · Рейс</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ ...title, fontSize: 30 }}>{order.orderNumber}</div>
+                    <span style={{ padding: '5px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700, background: `${statusTint}15`, color: statusTint, whiteSpace: 'nowrap' }}>
+                        {STATUS_LABEL[order.status] || order.status}
+                    </span>
                 </div>
+                {order.driverName && <div style={{ marginTop: 8, fontSize: 14, color: 'var(--lc-text-sec)' }}>{order.driverName}{order.vehiclePlate ? ` · ${order.vehiclePlate}` : ''}</div>}
             </div>
 
             {/* Прогресс рейса */}
@@ -211,11 +210,11 @@ export default function DriverPage() {
                         const on = i <= step || order.isFinished;
                         return (
                             <div key={label} style={{ flex: 1, textAlign: 'center', position: 'relative' }}>
-                                {i > 0 && <div style={{ position: 'absolute', top: 14, right: '50%', width: '100%', height: 3, background: on ? BRAND : 'var(--lc-border)' }} />}
-                                <div style={{ position: 'relative', zIndex: 1, width: 30, height: 30, margin: '0 auto', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', background: done ? BRAND : active ? BRAND : 'var(--lc-border)', boxShadow: active ? `0 0 0 4px rgba(22,119,255,0.18)` : 'none' }}>
+                                {i > 0 && <div style={{ position: 'absolute', top: 14, right: '50%', width: '100%', height: 2.5, background: on ? BLUE : 'var(--lc-border)' }} />}
+                                <div style={{ position: 'relative', zIndex: 1, width: 30, height: 30, margin: '0 auto', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: on ? '#fff' : 'var(--lc-text-ter)', background: on ? BLUE : 'var(--lc-card-2)', border: on ? 'none' : '1px solid var(--lc-border)', boxShadow: active ? `0 0 0 4px ${BLUE}22` : 'none' }}>
                                     {done ? '✓' : i + 1}
                                 </div>
-                                <div style={{ fontSize: 12, marginTop: 6, fontWeight: active ? 700 : 500, color: on ? 'var(--lc-text)' : 'var(--lc-text-ter)' }}>{label}</div>
+                                <div style={{ fontSize: 12, marginTop: 7, fontWeight: active ? 700 : 500, color: on ? 'var(--lc-text)' : 'var(--lc-text-ter)' }}>{label}</div>
                             </div>
                         );
                     })}
@@ -225,8 +224,8 @@ export default function DriverPage() {
             {/* Геолокация */}
             {!order.isFinished && (
                 <div style={{ ...card, padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: geo === 'on' ? GREEN : geo === 'denied' ? RED : '#eab308', flexShrink: 0, boxShadow: geo === 'on' ? `0 0 0 4px rgba(22,163,74,0.15)` : 'none' }} />
-                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--lc-text-sec)' }}>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: geo === 'on' ? GREEN : geo === 'denied' ? RED : '#eab308', boxShadow: geo === 'on' ? `0 0 0 4px ${GREEN}22` : 'none' }} />
+                    <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--lc-text-sec)' }}>
                         {geo === 'on' ? 'Геолокация включена — диспетчер видит вас' : geo === 'denied' ? 'Включите геолокацию, чтобы вас было видно' : 'Разрешите доступ к геолокации во всплывающем окне'}
                     </span>
                 </div>
@@ -234,14 +233,14 @@ export default function DriverPage() {
 
             {/* Куда ехать */}
             {target && !order.isFinished && (
-                <div style={{ ...card, borderLeft: `4px solid ${beforeTransit ? BRAND : RED}` }}>
+                <div style={{ ...card, borderLeft: `3px solid ${beforeTransit ? BLUE : RED}` }}>
                     <div style={eyebrow}>{beforeTransit ? 'Ехать на погрузку' : 'Ехать на выгрузку'}</div>
                     {target.name && <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--lc-text)' }}>{target.name}</div>}
                     <div style={{ fontSize: 17, fontWeight: target.name ? 500 : 700, marginTop: 2, lineHeight: 1.3, color: 'var(--lc-text)' }}>
                         {[target.city, target.address].filter(Boolean).join(', ')}
                     </div>
                     {target.contactPhone && (
-                        <a href={`tel:${target.contactPhone}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 15, color: BRAND, fontWeight: 600, textDecoration: 'none' }}>
+                        <a href={`tel:${target.contactPhone}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 15, color: BLUE, fontWeight: 600, textDecoration: 'none' }}>
                             ☎ {target.contactName ? `${target.contactName}: ` : ''}{target.contactPhone}
                         </a>
                     )}
@@ -267,8 +266,8 @@ export default function DriverPage() {
             {/* ТТН */}
             <div style={card}>
                 <div style={eyebrow}>Накладная (ТТН){order.ttnCount > 0 ? ` · отправлено ${order.ttnCount}` : ''}</div>
-                <label style={{ ...bigBtn, background: BRAND, display: 'block', textAlign: 'center', cursor: 'pointer', opacity: ttnBusy ? 0.6 : 1, boxShadow: `0 4px 12px rgba(22,119,255,0.25)` }}>
-                    {ttnBusy ? 'Отправка…' : order.ttnCount > 0 ? '📷 Отправить ещё фото' : '📷 Сфотографировать и отправить'}
+                <label style={{ ...outlineBtn, display: 'block', textAlign: 'center', cursor: 'pointer', opacity: ttnBusy ? 0.6 : 1 }}>
+                    {ttnBusy ? 'Отправка…' : order.ttnCount > 0 ? 'Отправить ещё фото' : 'Сфотографировать и отправить'}
                     <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={ttnBusy}
                         onChange={(e) => { uploadTtn(e.target.files); e.currentTarget.value = ''; }} />
                 </label>
@@ -278,25 +277,25 @@ export default function DriverPage() {
             {/* Действия */}
             <div style={{ position: 'sticky', bottom: 0, padding: '10px 0 22px', background: 'linear-gradient(transparent, var(--lc-bg) 28px)' }}>
                 {order.isFinished ? (
-                    <div style={{ ...card, textAlign: 'center', margin: 0, background: `linear-gradient(135deg, ${GREEN}, #22c55e)`, color: '#fff', border: 'none' }}>
-                        <div style={{ fontSize: 38 }}>✅</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>Рейс завершён</div>
-                        <div style={{ fontSize: 15, opacity: 0.95, marginTop: 2 }}>Спасибо за работу!</div>
+                    <div style={{ ...card, textAlign: 'center', margin: 0 }}>
+                        <div style={{ width: 52, height: 52, margin: '0 auto', borderRadius: '50%', background: `${GREEN}15`, color: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 800 }}>✓</div>
+                        <div style={{ ...title, fontSize: 20, marginTop: 10 }}>Рейс завершён</div>
+                        <div style={{ fontSize: 15, color: 'var(--lc-text-sec)', marginTop: 4 }}>Спасибо за работу!</div>
                     </div>
                 ) : (
                     <>
                         {order.nextAction && (
-                            <button onClick={advance} disabled={busy} style={{ ...bigBtn, background: `linear-gradient(135deg, ${GREEN}, #15803d)`, boxShadow: `0 6px 16px rgba(22,163,74,0.32)` }}>
+                            <button onClick={advance} disabled={busy} style={{ ...bigBtn, ...ctaDark }}>
                                 {busy ? 'Секунду…' : order.nextAction.label}
                             </button>
                         )}
                         {order.isProblem ? (
                             <div style={{ ...card, marginTop: 10, marginBottom: 0, textAlign: 'center' }}>
                                 <div style={{ color: RED, fontSize: 15, fontWeight: 600 }}>Диспетчер уведомлён о проблеме</div>
-                                {order.dispatcherPhone && <a href={`tel:${order.dispatcherPhone}`} style={{ display: 'inline-block', marginTop: 8, fontSize: 16, color: BRAND, fontWeight: 700 }}>Позвонить диспетчеру</a>}
+                                {order.dispatcherPhone && <a href={`tel:${order.dispatcherPhone}`} style={{ display: 'inline-block', marginTop: 8, fontSize: 16, color: BLUE, fontWeight: 700 }}>Позвонить диспетчеру</a>}
                             </div>
                         ) : (
-                            <button onClick={reportProblem} disabled={busy} style={{ ...bigBtn, background: 'var(--lc-card)', color: RED, border: `2px solid #fecaca`, marginTop: 10, fontSize: 17, boxShadow: 'none' }}>
+                            <button onClick={reportProblem} disabled={busy} style={{ ...bigBtn, background: 'var(--lc-card)', color: RED, border: '1.5px solid #fecaca', marginTop: 10, fontSize: 16, fontWeight: 700, boxShadow: 'none' }}>
                                 Сообщить о проблеме
                             </button>
                         )}
@@ -307,9 +306,12 @@ export default function DriverPage() {
     );
 }
 
-const wrap: React.CSSProperties = { minHeight: '100vh', background: 'var(--lc-bg)', padding: 12, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560, margin: '0 auto', fontFamily: 'system-ui, -apple-system, sans-serif' };
-const card: React.CSSProperties = { background: 'var(--lc-card)', borderRadius: 16, padding: 16, border: '1px solid var(--lc-border)', boxShadow: '0 1px 3px rgba(11,13,18,0.05)' };
-const bigBtn: React.CSSProperties = { width: '100%', padding: '18px', fontSize: 19, fontWeight: 800, color: '#fff', border: 'none', borderRadius: 14, cursor: 'pointer' };
-const navBtn: React.CSSProperties = { flex: 1, textAlign: 'center', padding: '15px', fontSize: 16, fontWeight: 800, color: '#fff', borderRadius: 12, textDecoration: 'none' };
+const wrap: React.CSSProperties = { minHeight: '100vh', background: 'var(--lc-bg)', padding: 12, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 540, margin: '0 auto' };
+const card: React.CSSProperties = { background: 'var(--lc-card)', borderRadius: 16, padding: 16, border: '1px solid var(--lc-border)', boxShadow: '0 1px 2px rgba(16,24,40,0.04)' };
+const title: React.CSSProperties = { fontWeight: 800, letterSpacing: '-0.035em', lineHeight: 1.05, color: 'var(--lc-text)' };
+const eyebrow: React.CSSProperties = { fontSize: 10.5, color: 'var(--lc-text-ter)', textTransform: 'uppercase', letterSpacing: '0.22em', fontWeight: 600, marginBottom: 8 };
+const bigBtn: React.CSSProperties = { width: '100%', padding: '17px', fontSize: 18, fontWeight: 700, color: '#fff', border: 'none', borderRadius: 12, cursor: 'pointer' };
+const ctaDark: React.CSSProperties = { background: 'linear-gradient(180deg, #1c202b 0%, #0f1117 100%)', color: '#fff', boxShadow: '0 4px 14px rgba(15,17,23,0.28), inset 0 1px 0 rgba(255,255,255,0.08)' };
+const outlineBtn: React.CSSProperties = { width: '100%', padding: '15px', fontSize: 16, fontWeight: 700, color: BLUE, background: 'var(--lc-card-2)', border: `1.5px solid ${BLUE}44`, borderRadius: 12 };
+const navBtn: React.CSSProperties = { flex: 1, textAlign: 'center', padding: '14px', fontSize: 16, fontWeight: 700, color: '#fff', borderRadius: 12, textDecoration: 'none' };
 const chip: React.CSSProperties = { padding: '6px 12px', borderRadius: 999, background: 'var(--lc-card-2)', border: '1px solid var(--lc-border)', fontSize: 14, fontWeight: 600, color: 'var(--lc-text-sec)' };
-const eyebrow: React.CSSProperties = { fontSize: 11, color: 'var(--lc-text-ter)', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 };
