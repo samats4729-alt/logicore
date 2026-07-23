@@ -12,9 +12,10 @@ type MoveType = 'receipt' | 'transfer' | 'writeoff';
 
 interface Nomen { id: string; name: string; unit: string; isActive?: boolean }
 interface Wh { id: string; name: string; isActive?: boolean }
+interface Cat { id: string; name: string; direction: 'IN' | 'OUT'; isActive?: boolean }
 interface Line { id?: string; nomenclatureId: string; quantity: number; price?: number | null; amount?: number | null; nomenclature?: { name?: string; unit?: string } }
 interface Move {
-    id: string; number: string; date: string; note?: string | null; counterparty?: string | null;
+    id: string; number: string; date: string; note?: string | null; counterparty?: string | null; expenseCategory?: string | null;
     warehouseId: string; warehouse?: { name?: string }; toWarehouseId?: string | null; toWarehouse?: { name?: string };
     lines: Line[];
 }
@@ -39,6 +40,7 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
     const [moves, setMoves] = useState<Move[]>([]);
     const [warehouses, setWarehouses] = useState<Wh[]>([]);
     const [nomen, setNomen] = useState<Nomen[]>([]);
+    const [categories, setCategories] = useState<Cat[]>([]);
     const [search, setSearch] = useState('');
 
     const [modalOpen, setModalOpen] = useState(false);
@@ -51,14 +53,16 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
     const fetchAll = async () => {
         setLoading(true);
         try {
-            const [mvRes, whRes, nmRes] = await Promise.all([
+            const [mvRes, whRes, nmRes, catRes] = await Promise.all([
                 api.get(`/inventory/moves/${type}`),
                 api.get('/inventory/warehouses'),
                 api.get('/inventory/nomenclature'),
+                type === 'writeoff' ? api.get('/accounting/finance-categories') : Promise.resolve({ data: [] }),
             ]);
             setMoves(mvRes.data || []);
             setWarehouses((whRes.data || []).filter((w: Wh) => w.isActive !== false));
             setNomen((nmRes.data || []).filter((n: Nomen) => n.isActive !== false));
+            setCategories((catRes.data || []).filter((c: Cat) => c.isActive !== false && c.direction === 'OUT'));
         } catch { message.error('Не удалось загрузить документы'); }
         finally { setLoading(false); }
     };
@@ -78,7 +82,7 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
     const openEdit = (m: Move) => {
         setEditing(m);
         form.setFieldsValue({
-            date: dayjs(m.date), warehouseId: m.warehouseId, toWarehouseId: m.toWarehouseId || undefined, counterparty: m.counterparty || '', note: m.note || '',
+            date: dayjs(m.date), warehouseId: m.warehouseId, toWarehouseId: m.toWarehouseId || undefined, counterparty: m.counterparty || '', expenseCategory: m.expenseCategory || undefined, note: m.note || '',
             lines: m.lines.map(l => ({ nomenclatureId: l.nomenclatureId, quantity: l.quantity, price: l.price ?? undefined })),
         });
         setModalOpen(true);
@@ -92,6 +96,7 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
                 warehouseId: values.warehouseId,
                 toWarehouseId: cfg.hasTo ? values.toWarehouseId : undefined,
                 counterparty: cfg.hasCounterparty ? values.counterparty : undefined,
+                expenseCategory: type === 'writeoff' ? (values.expenseCategory || undefined) : undefined,
                 note: values.note || undefined,
                 lines: (values.lines || []).filter((l: any) => l && l.nomenclatureId).map((l: any) => ({ nomenclatureId: l.nomenclatureId, quantity: l.quantity, price: cfg.hasPrice ? l.price : undefined })),
             };
@@ -121,6 +126,7 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
                 : <span style={{ fontSize: 13 }}>{m.warehouse?.name}</span>,
         },
         ...(cfg.hasCounterparty ? [{ title: 'Поставщик', dataIndex: 'counterparty', key: 'cp', render: (v: string) => <span style={{ fontSize: 13 }}>{v || '—'}</span> }] : []),
+        ...(type === 'writeoff' ? [{ title: 'Статья затрат', dataIndex: 'expenseCategory', key: 'exp', render: (v: string) => v ? <Tag color="orange">{v}</Tag> : <span style={{ fontSize: 13, color: 'var(--lc-text-ter)' }}>—</span> }] : []),
         { title: 'Позиций', key: 'pos', width: 90, align: 'center' as const, render: (_: any, m: Move) => <Tag>{m.lines.length}</Tag> },
         ...(cfg.hasPrice ? [{ title: 'Сумма', key: 'sum', width: 140, align: 'right' as const, render: (_: any, m: Move) => <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{money(m.lines.reduce((s, l) => s + (l.amount || 0), 0))}</strong> }] : []),
         ...(canEdit ? [{
@@ -214,6 +220,15 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
                     {cfg.hasCounterparty && (
                         <Form.Item name="counterparty" label="Поставщик">
                             <Input placeholder="Наименование поставщика" />
+                        </Form.Item>
+                    )}
+                    {type === 'writeoff' && (
+                        <Form.Item name="expenseCategory" label="Статья затрат" extra="Списание попадёт в расход (Прибыли и убытки / Расходы по статьям) по себестоимости. Кассу не трогает.">
+                            <Select
+                                placeholder="Списание материалов"
+                                showSearch optionFilterProp="label" allowClear
+                                options={categories.map(c => ({ value: c.name, label: c.name }))}
+                            />
                         </Form.Item>
                     )}
 

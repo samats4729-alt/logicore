@@ -1024,6 +1024,7 @@ model StockMove {
   toWarehouseId String?
   toWarehouse   StockWarehouse? @relation("MoveToWarehouse", fields: [toWarehouseId], references: [id])
   counterparty  String?       // Поставщик (для поступления) — свободный текст
+  expenseCategory String?     // Статья затрат для списания (попадает в ПиУ / расходы по статьям)
   note          String?
   createdById   String?
   createdAt     DateTime      @default(now())

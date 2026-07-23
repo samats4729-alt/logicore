@@ -9,6 +9,7 @@ interface MoveInput {
     warehouseId: string;
     toWarehouseId?: string;
     counterparty?: string;
+    expenseCategory?: string;
     note?: string;
     lines: MoveLineInput[];
 }
@@ -175,6 +176,7 @@ export class InventoryService {
                 warehouseId: data.warehouseId,
                 toWarehouseId: data.type === StockMoveType.TRANSFER ? data.toWarehouseId : null,
                 counterparty: data.counterparty?.trim() || null,
+                expenseCategory: data.type === StockMoveType.WRITEOFF ? (data.expenseCategory?.trim() || 'Списание материалов') : null,
                 note: data.note?.trim() || null,
                 createdById: userId,
                 lines: {
@@ -204,6 +206,7 @@ export class InventoryService {
                 warehouseId: data.warehouseId,
                 toWarehouseId: move.type === StockMoveType.TRANSFER ? data.toWarehouseId : null,
                 counterparty: data.counterparty?.trim() || null,
+                expenseCategory: move.type === StockMoveType.WRITEOFF ? (data.expenseCategory?.trim() || 'Списание материалов') : null,
                 note: data.note?.trim() || null,
                 lines: {
                     create: lines.map(l => ({

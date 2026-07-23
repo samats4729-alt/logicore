@@ -5,7 +5,7 @@ import { RedisService } from '../../redis/redis.service';
 import { FinanceCalculatorService } from './finance-calculator.service';
 import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType } from '@prisma/client';
 import { money } from '../../common/utils/money';
 import { PaymentsService } from './payments.service';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
@@ -1077,6 +1077,42 @@ export class FinancialReportsService {
         return { rows, totals };
     }
 
+    // Себестоимость списаний ТМЦ по статьям за период (оценка по средней цене поступлений).
+    // Это расход в ПиУ, но НЕ движение денег (деньги ушли при покупке).
+    private async getWriteoffCostsByCategory(companyId: string, start: Date | null, end: Date | null): Promise<{ byCategory: Map<string, number>; total: number }> {
+        const receipts = await this.prisma.stockMove.findMany({
+            where: { companyId, type: StockMoveType.RECEIPT },
+            include: { lines: true },
+        });
+        const recvQty = new Map<string, number>();
+        const recvSum = new Map<string, number>();
+        for (const m of receipts) {
+            for (const l of m.lines) {
+                if (l.amount == null) continue;
+                recvQty.set(l.nomenclatureId, (recvQty.get(l.nomenclatureId) || 0) + l.quantity);
+                recvSum.set(l.nomenclatureId, (recvSum.get(l.nomenclatureId) || 0) + l.amount);
+            }
+        }
+        const avg = (id: string) => { const q = recvQty.get(id) || 0; return q > 0 ? (recvSum.get(id) || 0) / q : 0; };
+
+        const writeoffs = await this.prisma.stockMove.findMany({
+            where: { companyId, type: StockMoveType.WRITEOFF, ...(start && end && { date: { gte: start, lte: end } }) },
+            include: { lines: true },
+        });
+        const byCategory = new Map<string, number>();
+        let total = 0;
+        for (const m of writeoffs) {
+            const cat = m.expenseCategory || 'Списание материалов';
+            for (const l of m.lines) {
+                const val = money(l.quantity * avg(l.nomenclatureId));
+                if (val <= 0) continue;
+                byCategory.set(cat, money((byCategory.get(cat) || 0) + val));
+                total = money(total + val);
+            }
+        }
+        return { byCategory, total };
+    }
+
     // ==================== РАСХОДЫ ПО СТАТЬЯМ ====================
 
     async getExpensesByCategoryReport(companyId: string, query: { startDate?: string; endDate?: string }) {
@@ -1104,6 +1140,10 @@ export class FinancialReportsService {
         };
         for (const p of payments) add(p.category?.name || 'Без статьи', p.amount);
         for (const e of expenses) add(e.category || 'Без статьи', e.amount);
+
+        // Списания ТМЦ по себестоимости (по статье списания)
+        const writeoffCosts = await this.getWriteoffCostsByCategory(companyId, start, end);
+        for (const [cat, amount] of writeoffCosts.byCategory) add(cat, amount);
 
         const rows = Array.from(map.values()).sort((a, b) => b.amount - a.amount);
         const total = money(rows.reduce((s, r) => s + r.amount, 0));
@@ -1924,6 +1964,12 @@ export class FinancialReportsService {
             .forEach(e => {
                 otherExpensesMap.set(e.category, money((otherExpensesMap.get(e.category) || 0) + e.amount));
             });
+
+        // Списания ТМЦ — расход в ПиУ по себестоимости (не касса)
+        const writeoffCosts = await this.getWriteoffCostsByCategory(companyId, start, end);
+        for (const [cat, amount] of writeoffCosts.byCategory) {
+            otherExpensesMap.set(cat, money((otherExpensesMap.get(cat) || 0) + amount));
+        }
 
         const otherIncomes = Array.from(otherIncomesMap.entries()).map(([name, amount]) => ({
             name,
