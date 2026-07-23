@@ -121,53 +121,66 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
         // Маршрут по дорогам (бесплатный OSRM, без ключа) + запасной прямой пунктир
         let cancelled = false;
         const straight = { type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: coords } };
+        // Рисуем линию маршрута, каждый раз пересоздавая слой начисто (надёжнее, чем менять dasharray)
         const drawRoute = (data: any, solid: boolean) => {
             if (!map || cancelled) return;
             const apply = () => {
-                if (map.getSource('route')) {
-                    (map.getSource('route') as any).setData(data);
-                    map.setPaintProperty('route-line', 'line-dasharray', solid ? [1, 0] : [2, 2]);
-                } else {
-                    map.addSource('route', { type: 'geojson', data });
-                    map.addLayer({
-                        id: 'route-line', type: 'line', source: 'route',
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: { 'line-color': '#1677ff', 'line-width': 3.5, 'line-dasharray': solid ? [1, 0] : [2, 2] },
-                    });
-                }
+                if (cancelled) return;
+                if (map.getLayer('route-line')) map.removeLayer('route-line');
+                if (map.getSource('route')) map.removeSource('route');
+                map.addSource('route', { type: 'geojson', data });
+                map.addLayer({
+                    id: 'route-line', type: 'line', source: 'route',
+                    layout: { 'line-cap': 'round', 'line-join': 'round' },
+                    paint: solid
+                        ? { 'line-color': '#1677ff', 'line-width': 3.5 }
+                        : { 'line-color': '#1677ff', 'line-width': 2.5, 'line-dasharray': [2, 2] },
+                });
             };
             if (map.isStyleLoaded()) apply(); else map.once('load', apply);
         };
 
         if (coords.length >= 2) {
             drawRoute(straight, false); // мгновенно показываем прямую, пока грузится маршрут
+            setDistanceKm(straightKm(coords)); // сразу примерный км, даже если сервер маршрутов не ответит
             // Заявка внутри Казахстана, если ВСЕ точки маршрута внутри страны.
             // Если хоть одна точка за границей — груз едет за рубеж, маршрут через границу разрешён.
             const domestic = coords.every(pointInKz);
             const path = coords.map(c => `${c[0]},${c[1]}`).join(';');
-            fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`)
-                .then(r => r.ok ? r.json() : Promise.reject())
-                .then(json => {
-                    const route = json?.routes?.[0];
-                    if (cancelled || !route?.geometry) return;
-                    const line = (route.geometry.coordinates || []) as [number, number][];
+            const url = `https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`;
 
-                    // Для внутренних заявок проверяем, не увёл ли OSRM маршрут за границу
-                    if (domestic && line.length > 1) {
-                        const stepN = Math.max(1, Math.floor(line.length / 200));
-                        const sample = line.filter((_, i) => i % stepN === 0);
-                        const outside = sample.filter(p => !pointInKz(p)).length;
-                        // заметный кусок за пределами страны (>6% точек) — это заезд через границу
-                        if (outside / sample.length > 0.06) {
-                            setDistanceKm(straightKm(coords)); // держим прямую внутри страны + приблизительный км
-                            return;
+            const tryFetch = (attemptsLeft: number): Promise<void> =>
+                fetch(url)
+                    .then(r => r.ok ? r.json() : Promise.reject(new Error('http')))
+                    .then(json => {
+                        const route = json?.routes?.[0];
+                        if (cancelled) return;
+                        if (!route?.geometry) throw new Error('no-route');
+                        const line = (route.geometry.coordinates || []) as [number, number][];
+
+                        // Для внутренних заявок отбрасываем только грубый заезд за границу (большой крюк),
+                        // а не лёгкое касание границы (контур страны упрощённый). Порог высокий.
+                        if (domestic && line.length > 1) {
+                            const stepN = Math.max(1, Math.floor(line.length / 200));
+                            const sample = line.filter((_, i) => i % stepN === 0);
+                            const outside = sample.filter(p => !pointInKz(p)).length;
+                            if (outside / sample.length > 0.4) {
+                                setDistanceKm(straightKm(coords));
+                                return;
+                            }
                         }
-                    }
 
-                    drawRoute({ type: 'Feature', properties: {}, geometry: route.geometry }, true);
-                    if (typeof route.distance === 'number') setDistanceKm(route.distance / 1000);
-                })
-                .catch(() => { setDistanceKm(straightKm(coords)); /* OSRM недоступен — прямой км */ });
+                        drawRoute({ type: 'Feature', properties: {}, geometry: route.geometry }, true);
+                        if (typeof route.distance === 'number') setDistanceKm(route.distance / 1000);
+                    })
+                    .catch(() => {
+                        // сервер маршрутов не ответил — ещё одна попытка, потом остаётся прямая + прямой км
+                        if (attemptsLeft > 0 && !cancelled) {
+                            return new Promise<void>(res => setTimeout(res, 900)).then(() => tryFetch(attemptsLeft - 1));
+                        }
+                    });
+
+            tryFetch(1);
         }
 
         // Подгоняем вид под все точки (маршрут + водитель)
