@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Service } from '../s3/s3.service';
 import { randomBytes } from 'crypto';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, DocumentType } from '@prisma/client';
+import * as path from 'path';
+import * as fs from 'fs';
 
 // Простой линейный сценарий для водителя: текущий статус → следующее действие
 const DRIVER_FLOW: { from: OrderStatus[]; to: OrderStatus; label: string }[] = [
@@ -14,7 +17,7 @@ const DRIVER_FLOW: { from: OrderStatus[]; to: OrderStatus; label: string }[] = [
 
 @Injectable()
 export class DriverService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private s3: S3Service) { }
 
     // ==================== ГЕНЕРАЦИЯ ССЫЛКИ (для платформы) ====================
 
@@ -78,6 +81,7 @@ export class DriverService {
 
         const nextAction = DRIVER_FLOW.find(f => f.from.includes(order.status as OrderStatus)) || null;
         const dispatcher = order.forwarder || order.partner || null;
+        const ttnCount = await this.prisma.document.count({ where: { orderId: order.id, type: DocumentType.TTN } });
 
         return {
             orderNumber: order.orderNumber,
@@ -95,6 +99,7 @@ export class DriverService {
             isProblem: order.status === OrderStatus.PROBLEM,
             dispatcherName: dispatcher?.name || null,
             dispatcherPhone: dispatcher?.phone || null,
+            ttnCount,
         };
     }
 
@@ -155,6 +160,43 @@ export class DriverService {
             });
         }
         return { ok: true };
+    }
+
+    async uploadTtn(token: string, file: Express.Multer.File) {
+        if (!file) throw new BadRequestException('Файл не найден');
+        const order = await this.prisma.order.findUnique({
+            where: { driverToken: token },
+            select: { id: true, driverId: true, responsibleManagerId: true, customerId: true },
+        });
+        if (!order) throw new NotFoundException('Ссылка недействительна');
+
+        const uploaderId = order.driverId || order.responsibleManagerId || order.customerId;
+        if (!uploaderId) throw new BadRequestException('Невозможно определить отправителя');
+
+        const ext = path.extname(file.originalname) || '.jpg';
+        const filename = `ttn_${order.id}_${Date.now()}${ext}`;
+        const relativePath = `uploads/documents/${filename}`;
+
+        if (this.s3.isS3Enabled()) {
+            await this.s3.uploadFile(relativePath, file.buffer, file.mimetype);
+        } else {
+            const uploadsDir = path.join(process.cwd(), 'uploads', 'documents');
+            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+            fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
+        }
+
+        const doc = await this.prisma.document.create({
+            data: {
+                type: DocumentType.TTN,
+                fileName: file.originalname || 'ТТН.jpg',
+                fileUrl: relativePath,
+                fileSize: file.size,
+                mimeType: file.mimetype,
+                orderId: order.id,
+                uploadedById: uploaderId,
+            },
+        });
+        return { ok: true, documentId: doc.id };
     }
 
     async reportProblem(token: string, comment?: string) {

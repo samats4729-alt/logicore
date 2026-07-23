@@ -32,6 +32,7 @@ interface DriverOrder {
     isProblem: boolean;
     dispatcherName: string | null;
     dispatcherPhone: string | null;
+    ttnCount: number;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -56,6 +57,7 @@ export default function DriverPage() {
     const [busy, setBusy] = useState(false);
     const [mobile, setMobile] = useState(true);
     const [geo, setGeo] = useState<'idle' | 'on' | 'denied'>('idle');
+    const [ttnBusy, setTtnBusy] = useState(false);
 
     useEffect(() => { setMobile(isMobile()); }, []);
 
@@ -118,6 +120,21 @@ export default function DriverPage() {
         } catch {
             alert('Не удалось отправить. Попробуйте ещё раз.');
         } finally { setBusy(false); }
+    };
+
+    const uploadTtn = async (fileList: FileList | null) => {
+        const file = fileList?.[0];
+        if (!file) return;
+        setTtnBusy(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            await axios.post(`${API_URL}/public/driver/${token}/ttn`, fd);
+            await load();
+            alert('ТТН отправлена диспетчеру ✅');
+        } catch {
+            alert('Не удалось отправить фото. Попробуйте ещё раз.');
+        } finally { setTtnBusy(false); }
     };
 
     // Куда ехать сейчас: до погрузки — точка PICKUP, после — DELIVERY
@@ -205,6 +222,19 @@ export default function DriverPage() {
                     {[order.cargoWeight ? `${order.cargoWeight} т` : null, order.cargoVolume ? `${order.cargoVolume} м³` : null, order.palletCount ? `${order.palletCount} палет` : null].filter(Boolean).join(' · ') || '—'}
                 </div>
                 {order.requirements && <div style={{ fontSize: 14, color: '#64748b', marginTop: 6 }}>Требования: {order.requirements}</div>}
+            </div>
+
+            {/* ТТН */}
+            <div style={card}>
+                <div style={{ fontSize: 13, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                    Накладная (ТТН){order.ttnCount > 0 ? ` · отправлено: ${order.ttnCount}` : ''}
+                </div>
+                <label style={{ ...bigBtn, background: '#1d4ed8', display: 'block', textAlign: 'center', cursor: 'pointer', opacity: ttnBusy ? 0.6 : 1 }}>
+                    {ttnBusy ? 'Отправка…' : '📷 Сфотографировать и отправить ТТН'}
+                    <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={ttnBusy}
+                        onChange={(e) => { uploadTtn(e.target.files); e.currentTarget.value = ''; }} />
+                </label>
+                {order.ttnCount > 0 && <div style={{ marginTop: 8, fontSize: 14, color: '#16a34a', textAlign: 'center' }}>✅ Диспетчер получил накладную</div>}
             </div>
 
             {/* Действия */}

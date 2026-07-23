@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { DriverService } from './driver.service';
 
@@ -29,5 +30,12 @@ export class DriverPublicController {
     @Post(':token/location')
     async location(@Param('token') token: string, @Body() body: { latitude: number; longitude: number; accuracy?: number; speed?: number; heading?: number }) {
         return this.driverService.recordLocation(token, body);
+    }
+
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @Post(':token/ttn')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
+    async uploadTtn(@Param('token') token: string, @UploadedFile() file: Express.Multer.File) {
+        return this.driverService.uploadTtn(token, file);
     }
 }
