@@ -3,6 +3,9 @@
 import { useEffect, useRef } from 'react';
 import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
 
+// Белый грузовик для маркера водителя (на чёрном круге)
+const TRUCK_SVG = '<svg viewBox="0 0 640 512" width="58%" height="58%" aria-hidden="true"><path fill="#fff" d="M0 48C0 21.5 21.5 0 48 0H368c26.5 0 48 21.5 48 48V96h50.7c17 0 33.3 6.7 45.3 18.7L621.3 173.3c12 12 18.7 28.3 18.7 45.3V352c17.7 0 32 14.3 32 32s-14.3 32-32 32H576c0 53-43 96-96 96s-96-43-96-96H256c0 53-43 96-96 96s-96-43-96-96H32c-17.7 0-32-14.3-32-32V48zM160 464a48 48 0 1 0 0-96 48 48 0 1 0 0 96zm368-48a48 48 0 1 0-96 0 48 48 0 1 0 96 0zM416 160v96h149.5L466.7 157.3c-3-3-7.1-4.7-11.3-4.7H416z"/></svg>';
+
 interface TrackDriver {
     driverId: string;
     driverName: string;
@@ -80,13 +83,13 @@ export default function DgisTrackingMap({
         driverMarkersRef.current = [];
 
         drivers.forEach((driver) => {
-            const color = getDriverColor(driver);
             const isSelected = selectedDriverId === driver.driverId;
             const size = isSelected ? 40 : 32;
 
+            // Маркер водителя — чёрный круг с белым грузовиком внутри
             const el = document.createElement('div');
-            el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2.5px solid ${isSelected ? '#0b0d12' : '#ffffff'};box-shadow:0 3px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:${size * 0.58}px;line-height:1;`;
-            el.textContent = '🚚';
+            el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:#0b0d12;border:2.5px solid ${isSelected ? '#1677ff' : '#ffffff'};box-shadow:0 3px 10px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;`;
+            el.innerHTML = TRUCK_SVG;
             el.title = `${driver.driverName} · ${driver.vehiclePlate}`;
             el.addEventListener('click', () => onDriverClickRef.current(driver));
 
