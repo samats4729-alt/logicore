@@ -121,6 +121,42 @@ export class DriverService {
         return this.getByToken(token);
     }
 
+    async recordLocation(token: string, data: { latitude: number; longitude: number; accuracy?: number; speed?: number; heading?: number }) {
+        if (typeof data?.latitude !== 'number' || typeof data?.longitude !== 'number') {
+            throw new BadRequestException('Нет координат');
+        }
+        const order = await this.prisma.order.findUnique({ where: { driverToken: token }, select: { id: true, driverId: true } });
+        if (!order) throw new NotFoundException('Ссылка недействительна');
+
+        await this.prisma.order.update({
+            where: { id: order.id },
+            data: {
+                driverLat: data.latitude,
+                driverLng: data.longitude,
+                driverSpeed: data.speed ?? null,
+                driverHeading: data.heading ?? null,
+                driverLocationAt: new Date(),
+            },
+        });
+
+        // Если водитель — пользователь, пишем и в общий трекинг (GpsPoint)
+        if (order.driverId) {
+            await this.prisma.gpsPoint.create({
+                data: {
+                    driverId: order.driverId,
+                    orderId: order.id,
+                    latitude: data.latitude,
+                    longitude: data.longitude,
+                    accuracy: data.accuracy ?? null,
+                    speed: data.speed ?? null,
+                    heading: data.heading ?? null,
+                    recordedAt: new Date(),
+                },
+            });
+        }
+        return { ok: true };
+    }
+
     async reportProblem(token: string, comment?: string) {
         const order = await this.findByToken(token);
         if (order.status === OrderStatus.COMPLETED || order.status === OrderStatus.CANCELLED) {

@@ -55,6 +55,7 @@ export default function DriverPage() {
     const [err, setErr] = useState('');
     const [busy, setBusy] = useState(false);
     const [mobile, setMobile] = useState(true);
+    const [geo, setGeo] = useState<'idle' | 'on' | 'denied'>('idle');
 
     useEffect(() => { setMobile(isMobile()); }, []);
 
@@ -71,6 +72,31 @@ export default function DriverPage() {
     }, [token]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Фоновая геолокация — шлём координаты не чаще раза в 20 сек
+    useEffect(() => {
+        if (!token || !order || order.isFinished) return;
+        if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+        let lastSent = 0;
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                setGeo('on');
+                const now = Date.now();
+                if (now - lastSent < 20000) return;
+                lastSent = now;
+                const { latitude, longitude, accuracy, speed, heading } = pos.coords;
+                axios.post(`${API_URL}/public/driver/${token}/location`, {
+                    latitude, longitude,
+                    accuracy: accuracy ?? undefined,
+                    speed: speed != null ? Math.max(speed * 3.6, 0) : undefined, // м/с → км/ч
+                    heading: heading ?? undefined,
+                }).catch(() => { });
+            },
+            () => setGeo('denied'),
+            { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
+        );
+        return () => navigator.geolocation.clearWatch(watchId);
+    }, [token, order?.isFinished]);
 
     const advance = async () => {
         if (!order?.nextAction) return;
@@ -142,6 +168,11 @@ export default function DriverPage() {
                     </span>
                 </div>
                 {order.driverName && <div style={{ marginTop: 8, fontSize: 15 }}>{order.driverName}{order.vehiclePlate ? ` · ${order.vehiclePlate}` : ''}</div>}
+                {!order.isFinished && (
+                    <div style={{ marginTop: 10, fontSize: 14, fontWeight: 600, padding: '8px 12px', borderRadius: 12, background: geo === 'on' ? '#dcfce7' : geo === 'denied' ? '#fee2e2' : '#fef9c3', color: geo === 'on' ? '#16a34a' : geo === 'denied' ? '#dc2626' : '#a16207' }}>
+                        {geo === 'on' ? '📍 Геолокация включена — диспетчер видит вас' : geo === 'denied' ? '⚠ Включите геолокацию, чтобы вас было видно на карте' : '📍 Разрешите доступ к геолокации во всплывающем окне'}
+                    </div>
+                )}
             </div>
 
             {/* Куда ехать */}

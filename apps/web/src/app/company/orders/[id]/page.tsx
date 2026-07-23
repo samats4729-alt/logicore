@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
+
+const DgisTrackingMap = dynamic(() => import('@/components/ui/DgisTrackingMap'), { ssr: false });
 import {
     Typography, Tag, Button, Descriptions, Card, Row, Col, Table,
     Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline,
@@ -1785,6 +1788,36 @@ export default function OrderDetailPage() {
                                                         <Descriptions.Item label="Автомобиль">{driverPlate || '—'}</Descriptions.Item>
                                                         <Descriptions.Item label="Прицеп">{driverTrailer || '—'}</Descriptions.Item>
                                                     </Descriptions>
+
+                                                    {order.driverLat != null && order.driverLng != null && (
+                                                        <div style={{ marginTop: 12 }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                                <span style={{ fontSize: 13, fontWeight: 600 }}><EnvironmentOutlined style={{ color: '#16a34a', marginRight: 6 }} />Местоположение водителя</span>
+                                                                <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
+                                                                    {order.driverLocationAt ? (() => { const m = dayjs().diff(dayjs(order.driverLocationAt), 'minute'); return `обновлено ${m < 1 ? 'только что' : m < 60 ? `${m} мин назад` : `${Math.floor(m / 60)} ч назад`}`; })() : ''}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--lc-border)' }}>
+                                                                <DgisTrackingMap
+                                                                    drivers={[{
+                                                                        driverId: order.id,
+                                                                        driverName: driverName || 'Водитель',
+                                                                        vehiclePlate: driverPlate || '',
+                                                                        latitude: order.driverLat,
+                                                                        longitude: order.driverLng,
+                                                                        speed: order.driverSpeed || 0,
+                                                                        heading: order.driverHeading || 0,
+                                                                        updatedAt: order.driverLocationAt || new Date().toISOString(),
+                                                                        orderNumber: order.orderNumber,
+                                                                    }]}
+                                                                    selectedDriverId={order.id}
+                                                                    onDriverClick={() => { }}
+                                                                    myLocation={null}
+                                                                    getDriverColor={() => '#16a34a'}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
 
                                                     <Divider style={{ margin: '12px 0' }} />
 

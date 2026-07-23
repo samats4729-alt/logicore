@@ -24,4 +24,10 @@ export class DriverPublicController {
     async problem(@Param('token') token: string, @Body() body: { comment?: string }) {
         return this.driverService.reportProblem(token, body?.comment);
     }
+
+    @Throttle({ default: { limit: 120, ttl: 60000 } })
+    @Post(':token/location')
+    async location(@Param('token') token: string, @Body() body: { latitude: number; longitude: number; accuracy?: number; speed?: number; heading?: number }) {
+        return this.driverService.recordLocation(token, body);
+    }
 }

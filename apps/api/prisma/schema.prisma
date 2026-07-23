@@ -493,6 +493,12 @@ model Order {
 
   // Секретная ссылка для водителя (веб вместо приложения)
   driverToken           String?   @unique
+  // Последнее местоположение водителя (со страницы водителя)
+  driverLat             Float?
+  driverLng             Float?
+  driverSpeed           Float?
+  driverHeading         Float?
+  driverLocationAt      DateTime?
 
   // Фаза 3: ссылка на конкретную машину (актив). Nullable, пока не пишется существующей
   // логикой — текстовые поля assignedDriver* остаются снимком. Задел под историю/переиспользование.
