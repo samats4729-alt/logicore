@@ -253,6 +253,32 @@ export class PaymentsService {
         let accountId = data.accountId;
         let categoryId = data.categoryId;
 
+        // Контрагент не указан, но платёж по заявке — определяем его из заявки,
+        // чтобы оплата попадала в акт сверки с этим контрагентом
+        let counterpartyId = data.counterpartyId || null;
+        if (!counterpartyId && data.orderId) {
+            const order = await this.prisma.order.findUnique({
+                where: { id: data.orderId },
+                select: { customerCompanyId: true, forwarderId: true, partnerId: true, subForwarderId: true },
+            });
+            if (order) {
+                const forwarderSide = order.forwarderId || order.partnerId || null;
+                if (data.direction === PaymentDirection.IN) {
+                    // нам платят: суб-экспедитору платит экспедитор, экспедитору — заказчик
+                    counterpartyId = companyId === order.subForwarderId
+                        ? forwarderSide
+                        : (order.customerCompanyId !== companyId ? order.customerCompanyId : null);
+                } else {
+                    // мы платим: заказчик платит экспедитору, экспедитор — суб-экспедитору
+                    // (водителю-физлицу компании-контрагента нет — оставляем пустым)
+                    counterpartyId = companyId === order.customerCompanyId
+                        ? forwarderSide
+                        : (order.subForwarderId && order.subForwarderId !== companyId ? order.subForwarderId : null);
+                }
+                if (counterpartyId === companyId) counterpartyId = null;
+            }
+        }
+
         if (!accountId) {
             const kind = data.method === PaymentMethod.CASH ? AccountKind.CASH : AccountKind.BANK;
             const defaultAcc = await this.prisma.financeAccount.findFirst({
@@ -273,7 +299,7 @@ export class PaymentsService {
             data: {
                 companyId,
                 orderId: data.orderId || null,
-                counterpartyId: data.counterpartyId || null,
+                counterpartyId,
                 direction: data.direction,
                 amount: amt,
                 date: new Date(data.date),

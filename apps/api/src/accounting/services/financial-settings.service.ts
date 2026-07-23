@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PaymentDirection, AccountKind, CostType, DictionaryKind } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, AccountKind, CostType, DictionaryKind } from '@prisma/client';
+import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
 
 @Injectable()
 export class FinancialSettingsService {
@@ -139,50 +140,107 @@ export class FinancialSettingsService {
     /** Остатки по кассам и счетам: начальный остаток + приход − расход = текущий остаток */
     async getAccountBalances(companyId: string) {
         await this.ensureCompanyFinanceSettings(companyId);
+        return this.buildAccountBalances(companyId, null);
+    }
+
+    /**
+     * Денежная позиция компании на момент времени.
+     * before = null → только начальные остатки (движений ещё «не было»);
+     * before = дата → начальные остатки + все движения строго до этой даты.
+     * Единый источник правды для «Остатков по кассам» и стартового остатка ДДС.
+     */
+    async getCashPosition(companyId: string, before: Date | null): Promise<number> {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const accounts = await this.prisma.financeAccount.findMany({
+            where: { companyId, isActive: true },
+            select: { openingBalance: true },
+        });
+        const openingTotal = accounts.reduce((s, a) => s + (a.openingBalance || 0), 0);
+        if (!before) return openingTotal;
+        const { totals } = await this.buildAccountBalances(companyId, before);
+        return totals.balance;
+    }
+
+    /**
+     * Считает остатки по каждому счёту/кассе.
+     * Операции без указанного счёта относим на счёт по умолчанию
+     * (наличный платёж → касса, всё остальное → банк) — так «Остатки по кассам»
+     * видят те же деньги, что и ДДС. Легаси-дубли (order_payment/driver_payment
+     * в доходах/расходах) исключаем — они уже учтены платежами.
+     */
+    private async buildAccountBalances(companyId: string, before: Date | null) {
         const accounts = await this.prisma.financeAccount.findMany({
             where: { companyId, isActive: true },
             orderBy: { kind: 'asc' },
         });
 
-        const rows = await Promise.all(accounts.map(async (acc) => {
-            // Движения на этом счёте с даты ввода остатка (если задана)
-            const dateFilter = acc.openingDate ? { date: { gte: acc.openingDate } } : {};
+        const defaultCash = accounts.find(a => a.kind === AccountKind.CASH && a.isDefault) || accounts.find(a => a.kind === AccountKind.CASH);
+        const defaultBank = accounts.find(a => a.kind === AccountKind.BANK && a.isDefault) || accounts.find(a => a.kind === AccountKind.BANK);
+        const accById = new Map(accounts.map(a => [a.id, a]));
 
-            const [payAgg, incAgg, expAgg] = await Promise.all([
-                this.prisma.payment.findMany({
-                    where: { companyId, accountId: acc.id, isDeleted: false, ...dateFilter },
-                    select: { direction: true, amount: true },
-                }),
-                this.prisma.income.aggregate({
-                    where: { companyId, accountId: acc.id, isDeleted: false, ...dateFilter },
-                    _sum: { amount: true },
-                }),
-                this.prisma.expense.aggregate({
-                    where: { companyId, accountId: acc.id, isDeleted: false, ...dateFilter },
-                    _sum: { amount: true },
-                }),
-            ]);
+        const dateFilter = before ? { date: { lt: before } } : {};
+        const [payments, incomes, expenses] = await Promise.all([
+            this.prisma.payment.findMany({
+                where: { companyId, isDeleted: false, ...dateFilter },
+                select: { accountId: true, direction: true, amount: true, date: true, method: true },
+            }),
+            this.prisma.income.findMany({
+                where: { companyId, isDeleted: false, ...dateFilter },
+                select: { accountId: true, amount: true, date: true, category: true },
+            }),
+            this.prisma.expense.findMany({
+                where: { companyId, isDeleted: false, ...dateFilter },
+                select: { accountId: true, amount: true, date: true, category: true },
+            }),
+        ]);
 
-            const payIn = payAgg.filter(p => p.direction === 'IN').reduce((s, p) => s + p.amount, 0);
-            const payOut = payAgg.filter(p => p.direction === 'OUT').reduce((s, p) => s + p.amount, 0);
-            const incomeSum = incAgg._sum.amount || 0;
-            const expenseSum = expAgg._sum.amount || 0;
+        const flows = new Map<string, { in: number; out: number }>();
+        const getFlow = (accId: string) => {
+            if (!flows.has(accId)) flows.set(accId, { in: 0, out: 0 });
+            return flows.get(accId)!;
+        };
 
-            const totalIn = payIn + incomeSum;
-            const totalOut = payOut + expenseSum;
-            const balance = (acc.openingBalance || 0) + totalIn - totalOut;
+        const resolveAccount = (accountId: string | null, preferCash: boolean) => {
+            if (accountId && accById.has(accountId)) return accById.get(accountId)!;
+            return (preferCash ? defaultCash : defaultBank) || defaultBank || defaultCash || null;
+        };
 
+        const countsForAccount = (acc: { openingDate: Date | null }, opDate: Date) =>
+            !acc.openingDate || opDate >= acc.openingDate;
+
+        for (const p of payments) {
+            const acc = resolveAccount(p.accountId, p.method === PaymentMethod.CASH);
+            if (!acc || !countsForAccount(acc, p.date)) continue;
+            const f = getFlow(acc.id);
+            if (p.direction === PaymentDirection.IN) f.in += p.amount;
+            else f.out += p.amount;
+        }
+        for (const i of incomes) {
+            if (EXCLUDED_INCOME_CATEGORIES.includes(i.category)) continue;
+            const acc = resolveAccount(i.accountId, false);
+            if (!acc || !countsForAccount(acc, i.date)) continue;
+            getFlow(acc.id).in += i.amount;
+        }
+        for (const e of expenses) {
+            if (EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)) continue;
+            const acc = resolveAccount(e.accountId, false);
+            if (!acc || !countsForAccount(acc, e.date)) continue;
+            getFlow(acc.id).out += e.amount;
+        }
+
+        const rows = accounts.map((acc) => {
+            const f = flows.get(acc.id) || { in: 0, out: 0 };
             return {
                 id: acc.id,
                 name: acc.name,
                 kind: acc.kind,
                 openingBalance: acc.openingBalance || 0,
                 openingDate: acc.openingDate,
-                totalIn,
-                totalOut,
-                balance,
+                totalIn: f.in,
+                totalOut: f.out,
+                balance: (acc.openingBalance || 0) + f.in - f.out,
             };
-        }));
+        });
 
         const totals = rows.reduce(
             (t, r) => ({

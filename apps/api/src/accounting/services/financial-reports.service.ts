@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType } from '@prisma/client';
 import { money } from '../../common/utils/money';
 import { PaymentsService } from './payments.service';
+import { FinancialSettingsService } from './financial-settings.service';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
 import * as XLSX from 'xlsx';
 
@@ -20,6 +21,7 @@ export class FinancialReportsService {
         private calculator: FinanceCalculatorService,
         private periodClosing: PeriodClosingService,
         private paymentsService: PaymentsService,
+        private settingsService: FinancialSettingsService,
     ) { }
 
     // ==================== ORDER FINANCIALS ====================
@@ -837,6 +839,24 @@ export class FinancialReportsService {
             }
         }
 
+        // Контрагенты, у которых есть только начальный долг (заявок ещё не было),
+        // тоже должны быть видны во взаиморасчётах
+        const knownIds = new Set(Array.from(counterpartyMap.values()).map(e => e.counterparty.id));
+        const openingOnly = openings.filter(
+            o => ((o.openingReceivable || 0) > 0 || (o.openingPayable || 0) > 0) && !knownIds.has(o.counterpartyId) && o.counterpartyId !== companyId,
+        );
+        if (openingOnly.length > 0) {
+            const comps = await this.prisma.company.findMany({
+                where: { id: { in: openingOnly.map(o => o.counterpartyId) } },
+                select: { id: true, name: true },
+            });
+            const nameMap = new Map(comps.map(c => [c.id, c.name]));
+            for (const o of openingOnly) {
+                if (!nameMap.has(o.counterpartyId)) continue;
+                getOrCreateEntry(o.counterpartyId, nameMap.get(o.counterpartyId)!, 'Контрагент');
+            }
+        }
+
         // Начальные долги применяем один раз на контрагента (запись хранит обе стороны)
         const appliedRecv = new Set<string>();
         const appliedPay = new Set<string>();
@@ -930,6 +950,10 @@ export class FinancialReportsService {
         type Op = { date: Date; doc: string; description: string; debit: number; credit: number };
         const ops: Op[] = [];
 
+        // По каждой общей заявке запоминаем, в какую сторону идут деньги с этим
+        // контрагентом: IN — он платит нам, OUT — мы платим ему
+        const orderPayDirection = new Map<string, PaymentDirection>();
+
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
                 order,
@@ -948,18 +972,33 @@ export class FinancialReportsService {
             if (weAreForwarder || weAreSub) {
                 // Контрагент должен нам за перевозку — дебет
                 if (fin.revenue > 0) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: money(fin.revenue), credit: 0 });
+                orderPayDirection.set(order.id, PaymentDirection.IN);
             } else if (weAreCustomer || weAreForwarderOverSub) {
                 // Мы должны контрагенту за перевозку — кредит
                 if (fin.executorCost > 0) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: 0, credit: money(fin.executorCost) });
+                orderPayDirection.set(order.id, PaymentDirection.OUT);
             }
         }
 
-        // Реальные оплаты между сторонами
-        const payments = await this.prisma.payment.findMany({
-            where: { companyId, counterpartyId, isDeleted: false },
+        // Реальные оплаты между сторонами: по контрагенту на платеже, а также
+        // оплаты по общим заявкам, где контрагент на платеже не был проставлен
+        const orderIds = Array.from(orderPayDirection.keys());
+        const rawPayments = await this.prisma.payment.findMany({
+            where: {
+                companyId,
+                isDeleted: false,
+                OR: [
+                    { counterpartyId },
+                    ...(orderIds.length > 0 ? [{ orderId: { in: orderIds }, counterpartyId: null }] : []),
+                ],
+            },
             include: { order: { select: { orderNumber: true } } },
             orderBy: { date: 'asc' },
         });
+        const payments = rawPayments.filter(p =>
+            p.counterpartyId === counterpartyId
+            || (p.orderId && orderPayDirection.get(p.orderId) === p.direction),
+        );
         for (const p of payments) {
             const doc = p.order?.orderNumber ? `Оплата по заявке №${p.order.orderNumber}` : 'Оплата';
             if (p.direction === PaymentDirection.IN) {
@@ -1633,9 +1672,19 @@ export class FinancialReportsService {
         const totalManualIncomes = manualIncomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category)).reduce((sum, i) => sum + i.amount, 0);
         const totalManualExpenses = manualExpenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)).reduce((sum, e) => sum + e.amount, 0);
 
+        // Начальные остатки касс и начальные долги контрагентов — чтобы дашборд
+        // сходился с «Остатками по кассам» и «Взаиморасчётами»
+        const [finAccounts, cpOpenings] = await Promise.all([
+            this.prisma.financeAccount.findMany({ where: { companyId, isActive: true }, select: { openingBalance: true } }),
+            this.prisma.counterpartyOpeningBalance.findMany({ where: { companyId } }),
+        ]);
+        const accountsOpening = finAccounts.reduce((s, a) => s + (a.openingBalance || 0), 0);
+        debtorSum += cpOpenings.reduce((s, o) => s + (o.openingReceivable || 0), 0);
+        creditorSum += cpOpenings.reduce((s, o) => s + (o.openingPayable || 0), 0);
+
         const totalCashIn = cashIn + totalManualIncomes;
         const totalCashOut = cashOut + totalManualExpenses;
-        const cashBalance = money(totalCashIn - totalCashOut);
+        const cashBalance = money(accountsOpening + totalCashIn - totalCashOut);
 
         totalRevenue = money(totalRevenue);
         totalMargin = money(totalMargin);
@@ -1670,25 +1719,9 @@ export class FinancialReportsService {
             where: { companyId, kind: AccountKind.CASH, isDefault: true }
         });
 
-        let startBalance = 0;
-        if (start) {
-            const prevPayments = await this.prisma.payment.findMany({
-                where: { companyId, isDeleted: false, date: { lt: start } }
-            });
-            const prevIncomes = await this.prisma.income.findMany({
-                where: { companyId, isDeleted: false, date: { lt: start } }
-            });
-            const prevExpenses = await this.prisma.expense.findMany({
-                where: { companyId, isDeleted: false, date: { lt: start } }
-            });
-
-            const pIn = money(prevPayments.filter(p => p.direction === PaymentDirection.IN).reduce((s, p) => s + p.amount, 0));
-            const pOut = money(prevPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((s, p) => s + p.amount, 0));
-            const inc = money(prevIncomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category)).reduce((s, i) => s + i.amount, 0));
-            const exp = money(prevExpenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)).reduce((s, e) => s + e.amount, 0));
-
-            startBalance = money(pIn + inc - pOut - exp);
-        }
+        // Остаток на начало = начальные остатки касс + движения до начала периода.
+        // Тот же расчёт, что и в «Остатках по кассам», — отчёты всегда сходятся.
+        const startBalance = money(await this.settingsService.getCashPosition(companyId, start));
 
         const dateFilter = start && end ? {
             date: { gte: start, lte: end }
