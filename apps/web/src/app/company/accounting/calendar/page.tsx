@@ -61,11 +61,48 @@ export default function PaymentCalendarPage() {
         return m;
     }, [rows]);
 
+    // Итоги по месяцам — для годового вида календаря
+    const byMonth = useMemo(() => {
+        const m = new Map<string, { in: number; out: number }>();
+        for (const r of rows) {
+            if (!r.dueDate) continue;
+            const key = dayjs(r.dueDate).format('YYYY-MM');
+            const cur = m.get(key) || { in: 0, out: 0 };
+            if (r.direction === 'IN') cur.in += r.amount; else cur.out += r.amount;
+            m.set(key, cur);
+        }
+        return m;
+    }, [rows]);
+
     const noDate = useMemo(() => rows.filter(r => !r.dueDate), [rows]);
     const selectedKey = selected.format('YYYY-MM-DD');
     const selectedDay = byDay.get(selectedKey);
+    const monthTotals = byMonth.get(value.format('YYYY-MM'));
 
     const cellRender = (current: Dayjs, info: { type: string }) => {
+        // Годовой вид: в клетке месяца — сколько придёт, уйдёт и сальдо
+        if (info.type === 'month') {
+            const mon = byMonth.get(current.format('YYYY-MM'));
+            if (!mon) return null;
+            const net = mon.in - mon.out;
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
+                    {mon.in > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
+                            +{short(mon.in)}
+                        </span>
+                    )}
+                    {mon.out > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
+                            −{short(mon.out)}
+                        </span>
+                    )}
+                    <span style={{ fontSize: 10.5, fontWeight: 600, color: net >= 0 ? '#16a34a' : '#dc2626', fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
+                        = {net >= 0 ? '+' : '−'}{short(Math.abs(net))}
+                    </span>
+                </div>
+            );
+        }
         if (info.type !== 'date') return null;
         const day = byDay.get(current.format('YYYY-MM-DD'));
         if (!day) return null;
@@ -138,6 +175,16 @@ export default function PaymentCalendarPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 16, alignItems: 'start' }} className="lc-cal-grid">
                 <div className="lc-card" style={{ padding: 12 }}>
+                    {monthTotals && (
+                        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '6px 10px 10px', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ fontWeight: 700 }}>{value.format('MMMM YYYY')}:</span>
+                            <span style={{ color: '#16a34a', fontWeight: 700 }}>придёт +{money(monthTotals.in)}</span>
+                            <span style={{ color: '#dc2626', fontWeight: 700 }}>уйдёт −{money(monthTotals.out)}</span>
+                            <span style={{ fontWeight: 700, color: monthTotals.in - monthTotals.out >= 0 ? '#16a34a' : '#dc2626' }}>
+                                сальдо {monthTotals.in - monthTotals.out >= 0 ? '+' : '−'}{money(Math.abs(monthTotals.in - monthTotals.out))}
+                            </span>
+                        </div>
+                    )}
                     <Spin spinning={loading}>
                         <Calendar
                             value={value}

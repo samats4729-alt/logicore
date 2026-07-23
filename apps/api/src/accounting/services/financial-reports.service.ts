@@ -1384,6 +1384,8 @@ export class FinancialReportsService {
                     { issuerId: companyId, recipientId: counterpartyId },
                     { issuerId: counterpartyId, recipientId: companyId },
                 ],
+                // Контрагенту показываем только действующие счета
+                status: { notIn: [InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED] },
             },
             include: {
                 issuer: { select: { id: true, name: true } },

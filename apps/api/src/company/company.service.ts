@@ -690,6 +690,7 @@ export class CompanyService {
         const participant = [
             { customerCompanyId: companyId },
             { forwarderId: companyId },
+            { partnerId: companyId },
             { subForwarderId: companyId },
         ];
         const IN_WORK = ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'] as any[];
@@ -701,12 +702,13 @@ export class CompanyService {
                         { OR: participant },
                         { OR: [{ createdAt: { gte: prevStart } }, { completedAt: { gte: prevStart } }] },
                     ],
-                    status: { not: 'DRAFT' },
+                    // Отменённые заявки не считаем — ни в активность, ни в деньги
+                    status: { notIn: ['DRAFT', 'CANCELLED'] },
                 },
                 select: {
                     createdAt: true, completedAt: true, status: true,
-                    customerCompanyId: true, forwarderId: true, subForwarderId: true,
-                    customerPrice: true, subForwarderPrice: true,
+                    customerCompanyId: true, forwarderId: true, partnerId: true, subForwarderId: true,
+                    customerPrice: true, subForwarderPrice: true, driverCost: true,
                 },
             }),
             this.prisma.order.count({ where: { OR: participant, status: { in: IN_WORK } } }),
@@ -734,7 +736,7 @@ export class CompanyService {
                 b.created++;
 
                 const isCust = o.customerCompanyId === companyId;
-                const isFwd = o.forwarderId === companyId;
+                const isFwd = o.forwarderId === companyId || o.partnerId === companyId;
                 const isSub = o.subForwarderId === companyId;
 
                 // Доход: нам платит заказчик (мы экспедитор) или экспедитор (мы суб-экспедитор)
@@ -746,7 +748,8 @@ export class CompanyService {
                     b.income += o.subForwarderPrice || 0;
                     b.customers.add(o.forwarderId);
                 }
-                // Расход: мы платим экспедитору (мы заказчик) или суб-экспедитору (мы экспедитор)
+                // Расход: мы платим экспедитору (мы заказчик),
+                // суб-экспедитору или перевозчику (мы экспедитор)
                 if (isCust && o.forwarderId && !isFwd) {
                     b.expense += o.customerPrice || 0;
                     b.carriers.add(o.forwarderId);
@@ -754,6 +757,9 @@ export class CompanyService {
                 if (isFwd && o.subForwarderId && !isSub) {
                     b.expense += o.subForwarderPrice || 0;
                     b.carriers.add(o.subForwarderId);
+                }
+                if (isFwd && !o.subForwarderId && (o.driverCost || 0) > 0) {
+                    b.expense += o.driverCost || 0;
                 }
             }
 

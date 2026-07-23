@@ -49,13 +49,24 @@ const statusColors: Record<string, string> = {
 
 const fmt = (n: number) => n.toLocaleString('ru-RU');
 
+function cityFrom(loc: any): string {
+    if (!loc) return '—';
+    if (loc.city) return loc.city;
+    if (loc.address) {
+        const m = loc.address.match(/г\.\s*([^,]+)/);
+        if (m?.[1]) return m[1].trim();
+        return loc.address;
+    }
+    return '—';
+}
+
 function getRoute(order: any): string {
     const pts = order.routePoints || [];
     const pickup = pts.find((p: any) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
-    const delivery = pts.find((p: any) => p.pointType === 'DELIVERY');
-    const from = pickup?.location?.city || pickup?.location?.address || '—';
-    const to = delivery?.location?.city || delivery?.location?.address || '—';
-    return `${from} → ${to}`;
+    // Конечная точка маршрута — ПОСЛЕДНЯЯ выгрузка, а не первая
+    const deliveries = pts.filter((p: any) => p.pointType === 'DELIVERY');
+    const delivery = deliveries.length ? deliveries[deliveries.length - 1] : null;
+    return `${cityFrom(pickup?.location)} → ${cityFrom(delivery?.location)}`;
 }
 
 export default function SharedReportPage() {
