@@ -491,6 +491,9 @@ model Order {
   assignedDriverTrailer String?   // Номер прицепа
   assignedAt            DateTime? // Когда назначен водитель
 
+  // Секретная ссылка для водителя (веб вместо приложения)
+  driverToken           String?   @unique
+
   // Фаза 3: ссылка на конкретную машину (актив). Nullable, пока не пишется существующей
   // логикой — текстовые поля assignedDriver* остаются снимком. Задел под историю/переиспользование.
   vehicleId             String?

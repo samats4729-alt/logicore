@@ -18,6 +18,7 @@ import { S3Module } from './s3/s3.module';
 import { CitiesModule } from './cities/cities.module';
 import { PartnersModule } from './partners/partners.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { DriverModule } from './driver/driver.module';
 import { CargoTypesModule } from './cargo-types/cargo-types.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ExternalCompaniesModule } from './external-companies/external-companies.module';
@@ -59,6 +60,7 @@ import { IdentityModule } from './identity/identity.module';
         CitiesModule,
         PartnersModule,
         InventoryModule,
+        DriverModule,
         CargoTypesModule,
         ContractsModule,
         ExternalCompaniesModule,

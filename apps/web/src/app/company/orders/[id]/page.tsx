@@ -190,6 +190,11 @@ export default function OrderDetailPage() {
     const [expenseForm] = Form.useForm();
     const [expenseLoading, setExpenseLoading] = useState(false);
 
+    // Ссылка для водителя
+    const [driverLinkModalOpen, setDriverLinkModalOpen] = useState(false);
+    const [driverLinkLoading, setDriverLinkLoading] = useState(false);
+    const [driverLinkToken, setDriverLinkToken] = useState<string>('');
+
     // Assign driver modal
     const [assignModalOpen, setAssignModalOpen] = useState(false);
     const [assignForm] = Form.useForm();
@@ -872,6 +877,34 @@ export default function OrderDetailPage() {
     };
 
     // =================== POWER OF ATTORNEY ===================
+
+    const driverLinkUrl = driverLinkToken ? `${typeof window !== 'undefined' ? window.location.origin : ''}/driver/${driverLinkToken}` : '';
+
+    const openDriverLink = async () => {
+        setDriverLinkLoading(true);
+        try {
+            const res = await api.post(`/orders/${orderId}/driver-link`, {});
+            setDriverLinkToken(res.data?.token || '');
+            setDriverLinkModalOpen(true);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось создать ссылку');
+        } finally {
+            setDriverLinkLoading(false);
+        }
+    };
+
+    const regenerateDriverLink = async () => {
+        setDriverLinkLoading(true);
+        try {
+            const res = await api.post(`/orders/${orderId}/driver-link`, { regenerate: true });
+            setDriverLinkToken(res.data?.token || '');
+            message.success('Ссылка обновлена, старая больше не работает');
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось обновить ссылку');
+        } finally {
+            setDriverLinkLoading(false);
+        }
+    };
 
     const handleDownloadPoA = async () => {
         try {
@@ -1758,6 +1791,14 @@ export default function OrderDetailPage() {
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                                         <Button
                                                             type="primary"
+                                                            icon={<EnvironmentOutlined />}
+                                                            onClick={openDriverLink}
+                                                            loading={driverLinkLoading}
+                                                            block
+                                                        >
+                                                            Ссылка для водителя
+                                                        </Button>
+                                                        <Button
                                                             icon={<UserAddOutlined />}
                                                             onClick={openAssignModal}
                                                             block
@@ -2225,6 +2266,36 @@ export default function OrderDetailPage() {
             </Modal>
 
             {/* =================== INCOME MODAL =================== */}
+            <Modal
+                title="Ссылка для водителя"
+                open={driverLinkModalOpen}
+                onCancel={() => setDriverLinkModalOpen(false)}
+                footer={null}
+                width={520}
+            >
+                <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, marginTop: 0 }}>
+                    Отправьте эту ссылку водителю в WhatsApp. Он откроет её на телефоне, увидит адрес и груз (без сумм), включит геолокацию и будет отмечать статусы. Ссылка работает только по этому адресу — храните её в секрете.
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <Input value={driverLinkUrl} readOnly onFocus={(e) => e.target.select()} />
+                    <Button type="primary" icon={<CopyOutlined />} onClick={() => { navigator.clipboard?.writeText(driverLinkUrl); message.success('Ссылка скопирована'); }}>Копировать</Button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Button
+                        icon={<WhatsAppOutlined />}
+                        style={{ background: '#25D366', color: '#fff', borderColor: '#25D366' }}
+                        onClick={() => {
+                            const text = `Здравствуйте! Ссылка на заявку ${order?.orderNumber}: ${driverLinkUrl}\nОткройте на телефоне, включите геолокацию.`;
+                            const phone = (driverPhone ? String(driverPhone) : '').replace(/\D/g, '');
+                            window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                        }}
+                    >
+                        Отправить в WhatsApp
+                    </Button>
+                    <Button icon={<SwapOutlined />} onClick={regenerateDriverLink} loading={driverLinkLoading}>Перевыпустить</Button>
+                </div>
+            </Modal>
+
             <Modal title="Добавить поступление" open={incomeModalOpen} onCancel={() => setIncomeModalOpen(false)} onOk={() => incomeForm.submit()} okText="Добавить" cancelText="Отмена" confirmLoading={incomeLoading}>
                 <Form form={incomeForm} layout="vertical" onFinish={handleAddIncome}>
                     <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
