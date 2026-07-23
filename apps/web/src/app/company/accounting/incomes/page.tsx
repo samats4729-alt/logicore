@@ -84,7 +84,7 @@ export default function CompanyIncomesPage() {
                     </div>
                     <h1 className="lc2-title">Поступления</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Прочие доходы, не связанные с заявками (разовые поступления, возвраты). Деньги по заявкам ведутся в «Реестре заявок».
+                        Прочие доходы, не связанные с заявками: разовые поступления, возвраты. Деньги по заявкам ведутся в «Реестре заявок».
                     </p>
                     {tab === 'other_incomes' && canEditFinance && (
                         <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIncome(null); form.resetFields(); form.setFieldsValue({ date: dayjs(), accountId: accounts.find(a => a.isDefault)?.id ?? accounts[0]?.id }); setModalOpen(true); }} className="lc-cta">

@@ -100,7 +100,7 @@ export default function FinanceHubPage() {
                 { label: 'Расход денежных средств', href: '/company/accounting/cash-out', show: acc, desc: 'Журнал расходов: создать документ, выбрать статью, счёт, контрагента, заявку' },
                 { label: 'Все операции', href: '/company/accounting/operations', show: acc, desc: 'Вся история денег в одном месте: приходы и расходы' },
                 { label: 'Остатки по кассам', href: '/company/accounting/balances', show: acc, desc: 'Сколько денег сейчас на счетах и в кассах' },
-                { label: 'Движение денежных средств (ДДС)', href: '/company/accounting/cashflow', show: acc, desc: 'Куда пришли и ушли живые деньги за период' },
+                { label: 'Движение денежных средств', href: '/company/accounting/cashflow', show: acc, desc: 'Куда пришли и ушли живые деньги за период' },
                 { label: 'Расходы по статьям', href: '/company/accounting/expenses-by-category', show: acc, desc: 'Все расходы за период, сгруппированные по статьям, с долей каждой' },
                 { label: 'Ввод начальных остатков', href: '/company/accounting/opening-balances', show: acc, desc: 'Стартовые суммы на счетах и долги контрагентов при запуске учёта' },
             ],
@@ -115,7 +115,7 @@ export default function FinanceHubPage() {
         {
             title: 'Прибыль',
             links: [
-                { label: 'Отчёт по прибыли (ПиУ)', href: '/company/accounting/pnl', show: acc, desc: 'Заработок: доход − себестоимость − расходы' },
+                { label: 'Отчёт по прибыли', href: '/company/accounting/pnl', show: acc, desc: 'Заработок: доход − себестоимость − расходы' },
                 { label: 'Прибыль по перевозчику', href: '/company/accounting/carrier-profit', show: acc, desc: 'Сколько заработано на каждом перевозчике: выручка − оплата перевозчику' },
                 { label: 'Все отчёты', href: '/company/reports', show: acc, desc: 'Сводки, аналитика, экспорт' },
             ],
@@ -129,17 +129,17 @@ export default function FinanceHubPage() {
                 { label: 'Формы оплаты', href: '/company/accounting/payment-forms', show: acc, desc: 'Формы оплаты для заявок: безнал, наличные, карта' },
                 { label: 'Формы собственности', href: '/company/accounting/ownership-types', show: acc, desc: 'Организационно-правовые формы контрагентов: ТОО, ИП, АО' },
                 { label: 'Банки', href: '/company/accounting/banks', show: acc, desc: 'Справочник банков и БИК для реквизитов' },
-                { label: 'Нумерация заявок', href: '/company/accounting/order-numbering', show: acc, desc: 'Формат номера как в 1С (000000001) и стартовый номер' },
+                { label: 'Нумерация заявок', href: '/company/accounting/order-numbering', show: acc, desc: 'Формат номера как в 1С и стартовый номер' },
                 { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
             ],
         },
         {
-            title: 'ТМЦ (склад)',
+            title: 'ТМЦ и склад',
             links: [
                 { label: 'Ведомость по остаткам', href: '/company/inventory/balances', show: acc, desc: 'Сколько и чего сейчас на складах' },
                 { label: 'Поступление товаров', href: '/company/inventory/receipts', show: acc, desc: 'Приход ТМЦ на склад от поставщика' },
                 { label: 'Перемещение товаров', href: '/company/inventory/transfers', show: acc, desc: 'Перемещение ТМЦ между складами' },
-                { label: 'Списание материалов', href: '/company/inventory/writeoffs', show: acc, desc: 'Списание ТМЦ со склада (расход, износ, недостача)' },
+                { label: 'Списание материалов', href: '/company/inventory/writeoffs', show: acc, desc: 'Списание ТМЦ со склада: расход, износ, недостача' },
                 { label: 'Номенклатура', href: '/company/inventory/nomenclature', show: acc, desc: 'Справочник товаров и материалов' },
                 { label: 'Склады', href: '/company/inventory/warehouses', show: acc, desc: 'Места хранения ТМЦ' },
             ],

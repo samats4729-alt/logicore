@@ -730,7 +730,7 @@ export default function CompanyContractsPage() {
                     </Form.Item>
                     <Form.Item
                         name="partnerCompanyId"
-                        label={contractMyRole === 'CUSTOMER' ? 'Вторая сторона — Экспедитор (перевозчик)' : 'Вторая сторона — Заказчик'}
+                        label={contractMyRole === 'CUSTOMER' ? 'Вторая сторона — Перевозчик' : 'Вторая сторона — Заказчик'}
                         rules={[{ required: true, message: 'Выберите вторую компанию договора' }]}
                     >
                         <Select

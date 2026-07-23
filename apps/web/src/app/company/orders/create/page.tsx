@@ -1171,13 +1171,13 @@ export default function CreateOrderPage() {
                 {showCustomerPriceField && (
                     <>
                         <Col xs={24} md={6}>
-                            <Form.Item name="customerPaymentCondition" label="Условие оплаты (заказчик)">
+                            <Form.Item name="customerPaymentCondition" label="Условие оплаты заказчика">
                                 <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                     options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
                             </Form.Item>
                         </Col>
                         <Col xs={24} md={6}>
-                            <Form.Item name="customerPaymentForm" label="Форма оплаты (заказчик)">
+                            <Form.Item name="customerPaymentForm" label="Форма оплаты заказчика">
                                 <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                     options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
                             </Form.Item>
@@ -1187,13 +1187,13 @@ export default function CreateOrderPage() {
                 {showDriverCostField && (
                     <>
                         <Col xs={24} md={6}>
-                            <Form.Item name="driverPaymentCondition" label="Условие оплаты (перевозчик)">
+                            <Form.Item name="driverPaymentCondition" label="Условие оплаты перевозчика">
                                 <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                     options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
                             </Form.Item>
                         </Col>
                         <Col xs={24} md={6}>
-                            <Form.Item name="driverPaymentForm" label="Форма оплаты (перевозчик)">
+                            <Form.Item name="driverPaymentForm" label="Форма оплаты перевозчика">
                                 <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                     options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
                             </Form.Item>

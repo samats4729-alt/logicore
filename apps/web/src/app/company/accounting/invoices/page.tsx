@@ -158,7 +158,7 @@ export default function InvoicesPage() {
             ),
         },
         {
-            title: activeTab === 'OUTGOING' ? 'Получатель (клиент)' : 'Отправитель (партнер)',
+            title: activeTab === 'OUTGOING' ? 'Получатель' : 'Отправитель',
             key: 'counterparty',
             render: (_: any, record: any) => {
                 const comp = record.issuerId === user?.companyId ? record.recipient : record.issuer;
@@ -317,7 +317,7 @@ export default function InvoicesPage() {
                     <div className="lc-eyebrow">Финансы · Счета</div>
                     <h1 className="lc2-title">Реестр счетов</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Счета-документы: исходящие — покупателям, входящие — от поставщиков. Это документы на оплату, а не сами деньги (оплаты — в реестре заявок и ДДС).
+                        Исходящие — покупателям, входящие — от поставщиков. Это документы на оплату, а не сами деньги.
                     </p>
                     {isAccountantOrAdmin && (
                         <Button
@@ -365,11 +365,11 @@ export default function InvoicesPage() {
                     items={[
                         {
                             key: 'OUTGOING',
-                            label: `Исходящие (Доходы / От нас клиентам)`,
+                            label: `Исходящие`,
                         },
                         {
                             key: 'INCOMING',
-                            label: `Входящие (Расходы / От партнеров нам)`,
+                            label: `Входящие`,
                         },
                     ]}
                     style={{ marginBottom: 16 }}

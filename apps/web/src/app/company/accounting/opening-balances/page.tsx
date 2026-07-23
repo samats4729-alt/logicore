@@ -139,7 +139,7 @@ export default function OpeningBalancesPage() {
     const cpColumns = (side: 'receivable' | 'payable') => [
         { title: 'Контрагент', dataIndex: 'name', key: 'name', render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
         {
-            title: side === 'receivable' ? 'Нам должны (начальный)' : 'Мы должны (начальный)',
+            title: side === 'receivable' ? 'Дебиторка' : 'Кредиторка',
             key: 'amt',
             align: 'right' as const,
             width: 220,
@@ -187,7 +187,7 @@ export default function OpeningBalancesPage() {
                         },
                         {
                             key: 'customers',
-                            label: <span><InboxOutlined /> Заказчики (нам должны)</span>,
+                            label: <span><InboxOutlined /> Заказчики</span>,
                             children: (
                                 <Table rowKey="id" loading={loading} columns={cpColumns('receivable')} dataSource={customers} size="small"
                                     pagination={{ pageSize: 20, hideOnSinglePage: true }} locale={{ emptyText: 'Нет заказчиков' }} />
@@ -195,7 +195,7 @@ export default function OpeningBalancesPage() {
                         },
                         {
                             key: 'carriers',
-                            label: <span><CarOutlined /> Перевозчики (мы должны)</span>,
+                            label: <span><CarOutlined /> Перевозчики</span>,
                             children: (
                                 <Table rowKey="id" loading={loading} columns={cpColumns('payable')} dataSource={carriers} size="small"
                                     pagination={{ pageSize: 20, hideOnSinglePage: true }} locale={{ emptyText: 'Нет перевозчиков' }} />
@@ -218,7 +218,7 @@ export default function OpeningBalancesPage() {
             </Modal>
 
             {/* Модалка контрагента */}
-            <Modal open={!!cpModal} title={cpModal ? `${cpModal.side === 'receivable' ? 'Нам должны' : 'Мы должны'} — ${cpModal.partner.name}` : ''} onCancel={() => setCpModal(null)} onOk={() => cpForm.submit()} okText="Сохранить" cancelText="Отмена" destroyOnClose>
+            <Modal open={!!cpModal} title={cpModal ? `${cpModal.side === 'receivable' ? 'Дебиторка' : 'Кредиторка'} — ${cpModal.partner.name}` : ''} onCancel={() => setCpModal(null)} onOk={() => cpForm.submit()} okText="Сохранить" cancelText="Отмена" destroyOnClose>
                 <Form form={cpForm} layout="vertical" onFinish={saveCp} style={{ marginTop: 12 }}>
                     <Form.Item name="amount" label={cpModal?.side === 'receivable' ? 'Долг заказчика перед нами на дату начала' : 'Наш долг перед перевозчиком на дату начала'}>
                         <InputNumber size="large" style={{ width: '100%' }} min={0} formatter={moneyFmt} parser={moneyParse} addonAfter="₸" />

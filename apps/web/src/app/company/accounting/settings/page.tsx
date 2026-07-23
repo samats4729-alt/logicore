@@ -42,7 +42,7 @@ interface ServiceItem {
 const COST_TYPE_OPTIONS: { value: CostType; label: string; hint: string }[] = [
     { value: 'PER_ORDER', label: 'По заявке', hint: 'Себестоимость рейса — уменьшает маржу заявки' },
     { value: 'PER_VEHICLE', label: 'По машине', hint: 'Расход конкретного грузовика' },
-    { value: 'GENERAL', label: 'Общехозяйственный', hint: 'Общий расход фирмы (аренда, зарплата…)' },
+    { value: 'GENERAL', label: 'Общехозяйственный', hint: 'Общий расход фирмы: аренда, зарплата…' },
 ];
 const COST_TYPE_LABELS: Record<string, string> = { PER_ORDER: 'По заявке', PER_VEHICLE: 'По машине', GENERAL: 'Общехозяйственный' };
 const COST_TYPE_COLORS: Record<string, string> = { PER_ORDER: 'blue', PER_VEHICLE: 'purple', GENERAL: 'default' };

@@ -1601,25 +1601,25 @@ export default function OrderDetailPage() {
 
                                                 <Row gutter={16}>
                                                     <Col xs={24} md={12}>
-                                                        <Form.Item name="customerPaymentCondition" label="Условие оплаты (заказчик)">
+                                                        <Form.Item name="customerPaymentCondition" label="Условие оплаты заказчика">
                                                             <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                                                 options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
                                                         </Form.Item>
                                                     </Col>
                                                     <Col xs={24} md={12}>
-                                                        <Form.Item name="customerPaymentForm" label="Форма оплаты (заказчик)">
+                                                        <Form.Item name="customerPaymentForm" label="Форма оплаты заказчика">
                                                             <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                                                 options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
                                                         </Form.Item>
                                                     </Col>
                                                     <Col xs={24} md={12}>
-                                                        <Form.Item name="driverPaymentCondition" label="Условие оплаты (перевозчик)">
+                                                        <Form.Item name="driverPaymentCondition" label="Условие оплаты перевозчика">
                                                             <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                                                 options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
                                                         </Form.Item>
                                                     </Col>
                                                     <Col xs={24} md={12}>
-                                                        <Form.Item name="driverPaymentForm" label="Форма оплаты (перевозчик)">
+                                                        <Form.Item name="driverPaymentForm" label="Форма оплаты перевозчика">
                                                             <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                                                 options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
                                                         </Form.Item>
@@ -2171,7 +2171,7 @@ export default function OrderDetailPage() {
                                 showIcon
                                 style={{ marginBottom: 16 }}
                                 message={`По заявке проведены оплаты на ${paidTotal.toLocaleString('ru-RU')} ₸`}
-                                description="При отмене они останутся в учёте (в «Все операции» и ДДС) — деньги не пропадут. Если сумму вернут — оформите возврат (входящий платёж) по контрагенту; если нет — спишите как убыток в «Расходах»."
+                                description="При отмене они останутся в учёте — в «Все операции» и ДДС, деньги не пропадут. Если сумму вернут — оформите входящий платёж по контрагенту; если нет — спишите как убыток в «Расходах»."
                             />
                         );
                     })()}

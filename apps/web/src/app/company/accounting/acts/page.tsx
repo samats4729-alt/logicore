@@ -148,7 +148,7 @@ export default function ActsJournalPage() {
                     Акт составляется по заявке. Выберите заявку — откроется готовый акт для проверки и печати.
                 </p>
                 <Select
-                    placeholder="Выберите заявку (по номеру или заказчику)"
+                    placeholder="Выберите заявку по номеру или заказчику"
                     style={{ width: '100%' }}
                     showSearch optionFilterProp="label"
                     value={pickOrder}

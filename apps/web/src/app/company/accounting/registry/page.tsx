@@ -653,13 +653,13 @@ export default function FinancialRegistryPage() {
                                 <Row gutter={12}>
                                     <Col span={12}>
                                         <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: token.colorBgLayout, marginBottom: 8, border: 'none' }}>
-                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>Ставка заказчика (Гросс)</div>
+                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>Ставка заказчика</div>
                                             <div style={{ fontSize: 16, fontWeight: 700, color: token.colorText }}>{fmt(o.customerPrice || 0)} ₸</div>
                                         </Card>
                                     </Col>
                                     <Col span={12}>
                                         <Card size="small" bodyStyle={{ padding: 12 }} style={{ background: token.colorBgLayout, marginBottom: 8, border: 'none' }}>
-                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>Ставка перевозчика (Гросс)</div>
+                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>Ставка перевозчика</div>
                                             <div style={{ fontSize: 16, fontWeight: 700, color: token.colorText }}>{fmt(getExecutorCost(o))} ₸</div>
                                         </Card>
                                     </Col>

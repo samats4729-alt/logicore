@@ -24,9 +24,9 @@ const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
 const num = (v: number) => (v || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
 
 const CFG: Record<MoveType, { title: string; eyebrow: string; create: string; whLabel: string; hasTo: boolean; hasCounterparty: boolean; hasPrice: boolean; icon: any }> = {
-    receipt: { title: 'Поступление товаров и услуг', eyebrow: 'ТМЦ · Документы', create: 'Создать поступление', whLabel: 'Склад (куда приходуем)', hasTo: false, hasCounterparty: true, hasPrice: true, icon: <InboxOutlined /> },
+    receipt: { title: 'Поступление товаров и услуг', eyebrow: 'ТМЦ · Документы', create: 'Создать поступление', whLabel: 'Склад поступления', hasTo: false, hasCounterparty: true, hasPrice: true, icon: <InboxOutlined /> },
     transfer: { title: 'Перемещение товаров', eyebrow: 'ТМЦ · Документы', create: 'Создать перемещение', whLabel: 'Склад-отправитель', hasTo: true, hasCounterparty: false, hasPrice: false, icon: <SwapOutlined /> },
-    writeoff: { title: 'Списание материалов', eyebrow: 'ТМЦ · Документы', create: 'Создать списание', whLabel: 'Склад (откуда списываем)', hasTo: false, hasCounterparty: false, hasPrice: false, icon: <ExportOutlined /> },
+    writeoff: { title: 'Списание материалов', eyebrow: 'ТМЦ · Документы', create: 'Создать списание', whLabel: 'Склад списания', hasTo: false, hasCounterparty: false, hasPrice: false, icon: <ExportOutlined /> },
 };
 
 export default function StockMoveJournal({ type }: { type: MoveType }) {
@@ -223,7 +223,7 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
                         </Form.Item>
                     )}
                     {type === 'writeoff' && (
-                        <Form.Item name="expenseCategory" label="Статья затрат" extra="Списание попадёт в расход (Прибыли и убытки / Расходы по статьям) по себестоимости. Кассу не трогает.">
+                        <Form.Item name="expenseCategory" label="Статья затрат" extra="Списание попадёт в расход по себестоимости — в отчёт «Прибыли и убытки». Кассу не трогает.">
                             <Select
                                 placeholder="Списание материалов"
                                 showSearch optionFilterProp="label" allowClear
