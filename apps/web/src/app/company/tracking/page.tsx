@@ -557,6 +557,7 @@ export default function CompanyTrackingPage() {
                     myLocation={myLocation}
                     getDriverColor={getDriverColor}
                     onReady={(m) => { dgisMapRef.current = m; }}
+                    autoFit
                 />
 
                 {popupInfo && (

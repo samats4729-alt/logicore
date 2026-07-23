@@ -1814,6 +1814,15 @@ export default function OrderDetailPage() {
                                                                     onDriverClick={() => { }}
                                                                     myLocation={null}
                                                                     getDriverColor={() => '#16a34a'}
+                                                                    autoFit
+                                                                    extraPoints={(order.routePoints || [])
+                                                                        .filter((p: any) => p.location?.latitude && p.location?.longitude)
+                                                                        .map((p: any) => ({
+                                                                            latitude: p.location.latitude,
+                                                                            longitude: p.location.longitude,
+                                                                            label: p.location.city || p.location.address,
+                                                                            color: p.pointType === 'DELIVERY' ? '#dc2626' : '#2563eb',
+                                                                        }))}
                                                                 />
                                                             </div>
                                                         </div>

@@ -64,35 +64,85 @@ export class TrackingService {
         // Получаем последнюю точку для каждого водителя за последний час
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
+        // Заявки компании: она может быть заказчиком, экспедитором, суб-экспедитором,
+        // партнёром или ответственным менеджером — а не только заказчиком.
+        const companyScope = companyId ? {
+            OR: [
+                { customerCompanyId: companyId },
+                { forwarderId: companyId },
+                { partnerId: companyId },
+                { subForwarderId: companyId },
+                { responsibleManager: { companyId } },
+            ],
+        } : {};
+
         const points = await this.prisma.gpsPoint.findMany({
             where: {
                 recordedAt: { gte: oneHourAgo },
-                order: companyId ? { customerCompanyId: companyId } : undefined,
+                order: companyId ? companyScope : undefined,
             },
             orderBy: { recordedAt: 'desc' },
             distinct: ['driverId'],
             include: {
-                driver: {
-                    select: { id: true, firstName: true, lastName: true, vehiclePlate: true },
-                },
-                order: {
-                    select: { id: true, orderNumber: true, status: true },
-                },
+                driver: { select: { id: true, firstName: true, lastName: true, vehiclePlate: true } },
+                order: { select: { id: true, orderNumber: true, status: true } },
             },
         });
 
-        // Форматируем для карты
-        return points.map(point => ({
-            driverId: point.driverId,
-            driverName: `${point.driver.lastName} ${point.driver.firstName}`,
-            vehiclePlate: point.driver.vehiclePlate || '',
-            latitude: point.latitude,
-            longitude: point.longitude,
-            speed: point.speed,
-            heading: point.heading,
-            updatedAt: point.recordedAt.toISOString(),
-            orderId: point.order?.id,
-            orderNumber: point.order?.orderNumber,
-        }));
+        // Водители по веб-ссылке — местоположение хранится прямо в заявке (без учётки/GpsPoint)
+        const linkOrders = await this.prisma.order.findMany({
+            where: {
+                driverLat: { not: null },
+                driverLng: { not: null },
+                driverLocationAt: { gte: oneHourAgo },
+                status: { notIn: ['DRAFT', 'CANCELLED', 'COMPLETED'] },
+                ...(companyId ? companyScope : {}),
+            },
+            select: {
+                id: true, orderNumber: true, status: true,
+                driverLat: true, driverLng: true, driverSpeed: true, driverHeading: true, driverLocationAt: true,
+                driverId: true, assignedDriverName: true, assignedDriverPlate: true,
+                driver: { select: { firstName: true, lastName: true, vehiclePlate: true } },
+            },
+        });
+
+        // Ключ — по заявке (одна заявка = один грузовик), берём самое свежее
+        const byKey = new Map<string, any>();
+        const put = (row: any) => {
+            const key = row.orderId || row.driverId;
+            const prev = byKey.get(key);
+            if (!prev || new Date(row.updatedAt) > new Date(prev.updatedAt)) byKey.set(key, row);
+        };
+
+        for (const p of points) {
+            put({
+                driverId: p.driverId,
+                driverName: `${p.driver.lastName || ''} ${p.driver.firstName || ''}`.trim() || 'Водитель',
+                vehiclePlate: p.driver.vehiclePlate || '',
+                latitude: p.latitude,
+                longitude: p.longitude,
+                speed: p.speed,
+                heading: p.heading,
+                updatedAt: p.recordedAt.toISOString(),
+                orderId: p.order?.id,
+                orderNumber: p.order?.orderNumber,
+            });
+        }
+        for (const o of linkOrders) {
+            put({
+                driverId: o.driverId || `order_${o.id}`,
+                driverName: o.assignedDriverName || `${o.driver?.lastName || ''} ${o.driver?.firstName || ''}`.trim() || 'Водитель',
+                vehiclePlate: o.assignedDriverPlate || o.driver?.vehiclePlate || '',
+                latitude: o.driverLat,
+                longitude: o.driverLng,
+                speed: o.driverSpeed || 0,
+                heading: o.driverHeading || 0,
+                updatedAt: (o.driverLocationAt || new Date()).toISOString(),
+                orderId: o.id,
+                orderNumber: o.orderNumber,
+            });
+        }
+
+        return Array.from(byKey.values());
     }
 }
