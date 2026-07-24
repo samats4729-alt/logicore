@@ -470,18 +470,27 @@ export class PaymentsService {
         if (order.subForwarderId) {
             const subForwarderPrice = order.subForwarderPrice || 0;
             isSubForwarderPaid = hasPaidIncomingInvoice || (subForwarderPrice > 0 && moneyGte(paidOut, subForwarderPrice));
-            subForwarderPaidAt = isSubForwarderPaid ? (order.subForwarderPaidAt || new Date()) : null;
+            // Дата оплаты — снимок реального события платежа. Если платежи всё ещё
+            // есть, но их стало недостаточно из-за повышения ставки задним числом,
+            // дату не затираем (см. H-4) — обнуляем только когда платежей нет вовсе.
+            subForwarderPaidAt = isSubForwarderPaid
+                ? (order.subForwarderPaidAt || new Date())
+                : (paidOut > 0 ? order.subForwarderPaidAt : null);
         } else {
             const driverCost = order.driverCost || 0;
             isDriverPaid = hasPaidIncomingInvoice || (driverCost > 0 && moneyGte(paidOut, driverCost));
-            driverPaidAt = isDriverPaid ? (order.driverPaidAt || new Date()) : null;
+            driverPaidAt = isDriverPaid
+                ? (order.driverPaidAt || new Date())
+                : (paidOut > 0 ? order.driverPaidAt : null);
         }
 
         await this.prisma.order.update({
             where: { id: orderId },
             data: {
                 isCustomerPaid,
-                customerPaidAt: isCustomerPaid ? (order.customerPaidAt || new Date()) : null,
+                customerPaidAt: isCustomerPaid
+                    ? (order.customerPaidAt || new Date())
+                    : (paidIn > 0 ? order.customerPaidAt : null),
                 isDriverPaid,
                 driverPaidAt,
                 isSubForwarderPaid,
@@ -541,6 +550,14 @@ export class PaymentsService {
                 await this.deletePayment(companyId, p.id, userId);
             }
             await this.syncOrderPaymentFlags(orderId);
+
+            // Удалили только автоматически созданные платежи. Если флаг всё равно
+            // остался true — по заявке есть платежи, введённые вручную, снять
+            // отметку молча нельзя: сообщаем об этом явно вместо тихого no-op.
+            const refreshed = await this.prisma.order.findUnique({ where: { id: orderId }, select: { isCustomerPaid: true } });
+            if (refreshed?.isCustomerPaid) {
+                throw new BadRequestException('Не удалось снять отметку об оплате: по заявке есть платежи, введённые вручную. Удалите или скорректируйте их в журнале платежей.');
+            }
         }
 
         return this.prisma.order.findUnique({ where: { id: orderId } });
@@ -593,6 +610,11 @@ export class PaymentsService {
                 await this.deletePayment(companyId, p.id, userId);
             }
             await this.syncOrderPaymentFlags(orderId);
+
+            const refreshed = await this.prisma.order.findUnique({ where: { id: orderId }, select: { isDriverPaid: true } });
+            if (refreshed?.isDriverPaid) {
+                throw new BadRequestException('Не удалось снять отметку об оплате: по заявке есть платежи, введённые вручную. Удалите или скорректируйте их в журнале платежей.');
+            }
         }
 
         return this.prisma.order.findUnique({ where: { id: orderId } });
@@ -645,6 +667,11 @@ export class PaymentsService {
                 await this.deletePayment(companyId, p.id, userId);
             }
             await this.syncOrderPaymentFlags(orderId);
+
+            const refreshed = await this.prisma.order.findUnique({ where: { id: orderId }, select: { isSubForwarderPaid: true } });
+            if (refreshed?.isSubForwarderPaid) {
+                throw new BadRequestException('Не удалось снять отметку об оплате: по заявке есть платежи, введённые вручную. Удалите или скорректируйте их в журнале платежей.');
+            }
         }
 
         return this.prisma.order.findUnique({ where: { id: orderId } });

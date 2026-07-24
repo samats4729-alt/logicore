@@ -4,6 +4,7 @@ import { UserRole, OrderStatus, InvoiceStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { RedisService } from '../redis/redis.service';
 import { PaymentsService } from '../accounting/services/payments.service';
+import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
 
@@ -91,6 +92,7 @@ export class OrdersService implements OnModuleInit {
         private prisma: PrismaService,
         private redis: RedisService,
         private paymentsService: PaymentsService,
+        private periodClosingService: PeriodClosingService,
         private notificationsService: NotificationsService,
         private payrollService: PayrollService,
     ) { }
@@ -656,6 +658,18 @@ export class OrdersService implements OnModuleInit {
                 completedAt: status === OrderStatus.COMPLETED
                     ? new Date()
                     : (order.status === OrderStatus.COMPLETED ? null : undefined),
+                // Отмена заявки: сами платежи (Payment) не трогаем — это реальные деньги,
+                // их дальнейшая судьба (возврат/перенос) остаётся на решение бухгалтера.
+                // Но флаги «оплачено» сбрасываем, чтобы отменённая заявка не выглядела
+                // оплаченной в реестрах и отчётах.
+                ...(status === OrderStatus.CANCELLED ? {
+                    isCustomerPaid: false,
+                    customerPaidAt: null,
+                    isDriverPaid: false,
+                    driverPaidAt: null,
+                    isSubForwarderPaid: false,
+                    subForwarderPaidAt: null,
+                } : {}),
                 pendingStatus: null,
                 pendingStatusById: null,
                 pendingStatusAt: null,
@@ -675,6 +689,12 @@ export class OrdersService implements OnModuleInit {
 
         if (status === OrderStatus.CANCELLED) {
             await this.cancelInvoicesForCancelledOrder(orderId);
+        }
+
+        // Заявку вернули из «Отменён» в работу: платежи никуда не делись, поэтому
+        // пересчитываем флаги оплаты сразу, а не ждём следующего события по платежам.
+        if (order.status === OrderStatus.CANCELLED && status !== OrderStatus.CANCELLED) {
+            await this.paymentsService.syncOrderPaymentFlags(orderId);
         }
 
         try {
@@ -917,6 +937,15 @@ export class OrdersService implements OnModuleInit {
             if (!isAdmin && !isCreator && !isRegisteredCustomerCompany) {
                 throw new ForbiddenException('У вас нет прав на редактирование этой заявки');
             }
+        }
+
+        // Правка финансовых полей задним числом запрещена, если период уже закрыт
+        // (иначе этот путь обходил бы закрытие периода, доступное через accounting).
+        if (
+            user?.companyId &&
+            (data.customerPrice !== undefined || data.driverCost !== undefined || data.subForwarderPrice !== undefined)
+        ) {
+            await this.periodClosingService.checkPeriodNotClosed(user.companyId, order.completedAt || order.createdAt);
         }
 
         // Собираем данные для обновления
