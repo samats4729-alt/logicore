@@ -22,7 +22,7 @@ function makePrismaMock() {
 }
 
 function makeService(prisma: ReturnType<typeof makePrismaMock>) {
-    const service = new InvoiceService(prisma as any, {} as any, {} as any, {} as any);
+    const service = new InvoiceService(prisma as any, {} as any, {} as any, {} as any, {} as any);
     jest.spyOn(service, 'getInvoiceDetails').mockResolvedValue({ id: 'inv-1' } as any);
     return service;
 }
@@ -93,6 +93,21 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
             COMPANY,
             'user-1',
             baseDto({ type: InvoiceType.INCOMING, issuerId: SUB, recipientId: COMPANY, orderIds: ['o1'] }),
+        );
+
+        const data = prisma.invoice.create.mock.calls[0][0].data;
+        expect(data.amount).toBe(120000);
+    });
+
+    it('исходящий счёт от субэкспедитора: берётся его ставка, а не цена заказчика', async () => {
+        prisma.order.findMany.mockResolvedValue([
+            { id: 'o1', orderNumber: 'N1', customerPrice: 250000, subForwarderPrice: 120000, subForwarderId: SUB, outgoingInvoiceId: null },
+        ]);
+
+        await service.createInvoice(
+            COMPANY,
+            'user-1',
+            baseDto({ type: InvoiceType.OUTGOING, issuerId: SUB, recipientId: CARRIER, orderIds: ['o1'] }),
         );
 
         const data = prisma.invoice.create.mock.calls[0][0].data;
