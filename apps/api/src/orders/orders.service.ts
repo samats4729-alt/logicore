@@ -408,6 +408,25 @@ export class OrdersService implements OnModuleInit {
             if (!isOwner && !isDriver && !isManager && !isCompanyOrder) {
                 throw new ForbiddenException('У вас нет доступа к этой заявке');
             }
+
+            // Заказчик не должен видеть себестоимость исполнителя (маржу
+            // экспедитора/партнёра) — только свою цену. Не скрываем, если
+            // компания одновременно исполнитель по этой же заявке.
+            const isCustomerOnly = !!companyId
+                && order.customerCompanyId === companyId
+                && order.forwarderId !== companyId
+                && order.partnerId !== companyId
+                && order.subForwarderId !== companyId;
+            if (isCustomerOnly) {
+                (order as any).driverCost = null;
+                (order as any).subForwarderPrice = null;
+                (order as any).subForwarderId = null;
+                (order as any).isDriverPaid = false;
+                (order as any).driverPaidAt = null;
+                (order as any).isSubForwarderPaid = false;
+                (order as any).subForwarderPaidAt = null;
+                (order as any).partner = null;
+            }
         }
 
         return order;
