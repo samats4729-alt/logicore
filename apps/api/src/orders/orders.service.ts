@@ -1409,23 +1409,42 @@ export class OrdersService implements OnModuleInit {
      * Взять заявку в работу с биржи
      */
     async takeOrder(orderId: string, companyId: string, userId?: string) {
-        const order = await this.findById(orderId);
-        if (order.forwarderId) throw new ForbiddenException('Заявка уже занята другим экспедитором');
-        if (order.status !== OrderStatus.PENDING) throw new ForbiddenException('Заявка не доступна для взятия');
-
-        const updated = await this.prisma.order.update({
-            where: { id: orderId },
-            data: {
-                forwarderId: companyId,
-                status: OrderStatus.PENDING,
-                isConfirmed: true, // Подтверждается автоматически при взятии
-                statusHistory: {
-                    create: {
-                        status: OrderStatus.PENDING,
-                        comment: 'Заявка взята экспедитором с биржи',
-                    },
+        const updated = await this.prisma.$transaction(async (tx) => {
+            // Условие входит в сам UPDATE: два параллельных запроса не смогут
+            // одновременно увидеть пустой forwarderId и перезаписать друг друга.
+            const claim = await tx.order.updateMany({
+                where: {
+                    id: orderId,
+                    forwarderId: null,
+                    status: OrderStatus.PENDING,
                 },
-            },
+                data: {
+                    forwarderId: companyId,
+                    isConfirmed: true,
+                },
+            });
+
+            if (claim.count !== 1) {
+                const current = await tx.order.findUnique({
+                    where: { id: orderId },
+                    select: { id: true, forwarderId: true, status: true },
+                });
+                if (!current) throw new NotFoundException('Заявка не найдена');
+                if (current.forwarderId) {
+                    throw new ForbiddenException('Заявка уже занята другим экспедитором');
+                }
+                throw new ForbiddenException('Заявка не доступна для взятия');
+            }
+
+            await tx.orderStatusHistory.create({
+                data: {
+                    orderId,
+                    status: OrderStatus.PENDING,
+                    comment: 'Заявка взята экспедитором с биржи',
+                },
+            });
+
+            return tx.order.findUniqueOrThrow({ where: { id: orderId } });
         });
 
         // Кто взял с биржи — тот и ведёт заявку со стороны своей компании
