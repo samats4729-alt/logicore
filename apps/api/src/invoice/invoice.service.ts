@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoiceType, InvoiceStatus } from '@prisma/client';
@@ -34,15 +34,56 @@ export class InvoiceService {
             throw new BadRequestException('Счет должен содержать как минимум один заказ');
         }
 
-        // Загрузим заказы
+        if (dto.issuerId === dto.recipientId) {
+            throw new BadRequestException('Эмитент и получатель счёта должны отличаться');
+        }
+
+        if (
+            (dto.type === InvoiceType.OUTGOING && dto.issuerId !== companyId)
+            || (dto.type === InvoiceType.INCOMING && dto.recipientId !== companyId)
+        ) {
+            throw new ForbiddenException('Нельзя создать счёт от имени другой компании');
+        }
+
+        // Загружаем только те заявки, в которых выбранная компания и указанный
+        // контрагент действительно участвуют. Одних известных ID недостаточно:
+        // иначе можно было включить в счёт чужие рейсы прямым запросом к API.
+        const participantWhere = dto.type === InvoiceType.OUTGOING
+            ? {
+                customerCompanyId: dto.recipientId,
+                OR: [
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId } },
+                ],
+            }
+            : {
+                AND: [
+                    {
+                        OR: [
+                            { partnerId: dto.issuerId },
+                            { subForwarderId: dto.issuerId },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                        ],
+                    },
+                ],
+            };
+
         const orders = await this.prisma.order.findMany({
             where: {
                 id: { in: dto.orderIds },
+                ...participantWhere,
             },
         });
 
         if (orders.length !== dto.orderIds.length) {
-            throw new BadRequestException('Некоторые заказы не найдены');
+            throw new BadRequestException('Некоторые заявки не найдены, недоступны или не относятся к выбранному контрагенту');
         }
 
         // Проверим, что заказы еще не выставлены в счет по данному типу

@@ -105,7 +105,7 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
         ]);
 
         await service.createInvoice(
-            COMPANY,
+            SUB,
             'user-1',
             baseDto({ type: InvoiceType.OUTGOING, issuerId: SUB, recipientId: CARRIER, orderIds: ['o1'] }),
         );
@@ -130,6 +130,33 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
             service.createInvoice(COMPANY, 'user-1', baseDto({ orderIds: [] })),
         ).rejects.toThrow(BadRequestException);
         expect(prisma.invoice.create).not.toHaveBeenCalled();
+    });
+
+    it('не позволяет создать исходящий счёт от имени чужой компании', async () => {
+        await expect(
+            service.createInvoice(COMPANY, 'user-1', baseDto({ issuerId: SUB })),
+        ).rejects.toThrow('Нельзя создать счёт от имени другой компании');
+        expect(prisma.order.findMany).not.toHaveBeenCalled();
+    });
+
+    it('ограничивает выбор заявок компанией и контрагентом счёта', async () => {
+        prisma.order.findMany.mockResolvedValue([]);
+
+        await expect(
+            service.createInvoice(COMPANY, 'user-1', baseDto({ orderIds: ['foreign-order'] })),
+        ).rejects.toThrow('не найдены, недоступны');
+        expect(prisma.order.findMany).toHaveBeenCalledWith({
+            where: {
+                id: { in: ['foreign-order'] },
+                customerCompanyId: 'company-customer',
+                OR: [
+                    { forwarderId: COMPANY },
+                    { partnerId: COMPANY },
+                    { subForwarderId: COMPANY },
+                    { responsibleManager: { companyId: COMPANY } },
+                ],
+            },
+        });
     });
 
     it('отклоняет счёт, если часть заявок не найдена', async () => {
@@ -164,7 +191,12 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
             service.createInvoice(
                 COMPANY,
                 'user-1',
-                baseDto({ type: InvoiceType.INCOMING, issuerId: CARRIER, orderIds: ['o1'] }),
+                baseDto({
+                    type: InvoiceType.INCOMING,
+                    issuerId: CARRIER,
+                    recipientId: COMPANY,
+                    orderIds: ['o1'],
+                }),
             ),
         ).resolves.toBeDefined();
     });
