@@ -7,6 +7,7 @@ import { IdentityService } from '../identity/identity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import { UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -19,6 +20,7 @@ export class AuthService {
         private redisService: RedisService,
         private emailService: EmailService,
         private identityService: IdentityService,
+        private auditService: AuditService,
     ) { }
 
     // ==================== EMAIL AUTH (для остальных ролей) ====================
@@ -353,131 +355,27 @@ export class AuthService {
         // Определяем роль на основе типа компании
         const userRole = UserRole.COMPANY_ADMIN;
 
-        // Создаём или обновляем компанию и админа в транзакции
+        // Создаём компанию и админа в транзакции.
+        //
+        // Раньше при совпадении БИН с уже существующей «внешней» компанией (контрагентом,
+        // которого кто-то другой завёл в своей базе) система автоматически присваивала
+        // регистранту её историю: заявки, договоры, партнёрства — без всякой проверки, что
+        // регистрант действительно владеет этим БИН. БИН/ИИН в РК — публичные данные, поэтому
+        // это позволяло получить доступ к чужой истории заявок и суммам, просто зная БИН.
+        // Теперь регистрация ВСЕГДА создаёт новую компанию; совпадение с внешними записями
+        // только логируется для ручной проверки платформенным админом (см. AuditLog).
         const result = await this.prisma.$transaction(async (tx) => {
-            let company;
-
-            if (externalCompanies.length > 0) {
-                // Берем первую внешнюю компанию как основную
-                const mainCompany = externalCompanies[0];
-                company = await tx.company.update({
-                    where: { id: mainCompany.id },
-                    data: {
-                        isExternal: false,
-                        name: data.companyName,
-                        email: data.adminEmail,
-                        phone: data.phone,
-                        type: data.companyType,
-                    },
-                });
-
-                // Создаем партнерство для первой (основной) внешней компании
-                if (mainCompany.createdByCompanyId) {
-                    const existing = await tx.partnership.findFirst({
-                        where: {
-                            OR: [
-                                { requesterId: mainCompany.createdByCompanyId, recipientId: mainCompany.id },
-                                { requesterId: mainCompany.id, recipientId: mainCompany.createdByCompanyId }
-                            ]
-                        }
-                    });
-                    if (!existing) {
-                        await tx.partnership.create({
-                            data: {
-                                requesterId: mainCompany.createdByCompanyId,
-                                recipientId: mainCompany.id,
-                                status: 'ACCEPTED',
-                            }
-                        });
-                    } else if (existing.status !== 'ACCEPTED') {
-                        await tx.partnership.update({
-                            where: { id: existing.id },
-                            data: { status: 'ACCEPTED' }
-                        });
-                    }
-                }
-
-                // Если есть дубликаты, переносим их связи на основную и удаляем
-                const duplicates = externalCompanies.slice(1);
-                for (const dup of duplicates) {
-                    await tx.order.updateMany({
-                        where: { customerCompanyId: dup.id },
-                        data: { customerCompanyId: mainCompany.id },
-                    });
-                    await tx.order.updateMany({
-                        where: { forwarderId: dup.id },
-                        data: { forwarderId: mainCompany.id },
-                    });
-                    await tx.order.updateMany({
-                        where: { partnerId: dup.id },
-                        data: { partnerId: mainCompany.id },
-                    });
-                    await tx.order.updateMany({
-                        where: { subForwarderId: dup.id },
-                        data: { subForwarderId: mainCompany.id },
-                    });
-                    await tx.contract.updateMany({
-                        where: { customerCompanyId: dup.id },
-                        data: { customerCompanyId: mainCompany.id },
-                    });
-                    await tx.contract.updateMany({
-                        where: { forwarderCompanyId: dup.id },
-                        data: { forwarderCompanyId: mainCompany.id },
-                    });
-
-                    // Создаем партнерство для создателя дубликата с основной компанией
-                    if (dup.createdByCompanyId) {
-                        const existing = await tx.partnership.findFirst({
-                            where: {
-                                OR: [
-                                    { requesterId: dup.createdByCompanyId, recipientId: mainCompany.id },
-                                    { requesterId: mainCompany.id, recipientId: dup.createdByCompanyId }
-                                ]
-                            }
-                        });
-                        if (!existing) {
-                            await tx.partnership.create({
-                                data: {
-                                    requesterId: dup.createdByCompanyId,
-                                    recipientId: mainCompany.id,
-                                    status: 'ACCEPTED',
-                                }
-                            });
-                        } else if (existing.status !== 'ACCEPTED') {
-                            await tx.partnership.update({
-                                where: { id: existing.id },
-                                data: { status: 'ACCEPTED' }
-                            });
-                        }
-                    }
-
-                    // Удаляем связи партнерства дубликата, чтобы база разрешила его удаление
-                    await tx.partnership.deleteMany({
-                        where: {
-                            OR: [
-                                { requesterId: dup.id },
-                                { recipientId: dup.id }
-                            ]
-                        }
-                    });
-
-                    await tx.company.delete({
-                        where: { id: dup.id },
-                    });
-                }
-            } else {
-                company = await tx.company.create({
-                    data: {
-                        name: data.companyName,
-                        bin: data.bin,
-                        email: data.adminEmail,
-                        phone: data.phone,
-                        type: data.companyType,
-                        isOurCompany: false,
-                        isExternal: false,
-                    },
-                });
-            }
+            const company = await tx.company.create({
+                data: {
+                    name: data.companyName,
+                    bin: data.bin,
+                    email: data.adminEmail,
+                    phone: data.phone,
+                    type: data.companyType,
+                    isOurCompany: false,
+                    isExternal: false,
+                },
+            });
 
             // Хешируем пароль
             const passwordHash = await bcrypt.hash(data.adminPassword, 12);
@@ -512,6 +410,25 @@ export class AuthService {
             await this.identityService.syncMembership(result.admin.id, result.company.id, userRole as any, { isPrimary: true });
         } catch (e) {
             console.warn('syncMembership (register-company) failed:', e);
+        }
+
+        // Если под этим БИН уже были заведены внешние (isExternal) компании — это
+        // не сливается автоматически (см. комментарий выше), но платформенный админ
+        // должен об этом узнать, чтобы вручную проверить и при необходимости объединить.
+        if (externalCompanies.length > 0) {
+            await this.auditService.log({
+                companyId: null,
+                user: { id: result.admin.id, firstName: result.admin.firstName, lastName: result.admin.lastName, role: result.admin.role },
+                action: 'CREATE',
+                entity: 'company_bin_conflict',
+                entityId: result.company.id,
+                entityLabel: `Компания «${result.company.name}» (БИН ${data.bin})`,
+                details: {
+                    reason: 'При регистрации найдены внешние записи с тем же БИН — требуется ручная проверка',
+                    externalCompanyIds: externalCompanies.map(c => c.id),
+                    externalCompanyNames: externalCompanies.map(c => c.name),
+                },
+            });
         }
 
         // Генерируем токен
@@ -710,130 +627,21 @@ export class AuthService {
 
         const userRole = UserRole.COMPANY_ADMIN;
 
+        // См. комментарий в registerCompany: регистрация всегда создаёт новую компанию,
+        // совпадение БИН с внешними записями не приводит к автоматическому присвоению
+        // их истории — только логируется для ручной проверки платформенным админом.
         const result = await this.prisma.$transaction(async (tx) => {
-            let company;
-
-            if (externalCompanies.length > 0) {
-                // Берем первую внешнюю компанию как основную
-                const mainCompany = externalCompanies[0];
-                company = await tx.company.update({
-                    where: { id: mainCompany.id },
-                    data: {
-                        isExternal: false,
-                        name: data.companyName,
-                        email: googleData.email || undefined,
-                        phone: data.phone,
-                        type: data.companyType,
-                    },
-                });
-
-                // Создаем партнерство для первой (основной) внешней компании
-                if (mainCompany.createdByCompanyId) {
-                    const existing = await tx.partnership.findFirst({
-                        where: {
-                            OR: [
-                                { requesterId: mainCompany.createdByCompanyId, recipientId: mainCompany.id },
-                                { requesterId: mainCompany.id, recipientId: mainCompany.createdByCompanyId }
-                            ]
-                        }
-                    });
-                    if (!existing) {
-                        await tx.partnership.create({
-                            data: {
-                                requesterId: mainCompany.createdByCompanyId,
-                                recipientId: mainCompany.id,
-                                status: 'ACCEPTED',
-                            }
-                        });
-                    } else if (existing.status !== 'ACCEPTED') {
-                        await tx.partnership.update({
-                            where: { id: existing.id },
-                            data: { status: 'ACCEPTED' }
-                        });
-                    }
-                }
-
-                // Если есть дубликаты, переносим их связи на основную и удаляем
-                const duplicates = externalCompanies.slice(1);
-                for (const dup of duplicates) {
-                    await tx.order.updateMany({
-                        where: { customerCompanyId: dup.id },
-                        data: { customerCompanyId: mainCompany.id },
-                    });
-                    await tx.order.updateMany({
-                        where: { forwarderId: dup.id },
-                        data: { forwarderId: mainCompany.id },
-                    });
-                    await tx.order.updateMany({
-                        where: { partnerId: dup.id },
-                        data: { partnerId: mainCompany.id },
-                    });
-                    await tx.order.updateMany({
-                        where: { subForwarderId: dup.id },
-                        data: { subForwarderId: mainCompany.id },
-                    });
-                    await tx.contract.updateMany({
-                        where: { customerCompanyId: dup.id },
-                        data: { customerCompanyId: mainCompany.id },
-                    });
-                    await tx.contract.updateMany({
-                        where: { forwarderCompanyId: dup.id },
-                        data: { forwarderCompanyId: mainCompany.id },
-                    });
-
-                    // Создаем партнерство для создателя дубликата с основной компанией
-                    if (dup.createdByCompanyId) {
-                        const existing = await tx.partnership.findFirst({
-                            where: {
-                                OR: [
-                                    { requesterId: dup.createdByCompanyId, recipientId: mainCompany.id },
-                                    { requesterId: mainCompany.id, recipientId: dup.createdByCompanyId }
-                                ]
-                            }
-                        });
-                        if (!existing) {
-                            await tx.partnership.create({
-                                data: {
-                                    requesterId: dup.createdByCompanyId,
-                                    recipientId: mainCompany.id,
-                                    status: 'ACCEPTED',
-                                }
-                            });
-                        } else if (existing.status !== 'ACCEPTED') {
-                            await tx.partnership.update({
-                                where: { id: existing.id },
-                                data: { status: 'ACCEPTED' }
-                            });
-                        }
-                    }
-
-                    // Удаляем связи партнерства дубликата, чтобы база разрешила его удаление
-                    await tx.partnership.deleteMany({
-                        where: {
-                            OR: [
-                                { requesterId: dup.id },
-                                { recipientId: dup.id }
-                            ]
-                        }
-                    });
-
-                    await tx.company.delete({
-                        where: { id: dup.id },
-                    });
-                }
-            } else {
-                company = await tx.company.create({
-                    data: {
-                        name: data.companyName,
-                        bin: data.bin,
-                        email: googleData.email || undefined,
-                        phone: data.phone,
-                        type: data.companyType,
-                        isOurCompany: false,
-                        isExternal: false,
-                    },
-                });
-            }
+            const company = await tx.company.create({
+                data: {
+                    name: data.companyName,
+                    bin: data.bin,
+                    email: googleData.email || undefined,
+                    phone: data.phone,
+                    type: data.companyType,
+                    isOurCompany: false,
+                    isExternal: false,
+                },
+            });
 
             const admin = await tx.user.create({
                 data: {
@@ -864,6 +672,22 @@ export class AuthService {
             await this.identityService.syncMembership(result.admin.id, result.company.id, userRole as any, { isPrimary: true });
         } catch (e) {
             console.warn('syncMembership (google register) failed:', e);
+        }
+
+        if (externalCompanies.length > 0) {
+            await this.auditService.log({
+                companyId: null,
+                user: { id: result.admin.id, firstName: result.admin.firstName, lastName: result.admin.lastName, role: result.admin.role },
+                action: 'CREATE',
+                entity: 'company_bin_conflict',
+                entityId: result.company.id,
+                entityLabel: `Компания «${result.company.name}» (БИН ${data.bin})`,
+                details: {
+                    reason: 'При регистрации через Google найдены внешние записи с тем же БИН — требуется ручная проверка',
+                    externalCompanyIds: externalCompanies.map(c => c.id),
+                    externalCompanyNames: externalCompanies.map(c => c.name),
+                },
+            });
         }
 
         const payload = {
