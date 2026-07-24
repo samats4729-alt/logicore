@@ -303,6 +303,8 @@ model Company {
   vehicles          Vehicle[]
   payments           Payment[] @relation("CompanyPayments")
   counterpartyPayments Payment[] @relation("CounterpartyPayments")
+  financeOperations         FinanceOperation[] @relation("CompanyFinanceOperations")
+  counterpartyFinanceOperations FinanceOperation[] @relation("CounterpartyFinanceOperations")
   closedPeriods      ClosedPeriod[]
   financeAccounts     FinanceAccount[] @relation("CompanyFinanceAccounts")
   financeCategories   FinanceCategory[] @relation("CompanyFinanceCategories")
@@ -574,6 +576,7 @@ model Order {
   incomes         Income[]
   bonuses         Bonus[]
   payments        Payment[]
+  financeOperations FinanceOperation[]
   assignees       OrderAssignee[]
   responsibles    OrderResponsible[]
   changeLog       OrderChangeLog[]
@@ -956,6 +959,7 @@ model FinanceAccount {
   payments       Payment[]   @relation("AccountPayments")
   incomes        Income[]    @relation("AccountIncomes")
   expenses    Expense[]   @relation("AccountExpenses")
+  financeOperations FinanceOperation[] @relation("AccountFinanceOperations")
 
   @@unique([companyId, name, kind])
   @@index([companyId])
@@ -979,9 +983,75 @@ model FinanceCategory {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   payments    Payment[]        @relation("CategoryPayments")
+  financeOperations FinanceOperation[] @relation("CategoryFinanceOperations")
 
   @@unique([companyId, name, direction])
   @@index([companyId])
+}
+
+// ==================== ФАЗА 1 (аудит M-8): единая модель финансовых операций ====================
+// Payment/Income/Expense фактически описывают одно и то же (движение денег компании),
+// но независимыми моделями с разными наборами полей — это создаёт риск задвоения
+// доходов/расходов в отчётах (см. аудит) и не даёт единой ленты операций.
+//
+// Как и в случае с Person/Affiliation (Фаза 1 мультикомпанийной архитектуры выше),
+// объединение делается поэтапно: на этой фазе FinanceOperation ЗАПОЛНЯЕТСЯ бэкфиллом
+// из Payment/Income/Expense (см. prisma/backfill-finance-operations.js) и НЕ читается
+// существующей логикой — ничего не ломает и не меняет поведение отчётов. Переключение
+// чтения/записи на неё — отдельная будущая фаза, требующая синхронной правки ~13 мест
+// в api (в первую очередь financial-reports.service.ts) и web (страницы accounting/*).
+//
+// sourceId — id исходной записи в Payment/Income/Expense, чтобы backfill был проверяем
+// и обратим (сверка 1:1, как PersonMerge позволяет проверить/откатить слияние личностей).
+enum FinanceOperationSource {
+  PAYMENT
+  INCOME
+  EXPENSE
+}
+
+model FinanceOperation {
+  id             String                 @id @default(cuid())
+  companyId      String
+  company        Company                @relation("CompanyFinanceOperations", fields: [companyId], references: [id], onDelete: Cascade)
+
+  source         FinanceOperationSource
+  sourceId       String                 // id исходной записи (Payment/Income/Expense.id)
+
+  direction      PaymentDirection       // IN|OUT; для Income всегда IN, для Expense всегда OUT
+  amount         Float
+  date           DateTime
+
+  // Категория: у Payment — ссылка на FinanceCategory, у Income/Expense — свободный текст.
+  // Храним оба варианта, чтобы бэкфилл не терял данные ни одного источника.
+  categoryId     String?
+  category       FinanceCategory?       @relation("CategoryFinanceOperations", fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryLabel  String?                // свободный текст категории (из Income.category/Expense.category)
+
+  description    String?                // у Income/Expense обязательное поле, у Payment — нет
+  note           String?
+
+  orderId        String?
+  order          Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  counterpartyId String?                // только у Payment
+  counterparty   Company?               @relation("CounterpartyFinanceOperations", fields: [counterpartyId], references: [id], onDelete: SetNull)
+
+  accountId      String?
+  account        FinanceAccount?        @relation("AccountFinanceOperations", fields: [accountId], references: [id], onDelete: SetNull)
+
+  method         PaymentMethod?         // только у Payment
+
+  createdById    String?
+  isDeleted      Boolean                @default(false)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([source, sourceId])
+  @@index([companyId, date])
+  @@index([companyId, isDeleted])
+  @@index([orderId])
+  @@index([accountId])
+  @@index([categoryId])
 }
 
 // ==================== ТМЦ (товарно-материальные ценности) ====================
