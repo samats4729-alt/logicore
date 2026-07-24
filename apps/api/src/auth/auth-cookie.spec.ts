@@ -2,6 +2,7 @@ import {
     AUTH_COOKIE_NAME,
     clearAuthCookie,
     extractAuthCookie,
+    extractAuthToken,
     setAuthCookie,
 } from './auth-cookie';
 
@@ -14,6 +15,21 @@ describe('auth cookie', () => {
 
     it('returns null when the auth cookie is absent', () => {
         expect(extractAuthCookie({ headers: { cookie: 'theme=dark' } })).toBeNull();
+    });
+
+    it('prefers an explicit Bearer token over the browser cookie', () => {
+        expect(extractAuthToken({
+            headers: {
+                authorization: 'Bearer mobile.api.token',
+                cookie: `${AUTH_COOKIE_NAME}=browser.cookie.token`,
+            },
+        })).toBe('mobile.api.token');
+    });
+
+    it('falls back to the browser cookie when Bearer auth is absent', () => {
+        expect(extractAuthToken({
+            headers: { cookie: `${AUTH_COOKIE_NAME}=browser.cookie.token` },
+        })).toBe('browser.cookie.token');
     });
 
     it('sets an httpOnly SameSite cookie', () => {

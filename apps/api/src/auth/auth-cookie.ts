@@ -20,7 +20,22 @@ export const clearAuthCookie = (response: Response) => {
     response.clearCookie(AUTH_COOKIE_NAME, baseCookieOptions());
 };
 
-export const extractAuthCookie = (request: { headers?: { cookie?: string } } | undefined): string | null => {
+type AuthRequest = {
+    headers?: {
+        authorization?: string;
+        cookie?: string;
+    };
+};
+
+export const extractBearerToken = (request: AuthRequest | undefined): string | null => {
+    const authorization = request?.headers?.authorization;
+    if (!authorization) return null;
+
+    const match = authorization.match(/^Bearer\s+(.+)$/i);
+    return match?.[1]?.trim() || null;
+};
+
+export const extractAuthCookie = (request: AuthRequest | undefined): string | null => {
     const cookieHeader = request?.headers?.cookie;
     if (!cookieHeader) return null;
 
@@ -39,3 +54,8 @@ export const extractAuthCookie = (request: { headers?: { cookie?: string } } | u
 
     return null;
 };
+
+// Explicit API/mobile credentials take precedence. Browser requests normally do
+// not send Authorization, so they transparently fall back to the httpOnly cookie.
+export const extractAuthToken = (request: AuthRequest | undefined): string | null =>
+    extractBearerToken(request) || extractAuthCookie(request);

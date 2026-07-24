@@ -1,9 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
-import { extractAuthCookie } from '../auth-cookie';
+import { extractAuthToken } from '../auth-cookie';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -17,10 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
         super({
             // Browser uses an httpOnly cookie; mobile and API clients keep Bearer auth.
-            jwtFromRequest: ExtractJwt.fromExtractors([
-                extractAuthCookie,
-                ExtractJwt.fromAuthHeaderAsBearerToken(),
-            ]),
+            jwtFromRequest: extractAuthToken,
             ignoreExpiration: false,
             secretOrKey: secret,
             passReqToCallback: true,
@@ -29,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     async validate(req: any, payload: any) {
         // Получаем токен из заголовка
-        const token = extractAuthCookie(req) || ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+        const token = extractAuthToken(req);
 
         // Проверяем активность сессии (Single Session Policy)
         if (!token) {
