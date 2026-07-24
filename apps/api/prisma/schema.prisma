@@ -1320,6 +1320,7 @@ model Invoice {
   incomingOrders  Order[]       @relation("IncomingInvoiceOrders")
   outgoingOrders  Order[]       @relation("OutgoingInvoiceOrders")
   
+  @@unique([issuerId, invoiceNumber, type])
   @@index([status])
   @@index([shareToken])
   @@index([issuerId])
