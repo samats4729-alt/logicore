@@ -76,5 +76,11 @@ import { IdentityModule } from './identity/identity.module';
         AdminStatsModule,
         IdentityModule,
     ],
+    providers: [
+        {
+            provide: APP_GUARD,
+            useClass: ThrottlerGuard,
+        },
+    ],
 })
 export class AppModule { }
