@@ -32,7 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
 
         // Проверка активности пользователя
-        const user = await this.authService.findUserById(payload.sub);
+        const user = await this.authService.findUserById(payload.sub, payload.companyId);
         if (!user) {
             throw new UnauthorizedException('Пользователь не найден');
         }
@@ -47,8 +47,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
 
         return {
-            id: payload.sub,
             ...payload,
+            id: payload.sub,
+            email: user.email,
+            role: user.role,
+            companyId: user.companyId,
             permissions: user.permissions ?? [],
         };
     }

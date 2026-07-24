@@ -178,8 +178,37 @@ export class AuthService {
         });
     }
 
-    async findUserById(userId: string) {
-        return this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, isActive: true, permissions: true } });
+    async findUserById(userId: string, activeCompanyId?: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                email: true,
+                isActive: true,
+                permissions: true,
+                role: true,
+                companyId: true,
+            },
+        });
+        if (!user) return null;
+
+        // companyId in JWT selects the active organisation, but access and role are
+        // resolved from the database on every request. Removing a relation or changing
+        // its role therefore takes effect immediately, without waiting for token expiry.
+        if (activeCompanyId) {
+            const relation = await this.prisma.userCompanyRelation.findUnique({
+                where: { userId_companyId: { userId, companyId: activeCompanyId } },
+                include: { company: { select: { isActive: true } } },
+            });
+            if (!relation || !relation.company.isActive) return null;
+            return {
+                ...user,
+                companyId: activeCompanyId,
+                role: relation.role,
+            };
+        }
+
+        return user;
     }
 
     /**
