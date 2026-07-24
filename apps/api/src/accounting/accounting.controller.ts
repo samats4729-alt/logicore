@@ -7,6 +7,13 @@ import { UserRole, PaymentDirection, CostType, DictionaryKind } from '@prisma/cl
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { Response } from 'express';
+import {
+    CreateManualEntryDto,
+    CreatePaymentDto,
+    UpdateManualEntryDto,
+    UpdateOrderFinanceDto,
+    UpdatePaymentDto,
+} from './dto/accounting.dto';
 
 const FINANCE_VIEW_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER];
 const FINANCE_CHANGE_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT];
@@ -84,7 +91,7 @@ export class AccountingController {
 
     @Put('orders/:id/update-finance')
     @Roles(...FINANCE_CHANGE_ROLES)
-    async updateOrderFinance(@Request() req: any, @Param('id') id: string, @Body() body: any) {
+    async updateOrderFinance(@Request() req: any, @Param('id') id: string, @Body() body: UpdateOrderFinanceDto) {
         return this.accountingService.updateOrderFinance(req.user.companyId, id, body, req.user.id);
     }
 
@@ -98,7 +105,7 @@ export class AccountingController {
 
     @Post('expenses')
     @Roles(...FINANCE_CHANGE_ROLES)
-    async createExpense(@Request() req: any, @Body() body: any) {
+    async createExpense(@Request() req: any, @Body() body: CreateManualEntryDto) {
         const result = await this.accountingService.createExpense(req.user.companyId, req.user.id, body);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'expense',
@@ -110,7 +117,7 @@ export class AccountingController {
 
     @Put('expenses/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
-    async updateExpense(@Request() req: any, @Param('id') id: string, @Body() body: any) {
+    async updateExpense(@Request() req: any, @Param('id') id: string, @Body() body: UpdateManualEntryDto) {
         const result = await this.accountingService.updateExpense(req.user.companyId, id, body);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'expense',
@@ -142,7 +149,7 @@ export class AccountingController {
 
     @Post('incomes')
     @Roles(...FINANCE_CHANGE_ROLES)
-    async createIncome(@Request() req: any, @Body() body: any) {
+    async createIncome(@Request() req: any, @Body() body: CreateManualEntryDto) {
         const result = await this.accountingService.createIncome(req.user.companyId, req.user.id, body);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'income',
@@ -154,7 +161,7 @@ export class AccountingController {
 
     @Put('incomes/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
-    async updateIncome(@Request() req: any, @Param('id') id: string, @Body() body: any) {
+    async updateIncome(@Request() req: any, @Param('id') id: string, @Body() body: UpdateManualEntryDto) {
         const result = await this.accountingService.updateIncome(req.user.companyId, id, body);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'income',
@@ -264,7 +271,7 @@ export class AccountingController {
 
     @Post('payments')
     @Roles(...FINANCE_CHANGE_ROLES)
-    async createPayment(@Request() req: any, @Body() body: any) {
+    async createPayment(@Request() req: any, @Body() body: CreatePaymentDto) {
         const result = await this.accountingService.createPayment(req.user.companyId, req.user.id, body);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'payment',
@@ -367,7 +374,7 @@ export class AccountingController {
     async updatePayment(
         @Request() req: any,
         @Param('id') id: string,
-        @Body() body: any,
+        @Body() body: UpdatePaymentDto,
     ) {
         const result = await this.accountingService.updatePayment(req.user.companyId, id, req.user.id, body);
         await this.auditService.log({
