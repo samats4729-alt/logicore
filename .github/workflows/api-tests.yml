@@ -56,6 +56,7 @@ jobs:
       - name: Run Prisma DB Push & Seed
         env:
           DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
+          SEED_TEST_DATA: "true"
         run: |
           pnpm --filter api prisma:generate
           pnpm --filter api prisma:push --accept-data-loss
