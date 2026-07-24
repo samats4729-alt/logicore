@@ -53,6 +53,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate Prisma migrations on an isolated schema
+        env:
+          DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=migration_test"
+        run: pnpm --filter api exec prisma migrate deploy
+
       - name: Run Prisma DB Push & Seed
         env:
           DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
