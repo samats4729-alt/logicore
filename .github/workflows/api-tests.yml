@@ -53,10 +53,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate Prisma migrations on an isolated schema
+      # История проекта начинается с ALTER-миграций и не содержит baseline,
+      # создающий старые таблицы. Поэтому здесь проверяем точный SQL новой
+      # добавочной миграции на изолированной схеме с минимальными FK-заглушками.
+      - name: Validate accounting document migration SQL
         env:
-          DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=migration_test"
-        run: pnpm --filter api exec prisma migrate deploy
+          PGPASSWORD: "logcomp_secret"
+        run: |
+          psql -h localhost -p 5433 -U logcomp -d logcomp -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE SCHEMA migration_test;
+          SET search_path TO migration_test;
+          CREATE TABLE "Company" ("id" TEXT PRIMARY KEY);
+          CREATE TABLE "Contract" ("id" TEXT PRIMARY KEY);
+          CREATE TABLE "User" ("id" TEXT PRIMARY KEY);
+          CREATE TABLE "Order" ("id" TEXT PRIMARY KEY);
+          CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY);
+          \i apps/api/prisma/migrations/20260725000000_add_accounting_document_core/migration.sql
+          SELECT COUNT(*) AS accounting_tables
+          FROM information_schema.tables
+          WHERE table_schema = 'migration_test'
+            AND table_name LIKE 'Accounting%';
+          SQL
 
       - name: Run Prisma DB Push & Seed
         env:
