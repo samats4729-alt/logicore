@@ -76,5 +76,10 @@ import { IdentityModule } from './identity/identity.module';
         AdminStatsModule,
         IdentityModule,
     ],
+    providers: [
+        // Глобальный rate-limit: без него @Throttle() на контроллерах — просто метаданные,
+        // лимиты нигде не применяются (см. аудит C-1).
+        { provide: APP_GUARD, useClass: ThrottlerGuard },
+    ],
 })
 export class AppModule { }
