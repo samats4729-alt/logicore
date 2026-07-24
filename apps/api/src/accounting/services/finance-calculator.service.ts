@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentDirection } from '@prisma/client';
-import { money } from '../../common/utils/money';
+import { money, moneyGte } from '../../common/utils/money';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
 
 @Injectable()
@@ -137,20 +137,20 @@ export class FinanceCalculatorService {
 
         let isCustomerPaid = false;
         if (isCustomer) {
-            isCustomerPaid = (paidOut >= executorCostGross && executorCostGross > 0) || !!order.isCustomerPaid;
+            isCustomerPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || !!order.isCustomerPaid;
         } else if (isSubForwarder) {
-            isCustomerPaid = (paidIn >= revenueGross && revenueGross > 0) || !!order.isSubForwarderPaid;
+            isCustomerPaid = (revenueGross > 0 && moneyGte(paidIn, revenueGross)) || !!order.isSubForwarderPaid;
         } else {
-            isCustomerPaid = (paidIn >= revenueGross && revenueGross > 0) || !!order.isCustomerPaid;
+            isCustomerPaid = (revenueGross > 0 && moneyGte(paidIn, revenueGross)) || !!order.isCustomerPaid;
         }
 
         let isExecutorPaid = false;
         if (isCustomer) {
-            isExecutorPaid = (paidOut >= executorCostGross && executorCostGross > 0) || !!order.isCustomerPaid;
+            isExecutorPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || !!order.isCustomerPaid;
         } else if (isSubForwarder) {
             isExecutorPaid = false;
         } else {
-            isExecutorPaid = (paidOut >= executorCostGross && executorCostGross > 0) || (order.subForwarderId ? !!order.isSubForwarderPaid : !!order.isDriverPaid);
+            isExecutorPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || (order.subForwarderId ? !!order.isSubForwarderPaid : !!order.isDriverPaid);
         }
 
         return {

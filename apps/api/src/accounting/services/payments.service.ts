@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PeriodClosingService } from './period-closing.service';
 import { FinancialSettingsService } from './financial-settings.service';
 import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus } from '@prisma/client';
-import { money } from '../../common/utils/money';
+import { money, moneyGte } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
 
 @Injectable()
@@ -447,7 +447,7 @@ export class PaymentsService {
         });
         const paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
         const revenue = order.customerPrice || 0;
-        const isCustomerPaid = hasPaidOutgoingInvoice || (paidIn >= revenue && revenue > 0);
+        const isCustomerPaid = hasPaidOutgoingInvoice || (revenue > 0 && moneyGte(paidIn, revenue));
         const customerPaidBecameTrue = !order.isCustomerPaid && isCustomerPaid;
 
         // Sync Driver / Sub-forwarder Paid Flag
@@ -469,11 +469,11 @@ export class PaymentsService {
 
         if (order.subForwarderId) {
             const subForwarderPrice = order.subForwarderPrice || 0;
-            isSubForwarderPaid = hasPaidIncomingInvoice || (paidOut >= subForwarderPrice && subForwarderPrice > 0);
+            isSubForwarderPaid = hasPaidIncomingInvoice || (subForwarderPrice > 0 && moneyGte(paidOut, subForwarderPrice));
             subForwarderPaidAt = isSubForwarderPaid ? (order.subForwarderPaidAt || new Date()) : null;
         } else {
             const driverCost = order.driverCost || 0;
-            isDriverPaid = hasPaidIncomingInvoice || (paidOut >= driverCost && driverCost > 0);
+            isDriverPaid = hasPaidIncomingInvoice || (driverCost > 0 && moneyGte(paidOut, driverCost));
             driverPaidAt = isDriverPaid ? (order.driverPaidAt || new Date()) : null;
         }
 
