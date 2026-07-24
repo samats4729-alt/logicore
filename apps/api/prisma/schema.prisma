@@ -123,6 +123,10 @@ model User {
   orderChangeLogs   OrderChangeLog[] @relation("OrderChangeLogs")
   closedPeriods     ClosedPeriod[]
   createdInvoices   Invoice[]        @relation("InvoiceCreator")
+  accountingDocumentsCreated   AccountingDocument[]        @relation("AccountingDocumentCreatedBy")
+  accountingDocumentsPosted    AccountingDocument[]        @relation("AccountingDocumentPostedBy")
+  accountingDocumentsCancelled AccountingDocument[]        @relation("AccountingDocumentCancelledBy")
+  accountingPaymentAllocations AccountingPaymentAllocation[]
   userCompanyRelations UserCompanyRelation[]
   
   // Компания (для PARTNER и WAREHOUSE)
@@ -310,6 +314,9 @@ model Company {
   financeCategories   FinanceCategory[] @relation("CompanyFinanceCategories")
   issuedInvoices     Invoice[]         @relation("InvoiceIssuer")
   receivedInvoices   Invoice[]         @relation("InvoiceRecipient")
+  accountingDocuments             AccountingDocument[]          @relation("AccountingDocumentCompany")
+  accountingCounterpartyDocuments AccountingDocument[]          @relation("AccountingDocumentCounterparty")
+  accountingDocumentNumberings    AccountingDocumentNumbering[]
   userCompanyRelations UserCompanyRelation[]
   affiliations       Affiliation[]     @relation("CompanyAffiliations")
   documents          Document[]
@@ -440,6 +447,8 @@ model Order {
   id              String      @id @default(cuid())
   orderNumber     String      @unique // Номер заявки
   status          OrderStatus @default(DRAFT)
+  accountingDocumentLines AccountingDocumentLine[]
+  accountingDocuments     AccountingDocumentOrder[]
   pendingStatus     OrderStatus?
   pendingStatusById String?
   pendingStatusAt   DateTime?
@@ -757,6 +766,7 @@ model Contract {
   // Стороны
   customerCompanyId String
   customerCompany   Company      @relation("ContractCustomer", fields: [customerCompanyId], references: [id])
+  accountingDocuments AccountingDocument[]
   
   forwarderCompanyId String
   forwarderCompany   Company    @relation("ContractForwarder", fields: [forwarderCompanyId], references: [id])
@@ -931,6 +941,7 @@ model Payment {
   account        FinanceAccount?  @relation("AccountPayments", fields: [accountId], references: [id], onDelete: SetNull)
   categoryId     String?
   category       FinanceCategory? @relation("CategoryPayments", fields: [categoryId], references: [id], onDelete: SetNull)
+  documentAllocations AccountingPaymentAllocation[]
 
   @@index([companyId, date])
   @@index([orderId])
@@ -1395,6 +1406,216 @@ model Invoice {
   @@index([shareToken])
   @@index([issuerId])
   @@index([recipientId])
+}
+
+// ==================== БУХГАЛТЕРСКОЕ ДОКУМЕНТНОЕ ЯДРО ====================
+//
+// Полностью добавочный контур: существующая Invoice и текущие Payment/Income/Expense
+// продолжают работать без изменений. Переключение API на эти таблицы выполняется
+// отдельным этапом после бэкфилла и сверки production-данных.
+enum AccountingDocumentType {
+  PAYMENT_INVOICE    // Счёт на оплату
+  SERVICE_ACT        // Акт выполненных работ (оказанных услуг), включая Р-1
+  RECONCILIATION_ACT // Акт сверки взаимных расчётов
+  CORRECTION         // Корректировочный документ
+}
+
+enum AccountingDocumentDirection {
+  INCOMING
+  OUTGOING
+}
+
+enum AccountingDocumentStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum AccountingDocumentLinkType {
+  BASED_ON
+  CORRECTS
+  REPLACES
+  RECONCILES
+}
+
+enum AccountingVatTreatment {
+  WITHOUT_VAT // Без НДС
+  STANDARD    // Обычная ставка (например, 12% или 16%)
+  ZERO        // Нулевая ставка НДС
+  EXEMPT      // Освобождённый оборот
+}
+
+model AccountingDocument {
+  id              String                      @id @default(cuid())
+  companyId       String
+  company         Company                     @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  counterpartyId  String
+  counterparty    Company                     @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
+  type            AccountingDocumentType
+  direction       AccountingDocumentDirection
+  status          AccountingDocumentStatus    @default(DRAFT)
+  number          String
+  externalNumber  String?
+  externalDate    DateTime?                    @db.Date
+  documentDate    DateTime                     @db.Date
+  operationDate   DateTime?                    @db.Date
+  dueDate         DateTime?                    @db.Date
+  reportPeriodFrom DateTime?                   @db.Date
+  reportPeriodTo   DateTime?                   @db.Date
+  contractId      String?
+  contract        Contract?                    @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  currency        String                       @default("KZT") @db.VarChar(3)
+  subtotal        Decimal                      @default(0) @db.Decimal(20, 2)
+  discountTotal   Decimal                      @default(0) @db.Decimal(20, 2)
+  vatTotal        Decimal                      @default(0) @db.Decimal(20, 2)
+  total           Decimal                      @default(0) @db.Decimal(20, 2)
+  amountPaid      Decimal                      @default(0) @db.Decimal(20, 2)
+  balanceDue      Decimal                      @default(0) @db.Decimal(20, 2)
+  openingBalance  Decimal?                     @db.Decimal(20, 2)
+  debitTurnover   Decimal?                     @db.Decimal(20, 2)
+  creditTurnover  Decimal?                     @db.Decimal(20, 2)
+  closingBalance  Decimal?                     @db.Decimal(20, 2)
+  issuerSnapshot  Json
+  recipientSnapshot Json
+  issuerSignatorySnapshot Json?
+  recipientSignatorySnapshot Json?
+  basisSnapshot   Json?
+  paymentPurposeCode String?
+  paymentTerms    String?
+  customerMaterialsInfo String?
+  appendixInfo    String?
+  note            String?
+  version         Int                          @default(1)
+  checksum        String?                      @db.VarChar(64)
+  pdfFileUrl      String?
+  pdfGeneratedAt  DateTime?
+  createdById     String
+  createdBy       User                         @relation("AccountingDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  postedById      String?
+  postedBy        User?                        @relation("AccountingDocumentPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
+  postedAt        DateTime?
+  cancelledById   String?
+  cancelledBy     User?                        @relation("AccountingDocumentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelledAt     DateTime?
+  cancellationReason String?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  lines           AccountingDocumentLine[]
+  reconciliationLines AccountingReconciliationLine[]
+  orders          AccountingDocumentOrder[]
+  paymentAllocations AccountingPaymentAllocation[]
+  sourceLinks     AccountingDocumentLink[]     @relation("AccountingDocumentSourceLinks")
+  targetLinks     AccountingDocumentLink[]     @relation("AccountingDocumentTargetLinks")
+
+  @@unique([companyId, type, number])
+  @@index([companyId, documentDate])
+  @@index([companyId, status])
+  @@index([counterpartyId, documentDate])
+  @@index([companyId, counterpartyId, externalNumber])
+  @@index([contractId])
+}
+
+model AccountingDocumentLine {
+  id          String             @id @default(cuid())
+  documentId  String
+  document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lineNumber  Int
+  serviceCode String?
+  name        String
+  description String?
+  serviceDate DateTime?          @db.Date
+  reportDetails String?
+  quantity    Decimal            @default(1) @db.Decimal(20, 3)
+  unit        String             @default("усл") @db.VarChar(32)
+  unitCode    String?
+  unitPrice   Decimal            @db.Decimal(20, 2)
+  subtotal    Decimal            @db.Decimal(20, 2)
+  discountAmount Decimal         @default(0) @db.Decimal(20, 2)
+  vatTreatment AccountingVatTreatment @default(WITHOUT_VAT)
+  vatRate     Decimal            @default(0) @db.Decimal(5, 2)
+  vatAmount   Decimal            @default(0) @db.Decimal(20, 2)
+  total       Decimal            @db.Decimal(20, 2)
+  orderId     String?
+  order       Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+
+  @@unique([documentId, lineNumber])
+  @@index([orderId])
+}
+
+model AccountingReconciliationLine {
+  id            String             @id @default(cuid())
+  documentId    String
+  document      AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lineNumber    Int
+  transactionDate DateTime          @db.Date
+  sourceDocumentType String?
+  sourceDocumentNumber String?
+  description   String?
+  debit         Decimal            @default(0) @db.Decimal(20, 2)
+  credit        Decimal            @default(0) @db.Decimal(20, 2)
+  runningBalance Decimal           @db.Decimal(20, 2)
+  createdAt     DateTime           @default(now())
+
+  @@unique([documentId, lineNumber])
+  @@index([transactionDate])
+}
+
+model AccountingDocumentOrder {
+  id          String             @id @default(cuid())
+  documentId  String
+  document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdAt   DateTime           @default(now())
+
+  @@unique([documentId, orderId])
+  @@index([orderId])
+}
+
+model AccountingPaymentAllocation {
+  id          String             @id @default(cuid())
+  documentId  String
+  document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  paymentId   String
+  payment     Payment            @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  amount      Decimal            @db.Decimal(20, 2)
+  createdById String
+  createdBy   User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime           @default(now())
+
+  @@unique([documentId, paymentId])
+  @@index([paymentId])
+}
+
+model AccountingDocumentLink {
+  id             String                     @id @default(cuid())
+  sourceDocumentId String
+  sourceDocument AccountingDocument         @relation("AccountingDocumentSourceLinks", fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  targetDocumentId String
+  targetDocument AccountingDocument         @relation("AccountingDocumentTargetLinks", fields: [targetDocumentId], references: [id], onDelete: Cascade)
+  type           AccountingDocumentLinkType
+  createdAt      DateTime                   @default(now())
+
+  @@unique([sourceDocumentId, targetDocumentId, type])
+  @@index([targetDocumentId])
+}
+
+model AccountingDocumentNumbering {
+  id          String                      @id @default(cuid())
+  companyId   String
+  company     Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        AccountingDocumentType
+  direction   AccountingDocumentDirection
+  year        Int
+  prefix      String                      @default("")
+  nextNumber  Int                         @default(1)
+  padLength   Int                         @default(6)
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+
+  @@unique([companyId, type, direction, year])
+  @@index([companyId])
 }
 
 model UserCompanyRelation {
