@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
+import { fetchRoadRoute } from '@/lib/osrmRoute';
 
 // Белый грузовик для маркера водителя (на чёрном круге)
 const TRUCK_SVG = '<svg viewBox="0 0 640 512" width="58%" height="58%" aria-hidden="true"><path fill="#fff" d="M0 48C0 21.5 21.5 0 48 0H368c26.5 0 48 21.5 48 48V96h50.7c17 0 33.3 6.7 45.3 18.7L621.3 173.3c12 12 18.7 28.3 18.7 45.3V352c17.7 0 32 14.3 32 32s-14.3 32-32 32H576c0 53-43 96-96 96s-96-43-96-96H256c0 53-43 96-96 96s-96-43-96-96H32c-17.7 0-32-14.3-32-32V48zM160 464a48 48 0 1 0 0-96 48 48 0 1 0 0 96zm368-48a48 48 0 1 0-96 0 48 48 0 1 0 96 0zM416 160v96h149.5L466.7 157.3c-3-3-7.1-4.7-11.3-4.7H416z"/></svg>';
@@ -28,9 +29,11 @@ interface DgisTrackingMapProps {
     onReady?: (map: any) => void;
     autoFit?: boolean;             // центрировать/масштабировать по маркерам
     extraPoints?: ExtraPoint[];    // доп. точки (погрузка/выгрузка)
+    routes?: TripRoute[];          // маршруты активных рейсов (строятся по дорогам)
 }
 
 interface ExtraPoint { latitude: number; longitude: number; label?: string; color?: string }
+interface TripRoute { id: string; coords: [number, number][]; color?: string } // coords — [lng, lat]
 
 
 export default function DgisTrackingMap({
@@ -42,6 +45,7 @@ export default function DgisTrackingMap({
     onReady,
     autoFit,
     extraPoints,
+    routes,
 }: DgisTrackingMapProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
@@ -137,6 +141,61 @@ export default function DgisTrackingMap({
             }
         }
     }, [extraPoints, drivers, autoFit]);
+
+    // Маршруты активных рейсов (по дорогам через OSRM, с запасной прямой)
+    const routeIdsRef = useRef<string[]>([]);
+    const lastRouteKeyRef = useRef('');
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) return;
+        const list = routes || [];
+
+        // Перерисовываем только когда изменился набор рейсов/точек, а не на каждый тик
+        const key = list.map(r => `${r.id}:${r.coords.length}:${r.coords[0]?.join(',')}>${r.coords[r.coords.length - 1]?.join(',')}`).join('|');
+        if (key === lastRouteKeyRef.current) return;
+        lastRouteKeyRef.current = key;
+
+        let cancelled = false;
+        const clear = () => {
+            routeIdsRef.current.forEach(id => {
+                if (map.getLayer(id)) map.removeLayer(id);
+                if (map.getSource(id)) map.removeSource(id);
+            });
+            routeIdsRef.current = [];
+        };
+        clear();
+
+        const drawLine = (id: string, coords: [number, number][], color: string, solid: boolean) => {
+            if (cancelled || !map) return;
+            const apply = () => {
+                if (cancelled) return;
+                if (map.getLayer(id)) map.removeLayer(id);
+                if (map.getSource(id)) map.removeSource(id);
+                map.addSource(id, { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } } });
+                map.addLayer({
+                    id, type: 'line', source: id,
+                    layout: { 'line-cap': 'round', 'line-join': 'round' },
+                    paint: solid
+                        ? { 'line-color': color, 'line-width': 3 }
+                        : { 'line-color': color, 'line-width': 2, 'line-dasharray': [2, 2] },
+                });
+                if (!routeIdsRef.current.includes(id)) routeIdsRef.current.push(id);
+            };
+            if (map.isStyleLoaded()) apply(); else map.once('load', apply);
+        };
+
+        list.forEach((trip) => {
+            if (trip.coords.length < 2) return;
+            const id = `trip-route-${trip.id}`;
+            const color = trip.color || '#1677ff';
+            drawLine(id, trip.coords, color, false);          // сразу прямая
+            fetchRoadRoute(trip.coords).then((road) => {       // затем по дорогам
+                if (road && !cancelled) drawLine(id, road.geometry.coordinates, color, true);
+            });
+        });
+
+        return () => { cancelled = true; };
+    }, [routes]);
 
     // Маркер «моё место»
     useEffect(() => {

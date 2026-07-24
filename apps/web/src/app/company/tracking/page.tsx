@@ -63,9 +63,38 @@ interface DriverPosition {
     orderNumber?: string;
 }
 
+interface TripPoint { type: string; latitude: number; longitude: number; city: string | null; address: string | null }
+interface ActiveTrip {
+    id: string;
+    orderNumber: string;
+    status: string;
+    driverName: string;
+    vehiclePlate: string;
+    driverId: string;
+    points: TripPoint[];
+    driver: { latitude: number; longitude: number; speed: number; heading: number; updatedAt: string } | null;
+}
+
+const STATUS_RU: Record<string, string> = {
+    ASSIGNED: 'Назначен', EN_ROUTE_PICKUP: 'Едет на погрузку', AT_PICKUP: 'На погрузке',
+    LOADING: 'Погрузка', IN_TRANSIT: 'В пути', AT_DELIVERY: 'На выгрузке',
+    UNLOADING: 'Выгрузка', PROBLEM: 'Проблема',
+};
+
+function tripCity(p: TripPoint | undefined): string {
+    if (!p) return '—';
+    if (p.city) return p.city;
+    if (p.address) {
+        const m = p.address.match(/г\.\s*([^,]+)/);
+        return m?.[1]?.trim() || p.address;
+    }
+    return '—';
+}
+
 export default function CompanyTrackingPage() {
     const { message } = App.useApp();
     const [drivers, setDrivers] = useState<DriverPosition[]>([]);
+    const [trips, setTrips] = useState<ActiveTrip[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const dgisMapRef = useRef<any>(null);
@@ -91,28 +120,66 @@ export default function CompanyTrackingPage() {
         };
     }, [mapMode]);
 
-    // Сопоставление рейсов и цветов
+    // Сопоставление рейсов и цветов (по номеру заявки)
     const orderColorMap = useMemo(() => {
         const map = new Map<string, string>();
-        const orderSet = new Set(drivers.filter(d => d.orderNumber).map(d => d.orderNumber!));
-        const uniqueOrders = Array.from(orderSet);
-        uniqueOrders.forEach((order, index) => {
-            map.set(order, ORDER_COLORS[index % ORDER_COLORS.length]);
-        });
+        trips.forEach((t, index) => map.set(t.orderNumber, ORDER_COLORS[index % ORDER_COLORS.length]));
         return map;
-    }, [drivers]);
+    }, [trips]);
 
-    // Загрузка позиций водителей
+    // Загрузка активных рейсов (маршруты + позиции водителей)
     const fetchDrivers = useCallback(async () => {
         try {
-            const response = await api.get('/tracking/drivers');
-            setDrivers(response.data);
+            const response = await api.get('/tracking/active-trips');
+            const activeTrips: ActiveTrip[] = response.data || [];
+            setTrips(activeTrips);
+            // Маркеры грузовиков — только для рейсов с известной позицией
+            setDrivers(activeTrips
+                .filter(t => t.driver)
+                .map(t => ({
+                    driverId: t.driverId,
+                    driverName: t.driverName,
+                    vehiclePlate: t.vehiclePlate,
+                    latitude: t.driver!.latitude,
+                    longitude: t.driver!.longitude,
+                    speed: t.driver!.speed,
+                    heading: t.driver!.heading,
+                    updatedAt: t.driver!.updatedAt,
+                    orderId: t.id,
+                    orderNumber: t.orderNumber,
+                })));
         } catch (error) {
-            console.error('Failed to fetch drivers:', error);
+            console.error('Failed to fetch trips:', error);
         } finally {
             setLoading(false);
         }
     }, []);
+
+    // Маршруты активных рейсов для карты (coords — [lng, lat])
+    const routes = useMemo(() => trips
+        .filter(t => t.points.length >= 2)
+        .map(t => ({
+            id: t.id,
+            color: orderColorMap.get(t.orderNumber) || '#1677ff',
+            coords: t.points.map(p => [p.longitude, p.latitude] as [number, number]),
+        })), [trips, orderColorMap]);
+
+    // Точки погрузки/выгрузки на карте
+    const extraPoints = useMemo(() => {
+        const pts: { latitude: number; longitude: number; label?: string; color?: string }[] = [];
+        for (const t of trips) {
+            t.points.forEach((p) => {
+                const isPickup = p.type === 'PICKUP' || p.type === 'ADDITIONAL_PICKUP';
+                pts.push({
+                    latitude: p.latitude,
+                    longitude: p.longitude,
+                    label: `${t.orderNumber}: ${isPickup ? 'погрузка' : 'выгрузка'} · ${tripCity(p)}`,
+                    color: isPickup ? '#1677ff' : '#dc2626',
+                });
+            });
+        }
+        return pts;
+    }, [trips]);
 
     useEffect(() => {
         fetchDrivers();
@@ -169,14 +236,6 @@ export default function CompanyTrackingPage() {
         }
     };
 
-    // Центрировать на выбранном водителе
-    const centerOnDriver = (driver: DriverPosition) => {
-        setSelectedDriver(driver.driverId);
-        dgisMapRef.current?.setCenter([driver.longitude, driver.latitude]);
-        dgisMapRef.current?.setZoom(15);
-        setPopupInfo(driver);
-    };
-
     // Получить цвет для водителя
     const getDriverColor = (driver: DriverPosition) => {
         if (driver.orderNumber) {
@@ -195,6 +254,30 @@ export default function CompanyTrackingPage() {
     const isDark = mapMode === 'night';
 
     const onlineCount = drivers.length;
+    const tripsCount = trips.length;
+
+    // Центрировать на рейсе: на грузовике, если известна позиция, иначе — по маршруту
+    const centerOnTrip = (trip: ActiveTrip) => {
+        setSelectedDriver(trip.driverId);
+        if (trip.driver) {
+            dgisMapRef.current?.setCenter([trip.driver.longitude, trip.driver.latitude]);
+            dgisMapRef.current?.setZoom(14);
+            setPopupInfo({
+                driverId: trip.driverId, driverName: trip.driverName, vehiclePlate: trip.vehiclePlate,
+                latitude: trip.driver.latitude, longitude: trip.driver.longitude, speed: trip.driver.speed,
+                heading: trip.driver.heading, updatedAt: trip.driver.updatedAt, orderId: trip.id, orderNumber: trip.orderNumber,
+            });
+        } else if (trip.points.length >= 1 && dgisMapRef.current) {
+            const map = dgisMapRef.current;
+            const lngs = trip.points.map(p => p.longitude);
+            const lats = trip.points.map(p => p.latitude);
+            if (trip.points.length === 1) {
+                map.setCenter([lngs[0], lats[0]]); map.setZoom(12);
+            } else {
+                map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 80, maxZoom: 12 });
+            }
+        }
+    };
 
     return (
         <div className="lc-page" style={{ maxWidth: '100%', margin: '0 auto', padding: '0 8px' }}>
@@ -209,7 +292,19 @@ export default function CompanyTrackingPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: onlineCount > 0 ? '#e0f2fe' : '#f1f2f5', color: onlineCount > 0 ? '#0369a1' : '#5f6672' }}>
+                        <div className="lc2-mic" style={{ background: tripsCount > 0 ? '#e0f2fe' : '#f1f2f5', color: tripsCount > 0 ? '#0369a1' : '#5f6672' }}>
+                            <EnvironmentOutlined />
+                        </div>
+                        <div>
+                            <div className="lc2-mlabel">Активных рейсов</div>
+                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {tripsCount}
+                            </div>
+                            <div className="lc2-msub">{tripsCount > 0 ? 'с маршрутами' : 'нет активных'}</div>
+                        </div>
+                    </div>
+                    <div className="lc2-metric">
+                        <div className="lc2-mic" style={{ background: onlineCount > 0 ? '#dcfce7' : '#f1f2f5', color: onlineCount > 0 ? '#16a34a' : '#5f6672' }}>
                             <CarOutlined />
                         </div>
                         <div>
@@ -217,7 +312,7 @@ export default function CompanyTrackingPage() {
                             <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
                                 {onlineCount}
                             </div>
-                            <div className="lc2-msub">{onlineCount > 0 ? 'в движении' : 'нет активных'}</div>
+                            <div className="lc2-msub">{onlineCount > 0 ? 'передают GPS' : 'нет сигнала'}</div>
                         </div>
                     </div>
                 </div>
@@ -286,7 +381,7 @@ export default function CompanyTrackingPage() {
                             color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)',
                             marginTop: 2,
                         }}>
-                            {drivers.length} {drivers.length === 1 ? 'водитель' : 'водителей'} онлайн
+                            {tripsCount} {tripsCount === 1 ? 'активный рейс' : 'активных рейсов'} · {onlineCount} онлайн
                         </div>
                     </div>
                     <button
@@ -320,7 +415,7 @@ export default function CompanyTrackingPage() {
                         <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
                             <Spin />
                         </div>
-                    ) : drivers.length === 0 ? (
+                    ) : trips.length === 0 ? (
                         /* ── Premium Empty State ── */
                         <div style={{
                             textAlign: 'center',
@@ -374,73 +469,69 @@ export default function CompanyTrackingPage() {
                         </div>
                     ) : (
                         <List
-                            dataSource={drivers}
-                            renderItem={(driver) => (
-                                <List.Item
-                                    style={{
-                                        cursor: 'pointer',
-                                        background: selectedDriver === driver.driverId
-                                            ? (isDark ? 'rgba(22, 119, 255, 0.15)' : 'rgba(22, 119, 255, 0.08)')
-                                            : 'transparent',
-                                        borderRadius: 12,
-                                        padding: '10px 12px',
-                                        marginBottom: 4,
-                                        border: selectedDriver === driver.driverId
-                                            ? (isDark ? '1px solid rgba(22, 119, 255, 0.2)' : '1px solid rgba(22, 119, 255, 0.15)')
-                                            : '1px solid transparent',
-                                        transition: 'all 0.2s ease',
-                                    }}
-                                    onClick={() => centerOnDriver(driver)}
-                                >
-                                    <List.Item.Meta
-                                        avatar={
-                                            <Badge dot color={getStatusColor(driver.updatedAt)}>
-                                                <Avatar
-                                                    icon={<CarOutlined />}
-                                                    style={{ background: getDriverColor(driver) }}
-                                                />
-                                            </Badge>
-                                        }
-                                        title={
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{
-                                                    fontWeight: 600,
-                                                    fontSize: 13,
-                                                    color: isDark ? '#fff' : '#09090b',
-                                                }}>{driver.driverName}</span>
-                                                <Tag style={{
-                                                    margin: 0,
-                                                    fontSize: 10,
-                                                    borderRadius: 6,
-                                                    background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                                                    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
-                                                    color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)',
-                                                }}>{driver.vehiclePlate}</Tag>
-                                            </div>
-                                        }
-                                        description={
-                                            <div style={{ marginTop: 4 }}>
-                                                {driver.orderNumber && (
-                                                    <Tag
-                                                        color={getDriverColor(driver)}
-                                                        style={{ marginBottom: 4, fontSize: 10, borderRadius: 6 }}
-                                                    >
-                                                        {driver.orderNumber}
-                                                    </Tag>
-                                                )}
-                                                <div style={{
-                                                    fontSize: 11,
-                                                    color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
-                                                }}>
-                                                    {driver.speed ? `${Math.round(driver.speed * 3.6)} км/ч` : 'Стоит'}
-                                                    {' • '}
-                                                    {new Date(driver.updatedAt).toLocaleTimeString('ru-RU')}
+                            dataSource={trips}
+                            renderItem={(trip) => {
+                                const color = orderColorMap.get(trip.orderNumber) || '#1677ff';
+                                const pickup = trip.points.find(p => p.type === 'PICKUP' || p.type === 'ADDITIONAL_PICKUP');
+                                const deliveries = trip.points.filter(p => p.type === 'DELIVERY');
+                                const delivery = deliveries.length ? deliveries[deliveries.length - 1] : undefined;
+                                const online = !!trip.driver;
+                                return (
+                                    <List.Item
+                                        style={{
+                                            cursor: 'pointer',
+                                            background: selectedDriver === trip.driverId
+                                                ? (isDark ? 'rgba(22, 119, 255, 0.15)' : 'rgba(22, 119, 255, 0.08)')
+                                                : 'transparent',
+                                            borderRadius: 12,
+                                            padding: '10px 12px',
+                                            marginBottom: 4,
+                                            border: selectedDriver === trip.driverId
+                                                ? (isDark ? '1px solid rgba(22, 119, 255, 0.2)' : '1px solid rgba(22, 119, 255, 0.15)')
+                                                : '1px solid transparent',
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                        onClick={() => centerOnTrip(trip)}
+                                    >
+                                        <List.Item.Meta
+                                            avatar={
+                                                <Badge dot color={online ? getStatusColor(trip.driver!.updatedAt) : '#9ca3af'}>
+                                                    <Avatar icon={<CarOutlined />} style={{ background: color }} />
+                                                </Badge>
+                                            }
+                                            title={
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                                                    <span style={{ fontWeight: 600, fontSize: 13, color: isDark ? '#fff' : '#09090b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{trip.driverName}</span>
+                                                    {trip.vehiclePlate && <Tag style={{
+                                                        margin: 0, fontSize: 10, borderRadius: 6,
+                                                        background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                                        border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
+                                                        color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)',
+                                                    }}>{trip.vehiclePlate}</Tag>}
                                                 </div>
-                                            </div>
-                                        }
-                                    />
-                                </List.Item>
-                            )}
+                                            }
+                                            description={
+                                                <div style={{ marginTop: 4 }}>
+                                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
+                                                        <Tag color={color} style={{ fontSize: 10, borderRadius: 6, margin: 0 }}>{trip.orderNumber}</Tag>
+                                                        <Tag style={{ fontSize: 10, borderRadius: 6, margin: 0, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', border: 'none', color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>{STATUS_RU[trip.status] || trip.status}</Tag>
+                                                    </div>
+                                                    {(pickup || delivery) && (
+                                                        <div style={{ fontSize: 11.5, color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)' }}>
+                                                            {tripCity(pickup)} → {tripCity(delivery)}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ fontSize: 11, color: online ? (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)') : '#9ca3af' }}>
+                                                        {online
+                                                            ? `${trip.driver!.speed ? `${Math.round(trip.driver!.speed)} км/ч` : 'Стоит'} • ${new Date(trip.driver!.updatedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+                                                            : 'GPS не передаётся'}
+                                                    </div>
+                                                </div>
+                                            }
+                                        />
+                                    </List.Item>
+                                );
+                            }}
                         />
                     )}
 
@@ -558,6 +649,8 @@ export default function CompanyTrackingPage() {
                     getDriverColor={getDriverColor}
                     onReady={(m) => { dgisMapRef.current = m; }}
                     autoFit
+                    routes={routes}
+                    extraPoints={extraPoints}
                 />
 
                 {popupInfo && (

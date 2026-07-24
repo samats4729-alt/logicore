@@ -45,6 +45,14 @@ export class TrackingController {
         return this.trackingService.getAllActiveDriversPositions(companyId);
     }
 
+    @Get('active-trips')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
+    @RequirePermissions('tracking')
+    @ApiOperation({ summary: 'Активные рейсы с маршрутами и позициями водителей' })
+    async getActiveTrips(@Request() req: any) {
+        return this.trackingService.getActiveTrips(req.user.companyId);
+    }
+
     @Get('driver/:id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
     @RequirePermissions('tracking')

@@ -145,4 +145,87 @@ export class TrackingService {
 
         return Array.from(byKey.values());
     }
+
+    /**
+     * Активные рейсы для карты мониторинга: заявки в работе с точками маршрута
+     * и (если есть) текущей позицией водителя. Показываются, даже если водитель
+     * ещё не поделился координатами — тогда виден только маршрут.
+     */
+    async getActiveTrips(companyId?: string) {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const ACTIVE = ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING', 'PROBLEM'] as any[];
+
+        const companyScope = companyId ? {
+            OR: [
+                { customerCompanyId: companyId },
+                { forwarderId: companyId },
+                { partnerId: companyId },
+                { subForwarderId: companyId },
+                { responsibleManager: { companyId } },
+            ],
+        } : {};
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                status: { in: ACTIVE },
+                ...(companyId ? companyScope : {}),
+            },
+            select: {
+                id: true, orderNumber: true, status: true,
+                driverLat: true, driverLng: true, driverSpeed: true, driverHeading: true, driverLocationAt: true,
+                driverId: true, assignedDriverName: true, assignedDriverPlate: true,
+                driver: { select: { id: true, firstName: true, lastName: true, vehiclePlate: true } },
+                routePoints: {
+                    orderBy: { sequence: 'asc' },
+                    select: {
+                        pointType: true,
+                        location: { select: { latitude: true, longitude: true, city: true, address: true } },
+                    },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Свежие GPS-точки водителей с учёткой (одна на водителя)
+        const gps = await this.prisma.gpsPoint.findMany({
+            where: { recordedAt: { gte: oneHourAgo }, order: companyId ? companyScope : undefined },
+            orderBy: { recordedAt: 'desc' },
+            distinct: ['driverId'],
+            select: { driverId: true, orderId: true, latitude: true, longitude: true, speed: true, heading: true, recordedAt: true },
+        });
+        const gpsByOrder = new Map<string, typeof gps[number]>();
+        for (const g of gps) if (g.orderId) gpsByOrder.set(g.orderId, g);
+
+        return orders.map((o) => {
+            const points = o.routePoints
+                .filter((p) => p.location?.latitude != null && p.location?.longitude != null)
+                .map((p) => ({
+                    type: p.pointType,
+                    latitude: p.location!.latitude,
+                    longitude: p.location!.longitude,
+                    city: p.location!.city || null,
+                    address: p.location!.address || null,
+                }));
+
+            // Позиция водителя: свежий GpsPoint, иначе координаты из веб-ссылки (за час)
+            const g = gpsByOrder.get(o.id);
+            let driver: { latitude: number; longitude: number; speed: number; heading: number; updatedAt: string } | null = null;
+            if (g) {
+                driver = { latitude: g.latitude, longitude: g.longitude, speed: g.speed || 0, heading: g.heading || 0, updatedAt: g.recordedAt.toISOString() };
+            } else if (o.driverLat != null && o.driverLng != null && o.driverLocationAt && o.driverLocationAt >= oneHourAgo) {
+                driver = { latitude: o.driverLat, longitude: o.driverLng, speed: o.driverSpeed || 0, heading: o.driverHeading || 0, updatedAt: o.driverLocationAt.toISOString() };
+            }
+
+            return {
+                id: o.id,
+                orderNumber: o.orderNumber,
+                status: o.status,
+                driverName: o.assignedDriverName || `${o.driver?.lastName || ''} ${o.driver?.firstName || ''}`.trim() || 'Водитель не назначен',
+                vehiclePlate: o.assignedDriverPlate || o.driver?.vehiclePlate || '',
+                driverId: o.driverId || `order_${o.id}`,
+                points,
+                driver,
+            };
+        });
+    }
 }
