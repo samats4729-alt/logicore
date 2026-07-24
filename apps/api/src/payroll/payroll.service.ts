@@ -28,6 +28,31 @@ export class PayrollService {
 
     async processOrderTrigger(orderId: string, trigger: string) {
         try {
+            const normalizedTrigger = trigger.startsWith('STATUS:') ? trigger.slice(7) : trigger;
+
+            // Отмена заявки: экономики рейса больше нет, поэтому ранее начисленный
+            // менеджеру процент по этой заявке сторнируем. Саму запись не удаляем
+            // (это финансовый след) — обнуляем сумму и помечаем причину в снимке.
+            if (normalizedTrigger === 'CANCELLED') {
+                const existing = await this.prisma.payrollAccrual.findFirst({
+                    where: { orderId, kind: 'PERCENT' },
+                });
+                if (existing && existing.amount !== 0) {
+                    await this.prisma.payrollAccrual.update({
+                        where: { id: existing.id },
+                        data: {
+                            amount: 0,
+                            schemeSnapshot: {
+                                ...((existing.schemeSnapshot as any) || {}),
+                                _reversedReason: 'order_cancelled',
+                                _reversedAt: new Date().toISOString(),
+                            },
+                        },
+                    });
+                }
+                return;
+            }
+
             // Взять заявку
             const order = await this.prisma.order.findUnique({
                 where: { id: orderId },
@@ -50,7 +75,6 @@ export class PayrollService {
 
             // Получить схему менеджера
             const scheme = await this.getSchemeFor(managerCompanyId, manager.id);
-            const normalizedTrigger = trigger.startsWith('STATUS:') ? trigger.slice(7) : trigger;
             if (!scheme || !scheme.isActive || scheme.accrualStatus !== normalizedTrigger) {
                 return;
             }
@@ -91,8 +115,21 @@ export class PayrollService {
             const amount = money(base * (scheme.percentValue || 0) / 100);
             const periodMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
 
-            // Защита от двойного начисления по уникальному индексу @@unique([orderId, userId, kind])
-            try {
+            // Защита от двойного начисления по уникальному индексу @@unique([orderId, userId, kind]).
+            // Если начисление уже есть — заявку пересчитали (изменилась цена/маржа) или
+            // триггер сработал повторно: обновляем сумму вместо того, чтобы молча оставить
+            // устаревшую (см. H-6), а не создаём новую запись поверх уникального индекса.
+            const existing = await this.prisma.payrollAccrual.findUnique({
+                where: { orderId_userId_kind: { orderId, userId: manager.id, kind: 'PERCENT' } },
+            });
+            if (existing) {
+                if (existing.amount !== amount || existing.baseAmount !== base) {
+                    await this.prisma.payrollAccrual.update({
+                        where: { id: existing.id },
+                        data: { amount, baseAmount: base, schemeSnapshot: scheme as any },
+                    });
+                }
+            } else {
                 await this.prisma.payrollAccrual.create({
                     data: {
                         companyId: managerCompanyId,
@@ -105,13 +142,6 @@ export class PayrollService {
                         schemeSnapshot: scheme as any,
                     },
                 });
-            } catch (e: any) {
-                // Если код ошибки уникальности Prisma, выходим молча
-                if (e.code === 'P2002') {
-                    this.logger.log(`Accrual already exists for order ${orderId}, user ${manager.id}`);
-                } else {
-                    throw e;
-                }
             }
         } catch (error: any) {
             this.logger.warn(`Failed to process payroll trigger for order ${orderId}: ${error.message}`);

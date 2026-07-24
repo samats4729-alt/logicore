@@ -17,6 +17,7 @@ function makePrismaMock() {
         payrollAccrual: {
             create: jest.fn(),
             findFirst: jest.fn(),
+            findUnique: jest.fn(),
             update: jest.fn(),
         },
         payrollKpiRule: {
@@ -154,12 +155,57 @@ describe('PayrollService.processOrderTrigger — процент менеджер
         expect(data.amount).toBe(10000); // 10% от маржи
     });
 
-    it('повторное срабатывание триггера не создаёт дубль (P2002 глушится)', async () => {
+    it('повторное срабатывание триггера обновляет сумму начисления, а не создаёт дубль', async () => {
         prisma.order.findUnique.mockResolvedValue(makeOrder());
         prisma.payrollScheme.findFirst.mockResolvedValueOnce(percentScheme());
-        prisma.payrollAccrual.create.mockRejectedValue({ code: 'P2002' });
+        // Уже есть начисление от предыдущего расчёта (заявку пересчитали — маржа изменилась)
+        prisma.payrollAccrual.findUnique.mockResolvedValue({ id: 'acc-1', amount: 10000, baseAmount: 200000 });
 
-        await expect(service.processOrderTrigger(ORDER, 'COMPLETED')).resolves.toBeUndefined();
+        await service.processOrderTrigger(ORDER, 'COMPLETED');
+
+        expect(prisma.payrollAccrual.create).not.toHaveBeenCalled();
+        expect(prisma.payrollAccrual.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: 'acc-1' },
+                data: expect.objectContaining({ amount: 25000, baseAmount: 500000 }), // 5% от 500 000
+            }),
+        );
+    });
+
+    it('повторное срабатывание с той же суммой ничего не перезаписывает', async () => {
+        prisma.order.findUnique.mockResolvedValue(makeOrder());
+        prisma.payrollScheme.findFirst.mockResolvedValueOnce(percentScheme());
+        prisma.payrollAccrual.findUnique.mockResolvedValue({ id: 'acc-1', amount: 25000, baseAmount: 500000 });
+
+        await service.processOrderTrigger(ORDER, 'COMPLETED');
+
+        expect(prisma.payrollAccrual.create).not.toHaveBeenCalled();
+        expect(prisma.payrollAccrual.update).not.toHaveBeenCalled();
+    });
+
+    it('отмена заявки сторнирует ранее начисленный процент (обнуляет, не удаляет)', async () => {
+        prisma.payrollAccrual.findFirst.mockResolvedValue({ id: 'acc-1', amount: 25000, schemeSnapshot: { foo: 'bar' } });
+
+        await service.processOrderTrigger(ORDER, 'STATUS:CANCELLED');
+
+        expect(prisma.payrollAccrual.findFirst).toHaveBeenCalledWith({ where: { orderId: ORDER, kind: 'PERCENT' } });
+        expect(prisma.payrollAccrual.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: 'acc-1' },
+                data: expect.objectContaining({ amount: 0 }),
+            }),
+        );
+        // Отмена — не обычный статус-триггер схемы, до поиска схемы дело не доходит
+        expect(prisma.order.findUnique).not.toHaveBeenCalled();
+        expect(prisma.payrollScheme.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('отмена заявки без начисления ничего не делает', async () => {
+        prisma.payrollAccrual.findFirst.mockResolvedValue(null);
+
+        await service.processOrderTrigger(ORDER, 'STATUS:CANCELLED');
+
+        expect(prisma.payrollAccrual.update).not.toHaveBeenCalled();
     });
 });
 
