@@ -318,12 +318,20 @@ export class AccountingController {
         @Param('year') year: string,
         @Param('month') month: string,
     ) {
-        return this.accountingService.openPeriod(
+        const result = await this.accountingService.openPeriod(
             req.user.companyId,
             req.user.id,
             parseInt(year, 10),
             parseInt(month, 10),
         );
+        // Переоткрытие закрытого периода разблокирует правку прошлых финансовых
+        // данных — фиксируем в аудите, кто и когда это сделал.
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'SETTINGS', entity: 'closed_period',
+            entityLabel: `Период ${month.padStart(2, '0')}/${year} переоткрыт`,
+            details: { year: parseInt(year, 10), month: parseInt(month, 10) },
+        });
+        return result;
     }
 
     // ==================== EXCEL EXPORTS ====================

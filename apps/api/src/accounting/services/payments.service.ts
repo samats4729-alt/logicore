@@ -349,6 +349,24 @@ export class PaymentsService {
             await this.periodClosingService.checkPeriodNotClosed(companyId, data.date);
         }
 
+        // Меняем сумму платежа по заявке, чей счёт уже подтверждён оплаченным (PAID) —
+        // это рассинхронит флаг «оплачено» с реальной суммой платежей (см. M-6).
+        if (data.amount !== undefined && payment.orderId) {
+            const relatedOrder = await this.prisma.order.findUnique({
+                where: { id: payment.orderId },
+                select: {
+                    outgoingInvoice: { select: { status: true } },
+                    incomingInvoice: { select: { status: true } },
+                },
+            });
+            const relevantInvoiceStatus = payment.direction === PaymentDirection.IN
+                ? relatedOrder?.outgoingInvoice?.status
+                : relatedOrder?.incomingInvoice?.status;
+            if (relevantInvoiceStatus === InvoiceStatus.PAID) {
+                throw new BadRequestException('Нельзя изменить сумму платежа: счёт по этой заявке уже отмечен оплаченным. Сначала измените статус счёта.');
+            }
+        }
+
         const amt = data.amount !== undefined ? money(data.amount) : payment.amount;
         const oldOrderId = payment.orderId;
 
@@ -395,6 +413,25 @@ export class PaymentsService {
         if (!payment) throw new NotFoundException('Платеж не найден');
 
         await this.periodClosingService.checkPeriodNotClosed(companyId, payment.date);
+
+        // Счёт по заявке уже подтверждён оплаченным (PAID) — удаление платежа
+        // напрямую (в обход смены статуса счёта) рассинхронит флаг «оплачено»
+        // с реальной суммой платежей (см. M-6). Сначала нужно снять PAID со счёта.
+        if (payment.orderId) {
+            const relatedOrder = await this.prisma.order.findUnique({
+                where: { id: payment.orderId },
+                select: {
+                    outgoingInvoice: { select: { status: true } },
+                    incomingInvoice: { select: { status: true } },
+                },
+            });
+            const relevantInvoiceStatus = payment.direction === PaymentDirection.IN
+                ? relatedOrder?.outgoingInvoice?.status
+                : relatedOrder?.incomingInvoice?.status;
+            if (relevantInvoiceStatus === InvoiceStatus.PAID) {
+                throw new BadRequestException('Нельзя удалить платёж: счёт по этой заявке уже отмечен оплаченным. Сначала измените статус счёта.');
+            }
+        }
 
         const updated = await this.prisma.payment.update({
             where: { id: paymentId },

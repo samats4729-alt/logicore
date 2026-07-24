@@ -7,9 +7,13 @@ export class PeriodClosingService {
     constructor(private prisma: PrismaService) { }
 
     async checkPeriodNotClosed(companyId: string, date: Date | string) {
+        // UTC, а не локальное время процесса: даты операций хранятся в UTC, и на
+        // границе месяца локальная TZ сервера могла отнести операцию к «соседнему»
+        // месяцу — операция либо обходила закрытие периода, либо блокировалась
+        // ошибочно (особенно заметно для KZ, UTC+5/+6, вечером последнего дня месяца).
         const d = new Date(date);
-        const year = d.getFullYear();
-        const month = d.getMonth() + 1;
+        const year = d.getUTCFullYear();
+        const month = d.getUTCMonth() + 1;
 
         const closed = await this.prisma.closedPeriod.findUnique({
             where: {
