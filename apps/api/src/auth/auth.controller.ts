@@ -1,9 +1,11 @@
-import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginEmailDto, RegisterCompanyDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Response } from 'express';
+import { clearAuthCookie, setAuthCookie } from './auth-cookie';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -18,8 +20,10 @@ export class AuthController {
     @ApiOperation({ summary: 'Вход по email и паролю' })
     @ApiResponse({ status: 200, description: 'Успешная авторизация' })
     @ApiResponse({ status: 401, description: 'Неверные учетные данные' })
-    async loginEmail(@Body() dto: LoginEmailDto) {
-        return this.authService.loginWithEmail(dto.email, dto.password, dto.deviceId);
+    async loginEmail(@Body() dto: LoginEmailDto, @Res({ passthrough: true }) response: Response) {
+        const result = await this.authService.loginWithEmail(dto.email, dto.password, dto.deviceId);
+        setAuthCookie(response, result.accessToken);
+        return result;
     }
 
     // ==================== Вход водителя (мобильное приложение) ====================
@@ -30,8 +34,10 @@ export class AuthController {
     @ApiOperation({ summary: 'Вход водителя по телефону и паролю' })
     @ApiResponse({ status: 200, description: 'Успешная авторизация' })
     @ApiResponse({ status: 401, description: 'Неверные учетные данные' })
-    async loginDriver(@Body() dto: { phone: string; password: string; deviceId: string }) {
-        return this.authService.loginDriver(dto.phone, dto.password, dto.deviceId);
+    async loginDriver(@Body() dto: { phone: string; password: string; deviceId: string }, @Res({ passthrough: true }) response: Response) {
+        const result = await this.authService.loginDriver(dto.phone, dto.password, dto.deviceId);
+        setAuthCookie(response, result.accessToken);
+        return result;
     }
 
     // ==================== Logout ====================
@@ -42,8 +48,9 @@ export class AuthController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Выход из системы' })
     @ApiResponse({ status: 200, description: 'Успешный выход' })
-    async logout(@Request() req: any) {
+    async logout(@Request() req: any, @Res({ passthrough: true }) response: Response) {
         await this.authService.logout(req.user.id);
+        clearAuthCookie(response);
         return { message: 'Успешный выход' };
     }
 
@@ -75,8 +82,10 @@ export class AuthController {
     @ApiOperation({ summary: 'Регистрация новой компании-клиента' })
     @ApiResponse({ status: 201, description: 'Компания зарегистрирована' })
     @ApiResponse({ status: 400, description: 'Email или телефон уже зарегистрирован' })
-    async registerCompany(@Body() dto: RegisterCompanyDto) {
-        return this.authService.registerCompany(dto);
+    async registerCompany(@Body() dto: RegisterCompanyDto, @Res({ passthrough: true }) response: Response) {
+        const result = await this.authService.registerCompany(dto);
+        setAuthCookie(response, result.accessToken);
+        return result;
     }
 
     // ==================== Google Auth ====================
@@ -84,8 +93,10 @@ export class AuthController {
     @Post('google')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Вход через Google' })
-    async googleLogin(@Body() dto: { token: string; deviceId: string }) {
-        return this.authService.loginWithGoogle(dto.token, dto.deviceId);
+    async googleLogin(@Body() dto: { token: string; deviceId: string }, @Res({ passthrough: true }) response: Response) {
+        const result = await this.authService.loginWithGoogle(dto.token, dto.deviceId);
+        if ('accessToken' in result && result.accessToken) setAuthCookie(response, result.accessToken);
+        return result;
     }
 
     @Post('google/register')
@@ -97,13 +108,15 @@ export class AuthController {
         companyType: 'CUSTOMER' | 'FORWARDER';
         bin: string;
         phone: string;
-    }) {
-        return this.authService.registerWithGoogle(dto.token, {
+    }, @Res({ passthrough: true }) response: Response) {
+        const result = await this.authService.registerWithGoogle(dto.token, {
             companyName: dto.companyName,
             companyType: dto.companyType,
             bin: dto.bin,
             phone: dto.phone,
         });
+        setAuthCookie(response, result.accessToken);
+        return result;
     }
 
     @Post('me')
@@ -127,8 +140,10 @@ export class AuthController {
     @Post('register/invited')
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: 'Зарегистрироваться по приглашению' })
-    async registerInvitedUser(@Body() dto: any) {
-        return this.authService.registerInvitedUser(dto);
+    async registerInvitedUser(@Body() dto: any, @Res({ passthrough: true }) response: Response) {
+        const result = await this.authService.registerInvitedUser(dto);
+        setAuthCookie(response, result.accessToken);
+        return result;
     }
 
     @Get('company-lookup/:bin')

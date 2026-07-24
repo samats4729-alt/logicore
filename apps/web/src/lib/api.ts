@@ -4,29 +4,26 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export const api = axios.create({
     baseURL: API_URL,
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Попытка восстановить токен из localStorage сразу при загрузке модуля (до инициализации React компонентов)
-const getInitialToken = () => {
-    if (typeof window === 'undefined') return null;
+// Удаляем токены, сохранённые старыми версиями веб-клиента. Пользовательские
+// данные можно оставить для быстрой отрисовки; сессия проверяется по httpOnly cookie.
+if (typeof window !== 'undefined') {
+    localStorage.removeItem('token');
     try {
         const authData = localStorage.getItem('logcomp-auth');
         if (authData) {
             const parsed = JSON.parse(authData);
-            return parsed.state?.token || null;
+            if (parsed.state?.token) {
+                delete parsed.state.token;
+                localStorage.setItem('logcomp-auth', JSON.stringify(parsed));
+            }
         }
-    } catch (e) {
-        return null;
-    }
-    return null;
-};
-
-const initialToken = getInitialToken();
-if (initialToken) {
-    api.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+    } catch { }
 }
 
 // Интерцептор для обработки ошибок авторизации
@@ -54,6 +51,7 @@ api.interceptors.response.use(
                 // Токен невалидный — очищаем
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('logcomp-auth');
+                    localStorage.removeItem('token');
                     window.location.href = '/login';
                 }
             }

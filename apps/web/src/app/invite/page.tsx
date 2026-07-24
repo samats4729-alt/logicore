@@ -50,7 +50,7 @@ function InviteForm() {
                 token
             });
             
-            setUser(res.data.user, res.data.accessToken);
+            setUser(res.data.user);
             
             message.success('Регистрация успешна!');
             

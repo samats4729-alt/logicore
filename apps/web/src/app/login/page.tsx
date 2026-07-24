@@ -98,8 +98,8 @@ export default function LoginPage() {
                 return;
             }
 
-            const { accessToken, user } = response.data;
-            setUser(user, accessToken);
+            const { user } = response.data;
+            setUser(user);
             message.success('Вход через Google выполнен успешно');
 
             // Редирект по роли

@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
+import { extractAuthCookie } from '../auth-cookie';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -15,7 +16,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             throw new Error('JWT_SECRET environment variable is not set');
         }
         super({
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            // Browser uses an httpOnly cookie; mobile and API clients keep Bearer auth.
+            jwtFromRequest: ExtractJwt.fromExtractors([
+                extractAuthCookie,
+                ExtractJwt.fromAuthHeaderAsBearerToken(),
+            ]),
             ignoreExpiration: false,
             secretOrKey: secret,
             passReqToCallback: true,
@@ -24,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     async validate(req: any, payload: any) {
         // Получаем токен из заголовка
-        const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+        const token = extractAuthCookie(req) || ExtractJwt.fromAuthHeaderAsBearerToken()(req);
 
         // Проверяем активность сессии (Single Session Policy)
         if (!token) {

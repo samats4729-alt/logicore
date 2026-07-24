@@ -48,16 +48,7 @@ export default function SettingsPage() {
         try {
             const res = await api.post(`/company/switch-company/${companyId}`);
             
-            const authState = {
-                state: {
-                    user: res.data.user,
-                    token: res.data.accessToken,
-                    isAuthenticated: true,
-                },
-                version: 0,
-            };
-            localStorage.setItem('logcomp-auth', JSON.stringify(authState));
-            setUser(res.data.user, res.data.accessToken);
+            setUser(res.data.user);
             
             message.success('Организация успешно переключена');
             setTimeout(() => {
@@ -93,17 +84,8 @@ export default function SettingsPage() {
             message.success('Организация успешно удалена');
             
             if (res.data.switched) {
-                // Если переключилась активная организация, обновляем JWT
-                const authState = {
-                    state: {
-                        user: res.data.user,
-                        token: res.data.accessToken,
-                        isAuthenticated: true,
-                    },
-                    version: 0,
-                };
-                localStorage.setItem('logcomp-auth', JSON.stringify(authState));
-                setUser(res.data.user, res.data.accessToken);
+                // Сервер уже обновил защищённую cookie активной организации.
+                setUser(res.data.user);
                 
                 setTimeout(() => {
                     window.location.reload();

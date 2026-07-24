@@ -15,6 +15,7 @@ import { UserRole } from '@prisma/client';
 import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto, GetCompanyUsersQueryDto, CreateVehicleDto, UpdateVehicleDto } from './dto/company.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { AssignDriverDto } from '../orders/dto/order.dto';
+import { setAuthCookie } from '../auth/auth-cookie';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -600,8 +601,10 @@ export class CompanyController {
 
     @Post('switch-company/:id')
     @ApiOperation({ summary: 'Переключить текущую организацию' })
-    async switchCompany(@Request() req: any, @Param('id') companyId: string) {
-        return this.companyService.switchCompany(req.user.sub, companyId);
+    async switchCompany(@Request() req: any, @Param('id') companyId: string, @Res({ passthrough: true }) response: Response) {
+        const result = await this.companyService.switchCompany(req.user.sub, companyId);
+        setAuthCookie(response, result.accessToken);
+        return result;
     }
 
     // ==================== События (тикер) ====================
@@ -637,7 +640,9 @@ export class CompanyController {
 
     @Delete('my-companies/:id')
     @ApiOperation({ summary: 'Удалить связь с организацией' })
-    async deleteMyCompany(@Request() req: any, @Param('id') companyId: string) {
-        return this.companyService.deleteCompany(req.user.sub, companyId);
+    async deleteMyCompany(@Request() req: any, @Param('id') companyId: string, @Res({ passthrough: true }) response: Response) {
+        const result = await this.companyService.deleteCompany(req.user.sub, companyId);
+        if (result.accessToken) setAuthCookie(response, result.accessToken);
+        return result;
     }
 }
