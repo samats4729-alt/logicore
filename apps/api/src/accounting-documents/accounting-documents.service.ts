@@ -13,11 +13,12 @@ import {
     OrderStatus,
     Prisma,
 } from '@prisma/client';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import type { FinancialReportsService } from '../accounting/services/financial-reports.service';
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
+import { toNum } from '../common/utils/money';
 import {
     AccountingDocumentListQueryDto,
     CreateAccountingDocumentDto,
@@ -280,7 +281,7 @@ export class AccountingDocumentsService {
                 }
                 : undefined,
         };
-        const [data, total] = await this.prisma.$transaction([
+        const [data, total, sums] = await this.prisma.$transaction([
             this.prisma.accountingDocument.findMany({
                 where,
                 orderBy: [{ documentDate: 'desc' }, { createdAt: 'desc' }],
@@ -288,12 +289,38 @@ export class AccountingDocumentsService {
                 take: limit,
                 include: {
                     counterparty: { select: { id: true, name: true, bin: true } },
-                    _count: { select: { lines: true, reconciliationLines: true, paymentAllocations: true } },
+                    // Заявки-основания: в журнале это колонка «Сделка», по ней
+                    // бухгалтер понимает, за какой рейс выставлен документ.
+                    orders: {
+                        select: { order: { select: { id: true, orderNumber: true } } },
+                        take: 5,
+                    },
+                    _count: { select: { lines: true, reconciliationLines: true, paymentAllocations: true, orders: true } },
                 },
             }),
             this.prisma.accountingDocument.count({ where }),
+            // Итоги считаются по ВСЕЙ выборке, а не по странице: бухгалтеру
+            // нужен ответ «сколько выставлено этому контрагенту за период»,
+            // и он не должен зависеть от размера страницы.
+            this.prisma.accountingDocument.aggregate({
+                where: { ...where, status: { not: AccountingDocumentStatus.CANCELLED } },
+                _sum: { total: true, amountPaid: true, balanceDue: true },
+            }),
         ]);
-        return { data, total, page, limit };
+
+        return {
+            data,
+            total,
+            page,
+            limit,
+            totals: {
+                // Отменённые документы в суммы не входят — в 1С они тоже не
+                // участвуют в итогах журнала.
+                amount: toNum(sums._sum.total),
+                paid: toNum(sums._sum.amountPaid),
+                due: toNum(sums._sum.balanceDue),
+            },
+        };
     }
 
     async getById(companyId: string, id: string) {
@@ -303,6 +330,64 @@ export class AccountingDocumentsService {
         });
         if (!document) throw new NotFoundException('Бухгалтерский документ не найден');
         return document;
+    }
+
+    /**
+     * Перевыпуск публичной ссылки: старый токен сразу перестаёт работать.
+     *
+     * У прежней модели счетов ссылка была вечной и отозвать её было нельзя —
+     * утёкшая ссылка навсегда открывала документ с реквизитами.
+     */
+    async regenerateShareToken(companyId: string, id: string) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: { id: true },
+        });
+        if (!document) throw new NotFoundException('Документ не найден');
+
+        return this.prisma.accountingDocument.update({
+            where: { id },
+            data: { shareToken: randomUUID(), shareRevokedAt: null },
+            select: { id: true, shareToken: true, shareRevokedAt: true },
+        });
+    }
+
+    /** Полный отзыв ссылки: документ перестаёт открываться публично вовсе. */
+    async revokeShare(companyId: string, id: string) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: { id: true },
+        });
+        if (!document) throw new NotFoundException('Документ не найден');
+
+        return this.prisma.accountingDocument.update({
+            where: { id },
+            data: { shareRevokedAt: new Date() },
+            select: { id: true, shareRevokedAt: true },
+        });
+    }
+
+    /**
+     * Публичный просмотр документа по токену. Отдаёт только то, что уместно
+     * показать контрагенту: сам документ и его строки, без внутренних
+     * пометок, автора и истории.
+     */
+    async getPublicByToken(token: string) {
+        const document = await this.prisma.accountingDocument.findUnique({
+            where: { shareToken: token },
+            include: DOCUMENT_INCLUDE,
+        });
+
+        // Отозванная ссылка и несуществующая неразличимы снаружи.
+        if (!document || document.shareRevokedAt) {
+            throw new NotFoundException('Ссылка недействительна');
+        }
+        if (document.status === AccountingDocumentStatus.DRAFT) {
+            throw new NotFoundException('Ссылка недействительна');
+        }
+
+        const { note, createdBy, postedBy, cancelledBy, checksum, ...publicFields } = document;
+        return publicFields;
     }
 
     async post(companyId: string, userId: string, id: string) {

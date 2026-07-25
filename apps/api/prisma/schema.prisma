@@ -1475,40 +1475,40 @@ enum AccountingVatCalculation {
 }
 
 model AccountingDocument {
-  id                         String                         @id @default(cuid())
+  id                         String                      @id @default(cuid())
   companyId                  String
-  company                    Company                        @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  company                    Company                     @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
   counterpartyId             String
-  counterparty               Company                        @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
+  counterparty               Company                     @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
   type                       AccountingDocumentType
   direction                  AccountingDocumentDirection
-  status                     AccountingDocumentStatus       @default(DRAFT)
+  status                     AccountingDocumentStatus    @default(DRAFT)
   number                     String
   externalNumber             String?
-  externalDate               DateTime?                      @db.Date
-  documentDate               DateTime                       @db.Date
-  operationDate              DateTime?                      @db.Date
-  dueDate                    DateTime?                      @db.Date
-  reportPeriodFrom           DateTime?                      @db.Date
-  reportPeriodTo             DateTime?                      @db.Date
+  externalDate               DateTime?                   @db.Date
+  documentDate               DateTime                    @db.Date
+  operationDate              DateTime?                   @db.Date
+  dueDate                    DateTime?                   @db.Date
+  reportPeriodFrom           DateTime?                   @db.Date
+  reportPeriodTo             DateTime?                   @db.Date
   contractId                 String?
-  contract                   Contract?                      @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  contract                   Contract?                   @relation(fields: [contractId], references: [id], onDelete: SetNull)
   // Расчётный счёт организации, с которого выставлен документ. Его реквизиты
   // попадают в issuerSnapshot и печатаются; сама ссылка нужна для отбора и
   // для подстановки счёта по умолчанию в следующих документах.
   bankAccountId              String?
-  bankAccount                FinanceAccount?                @relation("AccountingDocumentBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
-  currency                   String                         @default("KZT") @db.VarChar(3)
-  subtotal                   Decimal                        @default(0) @db.Decimal(20, 2)
-  discountTotal              Decimal                        @default(0) @db.Decimal(20, 2)
-  vatTotal                   Decimal                        @default(0) @db.Decimal(20, 2)
-  total                      Decimal                        @default(0) @db.Decimal(20, 2)
-  amountPaid                 Decimal                        @default(0) @db.Decimal(20, 2)
-  balanceDue                 Decimal                        @default(0) @db.Decimal(20, 2)
-  openingBalance             Decimal?                       @db.Decimal(20, 2)
-  debitTurnover              Decimal?                       @db.Decimal(20, 2)
-  creditTurnover             Decimal?                       @db.Decimal(20, 2)
-  closingBalance             Decimal?                       @db.Decimal(20, 2)
+  bankAccount                FinanceAccount?             @relation("AccountingDocumentBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
+  currency                   String                      @default("KZT") @db.VarChar(3)
+  subtotal                   Decimal                     @default(0) @db.Decimal(20, 2)
+  discountTotal              Decimal                     @default(0) @db.Decimal(20, 2)
+  vatTotal                   Decimal                     @default(0) @db.Decimal(20, 2)
+  total                      Decimal                     @default(0) @db.Decimal(20, 2)
+  amountPaid                 Decimal                     @default(0) @db.Decimal(20, 2)
+  balanceDue                 Decimal                     @default(0) @db.Decimal(20, 2)
+  openingBalance             Decimal?                    @db.Decimal(20, 2)
+  debitTurnover              Decimal?                    @db.Decimal(20, 2)
+  creditTurnover             Decimal?                    @db.Decimal(20, 2)
+  closingBalance             Decimal?                    @db.Decimal(20, 2)
   issuerSnapshot             Json
   recipientSnapshot          Json
   issuerSignatorySnapshot    Json?
@@ -1519,27 +1519,33 @@ model AccountingDocument {
   customerMaterialsInfo      String?
   appendixInfo               String?
   note                       String?
-  version                    Int                            @default(1)
-  checksum                   String?                        @db.VarChar(64)
-  pdfFileUrl                 String?
-  pdfGeneratedAt             DateTime?
-  createdById                String
-  createdBy                  User                           @relation("AccountingDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  postedById                 String?
-  postedBy                   User?                          @relation("AccountingDocumentPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
-  postedAt                   DateTime?
-  cancelledById              String?
-  cancelledBy                User?                          @relation("AccountingDocumentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
-  cancelledAt                DateTime?
-  cancellationReason         String?
-  createdAt                  DateTime                       @default(now())
-  updatedAt                  DateTime                       @updatedAt
-  lines                      AccountingDocumentLine[]
-  reconciliationLines        AccountingReconciliationLine[]
-  orders                     AccountingDocumentOrder[]
-  paymentAllocations         AccountingPaymentAllocation[]
-  sourceLinks                AccountingDocumentLink[]       @relation("AccountingDocumentSourceLinks")
-  targetLinks                AccountingDocumentLink[]       @relation("AccountingDocumentTargetLinks")
+  version                    Int                         @default(1)
+  checksum                   String?                     @db.VarChar(64)
+
+  // Публичная ссылка на документ для контрагента.
+  // Токен можно перевыпустить — тогда все ранее разосланные ссылки
+  // перестают работать (у старой модели Invoice отзыв был невозможен).
+  shareToken          String                         @unique @default(uuid())
+  shareRevokedAt      DateTime?
+  pdfFileUrl          String?
+  pdfGeneratedAt      DateTime?
+  createdById         String
+  createdBy           User                           @relation("AccountingDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  postedById          String?
+  postedBy            User?                          @relation("AccountingDocumentPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
+  postedAt            DateTime?
+  cancelledById       String?
+  cancelledBy         User?                          @relation("AccountingDocumentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelledAt         DateTime?
+  cancellationReason  String?
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
+  lines               AccountingDocumentLine[]
+  reconciliationLines AccountingReconciliationLine[]
+  orders              AccountingDocumentOrder[]
+  paymentAllocations  AccountingPaymentAllocation[]
+  sourceLinks         AccountingDocumentLink[]       @relation("AccountingDocumentSourceLinks")
+  targetLinks         AccountingDocumentLink[]       @relation("AccountingDocumentTargetLinks")
 
   @@unique([companyId, type, number])
   @@index([companyId, documentDate])

@@ -1,0 +1,44 @@
+import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AccountingDocumentsService } from './accounting-documents.service';
+import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
+
+/**
+ * Публичный доступ к документу по ссылке — для контрагента, у которого нет
+ * учётной записи. Аутентификации нет, поэтому:
+ *  - черновики и документы с отозванной ссылкой не отдаются;
+ *  - несуществующая и отозванная ссылка неразличимы (обе 404), чтобы по
+ *    ответу нельзя было перебирать токены;
+ *  - стоит ограничение частоты, как на остальных публичных страницах.
+ */
+@ApiTags('public-accounting-documents')
+@Controller('public/accounting-documents')
+export class PublicAccountingDocumentController {
+    constructor(
+        private readonly documents: AccountingDocumentsService,
+        private readonly pdf: AccountingDocumentPdfService,
+    ) {}
+
+    @Throttle({ default: { limit: 20, ttl: 60000 } })
+    @Get(':token')
+    @ApiOperation({ summary: 'Просмотр документа по публичной ссылке' })
+    async getByToken(@Param('token') token: string) {
+        return this.documents.getPublicByToken(token);
+    }
+
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @Get(':token/pdf')
+    @ApiOperation({ summary: 'Печатная форма документа по публичной ссылке' })
+    async getPdfByToken(@Param('token') token: string, @Res() res: Response) {
+        const document = await this.documents.getPublicByToken(token);
+        const buffer = await this.pdf.generatePdf(document as any);
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="document-${document.number}.pdf"`,
+            'Content-Length': String(buffer.length),
+        });
+        res.end(buffer);
+    }
+}

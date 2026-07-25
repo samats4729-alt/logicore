@@ -8,10 +8,11 @@ import {
     RECONCILIATION_REPORTS,
 } from './accounting-documents.service';
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
+import { PublicAccountingDocumentController } from './public-accounting-document.controller';
 
 @Module({
     imports: [AccountingModule],
-    controllers: [AccountingDocumentsController],
+    controllers: [AccountingDocumentsController, PublicAccountingDocumentController],
     providers: [
         AccountingDocumentsService,
         AccountingDocumentCalculatorService,

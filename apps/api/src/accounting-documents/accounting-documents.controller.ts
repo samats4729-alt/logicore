@@ -131,6 +131,43 @@ export class AccountingDocumentsController {
         res.end(pdfBuffer);
     }
 
+    @Post(':id/share/regenerate')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Перевыпустить публичную ссылку на документ',
+        description: 'Ранее разосланные ссылки сразу перестают работать.',
+    })
+    async regenerateShare(@Request() req: any, @Param('id') id: string) {
+        const result = await this.documents.regenerateShareToken(req.user.companyId, id);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'accounting_document',
+            entityId: id,
+            entityLabel: 'Публичная ссылка перевыпущена',
+            details: { revoked: true },
+        });
+        return result;
+    }
+
+    @Post(':id/share/revoke')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Отозвать публичную ссылку на документ' })
+    async revokeShare(@Request() req: any, @Param('id') id: string) {
+        const result = await this.documents.revokeShare(req.user.companyId, id);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'accounting_document',
+            entityId: id,
+            entityLabel: 'Публичная ссылка отозвана',
+            details: { revoked: true },
+        });
+        return result;
+    }
+
     @Post(':id/post')
     @Roles(...CHANGE_ROLES)
     @ApiOperation({ summary: 'Провести бухгалтерский документ' })

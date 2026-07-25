@@ -47,6 +47,8 @@ function makeService() {
         financeAccount: { findFirst: jest.fn().mockResolvedValue(null) },
         order: { count: jest.fn().mockResolvedValue(0) },
         accountingDocument: {
+            findUnique: jest.fn(),
+            update: jest.fn(async ({ data }: any) => ({ id: 'doc-1', ...data })),
             findFirst: jest.fn(),
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -125,6 +127,79 @@ const storedDocument = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('AccountingDocumentsService', () => {
+    // T-16: у прежней модели счетов публичная ссылка была вечной и отозвать
+    // её было нельзя — утёкшая ссылка навсегда открывала документ с
+    // реквизитами. Здесь ссылка перевыпускается и отзывается.
+    describe('публичная ссылка на документ', () => {
+        it('перевыпуск выдаёт новый токен и снимает отзыв', async () => {
+            const { service, prisma } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue({ id: 'doc-1' });
+
+            await service.regenerateShareToken(COMPANY, 'doc-1');
+
+            const [args] = prisma.accountingDocument.update.mock.calls[0];
+            expect(args.data.shareRevokedAt).toBeNull();
+            expect(typeof args.data.shareToken).toBe('string');
+            expect(args.data.shareToken.length).toBeGreaterThan(20);
+        });
+
+        it('отзыв проставляет дату и не трогает токен', async () => {
+            const { service, prisma } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue({ id: 'doc-1' });
+
+            await service.revokeShare(COMPANY, 'doc-1');
+
+            const [args] = prisma.accountingDocument.update.mock.calls[0];
+            expect(args.data.shareRevokedAt).toBeInstanceOf(Date);
+            expect(args.data.shareToken).toBeUndefined();
+        });
+
+        it('чужой документ не отзывается', async () => {
+            const { service, prisma } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue(null);
+
+            await expect(service.revokeShare(COMPANY, 'doc-чужой')).rejects.toThrow(/не найден/);
+        });
+
+        it('по отозванной ссылке документ не отдаётся', async () => {
+            const { service, prisma } = makeService();
+            prisma.accountingDocument.findUnique.mockResolvedValue(
+                storedDocument({ status: AccountingDocumentStatus.POSTED, shareRevokedAt: new Date() }),
+            );
+
+            await expect(service.getPublicByToken('t')).rejects.toThrow(/недействительна/);
+        });
+
+        it('черновик по ссылке не отдаётся', async () => {
+            const { service, prisma } = makeService();
+            prisma.accountingDocument.findUnique.mockResolvedValue(
+                storedDocument({ status: AccountingDocumentStatus.DRAFT, shareRevokedAt: null }),
+            );
+
+            await expect(service.getPublicByToken('t')).rejects.toThrow(/недействительна/);
+        });
+
+        it('проведённый документ отдаётся без внутренних полей', async () => {
+            const { service, prisma } = makeService();
+            prisma.accountingDocument.findUnique.mockResolvedValue(
+                storedDocument({
+                    status: AccountingDocumentStatus.POSTED,
+                    shareRevokedAt: null,
+                    note: 'внутренняя пометка',
+                    checksum: 'abc',
+                    createdBy: { id: 'u1', firstName: 'И', lastName: 'И' },
+                }),
+            );
+
+            const result: any = await service.getPublicByToken('t');
+
+            expect(result.number).toBe('СЧ-2026-000001');
+            expect(result.note).toBeUndefined();
+            expect(result.checksum).toBeUndefined();
+            expect(result.createdBy).toBeUndefined();
+        });
+    });
+
     // T-19: у компании может быть несколько расчётных счетов, а в карточке
     // организации хранится только один комплект реквизитов. В счёт обязаны
     // попасть реквизиты того счёта, с которого его выставили, — иначе
