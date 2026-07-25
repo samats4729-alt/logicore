@@ -14,7 +14,11 @@ interface InvoicePdfLine {
     quantity: Prisma.Decimal;
     unit: string;
     unitPrice: Prisma.Decimal;
+    subtotal?: Prisma.Decimal;
+    vatAmount?: Prisma.Decimal;
     total: Prisma.Decimal;
+    serviceDate?: Date | null;
+    reportDetails?: string | null;
 }
 
 export interface InvoicePdfDocument {
@@ -22,15 +26,22 @@ export interface InvoicePdfDocument {
     status: AccountingDocumentStatus;
     number: string;
     documentDate: Date;
+    operationDate?: Date | null;
+    reportPeriodFrom?: Date | null;
+    reportPeriodTo?: Date | null;
     paymentPurposeCode: string | null;
     paymentTerms: string | null;
     note: string | null;
+    customerMaterialsInfo?: string | null;
+    appendixInfo?: string | null;
     currency: string;
     subtotal: Prisma.Decimal;
     vatTotal: Prisma.Decimal;
     total: Prisma.Decimal;
     issuerSnapshot: Prisma.JsonValue;
     recipientSnapshot: Prisma.JsonValue;
+    issuerSignatorySnapshot?: Prisma.JsonValue | null;
+    recipientSignatorySnapshot?: Prisma.JsonValue | null;
     basisSnapshot: Prisma.JsonValue | null;
     createdAt: Date;
     postedAt: Date | null;
@@ -53,6 +64,16 @@ interface PartySnapshot {
 
 @Injectable()
 export class AccountingDocumentPdfService {
+    async generatePdf(document: InvoicePdfDocument): Promise<Buffer> {
+        if (document.type === AccountingDocumentType.PAYMENT_INVOICE) {
+            return this.generateInvoicePdf(document);
+        }
+        if (document.type === AccountingDocumentType.SERVICE_ACT) {
+            return this.generateServiceActPdf(document);
+        }
+        throw new BadRequestException('Печатная форма для этого типа документа ещё не реализована');
+    }
+
     async generateInvoicePdf(document: InvoicePdfDocument): Promise<Buffer> {
         if (document.type !== AccountingDocumentType.PAYMENT_INVOICE) {
             throw new BadRequestException('Эта печатная форма предназначена только для счёта на оплату');
@@ -112,6 +133,427 @@ export class AccountingDocumentPdfService {
             this.addPageNumbers(doc);
             doc.end();
         });
+    }
+
+    async generateServiceActPdf(document: InvoicePdfDocument): Promise<Buffer> {
+        if (document.type !== AccountingDocumentType.SERVICE_ACT) {
+            throw new BadRequestException('Эта печатная форма предназначена только для акта выполненных работ');
+        }
+        if (!document.lines.length) {
+            throw new BadRequestException('Нельзя сформировать акт без строк');
+        }
+
+        const issuer = this.party(document.issuerSnapshot);
+        const recipient = this.party(document.recipientSnapshot);
+        const issuerSignatory = this.record(document.issuerSignatorySnapshot ?? null);
+        const recipientSignatory = this.record(document.recipientSignatorySnapshot ?? null);
+        const basis = this.record(document.basisSnapshot);
+        const creationDate = document.postedAt ?? document.createdAt;
+
+        return new Promise<Buffer>((resolve, reject) => {
+            const doc = new PDFDocument({
+                size: 'A4',
+                layout: 'landscape',
+                margins: { top: 22, bottom: 32, left: 24, right: 24 },
+                bufferPages: true,
+                compress: true,
+                info: {
+                    Title: `Акт выполненных работ № ${document.number}`,
+                    Author: issuer.name || 'LogiCore',
+                    Subject: 'Форма Р-1',
+                    CreationDate: creationDate,
+                    ModDate: creationDate,
+                },
+            });
+            const fontsDir = path.join(__dirname, '..', 'contracts', 'fonts');
+            doc.registerFont('Roboto', path.join(fontsDir, 'Roboto-Regular.ttf'));
+            doc.registerFont('Roboto-Bold', path.join(fontsDir, 'Roboto-Bold.ttf'));
+
+            const chunks: Buffer[] = [];
+            doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+
+            const drawDraftWatermark = () => {
+                if (document.status !== AccountingDocumentStatus.DRAFT) return;
+                doc.save();
+                doc.opacity(0.07);
+                doc.font('Roboto-Bold').fontSize(58).fillColor('#6b7280');
+                doc.rotate(-25, { origin: [doc.page.width / 2, doc.page.height / 2] });
+                doc.text('ЧЕРНОВИК', 130, doc.page.height / 2 - 30, {
+                    width: doc.page.width - 260,
+                    align: 'center',
+                    lineBreak: false,
+                });
+                doc.restore();
+            };
+            doc.on('pageAdded', drawDraftWatermark);
+            drawDraftWatermark();
+
+            this.drawServiceActHeader(doc, document, issuer, recipient, basis);
+            this.drawServiceActLines(doc, document);
+            this.drawServiceActFooter(
+                doc,
+                document,
+                issuer,
+                recipient,
+                issuerSignatory,
+                recipientSignatory,
+            );
+            this.addPageNumbers(doc);
+            doc.end();
+        });
+    }
+
+    private drawServiceActHeader(
+        doc: PDFKit.PDFDocument,
+        document: InvoicePdfDocument,
+        issuer: PartySnapshot,
+        recipient: PartySnapshot,
+        basis: Record<string, unknown>,
+    ) {
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const legalWidth = 255;
+
+        doc.font('Roboto').fontSize(6.5).fillColor('#444444');
+        doc.text(
+            'Приложение 50\nк приказу Министра финансов\nРеспублики Казахстан\nот 20 декабря 2012 года № 562',
+            left + width - legalWidth,
+            18,
+            { width: legalWidth, align: 'center', lineGap: 0.5 },
+        );
+        doc.font('Roboto').fontSize(7.5).fillColor('#222222');
+        doc.text('Форма Р-1', left + width - 105, 67, { width: 105, align: 'center' });
+
+        let y = 82;
+        y = this.drawActPartyRow(doc, 'Заказчик', recipient, y);
+        y = this.drawActPartyRow(doc, 'Исполнитель', issuer, y);
+
+        const contractNumber = this.stringValue(basis.contractNumber);
+        const contractText = contractNumber
+            ? `Договор № ${contractNumber}${this.formatBasisDate(basis.startDate)}`
+            : '—';
+        const boxWidth = 170;
+        const contractLabelWidth = 64;
+        const contractY = y + 2;
+        doc.font('Roboto').fontSize(7.5).fillColor('#222222');
+        doc.text('Договор (контракт)', left, contractY, { width: contractLabelWidth });
+        doc.font('Roboto-Bold').text(contractText, left + contractLabelWidth, contractY, {
+            width: width - contractLabelWidth - boxWidth - 12,
+        });
+
+        const boxX = left + width - boxWidth;
+        const headerHeight = 18;
+        const valueHeight = 20;
+        const numberWidth = 88;
+        doc.rect(boxX, contractY - 2, boxWidth, headerHeight + valueHeight).lineWidth(0.55).strokeColor('#333333').stroke();
+        doc.moveTo(boxX + numberWidth, contractY - 2).lineTo(boxX + numberWidth, contractY + headerHeight + valueHeight - 2).stroke();
+        doc.moveTo(boxX, contractY + headerHeight - 2).lineTo(boxX + boxWidth, contractY + headerHeight - 2).stroke();
+        doc.font('Roboto').fontSize(6).text('Номер документа', boxX + 3, contractY + 2, {
+            width: numberWidth - 6,
+            align: 'center',
+        });
+        doc.text('Дата составления', boxX + numberWidth + 3, contractY + 2, {
+            width: boxWidth - numberWidth - 6,
+            align: 'center',
+        });
+        doc.font('Roboto-Bold').fontSize(7.5).text(document.number, boxX + 3, contractY + headerHeight + 2, {
+            width: numberWidth - 6,
+            align: 'center',
+        });
+        doc.text(this.formatDateNumeric(document.documentDate), boxX + numberWidth + 3, contractY + headerHeight + 2, {
+            width: boxWidth - numberWidth - 6,
+            align: 'center',
+        });
+
+        doc.y = contractY + headerHeight + valueHeight + 8;
+        doc.font('Roboto-Bold').fontSize(11).fillColor('#111111');
+        doc.text('АКТ ВЫПОЛНЕННЫХ РАБОТ (ОКАЗАННЫХ УСЛУГ)', left, doc.y, {
+            width,
+            align: 'center',
+        });
+        if (document.reportPeriodFrom && document.reportPeriodTo) {
+            doc.moveDown(0.2);
+            doc.font('Roboto').fontSize(6.8).text(
+                `Отчётный период: ${this.formatDateNumeric(document.reportPeriodFrom)} - ${this.formatDateNumeric(document.reportPeriodTo)}`,
+                left,
+                doc.y,
+                { width, align: 'center' },
+            );
+        }
+        doc.moveDown(0.55);
+    }
+
+    private drawActPartyRow(
+        doc: PDFKit.PDFDocument,
+        label: string,
+        party: PartySnapshot,
+        y: number,
+    ) {
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const labelWidth = 64;
+        const binWidth = 118;
+        const partyWidth = width - labelWidth - binWidth - 10;
+        const partyText = this.formatParty(party);
+        doc.font('Roboto-Bold').fontSize(7.2);
+        const textHeight = doc.heightOfString(partyText, { width: partyWidth - 8, lineGap: 0.5 });
+        const height = Math.max(29, textHeight + 10);
+
+        doc.font('Roboto').fontSize(7.5).fillColor('#222222');
+        doc.text(label, left, y + 8, { width: labelWidth - 5 });
+        doc.font('Roboto-Bold').fontSize(7.2).text(partyText, left + labelWidth, y + 2, {
+            width: partyWidth - 8,
+            lineGap: 0.5,
+        });
+        doc.moveTo(left + labelWidth, y + height - 5)
+            .lineTo(left + labelWidth + partyWidth - 8, y + height - 5)
+            .lineWidth(0.45)
+            .strokeColor('#555555')
+            .stroke();
+        doc.font('Roboto').fontSize(5.5).fillColor('#666666');
+        doc.text('полное наименование, адрес, данные о средствах связи', left + labelWidth, y + height - 3, {
+            width: partyWidth - 8,
+            align: 'center',
+        });
+
+        const binX = left + width - binWidth;
+        doc.rect(binX, y, binWidth, height).lineWidth(0.55).strokeColor('#333333').stroke();
+        doc.font('Roboto').fontSize(6.5).fillColor('#333333').text('ИИН/БИН', binX + 3, y + 3, {
+            width: binWidth - 6,
+            align: 'center',
+        });
+        doc.font('Roboto-Bold').fontSize(8).fillColor('#111111').text(party.bin || '—', binX + 3, y + 15, {
+            width: binWidth - 6,
+            align: 'center',
+        });
+        return y + height + 4;
+    }
+
+    private drawServiceActLines(doc: PDFKit.PDFDocument, document: InvoicePdfDocument) {
+        const left = doc.page.margins.left;
+        const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const widths = [32, 230, 62, 112, 48, 45, 72, 94, contentWidth - 695];
+        const fullHeaderHeight = 82;
+
+        const drawHeader = () => {
+            const y = doc.y;
+            const topHeight = 32;
+            const subHeight = 36;
+            const numberHeight = fullHeaderHeight - topHeight - subHeight;
+            const fixedHeaders = [
+                'Номер по порядку',
+                'Наименование работ (услуг) в разрезе их подвидов в соответствии с технической спецификацией, заданием, графиком выполнения работ (услуг)',
+                'Дата выполнения работ (оказания услуг)',
+                'Сведения об отчёте о научных исследованиях, маркетинговых, консультационных и прочих услугах',
+                'Единица измерения',
+            ];
+            let x = left;
+            fixedHeaders.forEach((header, index) => {
+                this.actHeaderCell(doc, header, x, y, widths[index], topHeight + subHeight, index === 1 ? 5.1 : 5.5);
+                x += widths[index];
+            });
+            const groupWidth = widths.slice(5).reduce((sum, value) => sum + value, 0);
+            this.actHeaderCell(doc, 'Выполнено работ (оказано услуг)', x, y, groupWidth, topHeight, 6.2);
+            const subHeaders = ['количество', 'цена за единицу', 'стоимость', 'в том числе НДС'];
+            subHeaders.forEach((header, offset) => {
+                this.actHeaderCell(doc, header, x, y + topHeight, widths[offset + 5], subHeight, 5.7);
+                x += widths[offset + 5];
+            });
+
+            x = left;
+            widths.forEach((columnWidth, index) => {
+                this.actHeaderCell(doc, String(index + 1), x, y + topHeight + subHeight, columnWidth, numberHeight, 5.5);
+                x += columnWidth;
+            });
+            doc.y = y + fullHeaderHeight;
+        };
+
+        drawHeader();
+        document.lines.forEach((line, index) => {
+            const name = line.description ? `${line.name}\n${line.description}` : line.name;
+            const values = [
+                String(index + 1),
+                name,
+                this.formatDateNumeric(line.serviceDate ?? document.operationDate ?? document.documentDate),
+                line.reportDetails || '',
+                line.unit,
+                this.formatQuantity(line.quantity),
+                this.formatMoney(line.unitPrice),
+                this.formatMoney(line.total),
+                this.formatMoney(line.vatAmount ?? new Prisma.Decimal(0)),
+            ];
+            doc.font('Roboto').fontSize(6.2);
+            const heights = values.map((value, column) => doc.heightOfString(value, {
+                width: widths[column] - 6,
+                lineGap: 0.5,
+            }));
+            const rowHeight = Math.max(22, ...heights.map((height) => height + 7));
+            if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 125) {
+                doc.addPage();
+                doc.y = doc.page.margins.top + 5;
+                doc.font('Roboto-Bold').fontSize(8).text(
+                    `Продолжение акта № ${document.number} от ${this.formatDateNumeric(document.documentDate)}`,
+                    left,
+                    doc.y,
+                    { width: contentWidth, align: 'right' },
+                );
+                doc.moveDown(0.35);
+                drawHeader();
+            }
+            const y = doc.y;
+            let x = left;
+            values.forEach((value, column) => {
+                const align = [0, 2, 4, 5].includes(column) ? 'center' : column >= 6 ? 'right' : 'left';
+                doc.font('Roboto').fontSize(6.2);
+                this.tableCell(doc, value, x, y, widths[column], rowHeight, align);
+                x += widths[column];
+            });
+            doc.y = y + rowHeight;
+        });
+
+        const totalY = doc.y;
+        const labelWidth = widths.slice(0, 5).reduce((sum, value) => sum + value, 0);
+        const totalQuantity = document.lines.reduce(
+            (sum, line) => sum.plus(line.quantity),
+            new Prisma.Decimal(0),
+        );
+        const totals = [
+            'Итого',
+            this.formatQuantity(totalQuantity),
+            'x',
+            this.formatMoney(document.total),
+            this.formatMoney(document.vatTotal),
+        ];
+        let x = left;
+        doc.font('Roboto-Bold').fontSize(6.5);
+        this.tableCell(doc, totals[0], x, totalY, labelWidth, 18, 'right');
+        x += labelWidth;
+        totals.slice(1).forEach((value, index) => {
+            this.tableCell(doc, value, x, totalY, widths[index + 5], 18, index === 0 ? 'center' : 'right');
+            x += widths[index + 5];
+        });
+        doc.y = totalY + 18;
+    }
+
+    private drawServiceActFooter(
+        doc: PDFKit.PDFDocument,
+        document: InvoicePdfDocument,
+        issuer: PartySnapshot,
+        recipient: PartySnapshot,
+        issuerSignatory: Record<string, unknown>,
+        recipientSignatory: Record<string, unknown>,
+    ) {
+        this.ensureSpace(doc, 125);
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        doc.moveDown(0.55);
+        doc.font('Roboto').fontSize(6.8).fillColor('#222222');
+        this.actInfoLine(
+            doc,
+            'Сведения об использовании запасов, полученных от заказчика',
+            document.customerMaterialsInfo || 'не использовались',
+        );
+        this.actInfoLine(
+            doc,
+            'Приложение: перечень документации, в том числе отчётов и прочих материалов',
+            document.appendixInfo || 'отсутствует',
+        );
+        doc.moveDown(0.55);
+
+        const gap = 34;
+        const blockWidth = (width - gap) / 2;
+        const y = doc.y;
+        this.actSignatureBlock(
+            doc,
+            'Сдал (Исполнитель)',
+            left,
+            y,
+            blockWidth,
+            this.stringValue(issuerSignatory.position) || 'директор',
+            this.stringValue(issuerSignatory.name) || issuer.directorName || '',
+        );
+        this.actSignatureBlock(
+            doc,
+            'Принял (Заказчик)',
+            left + blockWidth + gap,
+            y,
+            blockWidth,
+            this.stringValue(recipientSignatory.position) || 'должность',
+            this.stringValue(recipientSignatory.name) || recipient.directorName || '',
+        );
+        doc.font('Roboto-Bold').fontSize(7).text('М.П.', left + 5, y + 47);
+        doc.text('М.П.', left + blockWidth + gap + 5, y + 47);
+        doc.font('Roboto').fontSize(6.5).text(
+            `Дата подписания (принятия) работ (услуг): ${this.formatDateNumeric(document.documentDate)}`,
+            left + blockWidth + gap,
+            y + 47,
+            { width: blockWidth, align: 'right' },
+        );
+    }
+
+    private actHeaderCell(
+        doc: PDFKit.PDFDocument,
+        value: string,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        fontSize: number,
+    ) {
+        doc.rect(x, y, width, height).lineWidth(0.45).strokeColor('#333333').stroke();
+        doc.font('Roboto').fontSize(fontSize).fillColor('#111111');
+        const textHeight = doc.heightOfString(value, { width: width - 5, lineGap: 0.2 });
+        doc.text(value, x + 2.5, y + Math.max(2, (height - textHeight) / 2), {
+            width: width - 5,
+            height: height - 3,
+            align: 'center',
+            lineGap: 0.2,
+        });
+    }
+
+    private actInfoLine(doc: PDFKit.PDFDocument, label: string, value: string) {
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const y = doc.y;
+        const labelWidth = 330;
+        doc.text(label, left, y, { width: labelWidth });
+        doc.font('Roboto-Bold').text(value, left + labelWidth, y, { width: width - labelWidth });
+        doc.moveTo(left + labelWidth, y + 10).lineTo(left + width, y + 10).lineWidth(0.4).strokeColor('#555555').stroke();
+        doc.y = y + 17;
+        doc.font('Roboto');
+    }
+
+    private actSignatureBlock(
+        doc: PDFKit.PDFDocument,
+        title: string,
+        x: number,
+        y: number,
+        width: number,
+        position: string,
+        name: string,
+    ) {
+        doc.font('Roboto-Bold').fontSize(7).fillColor('#111111').text(title, x, y, { width: 92 });
+        doc.font('Roboto').fontSize(6.8).text(position, x + 95, y, { width: 82, align: 'center' });
+        doc.text('', x + 182, y, { width: 75 });
+        doc.text(name || '________________', x + 262, y, { width: width - 262, align: 'center' });
+        doc.moveTo(x + 95, y + 11).lineTo(x + 177, y + 11).stroke();
+        doc.moveTo(x + 182, y + 11).lineTo(x + 257, y + 11).stroke();
+        doc.moveTo(x + 262, y + 11).lineTo(x + width, y + 11).stroke();
+        doc.font('Roboto').fontSize(5.2).fillColor('#666666');
+        doc.text('должность', x + 95, y + 13, { width: 82, align: 'center' });
+        doc.text('подпись', x + 182, y + 13, { width: 75, align: 'center' });
+        doc.text('расшифровка подписи', x + 262, y + 13, { width: width - 262, align: 'center' });
+    }
+
+    private formatDateNumeric(date: Date) {
+        return new Intl.DateTimeFormat('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            timeZone: 'UTC',
+        }).format(date);
     }
 
     private drawInvoiceHeader(

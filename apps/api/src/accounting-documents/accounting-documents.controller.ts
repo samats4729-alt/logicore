@@ -85,11 +85,12 @@ export class AccountingDocumentsController {
         @Res() res: Response,
     ) {
         const document = await this.documents.getById(req.user.companyId, id);
-        const pdfBuffer = await this.pdf.generateInvoicePdf(document);
+        const pdfBuffer = await this.pdf.generatePdf(document);
         const safeNumber = document.number.replace(/[^a-zA-Z0-9_-]+/g, '_');
+        const filePrefix = document.type === 'SERVICE_ACT' ? 'ServiceAct_R1' : 'Invoice';
         res.set({
             'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="Invoice_${safeNumber}.pdf"`,
+            'Content-Disposition': `attachment; filename="${filePrefix}_${safeNumber}.pdf"`,
             'Content-Length': pdfBuffer.length,
             'Cache-Control': 'private, no-store',
         });

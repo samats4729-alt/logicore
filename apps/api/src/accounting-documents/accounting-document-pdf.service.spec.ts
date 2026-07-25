@@ -79,4 +79,25 @@ describe('AccountingDocumentPdfService', () => {
             type: AccountingDocumentType.SERVICE_ACT,
         })).rejects.toThrow('только для счёта на оплату');
     });
+
+    it('создаёт PDF акта выполненных работ по форме Р-1', async () => {
+        const buffer = await service.generateServiceActPdf({
+            ...sampleDocument(),
+            type: AccountingDocumentType.SERVICE_ACT,
+            number: '608',
+            reportPeriodFrom: new Date('2026-07-01'),
+            reportPeriodTo: new Date('2026-07-31'),
+            customerMaterialsInfo: 'не использовались',
+            appendixInfo: 'Товарно-транспортная накладная на 1 странице',
+            lines: sampleDocument().lines.map((line, index) => ({
+                ...line,
+                serviceDate: new Date('2026-07-22'),
+                reportDetails: null,
+                vatAmount: new Prisma.Decimal(index === 1 ? '2758.62' : '0'),
+            })),
+        });
+
+        expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+        expect(buffer.length).toBeGreaterThan(20_000);
+    });
 });
