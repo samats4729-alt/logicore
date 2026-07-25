@@ -24,9 +24,16 @@ interface ActRow {
     date: string;
     doc: string;
     description: string;
+    /** «Увеличение долга» в терминах 1С. */
     debit: number;
+    /** «Уменьшение долга» в терминах 1С. */
     credit: number;
     balance: number;
+    orderNumber: string | null;
+    route: string | null;
+    driver: string | null;
+    invoiceNumber: string | null;
+    actNumber: string | null;
 }
 interface ActData {
     company: { id: string; name: string; bin: string | null };
@@ -132,7 +139,7 @@ function ReconciliationActInner() {
     };
 
     return (
-        <div className="lc-page recon-wrap" style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div className="lc-page recon-wrap" style={{ maxWidth: 1180, margin: '0 auto' }}>
             {/* Панель управления — не печатается */}
             <div className="recon-controls" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
                 <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/accounting/counterparty-report')}>
@@ -219,48 +226,65 @@ function ReconciliationActInner() {
                         <strong> {data.company.name} </strong> следующее:
                     </p>
 
-                    <table className="recon-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <div className="recon-scroll">
+                    <table className="recon-table" style={{ width: '100%', minWidth: 940, borderCollapse: 'collapse', fontSize: 11.5 }}>
+                        {/* Колонки — как в акте сверки 1С, чтобы бухгалтер
+                            сверял строку не открывая заявку. */}
                         <thead>
                             <tr>
-                                <th style={{ textAlign: 'left', width: 90 }}>Дата</th>
-                                <th style={{ textAlign: 'left' }}>Документ / операция</th>
-                                <th style={{ textAlign: 'right', width: 120 }}>Дебет</th>
-                                <th style={{ textAlign: 'right', width: 120 }}>Кредит</th>
-                                <th style={{ textAlign: 'right', width: 130 }}>Сальдо</th>
+                                <th style={{ textAlign: 'left', width: 78 }}>Дата</th>
+                                <th style={{ textAlign: 'left', width: 96 }}>№ заявки</th>
+                                <th style={{ textAlign: 'left' }}>Маршрут / комментарий</th>
+                                <th style={{ textAlign: 'left', width: 120 }}>Водитель</th>
+                                <th style={{ textAlign: 'left', width: 104 }}>Счёт</th>
+                                <th style={{ textAlign: 'left', width: 104 }}>Акт</th>
+                                <th style={{ textAlign: 'right', width: 106 }}>Увеличение долга</th>
+                                <th style={{ textAlign: 'right', width: 106 }}>Уменьшение долга</th>
+                                <th style={{ textAlign: 'right', width: 112 }}>Сальдо</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr className="recon-saldo">
-                                <td colSpan={4}><strong>Сальдо на начало периода</strong></td>
+                                <td colSpan={8}><strong>Сальдо на начало периода</strong></td>
                                 <td style={{ textAlign: 'right' }}>
                                     <strong>{data.openingBalance >= 0 ? fmt(data.openingBalance) : `(${fmt(-data.openingBalance)})`}</strong>
                                 </td>
                             </tr>
                             {data.rows.length === 0 ? (
-                                <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--lc-text-ter)', padding: '14px 0' }}>Операций за период нет</td></tr>
+                                <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--lc-text-ter)', padding: '14px 0' }}>Операций за период нет</td></tr>
                             ) : data.rows.map((r, i) => (
                                 <tr key={i}>
                                     <td>{dayjs(r.date).format('DD.MM.YYYY')}</td>
-                                    <td>{r.doc}{r.description ? <span style={{ color: 'var(--lc-text-ter)' }}> · {r.description}</span> : null}</td>
+                                    <td>{r.orderNumber || '—'}</td>
+                                    <td>
+                                        {r.route || r.doc}
+                                        {r.description && (
+                                            <span style={{ color: 'var(--lc-text-ter)' }}> · {r.description}</span>
+                                        )}
+                                    </td>
+                                    <td>{r.driver || '—'}</td>
+                                    <td>{r.invoiceNumber || '—'}</td>
+                                    <td>{r.actNumber || '—'}</td>
                                     <td style={{ textAlign: 'right' }}>{r.debit ? fmt(r.debit) : ''}</td>
                                     <td style={{ textAlign: 'right' }}>{r.credit ? fmt(r.credit) : ''}</td>
                                     <td style={{ textAlign: 'right' }}>{r.balance >= 0 ? fmt(r.balance) : `(${fmt(-r.balance)})`}</td>
                                 </tr>
                             ))}
                             <tr className="recon-total">
-                                <td colSpan={2}><strong>Обороты за период</strong></td>
+                                <td colSpan={6}><strong>Обороты за период</strong></td>
                                 <td style={{ textAlign: 'right' }}><strong>{fmt(data.totals.debit)}</strong></td>
                                 <td style={{ textAlign: 'right' }}><strong>{fmt(data.totals.credit)}</strong></td>
                                 <td></td>
                             </tr>
                             <tr className="recon-saldo">
-                                <td colSpan={4}><strong>Сальдо на конец периода</strong></td>
+                                <td colSpan={8}><strong>Сальдо на конец периода</strong></td>
                                 <td style={{ textAlign: 'right' }}>
                                     <strong>{data.closingBalance >= 0 ? fmt(data.closingBalance) : `(${fmt(-data.closingBalance)})`}</strong>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                    </div>
 
                     <p style={{ fontSize: 13, margin: '18px 0 6px' }}>
                         На {data.period.end ? dayjs(data.period.end).format('DD.MM.YYYY') : dayjs().format('DD.MM.YYYY')} {data.closingBalance === 0 ? '' : <>по данным {data.company.name} </>}
@@ -305,7 +329,16 @@ function ReconciliationActInner() {
                 }
                 .recon-table tr.recon-saldo td { background: var(--lc-hover); }
                 .recon-table tr.recon-total td { border-top: 2px solid #333; }
+                /* Таблица горизонтально прокручивается на узком экране,
+                   но сама страница вбок не едет. */
+                .recon-scroll { overflow-x: auto; }
                 @media print {
+                    /* Девять колонок в портрет не помещаются — 1С печатает
+                       акт сверки так же, альбомом. */
+                    @page { size: landscape; margin: 12mm; }
+                    .recon-scroll { overflow-x: visible !important; }
+                    .recon-table { font-size: 10px !important; }
+                    .recon-table th, .recon-table td { padding: 3px 5px !important; }
                     .recon-controls, .lc-app-nav, nav, header, .ant-layout-sider, .ant-layout-header { display: none !important; }
                     .recon-doc { box-shadow: none !important; border: none !important; padding: 0 !important; }
                     .recon-wrap { max-width: 100% !important; }

@@ -5,7 +5,7 @@ import { RedisService } from '../../redis/redis.service';
 import { FinanceCalculatorService, ORDER_FINANCE_RELATIONS_SELECT, ORDER_FINANCE_SELECT } from './finance-calculator.service';
 import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType, AccountingDocumentStatus, AccountingDocumentType } from '@prisma/client';
 import { D, Money, ZERO, money, positiveRest, roundMoney, sumOf, toNum, toNumOrNull } from '../../common/utils/money';
 import { PaymentsService } from './payments.service';
 import { FinancialSettingsService } from './financial-settings.service';
@@ -883,8 +883,23 @@ export class FinancialReportsService {
                 openingPayable: toNum(openingPayable),
                 overdueTheyOweUs: toNum(entry.overdueTheyOweUs),
                 overdueWeOweThem: toNum(entry.overdueWeOweThem),
-                // Текущий долг = начальный + начислено − оплачено
-                balance: toNum(entry.theyOweUs.plus(openingReceivable).minus(entry.weOweThem).minus(openingPayable)),
+                // Текущий долг = начальный + начислено − оплачено.
+                //
+                // Оплаты вычитаются: раньше их здесь не было, и «Баланс» на
+                // странице взаиморасчётов показывал начисленный оборот, а не
+                // долг — контрагент, заплативший 90 000 из 250 000, значился
+                // должным 250 000, тогда как акт сверки по тем же данным давал
+                // 160 000. Формула совпадает с конечным сальдо акта сверки:
+                // начальное сальдо + дебет − кредит.
+                //
+                // Без обрезки по нулю, в отличие от unpaid* ниже: переплата
+                // должна уводить баланс в минус (мы должны вернуть), а в
+                // колонках «Нам должны»/«Мы должны» отрицательных сумм быть
+                // не может.
+                balance: toNum(
+                    entry.theyOweUs.minus(entry.theyOweUsPaid).plus(openingReceivable)
+                        .minus(entry.weOweThem.minus(entry.weOweThemPaid)).minus(openingPayable),
+                ),
                 unpaidTheyOweUs: toNum(positiveRest(entry.theyOweUs, entry.theyOweUsPaid).plus(openingReceivable)),
                 unpaidWeOweThem: toNum(positiveRest(entry.weOweThem, entry.weOweThemPaid).plus(openingPayable)),
                 totalOrders: entry.orders.length,
@@ -953,16 +968,84 @@ export class FinancialReportsService {
             },
             include: {
                 ...ORDER_FINANCE_RELATIONS_SELECT,
+                // Для колонок акта сверки как в 1С: маршрут и водитель рядом
+                // с операцией, чтобы бухгалтер узнавал рейс без открытия заявки.
+                routePoints: {
+                    orderBy: { sequence: 'asc' },
+                    select: { location: { select: { city: true, address: true } } },
+                },
             },
             orderBy: { createdAt: 'asc' },
         });
 
-        type Op = { date: Date; doc: string; description: string; debit: number; credit: number };
+        /**
+         * Строка сверки. Суммы — прежние дебет/кредит; в 1С эти же колонки
+         * называются «Увеличение долга» и «Уменьшение долга». Остальные поля
+         * справочные: они describe операцию, но на расчёт не влияют.
+         */
+        type Op = {
+            date: Date;
+            doc: string;
+            description: string;
+            debit: number;
+            credit: number;
+            orderNumber: string | null;
+            route: string | null;
+            driver: string | null;
+            invoiceNumber: string | null;
+            actNumber: string | null;
+        };
         const ops: Op[] = [];
 
         // По каждой общей заявке запоминаем, в какую сторону идут деньги с этим
         // контрагентом: IN — он платит нам, OUT — мы платим ему
         const orderPayDirection = new Map<string, PaymentDirection>();
+
+        // Номера счёта и акта по каждому рейсу — колонки «Счёт» и «Акт»
+        // в акте сверки 1С. Отменённые документы не показываем: по ним
+        // расчётов нет.
+        const invoiceByOrder = new Map<string, string>();
+        const actByOrder = new Map<string, string>();
+        if (orders.length) {
+            const linkedDocuments = await this.prisma.accountingDocument.findMany({
+                where: {
+                    companyId,
+                    status: { not: AccountingDocumentStatus.CANCELLED },
+                    type: {
+                        in: [
+                            AccountingDocumentType.PAYMENT_INVOICE,
+                            AccountingDocumentType.SERVICE_ACT,
+                        ],
+                    },
+                    orders: { some: { orderId: { in: orders.map((order) => order.id) } } },
+                },
+                select: {
+                    number: true,
+                    type: true,
+                    orders: { select: { orderId: true } },
+                },
+                orderBy: { documentDate: 'asc' },
+            });
+            for (const document of linkedDocuments) {
+                const target = document.type === AccountingDocumentType.PAYMENT_INVOICE
+                    ? invoiceByOrder
+                    : actByOrder;
+                for (const link of document.orders) {
+                    if (!target.has(link.orderId)) target.set(link.orderId, document.number);
+                }
+            }
+        }
+
+        const routeOf = (order: { routePoints?: { location: { city: string | null; address: string } | null }[] }) => {
+            const points = order.routePoints || [];
+            if (!points.length) return null;
+            const place = (index: number) =>
+                points[index]?.location?.city || points[index]?.location?.address || null;
+            const from = place(0);
+            const to = place(points.length - 1);
+            if (!from && !to) return null;
+            return points.length === 1 ? from : `${from || '—'} → ${to || '—'}`;
+        };
 
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
@@ -978,14 +1061,22 @@ export class FinancialReportsService {
             const weAreForwarderOverSub = order.forwarderId === companyId && order.subForwarderId === counterpartyId;
             const weAreSub = order.subForwarderId === companyId && order.forwarderId === counterpartyId;
 
+            const orderDetails = {
+                orderNumber: order.orderNumber,
+                route: routeOf(order),
+                driver: order.assignedDriverName || null,
+                invoiceNumber: invoiceByOrder.get(order.id) ?? null,
+                actNumber: actByOrder.get(order.id) ?? null,
+            };
+
             // Начисление (реализация услуг)
             if (weAreForwarder || weAreSub) {
                 // Контрагент должен нам за перевозку — дебет
-                if (fin.revenue.gt(0)) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: toNum(fin.revenue), credit: 0 });
+                if (fin.revenue.gt(0)) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: toNum(fin.revenue), credit: 0, ...orderDetails });
                 orderPayDirection.set(order.id, PaymentDirection.IN);
             } else if (weAreCustomer || weAreForwarderOverSub) {
                 // Мы должны контрагенту за перевозку — кредит
-                if (fin.executorCost.gt(0)) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: 0, credit: toNum(fin.executorCost) });
+                if (fin.executorCost.gt(0)) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: 0, credit: toNum(fin.executorCost), ...orderDetails });
                 orderPayDirection.set(order.id, PaymentDirection.OUT);
             }
         }
@@ -1002,7 +1093,19 @@ export class FinancialReportsService {
                     ...(orderIds.length > 0 ? [{ orderId: { in: orderIds }, counterpartyId: null }] : []),
                 ],
             },
-            include: { order: { select: { orderNumber: true } } },
+            include: {
+                order: {
+                    select: {
+                        id: true,
+                        orderNumber: true,
+                        assignedDriverName: true,
+                        routePoints: {
+                            orderBy: { sequence: 'asc' },
+                            select: { location: { select: { city: true, address: true } } },
+                        },
+                    },
+                },
+            },
             orderBy: { date: 'asc' },
         });
         const payments = rawPayments.filter(p =>
@@ -1011,12 +1114,19 @@ export class FinancialReportsService {
         );
         for (const p of payments) {
             const doc = p.order?.orderNumber ? `Оплата по заявке №${p.order.orderNumber}` : 'Оплата';
+            const paymentDetails = {
+                orderNumber: p.order?.orderNumber ?? null,
+                route: p.order ? routeOf(p.order) : null,
+                driver: p.order?.assignedDriverName || null,
+                invoiceNumber: p.order ? invoiceByOrder.get(p.order.id) ?? null : null,
+                actNumber: p.order ? actByOrder.get(p.order.id) ?? null : null,
+            };
             if (p.direction === PaymentDirection.IN) {
                 // Контрагент оплатил нам — уменьшает его долг — кредит
-                ops.push({ date: p.date, doc, description: 'Поступление оплаты', debit: 0, credit: toNum(p.amount) });
+                ops.push({ date: p.date, doc, description: 'Поступление оплаты', debit: 0, credit: toNum(p.amount), ...paymentDetails });
             } else {
                 // Мы оплатили контрагенту — уменьшает наш долг — дебет
-                ops.push({ date: p.date, doc, description: 'Оплата контрагенту', debit: toNum(p.amount), credit: 0 });
+                ops.push({ date: p.date, doc, description: 'Оплата контрагенту', debit: toNum(p.amount), credit: 0, ...paymentDetails });
             }
         }
 
@@ -1049,9 +1159,17 @@ export class FinancialReportsService {
                 date: op.date,
                 doc: op.doc,
                 description: op.description,
+                // В 1С эти колонки называются «Увеличение долга» и
+                // «Уменьшение долга»; debit/credit оставлены для совместимости
+                // с фиксацией акта и прежними потребителями отчёта.
                 debit: op.debit,
                 credit: op.credit,
                 balance: running,
+                orderNumber: op.orderNumber,
+                route: op.route,
+                driver: op.driver,
+                invoiceNumber: op.invoiceNumber,
+                actNumber: op.actNumber,
             };
         });
 
