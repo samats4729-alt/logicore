@@ -7,6 +7,17 @@ import {
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
 
+/**
+ * Единственный цвет печатных форм.
+ *
+ * Акт Р-1 — бланк, утверждённый приказом Минфина РК от 20.12.2012 № 562.
+ * В официальном бланке нет ни заливок, ни полутонов: только чёрные линии и
+ * чёрный текст на белом. Раньше здесь использовались шесть оттенков серого
+ * для текста и голубая заливка шапки таблицы — документ выглядел блёклым и
+ * непохожим на утверждённую форму.
+ */
+const INK = '#000000';
+
 interface InvoicePdfLine {
     serviceCode: string | null;
     name: string;
@@ -302,16 +313,16 @@ export class AccountingDocumentPdfService {
         const left = doc.page.margins.left;
         const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-        doc.font('Roboto-Bold').fontSize(14).fillColor('#111111');
+        doc.font('Roboto-Bold').fontSize(14).fillColor(INK);
         doc.text('АКТ СВЕРКИ ВЗАИМНЫХ РАСЧЁТОВ', left, 31, { width, align: 'center' });
-        doc.font('Roboto').fontSize(8).fillColor('#333333');
+        doc.font('Roboto').fontSize(8).fillColor(INK);
         doc.text(
             `за период с ${this.formatDateNumeric(document.reportPeriodFrom!)} по ${this.formatDateNumeric(document.reportPeriodTo!)}`,
             left,
             52,
             { width, align: 'center' },
         );
-        doc.font('Roboto-Bold').fontSize(8.5).fillColor('#111111');
+        doc.font('Roboto-Bold').fontSize(8.5).fillColor(INK);
         doc.text(`№ ${document.number} от ${this.formatDateNumeric(document.documentDate)}`, left, 68, {
             width,
             align: 'center',
@@ -324,7 +335,7 @@ export class AccountingDocumentPdfService {
         this.drawReconciliationPartyBox(doc, 'Организация', issuer, left, boxY, blockWidth, boxHeight);
         this.drawReconciliationPartyBox(doc, 'Контрагент', recipient, left + blockWidth + gap, boxY, blockWidth, boxHeight);
 
-        doc.font('Roboto').fontSize(7.2).fillColor('#222222');
+        doc.font('Roboto').fontSize(7.2).fillColor(INK);
         doc.text(
             `Мы, нижеподписавшиеся, составили настоящий акт о том, что состояние взаимных расчётов между указанными сторонами за период с ${this.formatDateNumeric(document.reportPeriodFrom!)} по ${this.formatDateNumeric(document.reportPeriodTo!)} соответствует приведённым ниже данным.`,
             left,
@@ -343,12 +354,12 @@ export class AccountingDocumentPdfService {
         width: number,
         height: number,
     ) {
-        doc.roundedRect(x, y, width, height, 4).lineWidth(0.7).strokeColor('#333333').stroke();
-        doc.font('Roboto-Bold').fontSize(7).fillColor('#555555');
+        doc.roundedRect(x, y, width, height, 4).lineWidth(0.7).strokeColor(INK).stroke();
+        doc.font('Roboto-Bold').fontSize(7).fillColor(INK);
         doc.text(title.toUpperCase(), x + 9, y + 7, { width: width - 18 });
-        doc.font('Roboto-Bold').fontSize(8).fillColor('#111111');
+        doc.font('Roboto-Bold').fontSize(8).fillColor(INK);
         doc.text(party.name || '—', x + 9, y + 20, { width: width - 18, height: 20 });
-        doc.font('Roboto').fontSize(7).fillColor('#333333');
+        doc.font('Roboto').fontSize(7).fillColor(INK);
         doc.text(`БИН/ИИН: ${party.bin || '—'}`, x + 9, y + 42, { width: 120 });
         const address = party.address || party.actualAddress || 'адрес не указан';
         doc.text(address, x + 137, y + 42, { width: width - 146, height: 11, align: 'right' });
@@ -365,8 +376,8 @@ export class AccountingDocumentPdfService {
             const y = doc.y;
             let x = left;
             headers.forEach((header, index) => {
-                doc.rect(x, y, widths[index], headerHeight).lineWidth(0.5).fillAndStroke('#edf1f5', '#333333');
-                doc.font('Roboto-Bold').fontSize(7).fillColor('#111111');
+                doc.rect(x, y, widths[index], headerHeight).lineWidth(0.5).strokeColor(INK).stroke();
+                doc.font('Roboto-Bold').fontSize(7).fillColor(INK);
                 const textHeight = doc.heightOfString(header, { width: widths[index] - 6 });
                 doc.text(header, x + 3, y + (headerHeight - textHeight) / 2, {
                     width: widths[index] - 6,
@@ -410,7 +421,7 @@ export class AccountingDocumentPdfService {
             if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 128) {
                 doc.addPage();
                 doc.y = doc.page.margins.top + 8;
-                doc.font('Roboto-Bold').fontSize(8).fillColor('#333333');
+                doc.font('Roboto-Bold').fontSize(8).fillColor(INK);
                 doc.text(`Акт сверки № ${document.number} — продолжение`, left, doc.y, {
                     width: contentWidth,
                     align: 'right',
@@ -445,8 +456,8 @@ export class AccountingDocumentPdfService {
         let x = doc.page.margins.left;
         const y = doc.y;
         values.forEach((value, index) => {
-            doc.rect(x, y, widths[index], height).lineWidth(0.45).strokeColor('#444444').stroke();
-            doc.font(bold ? 'Roboto-Bold' : 'Roboto').fontSize(7).fillColor('#111111');
+            doc.rect(x, y, widths[index], height).lineWidth(0.45).strokeColor(INK).stroke();
+            doc.font(bold ? 'Roboto-Bold' : 'Roboto').fontSize(7).fillColor(INK);
             const textHeight = doc.heightOfString(value, { width: widths[index] - 8, lineGap: 0.6 });
             doc.text(value, x + 4, y + Math.max(4, (height - textHeight) / 2), {
                 width: widths[index] - 8,
@@ -474,7 +485,7 @@ export class AccountingDocumentPdfService {
         const debtText = this.reconciliationDebtText(closing, issuer.name || 'организация', recipient.name || 'контрагент');
 
         doc.moveDown(0.65);
-        doc.font('Roboto-Bold').fontSize(8).fillColor('#111111');
+        doc.font('Roboto-Bold').fontSize(8).fillColor(INK);
         doc.text(`По состоянию на ${this.formatDateNumeric(document.reportPeriodTo!)} ${debtText}`, left, doc.y, {
             width,
         });
@@ -528,14 +539,14 @@ export class AccountingDocumentPdfService {
         const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
         const legalWidth = 255;
 
-        doc.font('Roboto').fontSize(6.5).fillColor('#444444');
+        doc.font('Roboto').fontSize(6.5).fillColor(INK);
         doc.text(
             'Приложение 50\nк приказу Министра финансов\nРеспублики Казахстан\nот 20 декабря 2012 года № 562',
             left + width - legalWidth,
             18,
             { width: legalWidth, align: 'center', lineGap: 0.5 },
         );
-        doc.font('Roboto').fontSize(7.5).fillColor('#222222');
+        doc.font('Roboto').fontSize(7.5).fillColor(INK);
         doc.text('Форма Р-1', left + width - 105, 67, { width: 105, align: 'center' });
 
         let y = 82;
@@ -549,7 +560,7 @@ export class AccountingDocumentPdfService {
         const boxWidth = 170;
         const contractLabelWidth = 64;
         const contractY = y + 2;
-        doc.font('Roboto').fontSize(7.5).fillColor('#222222');
+        doc.font('Roboto').fontSize(7.5).fillColor(INK);
         doc.text('Договор (контракт)', left, contractY, { width: contractLabelWidth });
         doc.font('Roboto-Bold').text(contractText, left + contractLabelWidth, contractY, {
             width: width - contractLabelWidth - boxWidth - 12,
@@ -559,7 +570,7 @@ export class AccountingDocumentPdfService {
         const headerHeight = 18;
         const valueHeight = 20;
         const numberWidth = 88;
-        doc.rect(boxX, contractY - 2, boxWidth, headerHeight + valueHeight).lineWidth(0.55).strokeColor('#333333').stroke();
+        doc.rect(boxX, contractY - 2, boxWidth, headerHeight + valueHeight).lineWidth(0.55).strokeColor(INK).stroke();
         doc.moveTo(boxX + numberWidth, contractY - 2).lineTo(boxX + numberWidth, contractY + headerHeight + valueHeight - 2).stroke();
         doc.moveTo(boxX, contractY + headerHeight - 2).lineTo(boxX + boxWidth, contractY + headerHeight - 2).stroke();
         doc.font('Roboto').fontSize(6).text('Номер документа', boxX + 3, contractY + 2, {
@@ -580,20 +591,13 @@ export class AccountingDocumentPdfService {
         });
 
         doc.y = contractY + headerHeight + valueHeight + 8;
-        doc.font('Roboto-Bold').fontSize(11).fillColor('#111111');
+        doc.font('Roboto-Bold').fontSize(11).fillColor(INK);
         doc.text('АКТ ВЫПОЛНЕННЫХ РАБОТ (ОКАЗАННЫХ УСЛУГ)', left, doc.y, {
             width,
             align: 'center',
         });
-        if (document.reportPeriodFrom && document.reportPeriodTo) {
-            doc.moveDown(0.2);
-            doc.font('Roboto').fontSize(6.8).text(
-                `Отчётный период: ${this.formatDateNumeric(document.reportPeriodFrom)} - ${this.formatDateNumeric(document.reportPeriodTo)}`,
-                left,
-                doc.y,
-                { width, align: 'center' },
-            );
-        }
+        // Строки «Отчётный период» в утверждённом бланке Р-1 нет — период
+        // документа виден по датам выполнения работ в графе 3.
         doc.moveDown(0.55);
     }
 
@@ -608,12 +612,12 @@ export class AccountingDocumentPdfService {
         const labelWidth = 64;
         const binWidth = 118;
         const partyWidth = width - labelWidth - binWidth - 10;
-        const partyText = this.formatParty(party);
+        const partyText = this.formatParty(party, false);
         doc.font('Roboto-Bold').fontSize(7.2);
         const textHeight = doc.heightOfString(partyText, { width: partyWidth - 8, lineGap: 0.5 });
         const height = Math.max(29, textHeight + 10);
 
-        doc.font('Roboto').fontSize(7.5).fillColor('#222222');
+        doc.font('Roboto').fontSize(7.5).fillColor(INK);
         doc.text(label, left, y + 8, { width: labelWidth - 5 });
         doc.font('Roboto-Bold').fontSize(7.2).text(partyText, left + labelWidth, y + 2, {
             width: partyWidth - 8,
@@ -622,21 +626,21 @@ export class AccountingDocumentPdfService {
         doc.moveTo(left + labelWidth, y + height - 5)
             .lineTo(left + labelWidth + partyWidth - 8, y + height - 5)
             .lineWidth(0.45)
-            .strokeColor('#555555')
+            .strokeColor(INK)
             .stroke();
-        doc.font('Roboto').fontSize(5.5).fillColor('#666666');
+        doc.font('Roboto').fontSize(5.5).fillColor(INK);
         doc.text('полное наименование, адрес, данные о средствах связи', left + labelWidth, y + height - 3, {
             width: partyWidth - 8,
             align: 'center',
         });
 
         const binX = left + width - binWidth;
-        doc.rect(binX, y, binWidth, height).lineWidth(0.55).strokeColor('#333333').stroke();
-        doc.font('Roboto').fontSize(6.5).fillColor('#333333').text('ИИН/БИН', binX + 3, y + 3, {
+        doc.rect(binX, y, binWidth, height).lineWidth(0.55).strokeColor(INK).stroke();
+        doc.font('Roboto').fontSize(6.5).fillColor(INK).text('ИИН/БИН', binX + 3, y + 3, {
             width: binWidth - 6,
             align: 'center',
         });
-        doc.font('Roboto-Bold').fontSize(8).fillColor('#111111').text(party.bin || '—', binX + 3, y + 15, {
+        doc.font('Roboto-Bold').fontSize(8).fillColor(INK).text(party.bin || '—', binX + 3, y + 15, {
             width: binWidth - 6,
             align: 'center',
         });
@@ -656,9 +660,9 @@ export class AccountingDocumentPdfService {
             const numberHeight = fullHeaderHeight - topHeight - subHeight;
             const fixedHeaders = [
                 'Номер по порядку',
-                'Наименование работ (услуг) в разрезе их подвидов в соответствии с технической спецификацией, заданием, графиком выполнения работ (услуг)',
+                'Наименование работ (услуг) (в разрезе их подвидов в соответствии с технической спецификацией, заданием, графиком выполнения работ (услуг) при их наличии)',
                 'Дата выполнения работ (оказания услуг)',
-                'Сведения об отчёте о научных исследованиях, маркетинговых, консультационных и прочих услугах',
+                'Сведения об отчете о научных исследованиях, маркетинговых, консультационных и прочих услугах (дата, номер, количество страниц) (при их наличии)',
                 'Единица измерения',
             ];
             let x = left;
@@ -668,7 +672,7 @@ export class AccountingDocumentPdfService {
             });
             const groupWidth = widths.slice(5).reduce((sum, value) => sum + value, 0);
             this.actHeaderCell(doc, 'Выполнено работ (оказано услуг)', x, y, groupWidth, topHeight, 6.2);
-            const subHeaders = ['количество', 'цена за единицу', 'стоимость', 'в том числе НДС'];
+            const subHeaders = ['количество', 'цена за единицу', 'стоимость', 'в том числе НДС, в тенге'];
             subHeaders.forEach((header, offset) => {
                 this.actHeaderCell(doc, header, x, y + topHeight, widths[offset + 5], subHeight, 5.7);
                 x += widths[offset + 5];
@@ -697,11 +701,7 @@ export class AccountingDocumentPdfService {
                 this.formatMoney(line.vatAmount ?? new Prisma.Decimal(0)),
             ];
             doc.font('Roboto').fontSize(6.2);
-            const heights = values.map((value, column) => doc.heightOfString(value, {
-                width: widths[column] - 6,
-                lineGap: 0.5,
-            }));
-            const rowHeight = Math.max(22, ...heights.map((height) => height + 7));
+            const rowHeight = this.tableRowHeight(doc, values, widths);
             if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 125) {
                 doc.addPage();
                 doc.y = doc.page.margins.top + 5;
@@ -761,16 +761,18 @@ export class AccountingDocumentPdfService {
         const left = doc.page.margins.left;
         const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
         doc.moveDown(0.55);
-        doc.font('Roboto').fontSize(6.8).fillColor('#222222');
+        doc.font('Roboto').fontSize(6.8).fillColor(INK);
         this.actInfoLine(
             doc,
             'Сведения об использовании запасов, полученных от заказчика',
-            document.customerMaterialsInfo || 'не использовались',
+            document.customerMaterialsInfo || '',
+            'наименование, количество, стоимость',
         );
         this.actInfoLine(
             doc,
-            'Приложение: перечень документации, в том числе отчётов и прочих материалов',
-            document.appendixInfo || 'отсутствует',
+            'Приложение: Перечень документации, в том числе отчет(ы) о маркетинговых, научных исследованиях, '
+            + 'консультационных и прочих услугах (обязательны при его (их) наличии)',
+            document.appendixInfo || '',
         );
         doc.moveDown(0.55);
 
@@ -814,8 +816,8 @@ export class AccountingDocumentPdfService {
         height: number,
         fontSize: number,
     ) {
-        doc.rect(x, y, width, height).lineWidth(0.45).strokeColor('#333333').stroke();
-        doc.font('Roboto').fontSize(fontSize).fillColor('#111111');
+        doc.rect(x, y, width, height).lineWidth(0.45).strokeColor(INK).stroke();
+        doc.font('Roboto').fontSize(fontSize).fillColor(INK);
         const textHeight = doc.heightOfString(value, { width: width - 5, lineGap: 0.2 });
         doc.text(value, x + 2.5, y + Math.max(2, (height - textHeight) / 2), {
             width: width - 5,
@@ -825,16 +827,27 @@ export class AccountingDocumentPdfService {
         });
     }
 
-    private actInfoLine(doc: PDFKit.PDFDocument, label: string, value: string) {
+    private actInfoLine(doc: PDFKit.PDFDocument, label: string, value: string, caption?: string) {
         const left = doc.page.margins.left;
         const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
         const y = doc.y;
         const labelWidth = 330;
+        const lineY = y + 10;
         doc.text(label, left, y, { width: labelWidth });
         doc.font('Roboto-Bold').text(value, left + labelWidth, y, { width: width - labelWidth });
-        doc.moveTo(left + labelWidth, y + 10).lineTo(left + width, y + 10).lineWidth(0.4).strokeColor('#555555').stroke();
-        doc.y = y + 17;
+        doc.moveTo(left + labelWidth, lineY).lineTo(left + width, lineY).lineWidth(0.4).strokeColor(INK).stroke();
         doc.font('Roboto');
+        if (caption) {
+            // Пояснение под линией — часть бланка, а не подсказка интерфейса.
+            doc.fontSize(5.5).text(caption, left + labelWidth, lineY + 1.5, {
+                width: width - labelWidth,
+                align: 'center',
+            });
+            doc.fontSize(6.8);
+            doc.y = lineY + 10;
+            return;
+        }
+        doc.y = y + 17;
     }
 
     private actSignatureBlock(
@@ -846,14 +859,14 @@ export class AccountingDocumentPdfService {
         position: string,
         name: string,
     ) {
-        doc.font('Roboto-Bold').fontSize(7).fillColor('#111111').text(title, x, y, { width: 92 });
+        doc.font('Roboto-Bold').fontSize(7).fillColor(INK).text(title, x, y, { width: 92 });
         doc.font('Roboto').fontSize(6.8).text(position, x + 95, y, { width: 82, align: 'center' });
         doc.text('', x + 182, y, { width: 75 });
         doc.text(name || '________________', x + 262, y, { width: width - 262, align: 'center' });
         doc.moveTo(x + 95, y + 11).lineTo(x + 177, y + 11).stroke();
         doc.moveTo(x + 182, y + 11).lineTo(x + 257, y + 11).stroke();
         doc.moveTo(x + 262, y + 11).lineTo(x + width, y + 11).stroke();
-        doc.font('Roboto').fontSize(5.2).fillColor('#666666');
+        doc.font('Roboto').fontSize(5.2).fillColor(INK);
         doc.text('должность', x + 95, y + 13, { width: 82, align: 'center' });
         doc.text('подпись', x + 182, y + 13, { width: 75, align: 'center' });
         doc.text('расшифровка подписи', x + 262, y + 13, { width: width - 262, align: 'center' });
@@ -878,7 +891,7 @@ export class AccountingDocumentPdfService {
         const left = doc.page.margins.left;
         const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-        doc.font('Roboto').fontSize(8).fillColor('#333333');
+        doc.font('Roboto').fontSize(8).fillColor(INK);
         doc.text(
             document.paymentTerms
                 || 'Оплата данного счёта означает согласие с условиями оказания услуг. Уведомление об оплате обязательно.',
@@ -893,7 +906,7 @@ export class AccountingDocumentPdfService {
         const bankLeftW = width * 0.61;
         const bankMiddleW = width * 0.21;
         const bankRightW = width - bankLeftW - bankMiddleW;
-        doc.lineWidth(0.7).strokeColor('#222222').fillColor('#111111');
+        doc.lineWidth(0.7).strokeColor(INK).fillColor(INK);
         doc.rect(left, bankY, width, bankH).stroke();
         doc.moveTo(left + bankLeftW, bankY).lineTo(left + bankLeftW, bankY + bankH).stroke();
         doc.moveTo(left + bankLeftW + bankMiddleW, bankY).lineTo(left + bankLeftW + bankMiddleW, bankY + bankH).stroke();
@@ -922,12 +935,12 @@ export class AccountingDocumentPdfService {
         );
         doc.y = bankY + bankH + 18;
 
-        doc.font('Roboto-Bold').fontSize(16).fillColor('#111111');
+        doc.font('Roboto-Bold').fontSize(16).fillColor(INK);
         doc.text(`Счёт на оплату № ${document.number} от ${this.formatDate(document.documentDate)}`, left, doc.y, {
             width,
         });
         doc.moveDown(0.35);
-        doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1.2).strokeColor('#222222').stroke();
+        doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1.2).strokeColor(INK).stroke();
         doc.moveDown(0.8);
 
         this.partyLine(doc, 'Поставщик:', this.formatParty(issuer));
@@ -949,7 +962,7 @@ export class AccountingDocumentPdfService {
             const y = doc.y;
             const height = 28;
             let x = left;
-            doc.font('Roboto-Bold').fontSize(7.5).fillColor('#111111');
+            doc.font('Roboto-Bold').fontSize(7.5).fillColor(INK);
             headers.forEach((header, index) => {
                 this.tableCell(doc, header, x, y, widths[index], height, index >= 3 ? 'center' : 'center');
                 x += widths[index];
@@ -1004,7 +1017,7 @@ export class AccountingDocumentPdfService {
         const labelX = left + width - 190;
         const valueX = left + width - 82;
         doc.moveDown(0.6);
-        doc.font('Roboto-Bold').fontSize(9).fillColor('#111111');
+        doc.font('Roboto-Bold').fontSize(9).fillColor(INK);
         this.totalLine(doc, 'Итого:', this.formatMoney(document.total), labelX, valueX);
         this.totalLine(doc, 'В том числе НДС:', this.formatMoney(document.vatTotal), labelX, valueX);
         doc.moveDown(0.5);
@@ -1017,7 +1030,7 @@ export class AccountingDocumentPdfService {
         doc.font('Roboto-Bold').fontSize(9.5);
         doc.text(`Всего к оплате: ${this.amountInWords(document.total)}`, left, doc.y, { width });
         doc.moveDown(0.55);
-        doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1).strokeColor('#222222').stroke();
+        doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1).strokeColor(INK).stroke();
         doc.moveDown(0.7);
     }
 
@@ -1035,7 +1048,7 @@ export class AccountingDocumentPdfService {
         doc.font('Roboto').text(issuer.directorName || '/бухгалтер/', { align: 'right' });
         if (document.note) {
             doc.moveDown(1);
-            doc.font('Roboto').fontSize(8).fillColor('#444444');
+            doc.font('Roboto').fontSize(8).fillColor(INK);
             doc.text(`Примечание: ${document.note}`, left, doc.y, { width });
         }
     }
@@ -1049,7 +1062,7 @@ export class AccountingDocumentPdfService {
         width: number,
         height: number,
     ) {
-        doc.font('Roboto').fontSize(6.5).fillColor('#333333');
+        doc.font('Roboto').fontSize(6.5).fillColor(INK);
         doc.text(label, x + 3, y + 3, { width: width - 6, align: 'center' });
         doc.font('Roboto-Bold').fontSize(value.length > 18 ? 6.5 : 8);
         doc.text(value, x + 3, y + 18, { width: width - 6, align: 'center' });
@@ -1071,6 +1084,27 @@ export class AccountingDocumentPdfService {
         doc.y = y + height + 5;
     }
 
+    /**
+     * Высота строки таблицы под её содержимое.
+     *
+     * Считается ТЕМИ ЖЕ параметрами, которыми tableCell рисует текст. Раньше
+     * измерение и отрисовка расходились (ширина w-6 против w-8, межстрочный
+     * 0.5 против 1), текст не помещался и молча обрезался по высоте — из акта
+     * пропадала часть описания услуги.
+     */
+    private tableRowHeight(doc: PDFKit.PDFDocument, values: string[], widths: number[], minHeight = 22) {
+        const heights = values.map((value, column) => doc.heightOfString(value, {
+            width: widths[column] - AccountingDocumentPdfService.CELL_PAD_X * 2,
+            lineGap: AccountingDocumentPdfService.CELL_LINE_GAP,
+        }));
+        return Math.max(minHeight, ...heights.map((h) => h + AccountingDocumentPdfService.CELL_PAD_Y * 2));
+    }
+
+    /** Отступы ячейки таблицы: по ним считается и высота строки, и отрисовка. */
+    private static readonly CELL_PAD_X = 4;
+    private static readonly CELL_PAD_Y = 5;
+    private static readonly CELL_LINE_GAP = 1;
+
     private tableCell(
         doc: PDFKit.PDFDocument,
         text: string,
@@ -1080,12 +1114,14 @@ export class AccountingDocumentPdfService {
         height: number,
         align: 'left' | 'center' | 'right',
     ) {
-        doc.rect(x, y, width, height).lineWidth(0.5).strokeColor('#333333').stroke();
-        doc.fillColor('#111111').text(text, x + 4, y + 5, {
-            width: width - 8,
-            height: height - 8,
+        const padX = AccountingDocumentPdfService.CELL_PAD_X;
+        const padY = AccountingDocumentPdfService.CELL_PAD_Y;
+        doc.rect(x, y, width, height).lineWidth(0.5).strokeColor(INK).stroke();
+        doc.fillColor(INK).text(text, x + padX, y + padY, {
+            width: width - padX * 2,
+            height: height - padY * 2,
             align,
-            lineGap: 1,
+            lineGap: AccountingDocumentPdfService.CELL_LINE_GAP,
             ellipsis: false,
         });
     }
@@ -1111,11 +1147,15 @@ export class AccountingDocumentPdfService {
 
     private addPageNumbers(doc: PDFKit.PDFDocument) {
         const range = doc.bufferedPageRange();
+        // В утверждённых бланках колонтитула нет. Нумерация нужна только
+        // чтобы не потерять лист многостраничного документа, поэтому на
+        // одной странице её не печатаем.
+        if (range.count < 2) return;
         for (let pageIndex = range.start; pageIndex < range.start + range.count; pageIndex += 1) {
             doc.switchToPage(pageIndex);
             const originalBottomMargin = doc.page.margins.bottom;
             doc.page.margins.bottom = 0;
-            doc.font('Roboto').fontSize(7).fillColor('#666666');
+            doc.font('Roboto').fontSize(7).fillColor(INK);
             doc.text(
                 `Страница ${pageIndex - range.start + 1} из ${range.count}`,
                 doc.page.margins.left,
@@ -1130,10 +1170,17 @@ export class AccountingDocumentPdfService {
         }
     }
 
-    private formatParty(party: PartySnapshot) {
+    /**
+     * Реквизиты стороны одной строкой.
+     *
+     * includeBin=false — для акта Р-1: там БИН печатается в отдельной рамке
+     * справа, и повторять его в строке наименования бланк не предусматривает.
+     * В счёте на оплату, наоборот, БИН идёт в самой строке.
+     */
+    private formatParty(party: PartySnapshot, includeBin = true) {
         const contacts = [party.phone ? `тел.: ${party.phone}` : null, party.email].filter(Boolean).join(', ');
         return [
-            party.bin ? `БИН/ИИН ${party.bin}` : null,
+            includeBin && party.bin ? `БИН/ИИН ${party.bin}` : null,
             party.name || '—',
             party.address || party.actualAddress,
             contacts || null,

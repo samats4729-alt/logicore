@@ -45,3 +45,6 @@ temp/
 
 # Redis snapshot (появляется при локальном запуске redis-server)
 dump.rdb
+
+# Образцы печатных форм из scripts/generate-*-sample.ts
+output/

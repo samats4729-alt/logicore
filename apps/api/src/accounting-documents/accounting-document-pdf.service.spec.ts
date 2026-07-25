@@ -1,3 +1,5 @@
+import * as PDFDocument from 'pdfkit';
+import * as path from 'path';
 import {
     AccountingDocumentStatus,
     AccountingDocumentType,
@@ -99,6 +101,35 @@ describe('AccountingDocumentPdfService', () => {
 
         expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
         expect(buffer.length).toBeGreaterThan(20_000);
+    });
+
+
+    // Регрессия: высота строки таблицы считалась по одной ширине и межстрочному
+    // интервалу, а текст рисовался по другим (w-6/0.5 против w-8/1). Текст не
+    // помещался и молча обрезался по высоте — из официального акта пропадала
+    // часть описания услуги: маршрут, автомобиль, номер заявки.
+    //
+    // Проверяем сам инвариант: высота строки обязана вмещать текст, измеренный
+    // ровно теми параметрами, которыми он будет нарисован.
+    it('высота строки таблицы вмещает текст, отрисованный теми же параметрами', () => {
+        const doc = new PDFDocument({ size: 'A4', layout: 'landscape' });
+        const fontsDir = path.join(__dirname, '..', 'contracts', 'fonts');
+        doc.registerFont('Roboto', path.join(fontsDir, 'Roboto-Regular.ttf'));
+        doc.font('Roboto').fontSize(6.2);
+
+        const padX = (AccountingDocumentPdfService as any).CELL_PAD_X as number;
+        const padY = (AccountingDocumentPdfService as any).CELL_PAD_Y as number;
+        const lineGap = (AccountingDocumentPdfService as any).CELL_LINE_GAP as number;
+
+        const width = 230;
+        const text = 'Транспортные услуги\nМаршрут: г. Шымкент - г. Тараз; водитель: Амангельды Е.К.; '
+            + 'автомобиль: ГАЗ, г/н 203AEL13; заявка AB00003767; дата разгрузки 22.07.2026.';
+
+        const rowHeight = (service as any).tableRowHeight(doc, [text], [width]) as number;
+        const rendered = doc.heightOfString(text, { width: width - padX * 2, lineGap });
+
+        // tableCell рисует текст в области height - padY * 2, начиная с y + padY
+        expect(rowHeight - padY * 2).toBeGreaterThanOrEqual(rendered);
     });
 
     it('создаёт PDF акта сверки с оборотами и конечным сальдо', async () => {
