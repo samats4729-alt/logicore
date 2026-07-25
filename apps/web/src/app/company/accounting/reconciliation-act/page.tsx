@@ -1,9 +1,19 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
-import { Button, DatePicker, Spin, Empty, App } from 'antd';
-import { ArrowLeftOutlined, PrinterOutlined, CalendarOutlined } from '@ant-design/icons';
-import { api } from '@/lib/api';
+import { Alert, Button, DatePicker, Spin, Empty, App } from 'antd';
+import {
+    ArrowLeftOutlined,
+    CalendarOutlined,
+    FileAddOutlined,
+    FilePdfOutlined,
+    PrinterOutlined,
+} from '@ant-design/icons';
+import {
+    accountingDocumentsApi,
+    api,
+} from '@/lib/api';
+import type { AccountingDocumentDraft } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { amountToWordsKzt } from '@/lib/amountToWords';
 import dayjs from 'dayjs';
@@ -38,7 +48,10 @@ function ReconciliationActInner() {
     const cpId = params.get('cp') || '';
 
     const [loading, setLoading] = useState(true);
+    const [creatingDraft, setCreatingDraft] = useState(false);
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
     const [data, setData] = useState<ActData | null>(null);
+    const [createdDraft, setCreatedDraft] = useState<AccountingDocumentDraft | null>(null);
     const [range, setRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>([dayjs().startOf('year'), dayjs().endOf('day')]);
 
     const fetchAct = useCallback(async () => {
@@ -61,6 +74,53 @@ function ReconciliationActInner() {
 
     useEffect(() => { fetchAct(); }, [fetchAct]);
 
+    const handleRangeChange = (value: [dayjs.Dayjs, dayjs.Dayjs] | null) => {
+        setCreatedDraft(null);
+        setRange(value);
+    };
+
+    const createOfficialDraft = async () => {
+        if (!range?.[0] || !range?.[1] || !data) {
+            message.warning('Сначала выберите период и дождитесь расчёта');
+            return;
+        }
+        setCreatingDraft(true);
+        try {
+            const draft = await accountingDocumentsApi.createReconciliationDraft({
+                counterpartyId: cpId,
+                reportPeriodFrom: range[0].format('YYYY-MM-DD'),
+                reportPeriodTo: range[1].format('YYYY-MM-DD'),
+                documentDate: range[1].format('YYYY-MM-DD'),
+            });
+            setCreatedDraft(draft);
+            message.success(`Черновик акта № ${draft.number} создан`);
+        } catch {
+            message.error('Не удалось создать официальный черновик акта');
+        } finally {
+            setCreatingDraft(false);
+        }
+    };
+
+    const downloadOfficialPdf = async () => {
+        if (!createdDraft) return;
+        setDownloadingPdf(true);
+        try {
+            const blob = await accountingDocumentsApi.downloadPdf(createdDraft.id);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Акт_сверки_${createdDraft.number}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            message.error('Не удалось скачать официальный PDF');
+        } finally {
+            setDownloadingPdf(false);
+        }
+    };
+
     if (!cpId) {
         return <div className="lc-page" style={{ maxWidth: 900, margin: '0 auto' }}><Empty description="Контрагент не выбран. Откройте акт сверки из карточки во «Взаиморасчётах»." /></div>;
     }
@@ -82,7 +142,7 @@ function ReconciliationActInner() {
                     <CalendarOutlined style={{ color: 'var(--lc-text-ter)' }} />
                     <RangePicker
                         value={range}
-                        onChange={(v) => setRange(v as any)}
+                        onChange={(value) => handleRangeChange(value as [dayjs.Dayjs, dayjs.Dayjs] | null)}
                         allowClear={false}
                         format="DD.MM.YYYY"
                         presets={[
@@ -92,10 +152,43 @@ function ReconciliationActInner() {
                         ]}
                     />
                 </span>
-                <Button type="primary" icon={<PrinterOutlined />} onClick={() => window.print()} disabled={!data} style={{ marginLeft: 'auto' }}>
-                    Печать / Сохранить PDF
-                </Button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                    <Button icon={<PrinterOutlined />} onClick={() => window.print()} disabled={!data || loading}>
+                        Печать предварительной формы
+                    </Button>
+                    {createdDraft ? (
+                        <Button
+                            type="primary"
+                            icon={<FilePdfOutlined />}
+                            loading={downloadingPdf}
+                            onClick={downloadOfficialPdf}
+                        >
+                            Скачать PDF № {createdDraft.number}
+                        </Button>
+                    ) : (
+                        <Button
+                            type="primary"
+                            icon={<FileAddOutlined />}
+                            loading={creatingDraft}
+                            disabled={!data || loading}
+                            onClick={createOfficialDraft}
+                        >
+                            Создать официальный черновик
+                        </Button>
+                    )}
+                </div>
             </div>
+
+            {createdDraft && (
+                <Alert
+                    className="recon-controls"
+                    type="success"
+                    showIcon
+                    message={`Официальный черновик № ${createdDraft.number} создан`}
+                    description="Документ сохранён в бухгалтерии, но ещё не проведён. Скачайте PDF и проверьте его перед проведением."
+                    style={{ marginBottom: 16, borderRadius: 14 }}
+                />
+            )}
 
             {loading ? (
                 <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>

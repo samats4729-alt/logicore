@@ -63,6 +63,33 @@ api.interceptors.response.use(
 // Универсальный fetcher для SWR
 export const fetcher = (url: string) => api.get(url).then(res => res.data);
 
+export interface CreateReconciliationDraftRequest {
+    counterpartyId: string;
+    reportPeriodFrom: string;
+    reportPeriodTo: string;
+    documentDate?: string;
+    note?: string;
+}
+
+export interface AccountingDocumentDraft {
+    id: string;
+    number: string;
+    type: 'RECONCILIATION_ACT';
+    status: 'DRAFT';
+    reportPeriodFrom: string;
+    reportPeriodTo: string;
+    reconciliationLines: Array<{ id: string }>;
+}
+
+export const accountingDocumentsApi = {
+    createReconciliationDraft: (payload: CreateReconciliationDraftRequest) =>
+        api.post<AccountingDocumentDraft>('/accounting-documents/reconciliation/from-ledger', payload)
+            .then((response) => response.data),
+    downloadPdf: (documentId: string) =>
+        api.get<Blob>(`/accounting-documents/${documentId}/pdf`, { responseType: 'blob' })
+            .then((response) => response.data),
+};
+
 // Типы для API
 export interface Location {
     id: string;
