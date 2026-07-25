@@ -1,4 +1,5 @@
 import { PayrollService } from './payroll.service';
+import { toNum } from '../common/utils/money';
 import { FinanceCalculatorService } from '../accounting/services/finance-calculator.service';
 
 const COMPANY = 'company-1';
@@ -83,8 +84,8 @@ describe('PayrollService.processOrderTrigger — процент менеджер
         expect(data.kind).toBe('PERCENT');
         expect(data.userId).toBe(MANAGER);
         expect(data.orderId).toBe(ORDER);
-        expect(data.baseAmount).toBe(500000);
-        expect(data.amount).toBe(25000); // 5% от 500 000
+        expect(toNum(data.baseAmount)).toBe(500000);
+        expect(toNum(data.amount)).toBe(25000); // 5% от 500 000
     });
 
     it('понимает триггер в формате STATUS:<статус>', async () => {
@@ -151,8 +152,8 @@ describe('PayrollService.processOrderTrigger — процент менеджер
         await service.processOrderTrigger(ORDER, 'COMPLETED');
 
         const data = prisma.payrollAccrual.create.mock.calls[0][0].data;
-        expect(data.baseAmount).toBe(100000); // маржа: 500 000 - 400 000
-        expect(data.amount).toBe(10000); // 10% от маржи
+        expect(toNum(data.baseAmount)).toBe(100000); // маржа: 500 000 - 400 000
+        expect(toNum(data.amount)).toBe(10000); // 10% от маржи
     });
 
     it('повторное срабатывание триггера обновляет сумму начисления, а не создаёт дубль', async () => {
@@ -164,12 +165,12 @@ describe('PayrollService.processOrderTrigger — процент менеджер
         await service.processOrderTrigger(ORDER, 'COMPLETED');
 
         expect(prisma.payrollAccrual.create).not.toHaveBeenCalled();
-        expect(prisma.payrollAccrual.update).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: { id: 'acc-1' },
-                data: expect.objectContaining({ amount: 25000, baseAmount: 500000 }), // 5% от 500 000
-            }),
-        );
+        expect(prisma.payrollAccrual.update).toHaveBeenCalledTimes(1);
+
+        const { where, data } = prisma.payrollAccrual.update.mock.calls[0][0];
+        expect(where).toEqual({ id: 'acc-1' });
+        expect(toNum(data.amount)).toBe(25000); // 5% от 500 000
+        expect(toNum(data.baseAmount)).toBe(500000);
     });
 
     it('повторное срабатывание с той же суммой ничего не перезаписывает', async () => {

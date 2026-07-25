@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
-import { io, Socket } from 'socket.io-client';
 
 const InteractiveAdminMap = dynamic(() => import('@/components/ui/InteractiveAdminMap'), {
     ssr: false,
@@ -54,7 +53,6 @@ export default function TrackingMapPage() {
     const [drivers, setDrivers] = useState<DriverPosition[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [socket, setSocket] = useState<Socket | null>(null);
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -104,47 +102,19 @@ export default function TrackingMapPage() {
         }
     }, []);
 
+    // Позиции обновляются опросом раз в 30 секунд. Раньше здесь дополнительно
+    // открывался WebSocket и отправлялась подписка 'subscribe:driver', но связка
+    // была нерабочей: клиент подключался без namespace '/tracking' и ждал
+    // события 'position:update', которого сервер не слал.
     useEffect(() => {
         fetchDrivers();
-
-        // WebSocket подключение для real-time обновлений
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const newSocket = io(API_URL, {
-            transports: ['websocket'],
-        });
-
-        newSocket.on('connect', () => {
-            console.log('Connected to tracking socket');
-        });
-
-        newSocket.on('position:update', (data: DriverPosition) => {
-            setDrivers((prev) => {
-                const index = prev.findIndex((d) => d.driverId === data.driverId);
-                if (index >= 0) {
-                    const updated = [...prev];
-                    updated[index] = data;
-                    return updated;
-                }
-                return [...prev, data];
-            });
-        });
-
-        setSocket(newSocket);
 
         const interval = setInterval(fetchDrivers, 30000);
 
         return () => {
-            newSocket.disconnect();
             clearInterval(interval);
         };
     }, [fetchDrivers]);
-
-    // Подписка на конкретного водителя
-    useEffect(() => {
-        if (socket && selectedDriver) {
-            socket.emit('subscribe:driver', { driverId: selectedDriver });
-        }
-    }, [socket, selectedDriver]);
 
     // Центрировать на своём местоположении
     const centerOnMyLocation = () => {

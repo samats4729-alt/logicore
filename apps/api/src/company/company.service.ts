@@ -6,6 +6,7 @@ import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
+import { D, ZERO, toNum } from '../common/utils/money';
 import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
@@ -717,7 +718,7 @@ export class CompanyService {
         ]);
 
         const makeBucket = () => ({
-            created: 0, completed: 0, income: 0, expense: 0,
+            created: 0, completed: 0, income: ZERO, expense: ZERO,
             customers: new Set<string>(), carriers: new Set<string>(),
         });
         const today = makeBucket();
@@ -741,25 +742,25 @@ export class CompanyService {
 
                 // Доход: нам платит заказчик (мы экспедитор) или экспедитор (мы суб-экспедитор)
                 if (isFwd && o.customerCompanyId && !isCust) {
-                    b.income += o.customerPrice || 0;
+                    b.income = b.income.plus(D(o.customerPrice));
                     b.customers.add(o.customerCompanyId);
                 }
                 if (isSub && o.forwarderId && o.forwarderId !== companyId) {
-                    b.income += o.subForwarderPrice || 0;
+                    b.income = b.income.plus(D(o.subForwarderPrice));
                     b.customers.add(o.forwarderId);
                 }
                 // Расход: мы платим экспедитору (мы заказчик),
                 // суб-экспедитору или перевозчику (мы экспедитор)
                 if (isCust && o.forwarderId && !isFwd) {
-                    b.expense += o.customerPrice || 0;
+                    b.expense = b.expense.plus(D(o.customerPrice));
                     b.carriers.add(o.forwarderId);
                 }
                 if (isFwd && o.subForwarderId && !isSub) {
-                    b.expense += o.subForwarderPrice || 0;
+                    b.expense = b.expense.plus(D(o.subForwarderPrice));
                     b.carriers.add(o.subForwarderId);
                 }
-                if (isFwd && !o.subForwarderId && (o.driverCost || 0) > 0) {
-                    b.expense += o.driverCost || 0;
+                if (isFwd && !o.subForwarderId && D(o.driverCost).gt(0)) {
+                    b.expense = b.expense.plus(D(o.driverCost));
                 }
             }
 
@@ -771,8 +772,8 @@ export class CompanyService {
         const pack = (b: ReturnType<typeof makeBucket>) => ({
             created: b.created,
             completed: b.completed,
-            income: Math.round(b.income),
-            expense: Math.round(b.expense),
+            income: Math.round(toNum(b.income)),
+            expense: Math.round(toNum(b.expense)),
             activeCustomers: b.customers.size,
             activeCarriers: b.carriers.size,
         });

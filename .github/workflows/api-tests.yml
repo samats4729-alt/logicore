@@ -83,36 +83,44 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # История проекта начинается с ALTER-миграций и не содержит baseline,
-      # создающий старые таблицы. Поэтому здесь проверяем точный SQL новой
-      # добавочной миграции на изолированной схеме с минимальными FK-заглушками.
-      - name: Validate accounting document migration SQL
+      # Миграции применяются к чистой базе тем же способом, что и в проде
+      # (prisma:deploy = prisma migrate deploy). Раньше здесь стоял костыль:
+      # SQL одной миграции прогонялся на отдельной схеме с FK-заглушками,
+      # потому что история не содержала baseline и воспроизвести базу с нуля
+      # было нельзя. Теперь история начинается с 0_init и проверяется честно.
+      - name: Apply migrations to a clean database
         env:
-          PGPASSWORD: "logcomp_secret"
+          DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
         run: |
-          psql -h localhost -p 5433 -U logcomp -d logcomp -v ON_ERROR_STOP=1 <<'SQL'
-          CREATE SCHEMA migration_test;
-          SET search_path TO migration_test;
-          CREATE TABLE "Company" ("id" TEXT PRIMARY KEY);
-          CREATE TABLE "Contract" ("id" TEXT PRIMARY KEY);
-          CREATE TABLE "User" ("id" TEXT PRIMARY KEY);
-          CREATE TABLE "Order" ("id" TEXT PRIMARY KEY);
-          CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY);
-          \i apps/api/prisma/migrations/20260725000000_add_accounting_document_core/migration.sql
-          SELECT COUNT(*) AS accounting_tables
-          FROM information_schema.tables
-          WHERE table_schema = 'migration_test'
-            AND table_name LIKE 'Accounting%';
-          SQL
+          pnpm --filter api prisma:generate
+          pnpm --filter api prisma:deploy
 
-      - name: Run Prisma DB Push & Seed
+      # Главная проверка перехода на Migrate: база, собранная ТОЛЬКО из
+      # миграций, обязана совпадать со схемой. Расхождение означает, что
+      # кто-то поменял schema.prisma без миграции — при деплое это привело бы
+      # к молчаливому расхождению прода со схемой. --exit-code роняет шаг.
+      - name: Verify migrations reproduce schema.prisma exactly
+        working-directory: apps/api
+        env:
+          DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
+        run: |
+          npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code \
+          && echo "✅ Схема и миграции совпадают" \
+          || {
+            echo "❌ База, собранная из миграций, не совпадает со схемой."
+            echo "   Похоже, schema.prisma изменили без новой миграции."
+            echo "   Создайте её: pnpm --filter api prisma:migrate"
+            exit 1
+          }
+
+      - name: Seed reference data
         env:
           DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
           SEED_TEST_DATA: "true"
-        run: |
-          pnpm --filter api prisma:generate
-          pnpm --filter api prisma:push --accept-data-loss
-          pnpm --filter api prisma:seed
+        run: pnpm --filter api prisma:seed
 
       - name: Run Unit Tests (financial logic)
         run: pnpm --filter api test

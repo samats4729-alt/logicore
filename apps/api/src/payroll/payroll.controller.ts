@@ -4,7 +4,7 @@ import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PayrollService } from './payroll.service';
-import { money } from '../common/utils/money';
+import { D, ZERO, money, sumOf, toNum } from '../common/utils/money';
 
 function getMonthsRange(fromStr: string, toStr: string): string[] {
     try {
@@ -248,10 +248,10 @@ export class PayrollController {
         });
 
         const rows = [];
-        let totalSalary = 0;
-        let totalPercent = 0;
-        let totalKpi = 0;
-        let grandTotal = 0;
+        let totalSalary = ZERO;
+        let totalPercent = ZERO;
+        let totalKpi = ZERO;
+        let grandTotal = ZERO;
 
         for (const user of users) {
             // Lazy calculation of SALARY and KPI
@@ -264,10 +264,10 @@ export class PayrollController {
                 },
             });
 
-            const salary = money(accruals.filter(a => a.kind === 'SALARY').reduce((sum, a) => sum + a.amount, 0));
-            const percentTotal = money(accruals.filter(a => a.kind === 'PERCENT').reduce((sum, a) => sum + a.amount, 0));
-            const kpiTotal = money(accruals.filter(a => a.kind === 'KPI').reduce((sum, a) => sum + a.amount, 0));
-            const total = money(salary + percentTotal + kpiTotal);
+            const salary = sumOf(accruals.filter(a => a.kind === 'SALARY'), (a) => a.amount);
+            const percentTotal = sumOf(accruals.filter(a => a.kind === 'PERCENT'), (a) => a.amount);
+            const kpiTotal = sumOf(accruals.filter(a => a.kind === 'KPI'), (a) => a.amount);
+            const total = salary.plus(percentTotal).plus(kpiTotal);
 
             // Completed orders count in range
             const start = new Date(months[0] + '-01T00:00:00.000Z');
@@ -289,26 +289,26 @@ export class PayrollController {
                 userId: user.id,
                 name: `${user.lastName || ''} ${user.firstName || ''}`.trim() || 'Сотрудник',
                 role: user.role,
-                salary,
-                percentTotal,
-                kpiTotal,
-                total,
+                salary: toNum(salary),
+                percentTotal: toNum(percentTotal),
+                kpiTotal: toNum(kpiTotal),
+                total: toNum(total),
                 ordersCount,
             });
 
-            totalSalary += salary;
-            totalPercent += percentTotal;
-            totalKpi += kpiTotal;
-            grandTotal += total;
+            totalSalary = totalSalary.plus(salary);
+            totalPercent = totalPercent.plus(percentTotal);
+            totalKpi = totalKpi.plus(kpiTotal);
+            grandTotal = grandTotal.plus(total);
         }
 
         return {
             report: rows,
             totals: {
-                salary: money(totalSalary),
-                percentTotal: money(totalPercent),
-                kpiTotal: money(totalKpi),
-                total: money(grandTotal),
+                salary: toNum(totalSalary),
+                percentTotal: toNum(totalPercent),
+                kpiTotal: toNum(totalKpi),
+                total: toNum(grandTotal),
             },
         };
     }
@@ -334,9 +334,9 @@ export class PayrollController {
             },
         });
 
-        const salary = money(accruals.filter(a => a.kind === 'SALARY').reduce((sum, a) => sum + a.amount, 0));
-        const percentTotal = money(accruals.filter(a => a.kind === 'PERCENT').reduce((sum, a) => sum + a.amount, 0));
-        const kpiTotal = money(accruals.filter(a => a.kind === 'KPI').reduce((sum, a) => sum + a.amount, 0));
+        const salary = sumOf(accruals.filter(a => a.kind === 'SALARY'), (a) => a.amount);
+        const percentTotal = sumOf(accruals.filter(a => a.kind === 'PERCENT'), (a) => a.amount);
+        const kpiTotal = sumOf(accruals.filter(a => a.kind === 'KPI'), (a) => a.amount);
 
         const start = new Date(currentMonth + '-01T00:00:00.000Z');
         const end = new Date(start);
@@ -353,7 +353,7 @@ export class PayrollController {
             },
         });
 
-        const total = money(salary + percentTotal + kpiTotal);
+        const total = salary.plus(percentTotal).plus(kpiTotal);
 
         // Check if there is any scheme configured to decide visibility of the metric
         const scheme = await this.payrollService.getSchemeFor(companyId, userId);
@@ -407,10 +407,10 @@ export class PayrollController {
         });
         const orderMap = new Map(orders.map(o => [o.id, o]));
 
-        const salary = money(accruals.filter(a => a.kind === 'SALARY').reduce((sum, a) => sum + a.amount, 0));
-        const percentTotal = money(accruals.filter(a => a.kind === 'PERCENT').reduce((sum, a) => sum + a.amount, 0));
-        const kpiTotal = money(accruals.filter(a => a.kind === 'KPI').reduce((sum, a) => sum + a.amount, 0));
-        const total = money(salary + percentTotal + kpiTotal);
+        const salary = sumOf(accruals.filter(a => a.kind === 'SALARY'), (a) => a.amount);
+        const percentTotal = sumOf(accruals.filter(a => a.kind === 'PERCENT'), (a) => a.amount);
+        const kpiTotal = sumOf(accruals.filter(a => a.kind === 'KPI'), (a) => a.amount);
+        const total = salary.plus(percentTotal).plus(kpiTotal);
 
         const mappedAccruals = accruals.map(a => {
             const ord = a.orderId ? orderMap.get(a.orderId) : null;

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinanceCalculatorService } from '../accounting/services/finance-calculator.service';
-import { money } from '../common/utils/money';
+import { D, Money, ZERO, money, roundMoney, toNum } from '../common/utils/money';
 
 @Injectable()
 export class PayrollService {
@@ -37,7 +37,7 @@ export class PayrollService {
                 const existing = await this.prisma.payrollAccrual.findFirst({
                     where: { orderId, kind: 'PERCENT' },
                 });
-                if (existing && existing.amount !== 0) {
+                if (existing && !D(existing.amount).isZero()) {
                     await this.prisma.payrollAccrual.update({
                         where: { id: existing.id },
                         data: {
@@ -85,9 +85,9 @@ export class PayrollService {
             }
 
             // Вычисляем базу
-            let base = 0;
+            let base: Money = ZERO;
             if (scheme.percentBase === 'ORDER_AMOUNT') {
-                base = order.customerPrice || 0;
+                base = D(order.customerPrice);
             } else if (scheme.percentBase === 'MARGIN') {
                 // Собрать входные данные так же, как getFinancialRegistry
                 const [payments, incomes, expenses] = await Promise.all([
@@ -112,7 +112,7 @@ export class PayrollService {
                 base = fin.margin;
             }
 
-            const amount = money(base * (scheme.percentValue || 0) / 100);
+            const amount = roundMoney(base.times(D(scheme.percentValue)).div(100));
             const periodMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
 
             // Защита от двойного начисления по уникальному индексу @@unique([orderId, userId, kind]).
@@ -123,7 +123,7 @@ export class PayrollService {
                 where: { orderId_userId_kind: { orderId, userId: manager.id, kind: 'PERCENT' } },
             });
             if (existing) {
-                if (existing.amount !== amount || existing.baseAmount !== base) {
+                if (!D(existing.amount).equals(amount) || !D(existing.baseAmount).equals(base)) {
                     await this.prisma.payrollAccrual.update({
                         where: { id: existing.id },
                         data: { amount, baseAmount: base, schemeSnapshot: scheme as any },
@@ -171,7 +171,7 @@ export class PayrollService {
             }
 
             // 1. Оклад (SALARY)
-            if ((scheme.type === 'FIXED' || scheme.type === 'HYBRID') && (scheme.fixedAmount || 0) > 0) {
+            if ((scheme.type === 'FIXED' || scheme.type === 'HYBRID') && D(scheme.fixedAmount).gt(0)) {
                 const existing = await this.prisma.payrollAccrual.findFirst({
                     where: { userId, periodMonth, kind: 'SALARY' },
                 });

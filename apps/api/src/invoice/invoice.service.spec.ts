@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { toNum } from '../common/utils/money';
 import { InvoiceType } from '@prisma/client';
 import { InvoiceService } from './invoice.service';
 
@@ -55,7 +56,7 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
         await service.createInvoice(COMPANY, 'user-1', baseDto());
 
         const data = prisma.invoice.create.mock.calls[0][0].data;
-        expect(data.amount).toBe(350000);
+        expect(toNum(data.amount)).toBe(350000);
         expect(data.type).toBe(InvoiceType.OUTGOING);
         // Заявки привязываются к исходящему счёту
         expect(prisma.order.updateMany).toHaveBeenCalledWith({
@@ -77,7 +78,7 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
         );
 
         const data = prisma.invoice.create.mock.calls[0][0].data;
-        expect(data.amount).toBe(170000);
+        expect(toNum(data.amount)).toBe(170000);
         expect(prisma.order.updateMany).toHaveBeenCalledWith({
             where: { id: { in: ['o1', 'o2'] } },
             data: { incomingInvoiceId: 'inv-1' },
@@ -96,7 +97,7 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
         );
 
         const data = prisma.invoice.create.mock.calls[0][0].data;
-        expect(data.amount).toBe(120000);
+        expect(toNum(data.amount)).toBe(120000);
     });
 
     it('исходящий счёт от субэкспедитора: берётся его ставка, а не цена заказчика', async () => {
@@ -111,7 +112,7 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
         );
 
         const data = prisma.invoice.create.mock.calls[0][0].data;
-        expect(data.amount).toBe(120000);
+        expect(toNum(data.amount)).toBe(120000);
     });
 
     it('пустые цены считаются нулём, а не NaN', async () => {
@@ -122,7 +123,7 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
 
         await service.createInvoice(COMPANY, 'user-1', baseDto());
 
-        expect(prisma.invoice.create.mock.calls[0][0].data.amount).toBe(200000);
+        expect(toNum(prisma.invoice.create.mock.calls[0][0].data.amount)).toBe(200000);
     });
 
     it('отклоняет счёт без заявок', async () => {

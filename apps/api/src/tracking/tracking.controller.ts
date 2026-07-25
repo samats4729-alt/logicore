@@ -1,10 +1,16 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, ParseArrayPipe, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TrackingService } from './tracking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
+import { PurgeGpsPointsDto, SendGpsPointDto } from './dto/gps-point.dto';
 import { UserRole } from '@prisma/client';
+
+// Ограничение на один offline-пакет: у водителя за смену накапливаются сотни
+// точек, но неограниченный массив — это неограниченная запись в самую горячую
+// таблицу базы одним запросом.
+const MAX_GPS_BATCH = 500;
 
 @ApiTags('tracking')
 @Controller('tracking')
@@ -16,10 +22,17 @@ export class TrackingController {
     @Post('gps')
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Отправить GPS точку' })
-    async sendGpsPoint(@Body() dto: any, @Request() req: any) {
+    async sendGpsPoint(@Body() dto: SendGpsPointDto, @Request() req: any) {
+        // driverId берётся ТОЛЬКО из токена и стоит после разбора тела запроса,
+        // чтобы его нельзя было переопределить полем из payload.
         return this.trackingService.saveGpsPoint({
+            orderId: dto.orderId,
+            latitude: dto.latitude,
+            longitude: dto.longitude,
+            accuracy: dto.accuracy,
+            speed: dto.speed,
+            heading: dto.heading,
             driverId: req.user.sub,
-            ...dto,
             recordedAt: new Date(dto.recordedAt),
         });
     }
@@ -27,13 +40,37 @@ export class TrackingController {
     @Post('gps/batch')
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Отправить пакет GPS точек (после offline)' })
-    async sendGpsPointsBatch(@Body() dto: any[], @Request() req: any) {
+    async sendGpsPointsBatch(
+        @Body(new ParseArrayPipe({ items: SendGpsPointDto })) dto: SendGpsPointDto[],
+        @Request() req: any,
+    ) {
+        if (dto.length > MAX_GPS_BATCH) {
+            throw new BadRequestException(`За один раз можно отправить не более ${MAX_GPS_BATCH} точек`);
+        }
+
         const points = dto.map(p => ({
+            orderId: p.orderId,
+            latitude: p.latitude,
+            longitude: p.longitude,
+            accuracy: p.accuracy,
+            speed: p.speed,
+            heading: p.heading,
             driverId: req.user.sub,
-            ...p,
             recordedAt: new Date(p.recordedAt),
         }));
         return this.trackingService.saveGpsPointsBatch(points);
+    }
+
+    @Post('gps/purge')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({
+        summary: 'Удалить GPS-точки старше указанного числа дней (обслуживание)',
+        description:
+            'Таблица GpsPoint растёт быстрее всех остальных и никогда не чистилась. '
+            + 'Удаление идёт пакетами; если в ответе hasMore = true, вызов нужно повторить.',
+    })
+    async purgeGpsPoints(@Body() dto: PurgeGpsPointsDto) {
+        return this.trackingService.purgeGpsPointsOlderThan(dto.olderThanDays);
     }
 
     @Get('drivers')
@@ -57,15 +94,15 @@ export class TrackingController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
     @RequirePermissions('tracking')
     @ApiOperation({ summary: 'Получить последнюю позицию водителя' })
-    async getDriverPosition(@Param('id') id: string) {
-        return this.trackingService.getDriverLastPosition(id);
+    async getDriverPosition(@Param('id') id: string, @Request() req: any) {
+        return this.trackingService.getDriverLastPosition(id, req.user.companyId);
     }
 
     @Get('order/:id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.RECIPIENT)
     @RequirePermissions('tracking', 'orders')
     @ApiOperation({ summary: 'Получить трек заявки' })
-    async getOrderTrack(@Param('id') id: string) {
-        return this.trackingService.getOrderTrack(id);
+    async getOrderTrack(@Param('id') id: string, @Request() req: any) {
+        return this.trackingService.getOrderTrack(id, req.user.companyId);
     }
 }
