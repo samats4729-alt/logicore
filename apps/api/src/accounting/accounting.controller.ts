@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Query, Res, BadRequestException } from '@nestjs/common';
+import { ApiOperation } from '@nestjs/swagger';
 import { AccountingService } from './accounting.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
@@ -187,8 +188,19 @@ export class AccountingController {
 
     @Get('counterparty-report')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getCounterpartyReport(@Request() req: any) {
-        return this.accountingService.getCounterpartyReport(req.user.companyId);
+    @ApiOperation({
+        summary: 'Взаиморасчёты по контрагентам',
+        description:
+            'includeOrders=false отдаёт только итоги и суммы по контрагентам, без списка заявок '
+            + 'по каждому. Дашборду нужны только итоги, а список заявок составляет почти весь объём ответа.',
+    })
+    async getCounterpartyReport(
+        @Request() req: any,
+        @Query('includeOrders') includeOrders?: string,
+    ) {
+        return this.accountingService.getCounterpartyReport(req.user.companyId, {
+            includeOrders: includeOrders !== 'false',
+        });
     }
 
     @Get('reconciliation-act/:counterpartyId')

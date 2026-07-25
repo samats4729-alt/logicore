@@ -1,10 +1,45 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentDirection } from '@prisma/client';
+import { PaymentDirection, Prisma } from '@prisma/client';
 import { D, Money, ZERO, roundMoney, sumOf } from '../../common/utils/money';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
 
 /** Суммы приходят из базы как Decimal, из DTO — как числа. */
 type Amount = Money | number | null | undefined;
+
+/**
+ * Поля заявки, которые нужны computeOrderFinance — и только они.
+ *
+ * У Order около семидесяти колонок, а расчёту нужно пятнадцать. Без явного
+ * select Prisma тянет строки целиком: на отчёте по нескольким тысячам заявок
+ * это мегабайты лишних данных из базы в память приложения. Экспортируется,
+ * чтобы все тяжёлые выборки просили одно и то же и не расходились.
+ */
+export const ORDER_FINANCE_SELECT = {
+    customerPrice: true,
+    driverCost: true,
+    subForwarderPrice: true,
+    customerCompanyId: true,
+    forwarderId: true,
+    subForwarderId: true,
+    partnerId: true,
+    vatRate: true,
+    hasVat: true,
+    executorVatRate: true,
+    executorHasVat: true,
+    isCustomerPaid: true,
+    isDriverPaid: true,
+    isSubForwarderPaid: true,
+} satisfies Prisma.OrderSelect;
+
+/**
+ * Связанные записи в том же объёме: расчёту нужны направление и сумма
+ * платежа, категория и сумма дохода/расхода. Остальные колонки не читаются.
+ */
+export const ORDER_FINANCE_RELATIONS_SELECT = {
+    payments: { where: { isDeleted: false }, select: { direction: true, amount: true, companyId: true } },
+    incomes: { where: { isDeleted: false }, select: { category: true, amount: true, isDeleted: true } },
+    expenses: { where: { isDeleted: false }, select: { category: true, amount: true, isDeleted: true } },
+} satisfies Prisma.OrderSelect;
 
 // Архитектурная заметка (см. аудит M-9): computeOrderFinance() и
 // PaymentsService.syncOrderPaymentFlags() выглядят как дублирование одной и

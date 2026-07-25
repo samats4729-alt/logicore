@@ -15,8 +15,19 @@
         "strictNullChecks": true,
         "noImplicitAny": true,
         "strictBindCallApply": true,
+        "strictFunctionTypes": true,
+        "noImplicitThis": true,
+        "alwaysStrict": true,
+        "useUnknownInCatchVariables": true,
+        "noImplicitReturns": true,
         "forceConsistentCasingInFileNames": true,
         "noFallthroughCasesInSwitch": true,
+        // Полный "strict" сейчас даёт 67 ошибок, и все они от
+        // strictPropertyInitialization: у DTO NestJS поля объявлены без
+        // инициализатора (`amount: number;`), значение приходит из
+        // ValidationPipe. Включать его нужно вместе с правкой всех DTO —
+        // это отдельная задача. Остальные проверки из strict уже включены
+        // поимённо и не стоили ни одной ошибки.
         "paths": {
             "@/*": [
                 "src/*"

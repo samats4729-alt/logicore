@@ -7,58 +7,74 @@ interface ChatMessage {
     content: string;
 }
 
-const ROUTES = `
+// ВАЖНО: этот список и SELECTORS ниже описывают реальный интерфейс. Их
+// сверяет assistant.service.spec.ts — тест падает, если маршрут или пункт
+// меню исчез. Без него карта тихо расходится с приложением, и гид начинает
+// уверенно вести пользователя в никуда (так уже случилось с /company/accounting
+// и несуществующими меню finance_group/transport_group).
+export const ROUTES = `
 - /company — Дашборд (общая сводка)
 - /company/orders — Все заявки
 - /company/orders/create — Создание заявки
 - /company/tracking — GPS / мониторинг
 - /company/warehouse — Склад
-- /company/accounting — Бухгалтерия (обзор)
+- /company/finance — Финансы: страница-хаб со ссылками на все операции, отчёты и справочники
 - /company/accounting/registry — Реестр заявок
-- /company/accounting/incomes — Поступления
-- /company/accounting/expenses — Расходы
+- /company/accounting/operations — Операции (движение денег)
+- /company/accounting/cash-in — Поступления
+- /company/accounting/cash-out — Списания
 - /company/accounting/cashflow — ДДС
-- /company/accounting/pnl — P&L
+- /company/accounting/pnl — Прибыли и убытки
 - /company/accounting/counterparty-report — Взаиморасчёты
+- /company/accounting/reconciliation-act — Акт сверки
 - /company/accounting/invoices — Счета
+- /company/accounting/acts — Акты выполненных работ
+- /company/accounting/balances — Остатки по кассам и счетам
+- /company/accounting/planned — Плановые платежи
+- /company/accounting/expenses-by-category — Расходы по статьям
+- /company/accounting/carrier-profit — Прибыль по перевозчикам
+- /company/accounting/settings — Настройки бухгалтерии
+- /company/payroll — Зарплата сотрудников
+- /company/my-salary — Моя зарплата
+- /company/reports — Отчёты
+- /company/calculator — Калькулятор
+- /company/cabinet — Кабинет: страница-хаб со ссылками на справочники компании
 - /company/partners — Контрагенты
 - /company/contracts — Договоры
 - /company/vehicles — Автопарк
 - /company/users — Сотрудники
 - /company/locations — Адреса
-- /company/calculator — Калькулятор
+- /company/documents — Документы
+- /company/audit — Журнал действий
+- /company/profile — Профиль пользователя
 - /company/settings — Настройки компании
 `;
 
-const SELECTORS = `
+export const SELECTORS = `
 Меню (верхний уровень, видно всегда):
 - Дашборд: [data-menu-id$='-/company']
 - Заявки (сразу открывает список заявок, группы нет): [data-menu-id$='-/company/orders']
-- Меню «Мониторинг»: [data-menu-id$='-monitoring_group']
-- Меню «Финансы»: [data-menu-id$='-finance_group']
-- Меню «Транспорт»: [data-menu-id$='-transport_group']
+- Меню «Мониторинг» (выпадающее): [data-menu-id$='-monitoring_group']
+- Финансы (открывает страницу-хаб, НЕ выпадающее меню): [data-menu-id$='-/company/finance']
+- Кабинет (открывает страницу-хаб, НЕ выпадающее меню): [data-menu-id$='-/company/cabinet']
 - Меню профиля (аватар справа вверху): [data-guide='profile']
 
-Подпункты (видны ТОЛЬКО после открытия их родительского меню):
-- GPS / Мониторинг (в «Мониторинг»): [data-menu-id$='-/company/tracking']
-- Склад (в «Мониторинг»): [data-menu-id$='-/company/warehouse']
-- Бухгалтерия (в «Финансы»): [data-menu-id$='-/company/accounting']
-- Реестр заявок (в «Финансы»): [data-menu-id$='-/company/accounting/registry']
-- Поступления (в «Финансы»): [data-menu-id$='-/company/accounting/incomes']
-- Расходы (в «Финансы»): [data-menu-id$='-/company/accounting/expenses']
-- ДДС (в «Финансы»): [data-menu-id$='-/company/accounting/cashflow']
-- P&L (в «Финансы»): [data-menu-id$='-/company/accounting/pnl']
-- Взаиморасчёты (в «Финансы»): [data-menu-id$='-/company/accounting/counterparty-report']
-- Счета (в «Финансы»): [data-menu-id$='-/company/accounting/invoices']
-- Зарплата (в «Финансы», только админ/экспедитор): [data-menu-id$='-/company/payroll']
-- Моя зарплата (в «Финансы», только логист): [data-menu-id$='-/company/my-salary']
-- Калькулятор (в «Финансы»): [data-menu-id$='-/company/calculator']
-- Автопарк (в «Транспорт»): [data-menu-id$='-/company/vehicles']
-- Контрагенты (в «Транспорт»): [data-menu-id$='-/company/partners']
-- Договоры (в «Транспорт»): [data-menu-id$='-/company/contracts']
-- Сотрудники (в «Транспорт»): [data-menu-id$='-/company/users']
-- Адреса (в «Транспорт»): [data-menu-id$='-/company/locations']
-- Настройки (в меню профиля): [data-menu-id$='-/company/settings']
+Подпункты меню «Мониторинг» (видны только после его открытия):
+- GPS / Мониторинг: [data-menu-id$='-/company/tracking']
+- Склад: [data-menu-id$='-/company/warehouse']
+
+Подпункты меню профиля (видны только после его открытия):
+- Настройки: [data-menu-id$='-/company/settings']
+
+ВАЖНО про финансы и справочники: отдельных пунктов меню у них нет. Путь всегда
+такой: сначала клик по «Финансы» или «Кабинет» в верхнем меню, затем нужная
+ссылка на открывшейся странице-хабе.
+- Через «Финансы»: реестр заявок, операции, поступления, списания, ДДС,
+  прибыли и убытки, взаиморасчёты, акт сверки, счета, акты, остатки,
+  плановые платежи, расходы по статьям, прибыль по перевозчикам, склад ТМЦ,
+  зарплата, отчёты, калькулятор, настройки бухгалтерии.
+- Через «Кабинет»: сотрудники, контрагенты, договоры, автопарк, адреса,
+  документы, журнал действий, профиль, настройки компании.
 
 Кнопки на страницах:
 - «Создать заявку» (на странице /company/orders): [data-guide='orders-create']
@@ -90,7 +106,8 @@ ${SELECTORS}
 Правила для steps:
 - Каждый шаг = один клик пользователя. say — короткая команда (что нажать).
 - Используй ТОЛЬКО селекторы из списка выше.
-- Чтобы попасть в подпункт меню, сначала добавь шаг с открытием родительского меню (Мониторинг/Финансы/Транспорт, а для Настроек — меню профиля [data-guide='profile']), затем шаг с подпунктом.
+- Выпадающее меню только одно — «Мониторинг». Чтобы попасть в его подпункт, сначала добавь шаг с открытием самого меню, затем шаг с подпунктом. Для «Настроек» родитель — меню профиля [data-guide='profile'].
+- «Финансы» и «Кабинет» — не меню, а страницы-хабы: шаг с кликом по ним открывает страницу, дальше пользователь переходит по ссылке на ней. Отдельных селекторов у этих ссылок нет, поэтому просто назови нужный раздел словами.
 - Заявки открываются одним кликом по пилюле, без промежуточного меню.
 - Учитывай текущую страницу пользователя: если он уже там, где нужно, не добавляй лишние шаги навигации.
 - Если задача не требует навигации — steps можно не добавлять.`;

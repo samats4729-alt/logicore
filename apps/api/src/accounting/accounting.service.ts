@@ -168,8 +168,8 @@ export class AccountingService {
 
     // ==================== COUNTERPARTY REPORT ====================
 
-    async getCounterpartyReport(companyId: string) {
-        return this.reportsService.getCounterpartyReport(companyId);
+    async getCounterpartyReport(companyId: string, options?: { includeOrders?: boolean }) {
+        return this.reportsService.getCounterpartyReport(companyId, options);
     }
 
     async getReconciliationAct(companyId: string, counterpartyId: string, query: { startDate?: string; endDate?: string }) {

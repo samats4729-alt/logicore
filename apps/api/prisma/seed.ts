@@ -353,12 +353,16 @@ async function main() {
 
     console.log('Seeding completed!');
     console.log('');
-    console.log('Test credentials:');
-    console.log('   Admin: admin@logcomp.kz / admin123');
-    console.log('   Customer: customer@test.kz / customer123');
-    console.log('   Driver: +77771234567 (SMS auth, code: 1234)');
-    console.log('');
-    console.log('Test order TEST-001 assigned to test driver');
+    // Пароли в лог не пишем: логи деплоя доступны шире, чем сама система.
+    // Раньше здесь печаталась пара admin@logcomp.kz / admin123 — причём
+    // независимо от того, что реально задано в ADMIN_EMAIL/ADMIN_PASSWORD,
+    // то есть строка ещё и вводила в заблуждение.
+    console.log(`Администратор: ${adminEmail} (пароль из ADMIN_PASSWORD)`);
+    if (process.env.SEED_TEST_DATA === 'true') {
+        console.log('Тестовые данные созданы (SEED_TEST_DATA=true):');
+        console.log('   заказчик customer@test.kz, водитель +77771234567, заявка TEST-001');
+        console.log('   пароли тестовых пользователей — в prisma/seed.ts');
+    }
 }
 
 main()
