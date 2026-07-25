@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     ConflictException,
+    Inject,
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
@@ -14,10 +15,12 @@ import {
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PeriodClosingService } from '../accounting/services/period-closing.service';
+import type { FinancialReportsService } from '../accounting/services/financial-reports.service';
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
 import {
     AccountingDocumentListQueryDto,
     CreateAccountingDocumentDto,
+    GenerateReconciliationDraftDto,
 } from './dto/accounting-document.dto';
 
 const COMPANY_SNAPSHOT_SELECT = {
@@ -58,13 +61,65 @@ const DOCUMENT_INCLUDE = {
     targetLinks: true,
 } satisfies Prisma.AccountingDocumentInclude;
 
+export const RECONCILIATION_REPORTS = Symbol('RECONCILIATION_REPORTS');
+type ReconciliationReports = Pick<FinancialReportsService, 'getReconciliationAct'>;
+
 @Injectable()
 export class AccountingDocumentsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly calculator: AccountingDocumentCalculatorService,
         private readonly periodClosing: PeriodClosingService,
+        @Inject(RECONCILIATION_REPORTS)
+        private readonly financialReports: ReconciliationReports,
     ) {}
+
+    async createReconciliationDraftFromLedger(
+        companyId: string,
+        userId: string,
+        dto: GenerateReconciliationDraftDto,
+    ) {
+        const periodFrom = new Date(dto.reportPeriodFrom);
+        const periodTo = new Date(dto.reportPeriodTo);
+        if (periodFrom > periodTo) {
+            throw new BadRequestException('Начало отчётного периода позже его окончания');
+        }
+
+        const report = await this.financialReports.getReconciliationAct(
+            companyId,
+            dto.counterpartyId,
+            {
+                startDate: dto.reportPeriodFrom,
+                endDate: dto.reportPeriodTo,
+            },
+        );
+        if (report.rows.length > 5000) {
+            throw new BadRequestException('В периоде больше 5000 операций. Выберите более короткий период');
+        }
+
+        return this.createDraft(companyId, userId, {
+            type: AccountingDocumentType.RECONCILIATION_ACT,
+            direction: AccountingDocumentDirection.OUTGOING,
+            counterpartyId: dto.counterpartyId,
+            documentDate: dto.documentDate ?? dto.reportPeriodTo,
+            reportPeriodFrom: dto.reportPeriodFrom,
+            reportPeriodTo: dto.reportPeriodTo,
+            openingBalance: report.openingBalance.toFixed(2),
+            currency: 'KZT',
+            note: dto.note,
+            reconciliationLines: report.rows.map((row) => {
+                const source = this.splitLedgerDocument(row.doc);
+                return {
+                    transactionDate: this.utcDateString(row.date),
+                    sourceDocumentType: source.type,
+                    sourceDocumentNumber: source.number,
+                    description: row.description,
+                    debit: row.debit.toFixed(2),
+                    credit: row.credit.toFixed(2),
+                };
+            }),
+        });
+    }
 
     async createDraft(companyId: string, userId: string, dto: CreateAccountingDocumentDto) {
         if (dto.counterpartyId === companyId) {
@@ -321,6 +376,17 @@ export class AccountingDocumentsService {
                 throw new BadRequestException('Строки взаиморасчётов допустимы только в акте сверки');
             }
         }
+    }
+
+    private splitLedgerDocument(value: string) {
+        const match = value.match(/^(.*?)\s+№\s*(.+)$/u);
+        return match
+            ? { type: match[1].trim(), number: match[2].trim() }
+            : { type: value.trim(), number: undefined };
+    }
+
+    private utcDateString(value: Date) {
+        return new Date(value).toISOString().slice(0, 10);
     }
 
     private async assertOrdersAccessible(

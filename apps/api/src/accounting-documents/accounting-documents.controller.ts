@@ -23,6 +23,7 @@ import {
     AccountingDocumentListQueryDto,
     CancelAccountingDocumentDto,
     CreateAccountingDocumentDto,
+    GenerateReconciliationDraftDto,
 } from './dto/accounting-document.dto';
 
 const VIEW_ROLES = [
@@ -58,6 +59,35 @@ export class AccountingDocumentsController {
             entity: 'accounting_document',
             entityId: document.id,
             entityLabel: `${document.type} №${document.number}`,
+        });
+        return document;
+    }
+
+    @Post('reconciliation/from-ledger')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Создать черновик акта сверки из заявок и оплат' })
+    async createReconciliationFromLedger(
+        @Request() req: any,
+        @Body() dto: GenerateReconciliationDraftDto,
+    ) {
+        const document = await this.documents.createReconciliationDraftFromLedger(
+            req.user.companyId,
+            req.user.id,
+            dto,
+        );
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'accounting_document',
+            entityId: document.id,
+            entityLabel: `${document.type} №${document.number}`,
+            details: {
+                source: 'ledger',
+                reportPeriodFrom: dto.reportPeriodFrom,
+                reportPeriodTo: dto.reportPeriodTo,
+                operationCount: document.reconciliationLines.length,
+            },
         });
         return document;
     }

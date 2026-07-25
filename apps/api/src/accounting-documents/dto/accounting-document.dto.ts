@@ -220,6 +220,27 @@ export class CreateAccountingDocumentDto {
     orderIds?: string[];
 }
 
+export class GenerateReconciliationDraftDto {
+    @IsString()
+    @IsNotEmpty()
+    counterpartyId!: string;
+
+    @IsDateString()
+    reportPeriodFrom!: string;
+
+    @IsDateString()
+    reportPeriodTo!: string;
+
+    @IsOptional()
+    @IsDateString()
+    documentDate?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(4000)
+    note?: string;
+}
+
 export class CancelAccountingDocumentDto {
     @IsString()
     @IsNotEmpty()

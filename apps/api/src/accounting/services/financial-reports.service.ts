@@ -928,6 +928,13 @@ export class FinancialReportsService {
 
         const start = query.startDate ? new Date(query.startDate) : null;
         const end = query.endDate ? new Date(query.endDate) : null;
+        if (start && Number.isNaN(start.getTime())) throw new BadRequestException('Некорректная дата начала периода');
+        if (end && Number.isNaN(end.getTime())) throw new BadRequestException('Некорректная дата окончания периода');
+        if (start) start.setUTCHours(0, 0, 0, 0);
+        if (end) end.setUTCHours(23, 59, 59, 999);
+        if (start && end && start > end) {
+            throw new BadRequestException('Начало периода позже его окончания');
+        }
 
         // Заявки, где участвуют обе стороны
         const orders = await this.prisma.order.findMany({

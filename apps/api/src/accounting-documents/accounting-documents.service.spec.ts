@@ -56,12 +56,45 @@ function makeService() {
         }),
     };
     const periodClosing = { checkPeriodNotClosed: jest.fn().mockResolvedValue(undefined) };
+    const financialReports = {
+        getReconciliationAct: jest.fn().mockResolvedValue({
+            company: { id: COMPANY, name: 'Наша компания', bin: '123456789012' },
+            counterparty: { id: COUNTERPARTY, name: 'Контрагент', bin: '987654321098' },
+            period: {
+                start: '2026-07-01T00:00:00.000Z',
+                end: '2026-07-31T23:59:59.999Z',
+            },
+            openingBalance: 100,
+            rows: [
+                {
+                    date: new Date('2026-07-15T18:00:00.000Z'),
+                    doc: 'Заявка №AB00000123',
+                    description: 'Транспортные услуги',
+                    debit: 500,
+                    credit: 0,
+                    balance: 600,
+                },
+                {
+                    date: new Date('2026-07-31T18:00:00.000Z'),
+                    doc: 'Оплата по заявке №AB00000123',
+                    description: 'Поступление оплаты',
+                    debit: 0,
+                    credit: 200,
+                    balance: 400,
+                },
+            ],
+            totals: { debit: 500, credit: 200 },
+            closingBalance: 400,
+            generatedAt: '2026-07-31T20:00:00.000Z',
+        }),
+    };
     const service = new AccountingDocumentsService(
         prisma,
         new AccountingDocumentCalculatorService(),
         periodClosing as any,
+        financialReports as any,
     );
-    return { service, prisma, tx, periodClosing };
+    return { service, prisma, tx, periodClosing, financialReports };
 }
 
 const storedDocument = (overrides: Record<string, unknown> = {}) => ({
@@ -91,6 +124,54 @@ const storedDocument = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('AccountingDocumentsService', () => {
+    it('создаёт черновик акта сверки из реальных строк регистра', async () => {
+        const { service, tx, financialReports } = makeService();
+
+        const result: any = await service.createReconciliationDraftFromLedger(
+            COMPANY,
+            'user-1',
+            {
+                counterpartyId: COUNTERPARTY,
+                reportPeriodFrom: '2026-07-01',
+                reportPeriodTo: '2026-07-31',
+            },
+        );
+
+        expect(financialReports.getReconciliationAct).toHaveBeenCalledWith(
+            COMPANY,
+            COUNTERPARTY,
+            { startDate: '2026-07-01', endDate: '2026-07-31' },
+        );
+        expect(result.type).toBe(AccountingDocumentType.RECONCILIATION_ACT);
+        const createData = tx.accountingDocument.create.mock.calls[0][0].data;
+        expect(createData.openingBalance.toFixed(2)).toBe('100.00');
+        expect(createData.closingBalance.toFixed(2)).toBe('400.00');
+        expect(createData.reconciliationLines.create).toHaveLength(2);
+        expect(createData.reconciliationLines.create[0]).toMatchObject({
+            sourceDocumentType: 'Заявка',
+            sourceDocumentNumber: 'AB00000123',
+            description: 'Транспортные услуги',
+        });
+        expect(createData.reconciliationLines.create[1].transactionDate).toEqual(
+            new Date('2026-07-31'),
+        );
+    });
+
+    it('не запрашивает регистр при перевёрнутом периоде', async () => {
+        const { service, financialReports } = makeService();
+
+        await expect(service.createReconciliationDraftFromLedger(
+            COMPANY,
+            'user-1',
+            {
+                counterpartyId: COUNTERPARTY,
+                reportPeriodFrom: '2026-08-01',
+                reportPeriodTo: '2026-07-31',
+            },
+        )).rejects.toThrow('Начало отчётного периода позже его окончания');
+        expect(financialReports.getReconciliationAct).not.toHaveBeenCalled();
+    });
+
     it('создаёт черновик одной транзакцией с автоматическим номером и снимками сторон', async () => {
         const { service, tx } = makeService();
 

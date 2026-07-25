@@ -2,7 +2,10 @@ import 'reflect-metadata';
 import { AccountingDocumentDirection, AccountingDocumentType } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CreateAccountingDocumentDto } from './accounting-document.dto';
+import {
+    CreateAccountingDocumentDto,
+    GenerateReconciliationDraftDto,
+} from './accounting-document.dto';
 
 describe('CreateAccountingDocumentDto', () => {
     const valid = {
@@ -39,5 +42,24 @@ describe('CreateAccountingDocumentDto', () => {
             reconciliationLines: [],
         });
         await expect(validate(dto)).resolves.toHaveLength(0);
+    });
+
+    it('проверяет обязательные поля автоматического акта сверки', async () => {
+        const validDto = plainToInstance(GenerateReconciliationDraftDto, {
+            counterpartyId: 'company-2',
+            reportPeriodFrom: '2026-07-01',
+            reportPeriodTo: '2026-07-31',
+        });
+        await expect(validate(validDto)).resolves.toHaveLength(0);
+
+        const invalidDto = plainToInstance(GenerateReconciliationDraftDto, {
+            counterpartyId: '',
+            reportPeriodFrom: 'не дата',
+            reportPeriodTo: '2026-07-31',
+        });
+        const errors = await validate(invalidDto);
+        expect(errors.map((error) => error.property)).toEqual(
+            expect.arrayContaining(['counterpartyId', 'reportPeriodFrom']),
+        );
     });
 });
