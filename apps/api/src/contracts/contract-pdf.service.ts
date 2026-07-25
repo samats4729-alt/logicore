@@ -15,7 +15,20 @@ export class ContractPdfService {
         private s3Service: S3Service,
     ) { }
 
-    async generateContractPdf(contractId: string): Promise<Buffer> {
+    /**
+     * PDF договора.
+     *
+     * Печать и подпись ставятся только по явному запросу (`withStamp`) и
+     * только своей стороне — той компании, которая печатает документ.
+     * Печать контрагента не вставляется никогда: поставить её без его
+     * участия — значит изобразить, что вторая сторона документ подписала.
+     * Подтверждения от контрагента система пока не собирает, поэтому и
+     * права рисовать его печать у неё нет.
+     */
+    async generateContractPdf(
+        contractId: string,
+        options: { requestingCompanyId: string; withStamp?: boolean },
+    ): Promise<Buffer> {
         const contract = await this.prisma.contract.findUnique({
             where: { id: contractId },
             include: {
@@ -47,17 +60,28 @@ export class ContractPdfService {
 
         this.logger.log(`[ContractPdf] Generating PDF for contractId=${contractId}. Forwarder="${forwarder?.name}", Customer="${customer?.name}"`);
 
-        if (forwarder?.stampImage) {
-            forwarderStampBuffer = await this.getImageBuffer(forwarder.stampImage);
+        // Своя сторона — компания, которая печатает договор. Реквизиты
+        // изображений грузим только для неё и только если печать запрошена:
+        // чего не загрузили, то физически не может попасть в PDF.
+        const stampsOwnSide = options.withStamp === true;
+        const weAreForwarder = forwarder?.id === options.requestingCompanyId;
+        const weAreCustomer = customer?.id === options.requestingCompanyId;
+
+        if (stampsOwnSide && weAreForwarder) {
+            if (forwarder?.stampImage) {
+                forwarderStampBuffer = await this.getImageBuffer(forwarder.stampImage);
+            }
+            if (forwarder?.signatureImage) {
+                forwarderSignatureBuffer = await this.getImageBuffer(forwarder.signatureImage);
+            }
         }
-        if (forwarder?.signatureImage) {
-            forwarderSignatureBuffer = await this.getImageBuffer(forwarder.signatureImage);
-        }
-        if (customer?.stampImage) {
-            customerStampBuffer = await this.getImageBuffer(customer.stampImage);
-        }
-        if (customer?.signatureImage) {
-            customerSignatureBuffer = await this.getImageBuffer(customer.signatureImage);
+        if (stampsOwnSide && weAreCustomer) {
+            if (customer?.stampImage) {
+                customerStampBuffer = await this.getImageBuffer(customer.stampImage);
+            }
+            if (customer?.signatureImage) {
+                customerSignatureBuffer = await this.getImageBuffer(customer.signatureImage);
+            }
         }
 
         return new Promise<Buffer>((resolve, reject) => {

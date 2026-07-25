@@ -91,12 +91,17 @@ interface PartySnapshot {
 
 @Injectable()
 export class AccountingDocumentPdfService {
-    async generatePdf(document: InvoicePdfDocument): Promise<Buffer> {
+    /**
+     * `stamp` — картинка печати НАШЕЙ компании, если бухгалтер попросил
+     * печатать «с подписью и печатью». Решение, можно ли её ставить,
+     * принимает вызывающий код: сюда она доходит уже только своя.
+     */
+    async generatePdf(document: InvoicePdfDocument, stamp?: Buffer | null): Promise<Buffer> {
         if (document.type === AccountingDocumentType.PAYMENT_INVOICE) {
-            return this.generateInvoicePdf(document);
+            return this.generateInvoicePdf(document, stamp);
         }
         if (document.type === AccountingDocumentType.SERVICE_ACT) {
-            return this.generateServiceActPdf(document);
+            return this.generateServiceActPdf(document, stamp);
         }
         if (document.type === AccountingDocumentType.RECONCILIATION_ACT) {
             return this.generateReconciliationActPdf(document);
@@ -104,7 +109,7 @@ export class AccountingDocumentPdfService {
         throw new BadRequestException('Печатная форма для этого типа документа ещё не реализована');
     }
 
-    async generateInvoicePdf(document: InvoicePdfDocument): Promise<Buffer> {
+    async generateInvoicePdf(document: InvoicePdfDocument, stamp?: Buffer | null): Promise<Buffer> {
         if (document.type !== AccountingDocumentType.PAYMENT_INVOICE) {
             throw new BadRequestException('Эта печатная форма предназначена только для счёта на оплату');
         }
@@ -159,13 +164,13 @@ export class AccountingDocumentPdfService {
             this.drawInvoiceHeader(doc, document, issuer, recipient, basis);
             this.drawInvoiceLines(doc, document.lines, document.number);
             this.drawInvoiceTotals(doc, document);
-            this.drawInvoiceFooter(doc, document, issuer);
+            this.drawInvoiceFooter(doc, document, issuer, stamp);
             this.addPageNumbers(doc);
             doc.end();
         });
     }
 
-    async generateServiceActPdf(document: InvoicePdfDocument): Promise<Buffer> {
+    async generateServiceActPdf(document: InvoicePdfDocument, stamp?: Buffer | null): Promise<Buffer> {
         if (document.type !== AccountingDocumentType.SERVICE_ACT) {
             throw new BadRequestException('Эта печатная форма предназначена только для акта выполненных работ');
         }
@@ -223,6 +228,7 @@ export class AccountingDocumentPdfService {
             this.drawServiceActHeader(doc, document, issuer, recipient, basis);
             this.drawServiceActLines(doc, document);
             this.drawServiceActFooter(
+                stamp,
                 doc,
                 document,
                 issuer,
@@ -750,6 +756,7 @@ export class AccountingDocumentPdfService {
     }
 
     private drawServiceActFooter(
+        stamp: Buffer | null | undefined,
         doc: PDFKit.PDFDocument,
         document: InvoicePdfDocument,
         issuer: PartySnapshot,
@@ -805,6 +812,9 @@ export class AccountingDocumentPdfService {
             y + 47,
             { width: blockWidth, align: 'right' },
         );
+        // Печать только исполнителя, то есть наша. «М.П.» заказчика
+        // остаётся пустым местом под его настоящую печать.
+        this.drawStamp(doc, stamp, left + 18, y + 6);
     }
 
     private actHeaderCell(
@@ -1038,18 +1048,33 @@ export class AccountingDocumentPdfService {
         doc: PDFKit.PDFDocument,
         document: InvoicePdfDocument,
         issuer: PartySnapshot,
+        stamp?: Buffer | null,
     ) {
-        this.ensureSpace(doc, 65);
+        this.ensureSpace(doc, stamp ? 130 : 65);
         const left = doc.page.margins.left;
         const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
         doc.font('Roboto-Bold').fontSize(9);
         doc.text('Исполнитель', left, doc.y, { continued: true });
         doc.font('Roboto').text(' ________________________________ ', { continued: true });
         doc.font('Roboto').text(issuer.directorName || '/бухгалтер/', { align: 'right' });
+        this.drawStamp(doc, stamp, left + 60, doc.y - 6);
         if (document.note) {
             doc.moveDown(1);
             doc.font('Roboto').fontSize(8).fillColor(INK);
             doc.text(`Примечание: ${document.note}`, left, doc.y, { width });
+        }
+    }
+
+    /**
+     * Печать поверх блока подписи. Полупрозрачности нет — печать кладётся
+     * рядом с «М.П.», а не поверх текста, чтобы ничего не перекрывать.
+     */
+    private drawStamp(doc: PDFKit.PDFDocument, stamp: Buffer | null | undefined, x: number, y: number) {
+        if (!stamp) return;
+        try {
+            doc.image(stamp, x, y, { fit: [96, 96] });
+        } catch {
+            // Битая картинка печати не должна ронять весь документ.
         }
     }
 

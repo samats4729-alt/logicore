@@ -21,6 +21,7 @@ import {
 import {
     ArrowLeftOutlined,
     CheckOutlined,
+    DownOutlined,
     DeleteOutlined,
     LinkOutlined,
     MoreOutlined,
@@ -651,9 +652,22 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                             </Tooltip>
                         </>
                     )}
-                    <Button icon={<PrinterOutlined />} onClick={() => openAccountingDocumentPdf(document.id)}>
-                        Печать
-                    </Button>
+                    {/* Как флажок «Подпись и печать» в 1С: обычная печать —
+                        чистый бланк, вариант из меню — со своей печатью. */}
+                    <Dropdown.Button
+                        icon={<DownOutlined />}
+                        onClick={() => openAccountingDocumentPdf(document.id)}
+                        menu={{
+                            items: [{
+                                key: 'stamp',
+                                label: 'С подписью и печатью',
+                                disabled: !outgoing,
+                                onClick: () => openAccountingDocumentPdf(document.id, true),
+                            }],
+                        }}
+                    >
+                        <PrinterOutlined /> Печать
+                    </Dropdown.Button>
                     <Dropdown
                         trigger={['click']}
                         menu={{

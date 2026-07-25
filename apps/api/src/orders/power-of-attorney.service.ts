@@ -14,7 +14,19 @@ export class PowerOfAttorneyService {
         private s3Service: S3Service,
     ) { }
 
-    async generatePdf(orderId: string, companyId: string): Promise<Buffer> {
+    /**
+     * PDF доверенности на водителя.
+     *
+     * Печать и подпись — только по явному запросу (`withStamp`) и только
+     * если доверенность выписывает та же компания, которая её печатает.
+     * Эмитентом может оказаться другая сторона заявки (например, когда мы
+     * на рейсе лишь партнёр) — ставить её печать система права не имеет.
+     */
+    async generatePdf(
+        orderId: string,
+        companyId: string,
+        options?: { withStamp?: boolean },
+    ): Promise<Buffer> {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: {
@@ -54,11 +66,14 @@ export class PowerOfAttorneyService {
 
         this.logger.log(`[PoA] Issuer company "${issuerCompany.name}" (ID: ${issuerCompany.id}) has stampImage="${issuerCompany.stampImage}", signatureImage="${issuerCompany.signatureImage}"`);
 
-        if (issuerCompany.stampImage) {
+        // Не загружаем изображения вовсе, если печать не запрошена или
+        // эмитент — не мы: чего нет в буфере, то не попадёт в документ.
+        const mayStamp = options?.withStamp === true && issuerCompany.id === companyId;
+        if (mayStamp && issuerCompany.stampImage) {
             stampBuffer = await this.getImageBuffer(issuerCompany.stampImage);
             this.logger.log(`[PoA] Loaded stampBuffer: ${stampBuffer ? stampBuffer.length + ' bytes' : 'failed/null'}`);
         }
-        if (issuerCompany.signatureImage) {
+        if (mayStamp && issuerCompany.signatureImage) {
             signatureBuffer = await this.getImageBuffer(issuerCompany.signatureImage);
             this.logger.log(`[PoA] Loaded signatureBuffer: ${signatureBuffer ? signatureBuffer.length + ' bytes' : 'failed/null'}`);
         }

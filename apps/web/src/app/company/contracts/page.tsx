@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import {
     Card, Button, Tag, Space, Modal, message, Typography,
     Collapse, Table, Empty, Badge, Input, Tooltip, Tabs,
-    Form, Select, DatePicker, InputNumber, Row, Col, Popconfirm, Divider, theme
+    Form, Select, DatePicker, InputNumber, Row, Col, Popconfirm, Divider, Dropdown, theme
 } from 'antd';
 import {
     CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined,
-    ExclamationCircleOutlined, PlusOutlined, SendOutlined, DeleteOutlined, DownloadOutlined, EditOutlined
+    ExclamationCircleOutlined, PlusOutlined, SendOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, DownOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -211,9 +211,17 @@ export default function CompanyContractsPage() {
     };
 
     // === PDF ===
-    const handleDownloadPdf = async (contractId: string, contractNumber: string) => {
+    /**
+     * withStamp — аналог флажка «Подпись и печать» в 1С. По умолчанию
+     * договор скачивается чистым, под живую подпись. Печать ставится
+     * только своей стороне: печать контрагента система не рисует.
+     */
+    const handleDownloadPdf = async (contractId: string, contractNumber: string, withStamp = false) => {
         try {
-            const res = await api.get(`/contracts/${contractId}/pdf`, { responseType: 'blob' });
+            const res = await api.get(`/contracts/${contractId}/pdf`, {
+                params: withStamp ? { withStamp: 'true' } : undefined,
+                responseType: 'blob',
+            });
             const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
             const link = document.createElement('a');
             link.href = url;
@@ -573,13 +581,20 @@ export default function CompanyContractsPage() {
                                                         >
                                                             Редактировать текст
                                                         </Button>
-                                                        <Button
+                                                        <Dropdown.Button
                                                             size="small"
-                                                            icon={<DownloadOutlined />}
+                                                            icon={<DownOutlined />}
                                                             onClick={() => handleDownloadPdf(contract.id, contract.contractNumber)}
+                                                            menu={{
+                                                                items: [{
+                                                                    key: 'stamp',
+                                                                    label: 'С подписью и печатью',
+                                                                    onClick: () => handleDownloadPdf(contract.id, contract.contractNumber, true),
+                                                                }],
+                                                            }}
                                                         >
-                                                            Скачать PDF
-                                                        </Button>
+                                                            <DownloadOutlined /> Скачать PDF
+                                                        </Dropdown.Button>
                                                         <Button
                                                             size="small"
                                                             icon={<PlusOutlined />}

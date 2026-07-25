@@ -302,8 +302,15 @@ export async function regenerateAccountingDocumentShare(id: string): Promise<{ s
     return res.data;
 }
 
-/** Печатная форма открывается в новой вкладке — как «Печать» в 1С. */
-export function openAccountingDocumentPdf(id: string) {
+/**
+ * Печатная форма открывается в новой вкладке — как «Печать» в 1С.
+ *
+ * `withStamp` — флажок «Подпись и печать». По умолчанию форма чистая, под
+ * живую подпись; печать ставится только своей стороне и только на
+ * исходящий документ.
+ */
+export function openAccountingDocumentPdf(id: string, withStamp = false) {
     const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    window.open(`${base}/accounting-documents/${id}/pdf`, '_blank', 'noopener');
+    const query = withStamp ? '?withStamp=true' : '';
+    window.open(`${base}/accounting-documents/${id}/pdf${query}`, '_blank', 'noopener');
 }

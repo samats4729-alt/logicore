@@ -6,7 +6,7 @@ import {
     Typography, Tag, Button, Descriptions, Card, Row, Col, Table,
     Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline,
     Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip,
-    Alert, theme, AutoComplete
+    Alert, theme, AutoComplete, Dropdown
 } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
@@ -968,9 +968,13 @@ export default function OrderDetailPage() {
         }
     };
 
-    const handleDownloadPoA = async () => {
+    /** withStamp — флажок «Подпись и печать»; по умолчанию бланк чистый. */
+    const handleDownloadPoA = async (withStamp = false) => {
         try {
-            const res = await api.get(`/orders/${orderId}/power-of-attorney`, { responseType: 'blob' });
+            const res = await api.get(`/orders/${orderId}/power-of-attorney`, {
+                params: withStamp ? { withStamp: 'true' } : undefined,
+                responseType: 'blob',
+            });
             const blob = new Blob([res.data], { type: 'application/pdf' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1867,13 +1871,20 @@ export default function OrderDetailPage() {
                                                         >
                                                             Изменить водителя
                                                         </Button>
-                                                        <Button
-                                                            icon={<FileTextOutlined />}
-                                                            onClick={handleDownloadPoA}
-                                                            block
+                                                        <Dropdown.Button
+                                                            style={{ width: '100%' }}
+                                                            buttonsRender={([left, right]) => [left, right]}
+                                                            onClick={() => handleDownloadPoA()}
+                                                            menu={{
+                                                                items: [{
+                                                                    key: 'stamp',
+                                                                    label: 'С подписью и печатью',
+                                                                    onClick: () => handleDownloadPoA(true),
+                                                                }],
+                                                            }}
                                                         >
-                                                            Скачать доверенность (PDF)
-                                                        </Button>
+                                                            <FileTextOutlined /> Доверенность (PDF)
+                                                        </Dropdown.Button>
                                                         <Button
                                                             icon={<MailOutlined />}
                                                             onClick={openSharePoAModal}

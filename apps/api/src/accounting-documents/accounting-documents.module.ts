@@ -9,6 +9,7 @@ import {
 } from './accounting-documents.service';
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
 import { PublicAccountingDocumentController } from './public-accounting-document.controller';
+import { StampImageService } from '../common/services/stamp-image.service';
 
 @Module({
     imports: [AccountingModule],
@@ -17,6 +18,7 @@ import { PublicAccountingDocumentController } from './public-accounting-document
         AccountingDocumentsService,
         AccountingDocumentCalculatorService,
         AccountingDocumentPdfService,
+        StampImageService,
         { provide: RECONCILIATION_REPORTS, useExisting: FinancialReportsService },
     ],
     exports: [AccountingDocumentsService, AccountingDocumentCalculatorService, AccountingDocumentPdfService],

@@ -510,6 +510,14 @@ export class AccountingDocumentsService {
      * У прежней модели счетов ссылка была вечной и отозвать её было нельзя —
      * утёкшая ссылка навсегда открывала документ с реквизитами.
      */
+    /** Картинки печати и подписи своей организации для печатной формы. */
+    async getStampSource(companyId: string) {
+        return this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { id: true, stampImage: true, signatureImage: true },
+        });
+    }
+
     async regenerateShareToken(companyId: string, id: string) {
         const document = await this.prisma.accountingDocument.findFirst({
             where: { id, companyId },

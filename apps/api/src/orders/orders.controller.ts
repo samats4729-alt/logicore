@@ -126,8 +126,12 @@ export class OrdersController {
         @Param('id') id: string,
         @Request() req: any,
         @Res() res: Response,
+        // Флажок «Подпись и печать»: по умолчанию документ чистый.
+        @Query('withStamp') withStamp?: string,
     ) {
-        const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId);
+        const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId, {
+            withStamp: withStamp === 'true',
+        });
         res.set({
             'Content-Type': 'application/pdf',
             'Content-Disposition': `attachment; filename="POA_${id}.pdf"`,

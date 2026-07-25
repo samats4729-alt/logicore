@@ -102,6 +102,55 @@ describe('AccountingDocumentPdfService', () => {
         expect(printed).toContain('17');
     });
 
+    // T-04: печать ставится только по флажку и только своей стороны.
+    // Раньше договор и доверенность вставляли печати обеих сторон
+    // автоматически — это изображает, что документ подписал контрагент.
+    describe('печать и подпись', () => {
+        // Достаточно, чтобы PDFKit принял картинку как PNG.
+        const stampImage = Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            'base64',
+        );
+
+        const drawnImages = async (run: () => Promise<Buffer>) => {
+            const proto = (PDFDocument as any).prototype;
+            const originalImage = proto.image;
+            const drawn: unknown[] = [];
+            proto.image = function (this: any, src: unknown, ...rest: unknown[]) {
+                drawn.push(src);
+                return originalImage.call(this, src, ...rest);
+            };
+            try {
+                await run();
+            } finally {
+                proto.image = originalImage;
+            }
+            return drawn;
+        };
+
+        it('без флажка счёт печатается чистым', async () => {
+            const drawn = await drawnImages(() => service.generateInvoicePdf(sampleDocument()));
+            expect(drawn).not.toContain(stampImage);
+        });
+
+        it('с флажком ставит переданную печать на счёт', async () => {
+            const drawn = await drawnImages(
+                () => service.generateInvoicePdf(sampleDocument(), stampImage),
+            );
+            expect(drawn).toContain(stampImage);
+        });
+
+        it('с флажком ставит печать на акт ровно один раз — только исполнителю', async () => {
+            const act = { ...sampleDocument(), type: AccountingDocumentType.SERVICE_ACT };
+            const drawn = await drawnImages(() => service.generateServiceActPdf(act, stampImage));
+
+            // Два блока «М.П.» — свой и контрагента. Печать должна лечь
+            // только в один: вторая печать означала бы, что документ
+            // подписан обеими сторонами.
+            expect(drawn.filter((image) => image === stampImage)).toHaveLength(1);
+        });
+    });
+
     it('не печатает акт через форму счёта', async () => {
         await expect(service.generateInvoicePdf({
             ...sampleDocument(),

@@ -20,6 +20,7 @@ import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { AuditService } from '../audit/audit.service';
 import { AccountingDocumentsService } from './accounting-documents.service';
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
+import { StampImageService } from '../common/services/stamp-image.service';
 import {
     AccountingDocumentListQueryDto,
     BillableOrdersQueryDto,
@@ -47,6 +48,7 @@ export class AccountingDocumentsController {
     constructor(
         private readonly documents: AccountingDocumentsService,
         private readonly pdf: AccountingDocumentPdfService,
+        private readonly stamps: StampImageService,
         private readonly audit: AuditService,
     ) {}
 
@@ -151,9 +153,18 @@ export class AccountingDocumentsController {
         @Request() req: any,
         @Param('id') id: string,
         @Res() res: Response,
+        // Флажок «Подпись и печать» — как в 1С. По умолчанию форма чистая.
+        @Query('withStamp') withStamp?: string,
     ) {
         const document = await this.documents.getById(req.user.companyId, id);
-        const pdfBuffer = await this.pdf.generatePdf(document);
+        // Печать ставим только на исходящий документ и только свою: входящий
+        // выставил контрагент, и наша печать на нём смысла не имеет.
+        const mayStamp = withStamp === 'true' && document.direction === 'OUTGOING';
+        const company = mayStamp
+            ? await this.documents.getStampSource(req.user.companyId)
+            : null;
+        const { stamp } = await this.stamps.loadFor(company, mayStamp);
+        const pdfBuffer = await this.pdf.generatePdf(document, stamp);
         const safeNumber = document.number.replace(/[^a-zA-Z0-9_-]+/g, '_');
         const filePrefix = document.type === 'SERVICE_ACT'
             ? 'ServiceAct_R1'

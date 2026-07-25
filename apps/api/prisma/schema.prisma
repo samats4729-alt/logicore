@@ -1547,7 +1547,11 @@ model AccountingDocument {
   sourceLinks         AccountingDocumentLink[]       @relation("AccountingDocumentSourceLinks")
   targetLinks         AccountingDocumentLink[]       @relation("AccountingDocumentTargetLinks")
 
-  @@unique([companyId, type, number])
+  // Направление входит в ключ, потому что номера выдаются отдельными
+  // последовательностями для исходящих и входящих (см.
+  // AccountingDocumentNumbering). Без направления первый входящий счёт
+  // сталкивался с исходящим «СЧ-2026-000001», и создать его было нельзя.
+  @@unique([companyId, type, direction, number])
   @@index([companyId, documentDate])
   @@index([companyId, status])
   @@index([counterpartyId, documentDate])

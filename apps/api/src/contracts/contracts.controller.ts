@@ -117,10 +117,16 @@ export class ContractsController {
         @Param('id') id: string,
         @Request() req: any,
         @Res() res: Response,
+        // Как флажок «Подпись и печать» в 1С: по умолчанию документ чистый,
+        // печать добавляется только по явному запросу — и только своя.
+        @Query('withStamp') withStamp?: string,
     ) {
         // Проверяем доступ через getContract (выбрасывает ForbiddenException если не сторона)
         await this.contractsService.getContract(id, req.user.companyId);
-        const pdfBuffer = await this.contractPdfService.generateContractPdf(id);
+        const pdfBuffer = await this.contractPdfService.generateContractPdf(id, {
+            requestingCompanyId: req.user.companyId,
+            withStamp: withStamp === 'true',
+        });
 
         res.set({
             'Content-Type': 'application/pdf',
