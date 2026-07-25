@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { MIN_GPS_RETENTION_DAYS } from '../tracking.service';
 
 /**
  * Точка GPS от водителя.
@@ -48,4 +49,16 @@ export class SendGpsPointDto {
     @ApiProperty({ description: 'Время фиксации точки на устройстве (ISO)' })
     @IsDateString()
     recordedAt: string;
+}
+
+/**
+ * Запрос на чистку старых GPS-точек. Глубина хранения ограничена снизу:
+ * треки нужны для разбора претензий по доставке, поэтому одним неверным
+ * параметром снести историю нельзя.
+ */
+export class PurgeGpsPointsDto {
+    @ApiProperty({ minimum: MIN_GPS_RETENTION_DAYS, description: 'Удалить точки старше этого числа дней' })
+    @IsInt()
+    @Min(MIN_GPS_RETENTION_DAYS)
+    olderThanDays: number;
 }

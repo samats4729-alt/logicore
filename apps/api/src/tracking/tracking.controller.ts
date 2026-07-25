@@ -4,7 +4,7 @@ import { TrackingService } from './tracking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
-import { SendGpsPointDto } from './dto/gps-point.dto';
+import { PurgeGpsPointsDto, SendGpsPointDto } from './dto/gps-point.dto';
 import { UserRole } from '@prisma/client';
 
 // Ограничение на один offline-пакет: у водителя за смену накапливаются сотни
@@ -59,6 +59,18 @@ export class TrackingController {
             recordedAt: new Date(p.recordedAt),
         }));
         return this.trackingService.saveGpsPointsBatch(points);
+    }
+
+    @Post('gps/purge')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({
+        summary: 'Удалить GPS-точки старше указанного числа дней (обслуживание)',
+        description:
+            'Таблица GpsPoint растёт быстрее всех остальных и никогда не чистилась. '
+            + 'Удаление идёт пакетами; если в ответе hasMore = true, вызов нужно повторить.',
+    })
+    async purgeGpsPoints(@Body() dto: PurgeGpsPointsDto) {
+        return this.trackingService.purgeGpsPointsOlderThan(dto.olderThanDays);
     }
 
     @Get('drivers')

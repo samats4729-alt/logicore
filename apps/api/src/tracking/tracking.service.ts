@@ -7,6 +7,17 @@ import { PrismaService } from '../prisma/prisma.service';
 // точек, и отдавать их одним ответом нельзя.
 const MAX_TRACK_POINTS = 5000;
 
+// Чистка старых точек идёт пакетами: таблицу никогда не пропалывали, поэтому
+// первый запуск может удалять миллионы строк, а один большой DELETE держал бы
+// блокировку на самой горячей таблице всё это время.
+const PURGE_BATCH_SIZE = 5000;
+const PURGE_MAX_BATCHES = 20;
+
+// Нижняя граница глубины хранения. Треки нужны для разбора претензий по
+// доставке, поэтому удалять «всё старше недели» одним неверным параметром
+// быть не должно.
+export const MIN_GPS_RETENTION_DAYS = 30;
+
 @Injectable()
 export class TrackingService {
     constructor(private prisma: PrismaService) { }
@@ -111,6 +122,44 @@ export class TrackingService {
             orderBy: { recordedAt: 'asc' },
             take: MAX_TRACK_POINTS,
         });
+    }
+
+    /**
+     * Удаление GPS-точек старше указанного числа дней.
+     *
+     * Таблица GpsPoint росла без ограничений: точки пишутся с каждого рейса и
+     * никогда не удалялись. Метод чистит их пакетами и возвращает `hasMore`,
+     * если за один вызов разобрать всё не удалось — тогда вызов повторяют.
+     */
+    async purgeGpsPointsOlderThan(days: number): Promise<{ deleted: number; hasMore: boolean }> {
+        const retentionDays = Math.max(MIN_GPS_RETENTION_DAYS, Math.floor(days));
+        const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+        let deleted = 0;
+
+        for (let batch = 0; batch < PURGE_MAX_BATCHES; batch++) {
+            const stale = await this.prisma.gpsPoint.findMany({
+                where: { recordedAt: { lt: cutoff } },
+                select: { id: true },
+                take: PURGE_BATCH_SIZE,
+            });
+
+            if (stale.length === 0) {
+                return { deleted, hasMore: false };
+            }
+
+            const result = await this.prisma.gpsPoint.deleteMany({
+                where: { id: { in: stale.map((point) => point.id) } },
+            });
+            deleted += result.count;
+
+            // Пакет оказался неполным — значит, старых точек больше нет.
+            if (stale.length < PURGE_BATCH_SIZE) {
+                return { deleted, hasMore: false };
+            }
+        }
+
+        return { deleted, hasMore: true };
     }
 
     /**

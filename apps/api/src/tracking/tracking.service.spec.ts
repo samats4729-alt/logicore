@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { TrackingService } from './tracking.service';
+import { MIN_GPS_RETENTION_DAYS, TrackingService } from './tracking.service';
 
 describe('TrackingService company scoping', () => {
     describe('getOrderTrack', () => {
@@ -107,5 +107,72 @@ describe('TrackingService company scoping', () => {
             const [args] = prisma.gpsPoint.findFirst.mock.calls[0];
             expect(args.where).toEqual({ driverId: 'driver-1' });
         });
+    });
+});
+
+describe('TrackingService.purgeGpsPointsOlderThan', () => {
+    // Один неполный пакет означает, что старых точек больше не осталось.
+    function buildPrisma(batchSizes: number[]) {
+        let call = 0;
+        return {
+            gpsPoint: {
+                findMany: jest.fn().mockImplementation(async () => {
+                    const size = batchSizes[call] ?? 0;
+                    call += 1;
+                    return Array.from({ length: size }, (_, i) => ({ id: `point-${call}-${i}` }));
+                }),
+                deleteMany: jest.fn().mockImplementation(async ({ where }: any) => ({
+                    count: where.id.in.length,
+                })),
+            },
+        };
+    }
+
+    it('stops as soon as a partial batch comes back', async () => {
+        const prisma = buildPrisma([5000, 120]);
+        const service = new TrackingService(prisma as any);
+
+        const result = await service.purgeGpsPointsOlderThan(90);
+
+        expect(result).toEqual({ deleted: 5120, hasMore: false });
+        expect(prisma.gpsPoint.findMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('does nothing when there is nothing old enough', async () => {
+        const prisma = buildPrisma([0]);
+        const service = new TrackingService(prisma as any);
+
+        const result = await service.purgeGpsPointsOlderThan(90);
+
+        expect(result).toEqual({ deleted: 0, hasMore: false });
+        expect(prisma.gpsPoint.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('reports hasMore instead of running unbounded', async () => {
+        const prisma = buildPrisma(Array(50).fill(5000));
+        const service = new TrackingService(prisma as any);
+
+        const result = await service.purgeGpsPointsOlderThan(90);
+
+        expect(result.hasMore).toBe(true);
+        // Один вызов не должен пытаться удалить всё разом.
+        expect(prisma.gpsPoint.findMany.mock.calls.length).toBeLessThan(50);
+    });
+
+    it('never deletes newer than the retention floor, even if asked to', async () => {
+        const prisma = buildPrisma([0]);
+        const service = new TrackingService(prisma as any);
+
+        await service.purgeGpsPointsOlderThan(1);
+
+        const [args] = prisma.gpsPoint.findMany.mock.calls[0];
+        const cutoff: Date = args.where.recordedAt.lt;
+        const requestedCutoff = Date.now() - 1 * 24 * 60 * 60 * 1000;
+
+        expect(cutoff.getTime()).toBeLessThan(requestedCutoff);
+        // Отсечка не ближе, чем нижняя граница хранения (с запасом на время теста).
+        expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(
+            MIN_GPS_RETENTION_DAYS * 24 * 60 * 60 * 1000 - 5000,
+        );
     });
 });
