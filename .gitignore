@@ -42,3 +42,6 @@ coverage/
 uploads/
 temp/
 /*.pdf
+
+# Redis snapshot (появляется при локальном запуске redis-server)
+dump.rdb
