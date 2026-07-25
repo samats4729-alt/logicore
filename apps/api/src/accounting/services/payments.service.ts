@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef 
 import { PrismaService } from '../../prisma/prisma.service';
 import { PeriodClosingService } from './period-closing.service';
 import { FinancialSettingsService } from './financial-settings.service';
-import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus, Prisma } from '@prisma/client';
 import { money, moneyGte } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
 
@@ -11,6 +11,12 @@ export class PaymentsService {
     private static readonly AUTO_NOTE_CUSTOMER = 'Проведение оплаты заказчика (на остаток)';
     private static readonly AUTO_NOTE_DRIVER = 'Оплата водителю (на остаток)';
     private static readonly AUTO_NOTE_SUBFORWARDER = 'Оплата суб-экспедитору (на остаток)';
+
+    // Запись платежа, пересчёт флагов заявки и журнал изменений выполняются в
+    // одной транзакции. Запас по времени взят с расчётом на заявку с большим
+    // числом платежей: лучше подождать, чем оставить платёж записанным, а флаг
+    // «оплачено» — нет.
+    private static readonly FINANCE_TX_TIMEOUT_MS = 15000;
 
     constructor(
         private prisma: PrismaService,
@@ -295,35 +301,47 @@ export class PaymentsService {
             categoryId = defaultCat?.id;
         }
 
-        const payment = await this.prisma.payment.create({
-            data: {
-                companyId,
-                orderId: data.orderId || null,
-                counterpartyId,
-                direction: data.direction,
-                amount: amt,
-                date: new Date(data.date),
-                method: data.method || PaymentMethod.BANK,
-                note: data.note || null,
-                createdById: userId,
-                accountId: accountId || null,
-                categoryId: categoryId || null,
-            },
-            include: {
-                order: { select: { orderNumber: true } },
-            }
-        });
-
-        if (payment.orderId) {
-            await this.syncOrderPaymentFlags(payment.orderId);
-            await this.prisma.orderChangeLog.create({
+        // Платёж, пересчёт флагов заявки и запись в журнал — одна транзакция.
+        // Раньше это были три независимые операции: падение между ними
+        // оставляло деньги записанными, а «оплачено» на заявке — старым.
+        const { payment, customerPaidBecameTrue } = await this.prisma.$transaction(async (tx) => {
+            const created = await tx.payment.create({
                 data: {
-                    orderId: payment.orderId,
-                    userId,
-                    action: 'payment_added',
-                    details: `Добавлен платеж: ${payment.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${payment.amount} ₸ (${payment.note || 'без примечания'}).`
+                    companyId,
+                    orderId: data.orderId || null,
+                    counterpartyId,
+                    direction: data.direction,
+                    amount: amt,
+                    date: new Date(data.date),
+                    method: data.method || PaymentMethod.BANK,
+                    note: data.note || null,
+                    createdById: userId,
+                    accountId: accountId || null,
+                    categoryId: categoryId || null,
+                },
+                include: {
+                    order: { select: { orderNumber: true } },
                 }
             });
+
+            let becameTrue = false;
+            if (created.orderId) {
+                becameTrue = await this.syncOrderPaymentFlagsWithin(tx, created.orderId);
+                await tx.orderChangeLog.create({
+                    data: {
+                        orderId: created.orderId,
+                        userId,
+                        action: 'payment_added',
+                        details: `Добавлен платеж: ${created.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${created.amount} ₸ (${created.note || 'без примечания'}).`
+                    }
+                });
+            }
+
+            return { payment: created, customerPaidBecameTrue: becameTrue };
+        }, { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS });
+
+        if (payment.orderId) {
+            await this.runCustomerPaidTrigger(payment.orderId, customerPaidBecameTrue);
         }
 
         return payment;
@@ -370,37 +388,52 @@ export class PaymentsService {
         const amt = data.amount !== undefined ? money(data.amount) : payment.amount;
         const oldOrderId = payment.orderId;
 
-        const updated = await this.prisma.payment.update({
-            where: { id: paymentId },
-            data: {
-                ...(data.amount !== undefined && { amount: amt }),
-                ...(data.date && { date: new Date(data.date) }),
-                ...(data.method && { method: data.method }),
-                ...(data.note !== undefined && { note: data.note || null }),
-                ...(data.counterpartyId !== undefined && { counterpartyId: data.counterpartyId || null }),
-                ...(data.accountId !== undefined && { accountId: data.accountId || null }),
-                ...(data.categoryId !== undefined && { categoryId: data.categoryId || null }),
-                ...(data.orderId !== undefined && { orderId: data.orderId || null }),
-            },
-            include: {
-                order: { select: { orderNumber: true } },
-            }
-        });
-
-        // Пересчитываем флаги оплаты: и у прежней заявки (если отвязали/сменили), и у новой
-        const affected = new Set<string>();
-        if (oldOrderId) affected.add(oldOrderId);
-        if (updated.orderId) affected.add(updated.orderId);
-        for (const oid of affected) {
-            await this.syncOrderPaymentFlags(oid);
-            await this.prisma.orderChangeLog.create({
+        // Смена привязки к заявке затрагивает две заявки сразу: прежнюю и новую.
+        // Обе пересчитываются в одной транзакции с самим платежом, иначе при
+        // сбое посередине одна из заявок останется с неверными флагами.
+        const { updated, paidTriggers } = await this.prisma.$transaction(async (tx) => {
+            const row = await tx.payment.update({
+                where: { id: paymentId },
                 data: {
-                    orderId: oid,
-                    userId,
-                    action: 'payment_updated',
-                    details: `Обновлен платеж: ${updated.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${updated.amount} ₸ (${updated.note || 'без примечания'}).`
+                    ...(data.amount !== undefined && { amount: amt }),
+                    ...(data.date && { date: new Date(data.date) }),
+                    ...(data.method && { method: data.method }),
+                    ...(data.note !== undefined && { note: data.note || null }),
+                    ...(data.counterpartyId !== undefined && { counterpartyId: data.counterpartyId || null }),
+                    ...(data.accountId !== undefined && { accountId: data.accountId || null }),
+                    ...(data.categoryId !== undefined && { categoryId: data.categoryId || null }),
+                    ...(data.orderId !== undefined && { orderId: data.orderId || null }),
+                },
+                include: {
+                    order: { select: { orderNumber: true } },
                 }
             });
+
+            // Пересчитываем флаги оплаты: и у прежней заявки (если отвязали/сменили), и у новой
+            const affected = new Set<string>();
+            if (oldOrderId) affected.add(oldOrderId);
+            if (row.orderId) affected.add(row.orderId);
+
+            const triggers: string[] = [];
+            for (const oid of affected) {
+                if (await this.syncOrderPaymentFlagsWithin(tx, oid)) {
+                    triggers.push(oid);
+                }
+                await tx.orderChangeLog.create({
+                    data: {
+                        orderId: oid,
+                        userId,
+                        action: 'payment_updated',
+                        details: `Обновлен платеж: ${row.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${row.amount} ₸ (${row.note || 'без примечания'}).`
+                    }
+                });
+            }
+
+            return { updated: row, paidTriggers: triggers };
+        }, { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS });
+
+        for (const oid of paidTriggers) {
+            await this.runCustomerPaidTrigger(oid, true);
         }
 
         return updated;
@@ -433,21 +466,30 @@ export class PaymentsService {
             }
         }
 
-        const updated = await this.prisma.payment.update({
-            where: { id: paymentId },
-            data: { isDeleted: true }
-        });
+        const { updated, customerPaidBecameTrue } = await this.prisma.$transaction(async (tx) => {
+            const row = await tx.payment.update({
+                where: { id: paymentId },
+                data: { isDeleted: true }
+            });
+
+            let becameTrue = false;
+            if (row.orderId) {
+                becameTrue = await this.syncOrderPaymentFlagsWithin(tx, row.orderId);
+                await tx.orderChangeLog.create({
+                    data: {
+                        orderId: row.orderId,
+                        userId,
+                        action: 'payment_deleted',
+                        details: `Удален платеж: ${row.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${row.amount} ₸ (${row.note || 'без примечания'}).`
+                    }
+                });
+            }
+
+            return { updated: row, customerPaidBecameTrue: becameTrue };
+        }, { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS });
 
         if (updated.orderId) {
-            await this.syncOrderPaymentFlags(updated.orderId);
-            await this.prisma.orderChangeLog.create({
-                data: {
-                    orderId: updated.orderId,
-                    userId,
-                    action: 'payment_deleted',
-                    details: `Удален платеж: ${updated.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${updated.amount} ₸ (${updated.note || 'без примечания'}).`
-                }
-            });
+            await this.runCustomerPaidTrigger(updated.orderId, customerPaidBecameTrue);
         }
 
         return updated;
@@ -465,7 +507,26 @@ export class PaymentsService {
     // платежей неполная. Это не дублирование, а два намеренно разных уровня
     // одного и того же расчёта — сливать их в одну функцию нельзя.
     async syncOrderPaymentFlags(orderId: string) {
-        const order = await this.prisma.order.findUnique({
+        const customerPaidBecameTrue = await this.prisma.$transaction(
+            (tx) => this.syncOrderPaymentFlagsWithin(tx, orderId),
+            { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS },
+        );
+        await this.runCustomerPaidTrigger(orderId, customerPaidBecameTrue);
+    }
+
+    /**
+     * Тот же расчёт, но внутри уже открытой транзакции. Возвращает признак
+     * «заявка только что стала оплаченной заказчиком»: сам payroll-триггер
+     * здесь НЕ запускается — он делает собственные записи и внешние вызовы,
+     * поэтому должен выполняться после коммита, иначе откат основной операции
+     * не откатит его последствия. За запуск отвечает вызывающий через
+     * runCustomerPaidTrigger().
+     */
+    private async syncOrderPaymentFlagsWithin(
+        tx: Prisma.TransactionClient,
+        orderId: string,
+    ): Promise<boolean> {
+        const order = await tx.order.findUnique({
             where: { id: orderId },
             include: {
                 outgoingInvoice: true,
@@ -477,13 +538,13 @@ export class PaymentsService {
                 },
             },
         });
-        if (!order) return;
+        if (!order) return false;
 
         const forwarderCompanyId = order.forwarderId || order.partnerId || order.responsibleManager?.companyId || order.customerCompanyId || null;
 
         // Sync Customer Paid Flag
         const hasPaidOutgoingInvoice = order.outgoingInvoice?.status === InvoiceStatus.PAID;
-        const customerPayments = await this.prisma.payment.findMany({
+        const customerPayments = await tx.payment.findMany({
             where: {
                 orderId,
                 direction: PaymentDirection.IN,
@@ -498,7 +559,7 @@ export class PaymentsService {
 
         // Sync Driver / Sub-forwarder Paid Flag
         const hasPaidIncomingInvoice = order.incomingInvoice?.status === InvoiceStatus.PAID;
-        const executorPayments = await this.prisma.payment.findMany({
+        const executorPayments = await tx.payment.findMany({
             where: {
                 orderId,
                 direction: PaymentDirection.OUT,
@@ -530,7 +591,7 @@ export class PaymentsService {
                 : (paidOut > 0 ? order.driverPaidAt : null);
         }
 
-        await this.prisma.order.update({
+        await tx.order.update({
             where: { id: orderId },
             data: {
                 isCustomerPaid,
@@ -544,12 +605,21 @@ export class PaymentsService {
             },
         });
 
-        if (customerPaidBecameTrue) {
-            try {
-                await this.payrollService.processOrderTrigger(orderId, 'CUSTOMER_PAID');
-            } catch (err) {
-                console.warn(`Payroll trigger failed for CUSTOMER_PAID: ${err}`);
-            }
+        return customerPaidBecameTrue;
+    }
+
+    /**
+     * Начисление зарплаты по факту оплаты заказчиком. Запускается только после
+     * успешного коммита. Ошибка начисления намеренно не роняет сам платёж:
+     * деньги уже записаны, а начисление пересчитывается отдельно.
+     */
+    private async runCustomerPaidTrigger(orderId: string, customerPaidBecameTrue: boolean) {
+        if (!customerPaidBecameTrue) return;
+
+        try {
+            await this.payrollService.processOrderTrigger(orderId, 'CUSTOMER_PAID');
+        } catch (err) {
+            console.warn(`Payroll trigger failed for CUSTOMER_PAID: ${err}`);
         }
     }
 
