@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockMoveType } from '@prisma/client';
+import { D, Money, ZERO, sumOf, toNum } from '../common/utils/money';
 
 interface MoveLineInput { nomenclatureId: string; quantity: number; price?: number }
 interface MoveInput {
@@ -119,14 +120,15 @@ export class InventoryService {
             include: { lines: true },
         });
         const map = new Map<string, number>();
-        const bump = (nomId: string, d: number) => map.set(nomId, round((map.get(nomId) || 0) + d));
+        const bump = (nomId: string, d: Money) => map.set(nomId, round((map.get(nomId) || 0) + d.toNumber()));
         for (const m of moves) {
             for (const l of m.lines) {
-                if (m.type === StockMoveType.RECEIPT && m.warehouseId === warehouseId) bump(l.nomenclatureId, l.quantity);
-                else if (m.type === StockMoveType.WRITEOFF && m.warehouseId === warehouseId) bump(l.nomenclatureId, -l.quantity);
+                const qty = D(l.quantity);
+                if (m.type === StockMoveType.RECEIPT && m.warehouseId === warehouseId) bump(l.nomenclatureId, qty);
+                else if (m.type === StockMoveType.WRITEOFF && m.warehouseId === warehouseId) bump(l.nomenclatureId, qty.negated());
                 else if (m.type === StockMoveType.TRANSFER) {
-                    if (m.warehouseId === warehouseId) bump(l.nomenclatureId, -l.quantity);
-                    if (m.toWarehouseId === warehouseId) bump(l.nomenclatureId, l.quantity);
+                    if (m.warehouseId === warehouseId) bump(l.nomenclatureId, qty.negated());
+                    if (m.toWarehouseId === warehouseId) bump(l.nomenclatureId, qty);
                 }
             }
         }
@@ -247,11 +249,12 @@ export class InventoryService {
 
         for (const m of moves) {
             for (const l of m.lines) {
-                if (m.type === StockMoveType.RECEIPT) bump(m.warehouseId, l.nomenclatureId, l.quantity);
-                else if (m.type === StockMoveType.WRITEOFF) bump(m.warehouseId, l.nomenclatureId, -l.quantity);
+                const qty = D(l.quantity).toNumber();
+                if (m.type === StockMoveType.RECEIPT) bump(m.warehouseId, l.nomenclatureId, qty);
+                else if (m.type === StockMoveType.WRITEOFF) bump(m.warehouseId, l.nomenclatureId, -qty);
                 else if (m.type === StockMoveType.TRANSFER) {
-                    bump(m.warehouseId, l.nomenclatureId, -l.quantity);
-                    if (m.toWarehouseId) bump(m.toWarehouseId, l.nomenclatureId, l.quantity);
+                    bump(m.warehouseId, l.nomenclatureId, -qty);
+                    if (m.toWarehouseId) bump(m.toWarehouseId, l.nomenclatureId, qty);
                 }
             }
         }
@@ -263,20 +266,22 @@ export class InventoryService {
         const whMap = new Map(warehouses.map(w => [w.id, w.name]));
         const nomMap = new Map(nomenclature.map(n => [n.id, n]));
 
-        // Средняя цена по номенклатуре из поступлений (для денежной оценки остатков)
-        const recvQty = new Map<string, number>();
-        const recvSum = new Map<string, number>();
+        // Средняя цена по номенклатуре из поступлений (для денежной оценки остатков).
+        // Считается в Decimal: результат уходит в стоимость остатков, а она —
+        // в финансовые отчёты.
+        const recvQty = new Map<string, Money>();
+        const recvSum = new Map<string, Money>();
         for (const m of moves) {
             if (m.type !== StockMoveType.RECEIPT) continue;
             for (const l of m.lines) {
                 if (l.amount == null) continue;
-                recvQty.set(l.nomenclatureId, (recvQty.get(l.nomenclatureId) || 0) + l.quantity);
-                recvSum.set(l.nomenclatureId, (recvSum.get(l.nomenclatureId) || 0) + l.amount);
+                recvQty.set(l.nomenclatureId, (recvQty.get(l.nomenclatureId) || ZERO).plus(D(l.quantity)));
+                recvSum.set(l.nomenclatureId, (recvSum.get(l.nomenclatureId) || ZERO).plus(D(l.amount)));
             }
         }
-        const avgCost = (nomId: string) => {
-            const q = recvQty.get(nomId) || 0;
-            return q > 0 ? (recvSum.get(nomId) || 0) / q : 0;
+        const avgCost = (nomId: string): Money => {
+            const q = recvQty.get(nomId) || ZERO;
+            return q.gt(0) ? (recvSum.get(nomId) || ZERO).div(q) : ZERO;
         };
 
         const rows = Array.from(balances.values())
@@ -290,13 +295,13 @@ export class InventoryService {
                     nomenclature: nomMap.get(b.nomenclatureId)?.name || '—',
                     unit: nomMap.get(b.nomenclatureId)?.unit || '',
                     quantity: b.quantity,
-                    avgCost: round(cost),
-                    value: round(b.quantity * cost),
+                    avgCost: toNum(cost),
+                    value: toNum(cost.times(b.quantity)),
                 };
             })
             .sort((a, b) => a.warehouse.localeCompare(b.warehouse) || a.nomenclature.localeCompare(b.nomenclature));
 
-        const totalValue = round(rows.reduce((s, r) => s + r.value, 0));
+        const totalValue = toNum(sumOf(rows, (r) => r.value));
         return { rows, warehouses, positions: rows.length, totalValue };
     }
 }

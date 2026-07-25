@@ -6,7 +6,7 @@ import { FinanceCalculatorService } from './finance-calculator.service';
 import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
 import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType } from '@prisma/client';
-import { money } from '../../common/utils/money';
+import { D, Money, ZERO, money, positiveRest, roundMoney, sumOf, toNum, toNumOrNull } from '../../common/utils/money';
 import { PaymentsService } from './payments.service';
 import { FinancialSettingsService } from './financial-settings.service';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
@@ -146,7 +146,7 @@ export class FinancialReportsService {
                     isCustomerPaid: fin.isCustomerPaid,
                     isDriverPaid: false,
                     isSubForwarderPaid: false,
-                    customerDebt: fin.customerDebt,
+                    customerDebt: toNum(fin.customerDebt),
                     driverDebt: 0,
                     subForwarderDebt: 0,
                     executorDebt: 0,
@@ -164,25 +164,25 @@ export class FinancialReportsService {
             incomes,
             expenses,
             summary: {
-                customerPrice: order.customerPrice || 0,
-                driverCost: order.driverCost || 0,
-                subForwarderPrice: order.subForwarderPrice || 0,
-                executorCost: fin.executorCost,
-                margin: fin.margin,
-                totalIncomes: money(fin.paidIn + fin.extraIncomes),
-                totalExpenses: money(fin.paidOut + fin.otherExpenses),
-                balance: money((fin.paidIn + fin.extraIncomes) - (fin.paidOut + fin.otherExpenses)),
+                customerPrice: toNum(order.customerPrice),
+                driverCost: toNum(order.driverCost),
+                subForwarderPrice: toNum(order.subForwarderPrice),
+                executorCost: toNum(fin.executorCost),
+                margin: toNum(fin.margin),
+                totalIncomes: toNum(fin.paidIn.plus(fin.extraIncomes)),
+                totalExpenses: toNum(fin.paidOut.plus(fin.otherExpenses)),
+                balance: toNum(fin.paidIn.plus(fin.extraIncomes).minus(fin.paidOut).minus(fin.otherExpenses)),
                 isCustomerPaid: fin.isCustomerPaid,
                 isDriverPaid: order.subForwarderId ? false : fin.isExecutorPaid,
                 isSubForwarderPaid: order.subForwarderId ? fin.isExecutorPaid : false,
-                customerDebt: fin.customerDebt,
-                driverDebt: order.subForwarderId ? 0 : fin.executorDebt,
-                subForwarderDebt: order.subForwarderId ? fin.executorDebt : 0,
-                executorDebt: fin.executorDebt,
-                revenueNet: fin.revenueNet,
-                revenueVat: fin.revenueVat,
-                executorCostNet: fin.executorCostNet,
-                executorCostVat: fin.executorCostVat,
+                customerDebt: toNum(fin.customerDebt),
+                driverDebt: order.subForwarderId ? 0 : toNum(fin.executorDebt),
+                subForwarderDebt: order.subForwarderId ? toNum(fin.executorDebt) : 0,
+                executorDebt: toNum(fin.executorDebt),
+                revenueNet: toNum(fin.revenueNet),
+                revenueVat: toNum(fin.revenueVat),
+                executorCostNet: toNum(fin.executorCostNet),
+                executorCostVat: toNum(fin.executorCostVat),
             },
         };
     }
@@ -218,23 +218,23 @@ export class FinancialReportsService {
         await this.periodClosing.checkPeriodNotClosed(companyId, orderDate);
 
         const detailsParts: string[] = [];
-        if (data.customerPrice !== undefined && data.customerPrice !== order.customerPrice) {
-            detailsParts.push(`Ставка заказчика: ${order.customerPrice || 0} -> ${data.customerPrice}`);
+        if (data.customerPrice !== undefined && !D(order.customerPrice).equals(data.customerPrice)) {
+            detailsParts.push(`Ставка заказчика: ${toNum(order.customerPrice)} -> ${data.customerPrice}`);
         }
-        if (data.driverCost !== undefined && data.driverCost !== order.driverCost) {
-            detailsParts.push(`Ставка перевозчика: ${order.driverCost || 0} -> ${data.driverCost}`);
+        if (data.driverCost !== undefined && !D(order.driverCost).equals(data.driverCost)) {
+            detailsParts.push(`Ставка перевозчика: ${toNum(order.driverCost)} -> ${data.driverCost}`);
         }
-        if (data.subForwarderPrice !== undefined && data.subForwarderPrice !== order.subForwarderPrice) {
-            detailsParts.push(`Ставка суб-экспедитора: ${order.subForwarderPrice || 0} -> ${data.subForwarderPrice}`);
+        if (data.subForwarderPrice !== undefined && !D(order.subForwarderPrice).equals(data.subForwarderPrice)) {
+            detailsParts.push(`Ставка суб-экспедитора: ${toNum(order.subForwarderPrice)} -> ${data.subForwarderPrice}`);
         }
-        if (data.vatRate !== undefined && data.vatRate !== order.vatRate) {
-            detailsParts.push(`Ставка НДС: ${order.vatRate || 0}% -> ${data.vatRate}%`);
+        if (data.vatRate !== undefined && !D(order.vatRate).equals(data.vatRate)) {
+            detailsParts.push(`Ставка НДС: ${toNum(order.vatRate)}% -> ${data.vatRate}%`);
         }
         if (data.hasVat !== undefined && data.hasVat !== order.hasVat) {
             detailsParts.push(`НДС заказчика: ${order.hasVat ? 'Да' : 'Нет'} -> ${data.hasVat ? 'Да' : 'Нет'}`);
         }
-        if (data.executorVatRate !== undefined && data.executorVatRate !== order.executorVatRate) {
-            detailsParts.push(`Ставка НДС исполнителя: ${order.executorVatRate || 0}% -> ${data.executorVatRate}%`);
+        if (data.executorVatRate !== undefined && !D(order.executorVatRate).equals(data.executorVatRate)) {
+            detailsParts.push(`Ставка НДС исполнителя: ${toNum(order.executorVatRate)}% -> ${data.executorVatRate}%`);
         }
         if (data.executorHasVat !== undefined && data.executorHasVat !== order.executorHasVat) {
             detailsParts.push(`НДС исполнителя: ${order.executorHasVat ? 'Да' : 'Нет'} -> ${data.executorHasVat ? 'Да' : 'Нет'}`);
@@ -348,10 +348,10 @@ export class FinancialReportsService {
                 subForwarder: order.subForwarder,
                 routePoints: order.routePoints,
                 margin: isCustomer ? null : fin.margin,
-                customerDebt: fin.customerDebt,
-                executorDebt: fin.executorDebt,
-                paidIn: fin.paidIn,
-                paidOut: fin.paidOut,
+                customerDebt: toNum(fin.customerDebt),
+                executorDebt: toNum(fin.executorDebt),
+                paidIn: toNum(fin.paidIn),
+                paidOut: toNum(fin.paidOut),
                 executorCost: isCustomer ? null : fin.executorCost,
             };
 
@@ -422,19 +422,19 @@ export class FinancialReportsService {
             });
 
             // Нам должен заказчик (приход)
-            if (fin.customerDebt > 0 && order.customerCompany) {
+            if (fin.customerDebt.gt(0) && order.customerCompany) {
                 rows.push({
                     orderId: order.id,
                     orderNumber: order.orderNumber,
                     direction: 'IN',
                     party: order.customerCompany.name,
-                    amount: fin.customerDebt,
+                    amount: toNum(fin.customerDebt),
                     dueDate: order.customerPaymentDate,
                 });
             }
 
             // Мы должны перевозчику/исполнителю (расход) — только если исполнитель внешний
-            if (fin.executorDebt > 0) {
+            if (fin.executorDebt.gt(0)) {
                 const externalParty = order.subForwarder?.name
                     || (order.forwarder && order.forwarder.id !== companyId ? order.forwarder.name : null)
                     || order.partner?.name
@@ -446,7 +446,7 @@ export class FinancialReportsService {
                         orderNumber: order.orderNumber,
                         direction: 'OUT',
                         party: externalParty,
-                        amount: fin.executorDebt,
+                        amount: toNum(fin.executorDebt),
                         dueDate: order.driverPaymentDate,
                     });
                 }
@@ -697,12 +697,12 @@ export class FinancialReportsService {
             counterparty: { id: string; name: string };
             ourRole: string;
             orders: any[];
-            theyOweUs: number;
-            theyOweUsPaid: number;
-            weOweThem: number;
-            weOweThemPaid: number;
-            overdueTheyOweUs: number;
-            overdueWeOweThem: number;
+            theyOweUs: Money;
+            theyOweUsPaid: Money;
+            weOweThem: Money;
+            weOweThemPaid: Money;
+            overdueTheyOweUs: Money;
+            overdueWeOweThem: Money;
         }>();
 
         const getOrCreateEntry = (counterpartyId: string, counterpartyName: string, ourRole: string) => {
@@ -712,12 +712,12 @@ export class FinancialReportsService {
                     counterparty: { id: counterpartyId, name: counterpartyName },
                     ourRole,
                     orders: [],
-                    theyOweUs: 0,
-                    theyOweUsPaid: 0,
-                    weOweThem: 0,
-                    weOweThemPaid: 0,
-                    overdueTheyOweUs: 0,
-                    overdueWeOweThem: 0,
+                    theyOweUs: ZERO,
+                    theyOweUsPaid: ZERO,
+                    weOweThem: ZERO,
+                    weOweThemPaid: ZERO,
+                    overdueTheyOweUs: ZERO,
+                    overdueWeOweThem: ZERO,
                 });
             }
             return counterpartyMap.get(key)!;
@@ -769,12 +769,12 @@ export class FinancialReportsService {
                 const amount = fin.executorCost;
                 const paid = fin.paidOut;
                 const overdue = isOverdue(order.driverPaymentDate, fin.isExecutorPaid);
-                entry.weOweThem += amount;
-                entry.weOweThemPaid += paid;
-                if (overdue) entry.overdueWeOweThem += Math.max(amount - paid, 0);
+                entry.weOweThem = entry.weOweThem.plus(amount);
+                entry.weOweThemPaid = entry.weOweThemPaid.plus(paid);
+                if (overdue) entry.overdueWeOweThem = entry.overdueWeOweThem.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount,
+                    amount: toNum(amount),
                     isPaid: fin.isExecutorPaid,
                     paidAt: order.customerPaidAt,
                     direction: 'weOwe',
@@ -788,12 +788,12 @@ export class FinancialReportsService {
                 const amount = fin.revenue;
                 const paid = fin.paidIn;
                 const overdue = isOverdue(order.customerPaymentDate, fin.isCustomerPaid);
-                entry.theyOweUs += amount;
-                entry.theyOweUsPaid += paid;
-                if (overdue) entry.overdueTheyOweUs += Math.max(amount - paid, 0);
+                entry.theyOweUs = entry.theyOweUs.plus(amount);
+                entry.theyOweUsPaid = entry.theyOweUsPaid.plus(paid);
+                if (overdue) entry.overdueTheyOweUs = entry.overdueTheyOweUs.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount,
+                    amount: toNum(amount),
                     isPaid: fin.isCustomerPaid,
                     paidAt: order.customerPaidAt,
                     direction: 'theyOwe',
@@ -807,12 +807,12 @@ export class FinancialReportsService {
                 const amount = fin.executorCost;
                 const paid = fin.paidOut;
                 const overdue = isOverdue(order.driverPaymentDate, fin.isExecutorPaid);
-                entry.weOweThem += amount;
-                entry.weOweThemPaid += paid;
-                if (overdue) entry.overdueWeOweThem += Math.max(amount - paid, 0);
+                entry.weOweThem = entry.weOweThem.plus(amount);
+                entry.weOweThemPaid = entry.weOweThemPaid.plus(paid);
+                if (overdue) entry.overdueWeOweThem = entry.overdueWeOweThem.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount,
+                    amount: toNum(amount),
                     isPaid: fin.isExecutorPaid,
                     paidAt: order.subForwarderPaidAt || order.driverPaidAt,
                     direction: 'weOwe',
@@ -826,12 +826,12 @@ export class FinancialReportsService {
                 const amount = fin.revenue;
                 const paid = fin.paidIn;
                 const overdue = isOverdue(order.customerPaymentDate, fin.isCustomerPaid);
-                entry.theyOweUs += amount;
-                entry.theyOweUsPaid += paid;
-                if (overdue) entry.overdueTheyOweUs += Math.max(amount - paid, 0);
+                entry.theyOweUs = entry.theyOweUs.plus(amount);
+                entry.theyOweUsPaid = entry.theyOweUsPaid.plus(paid);
+                if (overdue) entry.overdueTheyOweUs = entry.overdueTheyOweUs.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount,
+                    amount: toNum(amount),
                     isPaid: fin.isCustomerPaid,
                     paidAt: order.subForwarderPaidAt,
                     direction: 'theyOwe',
@@ -845,7 +845,7 @@ export class FinancialReportsService {
         // тоже должны быть видны во взаиморасчётах
         const knownIds = new Set(Array.from(counterpartyMap.values()).map(e => e.counterparty.id));
         const openingOnly = openings.filter(
-            o => ((o.openingReceivable || 0) > 0 || (o.openingPayable || 0) > 0) && !knownIds.has(o.counterpartyId) && o.counterpartyId !== companyId,
+            o => (D(o.openingReceivable).gt(0) || D(o.openingPayable).gt(0)) && !knownIds.has(o.counterpartyId) && o.counterpartyId !== companyId,
         );
         if (openingOnly.length > 0) {
             const comps = await this.prisma.company.findMany({
@@ -865,28 +865,32 @@ export class FinancialReportsService {
 
         const counterparties = Array.from(counterpartyMap.values()).map(entry => {
             const op = openingMap.get(entry.counterparty.id);
-            let openingReceivable = 0;
-            let openingPayable = 0;
+            let openingReceivable: Money = ZERO;
+            let openingPayable: Money = ZERO;
             if (op) {
-                if ((op.openingReceivable || 0) > 0 && !appliedRecv.has(entry.counterparty.id)) {
-                    openingReceivable = op.openingReceivable;
+                if (D(op.openingReceivable).gt(0) && !appliedRecv.has(entry.counterparty.id)) {
+                    openingReceivable = D(op.openingReceivable);
                     appliedRecv.add(entry.counterparty.id);
                 }
-                if ((op.openingPayable || 0) > 0 && !appliedPay.has(entry.counterparty.id)) {
-                    openingPayable = op.openingPayable;
+                if (D(op.openingPayable).gt(0) && !appliedPay.has(entry.counterparty.id)) {
+                    openingPayable = D(op.openingPayable);
                     appliedPay.add(entry.counterparty.id);
                 }
             }
             return {
                 ...entry,
-                openingReceivable: money(openingReceivable),
-                openingPayable: money(openingPayable),
-                overdueTheyOweUs: money(entry.overdueTheyOweUs),
-                overdueWeOweThem: money(entry.overdueWeOweThem),
+                theyOweUs: toNum(entry.theyOweUs),
+                theyOweUsPaid: toNum(entry.theyOweUsPaid),
+                weOweThem: toNum(entry.weOweThem),
+                weOweThemPaid: toNum(entry.weOweThemPaid),
+                openingReceivable: toNum(openingReceivable),
+                openingPayable: toNum(openingPayable),
+                overdueTheyOweUs: toNum(entry.overdueTheyOweUs),
+                overdueWeOweThem: toNum(entry.overdueWeOweThem),
                 // Текущий долг = начальный + начислено − оплачено
-                balance: money((entry.theyOweUs + openingReceivable) - (entry.weOweThem + openingPayable)),
-                unpaidTheyOweUs: money(Math.max(entry.theyOweUs - entry.theyOweUsPaid, 0) + openingReceivable),
-                unpaidWeOweThem: money(Math.max(entry.weOweThem - entry.weOweThemPaid, 0) + openingPayable),
+                balance: toNum(entry.theyOweUs.plus(openingReceivable).minus(entry.weOweThem).minus(openingPayable)),
+                unpaidTheyOweUs: toNum(positiveRest(entry.theyOweUs, entry.theyOweUsPaid).plus(openingReceivable)),
+                unpaidWeOweThem: toNum(positiveRest(entry.weOweThem, entry.weOweThemPaid).plus(openingPayable)),
                 totalOrders: entry.orders.length,
             };
         });
@@ -980,11 +984,11 @@ export class FinancialReportsService {
             // Начисление (реализация услуг)
             if (weAreForwarder || weAreSub) {
                 // Контрагент должен нам за перевозку — дебет
-                if (fin.revenue > 0) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: money(fin.revenue), credit: 0 });
+                if (fin.revenue.gt(0)) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: toNum(fin.revenue), credit: 0 });
                 orderPayDirection.set(order.id, PaymentDirection.IN);
             } else if (weAreCustomer || weAreForwarderOverSub) {
                 // Мы должны контрагенту за перевозку — кредит
-                if (fin.executorCost > 0) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: 0, credit: money(fin.executorCost) });
+                if (fin.executorCost.gt(0)) ops.push({ date: accrualDate, doc: `Заявка №${order.orderNumber}`, description: 'Услуги перевозки', debit: 0, credit: toNum(fin.executorCost) });
                 orderPayDirection.set(order.id, PaymentDirection.OUT);
             }
         }
@@ -1012,10 +1016,10 @@ export class FinancialReportsService {
             const doc = p.order?.orderNumber ? `Оплата по заявке №${p.order.orderNumber}` : 'Оплата';
             if (p.direction === PaymentDirection.IN) {
                 // Контрагент оплатил нам — уменьшает его долг — кредит
-                ops.push({ date: p.date, doc, description: 'Поступление оплаты', debit: 0, credit: money(p.amount) });
+                ops.push({ date: p.date, doc, description: 'Поступление оплаты', debit: 0, credit: toNum(p.amount) });
             } else {
                 // Мы оплатили контрагенту — уменьшает наш долг — дебет
-                ops.push({ date: p.date, doc, description: 'Оплата контрагенту', debit: money(p.amount), credit: 0 });
+                ops.push({ date: p.date, doc, description: 'Оплата контрагенту', debit: toNum(p.amount), credit: 0 });
             }
         }
 
@@ -1025,7 +1029,7 @@ export class FinancialReportsService {
         const opening = await this.prisma.counterpartyOpeningBalance.findUnique({
             where: { companyId_counterpartyId: { companyId, counterpartyId } },
         });
-        const openingNet = money((opening?.openingReceivable || 0) - (opening?.openingPayable || 0));
+        const openingNet = toNum(D(opening?.openingReceivable).minus(D(opening?.openingPayable)));
 
         // Сальдо на начало периода = начальный долг + движения до начала периода
         let openingBalance = openingNet;
@@ -1095,7 +1099,7 @@ export class FinancialReportsService {
             },
         });
 
-        const map = new Map<string, { carrier: string; orders: number; revenue: number; cost: number; margin: number }>();
+        const map = new Map<string, { carrier: string; orders: number; revenue: Money; cost: Money; margin: Money }>();
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
                 order, payments: order.payments, incomes: order.incomes, expenses: order.expenses, companyId,
@@ -1104,16 +1108,22 @@ export class FinancialReportsService {
                 || order.assignedDriverName
                 || (order.driver ? `${order.driver.lastName || ''} ${order.driver.firstName || ''}`.trim() : '')
                 || 'Свой транспорт / без перевозчика';
-            const cur = map.get(carrier) || { carrier, orders: 0, revenue: 0, cost: 0, margin: 0 };
+            const cur = map.get(carrier) || { carrier, orders: 0, revenue: ZERO, cost: ZERO, margin: ZERO };
             cur.orders += 1;
-            cur.revenue = money(cur.revenue + fin.revenue);
-            cur.cost = money(cur.cost + fin.executorCost);
-            cur.margin = money(cur.margin + fin.margin);
+            cur.revenue = roundMoney(cur.revenue.plus(fin.revenue));
+            cur.cost = roundMoney(cur.cost.plus(fin.executorCost));
+            cur.margin = roundMoney(cur.margin.plus(fin.margin));
             map.set(carrier, cur);
         }
 
         const rows = Array.from(map.values())
-            .map(r => ({ ...r, marginPct: r.revenue > 0 ? Math.round((r.margin / r.revenue) * 100) : 0 }))
+            .map(r => ({
+                ...r,
+                revenue: toNum(r.revenue),
+                cost: toNum(r.cost),
+                margin: toNum(r.margin),
+                marginPct: r.revenue.gt(0) ? Math.round(r.margin.div(r.revenue).times(100).toNumber()) : 0,
+            }))
             .sort((a, b) => b.margin - a.margin);
 
         const totals = {
@@ -1127,35 +1137,38 @@ export class FinancialReportsService {
 
     // Себестоимость списаний ТМЦ по статьям за период (оценка по средней цене поступлений).
     // Это расход в ПиУ, но НЕ движение денег (деньги ушли при покупке).
-    private async getWriteoffCostsByCategory(companyId: string, start: Date | null, end: Date | null): Promise<{ byCategory: Map<string, number>; total: number }> {
+    private async getWriteoffCostsByCategory(companyId: string, start: Date | null, end: Date | null): Promise<{ byCategory: Map<string, Money>; total: Money }> {
         const receipts = await this.prisma.stockMove.findMany({
             where: { companyId, type: StockMoveType.RECEIPT },
             include: { lines: true },
         });
-        const recvQty = new Map<string, number>();
-        const recvSum = new Map<string, number>();
+        const recvQty = new Map<string, Money>();
+        const recvSum = new Map<string, Money>();
         for (const m of receipts) {
             for (const l of m.lines) {
                 if (l.amount == null) continue;
-                recvQty.set(l.nomenclatureId, (recvQty.get(l.nomenclatureId) || 0) + l.quantity);
-                recvSum.set(l.nomenclatureId, (recvSum.get(l.nomenclatureId) || 0) + l.amount);
+                recvQty.set(l.nomenclatureId, (recvQty.get(l.nomenclatureId) || ZERO).plus(D(l.quantity)));
+                recvSum.set(l.nomenclatureId, (recvSum.get(l.nomenclatureId) || ZERO).plus(D(l.amount)));
             }
         }
-        const avg = (id: string) => { const q = recvQty.get(id) || 0; return q > 0 ? (recvSum.get(id) || 0) / q : 0; };
+        const avg = (id: string): Money => {
+            const q = recvQty.get(id) || ZERO;
+            return q.gt(0) ? (recvSum.get(id) || ZERO).div(q) : ZERO;
+        };
 
         const writeoffs = await this.prisma.stockMove.findMany({
             where: { companyId, type: StockMoveType.WRITEOFF, ...(start && end && { date: { gte: start, lte: end } }) },
             include: { lines: true },
         });
-        const byCategory = new Map<string, number>();
-        let total = 0;
+        const byCategory = new Map<string, Money>();
+        let total: Money = ZERO;
         for (const m of writeoffs) {
             const cat = m.expenseCategory || 'Списание материалов';
             for (const l of m.lines) {
-                const val = money(l.quantity * avg(l.nomenclatureId));
-                if (val <= 0) continue;
-                byCategory.set(cat, money((byCategory.get(cat) || 0) + val));
-                total = money(total + val);
+                const val = roundMoney(avg(l.nomenclatureId).times(D(l.quantity)));
+                if (val.lte(0)) continue;
+                byCategory.set(cat, roundMoney((byCategory.get(cat) || ZERO).plus(val)));
+                total = roundMoney(total.plus(val));
             }
         }
         return { byCategory, total };
@@ -1178,11 +1191,11 @@ export class FinancialReportsService {
             }),
         ]);
 
-        const map = new Map<string, { category: string; amount: number; count: number }>();
-        const add = (name: string, amount: number) => {
+        const map = new Map<string, { category: string; amount: Money; count: number }>();
+        const add = (name: string, amount: Money | number) => {
             const key = name || 'Без статьи';
-            const cur = map.get(key) || { category: key, amount: 0, count: 0 };
-            cur.amount = money(cur.amount + amount);
+            const cur = map.get(key) || { category: key, amount: ZERO, count: 0 };
+            cur.amount = roundMoney(cur.amount.plus(D(amount)));
             cur.count += 1;
             map.set(key, cur);
         };
@@ -1193,8 +1206,11 @@ export class FinancialReportsService {
         const writeoffCosts = await this.getWriteoffCostsByCategory(companyId, start, end);
         for (const [cat, amount] of writeoffCosts.byCategory) add(cat, amount);
 
-        const rows = Array.from(map.values()).sort((a, b) => b.amount - a.amount);
-        const total = money(rows.reduce((s, r) => s + r.amount, 0));
+        const totalExact = sumOf(Array.from(map.values()), (r) => r.amount);
+        const rows = Array.from(map.values())
+            .sort((a, b) => b.amount.comparedTo(a.amount))
+            .map(r => ({ ...r, amount: toNum(r.amount) }));
+        const total = toNum(totalExact);
         return { rows: rows.map(r => ({ ...r, pct: total > 0 ? Math.round((r.amount / total) * 100) : 0 })), total };
     }
 
@@ -1272,20 +1288,20 @@ export class FinancialReportsService {
             issuer = order.forwarder && order.forwarderId === companyId ? order.forwarder : (order.partner && order.partnerId === companyId ? order.partner : null);
             issuer = issuer || await this.prisma.company.findUnique({ where: { id: companyId } });
             recipient = order.customerCompany;
-            amountGross = order.customerPrice || 0;
-            vatRate = order.vatRate ?? 0;
+            amountGross = toNum(order.customerPrice);
+            vatRate = toNum(order.vatRate);
             hasVat = order.hasVat ?? false;
         } else if (order.subForwarderId === companyId) {
             issuer = order.subForwarder || await this.prisma.company.findUnique({ where: { id: companyId } });
             recipient = order.forwarder;
-            amountGross = order.subForwarderPrice || 0;
-            vatRate = order.executorVatRate ?? 0;
+            amountGross = toNum(order.subForwarderPrice);
+            vatRate = toNum(order.executorVatRate);
             hasVat = order.executorHasVat ?? false;
         } else {
             issuer = await this.prisma.company.findUnique({ where: { id: companyId } });
             recipient = order.customerCompany;
-            amountGross = order.customerPrice || 0;
-            vatRate = order.vatRate ?? 0;
+            amountGross = toNum(order.customerPrice);
+            vatRate = toNum(order.vatRate);
             hasVat = order.hasVat ?? false;
         }
 
@@ -1531,9 +1547,9 @@ export class FinancialReportsService {
             }
         }
 
-        let amount = 0;
+        let amount: Money = ZERO;
         for (const o of orders) {
-            amount += flow === 'customer' ? (o.customerPrice || 0) : (o.subForwarderPrice || 0);
+            amount = amount.plus(D(flow === 'customer' ? o.customerPrice : o.subForwarderPrice));
         }
 
         // Тип счёта следует потоку денег (единая конвенция со слотами и страницами счёта):
@@ -1629,10 +1645,10 @@ export class FinancialReportsService {
             }
         });
 
-        let totalRevenue = 0;
-        let totalMargin = 0;
-        let debtorSum = 0;
-        let creditorSum = 0;
+        let totalRevenue : Money = ZERO;
+        let totalMargin : Money = ZERO;
+        let debtorSum : Money = ZERO;
+        let creditorSum : Money = ZERO;
         let unpaidOrdersCount = 0;
 
         for (const order of orders) {
@@ -1644,12 +1660,12 @@ export class FinancialReportsService {
                 companyId,
             });
 
-            totalRevenue += fin.revenue;
-            totalMargin += fin.margin;
-            debtorSum += fin.customerDebt;
-            creditorSum += fin.executorDebt;
+            totalRevenue = totalRevenue.plus(fin.revenue);
+            totalMargin = totalMargin.plus(fin.margin);
+            debtorSum = debtorSum.plus(fin.customerDebt);
+            creditorSum = creditorSum.plus(fin.executorDebt);
 
-            const hasUnpaid = (!fin.isCustomerPaid && fin.revenue > 0) || (!fin.isExecutorPaid && fin.executorCost > 0);
+            const hasUnpaid = (!fin.isCustomerPaid && fin.revenue.gt(0)) || (!fin.isExecutorPaid && fin.executorCost.gt(0));
             if (hasUnpaid) {
                 unpaidOrdersCount++;
             }
@@ -1668,8 +1684,8 @@ export class FinancialReportsService {
             }
         });
 
-        const cashIn = payments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0);
-        const cashOut = payments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
+        const cashIn = sumOf(payments.filter(p => p.direction === PaymentDirection.IN), (p) => p.amount);
+        const cashOut = sumOf(payments.filter(p => p.direction === PaymentDirection.OUT), (p) => p.amount);
 
         const manualIncomes = await this.prisma.income.findMany({
             where: {
@@ -1697,8 +1713,8 @@ export class FinancialReportsService {
             }
         });
 
-        const totalManualIncomes = manualIncomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category)).reduce((sum, i) => sum + i.amount, 0);
-        const totalManualExpenses = manualExpenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)).reduce((sum, e) => sum + e.amount, 0);
+        const totalManualIncomes = sumOf(manualIncomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category)), (i) => i.amount);
+        const totalManualExpenses = sumOf(manualExpenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)), (e) => e.amount);
 
         // Начальные остатки касс и начальные долги контрагентов — чтобы дашборд
         // сходился с «Остатками по кассам» и «Взаиморасчётами»
@@ -1706,28 +1722,31 @@ export class FinancialReportsService {
             this.prisma.financeAccount.findMany({ where: { companyId, isActive: true }, select: { openingBalance: true } }),
             this.prisma.counterpartyOpeningBalance.findMany({ where: { companyId } }),
         ]);
-        const accountsOpening = finAccounts.reduce((s, a) => s + (a.openingBalance || 0), 0);
-        debtorSum += cpOpenings.reduce((s, o) => s + (o.openingReceivable || 0), 0);
-        creditorSum += cpOpenings.reduce((s, o) => s + (o.openingPayable || 0), 0);
+        const accountsOpening = sumOf(finAccounts, (a) => a.openingBalance);
+        debtorSum = debtorSum.plus(sumOf(cpOpenings, (o) => o.openingReceivable));
+        creditorSum = creditorSum.plus(sumOf(cpOpenings, (o) => o.openingPayable));
 
-        const totalCashIn = cashIn + totalManualIncomes;
-        const totalCashOut = cashOut + totalManualExpenses;
-        const cashBalance = money(accountsOpening + totalCashIn - totalCashOut);
+        const totalCashIn = cashIn.plus(totalManualIncomes);
+        const totalCashOut = cashOut.plus(totalManualExpenses);
+        const cashBalance = roundMoney(accountsOpening.plus(totalCashIn).minus(totalCashOut));
 
-        totalRevenue = money(totalRevenue);
-        totalMargin = money(totalMargin);
-        debtorSum = money(debtorSum);
-        creditorSum = money(creditorSum);
+        totalRevenue = roundMoney(totalRevenue);
+        totalMargin = roundMoney(totalMargin);
+        debtorSum = roundMoney(debtorSum);
+        creditorSum = roundMoney(creditorSum);
 
-        const marginPercentage = totalRevenue > 0 ? money((totalMargin / totalRevenue) * 100) : 0;
+        const marginPercentage = totalRevenue.gt(0)
+            ? toNum(totalMargin.div(totalRevenue).times(100))
+            : 0;
 
+        // Граница наружу: Decimal сериализуется в JSON строкой, веб ждёт число
         return {
-            revenue: totalRevenue,
-            margin: totalMargin,
+            revenue: toNum(totalRevenue),
+            margin: toNum(totalMargin),
             marginPercentage,
-            debtorSum,
-            creditorSum,
-            cashBalance,
+            debtorSum: toNum(debtorSum),
+            creditorSum: toNum(creditorSum),
+            cashBalance: toNum(cashBalance),
             unpaidOrdersCount,
         };
     }
@@ -1749,7 +1768,7 @@ export class FinancialReportsService {
 
         // Остаток на начало = начальные остатки касс + движения до начала периода.
         // Тот же расчёт, что и в «Остатках по кассам», — отчёты всегда сходятся.
-        const startBalance = money(await this.settingsService.getCashPosition(companyId, start));
+        const startBalance = toNum(await this.settingsService.getCashPosition(companyId, start));
 
         const dateFilter = start && end ? {
             date: { gte: start, lte: end }
@@ -1789,7 +1808,7 @@ export class FinancialReportsService {
                 id: p.id,
                 date: p.date,
                 direction: p.direction,
-                amount: money(p.amount),
+                amount: toNum(p.amount),
                 method: p.method,
                 accountName: p.account?.name || (p.method === 'CASH' ? defaultCash?.name : defaultBank?.name) || 'Банк',
                 categoryName: p.category?.name || (p.direction === PaymentDirection.IN ? 'Оплата за рейс' : 'Оплата исполнителю'),
@@ -1804,7 +1823,7 @@ export class FinancialReportsService {
                 id: i.id,
                 date: i.date,
                 direction: PaymentDirection.IN,
-                amount: money(i.amount),
+                amount: toNum(i.amount),
                 method: PaymentMethod.BANK,
                 accountName: defaultBank?.name || 'Банк',
                 categoryName: i.category === 'order_payment' ? 'Оплата за рейс' : i.category === 'prepayment' ? 'Предоплата' : i.category,
@@ -1819,7 +1838,7 @@ export class FinancialReportsService {
                 id: e.id,
                 date: e.date,
                 direction: PaymentDirection.OUT,
-                amount: money(e.amount),
+                amount: toNum(e.amount),
                 method: PaymentMethod.BANK,
                 accountName: defaultBank?.name || 'Банк',
                 categoryName: e.category,
@@ -1912,7 +1931,7 @@ export class FinancialReportsService {
 
         const categories = Array.from(categoriesMap.values()).map(c => ({
             ...c,
-            amount: money(c.amount),
+            amount: toNum(c.amount),
         }));
 
         return {
@@ -1984,8 +2003,8 @@ export class FinancialReportsService {
                 companyId,
             });
 
-            totalRevenueNet = money(totalRevenueNet + fin.revenueNet);
-            totalExecutorCostNet = money(totalExecutorCostNet + fin.executorCostNet);
+            totalRevenueNet = money(totalRevenueNet + toNum(fin.revenueNet));
+            totalExecutorCostNet = money(totalExecutorCostNet + toNum(fin.executorCostNet));
         }
 
         totalRevenueNet = money(totalRevenueNet);
@@ -2017,19 +2036,19 @@ export class FinancialReportsService {
         manualIncomes
             .filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category))
             .forEach(i => {
-                otherIncomesMap.set(i.category, money((otherIncomesMap.get(i.category) || 0) + i.amount));
+                otherIncomesMap.set(i.category, money((otherIncomesMap.get(i.category) || 0) + toNum(i.amount)));
             });
 
         manualExpenses
             .filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category))
             .forEach(e => {
-                otherExpensesMap.set(e.category, money((otherExpensesMap.get(e.category) || 0) + e.amount));
+                otherExpensesMap.set(e.category, money((otherExpensesMap.get(e.category) || 0) + toNum(e.amount)));
             });
 
         // Списания ТМЦ — расход в ПиУ по себестоимости (не касса)
         const writeoffCosts = await this.getWriteoffCostsByCategory(companyId, start, end);
         for (const [cat, amount] of writeoffCosts.byCategory) {
-            otherExpensesMap.set(cat, money((otherExpensesMap.get(cat) || 0) + amount));
+            otherExpensesMap.set(cat, money((otherExpensesMap.get(cat) || 0) + toNum(amount)));
         }
 
         const otherIncomes = Array.from(otherIncomesMap.entries()).map(([name, amount]) => ({

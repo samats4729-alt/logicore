@@ -5,6 +5,7 @@ import { InvoiceType, InvoiceStatus } from '@prisma/client';
 import { PaymentsService } from '../accounting/services/payments.service';
 import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import { EmailService } from '../email/email.service';
+import { D, ZERO, toNum } from '../common/utils/money';
 
 @Injectable()
 export class InvoiceService {
@@ -97,19 +98,19 @@ export class InvoiceService {
         }
 
         // Рассчитаем сумму счета
-        let amount = 0;
+        let amount = ZERO;
         for (const order of orders) {
             if (dto.type === InvoiceType.OUTGOING) {
                 // Исходящий счёт: сумма зависит от роли эмитента в заявке. Если счёт
                 // выставляет суб-экспедитор — это его ставка (subForwarderPrice), а не
                 // цена заказчика (иначе суб-экспедитор выставлял бы чужую сумму).
-                amount += (order.subForwarderId === dto.issuerId ? order.subForwarderPrice : order.customerPrice) || 0;
+                amount = amount.plus(D(order.subForwarderId === dto.issuerId ? order.subForwarderPrice : order.customerPrice));
             } else {
                 // Входящий счет от перевозчика или субподрядчика
                 if (order.subForwarderId === dto.issuerId) {
-                    amount += order.subForwarderPrice || 0;
+                    amount = amount.plus(D(order.subForwarderPrice));
                 } else {
-                    amount += order.driverCost || 0;
+                    amount = amount.plus(D(order.driverCost));
                 }
             }
         }
@@ -180,7 +181,7 @@ export class InvoiceService {
             shareUrl,
             invoice.issuer?.name || 'LogiCore',
             invoice.invoiceNumber,
-            invoice.amount,
+            toNum(invoice.amount),
         );
 
         return { message: `Счёт отправлен на ${target}` };
@@ -402,7 +403,7 @@ export class InvoiceService {
             await this.periodClosingService.checkPeriodNotClosed(companyId, order.completedAt || order.createdAt);
         }
 
-        let newAmount = 0;
+        let newAmount = ZERO;
 
         for (const order of orders) {
             const dataToUpdate: any = {};
@@ -410,9 +411,9 @@ export class InvoiceService {
             if (invoice.type === InvoiceType.OUTGOING) {
                 if (order.proposedCustomerPrice !== null && order.proposedCustomerPrice !== undefined) {
                     dataToUpdate.customerPrice = order.proposedCustomerPrice;
-                    newAmount += order.proposedCustomerPrice;
+                    newAmount = newAmount.plus(D(order.proposedCustomerPrice));
                 } else {
-                    newAmount += order.customerPrice || 0;
+                    newAmount = newAmount.plus(D(order.customerPrice));
                 }
                 dataToUpdate.proposedCustomerPrice = null;
             } else {
@@ -420,16 +421,16 @@ export class InvoiceService {
                 if (order.subForwarderId === invoice.issuerId) {
                     if (order.proposedSubForwarderPrice !== null && order.proposedSubForwarderPrice !== undefined) {
                         dataToUpdate.subForwarderPrice = order.proposedSubForwarderPrice;
-                        newAmount += order.proposedSubForwarderPrice;
+                        newAmount = newAmount.plus(D(order.proposedSubForwarderPrice));
                     } else {
-                        newAmount += order.subForwarderPrice || 0;
+                        newAmount = newAmount.plus(D(order.subForwarderPrice));
                     }
                 } else {
                     if (order.proposedDriverCost !== null && order.proposedDriverCost !== undefined) {
                         dataToUpdate.driverCost = order.proposedDriverCost;
-                        newAmount += order.proposedDriverCost;
+                        newAmount = newAmount.plus(D(order.proposedDriverCost));
                     } else {
-                        newAmount += order.driverCost || 0;
+                        newAmount = newAmount.plus(D(order.driverCost));
                     }
                 }
                 dataToUpdate.proposedDriverCost = null;

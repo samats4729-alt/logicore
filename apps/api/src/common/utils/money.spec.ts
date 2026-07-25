@@ -1,4 +1,5 @@
-import { money, moneyGte } from './money';
+import { Prisma } from '@prisma/client';
+import { D, DOrNull, money, moneyGte, sumOf, toNum, toNumOrNull } from './money';
 
 describe('money — округление денежных сумм до тиына (2 знака)', () => {
     it('устраняет ошибку плавающей точки при сложении', () => {
@@ -35,5 +36,44 @@ describe('moneyGte — сравнение порогов оплаты без л�
         expect(moneyGte(99.98, 100)).toBe(false);
         expect(moneyGte(100, 100)).toBe(true);
         expect(moneyGte(100.01, 100)).toBe(true);
+    });
+});
+
+describe('Decimal-помощники — точные деньги', () => {
+    it('складывает без погрешности плавающей точки', () => {
+        // В числах 0.1 + 0.2 даёт 0.30000000000000004
+        const rows = [{ amount: 0.1 }, { amount: 0.2 }];
+        expect(sumOf(rows, (r) => r.amount).equals(new Prisma.Decimal('0.3'))).toBe(true);
+    });
+
+    it('пять платежей по 19.99 дают ровно 99.95, а не меньше', () => {
+        const rows = Array(5).fill({ amount: '19.99' });
+        const total = sumOf(rows, (r) => r.amount);
+
+        expect(total.toString()).toBe('99.95');
+        // Именно этот случай раньше требовал обходного moneyGte
+        expect(total.gte(new Prisma.Decimal('99.95'))).toBe(true);
+    });
+
+    it('отличает реальную недоплату от погрешности', () => {
+        expect(D('99.98').gte(D(100))).toBe(false);
+        expect(D('100.00').gte(D(100))).toBe(true);
+    });
+
+    it('трактует отсутствие значения как ноль', () => {
+        expect(D(null).toString()).toBe('0');
+        expect(D(undefined).toString()).toBe('0');
+        expect(DOrNull(null)).toBeNull();
+    });
+
+    it('на границе отдаёт число, округлённое до тиына', () => {
+        expect(toNum(new Prisma.Decimal('1234.567'))).toBe(1234.57);
+        expect(toNum(null)).toBe(0);
+        expect(toNumOrNull(null)).toBeNull();
+    });
+
+    it('суммирует тысячу сумм по 0.01 в ровно 10', () => {
+        const rows = Array(1000).fill({ amount: '0.01' });
+        expect(sumOf(rows, (r) => r.amount).toString()).toBe('10');
     });
 });

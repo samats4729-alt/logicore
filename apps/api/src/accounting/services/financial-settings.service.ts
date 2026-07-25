@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentDirection, PaymentMethod, AccountKind, CostType, DictionaryKind } from '@prisma/client';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
+import { D, Money, ZERO, sumOf, toNum } from '../../common/utils/money';
 
 @Injectable()
 export class FinancialSettingsService {
@@ -140,7 +141,25 @@ export class FinancialSettingsService {
     /** Остатки по кассам и счетам: начальный остаток + приход − расход = текущий остаток */
     async getAccountBalances(companyId: string) {
         await this.ensureCompanyFinanceSettings(companyId);
-        return this.buildAccountBalances(companyId, null);
+        const { accounts, totals } = await this.buildAccountBalances(companyId, null);
+
+        // Граница наружу: внутри считаем в Decimal, в HTTP-ответ отдаём числа —
+        // контракт с вебом остаётся прежним.
+        return {
+            accounts: accounts.map((row) => ({
+                ...row,
+                openingBalance: toNum(row.openingBalance),
+                totalIn: toNum(row.totalIn),
+                totalOut: toNum(row.totalOut),
+                balance: toNum(row.balance),
+            })),
+            totals: {
+                openingBalance: toNum(totals.openingBalance),
+                totalIn: toNum(totals.totalIn),
+                totalOut: toNum(totals.totalOut),
+                balance: toNum(totals.balance),
+            },
+        };
     }
 
     /**
@@ -149,13 +168,13 @@ export class FinancialSettingsService {
      * before = дата → начальные остатки + все движения строго до этой даты.
      * Единый источник правды для «Остатков по кассам» и стартового остатка ДДС.
      */
-    async getCashPosition(companyId: string, before: Date | null): Promise<number> {
+    async getCashPosition(companyId: string, before: Date | null): Promise<Money> {
         await this.ensureCompanyFinanceSettings(companyId);
         const accounts = await this.prisma.financeAccount.findMany({
             where: { companyId, isActive: true },
             select: { openingBalance: true },
         });
-        const openingTotal = accounts.reduce((s, a) => s + (a.openingBalance || 0), 0);
+        const openingTotal = sumOf(accounts, (a) => a.openingBalance);
         if (!before) return openingTotal;
         const { totals } = await this.buildAccountBalances(companyId, before);
         return totals.balance;
@@ -194,9 +213,9 @@ export class FinancialSettingsService {
             }),
         ]);
 
-        const flows = new Map<string, { in: number; out: number }>();
+        const flows = new Map<string, { in: Money; out: Money }>();
         const getFlow = (accId: string) => {
-            if (!flows.has(accId)) flows.set(accId, { in: 0, out: 0 });
+            if (!flows.has(accId)) flows.set(accId, { in: ZERO, out: ZERO });
             return flows.get(accId)!;
         };
 
@@ -212,45 +231,45 @@ export class FinancialSettingsService {
             const acc = resolveAccount(p.accountId, p.method === PaymentMethod.CASH);
             if (!acc || !countsForAccount(acc, p.date)) continue;
             const f = getFlow(acc.id);
-            if (p.direction === PaymentDirection.IN) f.in += p.amount;
-            else f.out += p.amount;
+            if (p.direction === PaymentDirection.IN) f.in = f.in.plus(D(p.amount));
+            else f.out = f.out.plus(D(p.amount));
         }
         for (const i of incomes) {
             if (EXCLUDED_INCOME_CATEGORIES.includes(i.category)) continue;
             const acc = resolveAccount(i.accountId, false);
             if (!acc || !countsForAccount(acc, i.date)) continue;
-            getFlow(acc.id).in += i.amount;
+            const f = getFlow(acc.id);
+            f.in = f.in.plus(D(i.amount));
         }
         for (const e of expenses) {
             if (EXCLUDED_EXPENSE_CATEGORIES.includes(e.category)) continue;
             const acc = resolveAccount(e.accountId, false);
             if (!acc || !countsForAccount(acc, e.date)) continue;
-            getFlow(acc.id).out += e.amount;
+            const f = getFlow(acc.id);
+            f.out = f.out.plus(D(e.amount));
         }
 
         const rows = accounts.map((acc) => {
-            const f = flows.get(acc.id) || { in: 0, out: 0 };
+            const f = flows.get(acc.id) || { in: ZERO, out: ZERO };
+            const opening = D(acc.openingBalance);
             return {
                 id: acc.id,
                 name: acc.name,
                 kind: acc.kind,
-                openingBalance: acc.openingBalance || 0,
+                openingBalance: opening,
                 openingDate: acc.openingDate,
                 totalIn: f.in,
                 totalOut: f.out,
-                balance: (acc.openingBalance || 0) + f.in - f.out,
+                balance: opening.plus(f.in).minus(f.out),
             };
         });
 
-        const totals = rows.reduce(
-            (t, r) => ({
-                openingBalance: t.openingBalance + r.openingBalance,
-                totalIn: t.totalIn + r.totalIn,
-                totalOut: t.totalOut + r.totalOut,
-                balance: t.balance + r.balance,
-            }),
-            { openingBalance: 0, totalIn: 0, totalOut: 0, balance: 0 },
-        );
+        const totals = {
+            openingBalance: sumOf(rows, (r) => r.openingBalance),
+            totalIn: sumOf(rows, (r) => r.totalIn),
+            totalOut: sumOf(rows, (r) => r.totalOut),
+            balance: sumOf(rows, (r) => r.balance),
+        };
 
         return { accounts: rows, totals };
     }

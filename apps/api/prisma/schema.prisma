@@ -2,7 +2,7 @@
 // Logistics Management System
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
 }
 
@@ -14,150 +14,150 @@ datasource db {
 // ==================== ENUMS ====================
 
 enum PriceType {
-  FIXED     // Всего
-  PER_KM    // За км
-  PER_TON   // За тонну
+  FIXED // Всего
+  PER_KM // За км
+  PER_TON // За тонну
 }
 
 enum UserRole {
-  ADMIN             // Наша компания (LogComp)
-  COMPANY_ADMIN     // Админ компании-клиента (Заказчик)
-  LOGISTICIAN       // Логист (создаёт заявки)
+  ADMIN // Наша компания (LogComp)
+  COMPANY_ADMIN // Админ компании-клиента (Заказчик)
+  LOGISTICIAN // Логист (создаёт заявки)
   WAREHOUSE_MANAGER // Завсклад (управляет очередью)
-  ACCOUNTANT        // Бухгалтер
-  DRIVER            // Водитель
-  RECIPIENT         // Грузополучатель
-  PARTNER           // Иная ТК (субподрядчик)
-  FORWARDER         // Экспедитор
+  ACCOUNTANT // Бухгалтер
+  DRIVER // Водитель
+  RECIPIENT // Грузополучатель
+  PARTNER // Иная ТК (субподрядчик)
+  FORWARDER // Экспедитор
 }
 
 enum OrderStatus {
-  DRAFT           // Черновик
-  PENDING         // Ожидает назначения
-  ASSIGNED        // Назначен водитель
+  DRAFT // Черновик
+  PENDING // Ожидает назначения
+  ASSIGNED // Назначен водитель
   EN_ROUTE_PICKUP // Водитель едет на погрузку
-  AT_PICKUP       // Водитель на месте погрузки
-  LOADING         // Идет погрузка
-  IN_TRANSIT      // В пути
-  AT_DELIVERY     // Прибыл на выгрузку
-  UNLOADING       // Идет разгрузка
-  COMPLETED       // Завершен
-  CANCELLED       // Отменен
-  PROBLEM         // Проблема
+  AT_PICKUP // Водитель на месте погрузки
+  LOADING // Идет погрузка
+  IN_TRANSIT // В пути
+  AT_DELIVERY // Прибыл на выгрузку
+  UNLOADING // Идет разгрузка
+  COMPLETED // Завершен
+  CANCELLED // Отменен
+  PROBLEM // Проблема
 }
 
 enum DocumentType {
-  TTN             // Товарно-транспортная накладная
+  TTN // Товарно-транспортная накладная
   POWER_OF_ATTORNEY // Доверенность
-  ACT             // Акт
-  INVOICE         // Счет
-  OTHER           // Прочее
+  ACT // Акт
+  INVOICE // Счет
+  OTHER // Прочее
 }
 
 enum CompanyType {
-  CUSTOMER    // Заказчик
-  FORWARDER   // Экспедитор
+  CUSTOMER // Заказчик
+  FORWARDER // Экспедитор
 }
 
 enum RoutePointType {
-  PICKUP             // Погрузка
-  ADDITIONAL_PICKUP  // Догруз
-  DELIVERY           // Выгрузка
+  PICKUP // Погрузка
+  ADDITIONAL_PICKUP // Догруз
+  DELIVERY // Выгрузка
 }
 
 enum ContractStatus {
-  DRAFT       // Черновик
-  PENDING     // На согласовании
-  ACTIVE      // Активен
-  EXPIRED     // Истёк
-  TERMINATED  // Расторгнут
+  DRAFT // Черновик
+  PENDING // На согласовании
+  ACTIVE // Активен
+  EXPIRED // Истёк
+  TERMINATED // Расторгнут
 }
 
 enum AgreementStatus {
-  DRAFT       // Черновик
-  PENDING     // На согласовании у заказчика
-  APPROVED    // Утверждено обеими сторонами
-  REJECTED    // Отклонено
-  EXPIRED     // Истекло
+  DRAFT // Черновик
+  PENDING // На согласовании у заказчика
+  APPROVED // Утверждено обеими сторонами
+  REJECTED // Отклонено
+  EXPIRED // Истекло
 }
 
 // Фаза 2: тип членства человека в компании
 enum AffiliationType {
-  EMPLOYEE         // штатный сотрудник/водитель
-  PRIVATE_CARRIER  // частный перевозчик (физлицо со своей машиной)
-  COLLABORATOR     // приглашённый/внешний (задел на будущее)
+  EMPLOYEE // штатный сотрудник/водитель
+  PRIVATE_CARRIER // частный перевозчик (физлицо со своей машиной)
+  COLLABORATOR // приглашённый/внешний (задел на будущее)
 }
 
 // ==================== MODELS ====================
 
 model User {
-  id            String    @id @default(cuid())
-  email         String?   @unique
-  googleId      String?   @unique  // Google OAuth ID
-  phone         String
-  passwordHash  String?   // null для водителей (SMS auth)
-  firstName     String
-  lastName      String
-  middleName    String?
-  role          UserRole
-  position      String?   // Должность/роль
-  avatarPath    String?   // Фото профиля (S3-ключ или локальный путь)
-  permissions   String[]  @default([])
-  isActive      Boolean   @default(true)
-  isTrackable   Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  googleId     String?  @unique // Google OAuth ID
+  phone        String
+  passwordHash String? // null для водителей (SMS auth)
+  firstName    String
+  lastName     String
+  middleName   String?
+  role         UserRole
+  position     String? // Должность/роль
+  avatarPath   String? // Фото профиля (S3-ключ или локальный путь)
+  permissions  String[] @default([])
+  isActive     Boolean  @default(true)
+  isTrackable  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  sessions      Session[]
-  ordersAsCustomer   Order[]    @relation("CustomerOrders")
-  ordersAsDriver     Order[]    @relation("DriverOrders")
-  ordersAsRecipient  Order[]    @relation("RecipientOrders")
-  ordersAsManager    Order[]    @relation("ManagerOrders")
-  bonuses       Bonus[]
-  gpsPoints     GpsPoint[]
-  documents     Document[]
-  orderAssignments  OrderAssignee[]  @relation("OrderAssignees")
-  orderResponsibilities OrderResponsible[] @relation("UserOrderResponsibilities")
-  managedExternalCompanies Company[] @relation("ExternalCompanyManager")
-  orderChangeLogs   OrderChangeLog[] @relation("OrderChangeLogs")
-  closedPeriods     ClosedPeriod[]
-  createdInvoices   Invoice[]        @relation("InvoiceCreator")
-  accountingDocumentsCreated   AccountingDocument[]        @relation("AccountingDocumentCreatedBy")
-  accountingDocumentsPosted    AccountingDocument[]        @relation("AccountingDocumentPostedBy")
-  accountingDocumentsCancelled AccountingDocument[]        @relation("AccountingDocumentCancelledBy")
+  sessions                     Session[]
+  ordersAsCustomer             Order[]                       @relation("CustomerOrders")
+  ordersAsDriver               Order[]                       @relation("DriverOrders")
+  ordersAsRecipient            Order[]                       @relation("RecipientOrders")
+  ordersAsManager              Order[]                       @relation("ManagerOrders")
+  bonuses                      Bonus[]
+  gpsPoints                    GpsPoint[]
+  documents                    Document[]
+  orderAssignments             OrderAssignee[]               @relation("OrderAssignees")
+  orderResponsibilities        OrderResponsible[]            @relation("UserOrderResponsibilities")
+  managedExternalCompanies     Company[]                     @relation("ExternalCompanyManager")
+  orderChangeLogs              OrderChangeLog[]              @relation("OrderChangeLogs")
+  closedPeriods                ClosedPeriod[]
+  createdInvoices              Invoice[]                     @relation("InvoiceCreator")
+  accountingDocumentsCreated   AccountingDocument[]          @relation("AccountingDocumentCreatedBy")
+  accountingDocumentsPosted    AccountingDocument[]          @relation("AccountingDocumentPostedBy")
+  accountingDocumentsCancelled AccountingDocument[]          @relation("AccountingDocumentCancelledBy")
   accountingPaymentAllocations AccountingPaymentAllocation[]
-  userCompanyRelations UserCompanyRelation[]
-  
+  userCompanyRelations         UserCompanyRelation[]
+
   // Компания (для PARTNER и WAREHOUSE)
-  companyId     String?
-  company       Company?   @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   // Фаза 1 (мультикомпанийная архитектура): ссылка на глобальную личность.
   // Пока НЕ используется существующей логикой — заполняется бэкфиллом, служит фундаментом.
-  personId      String?
-  person        Person?    @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personId String?
+  person   Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
 
   // Отдел сотрудника
-  departmentId  String?
-  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
   // Водитель: данные транспорта
-  iin           String?   // ИИН
-  vehicleType   String?   // Тип транспорта (Тент, Реф и т.д.)
-  vehiclePlate  String?   // Госномер
-  vehicleModel  String?   // Модель авто
-  trailerNumber String?   // Номер прицепа
-  
+  iin           String? // ИИН
+  vehicleType   String? // Тип транспорта (Тент, Реф и т.д.)
+  vehiclePlate  String? // Госномер
+  vehicleModel  String? // Модель авто
+  trailerNumber String? // Номер прицепа
+
   // Водитель: документы (удостоверение/паспорт)
-  docType       String?   // Тип документа: "ID_CARD" или "PASSPORT"
-  docNumber     String?   // Номер документа
-  docIssuedAt   DateTime? // Дата выдачи
-  docExpiresAt  DateTime? // Срок действия
-  docIssuedBy   String?   // Кем выдан
+  docType           String? // Тип документа: "ID_CARD" или "PASSPORT"
+  docNumber         String? // Номер документа
+  docIssuedAt       DateTime? // Дата выдачи
+  docExpiresAt      DateTime? // Срок действия
+  docIssuedBy       String? // Кем выдан
   // Комиссия менеджера (% от маржи)
-  commissionPercent Float     @default(0)
-  
+  commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
+
   @@index([phone])
   @@index([role])
   @@index([departmentId])
@@ -174,7 +174,7 @@ model Person {
   lastName   String
   middleName String?
   phone      String?
-  iin        String?  // ИИН
+  iin        String? // ИИН
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -186,8 +186,8 @@ model Person {
 
   users            User[]
   affiliations     Affiliation[]
-  ownedVehicles    Vehicle[] @relation("PersonOwnedVehicles")
-  operatedVehicles Vehicle[] @relation("PersonOperatedVehicles")
+  ownedVehicles    Vehicle[]     @relation("PersonOwnedVehicles")
+  operatedVehicles Vehicle[]     @relation("PersonOperatedVehicles")
 
   @@index([phone])
   @@index([iin])
@@ -209,11 +209,11 @@ model Affiliation {
   position     String?
   departmentId String?
   status       String          @default("ACTIVE") // ACTIVE | ARCHIVED
-  isPrimary    Boolean         @default(false)     // домашняя компания (соответствует User.companyId)
-  rate         Float?          // задел под кадры (ставка) — пока не используется
+  isPrimary    Boolean         @default(false) // домашняя компания (соответствует User.companyId)
+  rate         Decimal?        @db.Decimal(18, 2) // задел под кадры (ставка) — пока не используется
   startedAt    DateTime?
   endedAt      DateTime?
-  sourceUserId String?         // из какого User сгенерирована связь (для сверки бэкфилла)
+  sourceUserId String? // из какого User сгенерирована связь (для сверки бэкфилла)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -226,13 +226,13 @@ model Affiliation {
 // Журнал объединений личностей — чтобы любое слияние можно было полностью откатить.
 model PersonMerge {
   id             String    @id @default(cuid())
-  targetPersonId String    // основная личность, в которую объединяли
+  targetPersonId String // основная личность, в которую объединяли
   status         String    @default("ACTIVE") // ACTIVE | REVERTED
-  createdById    String?   // кто выполнил объединение
+  createdById    String? // кто выполнил объединение
   createdAt      DateTime  @default(now())
   revertedAt     DateTime?
 
-  items          PersonMergeItem[]
+  items PersonMergeItem[]
 
   @@index([targetPersonId])
   @@index([status])
@@ -243,40 +243,40 @@ model PersonMergeItem {
   id               String      @id @default(cuid())
   mergeId          String
   merge            PersonMerge @relation(fields: [mergeId], references: [id], onDelete: Cascade)
-  userId           String      // перецепленный пользователь
-  previousPersonId String      // личность, на которую вернуть при откате
+  userId           String // перецепленный пользователь
+  previousPersonId String // личность, на которую вернуть при откате
 
   @@index([mergeId])
   @@index([userId])
 }
 
 model Company {
-  id             String      @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
-  bin            String?     // БИН/ИИН
-  address        String?     // Юридический адрес
-  actualAddress  String?     // Фактический адрес
+  bin            String? // БИН/ИИН
+  address        String? // Юридический адрес
+  actualAddress  String? // Фактический адрес
   phone          String?
-  email          String?     // Email компании
-  directorName   String?     // ФИО директора
-  bankAccount    String?     // ИИК (номер счёта)
-  bankName       String?     // Название банка
-  bankBic        String?     // БИК банка
-  kbe            String?     // КБЕ
-  stampImage     String?     // Путь к PNG печати
-  signatureImage String?     // Путь к PNG подписи
+  email          String? // Email компании
+  directorName   String? // ФИО директора
+  bankAccount    String? // ИИК (номер счёта)
+  bankName       String? // Название банка
+  bankBic        String? // БИК банка
+  kbe            String? // КБЕ
+  stampImage     String? // Путь к PNG печати
+  signatureImage String? // Путь к PNG подписи
   type           CompanyType? @default(CUSTOMER)
-  isCustomer     Boolean     @default(true)
-  isCarrier      Boolean     @default(false)
-  isOurCompany   Boolean     @default(false)  // true = LogComp
-  isExternal     Boolean     @default(false)  // Внешняя компания (справочник)
-  isActive       Boolean     @default(true)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  isCustomer     Boolean      @default(true)
+  isCarrier      Boolean      @default(false)
+  isOurCompany   Boolean      @default(false) // true = LogComp
+  isExternal     Boolean      @default(false) // Внешняя компания (справочник)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   // Настройки видимости для менеджеров (LOGISTICIAN) этой компании
-  managersSeeOwnOrdersOnly   Boolean @default(true)   // менеджер видит только свои заявки
-  managersSeeOwnPartnersOnly Boolean @default(false)  // менеджер видит только своих контрагентов
+  managersSeeOwnOrdersOnly   Boolean @default(true) // менеджер видит только свои заявки
+  managersSeeOwnPartnersOnly Boolean @default(false) // менеджер видит только своих контрагентов
 
   // Кто создал внешнюю компанию
   createdByCompanyId String?
@@ -287,49 +287,49 @@ model Company {
   responsibleManagerId String?
   responsibleManager   User?   @relation("ExternalCompanyManager", fields: [responsibleManagerId], references: [id])
 
-  users             User[]
-  ordersAsPartner   Order[]   @relation("PartnerOrders")
-  ordersAsCustomer  Order[]   @relation("CustomerCompanyOrders")
-  ordersAsForwarder Order[]   @relation("ForwarderOrders")
+  users                User[]
+  ordersAsPartner      Order[] @relation("PartnerOrders")
+  ordersAsCustomer     Order[] @relation("CustomerCompanyOrders")
+  ordersAsForwarder    Order[] @relation("ForwarderOrders")
   ordersAsSubForwarder Order[] @relation("SubForwarderOrders")
 
   // Partnerships
-  sentRequests      Partnership[] @relation("PartnershipRequester")
-  receivedRequests  Partnership[] @relation("PartnershipRecipient")
+  sentRequests     Partnership[] @relation("PartnershipRequester")
+  receivedRequests Partnership[] @relation("PartnershipRecipient")
 
   // Contracts
   contractsAsCustomer  Contract[] @relation("ContractCustomer")
   contractsAsForwarder Contract[] @relation("ContractForwarder")
-  
-  invitations       Invitation[]
-  locations         Location[]  @relation("CompanyLocations")
-  departments       Department[]
-  vehicles          Vehicle[]
-  payments           Payment[] @relation("CompanyPayments")
-  counterpartyPayments Payment[] @relation("CounterpartyPayments")
-  financeOperations         FinanceOperation[] @relation("CompanyFinanceOperations")
-  counterpartyFinanceOperations FinanceOperation[] @relation("CounterpartyFinanceOperations")
-  closedPeriods      ClosedPeriod[]
-  financeAccounts     FinanceAccount[] @relation("CompanyFinanceAccounts")
-  financeCategories   FinanceCategory[] @relation("CompanyFinanceCategories")
-  issuedInvoices     Invoice[]         @relation("InvoiceIssuer")
-  receivedInvoices   Invoice[]         @relation("InvoiceRecipient")
+
+  invitations                     Invitation[]
+  locations                       Location[]                    @relation("CompanyLocations")
+  departments                     Department[]
+  vehicles                        Vehicle[]
+  payments                        Payment[]                     @relation("CompanyPayments")
+  counterpartyPayments            Payment[]                     @relation("CounterpartyPayments")
+  financeOperations               FinanceOperation[]            @relation("CompanyFinanceOperations")
+  counterpartyFinanceOperations   FinanceOperation[]            @relation("CounterpartyFinanceOperations")
+  closedPeriods                   ClosedPeriod[]
+  financeAccounts                 FinanceAccount[]              @relation("CompanyFinanceAccounts")
+  financeCategories               FinanceCategory[]             @relation("CompanyFinanceCategories")
+  issuedInvoices                  Invoice[]                     @relation("InvoiceIssuer")
+  receivedInvoices                Invoice[]                     @relation("InvoiceRecipient")
   accountingDocuments             AccountingDocument[]          @relation("AccountingDocumentCompany")
   accountingCounterpartyDocuments AccountingDocument[]          @relation("AccountingDocumentCounterparty")
   accountingDocumentNumberings    AccountingDocumentNumbering[]
-  userCompanyRelations UserCompanyRelation[]
-  affiliations       Affiliation[]     @relation("CompanyAffiliations")
-  documents          Document[]
-  subscription       CompanySubscription?
-  orderResponsibilities OrderResponsible[] @relation("CompanyOrderResponsibilities")
-  counterpartyOpenings   CounterpartyOpeningBalance[] @relation("CompanyCounterpartyOpenings")
-  openingsAsCounterparty CounterpartyOpeningBalance[] @relation("CounterpartyOpenings")
-  serviceCatalog         ServiceCatalogItem[] @relation("CompanyServiceCatalog")
-  dictionaries           DictionaryItem[]     @relation("CompanyDictionaries")
-  orderNumbering         OrderNumbering?      @relation("CompanyOrderNumbering")
-  nomenclature           NomenclatureItem[]   @relation("CompanyNomenclature")
-  stockWarehouses        StockWarehouse[]     @relation("CompanyWarehouses")
-  stockMoves             StockMove[]          @relation("CompanyStockMoves")
+  userCompanyRelations            UserCompanyRelation[]
+  affiliations                    Affiliation[]                 @relation("CompanyAffiliations")
+  documents                       Document[]
+  subscription                    CompanySubscription?
+  orderResponsibilities           OrderResponsible[]            @relation("CompanyOrderResponsibilities")
+  counterpartyOpenings            CounterpartyOpeningBalance[]  @relation("CompanyCounterpartyOpenings")
+  openingsAsCounterparty          CounterpartyOpeningBalance[]  @relation("CounterpartyOpenings")
+  serviceCatalog                  ServiceCatalogItem[]          @relation("CompanyServiceCatalog")
+  dictionaries                    DictionaryItem[]              @relation("CompanyDictionaries")
+  orderNumbering                  OrderNumbering?               @relation("CompanyOrderNumbering")
+  nomenclature                    NomenclatureItem[]            @relation("CompanyNomenclature")
+  stockWarehouses                 StockWarehouse[]              @relation("CompanyWarehouses")
+  stockMoves                      StockMove[]                   @relation("CompanyStockMoves")
 
   @@index([bin])
 }
@@ -345,61 +345,61 @@ enum PartnershipStatus {
 }
 
 model Partnership {
-  id          String            @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   requesterId String
-  requester   Company           @relation("PartnershipRequester", fields: [requesterId], references: [id])
-  
+  requester   Company @relation("PartnershipRequester", fields: [requesterId], references: [id])
+
   recipientId String
-  recipient   Company           @relation("PartnershipRecipient", fields: [recipientId], references: [id])
-  
-  status      PartnershipStatus @default(PENDING)
-  
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  recipient   Company @relation("PartnershipRecipient", fields: [recipientId], references: [id])
+
+  status PartnershipStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([requesterId, recipientId])
   @@index([status])
 }
 
 model Session {
-  id          String    @id @default(cuid())
-  userId      String
-  deviceId    String    // Для Single Session Policy
-  token       String    @unique
-  expiresAt   DateTime
-  createdAt   DateTime  @default(now())
-  
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id        String   @id @default(cuid())
+  userId    String
+  deviceId  String // Для Single Session Policy
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([deviceId])
 }
 
 model Location {
-  id          String    @id @default(cuid())
-  name        String    // Название точки
-  address     String
-  latitude    Float
-  longitude   Float
-  contactName String?
+  id           String   @id @default(cuid())
+  name         String // Название точки
+  address      String
+  latitude     Float
+  longitude    Float
+  contactName  String?
   contactPhone String?
-  city        String?   // <-- Added city field
-  cityId      String?
-  cityRecord  City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
-  notes       String?
-  emails      String?   // Контактные email-адреса
-  companyId   String?   // ID привязанного контрагента
-  company     Company?  @relation("CompanyLocations", fields: [companyId], references: [id])
-  createdAt   DateTime  @default(now())
-  
+  city         String? // <-- Added city field
+  cityId       String?
+  cityRecord   City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  notes        String?
+  emails       String? // Контактные email-адреса
+  companyId    String? // ID привязанного контрагента
+  company      Company? @relation("CompanyLocations", fields: [companyId], references: [id])
+  createdAt    DateTime @default(now())
+
   // Кто создал
   createdById String?
-  
+
   // Relations
-  routePoints   OrderRoutePoint[]
-  warehouseGates    WarehouseGate[]
-  
+  routePoints    OrderRoutePoint[]
+  warehouseGates WarehouseGate[]
+
   @@index([latitude, longitude])
   @@index([cityId])
 }
@@ -411,41 +411,41 @@ model Country {
   externalProvider String?
   externalId       String?
   regions          Region[]
-  cities            City[]
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  cities           City[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@unique([externalProvider, externalId])
 }
 
 model Region {
   id               String   @id @default(cuid())
-  name             String   // e.g., "Almaty Region"
+  name             String // e.g., "Almaty Region"
   countryId        String
   country          Country  @relation(fields: [countryId], references: [id])
   externalProvider String?
   externalId       String?
-  cities            City[]
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  cities           City[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@unique([countryId, name])
   @@unique([externalProvider, externalId])
 }
 
 model City {
-  id               String   @id @default(cuid())
+  id               String  @id @default(cuid())
   name             String
   latitude         Float
   longitude        Float
   externalProvider String?
   externalId       String?
-  
-  regionId  String?
-  region    Region?  @relation(fields: [regionId], references: [id])
-  
+
+  regionId String?
+  region   Region? @relation(fields: [regionId], references: [id])
+
   countryId String
-  country   Country  @relation(fields: [countryId], references: [id])
+  country   Country @relation(fields: [countryId], references: [id])
 
   originTariffs      RouteTariff[] @relation("OriginTariffs")
   destinationTariffs RouteTariff[] @relation("DestinationTariffs")
@@ -457,160 +457,161 @@ model City {
   @@unique([countryId, regionId, name]) // Unique name per region/country
   @@unique([externalProvider, externalId])
 }
+
 model Order {
-  id              String      @id @default(cuid())
-  orderNumber     String      @unique // Номер заявки
-  status          OrderStatus @default(DRAFT)
+  id                      String                    @id @default(cuid())
+  orderNumber             String                    @unique // Номер заявки
+  status                  OrderStatus               @default(DRAFT)
   accountingDocumentLines AccountingDocumentLine[]
   accountingDocuments     AccountingDocumentOrder[]
-  pendingStatus     OrderStatus?
-  pendingStatusById String?
-  pendingStatusAt   DateTime?
+  pendingStatus           OrderStatus?
+  pendingStatusById       String?
+  pendingStatusAt         DateTime?
   // Груз
-  cargoDescription String?
-  cargoWeight     Float?      // кг
-  cargoVolume     Float?      // м³
-  cargoLength     Float?      // Длина груза, м
-  cargoWidth      Float?      // Ширина груза, м
-  cargoHeight     Float?      // Высота груза, м
-  palletCount     Int?        // Количество палет
-  cargoType       String?     // Тип транспорта (Тент, Реф и т.д.)
-  natureOfCargo   String?     // Характер груза (Сыпучие, Твердые и т.д.)
-  requirements    String?     // Особые требования
-  
+  cargoDescription        String?
+  cargoWeight             Float? // кг
+  cargoVolume             Float? // м³
+  cargoLength             Float? // Длина груза, м
+  cargoWidth              Float? // Ширина груза, м
+  cargoHeight             Float? // Высота груза, м
+  palletCount             Int? // Количество палет
+  cargoType               String? // Тип транспорта (Тент, Реф и т.д.)
+  natureOfCargo           String? // Характер груза (Сыпучие, Твердые и т.д.)
+  requirements            String? // Особые требования
+
   // Участники
-  customerId      String
-  customer        User        @relation("CustomerOrders", fields: [customerId], references: [id])
-  
-  driverId        String?
-  driver          User?       @relation("DriverOrders", fields: [driverId], references: [id])
-  
-  recipientId     String?
-  recipient       User?       @relation("RecipientOrders", fields: [recipientId], references: [id])
-  
+  customerId String
+  customer   User   @relation("CustomerOrders", fields: [customerId], references: [id])
+
+  driverId String?
+  driver   User?   @relation("DriverOrders", fields: [driverId], references: [id])
+
+  recipientId String?
+  recipient   User?   @relation("RecipientOrders", fields: [recipientId], references: [id])
+
   // Если субподрядчик
-  partnerId       String?
-  partner         Company?    @relation("PartnerOrders", fields: [partnerId], references: [id])
-  
+  partnerId String?
+  partner   Company? @relation("PartnerOrders", fields: [partnerId], references: [id])
+
   // Компания-заказчик
   customerCompanyId String?
-  customerCompany   Company?  @relation("CustomerCompanyOrders", fields: [customerCompanyId], references: [id])
-  
+  customerCompany   Company? @relation("CustomerCompanyOrders", fields: [customerCompanyId], references: [id])
+
   // Экспедитор (назначается заказчиком)
-  forwarderId       String?
-  forwarder         Company?  @relation("ForwarderOrders", fields: [forwarderId], references: [id])
+  forwarderId String?
+  forwarder   Company? @relation("ForwarderOrders", fields: [forwarderId], references: [id])
 
   // Ответственный менеджер (кто создал/ведет)
-  responsibleManagerId  String?
-  responsibleManager    User?  @relation("ManagerOrders", fields: [responsibleManagerId], references: [id])
+  responsibleManagerId String?
+  responsibleManager   User?   @relation("ManagerOrders", fields: [responsibleManagerId], references: [id])
 
   // Суб-экспедитор (назначенный основным экспедитором)
   subForwarderId    String?
-  subForwarder      Company?    @relation("SubForwarderOrders", fields: [subForwarderId], references: [id])
-  subForwarderPrice Float?      // Цена для суб-экспедитора
-  
+  subForwarder      Company? @relation("SubForwarderOrders", fields: [subForwarderId], references: [id])
+  subForwarderPrice Decimal? @db.Decimal(18, 2) // Цена для суб-экспедитора
+
   // Данные водителя от экспедитора (заполняет экспедитор)
-  assignedDriverName    String?   // ФИО водителя
-  assignedDriverPhone   String?   // Телефон водителя
-  assignedDriverPlate   String?   // Госномер авто (снимок на момент рейса)
-  assignedDriverTrailer String?   // Номер прицепа
+  assignedDriverName    String? // ФИО водителя
+  assignedDriverPhone   String? // Телефон водителя
+  assignedDriverPlate   String? // Госномер авто (снимок на момент рейса)
+  assignedDriverTrailer String? // Номер прицепа
   assignedAt            DateTime? // Когда назначен водитель
 
   // Секретная ссылка для водителя (веб вместо приложения). Уникальность
   // обеспечивается случайным 24-байтным токеном (без DB-constraint, чтобы
   // db push не требовал --accept-data-loss на существующей таблице).
-  driverToken           String?
+  driverToken      String?
   // Последнее местоположение водителя (со страницы водителя)
-  driverLat             Float?
-  driverLng             Float?
-  driverSpeed           Float?
-  driverHeading         Float?
-  driverLocationAt      DateTime?
+  driverLat        Float?
+  driverLng        Float?
+  driverSpeed      Float?
+  driverHeading    Float?
+  driverLocationAt DateTime?
 
   // Фаза 3: ссылка на конкретную машину (актив). Nullable, пока не пишется существующей
   // логикой — текстовые поля assignedDriver* остаются снимком. Задел под историю/переиспользование.
-  vehicleId             String?
-  vehicle               Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
-  
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
   // Финансы
-  customerPrice   Float?      // Цена для клиента (видит клиент)
+  customerPrice     Decimal?  @db.Decimal(18, 2) // Цена для клиента (видит клиент)
   customerPriceType PriceType @default(FIXED) // Тип цены (Всего, за км, за тонну)
-  driverCost      Float?      // Оплата водителю/перевозчику (скрыто от клиента)
-  vatRate           Float     @default(0)
+  driverCost        Decimal?  @db.Decimal(18, 2) // Оплата водителю/перевозчику (скрыто от клиента)
+  vatRate           Decimal   @default(0) @db.Decimal(5, 2)
   hasVat            Boolean   @default(false)
-  executorVatRate   Float     @default(0)
+  executorVatRate   Decimal   @default(0) @db.Decimal(5, 2)
   executorHasVat    Boolean   @default(false)
 
   // Тариф по доп. соглашению (автоподстановка)
   appliedTariffId String?
   appliedTariff   RouteTariff? @relation(fields: [appliedTariffId], references: [id])
-  currency        String      @default("KZT")
-  
+  currency        String       @default("KZT")
+
   // Подтверждение нами
-  isConfirmed     Boolean     @default(false)
-  confirmedAt     DateTime?
-  confirmedById   String?
-  
+  isConfirmed   Boolean   @default(false)
+  confirmedAt   DateTime?
+  confirmedById String?
+
   // Статус оплаты
-  isCustomerPaid      Boolean   @default(false)  // Заказчик оплатил нам
-  customerPaidAt      DateTime?                   // Когда оплатил
-  isDriverPaid        Boolean   @default(false)  // Мы оплатили водителю / партнёру
-  driverPaidAt        DateTime?                   // Когда оплатили
-  isSubForwarderPaid  Boolean   @default(false)  // Мы оплатили суб-экспедитору
-  subForwarderPaidAt  DateTime?                   // Когда оплатили
-  
+  isCustomerPaid     Boolean   @default(false) // Заказчик оплатил нам
+  customerPaidAt     DateTime? // Когда оплатил
+  isDriverPaid       Boolean   @default(false) // Мы оплатили водителю / партнёру
+  driverPaidAt       DateTime? // Когда оплатили
+  isSubForwarderPaid Boolean   @default(false) // Мы оплатили суб-экспедитору
+  subForwarderPaidAt DateTime? // Когда оплатили
+
   // --- Данные из Excel (Full List) ---
-  
+
   // Финансы: Заказчик
   customerPaymentCondition String? // Условие оплаты (По факту, Отсрочка...)
   customerPaymentForm      String? // Форма оплаты (НДС, без НДС...)
   customerPaymentDate      DateTime? // Плановая дата оплаты
-  
+
   // Финансы: Перевозчик
-  driverPaymentCondition   String?
-  driverPaymentForm        String?
-  driverPaymentDate        DateTime?
-  
+  driverPaymentCondition String?
+  driverPaymentForm      String?
+  driverPaymentDate      DateTime?
+
   // Документы и коды
-  ttnNumber                String? // Номер ТТН
-  atiCodeCustomer          String? // Код АТИ заказчика
-  atiCodeCarrier           String? // Код АТИ перевозчика
-  
+  ttnNumber       String? // Номер ТТН
+  atiCodeCustomer String? // Код АТИ заказчика
+  atiCodeCarrier  String? // Код АТИ перевозчика
+
   // Транспорт (уточнения для рейса)
-  trailerNumber            String? // Номер прицепа
-  
+  trailerNumber String? // Номер прицепа
+
   // Фактические данные
-  actualWeight             Float?  // Вес факт
-  actualVolume             Float?  // Объем факт
-  
+  actualWeight Float? // Вес факт
+  actualVolume Float? // Объем факт
+
   // Timestamps
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  completedAt     DateTime?
-  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
   // Relations
-  routePoints     OrderRoutePoint[]
-  documents       Document[]
-  statusHistory   OrderStatusHistory[]
-  gpsPoints       GpsPoint[]
-  problems        OrderProblem[]
-  warehouseQueue  WarehouseQueueItem?
-  expenses        Expense[]
-  incomes         Income[]
-  bonuses         Bonus[]
-  payments        Payment[]
-  financeOperations FinanceOperation[]
-  assignees       OrderAssignee[]
-  responsibles    OrderResponsible[]
-  changeLog       OrderChangeLog[]
-  incomingInvoiceId String?
-  incomingInvoice   Invoice?    @relation("IncomingInvoiceOrders", fields: [incomingInvoiceId], references: [id])
-  outgoingInvoiceId String?
-  outgoingInvoice   Invoice?    @relation("OutgoingInvoiceOrders", fields: [outgoingInvoiceId], references: [id])
-  proposedCustomerPrice Float?
-  proposedDriverCost    Float?
-  proposedSubForwarderPrice Float?
-  
+  routePoints               OrderRoutePoint[]
+  documents                 Document[]
+  statusHistory             OrderStatusHistory[]
+  gpsPoints                 GpsPoint[]
+  problems                  OrderProblem[]
+  warehouseQueue            WarehouseQueueItem?
+  expenses                  Expense[]
+  incomes                   Income[]
+  bonuses                   Bonus[]
+  payments                  Payment[]
+  financeOperations         FinanceOperation[]
+  assignees                 OrderAssignee[]
+  responsibles              OrderResponsible[]
+  changeLog                 OrderChangeLog[]
+  incomingInvoiceId         String?
+  incomingInvoice           Invoice?             @relation("IncomingInvoiceOrders", fields: [incomingInvoiceId], references: [id])
+  outgoingInvoiceId         String?
+  outgoingInvoice           Invoice?             @relation("OutgoingInvoiceOrders", fields: [outgoingInvoiceId], references: [id])
+  proposedCustomerPrice     Decimal?             @db.Decimal(18, 2)
+  proposedDriverCost        Decimal?             @db.Decimal(18, 2)
+  proposedSubForwarderPrice Decimal?             @db.Decimal(18, 2)
+
   @@index([status])
   @@index([customerId])
   @@index([driverId])
@@ -623,93 +624,93 @@ model Order {
 }
 
 model OrderRoutePoint {
-  id          String         @id @default(cuid())
-  orderId     String
-  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
-  locationId  String
-  location    Location       @relation(fields: [locationId], references: [id])
-  
-  pointType   RoutePointType
-  sequence    Int            // Порядок маршрута (1, 2, 3...)
-  
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+
+  pointType RoutePointType
+  sequence  Int // Порядок маршрута (1, 2, 3...)
+
   expectedDate DateTime?
-  notes       String?
-  
+  notes        String?
+
   @@index([orderId])
   @@index([locationId])
 }
 
 model OrderStatusHistory {
-  id          String      @id @default(cuid())
-  orderId     String
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
   status      OrderStatus
   comment     String?
   changedById String?
   changedAt   DateTime    @default(now())
-  
+
   @@index([orderId])
 }
 
 model OrderProblem {
-  id          String    @id @default(cuid())
-  orderId     String
-  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
-  description String
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  description  String
   reportedById String
-  resolvedAt  DateTime?
-  resolution  String?
-  createdAt   DateTime  @default(now())
-  
+  resolvedAt   DateTime?
+  resolution   String?
+  createdAt    DateTime  @default(now())
+
   @@index([orderId])
 }
 
 model Document {
-  id          String       @id @default(cuid())
-  type        DocumentType
-  fileName    String
-  fileUrl     String       // S3 URL
-  fileSize    Int
-  mimeType    String
-  
-  orderId     String?
-  order       Order?       @relation(fields: [orderId], references: [id])
-  
+  id       String       @id @default(cuid())
+  type     DocumentType
+  fileName String
+  fileUrl  String // S3 URL
+  fileSize Int
+  mimeType String
+
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
+
   uploadedById String
-  uploadedBy  User         @relation(fields: [uploadedById], references: [id])
-  
-  companyId    String?
-  company      Company?     @relation(fields: [companyId], references: [id])
-  
-  isVerified  Boolean      @default(false)
-  verifiedAt  DateTime?
-  
-  createdAt   DateTime     @default(now())
-  
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  isVerified Boolean   @default(false)
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+
   @@index([orderId])
   @@index([type])
 }
 
 model GpsPoint {
-  id          String    @id @default(cuid())
-  driverId    String
-  driver      User      @relation(fields: [driverId], references: [id])
-  
-  orderId     String?
-  order       Order?    @relation(fields: [orderId], references: [id])
-  
-  latitude    Float
-  longitude   Float
-  accuracy    Float?
-  speed       Float?    // км/ч
-  heading     Float?    // направление
-  
-  recordedAt  DateTime
-  receivedAt  DateTime  @default(now())
-  
+  id       String @id @default(cuid())
+  driverId String
+  driver   User   @relation(fields: [driverId], references: [id])
+
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  latitude  Float
+  longitude Float
+  accuracy  Float?
+  speed     Float? // км/ч
+  heading   Float? // направление
+
+  recordedAt DateTime
+  receivedAt DateTime @default(now())
+
   @@index([driverId, recordedAt])
   @@index([orderId])
 }
@@ -717,36 +718,35 @@ model GpsPoint {
 // ==================== WAREHOUSE ====================
 
 model WarehouseGate {
-  id          String    @id @default(cuid())
-  locationId  String
-  location    Location  @relation(fields: [locationId], references: [id])
-  
-  gateNumber  String    // Номер ворот/рампы
-  isAvailable Boolean   @default(true)
-  
-  queueItems  WarehouseQueueItem[]
-  
+  id         String   @id @default(cuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+
+  gateNumber  String // Номер ворот/рампы
+  isAvailable Boolean @default(true)
+
+  queueItems WarehouseQueueItem[]
+
   @@unique([locationId, gateNumber])
 }
 
 model WarehouseQueueItem {
-  id          String    @id @default(cuid())
-  orderId     String    @unique
-  order       Order     @relation(fields: [orderId], references: [id])
-  
-  gateId      String?
-  gate        WarehouseGate? @relation(fields: [gateId], references: [id])
-  
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  gateId String?
+  gate   WarehouseGate? @relation(fields: [gateId], references: [id])
+
   arrivedAt   DateTime  @default(now())
   assignedAt  DateTime?
   startedAt   DateTime?
   completedAt DateTime?
-  
-  instructions String?   // "Заезжайте на ворота 3"
-  
+
+  instructions String? // "Заезжайте на ворота 3"
+
   @@index([gateId])
 }
-
 
 // ==================== CARGO TYPES ====================
 
@@ -760,13 +760,13 @@ model CargoCategory {
 }
 
 model CargoType {
-  id          String        @id @default(cuid())
-  name        String        // Название типа
-  categoryId  String
-  category    CargoCategory @relation(fields: [categoryId], references: [id])
-  sortOrder   Int           @default(0)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id         String        @id @default(cuid())
+  name       String // Название типа
+  categoryId String
+  category   CargoCategory @relation(fields: [categoryId], references: [id])
+  sortOrder  Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
   @@index([categoryId])
 }
@@ -774,28 +774,28 @@ model CargoType {
 // ==================== CONTRACTS & TARIFFS ====================
 
 model Contract {
-  id              String         @id @default(cuid())
-  contractNumber  String         // Номер договора
-  
+  id             String @id @default(cuid())
+  contractNumber String // Номер договора
+
   // Стороны
-  customerCompanyId String
-  customerCompany   Company      @relation("ContractCustomer", fields: [customerCompanyId], references: [id])
+  customerCompanyId   String
+  customerCompany     Company              @relation("ContractCustomer", fields: [customerCompanyId], references: [id])
   accountingDocuments AccountingDocument[]
-  
+
   forwarderCompanyId String
-  forwarderCompany   Company    @relation("ContractForwarder", fields: [forwarderCompanyId], references: [id])
-  
-  status          ContractStatus @default(DRAFT)
-  startDate       DateTime?
-  endDate         DateTime?
-  notes           String?
-  content         Json?       // Содержимое: массив статей [{title, paragraphs: [{number, text}]}]
-  
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  
-  agreements      SupplementaryAgreement[]
-  
+  forwarderCompany   Company @relation("ContractForwarder", fields: [forwarderCompanyId], references: [id])
+
+  status    ContractStatus @default(DRAFT)
+  startDate DateTime?
+  endDate   DateTime?
+  notes     String?
+  content   Json? // Содержимое: массив статей [{title, paragraphs: [{number, text}]}]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agreements SupplementaryAgreement[]
+
   @@unique([customerCompanyId, forwarderCompanyId, contractNumber])
   @@index([customerCompanyId])
   @@index([forwarderCompanyId])
@@ -803,18 +803,18 @@ model Contract {
 }
 
 model SupplementaryAgreement {
-  id              String          @id @default(cuid())
-  agreementNumber String          // Номер доп. соглашения
-  
-  contractId      String
-  contract        Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  
-  status          AgreementStatus @default(DRAFT)
-  proposedBy      String          @default("FORWARDER") // "FORWARDER" или "CUSTOMER"
-  validFrom       DateTime?
-  validTo         DateTime?
-  notes           String?
-  
+  id              String @id @default(cuid())
+  agreementNumber String // Номер доп. соглашения
+
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  status     AgreementStatus @default(DRAFT)
+  proposedBy String          @default("FORWARDER") // "FORWARDER" или "CUSTOMER"
+  validFrom  DateTime?
+  validTo    DateTime?
+  notes      String?
+
   // Кто создал
   createdById     String?
   // Кто утвердил/отклонил
@@ -822,38 +822,38 @@ model SupplementaryAgreement {
   approvedAt      DateTime?
   rejectedAt      DateTime?
   rejectionReason String?
-  
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
-  tariffs         RouteTariff[]
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tariffs RouteTariff[]
+
   @@index([contractId])
   @@index([status])
 }
 
 model RouteTariff {
-  id              String     @id @default(cuid())
-  
-  agreementId     String
-  agreement       SupplementaryAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
-  
+  id String @id @default(cuid())
+
+  agreementId String
+  agreement   SupplementaryAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
   originCityId      String
-  originCity        City       @relation("OriginTariffs", fields: [originCityId], references: [id])
+  originCity        City   @relation("OriginTariffs", fields: [originCityId], references: [id])
   destinationCityId String
-  destinationCity   City       @relation("DestinationTariffs", fields: [destinationCityId], references: [id])
-  
-  price           Float      // Стоимость
-  priceType       PriceType  @default(FIXED)
-  vehicleType     String?    // Тип кузова (опционально)
-  
-  isActive        Boolean    @default(true)
-  
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-  
-  orders          Order[]    // Заявки по этому тарифу
-  
+  destinationCity   City   @relation("DestinationTariffs", fields: [destinationCityId], references: [id])
+
+  price       Decimal   @db.Decimal(18, 2) // Стоимость
+  priceType   PriceType @default(FIXED)
+  vehicleType String? // Тип кузова (опционально)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[] // Заявки по этому тарифу
+
   @@index([agreementId])
   @@index([originCityId, destinationCityId])
 }
@@ -861,28 +861,28 @@ model RouteTariff {
 // ==================== ACCOUNTING ====================
 
 model Expense {
-  id          String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   companyId   String
   date        DateTime
-  category    String   // fuel, repair, salary, insurance, tax, rent, communication, office, penalties, other
+  category    String // fuel, repair, salary, insurance, tax, rent, communication, office, penalties, other
   description String
-  amount      Float    // Сумма в тенге
+  amount      Decimal  @db.Decimal(18, 2) // Сумма в тенге
   note        String?
-  
+
   // Привязка к заявке (опционально)
-  orderId     String?
-  order       Order?   @relation(fields: [orderId], references: [id])
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
 
   // Касса / расчётный счёт, с которого ушли деньги (опционально)
-  accountId   String?
-  account     FinanceAccount? @relation("AccountExpenses", fields: [accountId], references: [id], onDelete: SetNull)
+  accountId String?
+  account   FinanceAccount? @relation("AccountExpenses", fields: [accountId], references: [id], onDelete: SetNull)
 
-  createdById String?  // Кто создал
+  createdById String? // Кто создал
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isDeleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
 
   @@index([companyId])
   @@index([companyId, date])
@@ -892,28 +892,28 @@ model Expense {
 }
 
 model Income {
-  id          String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   companyId   String
   date        DateTime
-  category    String   // order_payment, prepayment, refund, other
+  category    String // order_payment, prepayment, refund, other
   description String
-  amount      Float    // Сумма в тенге
+  amount      Decimal  @db.Decimal(18, 2) // Сумма в тенге
   note        String?
-  
+
   // Привязка к заявке (опционально)
-  orderId     String?
-  order       Order?   @relation(fields: [orderId], references: [id])
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
 
   // Касса / расчётный счёт, на который пришли деньги (опционально)
-  accountId   String?
-  account     FinanceAccount? @relation("AccountIncomes", fields: [accountId], references: [id], onDelete: SetNull)
+  accountId String?
+  account   FinanceAccount? @relation("AccountIncomes", fields: [accountId], references: [id], onDelete: SetNull)
 
-  createdById String?  // Кто создал
+  createdById String? // Кто создал
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isDeleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
 
   @@index([companyId])
   @@index([companyId, date])
@@ -935,26 +935,26 @@ enum PaymentMethod {
 }
 
 model Payment {
-  id             String           @id @default(cuid())
-  companyId      String
-  company        Company          @relation("CompanyPayments", fields: [companyId], references: [id], onDelete: Cascade)
-  orderId        String?
-  order          Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  counterpartyId String?
-  counterparty   Company?         @relation("CounterpartyPayments", fields: [counterpartyId], references: [id], onDelete: SetNull)
-  direction      PaymentDirection
-  amount         Float
-  date           DateTime
-  method         PaymentMethod    @default(BANK)
-  note           String?
-  createdById    String?
-  isDeleted      Boolean          @default(false)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  accountId      String?
-  account        FinanceAccount?  @relation("AccountPayments", fields: [accountId], references: [id], onDelete: SetNull)
-  categoryId     String?
-  category       FinanceCategory? @relation("CategoryPayments", fields: [categoryId], references: [id], onDelete: SetNull)
+  id                  String                        @id @default(cuid())
+  companyId           String
+  company             Company                       @relation("CompanyPayments", fields: [companyId], references: [id], onDelete: Cascade)
+  orderId             String?
+  order               Order?                        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  counterpartyId      String?
+  counterparty        Company?                      @relation("CounterpartyPayments", fields: [counterpartyId], references: [id], onDelete: SetNull)
+  direction           PaymentDirection
+  amount              Decimal                       @db.Decimal(18, 2)
+  date                DateTime
+  method              PaymentMethod                 @default(BANK)
+  note                String?
+  createdById         String?
+  isDeleted           Boolean                       @default(false)
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  accountId           String?
+  account             FinanceAccount?               @relation("AccountPayments", fields: [accountId], references: [id], onDelete: SetNull)
+  categoryId          String?
+  category            FinanceCategory?              @relation("CategoryPayments", fields: [categoryId], references: [id], onDelete: SetNull)
   documentAllocations AccountingPaymentAllocation[]
 
   @@index([companyId, date])
@@ -970,20 +970,20 @@ enum AccountKind {
 }
 
 model FinanceAccount {
-  id          String      @id @default(cuid())
-  companyId   String
-  company     Company     @relation("CompanyFinanceAccounts", fields: [companyId], references: [id], onDelete: Cascade)
-  name           String
-  kind           AccountKind
-  isDefault      Boolean     @default(false)
-  isActive       Boolean     @default(true)
-  openingBalance Float       @default(0)  // Начальный остаток (ввод остатков)
-  openingDate    DateTime?                // Дата, на которую введён начальный остаток
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  payments       Payment[]   @relation("AccountPayments")
-  incomes        Income[]    @relation("AccountIncomes")
-  expenses    Expense[]   @relation("AccountExpenses")
+  id                String             @id @default(cuid())
+  companyId         String
+  company           Company            @relation("CompanyFinanceAccounts", fields: [companyId], references: [id], onDelete: Cascade)
+  name              String
+  kind              AccountKind
+  isDefault         Boolean            @default(false)
+  isActive          Boolean            @default(true)
+  openingBalance    Decimal            @default(0) @db.Decimal(18, 2) // Начальный остаток (ввод остатков)
+  openingDate       DateTime? // Дата, на которую введён начальный остаток
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  payments          Payment[]          @relation("AccountPayments")
+  incomes           Income[]           @relation("AccountIncomes")
+  expenses          Expense[]          @relation("AccountExpenses")
   financeOperations FinanceOperation[] @relation("AccountFinanceOperations")
 
   @@unique([companyId, name, kind])
@@ -991,23 +991,23 @@ model FinanceAccount {
 }
 
 enum CostType {
-  PER_ORDER   // По заявке — себестоимость рейса (режет маржу заявки)
+  PER_ORDER // По заявке — себестоимость рейса (режет маржу заявки)
   PER_VEHICLE // По машине — расход конкретного ТС
-  GENERAL     // Общехозяйственный — общий расход фирмы
+  GENERAL // Общехозяйственный — общий расход фирмы
 }
 
 model FinanceCategory {
-  id          String           @id @default(cuid())
-  companyId   String
-  company     Company          @relation("CompanyFinanceCategories", fields: [companyId], references: [id], onDelete: Cascade)
-  name        String
-  direction   PaymentDirection
-  costType    CostType?        // Тип статьи затрат (только для расходных, direction=OUT)
-  isSystem    Boolean          @default(false)
-  isActive    Boolean          @default(true)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  payments    Payment[]        @relation("CategoryPayments")
+  id                String             @id @default(cuid())
+  companyId         String
+  company           Company            @relation("CompanyFinanceCategories", fields: [companyId], references: [id], onDelete: Cascade)
+  name              String
+  direction         PaymentDirection
+  costType          CostType? // Тип статьи затрат (только для расходных, direction=OUT)
+  isSystem          Boolean            @default(false)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  payments          Payment[]          @relation("CategoryPayments")
   financeOperations FinanceOperation[] @relation("CategoryFinanceOperations")
 
   @@unique([companyId, name, direction])
@@ -1035,41 +1035,41 @@ enum FinanceOperationSource {
 }
 
 model FinanceOperation {
-  id             String                 @id @default(cuid())
-  companyId      String
-  company        Company                @relation("CompanyFinanceOperations", fields: [companyId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation("CompanyFinanceOperations", fields: [companyId], references: [id], onDelete: Cascade)
 
-  source         FinanceOperationSource
-  sourceId       String                 // id исходной записи (Payment/Income/Expense.id)
+  source   FinanceOperationSource
+  sourceId String // id исходной записи (Payment/Income/Expense.id)
 
-  direction      PaymentDirection       // IN|OUT; для Income всегда IN, для Expense всегда OUT
-  amount         Float
-  date           DateTime
+  direction PaymentDirection // IN|OUT; для Income всегда IN, для Expense всегда OUT
+  amount    Decimal          @db.Decimal(18, 2)
+  date      DateTime
 
   // Категория: у Payment — ссылка на FinanceCategory, у Income/Expense — свободный текст.
   // Храним оба варианта, чтобы бэкфилл не терял данные ни одного источника.
-  categoryId     String?
-  category       FinanceCategory?       @relation("CategoryFinanceOperations", fields: [categoryId], references: [id], onDelete: SetNull)
-  categoryLabel  String?                // свободный текст категории (из Income.category/Expense.category)
+  categoryId    String?
+  category      FinanceCategory? @relation("CategoryFinanceOperations", fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryLabel String? // свободный текст категории (из Income.category/Expense.category)
 
-  description    String?                // у Income/Expense обязательное поле, у Payment — нет
-  note           String?
+  description String? // у Income/Expense обязательное поле, у Payment — нет
+  note        String?
 
-  orderId        String?
-  order          Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
-  counterpartyId String?                // только у Payment
-  counterparty   Company?               @relation("CounterpartyFinanceOperations", fields: [counterpartyId], references: [id], onDelete: SetNull)
+  counterpartyId String? // только у Payment
+  counterparty   Company? @relation("CounterpartyFinanceOperations", fields: [counterpartyId], references: [id], onDelete: SetNull)
 
-  accountId      String?
-  account        FinanceAccount?        @relation("AccountFinanceOperations", fields: [accountId], references: [id], onDelete: SetNull)
+  accountId String?
+  account   FinanceAccount? @relation("AccountFinanceOperations", fields: [accountId], references: [id], onDelete: SetNull)
 
-  method         PaymentMethod?         // только у Payment
+  method PaymentMethod? // только у Payment
 
-  createdById    String?
-  isDeleted      Boolean                @default(false)
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  createdById String?
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([source, sourceId])
   @@index([companyId, date])
@@ -1082,21 +1082,21 @@ model FinanceOperation {
 // ==================== ТМЦ (товарно-материальные ценности) ====================
 
 enum StockMoveType {
-  RECEIPT   // Поступление товаров и услуг
-  TRANSFER  // Перемещение между складами
-  WRITEOFF  // Списание материалов
+  RECEIPT // Поступление товаров и услуг
+  TRANSFER // Перемещение между складами
+  WRITEOFF // Списание материалов
 }
 
 model NomenclatureItem {
-  id        String   @id @default(cuid())
+  id        String          @id @default(cuid())
   companyId String
-  company   Company  @relation("CompanyNomenclature", fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company         @relation("CompanyNomenclature", fields: [companyId], references: [id], onDelete: Cascade)
   name      String
-  unit      String   @default("шт")
-  sku       String?  // Артикул
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  unit      String          @default("шт")
+  sku       String? // Артикул
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
   lines     StockMoveLine[]
 
   @@unique([companyId, name])
@@ -1104,13 +1104,13 @@ model NomenclatureItem {
 }
 
 model StockWarehouse {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   companyId String
-  company   Company  @relation("CompanyWarehouses", fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company     @relation("CompanyWarehouses", fields: [companyId], references: [id], onDelete: Cascade)
   name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
   movesFrom StockMove[] @relation("MoveWarehouse")
   movesTo   StockMove[] @relation("MoveToWarehouse")
 
@@ -1119,37 +1119,37 @@ model StockWarehouse {
 }
 
 model StockMove {
-  id            String        @id @default(cuid())
-  companyId     String
-  company       Company       @relation("CompanyStockMoves", fields: [companyId], references: [id], onDelete: Cascade)
-  type          StockMoveType
-  number        String
-  date          DateTime
-  warehouseId   String
-  warehouse     StockWarehouse @relation("MoveWarehouse", fields: [warehouseId], references: [id])
-  toWarehouseId String?
-  toWarehouse   StockWarehouse? @relation("MoveToWarehouse", fields: [toWarehouseId], references: [id])
-  counterparty  String?       // Поставщик (для поступления) — свободный текст
-  expenseCategory String?     // Статья затрат для списания (попадает в ПиУ / расходы по статьям)
-  note          String?
-  createdById   String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  lines         StockMoveLine[]
+  id              String          @id @default(cuid())
+  companyId       String
+  company         Company         @relation("CompanyStockMoves", fields: [companyId], references: [id], onDelete: Cascade)
+  type            StockMoveType
+  number          String
+  date            DateTime
+  warehouseId     String
+  warehouse       StockWarehouse  @relation("MoveWarehouse", fields: [warehouseId], references: [id])
+  toWarehouseId   String?
+  toWarehouse     StockWarehouse? @relation("MoveToWarehouse", fields: [toWarehouseId], references: [id])
+  counterparty    String? // Поставщик (для поступления) — свободный текст
+  expenseCategory String? // Статья затрат для списания (попадает в ПиУ / расходы по статьям)
+  note            String?
+  createdById     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  lines           StockMoveLine[]
 
   @@index([companyId, type])
   @@index([companyId, date])
 }
 
 model StockMoveLine {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   moveId         String
-  move           StockMove @relation(fields: [moveId], references: [id], onDelete: Cascade)
+  move           StockMove        @relation(fields: [moveId], references: [id], onDelete: Cascade)
   nomenclatureId String
   nomenclature   NomenclatureItem @relation(fields: [nomenclatureId], references: [id])
-  quantity       Float
-  price          Float?
-  amount         Float?
+  quantity       Decimal          @db.Decimal(18, 3)
+  price          Decimal?         @db.Decimal(18, 2)
+  amount         Decimal?         @db.Decimal(18, 2)
 
   @@index([moveId])
   @@index([nomenclatureId])
@@ -1160,9 +1160,9 @@ model OrderNumbering {
   id         String   @id @default(cuid())
   companyId  String   @unique
   company    Company  @relation("CompanyOrderNumbering", fields: [companyId], references: [id], onDelete: Cascade)
-  prefix     String   @default("")   // Префикс перед номером (может быть пустым)
-  padding    Int      @default(9)    // Длина числовой части (ведущие нули)
-  nextNumber Int      @default(1)    // Следующий номер, который будет присвоен
+  prefix     String   @default("") // Префикс перед номером (может быть пустым)
+  padding    Int      @default(9) // Длина числовой части (ведущие нули)
+  nextNumber Int      @default(1) // Следующий номер, который будет присвоен
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -1170,9 +1170,9 @@ model OrderNumbering {
 // Универсальные справочники (условия/формы оплаты, формы собственности, банки)
 enum DictionaryKind {
   PAYMENT_CONDITION // Условия оплаты (для заявок)
-  PAYMENT_FORM      // Формы оплаты (для заявок)
-  OWNERSHIP_TYPE    // Формы собственности контрагентов
-  BANK              // Банки
+  PAYMENT_FORM // Формы оплаты (для заявок)
+  OWNERSHIP_TYPE // Формы собственности контрагентов
+  BANK // Банки
 }
 
 model DictionaryItem {
@@ -1181,7 +1181,7 @@ model DictionaryItem {
   company   Company        @relation("CompanyDictionaries", fields: [companyId], references: [id], onDelete: Cascade)
   kind      DictionaryKind
   name      String
-  code      String?        // Доп. код: БИК банка и т.п.
+  code      String? // Доп. код: БИК банка и т.п.
   isActive  Boolean        @default(true)
   isDefault Boolean        @default(false)
   sortOrder Int            @default(0)
@@ -1200,7 +1200,7 @@ model ServiceCatalogItem {
   name      String
   unit      String   @default("услуга") // Единица измерения: услуга, рейс, км, т и т.д.
   isActive  Boolean  @default(true)
-  isDefault Boolean  @default(false)     // Подставляется в акт по умолчанию
+  isDefault Boolean  @default(false) // Подставляется в акт по умолчанию
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1215,9 +1215,9 @@ model CounterpartyOpeningBalance {
   company           Company   @relation("CompanyCounterpartyOpenings", fields: [companyId], references: [id], onDelete: Cascade)
   counterpartyId    String
   counterparty      Company   @relation("CounterpartyOpenings", fields: [counterpartyId], references: [id], onDelete: Cascade)
-  openingReceivable Float     @default(0)  // Они нам должны на дату начала
-  openingPayable    Float     @default(0)  // Мы им должны на дату начала
-  openingDate       DateTime?              // Дата, на которую введён начальный долг
+  openingReceivable Decimal   @default(0) @db.Decimal(18, 2) // Они нам должны на дату начала
+  openingPayable    Decimal   @default(0) @db.Decimal(18, 2) // Мы им должны на дату начала
+  openingDate       DateTime? // Дата, на которую введён начальный долг
   note              String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -1227,14 +1227,14 @@ model CounterpartyOpeningBalance {
 }
 
 model ClosedPeriod {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  year        Int
-  month       Int      // 1-12
-  closedById  String
-  closedBy    User     @relation(fields: [closedById], references: [id])
-  closedAt    DateTime @default(now())
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  year       Int
+  month      Int // 1-12
+  closedById String
+  closedBy   User     @relation(fields: [closedById], references: [id])
+  closedAt   DateTime @default(now())
 
   @@unique([companyId, year, month])
   @@index([companyId])
@@ -1243,20 +1243,20 @@ model ClosedPeriod {
 // ==================== BONUSES ====================
 
 model Bonus {
-  id         String   @id @default(cuid())
-  userId     String   // Менеджер
-  user       User     @relation(fields: [userId], references: [id])
-  orderId    String   // Заявка-источник
-  order      Order    @relation(fields: [orderId], references: [id])
-  
-  amount     Float    // Сумма бонуса
+  id      String @id @default(cuid())
+  userId  String // Менеджер
+  user    User   @relation(fields: [userId], references: [id])
+  orderId String // Заявка-источник
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  amount     Decimal  @db.Decimal(18, 2) // Сумма бонуса
   type       String   @default("MARGIN_PERCENT") // MARGIN_PERCENT | FIXED
-  percentage Float?   // Процент от маржи
+  percentage Decimal? @db.Decimal(5, 2) // Процент от маржи
   status     String   @default("PENDING") // PENDING | APPROVED | PAID
-  
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([orderId])
 }
@@ -1264,24 +1264,24 @@ model Bonus {
 // ==================== INVITATIONS ====================
 
 model Invitation {
-  id           String      @id @default(cuid())
-  email        String
-  role         UserRole
-  position     String?     // Должность/роль
-  companyId    String
-  token        String      @unique
-  permissions  String[]    @default([])
+  id               String      @id @default(cuid())
+  email            String
+  role             UserRole
+  position         String? // Должность/роль
+  companyId        String
+  token            String      @unique
+  permissions      String[]    @default([])
   // Дополнительные организации, в которые сотрудник получит доступ при принятии
   // приглашения (мультикомпания). Основная — companyId. По умолчанию — все компании владельца.
-  sharedCompanyIds String[] @default([])
-  isUsed       Boolean     @default(false)
-  expiresAt    DateTime
-  createdAt    DateTime    @default(now())
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  sharedCompanyIds String[]    @default([])
+  isUsed           Boolean     @default(false)
+  expiresAt        DateTime
+  createdAt        DateTime    @default(now())
+  departmentId     String?
+  department       Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
-  company      Company     @relation(fields: [companyId], references: [id])
-  
+  company Company @relation(fields: [companyId], references: [id])
+
   @@index([companyId])
   @@index([token])
   @@index([departmentId])
@@ -1308,29 +1308,29 @@ model OrderChangeLog {
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation("OrderChangeLogs", fields: [userId], references: [id])
-  action    String   // "assigned", "unassigned", "updated", "status_changed", "driver_assigned", etc.
-  details   String?  // Human-readable description
+  action    String // "assigned", "unassigned", "updated", "status_changed", "driver_assigned", etc.
+  details   String? // Human-readable description
   createdAt DateTime @default(now())
 
   @@index([orderId])
 }
 
 model Department {
-  id                 String       @id @default(cuid())
-  name               String
-  icon               String?      // Иконка отдела (например, "TruckOutlined")
-  companyId          String
-  company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  
+  id        String  @id @default(cuid())
+  name      String
+  icon      String? // Иконка отдела (например, "TruckOutlined")
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   parentDepartmentId String?
   parentDepartment   Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id], onDelete: SetNull)
   subDepartments     Department[] @relation("DepartmentHierarchy")
-  
-  users              User[]
-  invitations        Invitation[]
-  
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+
+  users       User[]
+  invitations Invitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([companyId])
   @@index([parentDepartmentId])
@@ -1342,23 +1342,23 @@ model Vehicle {
   id            String   @id @default(cuid())
   companyId     String
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  type          String   // body type e.g., Tent, Ref
-  plate         String   // license plate
-  model         String   // model details
-  trailerNumber String?  // optional trailer plate
+  type          String // body type e.g., Tent, Ref
+  plate         String // license plate
+  model         String // model details
+  trailerNumber String? // optional trailer plate
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   // Фаза 3: транспорт как актив. Пока НЕ используется существующей логикой —
   // заполняется бэкфиллом (связь водитель↔машина реальной ссылкой вместо копирования).
-  vin            String?  // задел под глобальную идентичность актива
-  ownerPersonId  String?  // владелец-физлицо (частный перевозчик), если машина не компании
-  ownerPerson    Person?  @relation("PersonOwnedVehicles", fields: [ownerPersonId], references: [id], onDelete: SetNull)
-  driverPersonId String?  // текущий водитель (реальная ссылка, а не копия полей в User)
-  driverPerson   Person?  @relation("PersonOperatedVehicles", fields: [driverPersonId], references: [id], onDelete: SetNull)
+  vin            String? // задел под глобальную идентичность актива
+  ownerPersonId  String? // владелец-физлицо (частный перевозчик), если машина не компании
+  ownerPerson    Person? @relation("PersonOwnedVehicles", fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  driverPersonId String? // текущий водитель (реальная ссылка, а не копия полей в User)
+  driverPerson   Person? @relation("PersonOperatedVehicles", fields: [driverPersonId], references: [id], onDelete: SetNull)
 
-  orders        Order[]
+  orders Order[]
 
   @@index([companyId])
   @@index([ownerPersonId])
@@ -1373,48 +1373,48 @@ enum InvoiceType {
 }
 
 enum InvoiceStatus {
-  DRAFT      // Черновик
-  PENDING    // Ожидает согласования
-  DISPUTED   // Спор (корректировки по ссылке)
-  APPROVED   // Согласован
-  PAID       // Оплачен
-  CANCELLED  // Отменен
+  DRAFT // Черновик
+  PENDING // Ожидает согласования
+  DISPUTED // Спор (корректировки по ссылке)
+  APPROVED // Согласован
+  PAID // Оплачен
+  CANCELLED // Отменен
 }
 
 model Invoice {
-  id              String        @id @default(cuid())
-  invoiceNumber   String        // Номер счета
-  type            InvoiceType
-  status          InvoiceStatus @default(DRAFT)
-  
+  id            String        @id @default(cuid())
+  invoiceNumber String // Номер счета
+  type          InvoiceType
+  status        InvoiceStatus @default(DRAFT)
+
   // Эмитент и получатель
-  issuerId        String
-  issuer          Company       @relation("InvoiceIssuer", fields: [issuerId], references: [id], onDelete: Cascade)
-  
-  recipientId     String
-  recipient       Company       @relation("InvoiceRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  
-  date            DateTime      // Дата выставления счета
-  dueDate         DateTime?     // Срок оплаты
-  
+  issuerId String
+  issuer   Company @relation("InvoiceIssuer", fields: [issuerId], references: [id], onDelete: Cascade)
+
+  recipientId String
+  recipient   Company @relation("InvoiceRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  date    DateTime // Дата выставления счета
+  dueDate DateTime? // Срок оплаты
+
   // Уникальный токен для публичной ссылки
-  shareToken      String        @unique @default(uuid())
-  
+  shareToken String @unique @default(uuid())
+
   // Финансовая сводка
-  amount          Float         // Изначальная сумма
-  adjustedAmount  Float?        // Скорректированная сумма (если был спор)
-  
-  note            String?
-  createdById     String
-  createdBy       User          @relation("InvoiceCreator", fields: [createdById], references: [id])
-  
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
+  amount         Decimal  @db.Decimal(18, 2) // Изначальная сумма
+  adjustedAmount Decimal? @db.Decimal(18, 2) // Скорректированная сумма (если был спор)
+
+  note        String?
+  createdById String
+  createdBy   User    @relation("InvoiceCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Связи с заказами
-  incomingOrders  Order[]       @relation("IncomingInvoiceOrders")
-  outgoingOrders  Order[]       @relation("OutgoingInvoiceOrders")
-  
+  incomingOrders Order[] @relation("IncomingInvoiceOrders")
+  outgoingOrders Order[] @relation("OutgoingInvoiceOrders")
+
   @@unique([issuerId, invoiceNumber, type])
   @@index([status])
   @@index([shareToken])
@@ -1428,10 +1428,10 @@ model Invoice {
 // продолжают работать без изменений. Переключение API на эти таблицы выполняется
 // отдельным этапом после бэкфилла и сверки production-данных.
 enum AccountingDocumentType {
-  PAYMENT_INVOICE    // Счёт на оплату
-  SERVICE_ACT        // Акт выполненных работ (оказанных услуг), включая Р-1
+  PAYMENT_INVOICE // Счёт на оплату
+  SERVICE_ACT // Акт выполненных работ (оказанных услуг), включая Р-1
   RECONCILIATION_ACT // Акт сверки взаимных расчётов
-  CORRECTION         // Корректировочный документ
+  CORRECTION // Корректировочный документ
 }
 
 enum AccountingDocumentDirection {
@@ -1454,9 +1454,9 @@ enum AccountingDocumentLinkType {
 
 enum AccountingVatTreatment {
   WITHOUT_VAT // Без НДС
-  STANDARD    // Обычная ставка (например, 12% или 16%)
-  ZERO        // Нулевая ставка НДС
-  EXEMPT      // Освобождённый оборот
+  STANDARD // Обычная ставка (например, 12% или 16%)
+  ZERO // Нулевая ставка НДС
+  EXEMPT // Освобождённый оборот
 }
 
 enum AccountingVatCalculation {
@@ -1465,66 +1465,66 @@ enum AccountingVatCalculation {
 }
 
 model AccountingDocument {
-  id              String                      @id @default(cuid())
-  companyId       String
-  company         Company                     @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
-  counterpartyId  String
-  counterparty    Company                     @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
-  type            AccountingDocumentType
-  direction       AccountingDocumentDirection
-  status          AccountingDocumentStatus    @default(DRAFT)
-  number          String
-  externalNumber  String?
-  externalDate    DateTime?                    @db.Date
-  documentDate    DateTime                     @db.Date
-  operationDate   DateTime?                    @db.Date
-  dueDate         DateTime?                    @db.Date
-  reportPeriodFrom DateTime?                   @db.Date
-  reportPeriodTo   DateTime?                   @db.Date
-  contractId      String?
-  contract        Contract?                    @relation(fields: [contractId], references: [id], onDelete: SetNull)
-  currency        String                       @default("KZT") @db.VarChar(3)
-  subtotal        Decimal                      @default(0) @db.Decimal(20, 2)
-  discountTotal   Decimal                      @default(0) @db.Decimal(20, 2)
-  vatTotal        Decimal                      @default(0) @db.Decimal(20, 2)
-  total           Decimal                      @default(0) @db.Decimal(20, 2)
-  amountPaid      Decimal                      @default(0) @db.Decimal(20, 2)
-  balanceDue      Decimal                      @default(0) @db.Decimal(20, 2)
-  openingBalance  Decimal?                     @db.Decimal(20, 2)
-  debitTurnover   Decimal?                     @db.Decimal(20, 2)
-  creditTurnover  Decimal?                     @db.Decimal(20, 2)
-  closingBalance  Decimal?                     @db.Decimal(20, 2)
-  issuerSnapshot  Json
-  recipientSnapshot Json
-  issuerSignatorySnapshot Json?
+  id                         String                         @id @default(cuid())
+  companyId                  String
+  company                    Company                        @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  counterpartyId             String
+  counterparty               Company                        @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
+  type                       AccountingDocumentType
+  direction                  AccountingDocumentDirection
+  status                     AccountingDocumentStatus       @default(DRAFT)
+  number                     String
+  externalNumber             String?
+  externalDate               DateTime?                      @db.Date
+  documentDate               DateTime                       @db.Date
+  operationDate              DateTime?                      @db.Date
+  dueDate                    DateTime?                      @db.Date
+  reportPeriodFrom           DateTime?                      @db.Date
+  reportPeriodTo             DateTime?                      @db.Date
+  contractId                 String?
+  contract                   Contract?                      @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  currency                   String                         @default("KZT") @db.VarChar(3)
+  subtotal                   Decimal                        @default(0) @db.Decimal(20, 2)
+  discountTotal              Decimal                        @default(0) @db.Decimal(20, 2)
+  vatTotal                   Decimal                        @default(0) @db.Decimal(20, 2)
+  total                      Decimal                        @default(0) @db.Decimal(20, 2)
+  amountPaid                 Decimal                        @default(0) @db.Decimal(20, 2)
+  balanceDue                 Decimal                        @default(0) @db.Decimal(20, 2)
+  openingBalance             Decimal?                       @db.Decimal(20, 2)
+  debitTurnover              Decimal?                       @db.Decimal(20, 2)
+  creditTurnover             Decimal?                       @db.Decimal(20, 2)
+  closingBalance             Decimal?                       @db.Decimal(20, 2)
+  issuerSnapshot             Json
+  recipientSnapshot          Json
+  issuerSignatorySnapshot    Json?
   recipientSignatorySnapshot Json?
-  basisSnapshot   Json?
-  paymentPurposeCode String?
-  paymentTerms    String?
-  customerMaterialsInfo String?
-  appendixInfo    String?
-  note            String?
-  version         Int                          @default(1)
-  checksum        String?                      @db.VarChar(64)
-  pdfFileUrl      String?
-  pdfGeneratedAt  DateTime?
-  createdById     String
-  createdBy       User                         @relation("AccountingDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  postedById      String?
-  postedBy        User?                        @relation("AccountingDocumentPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
-  postedAt        DateTime?
-  cancelledById   String?
-  cancelledBy     User?                        @relation("AccountingDocumentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
-  cancelledAt     DateTime?
-  cancellationReason String?
-  createdAt       DateTime                     @default(now())
-  updatedAt       DateTime                     @updatedAt
-  lines           AccountingDocumentLine[]
-  reconciliationLines AccountingReconciliationLine[]
-  orders          AccountingDocumentOrder[]
-  paymentAllocations AccountingPaymentAllocation[]
-  sourceLinks     AccountingDocumentLink[]     @relation("AccountingDocumentSourceLinks")
-  targetLinks     AccountingDocumentLink[]     @relation("AccountingDocumentTargetLinks")
+  basisSnapshot              Json?
+  paymentPurposeCode         String?
+  paymentTerms               String?
+  customerMaterialsInfo      String?
+  appendixInfo               String?
+  note                       String?
+  version                    Int                            @default(1)
+  checksum                   String?                        @db.VarChar(64)
+  pdfFileUrl                 String?
+  pdfGeneratedAt             DateTime?
+  createdById                String
+  createdBy                  User                           @relation("AccountingDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  postedById                 String?
+  postedBy                   User?                          @relation("AccountingDocumentPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
+  postedAt                   DateTime?
+  cancelledById              String?
+  cancelledBy                User?                          @relation("AccountingDocumentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelledAt                DateTime?
+  cancellationReason         String?
+  createdAt                  DateTime                       @default(now())
+  updatedAt                  DateTime                       @updatedAt
+  lines                      AccountingDocumentLine[]
+  reconciliationLines        AccountingReconciliationLine[]
+  orders                     AccountingDocumentOrder[]
+  paymentAllocations         AccountingPaymentAllocation[]
+  sourceLinks                AccountingDocumentLink[]       @relation("AccountingDocumentSourceLinks")
+  targetLinks                AccountingDocumentLink[]       @relation("AccountingDocumentTargetLinks")
 
   @@unique([companyId, type, number])
   @@index([companyId, documentDate])
@@ -1535,59 +1535,59 @@ model AccountingDocument {
 }
 
 model AccountingDocumentLine {
-  id          String             @id @default(cuid())
-  documentId  String
-  document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  lineNumber  Int
-  serviceCode String?
-  name        String
-  description String?
-  serviceDate DateTime?          @db.Date
-  reportDetails String?
-  quantity    Decimal            @default(1) @db.Decimal(20, 3)
-  unit        String             @default("усл") @db.VarChar(32)
-  unitCode    String?
-  unitPrice   Decimal            @db.Decimal(20, 2)
-  subtotal    Decimal            @db.Decimal(20, 2)
-  discountAmount Decimal         @default(0) @db.Decimal(20, 2)
-  vatTreatment AccountingVatTreatment @default(WITHOUT_VAT)
+  id             String                   @id @default(cuid())
+  documentId     String
+  document       AccountingDocument       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lineNumber     Int
+  serviceCode    String?
+  name           String
+  description    String?
+  serviceDate    DateTime?                @db.Date
+  reportDetails  String?
+  quantity       Decimal                  @default(1) @db.Decimal(20, 3)
+  unit           String                   @default("усл") @db.VarChar(32)
+  unitCode       String?
+  unitPrice      Decimal                  @db.Decimal(20, 2)
+  subtotal       Decimal                  @db.Decimal(20, 2)
+  discountAmount Decimal                  @default(0) @db.Decimal(20, 2)
+  vatTreatment   AccountingVatTreatment   @default(WITHOUT_VAT)
   vatCalculation AccountingVatCalculation @default(INCLUDED)
-  vatRate     Decimal            @default(0) @db.Decimal(5, 2)
-  vatAmount   Decimal            @default(0) @db.Decimal(20, 2)
-  total       Decimal            @db.Decimal(20, 2)
-  orderId     String?
-  order       Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  createdAt   DateTime           @default(now())
+  vatRate        Decimal                  @default(0) @db.Decimal(5, 2)
+  vatAmount      Decimal                  @default(0) @db.Decimal(20, 2)
+  total          Decimal                  @db.Decimal(20, 2)
+  orderId        String?
+  order          Order?                   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt      DateTime                 @default(now())
 
   @@unique([documentId, lineNumber])
   @@index([orderId])
 }
 
 model AccountingReconciliationLine {
-  id            String             @id @default(cuid())
-  documentId    String
-  document      AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  lineNumber    Int
-  transactionDate DateTime          @db.Date
-  sourceDocumentType String?
+  id                   String             @id @default(cuid())
+  documentId           String
+  document             AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lineNumber           Int
+  transactionDate      DateTime           @db.Date
+  sourceDocumentType   String?
   sourceDocumentNumber String?
-  description   String?
-  debit         Decimal            @default(0) @db.Decimal(20, 2)
-  credit        Decimal            @default(0) @db.Decimal(20, 2)
-  runningBalance Decimal           @db.Decimal(20, 2)
-  createdAt     DateTime           @default(now())
+  description          String?
+  debit                Decimal            @default(0) @db.Decimal(20, 2)
+  credit               Decimal            @default(0) @db.Decimal(20, 2)
+  runningBalance       Decimal            @db.Decimal(20, 2)
+  createdAt            DateTime           @default(now())
 
   @@unique([documentId, lineNumber])
   @@index([transactionDate])
 }
 
 model AccountingDocumentOrder {
-  id          String             @id @default(cuid())
-  documentId  String
-  document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  orderId     String
-  order       Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  createdAt   DateTime           @default(now())
+  id         String             @id @default(cuid())
+  documentId String
+  document   AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  orderId    String
+  order      Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdAt  DateTime           @default(now())
 
   @@unique([documentId, orderId])
   @@index([orderId])
@@ -1609,30 +1609,30 @@ model AccountingPaymentAllocation {
 }
 
 model AccountingDocumentLink {
-  id             String                     @id @default(cuid())
+  id               String                     @id @default(cuid())
   sourceDocumentId String
-  sourceDocument AccountingDocument         @relation("AccountingDocumentSourceLinks", fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  sourceDocument   AccountingDocument         @relation("AccountingDocumentSourceLinks", fields: [sourceDocumentId], references: [id], onDelete: Cascade)
   targetDocumentId String
-  targetDocument AccountingDocument         @relation("AccountingDocumentTargetLinks", fields: [targetDocumentId], references: [id], onDelete: Cascade)
-  type           AccountingDocumentLinkType
-  createdAt      DateTime                   @default(now())
+  targetDocument   AccountingDocument         @relation("AccountingDocumentTargetLinks", fields: [targetDocumentId], references: [id], onDelete: Cascade)
+  type             AccountingDocumentLinkType
+  createdAt        DateTime                   @default(now())
 
   @@unique([sourceDocumentId, targetDocumentId, type])
   @@index([targetDocumentId])
 }
 
 model AccountingDocumentNumbering {
-  id          String                      @id @default(cuid())
-  companyId   String
-  company     Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  type        AccountingDocumentType
-  direction   AccountingDocumentDirection
-  year        Int
-  prefix      String                      @default("")
-  nextNumber  Int                         @default(1)
-  padLength   Int                         @default(6)
-  createdAt   DateTime                    @default(now())
-  updatedAt   DateTime                    @updatedAt
+  id         String                      @id @default(cuid())
+  companyId  String
+  company    Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type       AccountingDocumentType
+  direction  AccountingDocumentDirection
+  year       Int
+  prefix     String                      @default("")
+  nextNumber Int                         @default(1)
+  padLength  Int                         @default(6)
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
 
   @@unique([companyId, type, direction, year])
   @@index([companyId])
@@ -1693,44 +1693,47 @@ model SupportTicket {
 model PayrollScheme {
   id            String   @id @default(cuid())
   companyId     String
-  userId        String?  // null = общая схема компании; задан = персональная (переопределяет общую)
-  type          String   // FIXED | PERCENT | HYBRID
-  fixedAmount   Float    @default(0)      // оклад в месяц (для FIXED и HYBRID)
-  percentValue  Float    @default(0)      // процент (для PERCENT и HYBRID)
+  userId        String? // null = общая схема компании; задан = персональная (переопределяет общую)
+  type          String // FIXED | PERCENT | HYBRID
+  fixedAmount   Decimal  @default(0) @db.Decimal(18, 2) // оклад в месяц (для FIXED и HYBRID)
+  percentValue  Decimal  @default(0) @db.Decimal(5, 2) // процент (для PERCENT и HYBRID)
   percentBase   String   @default("MARGIN") // MARGIN | ORDER_AMOUNT — база процента
   accrualStatus String   @default("COMPLETED") // статус заявки-триггер: любой OrderStatus ИЛИ спец-значение CUSTOMER_PAID
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
   @@unique([companyId, userId])
   @@index([companyId])
 }
 
 model PayrollKpiRule {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   companyId   String
   userId      String? // null = для всех менеджеров компании
-  metric      String  @default("COMPLETED_ORDERS_MONTH") // v1: количество завершённых заявок за месяц
-  threshold   Int     // порог (например 20 заявок)
-  bonusAmount Float   // бонус при достижении
-  isActive    Boolean @default(true)
+  metric      String   @default("COMPLETED_ORDERS_MONTH") // v1: количество завершённых заявок за месяц
+  threshold   Int // порог (например 20 заявок)
+  bonusAmount Decimal  @db.Decimal(18, 2) // бонус при достижении
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+
   @@index([companyId])
 }
 
 model PayrollAccrual {
   id             String   @id @default(cuid())
   companyId      String
-  userId         String   // менеджер
-  orderId        String?  // для kind=PERCENT; null для SALARY/KPI
-  kind           String   // PERCENT | SALARY | KPI
-  amount         Float
-  periodMonth    String   // 'YYYY-MM' — месяц начисления
-  baseAmount     Float?   // база на момент расчёта (сумма заявки или маржа)
-  schemeSnapshot Json?    // снимок схемы/правила на момент расчёта
+  userId         String // менеджер
+  orderId        String? // для kind=PERCENT; null для SALARY/KPI
+  kind           String // PERCENT | SALARY | KPI
+  amount         Decimal  @db.Decimal(18, 2)
+  periodMonth    String // 'YYYY-MM' — месяц начисления
+  baseAmount     Decimal? @db.Decimal(18, 2) // база на момент расчёта (сумма заявки или маржа)
+  schemeSnapshot Json? // снимок схемы/правила на момент расчёта
   kpiRuleId      String?
   createdAt      DateTime @default(now())
-  @@unique([orderId, userId, kind])          // защита от двойного начисления по заявке
+
+  @@unique([orderId, userId, kind]) // защита от двойного начисления по заявке
   @@unique([userId, periodMonth, kind, kpiRuleId]) // защита для SALARY/KPI за месяц
   @@index([companyId, periodMonth])
   @@index([userId, periodMonth])
@@ -1749,10 +1752,10 @@ model SubscriptionPlan {
   id                String   @id @default(cuid())
   name              String
   description       String?
-  priceMonthly      Int      // тенге в месяц
+  priceMonthly      Int // тенге в месяц
   currency          String   @default("KZT")
-  maxUsers          Int?     // null = без лимита
-  maxOrdersPerMonth Int?     // null = без лимита
+  maxUsers          Int? // null = без лимита
+  maxOrdersPerMonth Int? // null = без лимита
   features          String[] @default([])
   isActive          Boolean  @default(true)
   sortOrder         Int      @default(0)
@@ -1763,9 +1766,9 @@ model SubscriptionPlan {
 }
 
 enum SubscriptionStatus {
-  TRIAL     // Пробный период
-  ACTIVE    // Оплачена
-  PAST_DUE  // Просрочена
+  TRIAL // Пробный период
+  ACTIVE // Оплачена
+  PAST_DUE // Просрочена
   CANCELLED // Отменена
 }
 
@@ -1779,7 +1782,7 @@ model CompanySubscription {
   trialEndsAt DateTime?
   periodStart DateTime?
   periodEnd   DateTime?
-  note        String?            // Комментарий админа (№ счёта, детали оплаты)
+  note        String? // Комментарий админа (№ счёта, детали оплаты)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
@@ -1790,21 +1793,20 @@ model CompanySubscription {
 
 model AuditLog {
   id          String   @id @default(cuid())
-  companyId   String?  // null = платформенное событие
+  companyId   String? // null = платформенное событие
   userId      String?
-  userName    String?  // снимок ФИО на момент действия
+  userName    String? // снимок ФИО на момент действия
   userRole    String?
-  action      String   // CREATE / UPDATE / DELETE / STATUS / SETTINGS
-  entity      String   // order, expense, income, payment, partner, employee, driver, subscription, ...
+  action      String // CREATE / UPDATE / DELETE / STATUS / SETTINGS
+  entity      String // order, expense, income, payment, partner, employee, driver, subscription, ...
   entityId    String?
-  entityLabel String?  // «Заявка №145», «Расход ГСМ 80 000 ₸»
-  details     Json?    // старые/новые значения ключевых полей
+  entityLabel String? // «Заявка №145», «Расход ГСМ 80 000 ₸»
+  details     Json? // старые/новые значения ключевых полей
   createdAt   DateTime @default(now())
 
   @@index([companyId, createdAt])
   @@index([createdAt])
 }
-
 
 // Ответственный менеджер от каждой компании-участника заявки
 model OrderResponsible {

@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PeriodClosingService } from './period-closing.service';
 import { FinancialSettingsService } from './financial-settings.service';
 import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus, Prisma } from '@prisma/client';
-import { money, moneyGte } from '../../common/utils/money';
+import { D, roundMoney, sumOf, toNum } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
 
 @Injectable()
@@ -253,7 +253,7 @@ export class PaymentsService {
         categoryId?: string;
     }) {
         await this.financialSettingsService.ensureCompanyFinanceSettings(companyId);
-        const amt = money(data.amount);
+        const amt = roundMoney(data.amount);
         await this.periodClosingService.checkPeriodNotClosed(companyId, data.date);
 
         let accountId = data.accountId;
@@ -385,7 +385,7 @@ export class PaymentsService {
             }
         }
 
-        const amt = data.amount !== undefined ? money(data.amount) : payment.amount;
+        const amt = data.amount !== undefined ? roundMoney(data.amount) : payment.amount;
         const oldOrderId = payment.orderId;
 
         // Смена привязки к заявке затрагивает две заявки сразу: прежнюю и новую.
@@ -552,9 +552,11 @@ export class PaymentsService {
                 ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
             },
         });
-        const paidIn = customerPayments.reduce((sum, p) => sum + p.amount, 0);
-        const revenue = order.customerPrice || 0;
-        const isCustomerPaid = hasPaidOutgoingInvoice || (revenue > 0 && moneyGte(paidIn, revenue));
+        // Суммы складываются в Decimal: обходной moneyGte здесь больше не нужен,
+        // сравнение точное и «недоплаты в 0.00000000001» не возникает.
+        const paidIn = sumOf(customerPayments, (p) => p.amount);
+        const revenue = D(order.customerPrice);
+        const isCustomerPaid = hasPaidOutgoingInvoice || (revenue.gt(0) && paidIn.gte(revenue));
         const customerPaidBecameTrue = !order.isCustomerPaid && isCustomerPaid;
 
         // Sync Driver / Sub-forwarder Paid Flag
@@ -567,7 +569,7 @@ export class PaymentsService {
                 ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
             },
         });
-        const paidOut = executorPayments.reduce((sum, p) => sum + p.amount, 0);
+        const paidOut = sumOf(executorPayments, (p) => p.amount);
 
         let isDriverPaid = false;
         let driverPaidAt = null;
@@ -575,20 +577,20 @@ export class PaymentsService {
         let subForwarderPaidAt = null;
 
         if (order.subForwarderId) {
-            const subForwarderPrice = order.subForwarderPrice || 0;
-            isSubForwarderPaid = hasPaidIncomingInvoice || (subForwarderPrice > 0 && moneyGte(paidOut, subForwarderPrice));
+            const subForwarderPrice = D(order.subForwarderPrice);
+            isSubForwarderPaid = hasPaidIncomingInvoice || (subForwarderPrice.gt(0) && paidOut.gte(subForwarderPrice));
             // Дата оплаты — снимок реального события платежа. Если платежи всё ещё
             // есть, но их стало недостаточно из-за повышения ставки задним числом,
             // дату не затираем (см. H-4) — обнуляем только когда платежей нет вовсе.
             subForwarderPaidAt = isSubForwarderPaid
                 ? (order.subForwarderPaidAt || new Date())
-                : (paidOut > 0 ? order.subForwarderPaidAt : null);
+                : (paidOut.gt(0) ? order.subForwarderPaidAt : null);
         } else {
-            const driverCost = order.driverCost || 0;
-            isDriverPaid = hasPaidIncomingInvoice || (driverCost > 0 && moneyGte(paidOut, driverCost));
+            const driverCost = D(order.driverCost);
+            isDriverPaid = hasPaidIncomingInvoice || (driverCost.gt(0) && paidOut.gte(driverCost));
             driverPaidAt = isDriverPaid
                 ? (order.driverPaidAt || new Date())
-                : (paidOut > 0 ? order.driverPaidAt : null);
+                : (paidOut.gt(0) ? order.driverPaidAt : null);
         }
 
         await tx.order.update({
@@ -597,7 +599,7 @@ export class PaymentsService {
                 isCustomerPaid,
                 customerPaidAt: isCustomerPaid
                     ? (order.customerPaidAt || new Date())
-                    : (paidIn > 0 ? order.customerPaidAt : null),
+                    : (paidIn.gt(0) ? order.customerPaidAt : null),
                 isDriverPaid,
                 driverPaidAt,
                 isSubForwarderPaid,
@@ -640,14 +642,14 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.IN, isDeleted: false, companyId }
             });
-            const paidIn = payments.reduce((sum, p) => sum + p.amount, 0);
-            const balance = money((order.customerPrice || 0) - paidIn);
-            if (balance > 0) {
+            const paidIn = sumOf(payments, (p) => p.amount);
+            const balance = roundMoney(D(order.customerPrice).minus(paidIn));
+            if (balance.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     counterpartyId: order.customerCompanyId || undefined,
                     direction: PaymentDirection.IN,
-                    amount: balance,
+                    amount: toNum(balance),
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_CUSTOMER,
                 });
@@ -701,13 +703,13 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
             });
-            const paidOut = payments.reduce((sum, p) => sum + p.amount, 0);
-            const balance = money((order.driverCost || 0) - paidOut);
-            if (balance > 0) {
+            const paidOut = sumOf(payments, (p) => p.amount);
+            const balance = roundMoney(D(order.driverCost).minus(paidOut));
+            if (balance.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     direction: PaymentDirection.OUT,
-                    amount: balance,
+                    amount: toNum(balance),
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_DRIVER,
                 });
@@ -757,14 +759,14 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
             });
-            const paidOut = payments.reduce((sum, p) => sum + p.amount, 0);
-            const balance = money((order.subForwarderPrice || 0) - paidOut);
-            if (balance > 0) {
+            const paidOut = sumOf(payments, (p) => p.amount);
+            const balance = roundMoney(D(order.subForwarderPrice).minus(paidOut));
+            if (balance.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     counterpartyId: order.subForwarderId || undefined,
                     direction: PaymentDirection.OUT,
-                    amount: balance,
+                    amount: toNum(balance),
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_SUBFORWARDER,
                 });

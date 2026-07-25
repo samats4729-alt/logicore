@@ -1,5 +1,6 @@
 import { PaymentDirection } from '@prisma/client';
 import { FinanceCalculatorService } from './finance-calculator.service';
+import { toNum } from '../../common/utils/money';
 
 const FORWARDER = 'company-forwarder';
 const CUSTOMER = 'company-customer';
@@ -27,6 +28,11 @@ function baseOrder(overrides: Partial<OrderInput> = {}): OrderInput {
     };
 }
 
+/**
+ * Расчёт ведётся в Decimal, а тесты сверяют привычные числа: денежные поля
+ * результата приводятся к number. Так проверяется главное — что переход на
+ * точную арифметику не изменил ни одной итоговой суммы.
+ */
 function compute(
     calc: FinanceCalculatorService,
     order: OrderInput,
@@ -35,7 +41,24 @@ function compute(
     incomes: Array<{ category: string; amount: number; isDeleted?: boolean }> = [],
     expenses: Array<{ category: string; amount: number; isDeleted?: boolean }> = [],
 ) {
-    return calc.computeOrderFinance({ order, payments, incomes, expenses, companyId });
+    const fin = calc.computeOrderFinance({ order, payments, incomes, expenses, companyId });
+
+    return {
+        ...fin,
+        revenue: toNum(fin.revenue),
+        revenueNet: toNum(fin.revenueNet),
+        revenueVat: toNum(fin.revenueVat),
+        executorCost: toNum(fin.executorCost),
+        executorCostNet: toNum(fin.executorCostNet),
+        executorCostVat: toNum(fin.executorCostVat),
+        extraIncomes: toNum(fin.extraIncomes),
+        otherExpenses: toNum(fin.otherExpenses),
+        paidIn: toNum(fin.paidIn),
+        paidOut: toNum(fin.paidOut),
+        margin: toNum(fin.margin),
+        customerDebt: toNum(fin.customerDebt),
+        executorDebt: toNum(fin.executorDebt),
+    };
 }
 
 describe('FinanceCalculatorService.computeOrderFinance', () => {

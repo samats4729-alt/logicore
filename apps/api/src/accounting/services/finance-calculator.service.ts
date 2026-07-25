@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentDirection } from '@prisma/client';
-import { money, moneyGte } from '../../common/utils/money';
+import { D, Money, ZERO, roundMoney, sumOf } from '../../common/utils/money';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
+
+/** Суммы приходят из базы как Decimal, из DTO — как числа. */
+type Amount = Money | number | null | undefined;
 
 // Архитектурная заметка (см. аудит M-9): computeOrderFinance() и
 // PaymentsService.syncOrderPaymentFlags() выглядят как дублирование одной и
@@ -21,31 +24,31 @@ import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../cons
 //
 // Слияние их в одну функцию убрало бы этот фолбэк и либо сломало бы
 // персистентность канонического флага, либо сделало бы канонический расчёт
-// зависимым от того, кто его вызывает. Единая часть, которая ДЕЙСТВИТЕЛЬНО
-// дублировалась — сравнение суммы платежей с порогом — уже вынесена в
-// moneyGte() и используется в обоих местах одинаково.
+// зависимым от того, кто его вызывает. Сравнение суммы платежей с порогом
+// раньше требовало обходного moneyGte из-за погрешности плавающей точки;
+// теперь суммы — Decimal, и обе стороны сравнивают их точным .gte().
 @Injectable()
 export class FinanceCalculatorService {
     computeOrderFinance(params: {
         order: {
-            customerPrice?: number | null;
-            driverCost?: number | null;
-            subForwarderPrice?: number | null;
+            customerPrice?: Amount;
+            driverCost?: Amount;
+            subForwarderPrice?: Amount;
             customerCompanyId?: string | null;
             forwarderId?: string | null;
             subForwarderId?: string | null;
             partnerId?: string | null;
-            vatRate?: number | null;
+            vatRate?: Amount;
             hasVat?: boolean | null;
-            executorVatRate?: number | null;
+            executorVatRate?: Amount;
             executorHasVat?: boolean | null;
             isCustomerPaid?: boolean | null;
             isDriverPaid?: boolean | null;
             isSubForwarderPaid?: boolean | null;
         };
-        payments: Array<{ direction: PaymentDirection; amount: number; companyId: string }>;
-        incomes: Array<{ category: string; amount: number; isDeleted?: boolean }>;
-        expenses: Array<{ category: string; amount: number; isDeleted?: boolean }>;
+        payments: Array<{ direction: PaymentDirection; amount: Amount; companyId: string }>;
+        incomes: Array<{ category: string; amount: Amount; isDeleted?: boolean }>;
+        expenses: Array<{ category: string; amount: Amount; isDeleted?: boolean }>;
         companyId: string;
     }) {
         const { order, payments, incomes, expenses, companyId } = params;
@@ -54,52 +57,60 @@ export class FinanceCalculatorService {
         const isForwarder = order.forwarderId === companyId || order.partnerId === companyId;
         const isSubForwarder = order.subForwarderId === companyId;
 
-        const vatRate = order.vatRate ?? 0;
+        const vatRate = D(order.vatRate);
         const hasVat = order.hasVat ?? false;
-        const executorVatRate = order.executorVatRate ?? 0;
+        const executorVatRate = D(order.executorVatRate);
         const executorHasVat = order.executorHasVat ?? false;
 
-        let revenueGross = 0;
-        let executorCostGross = 0;
+        const customerPrice = D(order.customerPrice);
+        const subForwarderPrice = D(order.subForwarderPrice);
+        const driverCost = D(order.driverCost);
+
+        let revenueGross: Money;
+        let executorCostGross: Money;
 
         if (isCustomer) {
-            revenueGross = 0;
-            executorCostGross = order.customerPrice || 0;
+            revenueGross = ZERO;
+            executorCostGross = customerPrice;
         } else if (isForwarder) {
-            revenueGross = order.customerPrice || 0;
-            executorCostGross = order.subForwarderId ? (order.subForwarderPrice || 0) : (order.driverCost || 0);
+            revenueGross = customerPrice;
+            executorCostGross = order.subForwarderId ? subForwarderPrice : driverCost;
         } else if (isSubForwarder) {
-            revenueGross = order.subForwarderPrice || 0;
-            executorCostGross = 0;
+            revenueGross = subForwarderPrice;
+            executorCostGross = ZERO;
         } else {
-            revenueGross = order.customerPrice || 0;
-            executorCostGross = order.subForwarderId ? (order.subForwarderPrice || 0) : (order.driverCost || 0);
+            revenueGross = customerPrice;
+            executorCostGross = order.subForwarderId ? subForwarderPrice : driverCost;
         }
 
-        revenueGross = money(revenueGross);
-        executorCostGross = money(executorCostGross);
+        revenueGross = roundMoney(revenueGross);
+        executorCostGross = roundMoney(executorCostGross);
+
+        /** Выделение нетто из суммы, включающей НДС. */
+        const netOf = (gross: Money, rate: Money) =>
+            roundMoney(gross.div(rate.div(100).plus(1)));
 
         // Revenue Net/VAT/Gross
         let revenueNet = revenueGross;
-        let revenueVat = 0;
-        if (!isCustomer && hasVat && vatRate > 0) {
-            revenueNet = money(revenueGross / (1 + vatRate / 100));
-            revenueVat = money(revenueGross - revenueNet);
+        let revenueVat = ZERO;
+        if (!isCustomer && hasVat && vatRate.gt(0)) {
+            revenueNet = netOf(revenueGross, vatRate);
+            revenueVat = roundMoney(revenueGross.minus(revenueNet));
         }
 
         // Executor Cost Net/VAT/Gross
         let executorCostNet = executorCostGross;
-        let executorCostVat = 0;
+        let executorCostVat = ZERO;
         if (isCustomer) {
             // For customer, their cost is customerPrice, so they use the customer-side VAT settings
-            if (hasVat && vatRate > 0) {
-                executorCostNet = money(executorCostGross / (1 + vatRate / 100));
-                executorCostVat = money(executorCostGross - executorCostNet);
+            if (hasVat && vatRate.gt(0)) {
+                executorCostNet = netOf(executorCostGross, vatRate);
+                executorCostVat = roundMoney(executorCostGross.minus(executorCostNet));
             }
         } else {
-            if (executorHasVat && executorVatRate > 0) {
-                executorCostNet = money(executorCostGross / (1 + executorVatRate / 100));
-                executorCostVat = money(executorCostGross - executorCostNet);
+            if (executorHasVat && executorVatRate.gt(0)) {
+                executorCostNet = netOf(executorCostGross, executorVatRate);
+                executorCostVat = roundMoney(executorCostGross.minus(executorCostNet));
             }
         }
 
@@ -113,65 +124,80 @@ export class FinanceCalculatorService {
             }
         }
 
-        let paidIn = 0;
-        let paidOut = 0;
+        const sumPayments = (predicate: (p: { direction: PaymentDirection; companyId: string }) => boolean) =>
+            sumOf(payments.filter(predicate), (p) => p.amount);
+
+        let paidIn: Money;
+        let paidOut: Money;
 
         if (isCustomer) {
             // Customer's payment can be recorded by either side: as the forwarder's IN
             // or as the customer's own OUT. Take max to avoid double counting.
             const forwarderIn = forwarderCompId
-                ? payments.filter(p => p.companyId === forwarderCompId && p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0)
-                : 0;
-            const ownOut = payments.filter(p => p.companyId === companyId && p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
-            paidIn = Math.max(forwarderIn, ownOut);
+                ? sumPayments(p => p.companyId === forwarderCompId && p.direction === PaymentDirection.IN)
+                : ZERO;
+            const ownOut = sumPayments(p => p.companyId === companyId && p.direction === PaymentDirection.OUT);
+            paidIn = forwarderIn.gte(ownOut) ? forwarderIn : ownOut;
             paidOut = paidIn; // Customer paid this out
         } else if (isSubForwarder) {
             // Sub-forwarder is paid by the forwarder: mirror the forwarder's OUT payments
             // as our income (or our own recorded IN, whichever side recorded it).
-            const subForwarderPayments = payments.filter(p => p.companyId === companyId);
-            const ownIn = subForwarderPayments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0);
+            const ownIn = sumPayments(p => p.companyId === companyId && p.direction === PaymentDirection.IN);
             const forwarderOut = forwarderCompId
-                ? payments.filter(p => p.companyId === forwarderCompId && p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0)
-                : 0;
-            paidIn = Math.max(ownIn, forwarderOut);
-            paidOut = subForwarderPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
+                ? sumPayments(p => p.companyId === forwarderCompId && p.direction === PaymentDirection.OUT)
+                : ZERO;
+            paidIn = ownIn.gte(forwarderOut) ? ownIn : forwarderOut;
+            paidOut = sumPayments(p => p.companyId === companyId && p.direction === PaymentDirection.OUT);
         } else {
             // For Forwarder or main company/admin
             const targetCompId = companyId || forwarderCompId;
-            const forwarderPayments = targetCompId
-                ? payments.filter(p => p.companyId === targetCompId)
-                : payments;
-            
-            paidIn = forwarderPayments.filter(p => p.direction === PaymentDirection.IN).reduce((sum, p) => sum + p.amount, 0);
-            paidOut = forwarderPayments.filter(p => p.direction === PaymentDirection.OUT).reduce((sum, p) => sum + p.amount, 0);
+            const belongs = (p: { companyId: string }) => !targetCompId || p.companyId === targetCompId;
+
+            paidIn = sumPayments(p => belongs(p) && p.direction === PaymentDirection.IN);
+            paidOut = sumPayments(p => belongs(p) && p.direction === PaymentDirection.OUT);
         }
 
-        paidIn = money(paidIn);
-        paidOut = money(paidOut);
+        paidIn = roundMoney(paidIn);
+        paidOut = roundMoney(paidOut);
 
-        const extraIncomes = money(incomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category) && !i.isDeleted).reduce((sum, i) => sum + i.amount, 0));
-        const otherExpenses = money(expenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category) && !e.isDeleted).reduce((sum, e) => sum + e.amount, 0));
+        const extraIncomes = roundMoney(sumOf(
+            incomes.filter(i => !EXCLUDED_INCOME_CATEGORIES.includes(i.category) && !i.isDeleted),
+            (i) => i.amount,
+        ));
+        const otherExpenses = roundMoney(sumOf(
+            expenses.filter(e => !EXCLUDED_EXPENSE_CATEGORIES.includes(e.category) && !e.isDeleted),
+            (e) => e.amount,
+        ));
 
-        const margin = money(revenueNet + extraIncomes - executorCostNet - otherExpenses);
-        const customerDebt = money(Math.max(revenueGross - paidIn, 0));
-        const executorDebt = money(Math.max(executorCostGross - paidOut, 0));
+        const margin = roundMoney(revenueNet.plus(extraIncomes).minus(executorCostNet).minus(otherExpenses));
+
+        const debtOf = (owed: Money, paid: Money) => {
+            const rest = owed.minus(paid);
+            return roundMoney(rest.gt(0) ? rest : ZERO);
+        };
+        const customerDebt = debtOf(revenueGross, paidIn);
+        const executorDebt = debtOf(executorCostGross, paidOut);
+
+        /** Порог считается достигнутым только при ненулевой сумме к оплате. */
+        const covers = (paid: Money, target: Money) => target.gt(0) && paid.gte(target);
 
         let isCustomerPaid = false;
         if (isCustomer) {
-            isCustomerPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || !!order.isCustomerPaid;
+            isCustomerPaid = covers(paidOut, executorCostGross) || !!order.isCustomerPaid;
         } else if (isSubForwarder) {
-            isCustomerPaid = (revenueGross > 0 && moneyGte(paidIn, revenueGross)) || !!order.isSubForwarderPaid;
+            isCustomerPaid = covers(paidIn, revenueGross) || !!order.isSubForwarderPaid;
         } else {
-            isCustomerPaid = (revenueGross > 0 && moneyGte(paidIn, revenueGross)) || !!order.isCustomerPaid;
+            isCustomerPaid = covers(paidIn, revenueGross) || !!order.isCustomerPaid;
         }
 
         let isExecutorPaid = false;
         if (isCustomer) {
-            isExecutorPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || !!order.isCustomerPaid;
+            isExecutorPaid = covers(paidOut, executorCostGross) || !!order.isCustomerPaid;
         } else if (isSubForwarder) {
             isExecutorPaid = false;
         } else {
-            isExecutorPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || (order.subForwarderId ? !!order.isSubForwarderPaid : !!order.isDriverPaid);
+            isExecutorPaid = covers(paidOut, executorCostGross)
+                || (order.subForwarderId ? !!order.isSubForwarderPaid : !!order.isDriverPaid);
         }
 
         return {
