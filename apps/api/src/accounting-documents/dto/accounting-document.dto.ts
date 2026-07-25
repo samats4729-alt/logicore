@@ -156,6 +156,15 @@ export class CreateAccountingDocumentDto {
     @MaxLength(128)
     contractId?: string;
 
+    /**
+     * Расчётный счёт организации, с которого выставляется документ.
+     * Не указан — берётся счёт по умолчанию (kind=BANK, isDefault).
+     */
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    bankAccountId?: string;
+
     @IsOptional()
     @IsString()
     @MaxLength(100)

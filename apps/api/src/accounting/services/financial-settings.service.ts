@@ -121,7 +121,17 @@ export class FinancialSettingsService {
         });
     }
 
-    async updateFinanceAccount(companyId: string, id: string, data: { name?: string; openingBalance?: number; openingDate?: string | null }) {
+    async updateFinanceAccount(companyId: string, id: string, data: {
+        name?: string;
+        openingBalance?: number;
+        openingDate?: string | null;
+        // Печатные реквизиты — имеют смысл для банковского счёта: именно они
+        // попадают в счёт на оплату, выставленный с этого счёта.
+        iban?: string | null;
+        bankName?: string | null;
+        bankBic?: string | null;
+        kbe?: string | null;
+    }) {
         await this.ensureCompanyFinanceSettings(companyId);
         const account = await this.prisma.financeAccount.findFirst({
             where: { id, companyId },
@@ -134,6 +144,10 @@ export class FinancialSettingsService {
                 ...(data.name !== undefined && { name: data.name }),
                 ...(data.openingBalance !== undefined && { openingBalance: data.openingBalance || 0 }),
                 ...(data.openingDate !== undefined && { openingDate: data.openingDate ? new Date(data.openingDate) : null }),
+                ...(data.iban !== undefined && { iban: data.iban || null }),
+                ...(data.bankName !== undefined && { bankName: data.bankName || null }),
+                ...(data.bankBic !== undefined && { bankBic: data.bankBic || null }),
+                ...(data.kbe !== undefined && { kbe: data.kbe || null }),
             },
         });
     }

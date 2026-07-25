@@ -9,6 +9,7 @@ import {
     AccountingDocumentDirection,
     AccountingDocumentStatus,
     AccountingDocumentType,
+    AccountKind,
     OrderStatus,
     Prisma,
 } from '@prisma/client';
@@ -37,6 +38,17 @@ const COMPANY_SNAPSHOT_SELECT = {
     bankBic: true,
     kbe: true,
 } satisfies Prisma.CompanySelect;
+
+const BANK_ACCOUNT_SELECT = {
+    id: true,
+    name: true,
+    kind: true,
+    isActive: true,
+    iban: true,
+    bankName: true,
+    bankBic: true,
+    kbe: true,
+} satisfies Prisma.FinanceAccountSelect;
 
 const DOCUMENT_INCLUDE = {
     company: { select: COMPANY_SNAPSHOT_SELECT },
@@ -165,8 +177,15 @@ export class AccountingDocumentsService {
         ]));
         await this.assertOrdersAccessible(companyId, dto, orderIds);
 
-        const issuerSnapshot = dto.direction === AccountingDocumentDirection.OUTGOING ? company : counterparty;
-        const recipientSnapshot = dto.direction === AccountingDocumentDirection.OUTGOING ? counterparty : company;
+        // Расчётный счёт организации: явно выбранный или по умолчанию.
+        // Его реквизиты попадают в снимок и печатаются — у компании может быть
+        // несколько счетов в разных банках, а в карточке организации хранится
+        // только один комплект.
+        const bankAccount = await this.resolveBankAccount(companyId, dto.bankAccountId);
+
+        const ownSnapshot = this.applyBankAccount(company, bankAccount);
+        const issuerSnapshot = dto.direction === AccountingDocumentDirection.OUTGOING ? ownSnapshot : counterparty;
+        const recipientSnapshot = dto.direction === AccountingDocumentDirection.OUTGOING ? counterparty : ownSnapshot;
         const lineCalculation = dto.type === AccountingDocumentType.RECONCILIATION_ACT
             ? null
             : this.calculator.calculateLines(dto.lines ?? []);
@@ -210,6 +229,7 @@ export class AccountingDocumentsService {
                     debitTurnover: reconciliationCalculation?.debitTurnover,
                     creditTurnover: reconciliationCalculation?.creditTurnover,
                     closingBalance: reconciliationCalculation?.closingBalance,
+                    bankAccountId: bankAccount?.id ?? null,
                     issuerSnapshot,
                     recipientSnapshot,
                     basisSnapshot: contract
@@ -350,6 +370,56 @@ export class AccountingDocumentsService {
             throw new ConflictException('Удалить можно только существующий черновик');
         }
         return { success: true };
+    }
+
+    /**
+     * Расчётный счёт, с которого выставляется документ.
+     *
+     * Явно выбранный проверяется на принадлежность организации; без выбора
+     * берётся банковский счёт по умолчанию. Если банковских счетов нет —
+     * null, и в документе останутся реквизиты из карточки организации
+     * (прежнее поведение).
+     */
+    private async resolveBankAccount(companyId: string, bankAccountId?: string) {
+        if (bankAccountId) {
+            const account = await this.prisma.financeAccount.findFirst({
+                where: { id: bankAccountId, companyId },
+                select: BANK_ACCOUNT_SELECT,
+            });
+            if (!account) throw new NotFoundException('Расчётный счёт не найден');
+            if (account.kind !== AccountKind.BANK) {
+                throw new BadRequestException('В документе можно указать только банковский счёт, не кассу');
+            }
+            if (!account.isActive) {
+                throw new BadRequestException('Расчётный счёт закрыт, выберите действующий');
+            }
+            return account;
+        }
+
+        return this.prisma.financeAccount.findFirst({
+            where: { companyId, kind: AccountKind.BANK, isActive: true },
+            orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+            select: BANK_ACCOUNT_SELECT,
+        });
+    }
+
+    /**
+     * Реквизиты выбранного счёта поверх реквизитов организации. Пустые поля
+     * счёта не затирают карточку компании — у кассы или недозаполненного
+     * счёта печатается то, что известно об организации.
+     */
+    private applyBankAccount(
+        company: Prisma.CompanyGetPayload<{ select: typeof COMPANY_SNAPSHOT_SELECT }>,
+        account: Prisma.FinanceAccountGetPayload<{ select: typeof BANK_ACCOUNT_SELECT }> | null,
+    ) {
+        if (!account) return company;
+        return {
+            ...company,
+            bankAccount: account.iban || company.bankAccount,
+            bankName: account.bankName || company.bankName,
+            bankBic: account.bankBic || company.bankBic,
+            kbe: account.kbe || company.kbe,
+        };
     }
 
     private assertDocumentContent(dto: CreateAccountingDocumentDto) {

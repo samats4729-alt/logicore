@@ -44,6 +44,7 @@ function makeService() {
             findUnique: jest.fn(({ where }: any) => Promise.resolve(companySnapshot(where.id))),
         },
         contract: { findUnique: jest.fn().mockResolvedValue(null) },
+        financeAccount: { findFirst: jest.fn().mockResolvedValue(null) },
         order: { count: jest.fn().mockResolvedValue(0) },
         accountingDocument: {
             findFirst: jest.fn(),
@@ -124,6 +125,88 @@ const storedDocument = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('AccountingDocumentsService', () => {
+    // T-19: у компании может быть несколько расчётных счетов, а в карточке
+    // организации хранится только один комплект реквизитов. В счёт обязаны
+    // попасть реквизиты того счёта, с которого его выставили, — иначе
+    // контрагент заплатит не в тот банк.
+    describe('расчётный счёт организации в документе', () => {
+        const bankAccount = {
+            id: 'acc-kaspi',
+            name: 'Kaspi',
+            kind: 'BANK',
+            isActive: true,
+            iban: 'KZ13722S000013131565',
+            bankName: 'АО «KASPI BANK»',
+            bankBic: 'CASPKZKA',
+            kbe: '17',
+        };
+
+        const invoiceDto = (extra: Record<string, unknown> = {}) => ({
+            type: AccountingDocumentType.PAYMENT_INVOICE,
+            direction: AccountingDocumentDirection.OUTGOING,
+            counterpartyId: COUNTERPARTY,
+            documentDate: '2026-07-22',
+            lines: [{ name: 'Транспортные услуги', unitPrice: '20000.00' }],
+            ...extra,
+        }) as any;
+
+        it('печатает реквизиты выбранного счёта, а не карточки организации', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.financeAccount.findFirst.mockResolvedValue(bankAccount);
+
+            await service.createDraft(COMPANY, 'user-1', invoiceDto({ bankAccountId: 'acc-kaspi' }));
+
+            const { data } = tx.accountingDocument.create.mock.calls[0][0];
+            expect(data.bankAccountId).toBe('acc-kaspi');
+            expect(data.issuerSnapshot).toMatchObject({
+                bankAccount: 'KZ13722S000013131565',
+                bankName: 'АО «KASPI BANK»',
+                bankBic: 'CASPKZKA',
+                kbe: '17',
+            });
+        });
+
+        it('без явного выбора берёт банковский счёт по умолчанию', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.financeAccount.findFirst.mockResolvedValue(bankAccount);
+
+            await service.createDraft(COMPANY, 'user-1', invoiceDto());
+
+            const [args] = prisma.financeAccount.findFirst.mock.calls[0];
+            expect(args.where).toMatchObject({ companyId: COMPANY, kind: 'BANK', isActive: true });
+            expect(tx.accountingDocument.create.mock.calls[0][0].data.bankAccountId).toBe('acc-kaspi');
+        });
+
+        it('без банковских счетов печатает реквизиты организации, как раньше', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.financeAccount.findFirst.mockResolvedValue(null);
+
+            await service.createDraft(COMPANY, 'user-1', invoiceDto());
+
+            const { data } = tx.accountingDocument.create.mock.calls[0][0];
+            expect(data.bankAccountId).toBeNull();
+            expect(data.issuerSnapshot).toMatchObject({ id: COMPANY });
+        });
+
+        it('не даёт выставить счёт с кассы', async () => {
+            const { service, prisma } = makeService();
+            prisma.financeAccount.findFirst.mockResolvedValue({ ...bankAccount, kind: 'CASH' });
+
+            await expect(
+                service.createDraft(COMPANY, 'user-1', invoiceDto({ bankAccountId: 'acc-cash' })),
+            ).rejects.toThrow(/только банковский счёт/);
+        });
+
+        it('не даёт выставить счёт с закрытого счёта', async () => {
+            const { service, prisma } = makeService();
+            prisma.financeAccount.findFirst.mockResolvedValue({ ...bankAccount, isActive: false });
+
+            await expect(
+                service.createDraft(COMPANY, 'user-1', invoiceDto({ bankAccountId: 'acc-kaspi' })),
+            ).rejects.toThrow(/закрыт/);
+        });
+    });
+
     it('создаёт черновик акта сверки из реальных строк регистра', async () => {
         const { service, tx, financialReports } = makeService();
 

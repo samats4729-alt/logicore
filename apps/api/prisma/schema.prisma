@@ -970,21 +970,31 @@ enum AccountKind {
 }
 
 model FinanceAccount {
-  id                String             @id @default(cuid())
-  companyId         String
-  company           Company            @relation("CompanyFinanceAccounts", fields: [companyId], references: [id], onDelete: Cascade)
-  name              String
-  kind              AccountKind
-  isDefault         Boolean            @default(false)
-  isActive          Boolean            @default(true)
-  openingBalance    Decimal            @default(0) @db.Decimal(18, 2) // Начальный остаток (ввод остатков)
-  openingDate       DateTime? // Дата, на которую введён начальный остаток
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  payments          Payment[]          @relation("AccountPayments")
-  incomes           Income[]           @relation("AccountIncomes")
-  expenses          Expense[]          @relation("AccountExpenses")
-  financeOperations FinanceOperation[] @relation("AccountFinanceOperations")
+  id        String      @id @default(cuid())
+  companyId String
+  company   Company     @relation("CompanyFinanceAccounts", fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  kind      AccountKind
+  isDefault Boolean     @default(false)
+  isActive  Boolean     @default(true)
+
+  // Печатные реквизиты счёта (заполняются для kind = BANK).
+  // Нужны, чтобы в счёте на оплату печатался тот банк, с которого его
+  // выставили: у компании может быть несколько расчётных счетов, а в
+  // карточке организации хранится только один комплект реквизитов.
+  iban                String?
+  bankName            String?
+  bankBic             String?
+  kbe                 String?
+  openingBalance      Decimal              @default(0) @db.Decimal(18, 2) // Начальный остаток (ввод остатков)
+  openingDate         DateTime? // Дата, на которую введён начальный остаток
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  payments            Payment[]            @relation("AccountPayments")
+  incomes             Income[]             @relation("AccountIncomes")
+  expenses            Expense[]            @relation("AccountExpenses")
+  financeOperations   FinanceOperation[]   @relation("AccountFinanceOperations")
+  accountingDocuments AccountingDocument[] @relation("AccountingDocumentBankAccount")
 
   @@unique([companyId, name, kind])
   @@index([companyId])
@@ -1483,6 +1493,11 @@ model AccountingDocument {
   reportPeriodTo             DateTime?                      @db.Date
   contractId                 String?
   contract                   Contract?                      @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  // Расчётный счёт организации, с которого выставлен документ. Его реквизиты
+  // попадают в issuerSnapshot и печатаются; сама ссылка нужна для отбора и
+  // для подстановки счёта по умолчанию в следующих документах.
+  bankAccountId              String?
+  bankAccount                FinanceAccount?                @relation("AccountingDocumentBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
   currency                   String                         @default("KZT") @db.VarChar(3)
   subtotal                   Decimal                        @default(0) @db.Decimal(20, 2)
   discountTotal              Decimal                        @default(0) @db.Decimal(20, 2)

@@ -292,7 +292,15 @@ export class AccountingService {
         return this.settingsService.getFinanceAccounts(companyId);
     }
 
-    async updateFinanceAccount(companyId: string, id: string, data: { name?: string; openingBalance?: number; openingDate?: string | null }) {
+    async updateFinanceAccount(companyId: string, id: string, data: {
+        name?: string;
+        openingBalance?: number;
+        openingDate?: string | null;
+        iban?: string | null;
+        bankName?: string | null;
+        bankBic?: string | null;
+        kbe?: string | null;
+    }) {
         return this.settingsService.updateFinanceAccount(companyId, id, data);
     }
 

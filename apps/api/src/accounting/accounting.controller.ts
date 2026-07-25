@@ -435,7 +435,15 @@ export class AccountingController {
     async updateFinanceAccount(
         @Request() req: any,
         @Param('id') id: string,
-        @Body() body: { name?: string; openingBalance?: number; openingDate?: string | null },
+        @Body() body: {
+            name?: string;
+            openingBalance?: number;
+            openingDate?: string | null;
+            iban?: string | null;
+            bankName?: string | null;
+            bankBic?: string | null;
+            kbe?: string | null;
+        },
     ) {
         return this.accountingService.updateFinanceAccount(req.user.companyId, id, body);
     }
