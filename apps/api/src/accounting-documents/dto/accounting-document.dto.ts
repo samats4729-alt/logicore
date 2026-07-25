@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
     AccountingDocumentDirection,
     AccountingDocumentStatus,
@@ -10,6 +10,7 @@ import {
     ArrayMaxSize,
     ArrayUnique,
     IsArray,
+    IsBoolean,
     IsDateString,
     IsEnum,
     IsInt,
@@ -312,6 +313,22 @@ export class GenerateReconciliationDraftDto {
     @IsString()
     @MaxLength(4000)
     note?: string;
+}
+
+/** Параметры кнопки «Подобрать по заявкам» в форме создания счёта. */
+export class BillableOrdersQueryDto {
+    @IsEnum(AccountingDocumentDirection)
+    direction!: AccountingDocumentDirection;
+
+    @IsString()
+    @IsNotEmpty()
+    counterpartyId!: string;
+
+    /** Добавить рейсы «в работе» — счёт на аванс до завершения перевозки. */
+    @IsOptional()
+    @Transform(({ value }) => value === true || value === 'true')
+    @IsBoolean()
+    includeInProgress?: boolean;
 }
 
 export class CancelAccountingDocumentDto {

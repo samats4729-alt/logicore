@@ -219,6 +219,40 @@ export async function updateAccountingDocument(
     return res.data;
 }
 
+/**
+ * Заявка, на которую счёт ещё не выставлен — строка окна «Подобрать по
+ * заявкам». Сумма и ставка НДС уже посчитаны сервером под направление
+ * документа: заказчику идёт его цена, поставщику — стоимость исполнителя.
+ */
+export interface BillableOrder {
+    id: string;
+    orderNumber: string;
+    status: string;
+    createdAt: string;
+    cargoDescription: string | null;
+    currency: string;
+    amount: number;
+    hasVat: boolean;
+    vatRate: number;
+    assignedDriverName: string | null;
+    assignedDriverPlate: string | null;
+    routePoints: AccountingDocumentRoutePoint[];
+}
+
+export async function fetchBillableOrders(params: {
+    direction: AccountingDocumentDirection;
+    counterpartyId: string;
+    includeInProgress?: boolean;
+}): Promise<BillableOrder[]> {
+    const res = await api.get('/accounting-documents/billable-orders', { params });
+    return res.data;
+}
+
+/** «Алматы → Астана» по точкам маршрута заявки подбора. */
+export function routePointsLabel(points: AccountingDocumentRoutePoint[] | undefined): string | null {
+    return orderRouteLabel({ id: '', orderNumber: '', routePoints: points });
+}
+
 export interface CompanyBankAccount {
     id: string;
     name: string;

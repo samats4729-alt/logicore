@@ -1,421 +1,656 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-    Typography,
-    Card,
-    Form,
-    Input,
-    Select,
-    DatePicker,
-    Table,
+    Alert,
     Button,
+    DatePicker,
+    Empty,
+    Input,
+    InputNumber,
+    Modal,
+    Segmented,
+    Select,
     Space,
-    Row,
-    Col,
+    Spin,
+    Switch,
+    Table,
+    Tooltip,
     message,
     theme,
-    Spin,
-    Switch
 } from 'antd';
 import {
     ArrowLeftOutlined,
-    CheckOutlined,
-    FileTextOutlined
+    DeleteOutlined,
+    PlusOutlined,
+    SelectOutlined,
 } from '@ant-design/icons';
+import dayjs, { Dayjs } from 'dayjs';
 import { api } from '@/lib/api';
 import StatusPill from '@/components/ui/StatusPill';
-import { useAuthStore } from '@/store/auth';
-import dayjs from 'dayjs';
+import {
+    AccountingDocumentDirection,
+    BillableOrder,
+    CompanyBankAccount,
+    CreateAccountingDocumentLineInput,
+    createAccountingDocument,
+    fetchBillableOrders,
+    fetchCompanyBankAccounts,
+    routePointsLabel,
+} from '@/lib/accounting-documents';
 
-const { Title, Text } = Typography;
+const money = (value: number) =>
+    `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
 
+const VAT_OPTIONS = [
+    { value: 'none', label: 'Без НДС' },
+    { value: '12', label: '12 %' },
+    { value: '0', label: '0 %' },
+];
+
+/** Строка будущего документа — до создания живёт только на клиенте. */
+interface DraftLine {
+    key: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    /** 'none' — без НДС, иначе ставка в процентах. */
+    vat: string;
+    orderId: string | null;
+    orderNumber: string | null;
+    orderDetails: string | null;
+}
+
+const lineFromOrder = (order: BillableOrder): DraftLine => ({
+    key: `order-${order.id}`,
+    name: 'Транспортные услуги',
+    quantity: 1,
+    unit: 'усл',
+    unitPrice: order.amount ?? 0,
+    vat: order.hasVat && order.vatRate > 0 ? String(order.vatRate) : 'none',
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    orderDetails: [
+        routePointsLabel(order.routePoints),
+        order.assignedDriverName,
+        order.assignedDriverPlate,
+    ].filter(Boolean).join(' · ') || null,
+});
+
+const toPayload = (line: DraftLine): CreateAccountingDocumentLineInput => ({
+    name: line.name.trim(),
+    quantity: String(line.quantity ?? 1),
+    unit: line.unit?.trim() || 'усл',
+    unitPrice: (line.unitPrice ?? 0).toFixed(2),
+    ...(line.vat === 'none' || Number(line.vat) === 0
+        ? {}
+        : { vatTreatment: 'STANDARD' as const, vatCalculation: 'INCLUDED' as const, vatRate: line.vat }),
+    orderId: line.orderId || undefined,
+});
+
+/**
+ * Создание счёта — первый шаг раздела «Счета» перед карточкой документа.
+ *
+ * Поток сохранён прежний и привычный по 1С: выбрать контрагента, затем
+ * «Подобрать по заявкам» — рейсы превращаются в строки счёта. Дополнительно
+ * строку можно добавить руками из справочника услуг, как в 1С.
+ *
+ * Номер документа не спрашивается: его выдаёт нумератор при создании — так
+ * два бухгалтера не выставят два счёта с одним номером.
+ */
 export default function CreateInvoicePage() {
     const router = useRouter();
     const { token } = theme.useToken();
-    const { user } = useAuthStore();
-    const [form] = Form.useForm();
 
-    const [counterparties, setCounterparties] = useState<any[]>([]);
-    const [loadingCounterparties, setLoadingCounterparties] = useState(true);
-    
-    const [orders, setOrders] = useState<any[]>([]);
-    const [loadingOrders, setLoadingOrders] = useState(false);
-    const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+    const [direction, setDirection] = useState<AccountingDocumentDirection>('OUTGOING');
+    const [counterpartyId, setCounterpartyId] = useState<string | undefined>();
+    const [documentDate, setDocumentDate] = useState<Dayjs>(dayjs());
+    const [dueDate, setDueDate] = useState<Dayjs | null>(null);
+    const [bankAccountId, setBankAccountId] = useState<string | undefined>();
+    const [note, setNote] = useState('');
+    const [lines, setLines] = useState<DraftLine[]>([]);
     const [submitting, setSubmitting] = useState(false);
-    // По умолчанию — только завершённые. Галочка добавляет заявки «в работе» (для аванса)
+
+    const [counterparties, setCounterparties] = useState<{ id: string; name: string }[]>([]);
+    const [bankAccounts, setBankAccounts] = useState<CompanyBankAccount[]>([]);
+    const [services, setServices] = useState<{ id: string; name: string; unit: string }[]>([]);
+
+    // Окно «Подобрать по заявкам».
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [orders, setOrders] = useState<BillableOrder[]>([]);
+    const [loadingOrders, setLoadingOrders] = useState(false);
+    const [pickedIds, setPickedIds] = useState<string[]>([]);
     const [includeInProgress, setIncludeInProgress] = useState(false);
 
-    // Form watch values
-    const [invoiceType, setInvoiceType] = useState<'OUTGOING' | 'INCOMING'>('OUTGOING');
-    const [selectedCounterpartyId, setSelectedCounterpartyId] = useState<string>('');
-
-    const cardStyle = {
-        borderRadius: 8,
-        background: token.colorBgContainer,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-    };
-
-    const getRoute = (order: any): string => {
-        const pts = order.routePoints || [];
-        const pickup = pts.find((p: any) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
-        const delivery = pts.find((p: any) => p.pointType === 'DELIVERY');
-        const from = pickup?.location?.city || pickup?.location?.address || '—';
-        const to = delivery?.location?.city || delivery?.location?.address || '—';
-        return `${from} → ${to}`;
-    };
-
-    // Load registered partners and offline companies
     useEffect(() => {
-        const loadCounterparties = async () => {
-            try {
-                setLoadingCounterparties(true);
-                const [partnersRes, externalRes] = await Promise.all([
-                    api.get('/partners'),
-                    api.get('/external-companies')
-                ]);
+        Promise.all([api.get('/partners'), api.get('/external-companies')])
+            .then(([partners, external]) => setCounterparties([
+                ...(partners.data || []).map((p: any) => ({ id: p.id, name: p.name || 'Без названия' })),
+                ...(external.data || []).map((e: any) => ({ id: e.id, name: `${e.name} (офлайн)` })),
+            ]))
+            .catch(() => message.error('Не удалось загрузить список контрагентов'));
 
-                const formattedPartners = (partnersRes.data || []).map((p: any) => ({
-                    id: p.id,
-                    name: p.name,
-                    isExternal: false,
-                }));
+        fetchCompanyBankAccounts()
+            .then((accounts) => {
+                setBankAccounts(accounts);
+                setBankAccountId(accounts.find((a) => a.isDefault && a.isActive)?.id);
+            })
+            .catch(() => setBankAccounts([]));
 
-                const formattedExternal = (externalRes.data || []).map((e: any) => ({
-                    id: e.id,
-                    name: `${e.name} (Офлайн)`,
-                    isExternal: true,
-                }));
-
-                setCounterparties([...formattedPartners, ...formattedExternal]);
-            } catch (e) {
-                message.error('Ошибка загрузки списка контрагентов');
-            } finally {
-                setLoadingCounterparties(false);
-            }
-        };
-
-        loadCounterparties();
+        api.get('/accounting/service-catalog')
+            .then((res) => setServices((res.data || []).filter((s: any) => s.isActive)))
+            .catch(() => setServices([]));
     }, []);
 
-    // Load uninvoiced orders when type or counterparty changes
+    // Смена направления или контрагента обнуляет подбор: строки прежнего
+    // контрагента к новому отношения не имеют.
     useEffect(() => {
-        if (!selectedCounterpartyId) {
+        setLines([]);
+        setOrders([]);
+        setPickedIds([]);
+    }, [direction, counterpartyId]);
+
+    const loadOrders = useCallback(async () => {
+        if (!counterpartyId) return;
+        try {
+            setLoadingOrders(true);
+            const data = await fetchBillableOrders({ direction, counterpartyId, includeInProgress });
+            setOrders(data);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось загрузить заявки');
             setOrders([]);
-            setSelectedOrderIds([]);
+        } finally {
+            setLoadingOrders(false);
+        }
+    }, [direction, counterpartyId, includeInProgress]);
+
+    useEffect(() => {
+        if (pickerOpen) loadOrders();
+    }, [pickerOpen, loadOrders]);
+
+    const totals = useMemo(() => {
+        let total = 0;
+        let vat = 0;
+        for (const line of lines) {
+            const amount = Math.round((line.quantity || 0) * (line.unitPrice || 0) * 100) / 100;
+            total += amount;
+            const rate = line.vat === 'none' ? 0 : Number(line.vat);
+            if (rate > 0) vat += Math.round((amount * rate / (100 + rate)) * 100) / 100;
+        }
+        return { total, vat };
+    }, [lines]);
+
+    const updateLine = (key: string, patch: Partial<DraftLine>) =>
+        setLines((prev) => prev.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+
+    const openPicker = () => {
+        if (!counterpartyId) {
+            message.warning('Сначала выберите контрагента');
             return;
         }
+        // Уже добавленные рейсы отмечены — окно показывает текущий выбор.
+        setPickedIds(lines.map((l) => l.orderId).filter((id): id is string => Boolean(id)));
+        setPickerOpen(true);
+    };
 
-        const loadUninvoicedOrders = async () => {
-            try {
-                setLoadingOrders(true);
-                setSelectedOrderIds([]);
-                const res = await api.get('/invoices/uninvoiced-orders', {
-                    params: {
-                        type: invoiceType,
-                        counterpartyId: selectedCounterpartyId,
-                        includeInProgress: includeInProgress ? 'true' : 'false',
-                    }
-                });
-                setOrders(res.data || []);
-            } catch (e) {
-                message.error('Ошибка загрузки готовых к оплате рейсов');
-            } finally {
-                setLoadingOrders(false);
-            }
-        };
+    const applyPicked = () => {
+        const manual = lines.filter((line) => !line.orderId);
+        const picked = orders
+            .filter((order) => pickedIds.includes(order.id))
+            .map(lineFromOrder);
+        // Ручные строки сохраняются: подбор управляет только строками заявок.
+        setLines([...picked, ...manual]);
+        setPickerOpen(false);
+    };
 
-        loadUninvoicedOrders();
-    }, [invoiceType, selectedCounterpartyId, includeInProgress]);
+    const addManualLine = () => {
+        const preset = services[0];
+        setLines((prev) => [...prev, {
+            key: `manual-${Date.now()}-${prev.length}`,
+            name: preset?.name || 'Транспортные услуги',
+            quantity: 1,
+            unit: preset?.unit || 'усл',
+            unitPrice: 0,
+            vat: 'none',
+            orderId: null,
+            orderNumber: null,
+            orderDetails: null,
+        }]);
+    };
 
-    // Calculate sum of selected orders
-    const selectedAmount = useMemo(() => {
-        return orders
-            .filter((o) => selectedOrderIds.includes(o.id))
-            .reduce((sum, o) => {
-                if (invoiceType === 'OUTGOING') {
-                    return sum + (o.customerPrice || 0);
-                } else {
-                    if (o.subForwarderId === selectedCounterpartyId) {
-                        return sum + (o.subForwarderPrice || 0);
-                    }
-                    return sum + (o.driverCost || 0);
-                }
-            }, 0);
-    }, [orders, selectedOrderIds, invoiceType, selectedCounterpartyId]);
-
-    const handleSubmit = async (values: any) => {
-        if (selectedOrderIds.length === 0) {
-            message.warning('Необходимо выбрать хотя бы один рейс');
+    const submit = async () => {
+        if (!counterpartyId) {
+            message.warning('Выберите контрагента');
             return;
         }
-
+        if (!lines.length) {
+            message.warning('Добавьте хотя бы одну строку — подбором по заявкам или вручную');
+            return;
+        }
+        if (lines.some((line) => !line.name.trim())) {
+            message.warning('У каждой строки должно быть наименование услуги');
+            return;
+        }
         try {
             setSubmitting(true);
-            const ourCompanyId = user?.companyId || '';
-
-            const issuerId = invoiceType === 'OUTGOING' ? ourCompanyId : selectedCounterpartyId;
-            const recipientId = invoiceType === 'OUTGOING' ? selectedCounterpartyId : ourCompanyId;
-
-            await api.post('/invoices', {
-                invoiceNumber: values.invoiceNumber,
-                type: invoiceType,
-                date: values.date.format('YYYY-MM-DD'),
-                dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : undefined,
-                issuerId,
-                recipientId,
-                orderIds: selectedOrderIds,
-                note: values.note,
+            const created = await createAccountingDocument({
+                type: 'PAYMENT_INVOICE',
+                direction,
+                counterpartyId,
+                documentDate: documentDate.format('YYYY-MM-DD'),
+                dueDate: dueDate ? dueDate.format('YYYY-MM-DD') : undefined,
+                bankAccountId,
+                note: note.trim() || undefined,
+                lines: lines.map(toPayload),
             });
-
-            message.success('Счет успешно сформирован');
-            router.push('/company/accounting/invoices');
+            message.success(`Черновик счёта № ${created.number} создан`);
+            // Дальше работа идёт в карточке: там документ проводят и печатают.
+            router.push(`/company/accounting/invoices/${created.id}`);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось сформировать счет');
+            message.error(e.response?.data?.message || 'Не удалось создать счёт');
         } finally {
             setSubmitting(false);
         }
     };
 
-    const columns = [
+    const lineColumns = [
         {
-            title: 'Номер заявки',
-            dataIndex: 'orderNumber',
-            key: 'orderNumber',
-            render: (t: string) => <span style={{ fontWeight: 600 }}>{t}</span>,
+            title: '№',
+            key: 'index',
+            width: 40,
+            render: (_: unknown, __: DraftLine, index: number) => (
+                <span style={{ color: token.colorTextTertiary, fontSize: 12 }}>{index + 1}</span>
+            ),
         },
         {
-            title: 'Статус',
-            dataIndex: 'status',
-            key: 'status',
-            render: (s: string) => <StatusPill status={s} />,
+            title: 'Документ-основание',
+            key: 'basis',
+            width: 190,
+            render: (_: unknown, record: DraftLine) => (
+                record.orderNumber ? (
+                    <div>
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>Заявка {record.orderNumber}</div>
+                        {record.orderDetails && (
+                            <div style={{ fontSize: 11, color: token.colorTextSecondary, lineHeight: 1.35 }}>
+                                {record.orderDetails}
+                            </div>
+                        )}
+                    </div>
+                ) : <span style={{ color: token.colorTextDisabled, fontSize: 12 }}>—</span>
+            ),
         },
         {
-            title: 'Дата создания',
-            dataIndex: 'createdAt',
-            key: 'createdAt',
-            render: (d: string) => dayjs(d).format('DD.MM.YYYY'),
+            title: 'Услуга',
+            key: 'name',
+            render: (_: unknown, record: DraftLine) => (
+                <Select
+                    size="small"
+                    showSearch
+                    style={{ width: '100%' }}
+                    value={record.name}
+                    onChange={(value) => updateLine(record.key, { name: value })}
+                    onSearch={(value) => { if (value.trim()) updateLine(record.key, { name: value }); }}
+                    options={Array.from(new Set([record.name, ...services.map((s) => s.name)]))
+                        .filter(Boolean)
+                        .map((name) => ({ value: name, label: name }))}
+                    filterOption={(input, option) =>
+                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                />
+            ),
         },
         {
-            title: 'Маршрут',
-            key: 'route',
-            render: (_: any, record: any) => getRoute(record),
-        },
-        {
-            title: 'Груз',
-            dataIndex: 'cargoDescription',
-            key: 'cargoDescription',
-            ellipsis: true,
-        },
-        {
-            title: 'Сумма рейса',
-            key: 'price',
+            title: 'Кол-во',
+            key: 'quantity',
+            width: 90,
             align: 'right' as const,
-            render: (_: any, record: any) => {
-                const amount = invoiceType === 'OUTGOING'
-                    ? record.customerPrice
-                    : (record.subForwarderId === selectedCounterpartyId ? record.subForwarderPrice : record.driverCost);
-                return (
-                    <span style={{ fontWeight: 600 }}>
-                        {(amount || 0).toLocaleString('ru-RU')} ₸
-                    </span>
-                );
-            },
+            render: (_: unknown, record: DraftLine) => (
+                <InputNumber
+                    size="small"
+                    min={0.001}
+                    style={{ width: '100%' }}
+                    value={record.quantity}
+                    onChange={(value) => updateLine(record.key, { quantity: Number(value) || 1 })}
+                />
+            ),
+        },
+        {
+            title: 'Цена',
+            key: 'unitPrice',
+            width: 140,
+            align: 'right' as const,
+            render: (_: unknown, record: DraftLine) => (
+                <InputNumber
+                    size="small"
+                    min={0}
+                    style={{ width: '100%' }}
+                    value={record.unitPrice}
+                    onChange={(value) => updateLine(record.key, { unitPrice: Number(value) || 0 })}
+                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
+                    parser={(value) => Number((value || '').replace(/\s/g, '')) as any}
+                />
+            ),
+        },
+        {
+            title: '% НДС',
+            key: 'vat',
+            width: 110,
+            render: (_: unknown, record: DraftLine) => (
+                <Select
+                    size="small"
+                    style={{ width: '100%' }}
+                    value={record.vat}
+                    onChange={(value) => updateLine(record.key, { vat: value })}
+                    options={VAT_OPTIONS}
+                />
+            ),
+        },
+        {
+            title: 'Сумма',
+            key: 'amount',
+            width: 140,
+            align: 'right' as const,
+            render: (_: unknown, record: DraftLine) => (
+                <span style={{ fontWeight: 600 }}>
+                    {money((record.quantity || 0) * (record.unitPrice || 0))}
+                </span>
+            ),
+        },
+        {
+            title: '',
+            key: 'remove',
+            width: 40,
+            render: (_: unknown, record: DraftLine) => (
+                <Button
+                    type="text"
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    onClick={() => setLines((prev) => prev.filter((line) => line.key !== record.key))}
+                />
+            ),
         },
     ];
 
-    const rowSelection = {
-        selectedRowKeys: selectedOrderIds,
-        onChange: (selectedKeys: any) => {
-            setSelectedOrderIds(selectedKeys);
-        },
-    };
+    const headerField = (label: string, content: React.ReactNode) => (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minHeight: 34 }}>
+            <div style={{ width: 132, flexShrink: 0, fontSize: 12, color: token.colorTextSecondary }}>
+                {label}
+            </div>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}>{content}</div>
+        </div>
+    );
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1400, margin: '0 auto' }}>
-            {/* ===== HERO 2026 ===== */}
-            <div className="lc2-hero">
+        <div className="lc-page" style={{ maxWidth: 1180, margin: '0 auto' }}>
+            <div className="lc2-hero" style={{ alignItems: 'flex-start' }}>
                 <div>
-                    <div className="lc-eyebrow">Финансы · Счета</div>
-                    <h1 className="lc2-title">Новый счёт</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Выставление счета для взаиморасчётов с заказчиками и партнёрами
-                    </p>
                     <Button
                         type="link"
                         icon={<ArrowLeftOutlined />}
                         onClick={() => router.push('/company/accounting/invoices')}
-                        style={{ padding: 0, color: 'var(--lc-text-ter)' }}
+                        style={{ padding: 0, color: 'var(--lc-text-ter)', marginBottom: 4 }}
                     >
-                        Назад к реестру
+                        Журнал счетов
                     </Button>
+                    <div className="lc-eyebrow">Финансы · Счета</div>
+                    <h1 className="lc2-title">Новый счёт</h1>
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0' }}>
+                        Номер присвоится автоматически при создании. Документ создаётся черновиком —
+                        провести его можно в карточке.
+                    </p>
+                </div>
+
+                <Space size={8} style={{ flexShrink: 0, paddingTop: 4 }}>
+                    <Button type="primary" loading={submitting} onClick={submit}>
+                        Создать черновик
+                    </Button>
+                </Space>
+            </div>
+
+            {/* ===== Шапка документа ===== */}
+            <div className="lc-card" style={{ padding: 20, marginBottom: 14 }}>
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                        gap: '4px 32px',
+                    }}
+                >
+                    {headerField('Вид счёта', (
+                        <Segmented
+                            size="small"
+                            value={direction}
+                            onChange={(value) => setDirection(value as AccountingDocumentDirection)}
+                            options={[
+                                { value: 'OUTGOING', label: 'Исходящий' },
+                                { value: 'INCOMING', label: 'Входящий' },
+                            ]}
+                        />
+                    ))}
+
+                    {headerField('Контрагент', (
+                        <Select
+                            size="small"
+                            showSearch
+                            style={{ width: '100%', maxWidth: 340 }}
+                            placeholder={direction === 'OUTGOING' ? 'Кому выставляем' : 'Кто выставил нам'}
+                            optionFilterProp="label"
+                            value={counterpartyId}
+                            onChange={setCounterpartyId}
+                            options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
+                        />
+                    ))}
+
+                    {headerField('Дата', (
+                        <DatePicker
+                            size="small"
+                            format="DD.MM.YYYY"
+                            allowClear={false}
+                            style={{ width: 150 }}
+                            value={documentDate}
+                            onChange={(value) => value && setDocumentDate(value)}
+                        />
+                    ))}
+
+                    {headerField('Срок оплаты', (
+                        <DatePicker
+                            size="small"
+                            format="DD.MM.YYYY"
+                            placeholder="Не указан"
+                            style={{ width: 150 }}
+                            value={dueDate}
+                            onChange={setDueDate}
+                        />
+                    ))}
+
+                    {headerField('Банковский счёт', (
+                        <Select
+                            size="small"
+                            allowClear
+                            style={{ width: '100%', maxWidth: 340 }}
+                            placeholder="Счёт по умолчанию"
+                            value={bankAccountId}
+                            onChange={(value) => setBankAccountId(value)}
+                            options={bankAccounts.map((account) => ({
+                                value: account.id,
+                                label: [account.name, account.iban].filter(Boolean).join(' · '),
+                                disabled: !account.isActive,
+                            }))}
+                            notFoundContent="Банковские счета не заведены"
+                        />
+                    ))}
                 </div>
             </div>
 
-            {/* ===== FORM CARD ===== */}
-            <div className="lc-card" style={{ padding: '24px' }}>
-                <Row gutter={16}>
-                    <Col xs={24} lg={8}>
-                        <div style={{ marginBottom: 16 }}>
-                            <Text strong style={{ fontSize: 15 }}>Параметры счета</Text>
+            {/* ===== Табличная часть ===== */}
+            <div className="lc-card" style={{ padding: 20 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <Tooltip title={counterpartyId ? undefined : 'Сначала выберите контрагента'}>
+                        <Button icon={<SelectOutlined />} onClick={openPicker}>
+                            Подобрать по заявкам
+                        </Button>
+                    </Tooltip>
+                    <Button icon={<PlusOutlined />} onClick={addManualLine}>
+                        Добавить услугу
+                    </Button>
+                </div>
+
+                {lines.length === 0 ? (
+                    <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description={
+                            <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
+                                Строк пока нет. Подберите рейсы по заявкам или добавьте услугу вручную.
+                            </span>
+                        }
+                        style={{ padding: '24px 0' }}
+                    />
+                ) : (
+                    <Table
+                        columns={lineColumns}
+                        dataSource={lines}
+                        rowKey="key"
+                        size="small"
+                        pagination={false}
+                        scroll={{ x: 900 }}
+                    />
+                )}
+
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-end',
+                        gap: 32,
+                        marginTop: 18,
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    <div style={{ flex: '1 1 320px', minWidth: 260 }}>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>
+                            Комментарий
                         </div>
-                        <Form
-                            form={form}
-                            layout="vertical"
-                            onFinish={handleSubmit}
-                            initialValues={{
-                                type: 'OUTGOING',
-                                date: dayjs(),
-                            }}
-                        >
-                            <Form.Item
-                                name="invoiceNumber"
-                                label="Номер счета"
-                                rules={[{ required: true, message: 'Введите номер счета' }]}
-                            >
-                                <Input placeholder="Например, СЧ-105" />
-                            </Form.Item>
+                        <Input.TextArea
+                            rows={2}
+                            maxLength={4000}
+                            placeholder="Виден только вашей компании"
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                        />
+                    </div>
 
-                            <Form.Item
-                                name="type"
-                                label="Направление счета"
-                                rules={[{ required: true }]}
-                            >
-                                <Select
-                                    onChange={(val: any) => {
-                                        setInvoiceType(val);
-                                        setSelectedCounterpartyId('');
-                                        form.setFieldsValue({ counterpartyId: undefined });
-                                    }}
-                                    options={[
-                                        { value: 'OUTGOING', label: 'Исходящий — счёт покупателю' },
-                                        { value: 'INCOMING', label: 'Входящий — счёт от поставщика' },
-                                    ]}
-                                />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="counterpartyId"
-                                label="Контрагент"
-                                rules={[{ required: true, message: 'Выберите контрагента' }]}
-                            >
-                                <Select
-                                    showSearch
-                                    loading={loadingCounterparties}
-                                    placeholder="Выберите компанию..."
-                                    optionFilterProp="label"
-                                    onChange={(val) => setSelectedCounterpartyId(val)}
-                                    options={counterparties.map((c) => ({
-                                        value: c.id,
-                                        label: c.name,
-                                    }))}
-                                />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="date"
-                                label="Дата счета"
-                                rules={[{ required: true, message: 'Выберите дату' }]}
-                            >
-                                <DatePicker style={{ width: 'full' }} format="DD.MM.YYYY" />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="dueDate"
-                                label="Срок оплаты (dueDate)"
-                            >
-                                <DatePicker style={{ width: 'full' }} format="DD.MM.YYYY" />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="note"
-                                label="Примечание"
-                            >
-                                <Input.TextArea placeholder="Дополнительная информация по счету..." rows={3} />
-                            </Form.Item>
-
-                            <div style={{ marginTop: 24, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 16 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                                    <Text type="secondary">Выбрано рейсов:</Text>
-                                    <Text strong>{selectedOrderIds.length}</Text>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-                                    <Text type="secondary">Итоговая сумма:</Text>
-                                    <Text strong style={{ fontSize: 18, color: token.colorPrimary }}>
-                                        {selectedAmount.toLocaleString('ru-RU')} ₸
-                                    </Text>
-                                </div>
-
-                                <Button
-                                    type="primary"
-                                    htmlType="submit"
-                                    block
-                                    loading={submitting}
-                                    disabled={selectedOrderIds.length === 0}
-                                    icon={<CheckOutlined />}
-                                >
-                                    Сформировать счет
-                                </Button>
-                            </div>
-                        </Form>
-                </Col>
-
-                <Col xs={24} lg={16}>
-                    <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                        <div>
-                            <Text strong style={{ fontSize: 15 }}>Доступные рейсы для включения в счет</Text>
-                            <Text type="secondary" style={{ fontSize: 12, marginLeft: 12 }}>
-                                {includeInProgress
-                                    ? 'Завершённые и заявки в работе (для аванса)'
-                                    : 'Показываются только завершённые рейсы'}
-                            </Text>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                            В том числе НДС: {money(totals.vat)}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Switch
-                                size="small"
-                                checked={includeInProgress}
-                                onChange={setIncludeInProgress}
-                            />
-                            <Text style={{ fontSize: 13 }}>Показать заявки в работе (для аванса)</Text>
+                        <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>
+                            Всего: {money(totals.total)}
                         </div>
                     </div>
-                        {!selectedCounterpartyId ? (
-                            <div style={{ textAlign: 'center', padding: '40px 0', color: token.colorTextDescription }}>
-                                <FileTextOutlined style={{ fontSize: 32, marginBottom: 8, display: 'block', margin: '0 auto 8px' }} />
-                                Выберите контрагента для загрузки доступных рейсов
-                            </div>
-                        ) : loadingOrders ? (
-                            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                                <Spin size="large" />
-                            </div>
-                        ) : orders.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '40px 0', color: token.colorTextDescription }}>
-                                {includeInProgress
-                                    ? 'Нет заявок (в работе или завершённых) без выставленного счёта для данного контрагента'
-                                    : 'Нет завершённых рейсов без выставленного счёта для данного контрагента'}
-                            </div>
-                        ) : (
-                            <Table
-                                rowSelection={rowSelection}
-                                columns={columns}
-                                dataSource={orders}
-                                rowKey="id"
-                                pagination={false}
-                                size="small"
-                                scroll={{ y: 500 }}
-                            />
-                        )}
-                </Col>
-            </Row>
+                </div>
             </div>
 
-            <style jsx global>{`
-                .ant-picker {
-                    width: 100% !important;
-                }
-            `}</style>
+            {/* ===== Подбор по заявкам ===== */}
+            <Modal
+                title="Подобрать по заявкам"
+                open={pickerOpen}
+                onCancel={() => setPickerOpen(false)}
+                onOk={applyPicked}
+                okText={`Перенести в счёт (${pickedIds.length})`}
+                cancelText="Отмена"
+                width={980}
+                destroyOnClose
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 12px' }}>
+                    <Switch size="small" checked={includeInProgress} onChange={setIncludeInProgress} />
+                    <span style={{ fontSize: 13 }}>Показать рейсы в работе — счёт на аванс</span>
+                </div>
+
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message="Показаны только рейсы, на которые счёт ещё не выставлен."
+                    description="Цена и ставка НДС подставляются из заявки — в строках счёта их можно поправить."
+                />
+
+                {loadingOrders ? (
+                    <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+                ) : (
+                    <Table
+                        rowKey="id"
+                        size="small"
+                        pagination={false}
+                        scroll={{ y: 420 }}
+                        dataSource={orders}
+                        rowSelection={{
+                            selectedRowKeys: pickedIds,
+                            onChange: (keys) => setPickedIds(keys as string[]),
+                        }}
+                        locale={{
+                            emptyText: includeInProgress
+                                ? 'Нет рейсов без счёта у этого контрагента'
+                                : 'Нет завершённых рейсов без счёта. Включите «рейсы в работе» для аванса.',
+                        }}
+                        columns={[
+                            {
+                                title: 'Заявка',
+                                dataIndex: 'orderNumber',
+                                width: 140,
+                                render: (value: string) => <span style={{ fontWeight: 600 }}>{value}</span>,
+                            },
+                            {
+                                title: 'Статус',
+                                dataIndex: 'status',
+                                width: 130,
+                                render: (value: string) => <StatusPill status={value} />,
+                            },
+                            {
+                                title: 'Маршрут',
+                                key: 'route',
+                                render: (_: unknown, record: BillableOrder) => (
+                                    <div>
+                                        <div style={{ fontSize: 12 }}>
+                                            {routePointsLabel(record.routePoints) || '—'}
+                                        </div>
+                                        {record.assignedDriverName && (
+                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                                {[record.assignedDriverName, record.assignedDriverPlate]
+                                                    .filter(Boolean).join(' · ')}
+                                            </div>
+                                        )}
+                                    </div>
+                                ),
+                            },
+                            {
+                                title: 'Груз',
+                                dataIndex: 'cargoDescription',
+                                ellipsis: true,
+                                render: (value: string | null) => (
+                                    <span style={{ fontSize: 12 }}>{value || '—'}</span>
+                                ),
+                            },
+                            {
+                                title: 'Сумма',
+                                key: 'amount',
+                                width: 150,
+                                align: 'right' as const,
+                                render: (_: unknown, record: BillableOrder) => (
+                                    <div>
+                                        <div style={{ fontWeight: 600 }}>{money(record.amount)}</div>
+                                        <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                            {record.hasVat && record.vatRate > 0
+                                                ? `НДС ${record.vatRate} %`
+                                                : 'без НДС'}
+                                        </div>
+                                    </div>
+                                ),
+                            },
+                        ]}
+                    />
+                )}
+            </Modal>
         </div>
     );
 }

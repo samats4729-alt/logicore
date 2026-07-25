@@ -21,6 +21,7 @@ import { AccountingDocumentCalculatorService } from './accounting-document-calcu
 import { toNum } from '../common/utils/money';
 import {
     AccountingDocumentListQueryDto,
+    BillableOrdersQueryDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
     UpdateAccountingDocumentDto,
@@ -714,6 +715,38 @@ export class AccountingDocumentsService {
         return new Date(value).toISOString().slice(0, 10);
     }
 
+    /**
+     * Условие «эта заявка относится к сторонам документа и в подходящем
+     * статусе». Один и тот же фильтр используют подбор заявок и проверка при
+     * сохранении — иначе в списке подбора появлялись бы заявки, которые
+     * сервер потом отказывается принимать.
+     */
+    private billableOrdersWhere(
+        companyId: string,
+        document: Pick<CreateAccountingDocumentDto, 'type' | 'direction' | 'counterpartyId'>,
+    ): Prisma.OrderWhereInput {
+        const statusFilter = document.type === AccountingDocumentType.SERVICE_ACT
+            ? { equals: OrderStatus.COMPLETED }
+            : { notIn: [OrderStatus.DRAFT, OrderStatus.PENDING, OrderStatus.CANCELLED] };
+        const participantFilter = document.direction === AccountingDocumentDirection.OUTGOING
+            ? {
+                customerCompanyId: document.counterpartyId,
+                OR: [
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId } },
+                ],
+            }
+            : {
+                AND: [
+                    { OR: [{ partnerId: document.counterpartyId }, { subForwarderId: document.counterpartyId }] },
+                    { OR: [{ customerCompanyId: companyId }, { forwarderId: companyId }] },
+                ],
+            };
+        return { status: statusFilter, ...participantFilter };
+    }
+
     private async assertOrdersAccessible(
         companyId: string,
         dto: Pick<CreateAccountingDocumentDto, 'type' | 'direction' | 'counterpartyId'>,
@@ -724,35 +757,107 @@ export class AccountingDocumentsService {
             throw new BadRequestException('Акт сверки не связывается с отдельными заявками');
         }
 
-        const statusFilter = dto.type === AccountingDocumentType.SERVICE_ACT
-            ? { equals: OrderStatus.COMPLETED }
-            : { notIn: [OrderStatus.DRAFT, OrderStatus.PENDING, OrderStatus.CANCELLED] };
-        const participantFilter = dto.direction === AccountingDocumentDirection.OUTGOING
-            ? {
-                customerCompanyId: dto.counterpartyId,
-                OR: [
-                    { forwarderId: companyId },
-                    { partnerId: companyId },
-                    { subForwarderId: companyId },
-                    { responsibleManager: { companyId } },
-                ],
-            }
-            : {
-                AND: [
-                    { OR: [{ partnerId: dto.counterpartyId }, { subForwarderId: dto.counterpartyId }] },
-                    { OR: [{ customerCompanyId: companyId }, { forwarderId: companyId }] },
-                ],
-            };
         const count = await this.prisma.order.count({
             where: {
                 id: { in: orderIds },
-                status: statusFilter,
-                ...participantFilter,
+                ...this.billableOrdersWhere(companyId, dto),
             },
         });
         if (count !== orderIds.length) {
             throw new BadRequestException('Некоторые заявки недоступны, имеют неверный статус или не относятся к сторонам документа');
         }
+    }
+
+    /**
+     * «Подобрать по заявкам» — список рейсов контрагента, на которые счёт ещё
+     * не выставлен. Аналог одноимённой кнопки в 1С.
+     *
+     * Уже выставленным считается рейс, попавший в непогашенный документ того
+     * же вида и направления; отменённый документ рейс освобождает — иначе
+     * ошибочно выставленный счёт навсегда блокировал бы перевыставление.
+     */
+    async listBillableOrders(
+        companyId: string,
+        query: BillableOrdersQueryDto,
+    ) {
+        if (query.counterpartyId === companyId) {
+            throw new BadRequestException('Организация и контрагент должны отличаться');
+        }
+
+        const document = {
+            type: AccountingDocumentType.PAYMENT_INVOICE,
+            direction: query.direction,
+            counterpartyId: query.counterpartyId,
+        };
+        // Без флага — только завершённые: по ним услуга оказана. С флагом
+        // добавляются рейсы в работе, чтобы выставить счёт на аванс.
+        const statusFilter = query.includeInProgress
+            ? this.billableOrdersWhere(companyId, document).status
+            : { equals: OrderStatus.COMPLETED };
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                ...this.billableOrdersWhere(companyId, document),
+                status: statusFilter,
+                accountingDocuments: {
+                    none: {
+                        document: {
+                            companyId,
+                            type: AccountingDocumentType.PAYMENT_INVOICE,
+                            direction: query.direction,
+                            status: { not: AccountingDocumentStatus.CANCELLED },
+                        },
+                    },
+                },
+            },
+            select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                createdAt: true,
+                cargoDescription: true,
+                currency: true,
+                customerPrice: true,
+                driverCost: true,
+                subForwarderPrice: true,
+                subForwarderId: true,
+                vatRate: true,
+                hasVat: true,
+                executorVatRate: true,
+                executorHasVat: true,
+                assignedDriverName: true,
+                assignedDriverPlate: true,
+                routePoints: {
+                    orderBy: { sequence: 'asc' },
+                    select: {
+                        pointType: true,
+                        sequence: true,
+                        location: { select: { city: true, address: true } },
+                    },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 200,
+        });
+
+        // Сумма и НДС зависят от того, кому выставляем: заказчику идёт его
+        // цена и его ставка, поставщику — стоимость исполнителя.
+        return orders.map((order) => {
+            const outgoing = query.direction === AccountingDocumentDirection.OUTGOING;
+            const amount = outgoing
+                ? order.customerPrice
+                : order.subForwarderId === query.counterpartyId
+                    ? order.subForwarderPrice
+                    : order.driverCost;
+            const hasVat = outgoing ? order.hasVat : order.executorHasVat;
+            const vatRate = outgoing ? order.vatRate : order.executorVatRate;
+            return {
+                ...order,
+                amount: amount ?? new Prisma.Decimal(0),
+                hasVat,
+                vatRate: hasVat ? vatRate : new Prisma.Decimal(0),
+            };
+        });
     }
 
     private async nextNumber(

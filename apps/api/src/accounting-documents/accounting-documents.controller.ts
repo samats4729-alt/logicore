@@ -22,6 +22,7 @@ import { AccountingDocumentsService } from './accounting-documents.service';
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
 import {
     AccountingDocumentListQueryDto,
+    BillableOrdersQueryDto,
     CancelAccountingDocumentDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
@@ -99,6 +100,17 @@ export class AccountingDocumentsController {
     @ApiOperation({ summary: 'Получить список бухгалтерских документов' })
     list(@Request() req: any, @Query() query: AccountingDocumentListQueryDto) {
         return this.documents.list(req.user.companyId, query);
+    }
+
+    // Объявлено до `:id`, иначе путь съедается параметром.
+    @Get('billable-orders')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Заявки контрагента, на которые счёт ещё не выставлен',
+        description: 'Аналог кнопки «Подобрать по заявкам» в 1С.',
+    })
+    listBillableOrders(@Request() req: any, @Query() query: BillableOrdersQueryDto) {
+        return this.documents.listBillableOrders(req.user.companyId, query);
     }
 
     @Get(':id')

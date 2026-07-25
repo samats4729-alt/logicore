@@ -48,7 +48,7 @@ function makeService() {
         },
         contract: { findUnique: jest.fn().mockResolvedValue(null) },
         financeAccount: { findFirst: jest.fn().mockResolvedValue(null) },
-        order: { count: jest.fn().mockResolvedValue(0) },
+        order: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
         accountingDocument: {
             findUnique: jest.fn(),
             update: jest.fn(async ({ data }: any) => ({ id: 'doc-1', ...data })),
@@ -517,6 +517,152 @@ describe('AccountingDocumentsService', () => {
                 service.updateDraft(COMPANY, 'doc-1', { orderIds: ['order-чужой'] }),
             ).rejects.toThrow('Некоторые заявки недоступны');
             expect(tx.accountingDocument.update).not.toHaveBeenCalled();
+        });
+    });
+
+    // T-01в: «Подобрать по заявкам». Главное свойство — список подбора и
+    // проверка при сохранении смотрят на одни и те же заявки, иначе
+    // выбранный рейс отваливался бы уже при создании документа.
+    describe('подбор заявок для счёта', () => {
+        const orderRow = (overrides: Record<string, unknown> = {}) => ({
+            id: 'order-1',
+            orderNumber: 'AB00000123',
+            status: 'COMPLETED',
+            createdAt: new Date('2026-07-20'),
+            cargoDescription: 'Металлопрокат',
+            currency: 'KZT',
+            customerPrice: new Prisma.Decimal('250000'),
+            driverCost: new Prisma.Decimal('180000'),
+            subForwarderPrice: null,
+            subForwarderId: null,
+            vatRate: new Prisma.Decimal('12'),
+            hasVat: true,
+            executorVatRate: new Prisma.Decimal('0'),
+            executorHasVat: false,
+            assignedDriverName: 'Амангельды Е.К.',
+            assignedDriverPlate: '123 ABC 02',
+            routePoints: [],
+            ...overrides,
+        });
+
+        it('не предлагает заявку, уже попавшую в непогашенный счёт', async () => {
+            const { service, prisma } = makeService();
+
+            await service.listBillableOrders(COMPANY, {
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COUNTERPARTY,
+            });
+
+            const { where } = prisma.order.findMany.mock.calls[0][0];
+            expect(where.accountingDocuments.none.document).toEqual({
+                companyId: COMPANY,
+                type: AccountingDocumentType.PAYMENT_INVOICE,
+                direction: AccountingDocumentDirection.OUTGOING,
+                // Отменённый счёт заявку освобождает — иначе ошибочно
+                // выставленный документ навсегда блокировал бы перевыставление.
+                status: { not: AccountingDocumentStatus.CANCELLED },
+            });
+        });
+
+        it('по умолчанию берёт только завершённые, с флагом — и рейсы в работе', async () => {
+            const { service, prisma } = makeService();
+
+            await service.listBillableOrders(COMPANY, {
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COUNTERPARTY,
+            });
+            expect(prisma.order.findMany.mock.calls[0][0].where.status).toEqual({ equals: 'COMPLETED' });
+
+            await service.listBillableOrders(COMPANY, {
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COUNTERPARTY,
+                includeInProgress: true,
+            });
+            expect(prisma.order.findMany.mock.calls[1][0].where.status).toEqual({
+                notIn: ['DRAFT', 'PENDING', 'CANCELLED'],
+            });
+        });
+
+        it('исходящему счёту подставляет цену заказчика и его ставку НДС', async () => {
+            const { service, prisma } = makeService();
+            prisma.order.findMany.mockResolvedValue([orderRow()]);
+
+            const [row] = await service.listBillableOrders(COMPANY, {
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COUNTERPARTY,
+            });
+
+            expect(row.amount.toFixed(2)).toBe('250000.00');
+            expect(row.hasVat).toBe(true);
+            expect(row.vatRate.toFixed(0)).toBe('12');
+        });
+
+        it('входящему счёту подставляет стоимость исполнителя, а не цену заказчика', async () => {
+            const { service, prisma } = makeService();
+            prisma.order.findMany.mockResolvedValue([orderRow()]);
+
+            const [row] = await service.listBillableOrders(COMPANY, {
+                direction: AccountingDocumentDirection.INCOMING,
+                counterpartyId: COUNTERPARTY,
+            });
+
+            expect(row.amount.toFixed(2)).toBe('180000.00');
+            // У исполнителя НДС не выделен — ставка заказчика сюда попасть
+            // не должна, иначе счёт поставщика раздувается на 12 %.
+            expect(row.hasVat).toBe(false);
+            expect(row.vatRate.toFixed(0)).toBe('0');
+        });
+
+        it('берёт цену суб-экспедитора, если счёт выставляет именно он', async () => {
+            const { service, prisma } = makeService();
+            prisma.order.findMany.mockResolvedValue([orderRow({
+                subForwarderId: COUNTERPARTY,
+                subForwarderPrice: new Prisma.Decimal('200000'),
+            })]);
+
+            const [row] = await service.listBillableOrders(COMPANY, {
+                direction: AccountingDocumentDirection.INCOMING,
+                counterpartyId: COUNTERPARTY,
+            });
+
+            expect(row.amount.toFixed(2)).toBe('200000.00');
+        });
+
+        it('не подбирает заявки, когда контрагент — сама организация', async () => {
+            const { service, prisma } = makeService();
+
+            await expect(service.listBillableOrders(COMPANY, {
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COMPANY,
+            })).rejects.toThrow('должны отличаться');
+            expect(prisma.order.findMany).not.toHaveBeenCalled();
+        });
+
+        it('подбор и проверка при сохранении смотрят на одни и те же заявки', async () => {
+            const { service, prisma } = makeService();
+            const request = {
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COUNTERPARTY,
+                includeInProgress: true,
+            };
+
+            await service.listBillableOrders(COMPANY, request);
+            prisma.order.count.mockResolvedValue(1);
+            await service.createDraft(COMPANY, 'accountant-1', {
+                type: AccountingDocumentType.PAYMENT_INVOICE,
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COUNTERPARTY,
+                documentDate: '2026-07-25',
+                lines: [{ name: 'Транспортные услуги', unitPrice: '250000', orderId: 'order-1' }],
+            });
+
+            const picked = prisma.order.findMany.mock.calls[0][0].where;
+            const saved = prisma.order.count.mock.calls[0][0].where;
+            // Условие участия сторон обязано совпадать; отличаться может лишь
+            // отбор по статусу и отсев уже выставленных.
+            expect(saved.customerCompanyId).toEqual(picked.customerCompanyId);
+            expect(saved.OR).toEqual(picked.OR);
+            expect(saved.status).toEqual(picked.status);
         });
     });
 
