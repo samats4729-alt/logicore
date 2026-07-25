@@ -15,7 +15,7 @@
         "prisma:migrate": "prisma migrate dev",
         "prisma:studio": "prisma studio",
         "prisma:push": "prisma db push",
-        "prisma:deploy": "prisma db execute --file prisma/migrations/20260724000000_add_invoice_unique_number/migration.sql --schema prisma/schema.prisma && prisma db push --skip-generate --accept-data-loss",
+        "prisma:deploy": "prisma db push --skip-generate",
         "prisma:seed": "npx ts-node --transpile-only prisma/seed.ts"
     },
     "dependencies": {
