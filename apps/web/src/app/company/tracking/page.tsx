@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
-import { io, Socket } from 'socket.io-client';
 
 const DgisTrackingMap = dynamic(() => import('@/components/ui/DgisTrackingMap'), {
     ssr: false,
@@ -181,35 +180,15 @@ export default function CompanyTrackingPage() {
         return pts;
     }, [trips]);
 
+    // Позиции обновляются опросом раз в 30 секунд. Раньше здесь дополнительно
+    // открывался WebSocket, но он был нерабочим: подключался без namespace
+    // '/tracking' и ждал события 'position:update', которого сервер не слал.
     useEffect(() => {
         fetchDrivers();
-
-        // WebSocket подключение
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const newSocket = io(API_URL, {
-            transports: ['websocket'],
-        });
-
-        newSocket.on('connect', () => {
-            console.log('Connected to tracking socket');
-        });
-
-        newSocket.on('position:update', (data: DriverPosition) => {
-            setDrivers((prev) => {
-                const index = prev.findIndex((d) => d.driverId === data.driverId);
-                if (index >= 0) {
-                    const updated = [...prev];
-                    updated[index] = data;
-                    return updated;
-                }
-                return prev;
-            });
-        });
 
         const interval = setInterval(fetchDrivers, 30000);
 
         return () => {
-            newSocket.disconnect();
             clearInterval(interval);
         };
     }, [fetchDrivers]);
