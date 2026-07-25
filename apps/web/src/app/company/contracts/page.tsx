@@ -179,6 +179,10 @@ export default function CompanyContractsPage() {
         } catch (error) { console.error('Failed to fetch cities:', error); }
     };
 
+    const getDefaultCountryId = () => countries.find((country: any) =>
+        country.code === 'KZ' || /казах/i.test(country.name),
+    )?.id as string | undefined;
+
     useEffect(() => {
         fetchContracts();
         fetchPendingAgreements();
@@ -282,13 +286,22 @@ export default function CompanyContractsPage() {
 
     // === Тарифы ===
     const openTariffModal = (agreementId: string, status?: string) => {
+        const defaultCountryId = getDefaultCountryId();
         setSelectedAgreementId(agreementId);
         setSelectedAgreementStatus(status || 'DRAFT');
         tariffForm.resetFields();
-        setOriginCountryId(undefined); setOriginRegionId(undefined);
+        tariffForm.setFieldsValue({
+            originCountryId: defaultCountryId,
+            destCountryId: defaultCountryId,
+        });
+        setOriginCountryId(defaultCountryId); setOriginRegionId(undefined);
         setOriginRegions([]); setOriginCities([]);
-        setDestCountryId(undefined); setDestRegionId(undefined);
+        setDestCountryId(defaultCountryId); setDestRegionId(undefined);
         setDestRegions([]); setDestCities([]);
+        if (defaultCountryId) {
+            void fetchRegions(defaultCountryId, 'origin');
+            void fetchRegions(defaultCountryId, 'dest');
+        }
         setTariffModalOpen(true);
     };
 
