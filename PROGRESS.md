@@ -1,59 +1,54 @@
-# LogComp — Журнал прогресса
+# LogiCore — локальный запуск
 
-> **Цель:** Система управления логистикой  
-> **Начат:** 2026-01-04  
-> **Статус:** ✅ Фазы 1-3 созданы
+> Проект в продакшене. Правила работы — `AGENTS.md`, дизайн — `REDESIGN_PLAN.md`,
+> деплой и откат — `PRODUCTION_DEPLOY.md`, планы по бухгалтерии —
+> `ACCOUNTING_ROADMAP.md`.
 
----
+## Состав
 
-## ✅ Фаза 1: Backend — ГОТОВО
+| Приложение | Что это | Локальный адрес |
+|------------|---------|-----------------|
+| `apps/api` | NestJS + Prisma | http://localhost:3001 |
+| `apps/web` | Next.js 14 + Ant Design | http://localhost:3000 |
+| `apps/mobile` | Expo (приложение водителя) | Expo Go / dev client |
 
-| Сервис | URL |
-|--------|-----|
-| API | http://localhost:3001 |
-| Swagger | http://localhost:3001/api/docs |
-| PostgreSQL | localhost:5433 |
-| Redis | localhost:6379 |
+Инфраструктура из `docker-compose.yml`: PostgreSQL (PostGIS) на `localhost:5433`,
+Redis на `localhost:6379`, MinIO на `localhost:9000`.
 
-## ✅ Фаза 2: Веб-портал — ГОТОВО
+Swagger доступен на http://localhost:3001/api/docs — только вне продакшена
+либо при `SWAGGER_ENABLED=true`.
 
-| URL | Описание |
-|-----|----------|
-| http://localhost:3000 | Next.js портал |
-| /login | Авторизация |
-| /admin | Админ-панель |
-
-**Тестовый логин:** `admin@logcomp.kz` / `admin123`
-
-## ✅ Фаза 3: Мобильное приложение — ГОТОВО
-
-**Экраны:**
-- SMS авторизация водителей
-- Активный рейс с управлением статусами
-- Карта маршрута
-- Профиль
-
-**Технологии:** Expo, React Native, Expo Router, react-native-maps, фоновая геолокация
-
----
-
-## Как запустить
+## Запуск
 
 ```bash
-# Backend
-cd c:\work\logcomp
-docker-compose up -d
-pnpm dev:api
+docker-compose up -d          # postgres + redis + minio
 
-# Веб-портал
-cd apps/web
-pnpm dev
-
-# Мобильное (нужен Expo Go)
-cd apps/mobile
 pnpm install
+pnpm db:generate
+pnpm dev                      # api + web
+# только веб: pnpm dev:web ; только api: pnpm dev:api
+```
+
+Мобильное приложение:
+
+```bash
+cd apps/mobile
 pnpm start
 ```
 
----
-*Последний триггер деплоя: 25.06.2026*
+## Учётные данные
+
+В репозитории их нет и быть не должно. Локальные значения берутся из `.env`
+(шаблоны — `apps/api/.env.example`, `apps/web/.env.example`).
+
+Первый администратор создаётся на старте API из `ADMIN_EMAIL` и
+`ADMIN_PASSWORD` и только при `BOOTSTRAP_ADMIN_ON_START=true` (см.
+`apps/api/src/main.ts`).
+
+## Проверки перед коммитом
+
+```bash
+cd apps/web && npx tsc --noEmit
+cd apps/api && npx tsc --noEmit   # если менялся api
+pnpm --filter api test
+```

@@ -8,8 +8,6 @@ import { initSentry } from './common/sentry';
 import * as bcrypt from 'bcryptjs';
 import * as compression from 'compression';
 
-// Force rebuild 2026-02-02
-
 async function bootstrap() {
     const logger = new Logger('Bootstrap');
 
