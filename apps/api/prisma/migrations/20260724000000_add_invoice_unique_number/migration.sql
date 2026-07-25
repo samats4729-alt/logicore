@@ -14,9 +14,9 @@ WITH duplicates AS (
   FROM "Invoice"
 )
 UPDATE "Invoice" AS i
-SET "invoiceNumber" = i."invoiceNumber" || '-dup' || d."rn"
+SET "invoiceNumber" = i."invoiceNumber" || '-dup-' || i."id"
 FROM duplicates d
 WHERE i."id" = d."id" AND d."rn" > 1;
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Invoice_issuerId_invoiceNumber_type_key" ON "Invoice"("issuerId", "invoiceNumber", "type");
+CREATE UNIQUE INDEX IF NOT EXISTS "Invoice_issuerId_invoiceNumber_type_key" ON "Invoice"("issuerId", "invoiceNumber", "type");
