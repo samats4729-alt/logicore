@@ -7,8 +7,10 @@ import {
     Post,
     Query,
     Request,
+    Res,
     UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -16,6 +18,7 @@ import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { AuditService } from '../audit/audit.service';
 import { AccountingDocumentsService } from './accounting-documents.service';
+import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
 import {
     AccountingDocumentListQueryDto,
     CancelAccountingDocumentDto,
@@ -39,6 +42,7 @@ const CHANGE_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTAN
 export class AccountingDocumentsController {
     constructor(
         private readonly documents: AccountingDocumentsService,
+        private readonly pdf: AccountingDocumentPdfService,
         private readonly audit: AuditService,
     ) {}
 
@@ -70,6 +74,26 @@ export class AccountingDocumentsController {
     @ApiOperation({ summary: 'Получить бухгалтерский документ' })
     getById(@Request() req: any, @Param('id') id: string) {
         return this.documents.getById(req.user.companyId, id);
+    }
+
+    @Get(':id/pdf')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({ summary: 'Скачать PDF бухгалтерского документа' })
+    async downloadPdf(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Res() res: Response,
+    ) {
+        const document = await this.documents.getById(req.user.companyId, id);
+        const pdfBuffer = await this.pdf.generateInvoicePdf(document);
+        const safeNumber = document.number.replace(/[^a-zA-Z0-9_-]+/g, '_');
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="Invoice_${safeNumber}.pdf"`,
+            'Content-Length': pdfBuffer.length,
+            'Cache-Control': 'private, no-store',
+        });
+        res.end(pdfBuffer);
     }
 
     @Post(':id/post')
