@@ -82,15 +82,15 @@ export class TrackingController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
     @RequirePermissions('tracking')
     @ApiOperation({ summary: 'Получить последнюю позицию водителя' })
-    async getDriverPosition(@Param('id') id: string) {
-        return this.trackingService.getDriverLastPosition(id);
+    async getDriverPosition(@Param('id') id: string, @Request() req: any) {
+        return this.trackingService.getDriverLastPosition(id, req.user.companyId);
     }
 
     @Get('order/:id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.RECIPIENT)
     @RequirePermissions('tracking', 'orders')
     @ApiOperation({ summary: 'Получить трек заявки' })
-    async getOrderTrack(@Param('id') id: string) {
-        return this.trackingService.getOrderTrack(id);
+    async getOrderTrack(@Param('id') id: string, @Request() req: any) {
+        return this.trackingService.getOrderTrack(id, req.user.companyId);
     }
 }

@@ -1,9 +1,33 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+// Верхняя граница на длину трека одной заявки. GpsPoint — самая быстрорастущая
+// таблица в базе: рейс на несколько суток с секундной частотой даёт сотни тысяч
+// точек, и отдавать их одним ответом нельзя.
+const MAX_TRACK_POINTS = 5000;
 
 @Injectable()
 export class TrackingService {
     constructor(private prisma: PrismaService) { }
+
+    /**
+     * Заявки, которые видит компания: она может быть заказчиком, экспедитором,
+     * суб-экспедитором, партнёром или ответственным менеджером — а не только
+     * заказчиком. Для платформенного админа (companyId пустой) ограничения нет.
+     */
+    private companyOrderScope(companyId?: string): Prisma.OrderWhereInput {
+        if (!companyId) return {};
+        return {
+            OR: [
+                { customerCompanyId: companyId },
+                { forwarderId: companyId },
+                { partnerId: companyId },
+                { subForwarderId: companyId },
+                { responsibleManager: { companyId } },
+            ],
+        };
+    }
 
     /**
      * Сохранение GPS точки от водителя
@@ -38,22 +62,54 @@ export class TrackingService {
     }
 
     /**
-     * Получение последней позиции водителя
+     * Получение последней позиции водителя.
+     *
+     * Раньше метод искал точку только по driverId, без привязки к компании:
+     * любой пользователь с правом `tracking` мог узнать текущие координаты
+     * произвольного водителя платформы, подставив чужой ID. Теперь точка
+     * отдаётся, только если водитель числится в компании запрашивающего или
+     * точка привязана к заявке, которую эта компания видит.
      */
-    async getDriverLastPosition(driverId: string) {
+    async getDriverLastPosition(driverId: string, companyId?: string) {
+        const where: Prisma.GpsPointWhereInput = companyId
+            ? {
+                driverId,
+                OR: [
+                    { driver: { companyId } },
+                    { order: this.companyOrderScope(companyId) },
+                ],
+            }
+            : { driverId };
+
         return this.prisma.gpsPoint.findFirst({
-            where: { driverId },
+            where,
             orderBy: { recordedAt: 'desc' },
         });
     }
 
     /**
-     * Получение трека заявки
+     * Получение трека заявки.
+     *
+     * Раньше трек отдавался по одному orderId без проверки компании — любая
+     * компания могла выгрузить полный маршрут чужой заявки. Теперь заявка
+     * сначала проверяется на видимость, а количество точек ограничено.
      */
-    async getOrderTrack(orderId: string) {
+    async getOrderTrack(orderId: string, companyId?: string) {
+        const order = await this.prisma.order.findFirst({
+            where: { id: orderId, ...this.companyOrderScope(companyId) },
+            select: { id: true },
+        });
+
+        if (!order) {
+            // Не раскрываем, существует ли заявка вообще: для чужой заявки и
+            // для несуществующей ответ одинаковый.
+            throw new NotFoundException('Заявка не найдена');
+        }
+
         return this.prisma.gpsPoint.findMany({
             where: { orderId },
             orderBy: { recordedAt: 'asc' },
+            take: MAX_TRACK_POINTS,
         });
     }
 
@@ -64,17 +120,7 @@ export class TrackingService {
         // Получаем последнюю точку для каждого водителя за последний час
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-        // Заявки компании: она может быть заказчиком, экспедитором, суб-экспедитором,
-        // партнёром или ответственным менеджером — а не только заказчиком.
-        const companyScope = companyId ? {
-            OR: [
-                { customerCompanyId: companyId },
-                { forwarderId: companyId },
-                { partnerId: companyId },
-                { subForwarderId: companyId },
-                { responsibleManager: { companyId } },
-            ],
-        } : {};
+        const companyScope = this.companyOrderScope(companyId);
 
         const points = await this.prisma.gpsPoint.findMany({
             where: {
@@ -155,15 +201,7 @@ export class TrackingService {
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
         const ACTIVE = ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING', 'PROBLEM'] as any[];
 
-        const companyScope = companyId ? {
-            OR: [
-                { customerCompanyId: companyId },
-                { forwarderId: companyId },
-                { partnerId: companyId },
-                { subForwarderId: companyId },
-                { responsibleManager: { companyId } },
-            ],
-        } : {};
+        const companyScope = this.companyOrderScope(companyId);
 
         const orders = await this.prisma.order.findMany({
             where: {
