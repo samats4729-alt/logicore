@@ -64,8 +64,7 @@ function RegisterContent() {
                 phone: formValues.phone || '+70000000000',
             });
 
-            localStorage.setItem('token', res.data.accessToken);
-            setUser(res.data.admin, res.data.accessToken);
+            setUser(res.data.admin);
             setStep(2);
 
             setTimeout(() => {
@@ -88,9 +87,7 @@ function RegisterContent() {
                 companyType: 'CUSTOMER',
             });
 
-            // Сохраняем токен
-            localStorage.setItem('token', response.data.accessToken);
-            setUser(response.data.admin, response.data.accessToken);
+            setUser(response.data.admin);
 
             setStep(2);
 

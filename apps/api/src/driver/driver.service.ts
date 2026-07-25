@@ -5,6 +5,7 @@ import { randomBytes } from 'crypto';
 import { OrderStatus, DocumentType } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
+import { OrdersService } from '../orders/orders.service';
 
 // Простой линейный сценарий для водителя: текущий статус → следующее действие
 const DRIVER_FLOW: { from: OrderStatus[]; to: OrderStatus; label: string }[] = [
@@ -17,7 +18,11 @@ const DRIVER_FLOW: { from: OrderStatus[]; to: OrderStatus; label: string }[] = [
 
 @Injectable()
 export class DriverService {
-    constructor(private prisma: PrismaService, private s3: S3Service) { }
+    constructor(
+        private prisma: PrismaService,
+        private s3: S3Service,
+        private ordersService: OrdersService,
+    ) { }
 
     // ==================== ГЕНЕРАЦИЯ ССЫЛКИ (для платформы) ====================
 
@@ -57,6 +62,7 @@ export class DriverService {
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 forwarder: { select: { name: true, phone: true } },
                 partner: { select: { name: true, phone: true } },
+                responsibleManager: { select: { companyId: true } },
             },
         });
         if (!order) throw new NotFoundException('Ссылка недействительна');
@@ -117,7 +123,22 @@ export class DriverService {
             throw new BadRequestException('Неверный переход');
         }
 
-        await this.prisma.order.update({ where: { id: order.id }, data: { status: flow.to } });
+        // The public driver link is an authentication mechanism of its own. Route every
+        // transition through OrdersService so completion confirmation, status history,
+        // payment flags, payroll triggers and notifications cannot be bypassed here.
+        const initiatorCompanyId = order.subForwarderId
+            || order.partnerId
+            || order.forwarderId
+            || order.responsibleManager?.companyId
+            || undefined;
+        await this.ordersService.updateStatus(
+            order.id,
+            flow.to,
+            `Driver link: ${flow.label}`,
+            order.driverId || undefined,
+            initiatorCompanyId,
+            order.driverId ? 'DRIVER' : undefined,
+        );
         if (order.driverId) {
             await this.prisma.orderChangeLog.create({
                 data: { orderId: order.id, userId: order.driverId, action: 'driver_status', details: `Водитель: ${flow.label} → статус ${flow.to}` },

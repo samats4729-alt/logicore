@@ -10,7 +10,6 @@ import {
     PlusOutlined, DeleteOutlined, EditOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
-import { useAuthStore } from '@/store/auth';
 import { useParams, useRouter } from 'next/navigation';
 
 const { Title, Text } = Typography;
@@ -31,7 +30,6 @@ export default function EditContractContentPage() {
     const params = useParams();
     const router = useRouter();
     const contractId = params.id as string;
-    const { token } = useAuthStore();
 
     const [articles, setArticles] = useState<ContractArticle[]>([]);
     const [contractNumber, setContractNumber] = useState('');
@@ -39,15 +37,7 @@ export default function EditContractContentPage() {
     const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
 
-    // Ensure auth header is set
-    useEffect(() => {
-        if (token) {
-            api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        }
-    }, [token]);
-
     const fetchContent = useCallback(async () => {
-        if (!token) return;
         try {
             setLoading(true);
             const contentRes = await api.get(`/contracts/${contractId}/content`);
@@ -67,7 +57,7 @@ export default function EditContractContentPage() {
         } finally {
             setLoading(false);
         }
-    }, [contractId, token]);
+    }, [contractId]);
 
     useEffect(() => { fetchContent(); }, [fetchContent]);
 

@@ -1,0 +1,186 @@
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    Post,
+    Query,
+    Request,
+    Res,
+    UseGuards,
+} from '@nestjs/common';
+import { Response } from 'express';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
+import { Roles, RolesGuard } from '../auth/guards/roles.guard';
+import { AuditService } from '../audit/audit.service';
+import { AccountingDocumentsService } from './accounting-documents.service';
+import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
+import {
+    AccountingDocumentListQueryDto,
+    CancelAccountingDocumentDto,
+    CreateAccountingDocumentDto,
+    GenerateReconciliationDraftDto,
+} from './dto/accounting-document.dto';
+
+const VIEW_ROLES = [
+    UserRole.ADMIN,
+    UserRole.COMPANY_ADMIN,
+    UserRole.ACCOUNTANT,
+    UserRole.LOGISTICIAN,
+    UserRole.FORWARDER,
+];
+const CHANGE_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT];
+
+@ApiTags('accounting-documents')
+@ApiBearerAuth()
+@Controller('accounting-documents')
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@RequirePermissions('accounting')
+export class AccountingDocumentsController {
+    constructor(
+        private readonly documents: AccountingDocumentsService,
+        private readonly pdf: AccountingDocumentPdfService,
+        private readonly audit: AuditService,
+    ) {}
+
+    @Post()
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Создать черновик бухгалтерского документа' })
+    async create(@Request() req: any, @Body() dto: CreateAccountingDocumentDto) {
+        const document = await this.documents.createDraft(req.user.companyId, req.user.id, dto);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'accounting_document',
+            entityId: document.id,
+            entityLabel: `${document.type} №${document.number}`,
+        });
+        return document;
+    }
+
+    @Post('reconciliation/from-ledger')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Создать черновик акта сверки из заявок и оплат' })
+    async createReconciliationFromLedger(
+        @Request() req: any,
+        @Body() dto: GenerateReconciliationDraftDto,
+    ) {
+        const document = await this.documents.createReconciliationDraftFromLedger(
+            req.user.companyId,
+            req.user.id,
+            dto,
+        );
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'accounting_document',
+            entityId: document.id,
+            entityLabel: `${document.type} №${document.number}`,
+            details: {
+                source: 'ledger',
+                reportPeriodFrom: dto.reportPeriodFrom,
+                reportPeriodTo: dto.reportPeriodTo,
+                operationCount: document.reconciliationLines.length,
+            },
+        });
+        return document;
+    }
+
+    @Get()
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({ summary: 'Получить список бухгалтерских документов' })
+    list(@Request() req: any, @Query() query: AccountingDocumentListQueryDto) {
+        return this.documents.list(req.user.companyId, query);
+    }
+
+    @Get(':id')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({ summary: 'Получить бухгалтерский документ' })
+    getById(@Request() req: any, @Param('id') id: string) {
+        return this.documents.getById(req.user.companyId, id);
+    }
+
+    @Get(':id/pdf')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({ summary: 'Скачать PDF бухгалтерского документа' })
+    async downloadPdf(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Res() res: Response,
+    ) {
+        const document = await this.documents.getById(req.user.companyId, id);
+        const pdfBuffer = await this.pdf.generatePdf(document);
+        const safeNumber = document.number.replace(/[^a-zA-Z0-9_-]+/g, '_');
+        const filePrefix = document.type === 'SERVICE_ACT'
+            ? 'ServiceAct_R1'
+            : document.type === 'RECONCILIATION_ACT'
+                ? 'ReconciliationAct'
+                : 'Invoice';
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${filePrefix}_${safeNumber}.pdf"`,
+            'Content-Length': pdfBuffer.length,
+            'Cache-Control': 'private, no-store',
+        });
+        res.end(pdfBuffer);
+    }
+
+    @Post(':id/post')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Провести бухгалтерский документ' })
+    async postDocument(@Request() req: any, @Param('id') id: string) {
+        const document = await this.documents.post(req.user.companyId, req.user.id, id);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'STATUS',
+            entity: 'accounting_document',
+            entityId: document.id,
+            entityLabel: `${document.type} №${document.number}`,
+            details: { status: document.status, checksum: document.checksum },
+        });
+        return document;
+    }
+
+    @Post(':id/cancel')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Отменить проведённый бухгалтерский документ' })
+    async cancel(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() dto: CancelAccountingDocumentDto,
+    ) {
+        const document = await this.documents.cancel(req.user.companyId, req.user.id, id, dto.reason);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'STATUS',
+            entity: 'accounting_document',
+            entityId: document.id,
+            entityLabel: `${document.type} №${document.number}`,
+            details: { status: document.status, reason: dto.reason },
+        });
+        return document;
+    }
+
+    @Delete(':id')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Удалить черновик бухгалтерского документа' })
+    async deleteDraft(@Request() req: any, @Param('id') id: string) {
+        const result = await this.documents.deleteDraft(req.user.companyId, id);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'DELETE',
+            entity: 'accounting_document',
+            entityId: id,
+        });
+        return result;
+    }
+}

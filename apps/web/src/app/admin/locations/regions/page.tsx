@@ -32,10 +32,13 @@ export default function AdminRegionsPage() {
     const fetchCountries = async () => {
         try {
             const res = await api.get('/cities/countries');
-            setCountries(res.data);
-            // Select first country by default if available
-            if (res.data.length > 0 && !selectedCountryId) {
-                setSelectedCountryId(res.data[0].id);
+            const list: Country[] = res.data || [];
+            setCountries(list);
+            if (list.length > 0 && !selectedCountryId) {
+                const kazakhstan = list.find(country =>
+                    country.code === 'KZ' || /казах/i.test(country.name),
+                );
+                setSelectedCountryId((kazakhstan || list[0]).id);
             }
         } catch (error) {
             message.error('Ошибка загрузки стран');

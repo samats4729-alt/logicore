@@ -1,8 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
+import { extractAuthToken } from '../auth-cookie';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -15,7 +16,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             throw new Error('JWT_SECRET environment variable is not set');
         }
         super({
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            // Browser uses an httpOnly cookie; mobile and API clients keep Bearer auth.
+            jwtFromRequest: extractAuthToken,
             ignoreExpiration: false,
             secretOrKey: secret,
             passReqToCallback: true,
@@ -24,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     async validate(req: any, payload: any) {
         // Получаем токен из заголовка
-        const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+        const token = extractAuthToken(req);
 
         // Проверяем активность сессии (Single Session Policy)
         if (!token) {
@@ -32,7 +34,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
 
         // Проверка активности пользователя
-        const user = await this.authService.findUserById(payload.sub);
+        const user = await this.authService.findUserById(payload.sub, payload.companyId);
         if (!user) {
             throw new UnauthorizedException('Пользователь не найден');
         }
@@ -47,8 +49,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
 
         return {
-            id: payload.sub,
             ...payload,
+            id: payload.sub,
+            email: user.email,
+            role: user.role,
+            companyId: user.companyId,
             permissions: user.permissions ?? [],
         };
     }

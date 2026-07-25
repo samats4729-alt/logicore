@@ -38,6 +38,11 @@ export class CreateLocationDto {
     @IsString()
     city?: string;
 
+    @ApiPropertyOptional({ description: 'ID города из справочника' })
+    @IsOptional()
+    @IsString()
+    cityId?: string;
+
     @ApiPropertyOptional({ description: 'ID компании' })
     @IsOptional()
     @IsString()
@@ -89,6 +94,11 @@ export class UpdateLocationDto {
     @IsOptional()
     @IsString()
     city?: string;
+
+    @ApiPropertyOptional({ description: 'ID города из справочника' })
+    @IsOptional()
+    @IsString()
+    cityId?: string | null;
 
     @ApiPropertyOptional({ description: 'ID компании' })
     @IsOptional()

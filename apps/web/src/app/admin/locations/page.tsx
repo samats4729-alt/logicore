@@ -65,6 +65,19 @@ export default function AdminLocationsPage() {
         fetchRegions(val);
     };
 
+    const prepareNewCity = () => {
+        const defaultCountryId = countries.find(country =>
+            country.code === 'KZ' || /казах/i.test(country.name),
+        )?.id;
+        setEditingId(null);
+        form.resetFields();
+        form.setFieldValue('countryId', defaultCountryId);
+        setSelectedCountryId(defaultCountryId);
+        setRegions([]);
+        if (defaultCountryId) void fetchRegions(defaultCountryId);
+        setModalOpen(true);
+    };
+
     const handleSave = async (values: any) => {
         try {
             // Check if API supports creating cities. For now mockup or basic endpoint
@@ -155,11 +168,7 @@ export default function AdminLocationsPage() {
             <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                 <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
                     <Input prefix={<SearchOutlined />} placeholder="Поиск города..." style={{ width: 300 }} />
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-                        setEditingId(null);
-                        form.resetFields();
-                        setModalOpen(true);
-                    }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={prepareNewCity}>
                         Добавить город
                     </Button>
                 </div>

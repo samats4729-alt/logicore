@@ -4,7 +4,14 @@ import { InvoiceService } from './invoice.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
-import { UserRole, InvoiceType, InvoiceStatus } from '@prisma/client';
+import { UserRole } from '@prisma/client';
+import {
+    CreateInvoiceDto,
+    GetInvoicesQueryDto,
+    GetUninvoicedOrdersQueryDto,
+    SendInvoiceEmailDto,
+    UpdateInvoiceStatusDto,
+} from './dto/invoice.dto';
 
 @ApiTags('invoices')
 @Controller('invoices')
@@ -18,16 +25,7 @@ export class InvoiceController {
     @Roles(UserRole.ACCOUNTANT, UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Создать новый счет' })
     async createInvoice(
-        @Body() dto: {
-            invoiceNumber: string;
-            type: InvoiceType;
-            date: string;
-            dueDate?: string;
-            issuerId: string;
-            recipientId: string;
-            orderIds: string[];
-            note?: string;
-        },
+        @Body() dto: CreateInvoiceDto,
         @Request() req: any,
     ) {
         return this.invoiceService.createInvoice(req.user.companyId, req.user.id, dto);
@@ -37,28 +35,24 @@ export class InvoiceController {
     @Roles(UserRole.ACCOUNTANT, UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Получить список счетов компании' })
     async getInvoices(
-        @Query('type') type?: InvoiceType,
-        @Query('status') status?: InvoiceStatus,
-        @Query('counterpartyId') counterpartyId?: string,
-        @Request() req?: any,
+        @Query() query: GetInvoicesQueryDto,
+        @Request() req: any,
     ) {
-        return this.invoiceService.getInvoices(req.user.companyId, { type, status, counterpartyId });
+        return this.invoiceService.getInvoices(req.user.companyId, query);
     }
 
     @Get('uninvoiced-orders')
     @Roles(UserRole.ACCOUNTANT, UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Получить рейсы контрагента без счета (завершённые, опц. в работе)' })
     async getUninvoicedOrders(
-        @Query('type') type: InvoiceType,
-        @Query('counterpartyId') counterpartyId: string,
-        @Query('includeInProgress') includeInProgress: string,
+        @Query() query: GetUninvoicedOrdersQueryDto,
         @Request() req: any,
     ) {
         return this.invoiceService.getUninvoicedOrders(
             req.user.companyId,
-            type,
-            counterpartyId,
-            includeInProgress === 'true',
+            query.type,
+            query.counterpartyId,
+            query.includeInProgress === 'true',
         );
     }
 
@@ -74,7 +68,7 @@ export class InvoiceController {
     @ApiOperation({ summary: 'Изменить статус счета' })
     async updateInvoiceStatus(
         @Param('id') id: string,
-        @Body() dto: { status: InvoiceStatus },
+        @Body() dto: UpdateInvoiceStatusDto,
         @Request() req: any,
     ) {
         return this.invoiceService.updateInvoiceStatus(id, req.user.companyId, dto.status, req.user.id);
@@ -90,7 +84,7 @@ export class InvoiceController {
     @Post(':id/send-email')
     @Roles(UserRole.ACCOUNTANT, UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Отправить счёт контрагенту по email' })
-    async sendEmail(@Param('id') id: string, @Body() dto: { email: string }, @Request() req: any) {
+    async sendEmail(@Param('id') id: string, @Body() dto: SendInvoiceEmailDto, @Request() req: any) {
         return this.invoiceService.sendInvoiceEmail(id, req.user.companyId, dto?.email);
     }
 

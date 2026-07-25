@@ -757,9 +757,11 @@ export class FinancialReportsService {
                 routePoints: order.routePoints,
                 incomingInvoiceId: order.incomingInvoiceId,
                 outgoingInvoiceId: order.outgoingInvoiceId,
-                subForwarderId: order.subForwarderId,
-                subForwarderPrice: order.subForwarderPrice,
-                driverCost: order.driverCost,
+                // Заказчик не должен видеть себестоимость исполнителя (маржу
+                // экспедитора/партнёра) — скрываем при просмотре со стороны заказчика.
+                subForwarderId: isCustomer ? null : order.subForwarderId,
+                subForwarderPrice: isCustomer ? null : order.subForwarderPrice,
+                driverCost: isCustomer ? null : order.driverCost,
             };
 
             if (isCustomer && order.forwarder && order.forwarder.id !== companyId) {
@@ -926,6 +928,13 @@ export class FinancialReportsService {
 
         const start = query.startDate ? new Date(query.startDate) : null;
         const end = query.endDate ? new Date(query.endDate) : null;
+        if (start && Number.isNaN(start.getTime())) throw new BadRequestException('Некорректная дата начала периода');
+        if (end && Number.isNaN(end.getTime())) throw new BadRequestException('Некорректная дата окончания периода');
+        if (start) start.setUTCHours(0, 0, 0, 0);
+        if (end) end.setUTCHours(23, 59, 59, 999);
+        if (start && end && start > end) {
+            throw new BadRequestException('Начало периода позже его окончания');
+        }
 
         // Заявки, где участвуют обе стороны
         const orders = await this.prisma.order.findMany({
@@ -1374,9 +1383,26 @@ export class FinancialReportsService {
         const fullReport = await this.getCounterpartyReport(companyId);
 
         const key = `${counterpartyId}__${ourRole}`;
-        const counterparty = fullReport.counterparties.find(
+        const rawCounterparty = fullReport.counterparties.find(
             (c: any) => `${c.counterparty.id}__${c.ourRole}` === key
         );
+
+        // getCounterpartyReport считает суммы с точки зрения отправителя ссылки, поэтому
+        // driverCost/subForwarderPrice могут быть не скрыты (отправитель — легитимный
+        // экспедитор, видящий свою себестоимость). Но публичная ссылка уходит контрагенту
+        // (в т.ч. заказчику), которому эта себестоимость видна быть не должна — скрываем
+        // её всегда, независимо от роли отправителя.
+        const counterparty = rawCounterparty
+            ? {
+                ...rawCounterparty,
+                orders: rawCounterparty.orders.map((o: any) => ({
+                    ...o,
+                    driverCost: null,
+                    subForwarderPrice: null,
+                    subForwarderId: null,
+                })),
+            }
+            : rawCounterparty;
 
         const invoices = await this.prisma.invoice.findMany({
             where: {

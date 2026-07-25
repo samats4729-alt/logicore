@@ -123,6 +123,10 @@ model User {
   orderChangeLogs   OrderChangeLog[] @relation("OrderChangeLogs")
   closedPeriods     ClosedPeriod[]
   createdInvoices   Invoice[]        @relation("InvoiceCreator")
+  accountingDocumentsCreated   AccountingDocument[]        @relation("AccountingDocumentCreatedBy")
+  accountingDocumentsPosted    AccountingDocument[]        @relation("AccountingDocumentPostedBy")
+  accountingDocumentsCancelled AccountingDocument[]        @relation("AccountingDocumentCancelledBy")
+  accountingPaymentAllocations AccountingPaymentAllocation[]
   userCompanyRelations UserCompanyRelation[]
   
   // Компания (для PARTNER и WAREHOUSE)
@@ -303,11 +307,16 @@ model Company {
   vehicles          Vehicle[]
   payments           Payment[] @relation("CompanyPayments")
   counterpartyPayments Payment[] @relation("CounterpartyPayments")
+  financeOperations         FinanceOperation[] @relation("CompanyFinanceOperations")
+  counterpartyFinanceOperations FinanceOperation[] @relation("CounterpartyFinanceOperations")
   closedPeriods      ClosedPeriod[]
   financeAccounts     FinanceAccount[] @relation("CompanyFinanceAccounts")
   financeCategories   FinanceCategory[] @relation("CompanyFinanceCategories")
   issuedInvoices     Invoice[]         @relation("InvoiceIssuer")
   receivedInvoices   Invoice[]         @relation("InvoiceRecipient")
+  accountingDocuments             AccountingDocument[]          @relation("AccountingDocumentCompany")
+  accountingCounterpartyDocuments AccountingDocument[]          @relation("AccountingDocumentCounterparty")
+  accountingDocumentNumberings    AccountingDocumentNumbering[]
   userCompanyRelations UserCompanyRelation[]
   affiliations       Affiliation[]     @relation("CompanyAffiliations")
   documents          Document[]
@@ -376,6 +385,8 @@ model Location {
   contactName String?
   contactPhone String?
   city        String?   // <-- Added city field
+  cityId      String?
+  cityRecord  City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
   notes       String?
   emails      String?   // Контактные email-адреса
   companyId   String?   // ID привязанного контрагента
@@ -390,35 +401,45 @@ model Location {
   warehouseGates    WarehouseGate[]
   
   @@index([latitude, longitude])
+  @@index([cityId])
 }
 
 model Country {
-  id        String   @id @default(cuid())
-  name      String   @unique // e.g., "Kazakhstan"
-  code      String   @unique // e.g., "KZ"
-  regions   Region[]
-  cities    City[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String   @unique // e.g., "Kazakhstan"
+  code             String   @unique // e.g., "KZ"
+  externalProvider String?
+  externalId       String?
+  regions          Region[]
+  cities            City[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([externalProvider, externalId])
 }
 
 model Region {
-  id        String   @id @default(cuid())
-  name      String   // e.g., "Almaty Region"
-  countryId String
-  country   Country  @relation(fields: [countryId], references: [id])
-  cities    City[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String   // e.g., "Almaty Region"
+  countryId        String
+  country          Country  @relation(fields: [countryId], references: [id])
+  externalProvider String?
+  externalId       String?
+  cities            City[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@unique([countryId, name])
+  @@unique([externalProvider, externalId])
 }
 
 model City {
-  id        String   @id @default(cuid())
-  name      String
-  latitude  Float
-  longitude Float
+  id               String   @id @default(cuid())
+  name             String
+  latitude         Float
+  longitude        Float
+  externalProvider String?
+  externalId       String?
   
   regionId  String?
   region    Region?  @relation(fields: [regionId], references: [id])
@@ -428,16 +449,20 @@ model City {
 
   originTariffs      RouteTariff[] @relation("OriginTariffs")
   destinationTariffs RouteTariff[] @relation("DestinationTariffs")
+  locations          Location[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([countryId, regionId, name]) // Unique name per region/country
+  @@unique([externalProvider, externalId])
 }
 model Order {
   id              String      @id @default(cuid())
   orderNumber     String      @unique // Номер заявки
   status          OrderStatus @default(DRAFT)
+  accountingDocumentLines AccountingDocumentLine[]
+  accountingDocuments     AccountingDocumentOrder[]
   pendingStatus     OrderStatus?
   pendingStatusById String?
   pendingStatusAt   DateTime?
@@ -574,6 +599,7 @@ model Order {
   incomes         Income[]
   bonuses         Bonus[]
   payments        Payment[]
+  financeOperations FinanceOperation[]
   assignees       OrderAssignee[]
   responsibles    OrderResponsible[]
   changeLog       OrderChangeLog[]
@@ -754,6 +780,7 @@ model Contract {
   // Стороны
   customerCompanyId String
   customerCompany   Company      @relation("ContractCustomer", fields: [customerCompanyId], references: [id])
+  accountingDocuments AccountingDocument[]
   
   forwarderCompanyId String
   forwarderCompany   Company    @relation("ContractForwarder", fields: [forwarderCompanyId], references: [id])
@@ -928,6 +955,7 @@ model Payment {
   account        FinanceAccount?  @relation("AccountPayments", fields: [accountId], references: [id], onDelete: SetNull)
   categoryId     String?
   category       FinanceCategory? @relation("CategoryPayments", fields: [categoryId], references: [id], onDelete: SetNull)
+  documentAllocations AccountingPaymentAllocation[]
 
   @@index([companyId, date])
   @@index([orderId])
@@ -956,6 +984,7 @@ model FinanceAccount {
   payments       Payment[]   @relation("AccountPayments")
   incomes        Income[]    @relation("AccountIncomes")
   expenses    Expense[]   @relation("AccountExpenses")
+  financeOperations FinanceOperation[] @relation("AccountFinanceOperations")
 
   @@unique([companyId, name, kind])
   @@index([companyId])
@@ -979,9 +1008,75 @@ model FinanceCategory {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   payments    Payment[]        @relation("CategoryPayments")
+  financeOperations FinanceOperation[] @relation("CategoryFinanceOperations")
 
   @@unique([companyId, name, direction])
   @@index([companyId])
+}
+
+// ==================== ФАЗА 1 (аудит M-8): единая модель финансовых операций ====================
+// Payment/Income/Expense фактически описывают одно и то же (движение денег компании),
+// но независимыми моделями с разными наборами полей — это создаёт риск задвоения
+// доходов/расходов в отчётах (см. аудит) и не даёт единой ленты операций.
+//
+// Как и в случае с Person/Affiliation (Фаза 1 мультикомпанийной архитектуры выше),
+// объединение делается поэтапно: на этой фазе FinanceOperation ЗАПОЛНЯЕТСЯ бэкфиллом
+// из Payment/Income/Expense (см. prisma/backfill-finance-operations.js) и НЕ читается
+// существующей логикой — ничего не ломает и не меняет поведение отчётов. Переключение
+// чтения/записи на неё — отдельная будущая фаза, требующая синхронной правки ~13 мест
+// в api (в первую очередь financial-reports.service.ts) и web (страницы accounting/*).
+//
+// sourceId — id исходной записи в Payment/Income/Expense, чтобы backfill был проверяем
+// и обратим (сверка 1:1, как PersonMerge позволяет проверить/откатить слияние личностей).
+enum FinanceOperationSource {
+  PAYMENT
+  INCOME
+  EXPENSE
+}
+
+model FinanceOperation {
+  id             String                 @id @default(cuid())
+  companyId      String
+  company        Company                @relation("CompanyFinanceOperations", fields: [companyId], references: [id], onDelete: Cascade)
+
+  source         FinanceOperationSource
+  sourceId       String                 // id исходной записи (Payment/Income/Expense.id)
+
+  direction      PaymentDirection       // IN|OUT; для Income всегда IN, для Expense всегда OUT
+  amount         Float
+  date           DateTime
+
+  // Категория: у Payment — ссылка на FinanceCategory, у Income/Expense — свободный текст.
+  // Храним оба варианта, чтобы бэкфилл не терял данные ни одного источника.
+  categoryId     String?
+  category       FinanceCategory?       @relation("CategoryFinanceOperations", fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryLabel  String?                // свободный текст категории (из Income.category/Expense.category)
+
+  description    String?                // у Income/Expense обязательное поле, у Payment — нет
+  note           String?
+
+  orderId        String?
+  order          Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  counterpartyId String?                // только у Payment
+  counterparty   Company?               @relation("CounterpartyFinanceOperations", fields: [counterpartyId], references: [id], onDelete: SetNull)
+
+  accountId      String?
+  account        FinanceAccount?        @relation("AccountFinanceOperations", fields: [accountId], references: [id], onDelete: SetNull)
+
+  method         PaymentMethod?         // только у Payment
+
+  createdById    String?
+  isDeleted      Boolean                @default(false)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([source, sourceId])
+  @@index([companyId, date])
+  @@index([companyId, isDeleted])
+  @@index([orderId])
+  @@index([accountId])
+  @@index([categoryId])
 }
 
 // ==================== ТМЦ (товарно-материальные ценности) ====================
@@ -1320,10 +1415,227 @@ model Invoice {
   incomingOrders  Order[]       @relation("IncomingInvoiceOrders")
   outgoingOrders  Order[]       @relation("OutgoingInvoiceOrders")
   
+  @@unique([issuerId, invoiceNumber, type])
   @@index([status])
   @@index([shareToken])
   @@index([issuerId])
   @@index([recipientId])
+}
+
+// ==================== БУХГАЛТЕРСКОЕ ДОКУМЕНТНОЕ ЯДРО ====================
+//
+// Полностью добавочный контур: существующая Invoice и текущие Payment/Income/Expense
+// продолжают работать без изменений. Переключение API на эти таблицы выполняется
+// отдельным этапом после бэкфилла и сверки production-данных.
+enum AccountingDocumentType {
+  PAYMENT_INVOICE    // Счёт на оплату
+  SERVICE_ACT        // Акт выполненных работ (оказанных услуг), включая Р-1
+  RECONCILIATION_ACT // Акт сверки взаимных расчётов
+  CORRECTION         // Корректировочный документ
+}
+
+enum AccountingDocumentDirection {
+  INCOMING
+  OUTGOING
+}
+
+enum AccountingDocumentStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum AccountingDocumentLinkType {
+  BASED_ON
+  CORRECTS
+  REPLACES
+  RECONCILES
+}
+
+enum AccountingVatTreatment {
+  WITHOUT_VAT // Без НДС
+  STANDARD    // Обычная ставка (например, 12% или 16%)
+  ZERO        // Нулевая ставка НДС
+  EXEMPT      // Освобождённый оборот
+}
+
+enum AccountingVatCalculation {
+  INCLUDED // НДС уже включён в введённую цену
+  EXCLUDED // НДС начисляется сверху введённой цены
+}
+
+model AccountingDocument {
+  id              String                      @id @default(cuid())
+  companyId       String
+  company         Company                     @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  counterpartyId  String
+  counterparty    Company                     @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
+  type            AccountingDocumentType
+  direction       AccountingDocumentDirection
+  status          AccountingDocumentStatus    @default(DRAFT)
+  number          String
+  externalNumber  String?
+  externalDate    DateTime?                    @db.Date
+  documentDate    DateTime                     @db.Date
+  operationDate   DateTime?                    @db.Date
+  dueDate         DateTime?                    @db.Date
+  reportPeriodFrom DateTime?                   @db.Date
+  reportPeriodTo   DateTime?                   @db.Date
+  contractId      String?
+  contract        Contract?                    @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  currency        String                       @default("KZT") @db.VarChar(3)
+  subtotal        Decimal                      @default(0) @db.Decimal(20, 2)
+  discountTotal   Decimal                      @default(0) @db.Decimal(20, 2)
+  vatTotal        Decimal                      @default(0) @db.Decimal(20, 2)
+  total           Decimal                      @default(0) @db.Decimal(20, 2)
+  amountPaid      Decimal                      @default(0) @db.Decimal(20, 2)
+  balanceDue      Decimal                      @default(0) @db.Decimal(20, 2)
+  openingBalance  Decimal?                     @db.Decimal(20, 2)
+  debitTurnover   Decimal?                     @db.Decimal(20, 2)
+  creditTurnover  Decimal?                     @db.Decimal(20, 2)
+  closingBalance  Decimal?                     @db.Decimal(20, 2)
+  issuerSnapshot  Json
+  recipientSnapshot Json
+  issuerSignatorySnapshot Json?
+  recipientSignatorySnapshot Json?
+  basisSnapshot   Json?
+  paymentPurposeCode String?
+  paymentTerms    String?
+  customerMaterialsInfo String?
+  appendixInfo    String?
+  note            String?
+  version         Int                          @default(1)
+  checksum        String?                      @db.VarChar(64)
+  pdfFileUrl      String?
+  pdfGeneratedAt  DateTime?
+  createdById     String
+  createdBy       User                         @relation("AccountingDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  postedById      String?
+  postedBy        User?                        @relation("AccountingDocumentPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
+  postedAt        DateTime?
+  cancelledById   String?
+  cancelledBy     User?                        @relation("AccountingDocumentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelledAt     DateTime?
+  cancellationReason String?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  lines           AccountingDocumentLine[]
+  reconciliationLines AccountingReconciliationLine[]
+  orders          AccountingDocumentOrder[]
+  paymentAllocations AccountingPaymentAllocation[]
+  sourceLinks     AccountingDocumentLink[]     @relation("AccountingDocumentSourceLinks")
+  targetLinks     AccountingDocumentLink[]     @relation("AccountingDocumentTargetLinks")
+
+  @@unique([companyId, type, number])
+  @@index([companyId, documentDate])
+  @@index([companyId, status])
+  @@index([counterpartyId, documentDate])
+  @@index([companyId, counterpartyId, externalNumber])
+  @@index([contractId])
+}
+
+model AccountingDocumentLine {
+  id          String             @id @default(cuid())
+  documentId  String
+  document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lineNumber  Int
+  serviceCode String?
+  name        String
+  description String?
+  serviceDate DateTime?          @db.Date
+  reportDetails String?
+  quantity    Decimal            @default(1) @db.Decimal(20, 3)
+  unit        String             @default("усл") @db.VarChar(32)
+  unitCode    String?
+  unitPrice   Decimal            @db.Decimal(20, 2)
+  subtotal    Decimal            @db.Decimal(20, 2)
+  discountAmount Decimal         @default(0) @db.Decimal(20, 2)
+  vatTreatment AccountingVatTreatment @default(WITHOUT_VAT)
+  vatCalculation AccountingVatCalculation @default(INCLUDED)
+  vatRate     Decimal            @default(0) @db.Decimal(5, 2)
+  vatAmount   Decimal            @default(0) @db.Decimal(20, 2)
+  total       Decimal            @db.Decimal(20, 2)
+  orderId     String?
+  order       Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+
+  @@unique([documentId, lineNumber])
+  @@index([orderId])
+}
+
+model AccountingReconciliationLine {
+  id            String             @id @default(cuid())
+  documentId    String
+  document      AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lineNumber    Int
+  transactionDate DateTime          @db.Date
+  sourceDocumentType String?
+  sourceDocumentNumber String?
+  description   String?
+  debit         Decimal            @default(0) @db.Decimal(20, 2)
+  credit        Decimal            @default(0) @db.Decimal(20, 2)
+  runningBalance Decimal           @db.Decimal(20, 2)
+  createdAt     DateTime           @default(now())
+
+  @@unique([documentId, lineNumber])
+  @@index([transactionDate])
+}
+
+model AccountingDocumentOrder {
+  id          String             @id @default(cuid())
+  documentId  String
+  document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdAt   DateTime           @default(now())
+
+  @@unique([documentId, orderId])
+  @@index([orderId])
+}
+
+model AccountingPaymentAllocation {
+  id          String             @id @default(cuid())
+  documentId  String
+  document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  paymentId   String
+  payment     Payment            @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  amount      Decimal            @db.Decimal(20, 2)
+  createdById String
+  createdBy   User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime           @default(now())
+
+  @@unique([documentId, paymentId])
+  @@index([paymentId])
+}
+
+model AccountingDocumentLink {
+  id             String                     @id @default(cuid())
+  sourceDocumentId String
+  sourceDocument AccountingDocument         @relation("AccountingDocumentSourceLinks", fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  targetDocumentId String
+  targetDocument AccountingDocument         @relation("AccountingDocumentTargetLinks", fields: [targetDocumentId], references: [id], onDelete: Cascade)
+  type           AccountingDocumentLinkType
+  createdAt      DateTime                   @default(now())
+
+  @@unique([sourceDocumentId, targetDocumentId, type])
+  @@index([targetDocumentId])
+}
+
+model AccountingDocumentNumbering {
+  id          String                      @id @default(cuid())
+  companyId   String
+  company     Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        AccountingDocumentType
+  direction   AccountingDocumentDirection
+  year        Int
+  prefix      String                      @default("")
+  nextNumber  Int                         @default(1)
+  padLength   Int                         @default(6)
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+
+  @@unique([companyId, type, direction, year])
+  @@index([companyId])
 }
 
 model UserCompanyRelation {

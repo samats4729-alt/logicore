@@ -33,6 +33,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
 import { AdminStatsModule } from './admin-stats/admin-stats.module';
 import { IdentityModule } from './identity/identity.module';
+import { AccountingDocumentsModule } from './accounting-documents/accounting-documents.module';
 
 @Module({
     imports: [
@@ -65,6 +66,7 @@ import { IdentityModule } from './identity/identity.module';
         ContractsModule,
         ExternalCompaniesModule,
         AccountingModule,
+        AccountingDocumentsModule,
         EmailModule,
         InvoiceModule,
         AssistantModule,
@@ -75,6 +77,11 @@ import { IdentityModule } from './identity/identity.module';
         GeoModule,
         AdminStatsModule,
         IdentityModule,
+    ],
+    providers: [
+        // Глобальный rate-limit: без него @Throttle() на контроллерах — просто метаданные,
+        // лимиты нигде не применяются (см. аудит C-1).
+        { provide: APP_GUARD, useClass: ThrottlerGuard },
     ],
 })
 export class AppModule { }

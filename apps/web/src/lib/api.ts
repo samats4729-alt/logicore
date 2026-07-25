@@ -4,29 +4,26 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export const api = axios.create({
     baseURL: API_URL,
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Попытка восстановить токен из localStorage сразу при загрузке модуля (до инициализации React компонентов)
-const getInitialToken = () => {
-    if (typeof window === 'undefined') return null;
+// Удаляем токены, сохранённые старыми версиями веб-клиента. Пользовательские
+// данные можно оставить для быстрой отрисовки; сессия проверяется по httpOnly cookie.
+if (typeof window !== 'undefined') {
+    localStorage.removeItem('token');
     try {
         const authData = localStorage.getItem('logcomp-auth');
         if (authData) {
             const parsed = JSON.parse(authData);
-            return parsed.state?.token || null;
+            if (parsed.state?.token) {
+                delete parsed.state.token;
+                localStorage.setItem('logcomp-auth', JSON.stringify(parsed));
+            }
         }
-    } catch (e) {
-        return null;
-    }
-    return null;
-};
-
-const initialToken = getInitialToken();
-if (initialToken) {
-    api.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+    } catch { }
 }
 
 // Интерцептор для обработки ошибок авторизации
@@ -54,6 +51,7 @@ api.interceptors.response.use(
                 // Токен невалидный — очищаем
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('logcomp-auth');
+                    localStorage.removeItem('token');
                     window.location.href = '/login';
                 }
             }
@@ -65,6 +63,33 @@ api.interceptors.response.use(
 // Универсальный fetcher для SWR
 export const fetcher = (url: string) => api.get(url).then(res => res.data);
 
+export interface CreateReconciliationDraftRequest {
+    counterpartyId: string;
+    reportPeriodFrom: string;
+    reportPeriodTo: string;
+    documentDate?: string;
+    note?: string;
+}
+
+export interface AccountingDocumentDraft {
+    id: string;
+    number: string;
+    type: 'RECONCILIATION_ACT';
+    status: 'DRAFT';
+    reportPeriodFrom: string;
+    reportPeriodTo: string;
+    reconciliationLines: Array<{ id: string }>;
+}
+
+export const accountingDocumentsApi = {
+    createReconciliationDraft: (payload: CreateReconciliationDraftRequest) =>
+        api.post<AccountingDocumentDraft>('/accounting-documents/reconciliation/from-ledger', payload)
+            .then((response) => response.data),
+    downloadPdf: (documentId: string) =>
+        api.get<Blob>(`/accounting-documents/${documentId}/pdf`, { responseType: 'blob' })
+            .then((response) => response.data),
+};
+
 // Типы для API
 export interface Location {
     id: string;
@@ -75,6 +100,8 @@ export interface Location {
     contactName?: string;
     contactPhone?: string;
     city?: string;
+    cityId?: string;
+    cityRecord?: City;
     companyId?: string;
     emails?: string;
 }
@@ -83,6 +110,19 @@ export interface Country {
     id: string;
     name: string;
     code: string;
+}
+
+export interface GeoProviderEntity {
+    externalId?: string;
+    name: string;
+}
+
+export interface GeoProviderHierarchy {
+    provider: '2gis';
+    placeId?: string;
+    country?: GeoProviderEntity & { code: string };
+    region?: GeoProviderEntity;
+    city?: GeoProviderEntity;
 }
 
 export interface Region {
@@ -99,7 +139,12 @@ export interface City {
     countryId?: string;
     regionId?: string;
     country?: {
+        id?: string;
         code: string;
+        name: string;
+    };
+    region?: {
+        id: string;
         name: string;
     };
 }

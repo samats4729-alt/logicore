@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoiceType, InvoiceStatus } from '@prisma/client';
 import { PaymentsService } from '../accounting/services/payments.service';
+import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import { EmailService } from '../email/email.service';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class InvoiceService {
     constructor(
         private prisma: PrismaService,
         private paymentsService: PaymentsService,
+        private periodClosingService: PeriodClosingService,
         private emailService: EmailService,
         private configService: ConfigService,
     ) {}
@@ -32,15 +34,56 @@ export class InvoiceService {
             throw new BadRequestException('Счет должен содержать как минимум один заказ');
         }
 
-        // Загрузим заказы
+        if (dto.issuerId === dto.recipientId) {
+            throw new BadRequestException('Эмитент и получатель счёта должны отличаться');
+        }
+
+        if (
+            (dto.type === InvoiceType.OUTGOING && dto.issuerId !== companyId)
+            || (dto.type === InvoiceType.INCOMING && dto.recipientId !== companyId)
+        ) {
+            throw new ForbiddenException('Нельзя создать счёт от имени другой компании');
+        }
+
+        // Загружаем только те заявки, в которых выбранная компания и указанный
+        // контрагент действительно участвуют. Одних известных ID недостаточно:
+        // иначе можно было включить в счёт чужие рейсы прямым запросом к API.
+        const participantWhere = dto.type === InvoiceType.OUTGOING
+            ? {
+                customerCompanyId: dto.recipientId,
+                OR: [
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { responsibleManager: { companyId } },
+                ],
+            }
+            : {
+                AND: [
+                    {
+                        OR: [
+                            { partnerId: dto.issuerId },
+                            { subForwarderId: dto.issuerId },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                        ],
+                    },
+                ],
+            };
+
         const orders = await this.prisma.order.findMany({
             where: {
                 id: { in: dto.orderIds },
+                ...participantWhere,
             },
         });
 
         if (orders.length !== dto.orderIds.length) {
-            throw new BadRequestException('Некоторые заказы не найдены');
+            throw new BadRequestException('Некоторые заявки не найдены, недоступны или не относятся к выбранному контрагенту');
         }
 
         // Проверим, что заказы еще не выставлены в счет по данному типу
@@ -57,7 +100,10 @@ export class InvoiceService {
         let amount = 0;
         for (const order of orders) {
             if (dto.type === InvoiceType.OUTGOING) {
-                amount += order.customerPrice || 0;
+                // Исходящий счёт: сумма зависит от роли эмитента в заявке. Если счёт
+                // выставляет суб-экспедитор — это его ставка (subForwarderPrice), а не
+                // цена заказчика (иначе суб-экспедитор выставлял бы чужую сумму).
+                amount += (order.subForwarderId === dto.issuerId ? order.subForwarderPrice : order.customerPrice) || 0;
             } else {
                 // Входящий счет от перевозчика или субподрядчика
                 if (order.subForwarderId === dto.issuerId) {
@@ -307,6 +353,23 @@ export class InvoiceService {
             }
         }
 
+        // Отменённый счёт больше не должен занимать «слот» заявки — иначе её
+        // невозможно включить ни в один новый счёт (createInvoice отказывает,
+        // если outgoingInvoiceId/incomingInvoiceId уже заполнен).
+        if (status === InvoiceStatus.CANCELLED && oldStatus !== InvoiceStatus.CANCELLED) {
+            if (invoice.type === InvoiceType.OUTGOING) {
+                await this.prisma.order.updateMany({
+                    where: { outgoingInvoiceId: invoice.id },
+                    data: { outgoingInvoiceId: null },
+                });
+            } else {
+                await this.prisma.order.updateMany({
+                    where: { incomingInvoiceId: invoice.id },
+                    data: { incomingInvoiceId: null },
+                });
+            }
+        }
+
         return updatedInvoice;
     }
 
@@ -332,6 +395,12 @@ export class InvoiceService {
         }
 
         const orders = invoice.type === InvoiceType.OUTGOING ? invoice.outgoingOrders : invoice.incomingOrders;
+
+        // Согласование спора меняет цены заявок задним числом — запрещаем,
+        // если период уже закрыт для финансовых операций.
+        for (const order of orders) {
+            await this.periodClosingService.checkPeriodNotClosed(companyId, order.completedAt || order.createdAt);
+        }
 
         let newAmount = 0;
 
@@ -381,6 +450,12 @@ export class InvoiceService {
                 adjustedAmount: null,
             },
         });
+
+        // Согласованная цена могла отличаться от исходной — пересчитываем флаги
+        // оплаты/долга заявок, иначе они останутся посчитанными от старой суммы.
+        for (const order of orders) {
+            await this.paymentsService.syncOrderPaymentFlags(order.id);
+        }
 
         return updatedInvoice;
     }
@@ -493,6 +568,20 @@ export class InvoiceService {
             invoice.status !== InvoiceStatus.DISPUTED
         ) {
             throw new BadRequestException('Этот счет уже согласован, оплачен или отменен');
+        }
+
+        // Ссылка публичная и без авторизации — не доверяем произвольным числам:
+        // отклоняем отрицательные, нечисловые (NaN/Infinity) и заведомо абсурдные суммы.
+        const MAX_PROPOSED_AMOUNT = 1_000_000_000;
+        const isValidAmount = (v: unknown): v is number =>
+            typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_PROPOSED_AMOUNT;
+        for (const p of proposedPrices) {
+            for (const field of ['proposedCustomerPrice', 'proposedDriverCost', 'proposedSubForwarderPrice'] as const) {
+                const v = p[field];
+                if (v !== undefined && !isValidAmount(v)) {
+                    throw new BadRequestException('Некорректная предложенная сумма');
+                }
+            }
         }
 
         const orders = invoice.type === InvoiceType.OUTGOING ? invoice.outgoingOrders : invoice.incomingOrders;

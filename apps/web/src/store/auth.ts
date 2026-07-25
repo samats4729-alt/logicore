@@ -22,22 +22,20 @@ interface User {
 
 interface AuthState {
     user: User | null;
-    token: string | null;
     isAuthenticated: boolean;
     isLoading: boolean;
 
     // Actions
     login: (email: string, password: string, deviceId: string) => Promise<void>;
     logout: () => void;
-    setUser: (user: User, token: string) => void;
+    setUser: (user: User) => void;
     checkAuth: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
     persist(
-        (set, get) => ({
+        (set) => ({
             user: null,
-            token: null,
             isAuthenticated: false,
             isLoading: false,
 
@@ -45,17 +43,13 @@ export const useAuthStore = create<AuthState>()(
                 set({ isLoading: true });
                 try {
                     const response = await api.post('/auth/login', { email, password, deviceId });
-                    const { accessToken, user } = response.data;
+                    const { user } = response.data;
 
                     set({
                         user,
-                        token: accessToken,
                         isAuthenticated: true,
                         isLoading: false
                     });
-
-                    // Сохраняем токен в API клиент
-                    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
                 } catch (error) {
                     set({ isLoading: false });
                     throw error;
@@ -64,32 +58,30 @@ export const useAuthStore = create<AuthState>()(
 
             logout: () => {
                 api.post('/auth/logout').catch(() => { });
-                set({ user: null, token: null, isAuthenticated: false });
-                delete api.defaults.headers.common['Authorization'];
+                set({ user: null, isAuthenticated: false });
             },
 
-            setUser: (user: User, token: string) => {
-                set({ user, token, isAuthenticated: true });
-                api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            setUser: (user: User) => {
+                set({ user, isAuthenticated: true });
             },
 
             checkAuth: async () => {
-                const { token } = get();
-                if (!token) return;
-
                 try {
-                    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                     const response = await api.post('/auth/me');
                     set({ user: response.data, isAuthenticated: true });
                 } catch {
-                    set({ user: null, token: null, isAuthenticated: false });
-                    delete api.defaults.headers.common['Authorization'];
+                    set({ user: null, isAuthenticated: false });
                 }
             },
         }),
         {
             name: 'logcomp-auth',
-            partialize: (state) => ({ token: state.token, user: state.user }),
+            version: 1,
+            partialize: (state) => ({ user: state.user }),
+            migrate: (persistedState: any) => ({
+                ...persistedState,
+                token: undefined,
+            }),
         }
     )
 );

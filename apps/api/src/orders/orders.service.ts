@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, OrderStatus, InvoiceStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { RedisService } from '../redis/redis.service';
 import { PaymentsService } from '../accounting/services/payments.service';
+import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
 
@@ -86,45 +87,15 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 };
 
 @Injectable()
-export class OrdersService implements OnModuleInit {
+export class OrdersService {
     constructor(
         private prisma: PrismaService,
         private redis: RedisService,
         private paymentsService: PaymentsService,
+        private periodClosingService: PeriodClosingService,
         private notificationsService: NotificationsService,
         private payrollService: PayrollService,
     ) { }
-
-    async onModuleInit() {
-        try {
-            const orders = await this.prisma.order.findMany({
-                where: {
-                    isConfirmed: false,
-                    status: 'PENDING',
-                },
-                include: {
-                    customer: { select: { companyId: true } },
-                    customerCompany: { select: { isExternal: true } },
-                }
-            });
-
-            for (const order of orders) {
-                const isCustomerExternal = order.customerCompany?.isExternal ?? false;
-                const creatorCompanyId = order.customer?.companyId;
-                const isCreatorForwarder = creatorCompanyId && order.forwarderId && creatorCompanyId === order.forwarderId;
-
-                if (isCustomerExternal || isCreatorForwarder) {
-                    await this.prisma.order.update({
-                        where: { id: order.id },
-                        data: { isConfirmed: true }
-                    });
-                    console.log(`Auto-confirmed order #${order.orderNumber} (isCustomerExternal=${isCustomerExternal}, isCreatorForwarder=${isCreatorForwarder})`);
-                }
-            }
-        } catch (error) {
-            console.error('Error auto-confirming existing pending orders on init:', error);
-        }
-    }
 
     /**
      * Создание заявки на перевозку
@@ -408,6 +379,25 @@ export class OrdersService implements OnModuleInit {
             if (!isOwner && !isDriver && !isManager && !isCompanyOrder) {
                 throw new ForbiddenException('У вас нет доступа к этой заявке');
             }
+
+            // Заказчик не должен видеть себестоимость исполнителя (маржу
+            // экспедитора/партнёра) — только свою цену. Не скрываем, если
+            // компания одновременно исполнитель по этой же заявке.
+            const isCustomerOnly = !!companyId
+                && order.customerCompanyId === companyId
+                && order.forwarderId !== companyId
+                && order.partnerId !== companyId
+                && order.subForwarderId !== companyId;
+            if (isCustomerOnly) {
+                (order as any).driverCost = null;
+                (order as any).subForwarderPrice = null;
+                (order as any).subForwarderId = null;
+                (order as any).isDriverPaid = false;
+                (order as any).driverPaidAt = null;
+                (order as any).isSubForwarderPaid = false;
+                (order as any).subForwarderPaidAt = null;
+                (order as any).partner = null;
+            }
         }
 
         return order;
@@ -637,6 +627,18 @@ export class OrdersService implements OnModuleInit {
                 completedAt: status === OrderStatus.COMPLETED
                     ? new Date()
                     : (order.status === OrderStatus.COMPLETED ? null : undefined),
+                // Отмена заявки: сами платежи (Payment) не трогаем — это реальные деньги,
+                // их дальнейшая судьба (возврат/перенос) остаётся на решение бухгалтера.
+                // Но флаги «оплачено» сбрасываем, чтобы отменённая заявка не выглядела
+                // оплаченной в реестрах и отчётах.
+                ...(status === OrderStatus.CANCELLED ? {
+                    isCustomerPaid: false,
+                    customerPaidAt: null,
+                    isDriverPaid: false,
+                    driverPaidAt: null,
+                    isSubForwarderPaid: false,
+                    subForwarderPaidAt: null,
+                } : {}),
                 pendingStatus: null,
                 pendingStatusById: null,
                 pendingStatusAt: null,
@@ -656,6 +658,12 @@ export class OrdersService implements OnModuleInit {
 
         if (status === OrderStatus.CANCELLED) {
             await this.cancelInvoicesForCancelledOrder(orderId);
+        }
+
+        // Заявку вернули из «Отменён» в работу: платежи никуда не делись, поэтому
+        // пересчитываем флаги оплаты сразу, а не ждём следующего события по платежам.
+        if (order.status === OrderStatus.CANCELLED && status !== OrderStatus.CANCELLED) {
+            await this.paymentsService.syncOrderPaymentFlags(orderId);
         }
 
         try {
@@ -898,6 +906,15 @@ export class OrdersService implements OnModuleInit {
             if (!isAdmin && !isCreator && !isRegisteredCustomerCompany) {
                 throw new ForbiddenException('У вас нет прав на редактирование этой заявки');
             }
+        }
+
+        // Правка финансовых полей задним числом запрещена, если период уже закрыт
+        // (иначе этот путь обходил бы закрытие периода, доступное через accounting).
+        if (
+            user?.companyId &&
+            (data.customerPrice !== undefined || data.driverCost !== undefined || data.subForwarderPrice !== undefined)
+        ) {
+            await this.periodClosingService.checkPeriodNotClosed(user.companyId, order.completedAt || order.createdAt);
         }
 
         // Собираем данные для обновления
@@ -1361,23 +1378,42 @@ export class OrdersService implements OnModuleInit {
      * Взять заявку в работу с биржи
      */
     async takeOrder(orderId: string, companyId: string, userId?: string) {
-        const order = await this.findById(orderId);
-        if (order.forwarderId) throw new ForbiddenException('Заявка уже занята другим экспедитором');
-        if (order.status !== OrderStatus.PENDING) throw new ForbiddenException('Заявка не доступна для взятия');
-
-        const updated = await this.prisma.order.update({
-            where: { id: orderId },
-            data: {
-                forwarderId: companyId,
-                status: OrderStatus.PENDING,
-                isConfirmed: true, // Подтверждается автоматически при взятии
-                statusHistory: {
-                    create: {
-                        status: OrderStatus.PENDING,
-                        comment: 'Заявка взята экспедитором с биржи',
-                    },
+        const updated = await this.prisma.$transaction(async (tx) => {
+            // Условие входит в сам UPDATE: два параллельных запроса не смогут
+            // одновременно увидеть пустой forwarderId и перезаписать друг друга.
+            const claim = await tx.order.updateMany({
+                where: {
+                    id: orderId,
+                    forwarderId: null,
+                    status: OrderStatus.PENDING,
                 },
-            },
+                data: {
+                    forwarderId: companyId,
+                    isConfirmed: true,
+                },
+            });
+
+            if (claim.count !== 1) {
+                const current = await tx.order.findUnique({
+                    where: { id: orderId },
+                    select: { id: true, forwarderId: true, status: true },
+                });
+                if (!current) throw new NotFoundException('Заявка не найдена');
+                if (current.forwarderId) {
+                    throw new ForbiddenException('Заявка уже занята другим экспедитором');
+                }
+                throw new ForbiddenException('Заявка не доступна для взятия');
+            }
+
+            await tx.orderStatusHistory.create({
+                data: {
+                    orderId,
+                    status: OrderStatus.PENDING,
+                    comment: 'Заявка взята экспедитором с биржи',
+                },
+            });
+
+            return tx.order.findUniqueOrThrow({ where: { id: orderId } });
         });
 
         // Кто взял с биржи — тот и ведёт заявку со стороны своей компании

@@ -22,7 +22,7 @@ function makePrismaMock() {
 }
 
 function makeService(prisma: ReturnType<typeof makePrismaMock>) {
-    const service = new InvoiceService(prisma as any, {} as any, {} as any, {} as any);
+    const service = new InvoiceService(prisma as any, {} as any, {} as any, {} as any, {} as any);
     jest.spyOn(service, 'getInvoiceDetails').mockResolvedValue({ id: 'inv-1' } as any);
     return service;
 }
@@ -99,6 +99,21 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
         expect(data.amount).toBe(120000);
     });
 
+    it('исходящий счёт от субэкспедитора: берётся его ставка, а не цена заказчика', async () => {
+        prisma.order.findMany.mockResolvedValue([
+            { id: 'o1', orderNumber: 'N1', customerPrice: 250000, subForwarderPrice: 120000, subForwarderId: SUB, outgoingInvoiceId: null },
+        ]);
+
+        await service.createInvoice(
+            SUB,
+            'user-1',
+            baseDto({ type: InvoiceType.OUTGOING, issuerId: SUB, recipientId: CARRIER, orderIds: ['o1'] }),
+        );
+
+        const data = prisma.invoice.create.mock.calls[0][0].data;
+        expect(data.amount).toBe(120000);
+    });
+
     it('пустые цены считаются нулём, а не NaN', async () => {
         prisma.order.findMany.mockResolvedValue([
             { id: 'o1', orderNumber: 'N1', customerPrice: null, outgoingInvoiceId: null },
@@ -115,6 +130,33 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
             service.createInvoice(COMPANY, 'user-1', baseDto({ orderIds: [] })),
         ).rejects.toThrow(BadRequestException);
         expect(prisma.invoice.create).not.toHaveBeenCalled();
+    });
+
+    it('не позволяет создать исходящий счёт от имени чужой компании', async () => {
+        await expect(
+            service.createInvoice(COMPANY, 'user-1', baseDto({ issuerId: SUB })),
+        ).rejects.toThrow('Нельзя создать счёт от имени другой компании');
+        expect(prisma.order.findMany).not.toHaveBeenCalled();
+    });
+
+    it('ограничивает выбор заявок компанией и контрагентом счёта', async () => {
+        prisma.order.findMany.mockResolvedValue([]);
+
+        await expect(
+            service.createInvoice(COMPANY, 'user-1', baseDto({ orderIds: ['foreign-order'] })),
+        ).rejects.toThrow('не найдены, недоступны');
+        expect(prisma.order.findMany).toHaveBeenCalledWith({
+            where: {
+                id: { in: ['foreign-order'] },
+                customerCompanyId: 'company-customer',
+                OR: [
+                    { forwarderId: COMPANY },
+                    { partnerId: COMPANY },
+                    { subForwarderId: COMPANY },
+                    { responsibleManager: { companyId: COMPANY } },
+                ],
+            },
+        });
     });
 
     it('отклоняет счёт, если часть заявок не найдена', async () => {
@@ -149,7 +191,12 @@ describe('InvoiceService.createInvoice — расчёт суммы счёта', 
             service.createInvoice(
                 COMPANY,
                 'user-1',
-                baseDto({ type: InvoiceType.INCOMING, issuerId: CARRIER, orderIds: ['o1'] }),
+                baseDto({
+                    type: InvoiceType.INCOMING,
+                    issuerId: CARRIER,
+                    recipientId: COMPANY,
+                    orderIds: ['o1'],
+                }),
             ),
         ).resolves.toBeDefined();
     });

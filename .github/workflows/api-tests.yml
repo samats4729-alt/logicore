@@ -7,6 +7,36 @@ on:
     branches: [ main ]
 
 jobs:
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://build:build@localhost:5432/build"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm --filter api build
+
+      - name: Build web
+        run: pnpm --filter web build
+
   test:
     runs-on: ubuntu-latest
 
@@ -53,9 +83,32 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # История проекта начинается с ALTER-миграций и не содержит baseline,
+      # создающий старые таблицы. Поэтому здесь проверяем точный SQL новой
+      # добавочной миграции на изолированной схеме с минимальными FK-заглушками.
+      - name: Validate accounting document migration SQL
+        env:
+          PGPASSWORD: "logcomp_secret"
+        run: |
+          psql -h localhost -p 5433 -U logcomp -d logcomp -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE SCHEMA migration_test;
+          SET search_path TO migration_test;
+          CREATE TABLE "Company" ("id" TEXT PRIMARY KEY);
+          CREATE TABLE "Contract" ("id" TEXT PRIMARY KEY);
+          CREATE TABLE "User" ("id" TEXT PRIMARY KEY);
+          CREATE TABLE "Order" ("id" TEXT PRIMARY KEY);
+          CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY);
+          \i apps/api/prisma/migrations/20260725000000_add_accounting_document_core/migration.sql
+          SELECT COUNT(*) AS accounting_tables
+          FROM information_schema.tables
+          WHERE table_schema = 'migration_test'
+            AND table_name LIKE 'Accounting%';
+          SQL
+
       - name: Run Prisma DB Push & Seed
         env:
           DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
+          SEED_TEST_DATA: "true"
         run: |
           pnpm --filter api prisma:generate
           pnpm --filter api prisma:push --accept-data-loss

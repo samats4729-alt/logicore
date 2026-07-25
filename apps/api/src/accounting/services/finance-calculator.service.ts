@@ -1,8 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentDirection } from '@prisma/client';
-import { money } from '../../common/utils/money';
+import { money, moneyGte } from '../../common/utils/money';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
 
+// Архитектурная заметка (см. аудит M-9): computeOrderFinance() и
+// PaymentsService.syncOrderPaymentFlags() выглядят как дублирование одной и
+// той же логики «оплачено ли», но НЕ являются им — у них разная и осознанно
+// разделённая роль:
+//
+//   - syncOrderPaymentFlags — канонический расчёт с полной видимостью
+//     платежей ОБЕИХ сторон заявки. Его результат ПЕРСИСТИТСЯ в
+//     Order.isCustomerPaid/isDriverPaid/isSubForwarderPaid — это единый
+//     глобальный факт «оплачено», не зависящий от того, кто спрашивает.
+//   - computeOrderFinance — расчёт «с точки зрения» конкретной компании
+//     (companyId) для отображения в её кабинете, ограниченный платежами,
+//     которые видны ЭТОЙ компании. Поэтому он намеренно берёт OR с уже
+//     сохранённым каноническим флагом (order.isCustomerPaid и т.п.) —
+//     это фолбэк на канонический факт, когда локальная видимость платежей
+//     неполная (например, платёж провела встречная сторона сделки).
+//
+// Слияние их в одну функцию убрало бы этот фолбэк и либо сломало бы
+// персистентность канонического флага, либо сделало бы канонический расчёт
+// зависимым от того, кто его вызывает. Единая часть, которая ДЕЙСТВИТЕЛЬНО
+// дублировалась — сравнение суммы платежей с порогом — уже вынесена в
+// moneyGte() и используется в обоих местах одинаково.
 @Injectable()
 export class FinanceCalculatorService {
     computeOrderFinance(params: {
@@ -137,20 +158,20 @@ export class FinanceCalculatorService {
 
         let isCustomerPaid = false;
         if (isCustomer) {
-            isCustomerPaid = (paidOut >= executorCostGross && executorCostGross > 0) || !!order.isCustomerPaid;
+            isCustomerPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || !!order.isCustomerPaid;
         } else if (isSubForwarder) {
-            isCustomerPaid = (paidIn >= revenueGross && revenueGross > 0) || !!order.isSubForwarderPaid;
+            isCustomerPaid = (revenueGross > 0 && moneyGte(paidIn, revenueGross)) || !!order.isSubForwarderPaid;
         } else {
-            isCustomerPaid = (paidIn >= revenueGross && revenueGross > 0) || !!order.isCustomerPaid;
+            isCustomerPaid = (revenueGross > 0 && moneyGte(paidIn, revenueGross)) || !!order.isCustomerPaid;
         }
 
         let isExecutorPaid = false;
         if (isCustomer) {
-            isExecutorPaid = (paidOut >= executorCostGross && executorCostGross > 0) || !!order.isCustomerPaid;
+            isExecutorPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || !!order.isCustomerPaid;
         } else if (isSubForwarder) {
             isExecutorPaid = false;
         } else {
-            isExecutorPaid = (paidOut >= executorCostGross && executorCostGross > 0) || (order.subForwarderId ? !!order.isSubForwarderPaid : !!order.isDriverPaid);
+            isExecutorPaid = (executorCostGross > 0 && moneyGte(paidOut, executorCostGross)) || (order.subForwarderId ? !!order.isSubForwarderPaid : !!order.isDriverPaid);
         }
 
         return {
