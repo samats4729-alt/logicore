@@ -18,6 +18,12 @@ interface FinanceAccount {
     isActive: boolean;
     openingBalance?: number;
     openingDate?: string | null;
+    // Печатные реквизиты банковского счёта: именно они уходят в счёт на
+    // оплату, выставленный с этого счёта, и в блок платёжного поручения PDF.
+    iban?: string | null;
+    bankName?: string | null;
+    bankBic?: string | null;
+    kbe?: string | null;
 }
 
 type CostType = 'PER_ORDER' | 'PER_VEHICLE' | 'GENERAL';
@@ -111,18 +117,38 @@ export default function FinanceSettingsPage() {
             name: record.name,
             openingBalance: record.openingBalance || 0,
             openingDate: record.openingDate ? dayjs(record.openingDate) : null,
+            iban: record.iban || '',
+            bankName: record.bankName || '',
+            bankBic: record.bankBic || '',
+            kbe: record.kbe || '',
         });
         setAccountModalOpen(true);
     };
 
-    const handleSaveAccount = async (values: { name: string; openingBalance?: number; openingDate?: dayjs.Dayjs | null }) => {
+    const handleSaveAccount = async (values: {
+        name: string;
+        openingBalance?: number;
+        openingDate?: dayjs.Dayjs | null;
+        iban?: string;
+        bankName?: string;
+        bankBic?: string;
+        kbe?: string;
+    }) => {
         if (!editingAccount) return;
         setSaving(true);
         try {
+            const isBank = editingAccount.kind === 'BANK';
             await api.put(`/accounting/finance-accounts/${editingAccount.id}`, {
                 name: values.name,
                 openingBalance: values.openingBalance ?? 0,
                 openingDate: values.openingDate ? values.openingDate.toISOString() : null,
+                // У кассы печатных реквизитов нет — счёт с неё не выставляют.
+                ...(isBank ? {
+                    iban: values.iban?.trim() || null,
+                    bankName: values.bankName?.trim() || null,
+                    bankBic: values.bankBic?.trim() || null,
+                    kbe: values.kbe?.trim() || null,
+                } : {}),
             });
             message.success('Счёт сохранён');
             setAccountModalOpen(false);
@@ -271,10 +297,30 @@ export default function FinanceSettingsPage() {
             )
         },
         {
+            // Незаполненные реквизиты видно сразу: без них в счёт уйдут
+            // данные из карточки организации, а не этого счёта.
+            title: 'Реквизиты для счетов',
+            key: 'requisites',
+            render: (_: any, r: FinanceAccount) => {
+                if (r.kind !== 'BANK') return <Text type="secondary">—</Text>;
+                if (!r.iban && !r.bankName) {
+                    return <Text type="secondary" style={{ fontSize: 12 }}>Не заполнены</Text>;
+                }
+                return (
+                    <div style={{ fontSize: 12 }}>
+                        <div>{r.bankName || '—'}</div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                            {[r.iban, r.bankBic && `БИК ${r.bankBic}`, r.kbe && `Кбе ${r.kbe}`].filter(Boolean).join(' · ')}
+                        </Text>
+                    </div>
+                );
+            }
+        },
+        {
             title: 'По умолчанию',
             dataIndex: 'isDefault',
             key: 'default',
-            width: 150,
+            width: 130,
             render: (val: boolean) => val ? <Tag color="green">Да</Tag> : <Text type="secondary">—</Text>
         },
         {
@@ -469,6 +515,31 @@ export default function FinanceSettingsPage() {
                     <Form.Item name="name" label="Название" rules={[{ required: true, message: 'Укажите название' }]}>
                         <Input size="large" maxLength={60} />
                     </Form.Item>
+                    {editingAccount?.kind === 'BANK' && (
+                        <>
+                            <div style={{ fontWeight: 600, fontSize: 13, margin: '4px 0 4px', color: 'var(--lc-text-sec)' }}>
+                                Реквизиты для счетов
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)', marginBottom: 10 }}>
+                                Печатаются в счёте на оплату, выставленном с этого счёта. По ним контрагент платит —
+                                у компании с двумя банками важно не перепутать.
+                            </div>
+                            <Form.Item name="iban" label="ИИК (номер счёта)">
+                                <Input size="large" maxLength={34} placeholder="KZ00 0000 0000 0000 0000" />
+                            </Form.Item>
+                            <Form.Item name="bankName" label="Банк">
+                                <Input size="large" maxLength={200} placeholder="АО «Kaspi Bank»" />
+                            </Form.Item>
+                            <Space size={12} style={{ display: 'flex' }}>
+                                <Form.Item name="bankBic" label="БИК" style={{ flex: 1 }}>
+                                    <Input size="large" maxLength={11} placeholder="CASPKZKA" />
+                                </Form.Item>
+                                <Form.Item name="kbe" label="Кбе" style={{ width: 110 }}>
+                                    <Input size="large" maxLength={2} placeholder="17" />
+                                </Form.Item>
+                            </Space>
+                        </>
+                    )}
                     <div style={{ fontWeight: 600, fontSize: 13, margin: '4px 0 10px', color: 'var(--lc-text-sec)' }}>Ввод остатка</div>
                     <Form.Item name="openingBalance" label="Начальный остаток (₸)" extra="Сколько денег уже есть на этом счёте/в кассе на старте">
                         <InputNumber size="large" style={{ width: '100%' }} min={0} placeholder="0" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />

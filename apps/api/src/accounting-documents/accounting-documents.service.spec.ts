@@ -37,7 +37,10 @@ function makeService() {
         },
         accountingDocument: {
             create: jest.fn(async ({ data }: any) => ({ id: 'doc-1', status: 'DRAFT', ...data })),
+            update: jest.fn(async ({ data }: any) => ({ id: 'doc-1', ...data })),
         },
+        accountingDocumentLine: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        accountingDocumentOrder: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const prisma: any = {
         company: {
@@ -398,6 +401,123 @@ describe('AccountingDocumentsService', () => {
         await expect(service.post(COMPANY, 'accountant-1', 'doc-1')).rejects.toBeInstanceOf(
             ConflictException,
         );
+    });
+
+    // T-01б: карточка документа умеет «Записать» — но только для черновика.
+    // Проведённый счёт уже у контрагента на руках, и меняться задним числом
+    // он не должен.
+    describe('правка черновика из карточки', () => {
+        const draft = (overrides: Record<string, unknown> = {}) => ({
+            id: 'doc-1',
+            type: AccountingDocumentType.PAYMENT_INVOICE,
+            direction: AccountingDocumentDirection.OUTGOING,
+            counterpartyId: COUNTERPARTY,
+            status: AccountingDocumentStatus.DRAFT,
+            documentDate: new Date('2026-07-22'),
+            amountPaid: new Prisma.Decimal('0'),
+            orders: [],
+            ...overrides,
+        });
+
+        it('заменяет строки целиком и пересчитывает итоги', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue(draft());
+            jest.spyOn(service, 'getById').mockResolvedValue({ id: 'doc-1' } as any);
+
+            await service.updateDraft(COMPANY, 'doc-1', {
+                lines: [
+                    { name: 'Перевозка Алматы — Астана', unitPrice: '100000', vatRate: '12', vatTreatment: 'STANDARD', vatCalculation: 'INCLUDED' } as any,
+                    { name: 'Простой', quantity: '2', unitPrice: '5000' } as any,
+                ],
+            });
+
+            expect(tx.accountingDocumentLine.deleteMany).toHaveBeenCalledWith({
+                where: { documentId: 'doc-1' },
+            });
+            const { data } = tx.accountingDocument.update.mock.calls[0][0];
+            // 100 000 с НДС 12 % «в том числе» = 89 285.71 + 10 714.29,
+            // плюс 2 × 5 000 без НДС.
+            expect(data.subtotal.toFixed(2)).toBe('99285.71');
+            expect(data.vatTotal.toFixed(2)).toBe('10714.29');
+            expect(data.total.toFixed(2)).toBe('110000.00');
+            expect(data.balanceDue.toFixed(2)).toBe('110000.00');
+            expect(data.lines.create).toHaveLength(2);
+            expect(data.lines.create[1].quantity.toFixed(0)).toBe('2');
+        });
+
+        it('оставляет строки и итоги нетронутыми, если пришли только реквизиты шапки', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue(draft());
+            jest.spyOn(service, 'getById').mockResolvedValue({ id: 'doc-1' } as any);
+
+            await service.updateDraft(COMPANY, 'doc-1', { note: '  Оплата до конца недели  ' });
+
+            expect(tx.accountingDocumentLine.deleteMany).not.toHaveBeenCalled();
+            const { data } = tx.accountingDocument.update.mock.calls[0][0];
+            expect(data.note).toBe('Оплата до конца недели');
+            expect(data.total).toBeUndefined();
+            expect(data.lines).toBeUndefined();
+        });
+
+        it('переносит реквизиты выбранного банковского счёта в снимок выставителя', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue(draft());
+            prisma.financeAccount.findFirst.mockResolvedValue({
+                id: 'acc-kaspi',
+                name: 'Kaspi',
+                kind: 'BANK',
+                isActive: true,
+                iban: 'KZ13722S000013131565',
+                bankName: 'АО «KASPI BANK»',
+                bankBic: 'CASPKZKA',
+                kbe: '17',
+            });
+            jest.spyOn(service, 'getById').mockResolvedValue({ id: 'doc-1' } as any);
+
+            await service.updateDraft(COMPANY, 'doc-1', { bankAccountId: 'acc-kaspi' });
+
+            const { data } = tx.accountingDocument.update.mock.calls[0][0];
+            expect(data.bankAccountId).toBe('acc-kaspi');
+            // Исходящий документ — выставляем мы, значит наши реквизиты
+            // стоят в «Исполнителе», а контрагент остаётся как был.
+            expect(data.issuerSnapshot.bankAccount).toBe('KZ13722S000013131565');
+            expect(data.issuerSnapshot.bankName).toBe('АО «KASPI BANK»');
+            expect(data.recipientSnapshot.id).toBe(COUNTERPARTY);
+            expect(data.recipientSnapshot.bankAccount).toBeNull();
+        });
+
+        it('не изменяет проведённый документ', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue(
+                draft({ status: AccountingDocumentStatus.POSTED }),
+            );
+
+            await expect(
+                service.updateDraft(COMPANY, 'doc-1', { note: 'Правка' }),
+            ).rejects.toBeInstanceOf(ConflictException);
+            expect(tx.accountingDocument.update).not.toHaveBeenCalled();
+        });
+
+        it('отклоняет перенос даты в другой год — номер выдан в разрезе года', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue(draft());
+
+            await expect(
+                service.updateDraft(COMPANY, 'doc-1', { documentDate: '2027-01-10' }),
+            ).rejects.toThrow('создайте документ заново');
+            expect(tx.accountingDocument.update).not.toHaveBeenCalled();
+        });
+
+        it('не пускает в документ чужую заявку', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue(draft());
+            prisma.order.count.mockResolvedValue(0);
+
+            await expect(
+                service.updateDraft(COMPANY, 'doc-1', { orderIds: ['order-чужой'] }),
+            ).rejects.toThrow('Некоторые заявки недоступны');
+            expect(tx.accountingDocument.update).not.toHaveBeenCalled();
+        });
     });
 
     it('удаляет только черновик выбранной компании', async () => {

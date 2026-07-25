@@ -229,6 +229,70 @@ export class CreateAccountingDocumentDto {
     orderIds?: string[];
 }
 
+/**
+ * Правка черновика из карточки документа («Записать» в 1С).
+ *
+ * Тип, направление и контрагент здесь не принимаются намеренно: от них
+ * зависит номер документа и снимки сторон. Ошибся в них — черновик
+ * удаляется и создаётся заново, а не переписывается задним числом.
+ *
+ * Поле, которого нет в запросе, остаётся прежним; `null` в необязательной
+ * дате или примечании очищает значение.
+ */
+export class UpdateAccountingDocumentDto {
+    @IsOptional()
+    @IsDateString()
+    documentDate?: string;
+
+    @IsOptional()
+    @IsDateString()
+    operationDate?: string | null;
+
+    @IsOptional()
+    @IsDateString()
+    dueDate?: string | null;
+
+    /** `null` — вернуться к счёту организации по умолчанию. */
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    bankAccountId?: string | null;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(100)
+    externalNumber?: string | null;
+
+    @IsOptional()
+    @IsDateString()
+    externalDate?: string | null;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(2000)
+    paymentTerms?: string | null;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(4000)
+    note?: string | null;
+
+    /** Массив заменяет строки документа целиком, итоги пересчитываются. */
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(500)
+    @ValidateNested({ each: true })
+    @Type(() => AccountingDocumentLineDto)
+    lines?: AccountingDocumentLineDto[];
+
+    @IsOptional()
+    @IsArray()
+    @ArrayUnique()
+    @ArrayMaxSize(500)
+    @IsString({ each: true })
+    orderIds?: string[];
+}
+
 export class GenerateReconciliationDraftDto {
     @IsString()
     @IsNotEmpty()

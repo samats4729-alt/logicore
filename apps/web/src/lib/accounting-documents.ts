@@ -24,8 +24,40 @@ export interface AccountingDocumentParty {
     bin: string | null;
 }
 
+export interface AccountingDocumentRoutePoint {
+    pointType: string;
+    sequence: number;
+    location: { city: string | null; address: string } | null;
+}
+
+/**
+ * Заявка-основание документа. В журнале приходит только номер, в карточке —
+ * ещё маршрут, водитель и авто: в 1С под «Документом-основанием» второй
+ * строкой печатается расшифровка, и бухгалтеру она нужна, чтобы не открывать
+ * заявку ради проверки.
+ */
 export interface AccountingDocumentOrderRef {
-    order: { id: string; orderNumber: string };
+    order: {
+        id: string;
+        orderNumber: string;
+        status?: string;
+        cargoDescription?: string | null;
+        assignedDriverName?: string | null;
+        assignedDriverPlate?: string | null;
+        routePoints?: AccountingDocumentRoutePoint[];
+    };
+}
+
+/** «Алматы → Астана» по точкам маршрута заявки. */
+export function orderRouteLabel(order: AccountingDocumentOrderRef['order']): string | null {
+    const points = order.routePoints || [];
+    if (!points.length) return null;
+    const place = (point: AccountingDocumentRoutePoint) =>
+        point.location?.city || point.location?.address || null;
+    const from = place(points[0]);
+    const to = place(points[points.length - 1]);
+    if (!from && !to) return null;
+    return points.length === 1 ? from : `${from || '—'} → ${to || '—'}`;
 }
 
 export interface AccountingDocumentListItem {
@@ -47,6 +79,9 @@ export interface AccountingDocumentListItem {
     _count?: { lines: number; orders: number; paymentAllocations: number };
 }
 
+export type AccountingVatTreatment = 'STANDARD' | 'WITHOUT_VAT' | 'EXEMPT' | 'ZERO_RATE';
+export type AccountingVatCalculation = 'INCLUDED' | 'ADDED';
+
 export interface AccountingDocumentLine {
     id: string;
     lineNumber: number;
@@ -56,6 +91,9 @@ export interface AccountingDocumentLine {
     quantity: number;
     unit: string;
     unitPrice: number;
+    discountAmount: number;
+    vatTreatment: AccountingVatTreatment;
+    vatCalculation: AccountingVatCalculation;
     vatRate: number;
     vatAmount: number;
     subtotal: number;
@@ -66,18 +104,23 @@ export interface AccountingDocumentLine {
 export interface AccountingDocumentDetails extends AccountingDocumentListItem {
     subtotal: number;
     vatTotal: number;
+    discountTotal: number;
     note: string | null;
     paymentTerms: string | null;
+    externalNumber: string | null;
+    externalDate: string | null;
     bankAccountId: string | null;
     operationDate: string | null;
     postedAt: string | null;
     cancelledAt: string | null;
     cancellationReason: string | null;
-    issuerSnapshot: Record<string, unknown>;
-    recipientSnapshot: Record<string, unknown>;
+    company: AccountingDocumentParty | null;
+    issuerSnapshot: Record<string, any>;
+    recipientSnapshot: Record<string, any>;
     lines: AccountingDocumentLine[];
     createdBy?: { id: string; firstName: string | null; lastName: string | null };
     postedBy?: { id: string; firstName: string | null; lastName: string | null } | null;
+    cancelledBy?: { id: string; firstName: string | null; lastName: string | null } | null;
 }
 
 export interface AccountingDocumentListResult {
@@ -113,11 +156,19 @@ export async function fetchAccountingDocument(id: string): Promise<AccountingDoc
 }
 
 export interface CreateAccountingDocumentLineInput {
+    serviceCode?: string;
     name: string;
     description?: string;
     quantity?: string;
     unit?: string;
     unitPrice: string;
+    discountAmount?: string;
+    /**
+     * НДС описывается тремя полями, а не одной ставкой: API отклоняет ставку
+     * без `vatTreatment: 'STANDARD'` и наоборот — обычный НДС без ставки.
+     */
+    vatTreatment?: AccountingVatTreatment;
+    vatCalculation?: AccountingVatCalculation;
     vatRate?: string;
     orderId?: string;
 }
@@ -141,6 +192,53 @@ export async function createAccountingDocument(
 ): Promise<AccountingDocumentDetails> {
     const res = await api.post('/accounting-documents', input);
     return res.data;
+}
+
+/**
+ * Правка черновика («Записать» в карточке). Передаются только изменённые
+ * поля; массив `lines` заменяет строки документа целиком.
+ */
+export interface UpdateAccountingDocumentInput {
+    documentDate?: string;
+    dueDate?: string | null;
+    operationDate?: string | null;
+    bankAccountId?: string | null;
+    externalNumber?: string | null;
+    externalDate?: string | null;
+    paymentTerms?: string | null;
+    note?: string | null;
+    lines?: CreateAccountingDocumentLineInput[];
+    orderIds?: string[];
+}
+
+export async function updateAccountingDocument(
+    id: string,
+    input: UpdateAccountingDocumentInput,
+): Promise<AccountingDocumentDetails> {
+    const res = await api.patch(`/accounting-documents/${id}`, input);
+    return res.data;
+}
+
+export interface CompanyBankAccount {
+    id: string;
+    name: string;
+    kind: 'CASH' | 'BANK';
+    isDefault: boolean;
+    isActive: boolean;
+    iban: string | null;
+    bankName: string | null;
+    bankBic: string | null;
+    kbe: string | null;
+}
+
+/**
+ * Расчётные счета организации для выбора в шапке документа. Кассы отброшены:
+ * в счёте на оплату печатаются банковские реквизиты, платить в кассу
+ * контрагент по этому документу не может.
+ */
+export async function fetchCompanyBankAccounts(): Promise<CompanyBankAccount[]> {
+    const res = await api.get('/accounting/finance-accounts');
+    return (res.data || []).filter((account: CompanyBankAccount) => account.kind === 'BANK');
 }
 
 export async function postAccountingDocument(id: string): Promise<AccountingDocumentDetails> {

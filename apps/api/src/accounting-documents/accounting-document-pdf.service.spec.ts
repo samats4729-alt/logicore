@@ -75,6 +75,33 @@ describe('AccountingDocumentPdfService', () => {
         expect(buffer.length).toBeGreaterThan(20_000);
     });
 
+    // T-19: у компании может быть два банка, и в счёт должны попасть
+    // реквизиты выбранного счёта — иначе контрагент платит не туда.
+    // Снимок документа — единственный источник этих полей, поэтому здесь
+    // проверяется, что напечатано именно то, что в снимке.
+    it('печатает банковские реквизиты из снимка документа', async () => {
+        const printed: string[] = [];
+        const proto = (PDFDocument as any).prototype;
+        const originalText = proto.text;
+        // Пишем в тот же PDF, только попутно запоминая строки: так проверяется
+        // настоящий проход печати, а не отдельно вызванный кусок вёрстки.
+        proto.text = function (this: any, value: unknown, ...rest: unknown[]) {
+            printed.push(String(value));
+            return originalText.call(this, value, ...rest);
+        };
+
+        try {
+            await service.generateInvoicePdf(sampleDocument());
+        } finally {
+            proto.text = originalText;
+        }
+
+        expect(printed).toContain('KZ13722S00013131565');
+        expect(printed).toContain('АО «KASPI BANK»');
+        expect(printed).toContain('CASPKZKA');
+        expect(printed).toContain('17');
+    });
+
     it('не печатает акт через форму счёта', async () => {
         await expect(service.generateInvoicePdf({
             ...sampleDocument(),

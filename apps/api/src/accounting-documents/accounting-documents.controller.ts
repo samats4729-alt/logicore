@@ -4,6 +4,7 @@ import {
     Delete,
     Get,
     Param,
+    Patch,
     Post,
     Query,
     Request,
@@ -24,6 +25,7 @@ import {
     CancelAccountingDocumentDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
+    UpdateAccountingDocumentDto,
 } from './dto/accounting-document.dto';
 
 const VIEW_ROLES = [
@@ -104,6 +106,30 @@ export class AccountingDocumentsController {
     @ApiOperation({ summary: 'Получить бухгалтерский документ' })
     getById(@Request() req: any, @Param('id') id: string) {
         return this.documents.getById(req.user.companyId, id);
+    }
+
+    @Patch(':id')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Изменить черновик бухгалтерского документа',
+        description: 'Проведённый документ не изменяется — его отменяют и создают заново.',
+    })
+    async update(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() dto: UpdateAccountingDocumentDto,
+    ) {
+        const document = await this.documents.updateDraft(req.user.companyId, id, dto);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'accounting_document',
+            entityId: document.id,
+            entityLabel: `${document.type} №${document.number}`,
+            details: { fields: Object.keys(dto) },
+        });
+        return document;
     }
 
     @Get(':id/pdf')

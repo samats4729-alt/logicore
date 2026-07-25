@@ -23,6 +23,7 @@ import {
     AccountingDocumentListQueryDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
+    UpdateAccountingDocumentDto,
 } from './dto/accounting-document.dto';
 
 const COMPANY_SNAPSHOT_SELECT = {
@@ -72,6 +73,40 @@ const DOCUMENT_INCLUDE = {
     paymentAllocations: true,
     sourceLinks: true,
     targetLinks: true,
+} satisfies Prisma.AccountingDocumentInclude;
+
+/**
+ * Карточка документа внутри компании. В графе «Документ-основание», как в
+ * 1С, под номером заявки идёт вторая строка — маршрут, водитель и авто,
+ * поэтому здесь заявки раскрываются подробнее.
+ *
+ * Публичная ссылка использует узкий DOCUMENT_INCLUDE: контрагенту без
+ * учётной записи имя и телефон водителя показывать незачем.
+ */
+const CARD_DOCUMENT_INCLUDE = {
+    ...DOCUMENT_INCLUDE,
+    orders: {
+        include: {
+            order: {
+                select: {
+                    id: true,
+                    orderNumber: true,
+                    status: true,
+                    cargoDescription: true,
+                    assignedDriverName: true,
+                    assignedDriverPlate: true,
+                    routePoints: {
+                        orderBy: { sequence: 'asc' as const },
+                        select: {
+                            pointType: true,
+                            sequence: true,
+                            location: { select: { city: true, address: true } },
+                        },
+                    },
+                },
+            },
+        },
+    },
 } satisfies Prisma.AccountingDocumentInclude;
 
 export const RECONCILIATION_REPORTS = Symbol('RECONCILIATION_REPORTS');
@@ -326,10 +361,145 @@ export class AccountingDocumentsService {
     async getById(companyId: string, id: string) {
         const document = await this.prisma.accountingDocument.findFirst({
             where: { id, companyId },
-            include: DOCUMENT_INCLUDE,
+            include: CARD_DOCUMENT_INCLUDE,
         });
         if (!document) throw new NotFoundException('Бухгалтерский документ не найден');
         return document;
+    }
+
+    /**
+     * Правка черновика из карточки — кнопка «Записать» в 1С.
+     *
+     * Проведённый документ неизменяем: его исправляют отменой и новым
+     * документом, иначе напечатанный контрагенту счёт менялся бы задним
+     * числом. Строки приходят целиком: пришёл массив — он заменяет прежние
+     * и итоги пересчитываются, не пришёл — строки остаются как были.
+     */
+    async updateDraft(companyId: string, id: string, dto: UpdateAccountingDocumentDto) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: {
+                id: true,
+                type: true,
+                direction: true,
+                counterpartyId: true,
+                status: true,
+                documentDate: true,
+                amountPaid: true,
+                orders: { select: { orderId: true } },
+            },
+        });
+        if (!document) throw new NotFoundException('Бухгалтерский документ не найден');
+        if (document.status !== AccountingDocumentStatus.DRAFT) {
+            throw new ConflictException('Изменить можно только документ в статусе «Черновик»');
+        }
+        if (document.type === AccountingDocumentType.RECONCILIATION_ACT && dto.lines) {
+            throw new BadRequestException('Акт сверки содержит строки взаиморасчётов, а не строки услуг');
+        }
+        if (dto.lines && !dto.lines.length) {
+            throw new BadRequestException('Счёт или акт должен содержать хотя бы одну строку');
+        }
+        // Номер выдан в разрезе года («СЧ-2026-000001»), поэтому перенос
+        // черновика в другой год сделал бы номер неверным.
+        if (dto.documentDate) {
+            const nextYear = new Date(dto.documentDate).getUTCFullYear();
+            if (nextYear !== document.documentDate.getUTCFullYear()) {
+                throw new BadRequestException(
+                    'Дата другого года меняет нумерацию — создайте документ заново нужной датой',
+                );
+            }
+        }
+
+        const linesOrderIds = (dto.lines ?? [])
+            .map((line) => line.orderId)
+            .filter((orderId): orderId is string => Boolean(orderId));
+        // Список заявок пересобираем, только если он вообще затронут: пришёл
+        // явно или изменились строки, которые на заявки ссылаются.
+        const nextOrderIds = dto.orderIds !== undefined
+            ? Array.from(new Set([...dto.orderIds, ...linesOrderIds]))
+            : dto.lines
+                ? Array.from(new Set([...document.orders.map((link) => link.orderId), ...linesOrderIds]))
+                : null;
+        if (nextOrderIds) {
+            await this.assertOrdersAccessible(companyId, document, nextOrderIds);
+        }
+
+        const bankAccountTouched = dto.bankAccountId !== undefined;
+        let snapshots: {
+            bankAccountId: string | null;
+            issuerSnapshot: Prisma.InputJsonValue;
+            recipientSnapshot: Prisma.InputJsonValue;
+        } | null = null;
+        if (bankAccountTouched) {
+            const [company, counterparty] = await Promise.all([
+                this.prisma.company.findUnique({ where: { id: companyId }, select: COMPANY_SNAPSHOT_SELECT }),
+                this.prisma.company.findUnique({
+                    where: { id: document.counterpartyId },
+                    select: COMPANY_SNAPSHOT_SELECT,
+                }),
+            ]);
+            if (!company) throw new NotFoundException('Организация не найдена');
+            if (!counterparty) throw new NotFoundException('Контрагент не найден');
+
+            const bankAccount = await this.resolveBankAccount(companyId, dto.bankAccountId ?? undefined);
+            const ownSnapshot = this.applyBankAccount(company, bankAccount);
+            const outgoing = document.direction === AccountingDocumentDirection.OUTGOING;
+            snapshots = {
+                bankAccountId: bankAccount?.id ?? null,
+                issuerSnapshot: (outgoing ? ownSnapshot : counterparty) as Prisma.InputJsonValue,
+                recipientSnapshot: (outgoing ? counterparty : ownSnapshot) as Prisma.InputJsonValue,
+            };
+        }
+
+        const lineCalculation = dto.lines ? this.calculator.calculateLines(dto.lines) : null;
+        const trimmed = (value: string | null | undefined) =>
+            value === undefined ? undefined : value?.trim() || null;
+
+        await this.prisma.$transaction(async (tx) => {
+            if (lineCalculation) {
+                await tx.accountingDocumentLine.deleteMany({ where: { documentId: id } });
+            }
+            if (nextOrderIds) {
+                await tx.accountingDocumentOrder.deleteMany({ where: { documentId: id } });
+            }
+
+            await tx.accountingDocument.update({
+                where: { id },
+                data: {
+                    ...(dto.documentDate !== undefined
+                        ? { documentDate: new Date(dto.documentDate) }
+                        : {}),
+                    ...(dto.operationDate !== undefined
+                        ? { operationDate: dto.operationDate ? new Date(dto.operationDate) : null }
+                        : {}),
+                    ...(dto.dueDate !== undefined
+                        ? { dueDate: dto.dueDate ? new Date(dto.dueDate) : null }
+                        : {}),
+                    ...(dto.externalDate !== undefined
+                        ? { externalDate: dto.externalDate ? new Date(dto.externalDate) : null }
+                        : {}),
+                    externalNumber: trimmed(dto.externalNumber),
+                    paymentTerms: trimmed(dto.paymentTerms),
+                    note: trimmed(dto.note),
+                    ...(snapshots ?? {}),
+                    ...(lineCalculation
+                        ? {
+                            subtotal: lineCalculation.subtotal,
+                            discountTotal: lineCalculation.discountTotal,
+                            vatTotal: lineCalculation.vatTotal,
+                            total: lineCalculation.total,
+                            balanceDue: lineCalculation.total.minus(document.amountPaid),
+                            lines: { create: lineCalculation.lines },
+                        }
+                        : {}),
+                    ...(nextOrderIds
+                        ? { orders: { create: nextOrderIds.map((orderId) => ({ orderId })) } }
+                        : {}),
+                },
+            });
+        });
+
+        return this.getById(companyId, id);
     }
 
     /**
@@ -546,7 +716,7 @@ export class AccountingDocumentsService {
 
     private async assertOrdersAccessible(
         companyId: string,
-        dto: CreateAccountingDocumentDto,
+        dto: Pick<CreateAccountingDocumentDto, 'type' | 'direction' | 'counterpartyId'>,
         orderIds: string[],
     ) {
         if (!orderIds.length) return;
