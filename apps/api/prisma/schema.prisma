@@ -1445,6 +1445,11 @@ enum AccountingVatTreatment {
   EXEMPT      // Освобождённый оборот
 }
 
+enum AccountingVatCalculation {
+  INCLUDED // НДС уже включён в введённую цену
+  EXCLUDED // НДС начисляется сверху введённой цены
+}
+
 model AccountingDocument {
   id              String                      @id @default(cuid())
   companyId       String
@@ -1532,6 +1537,7 @@ model AccountingDocumentLine {
   subtotal    Decimal            @db.Decimal(20, 2)
   discountAmount Decimal         @default(0) @db.Decimal(20, 2)
   vatTreatment AccountingVatTreatment @default(WITHOUT_VAT)
+  vatCalculation AccountingVatCalculation @default(INCLUDED)
   vatRate     Decimal            @default(0) @db.Decimal(5, 2)
   vatAmount   Decimal            @default(0) @db.Decimal(20, 2)
   total       Decimal            @db.Decimal(20, 2)

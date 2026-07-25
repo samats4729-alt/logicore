@@ -29,6 +29,8 @@ CREATE TYPE "AccountingVatTreatment" AS ENUM (
     'EXEMPT'
 );
 
+CREATE TYPE "AccountingVatCalculation" AS ENUM ('INCLUDED', 'EXCLUDED');
+
 -- CreateTable
 CREATE TABLE "AccountingDocument" (
     "id" TEXT NOT NULL,
@@ -106,6 +108,7 @@ CREATE TABLE "AccountingDocumentLine" (
     "subtotal" DECIMAL(20,2) NOT NULL,
     "discountAmount" DECIMAL(20,2) NOT NULL DEFAULT 0,
     "vatTreatment" "AccountingVatTreatment" NOT NULL DEFAULT 'WITHOUT_VAT',
+    "vatCalculation" "AccountingVatCalculation" NOT NULL DEFAULT 'INCLUDED',
     "vatRate" DECIMAL(5,2) NOT NULL DEFAULT 0,
     "vatAmount" DECIMAL(20,2) NOT NULL DEFAULT 0,
     "total" DECIMAL(20,2) NOT NULL,
