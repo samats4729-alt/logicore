@@ -228,20 +228,21 @@ async function main() {
     console.log(`✅ Country created: ${kazakhstan.name}`);
 
     // 2. Process Regions and Cities
-    const regionMap = new Map(); // name -> id
-
-    // Clear existing cities/regions if needed to ensure clean state with new hierarchy
-    // (Optional: DELETE logic if schema changed drastically, otherwise upsert is safer)
-    await prisma.city.deleteMany({});
-    await prisma.region.deleteMany({});
-    console.log('🗑️ Cleared existing cities and regions');
+    const regionMap = new Map<string, string>(); // name -> id
 
     for (const cityData of kzCities) {
         // Find or create Region
         let regionId = regionMap.get(cityData.region);
         if (!regionId) {
-            const region = await prisma.region.create({
-                data: {
+            const region = await prisma.region.upsert({
+                where: {
+                    countryId_name: {
+                        countryId: kazakhstan.id,
+                        name: cityData.region,
+                    },
+                },
+                update: {},
+                create: {
                     name: cityData.region,
                     countryId: kazakhstan.id,
                 },
@@ -251,9 +252,20 @@ async function main() {
             console.log(`  📍 Region created: ${cityData.region}`);
         }
 
-        // Create City
-        await prisma.city.create({
-            data: {
+        // Update coordinates without replacing the city: existing tariff links keep their IDs.
+        await prisma.city.upsert({
+            where: {
+                countryId_regionId_name: {
+                    countryId: kazakhstan.id,
+                    regionId,
+                    name: cityData.name,
+                },
+            },
+            update: {
+                latitude: cityData.latitude,
+                longitude: cityData.longitude,
+            },
+            create: {
                 name: cityData.name,
                 latitude: cityData.latitude,
                 longitude: cityData.longitude,
