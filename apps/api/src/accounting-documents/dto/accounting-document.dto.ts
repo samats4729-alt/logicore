@@ -315,8 +315,13 @@ export class GenerateReconciliationDraftDto {
     note?: string;
 }
 
-/** Параметры кнопки «Подобрать по заявкам» в форме создания счёта. */
+/** Параметры кнопки «Подобрать по заявкам» в формах счёта и акта. */
 export class BillableOrdersQueryDto {
+    /** Счёт (по умолчанию) или акт выполненных работ. */
+    @IsOptional()
+    @IsEnum(AccountingDocumentType)
+    type?: AccountingDocumentType;
+
     @IsEnum(AccountingDocumentDirection)
     direction!: AccountingDocumentDirection;
 
@@ -324,7 +329,10 @@ export class BillableOrdersQueryDto {
     @IsNotEmpty()
     counterpartyId!: string;
 
-    /** Добавить рейсы «в работе» — счёт на аванс до завершения перевозки. */
+    /**
+     * Добавить рейсы «в работе» — счёт на аванс до завершения перевозки.
+     * Для акта не действует: услуга ещё не оказана, актировать нечего.
+     */
     @IsOptional()
     @Transform(({ value }) => value === true || value === 'true')
     @IsBoolean()
@@ -354,6 +362,12 @@ export class AccountingDocumentListQueryDto {
     @IsOptional()
     @IsString()
     counterpartyId?: string;
+
+    /** Документы, связанные с конкретной заявкой — цепочка документов рейса. */
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    orderId?: string;
 
     @IsOptional()
     @IsDateString()

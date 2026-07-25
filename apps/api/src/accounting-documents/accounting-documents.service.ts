@@ -310,6 +310,7 @@ export class AccountingDocumentsService {
             direction: query.direction,
             status: query.status,
             counterpartyId: query.counterpartyId,
+            orders: query.orderId ? { some: { orderId: query.orderId } } : undefined,
             documentDate: query.from || query.to
                 ? {
                     gte: query.from ? new Date(query.from) : undefined,
@@ -784,14 +785,16 @@ export class AccountingDocumentsService {
             throw new BadRequestException('Организация и контрагент должны отличаться');
         }
 
-        const document = {
-            type: AccountingDocumentType.PAYMENT_INVOICE,
-            direction: query.direction,
-            counterpartyId: query.counterpartyId,
-        };
+        const type = query.type ?? AccountingDocumentType.PAYMENT_INVOICE;
+        if (type === AccountingDocumentType.RECONCILIATION_ACT) {
+            throw new BadRequestException('Акт сверки не связывается с отдельными заявками');
+        }
+        const document = { type, direction: query.direction, counterpartyId: query.counterpartyId };
+
         // Без флага — только завершённые: по ним услуга оказана. С флагом
-        // добавляются рейсы в работе, чтобы выставить счёт на аванс.
-        const statusFilter = query.includeInProgress
+        // добавляются рейсы в работе, чтобы выставить счёт на аванс. Для акта
+        // флаг игнорируется — актировать неоказанную услугу нельзя.
+        const statusFilter = query.includeInProgress && type === AccountingDocumentType.PAYMENT_INVOICE
             ? this.billableOrdersWhere(companyId, document).status
             : { equals: OrderStatus.COMPLETED };
 
@@ -803,7 +806,7 @@ export class AccountingDocumentsService {
                     none: {
                         document: {
                             companyId,
-                            type: AccountingDocumentType.PAYMENT_INVOICE,
+                            type,
                             direction: query.direction,
                             status: { not: AccountingDocumentStatus.CANCELLED },
                         },

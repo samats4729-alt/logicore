@@ -628,6 +628,38 @@ describe('AccountingDocumentsService', () => {
             expect(row.amount.toFixed(2)).toBe('200000.00');
         });
 
+        // T-02: счёт и акт — разные документы. Выставленный счёт не должен
+        // мешать составить акт по тому же рейсу, и наоборот.
+        it('для акта смотрит на акты, а не на счета', async () => {
+            const { service, prisma } = makeService();
+
+            await service.listBillableOrders(COMPANY, {
+                type: AccountingDocumentType.SERVICE_ACT,
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COUNTERPARTY,
+            });
+
+            const { where } = prisma.order.findMany.mock.calls[0][0];
+            expect(where.accountingDocuments.none.document.type)
+                .toBe(AccountingDocumentType.SERVICE_ACT);
+        });
+
+        it('акт берёт только завершённые рейсы, даже если просят рейсы в работе', async () => {
+            const { service, prisma } = makeService();
+
+            await service.listBillableOrders(COMPANY, {
+                type: AccountingDocumentType.SERVICE_ACT,
+                direction: AccountingDocumentDirection.OUTGOING,
+                counterpartyId: COUNTERPARTY,
+                includeInProgress: true,
+            });
+
+            // Услуга ещё не оказана — актировать нечего, флаг аванса
+            // относится только к счетам.
+            expect(prisma.order.findMany.mock.calls[0][0].where.status)
+                .toEqual({ equals: 'COMPLETED' });
+        });
+
         it('не подбирает заявки, когда контрагент — сама организация', async () => {
             const { service, prisma } = makeService();
 

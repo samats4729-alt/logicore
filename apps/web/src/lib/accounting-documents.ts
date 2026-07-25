@@ -137,6 +137,8 @@ export interface AccountingDocumentListParams {
     direction?: AccountingDocumentDirection;
     status?: AccountingDocumentStatus;
     counterpartyId?: string;
+    /** Документы конкретной заявки — цепочка документов рейса. */
+    orderId?: string;
     from?: string;
     to?: string;
     page?: number;
@@ -240,6 +242,8 @@ export interface BillableOrder {
 }
 
 export async function fetchBillableOrders(params: {
+    /** Счёт (по умолчанию) или акт — у них разные списки занятых заявок. */
+    type?: AccountingDocumentType;
     direction: AccountingDocumentDirection;
     counterpartyId: string;
     includeInProgress?: boolean;

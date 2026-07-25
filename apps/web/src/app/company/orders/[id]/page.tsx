@@ -27,6 +27,7 @@ const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
+import { createAccountingDocument, fetchAccountingDocuments } from '@/lib/accounting-documents';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -141,6 +142,7 @@ export default function OrderDetailPage() {
     const [data, setData] = useState<any>(null);
     const [documents, setDocuments] = useState<any[]>([]);
     const [uploadingDoc, setUploadingDoc] = useState(false);
+    const [actLoading, setActLoading] = useState(false);
 
     // Unified payment states & role checks
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
@@ -283,6 +285,66 @@ export default function OrderDetailPage() {
     const [quickPartnerTarget, setQuickPartnerTarget] = useState<'CUSTOMER' | 'CARRIER' | null>(null);
     const [quickLocationModalOpen, setQuickLocationModalOpen] = useState(false);
     const [activeRoutePointIndex, setActiveRoutePointIndex] = useState<number | null>(null);
+
+    /**
+     * «Акт выполненных работ» на карточке заявки.
+     *
+     * Раньше кнопка открывала страницу, которая считала акт из ТЕКУЩЕЙ
+     * заявки: правка заявки задним числом меняла уже отданный контрагенту
+     * документ. Теперь акт — сохранённый документ со своим номером и
+     * снимком реквизитов. Если акт по рейсу уже есть, открываем его, а не
+     * плодим второй.
+     */
+    const openOrCreateAct = async () => {
+        // Заявку берём из data напрямую: одноимённая переменная объявлена
+        // ниже по файлу, и опираться на неё отсюда было бы неочевидно.
+        const current = data?.order;
+        const counterpartyId = current?.customerCompanyId;
+        if (!counterpartyId) {
+            message.warning('У заявки не указана компания-заказчик');
+            return;
+        }
+        try {
+            setActLoading(true);
+            const existing = await fetchAccountingDocuments({
+                type: 'SERVICE_ACT',
+                orderId,
+                limit: 1,
+            });
+            if (existing.data.length) {
+                router.push(`/company/accounting/acts/${existing.data[0].id}`);
+                return;
+            }
+
+            const amount = Number(current?.customerPrice || 0);
+            const created = await createAccountingDocument({
+                type: 'SERVICE_ACT',
+                direction: 'OUTGOING',
+                counterpartyId,
+                documentDate: dayjs().format('YYYY-MM-DD'),
+                lines: [{
+                    name: 'Транспортные услуги',
+                    quantity: '1',
+                    unit: 'усл',
+                    unitPrice: amount.toFixed(2),
+                    ...(current?.hasVat && Number(current?.vatRate) > 0
+                        ? {
+                            vatTreatment: 'STANDARD' as const,
+                            vatCalculation: 'INCLUDED' as const,
+                            vatRate: String(current.vatRate),
+                        }
+                        : {}),
+                    orderId,
+                }],
+            });
+            message.success(`Черновик акта № ${created.number} создан`);
+            router.push(`/company/accounting/acts/${created.id}`);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось открыть акт');
+        } finally {
+            setActLoading(false);
+        }
+    };
 
     // =================== DATA FETCHING ===================
 
@@ -1904,12 +1966,23 @@ export default function OrderDetailPage() {
                             <div>
                                 {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                                        <Button
-                                            icon={<FileTextOutlined />}
-                                            onClick={() => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank')}
-                                        >
-                                            Акт выполненных работ
-                                        </Button>
+                                        <Space size={8}>
+                                            <Button
+                                                type="primary"
+                                                icon={<FileTextOutlined />}
+                                                loading={actLoading}
+                                                onClick={openOrCreateAct}
+                                            >
+                                                Акт выполненных работ
+                                            </Button>
+                                            <Tooltip title="Расчёт по текущим данным заявки — меняется вместе с ней">
+                                                <Button
+                                                    onClick={() => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank')}
+                                                >
+                                                    Предпросмотр
+                                                </Button>
+                                            </Tooltip>
+                                        </Space>
                                     </div>
                                 )}
                                 {/* Условия и формы оплаты */}

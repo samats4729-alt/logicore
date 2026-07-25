@@ -1,137 +1,428 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Space, DatePicker, Input, Select, Modal, App } from 'antd';
-import { ArrowLeftOutlined, FileTextOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
-import { api } from '@/lib/api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import StatusPill from '@/components/ui/StatusPill';
-import dayjs from 'dayjs';
+import {
+    Alert,
+    Button,
+    DatePicker,
+    Dropdown,
+    Input,
+    Modal,
+    Select,
+    Space,
+    Spin,
+    Table,
+    Tabs,
+    Tooltip,
+    message,
+    theme,
+} from 'antd';
+import {
+    EyeOutlined,
+    MoreOutlined,
+    PlusOutlined,
+    PrinterOutlined,
+    SearchOutlined,
+} from '@ant-design/icons';
+import dayjs, { Dayjs } from 'dayjs';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
+import {
+    ACCOUNTING_DOCUMENT_STATUS_LABELS,
+    AccountingDocumentDirection,
+    AccountingDocumentListItem,
+    AccountingDocumentStatus,
+    BillableOrder,
+    createAccountingDocument,
+    fetchAccountingDocuments,
+    fetchBillableOrders,
+    openAccountingDocumentPdf,
+    revokeAccountingDocumentShare,
+    routePointsLabel,
+} from '@/lib/accounting-documents';
 
 const { RangePicker } = DatePicker;
 
-interface ActRow {
-    id: string;
-    orderNumber: string;
-    status: string;
-    date: string;
-    customerName: string;
-    route: string;
-    amount: number;
-}
+const DEFAULT_PERIOD: [Dayjs, Dayjs] = [dayjs().startOf('year'), dayjs().endOf('day')];
 
-const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
+const money = (value: number) =>
+    `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
 
+/**
+ * Журнал актов выполненных работ — первый уровень раздела, как журнал
+ * документов в 1С.
+ *
+ * Раньше здесь были перечислены ЗАЯВКИ, а акт печатался из живой заявки:
+ * номер акта совпадал с номером заявки, а правка заявки задним числом
+ * меняла уже отданный контрагенту документ. Теперь это список настоящих
+ * актов со своей нумерацией и снимком реквизитов.
+ */
 export default function ActsJournalPage() {
     const router = useRouter();
-    const { message } = App.useApp();
+    const { token } = theme.useToken();
+    const { user } = useAuthStore();
 
-    const [loading, setLoading] = useState(false);
-    const [rows, setRows] = useState<ActRow[]>([]);
+    const [documents, setDocuments] = useState<AccountingDocumentListItem[]>([]);
+    const [totals, setTotals] = useState({ amount: 0, paid: 0, due: 0 });
+    const [totalCount, setTotalCount] = useState(0);
+    const [loading, setLoading] = useState(true);
+
+    const [direction, setDirection] = useState<AccountingDocumentDirection>('OUTGOING');
+    const [status, setStatus] = useState<AccountingDocumentStatus | 'all'>('all');
+    const [counterpartyId, setCounterpartyId] = useState<string | undefined>();
+    const [period, setPeriod] = useState<[Dayjs, Dayjs]>(DEFAULT_PERIOD);
     const [search, setSearch] = useState('');
-    const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
-    const [onlyCompleted, setOnlyCompleted] = useState(false);
+    const [page, setPage] = useState(1);
 
+    const [counterparties, setCounterparties] = useState<{ id: string; name: string }[]>([]);
+
+    // Окно «Создать акт»: контрагент → завершённые рейсы без акта.
     const [createOpen, setCreateOpen] = useState(false);
-    const [pickOrder, setPickOrder] = useState<string | undefined>(undefined);
+    const [createCounterparty, setCreateCounterparty] = useState<string | undefined>();
+    const [orders, setOrders] = useState<BillableOrder[]>([]);
+    const [loadingOrders, setLoadingOrders] = useState(false);
+    const [pickedIds, setPickedIds] = useState<string[]>([]);
+    const [creating, setCreating] = useState(false);
 
-    useEffect(() => { fetchActs(); }, []);
+    const canChange = useMemo(
+        () => ['ACCOUNTANT', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
+        [user],
+    );
 
-    const fetchActs = async () => {
-        setLoading(true);
+    const load = useCallback(async () => {
         try {
-            const res = await api.get('/accounting/acts-journal');
-            setRows(res.data || []);
+            setLoading(true);
+            const result = await fetchAccountingDocuments({
+                type: 'SERVICE_ACT',
+                direction,
+                status: status === 'all' ? undefined : status,
+                counterpartyId,
+                from: period[0].format('YYYY-MM-DD'),
+                to: period[1].format('YYYY-MM-DD'),
+                page,
+                limit: 30,
+            });
+            setDocuments(result.data);
+            setTotals(result.totals);
+            setTotalCount(result.total);
         } catch {
-            message.error('Не удалось загрузить акты');
+            message.error('Не удалось загрузить журнал актов');
         } finally {
             setLoading(false);
         }
+    }, [direction, status, counterpartyId, period, page]);
+
+    useEffect(() => { load(); }, [load]);
+
+    useEffect(() => {
+        Promise.all([api.get('/partners'), api.get('/external-companies')])
+            .then(([partners, external]) => setCounterparties([
+                ...(partners.data || []).map((p: any) => ({ id: p.id, name: p.name || 'Без названия' })),
+                ...(external.data || []).map((e: any) => ({ id: e.id, name: `${e.name} (офлайн)` })),
+            ]))
+            .catch(() => setCounterparties([]));
+    }, []);
+
+    const loadOrders = useCallback(async () => {
+        if (!createCounterparty) { setOrders([]); return; }
+        try {
+            setLoadingOrders(true);
+            setPickedIds([]);
+            setOrders(await fetchBillableOrders({
+                type: 'SERVICE_ACT',
+                direction,
+                counterpartyId: createCounterparty,
+            }));
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось загрузить заявки');
+            setOrders([]);
+        } finally {
+            setLoadingOrders(false);
+        }
+    }, [createCounterparty, direction]);
+
+    useEffect(() => { if (createOpen) loadOrders(); }, [createOpen, loadOrders]);
+
+    const createAct = async () => {
+        if (!createCounterparty) { message.warning('Выберите контрагента'); return; }
+        if (!pickedIds.length) { message.warning('Выберите хотя бы один рейс'); return; }
+        try {
+            setCreating(true);
+            const picked = orders.filter((order) => pickedIds.includes(order.id));
+            const created = await createAccountingDocument({
+                type: 'SERVICE_ACT',
+                direction,
+                counterpartyId: createCounterparty,
+                documentDate: dayjs().format('YYYY-MM-DD'),
+                lines: picked.map((order) => ({
+                    name: 'Транспортные услуги',
+                    description: [routePointsLabel(order.routePoints), order.assignedDriverName]
+                        .filter(Boolean).join(', ') || undefined,
+                    quantity: '1',
+                    unit: 'усл',
+                    unitPrice: (order.amount ?? 0).toFixed(2),
+                    ...(order.hasVat && order.vatRate > 0
+                        ? {
+                            vatTreatment: 'STANDARD' as const,
+                            vatCalculation: 'INCLUDED' as const,
+                            vatRate: String(order.vatRate),
+                        }
+                        : {}),
+                    orderId: order.id,
+                })),
+            });
+            message.success(`Черновик акта № ${created.number} создан`);
+            setCreateOpen(false);
+            router.push(`/company/accounting/acts/${created.id}`);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось создать акт');
+        } finally {
+            setCreating(false);
+        }
     };
 
-    const openAct = (orderId: string) => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank');
-
-    const filtered = useMemo(() => rows.filter(r => {
-        if (onlyCompleted && r.status !== 'COMPLETED') return false;
-        if (dateRange && dateRange[0] && dateRange[1]) {
-            const d = dayjs(r.date);
-            if (d.isBefore(dateRange[0], 'day') || d.isAfter(dateRange[1], 'day')) return false;
-        }
-        if (search) {
-            const q = search.toLowerCase();
-            const hay = `${r.orderNumber} ${r.customerName} ${r.route}`.toLowerCase();
-            if (!hay.includes(q)) return false;
-        }
-        return true;
-    }), [rows, search, dateRange, onlyCompleted]);
-
-    const total = filtered.reduce((s, r) => s + r.amount, 0);
+    const visible = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        if (!term) return documents;
+        return documents.filter((doc) =>
+            doc.number.toLowerCase().includes(term)
+            || (doc.counterparty?.name || '').toLowerCase().includes(term));
+    }, [documents, search]);
 
     const columns = [
-        { title: '№ акта', dataIndex: 'orderNumber', key: 'num', width: 120, render: (v: string) => <span style={{ fontWeight: 600, fontSize: 13 }}>{v}</span> },
-        { title: 'Дата', dataIndex: 'date', key: 'date', width: 110, render: (v: string) => <span style={{ fontSize: 13 }}>{dayjs(v).format('DD.MM.YYYY')}</span> },
-        { title: 'Заказчик', dataIndex: 'customerName', key: 'cust', render: (v: string) => <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span> },
-        { title: 'Маршрут', dataIndex: 'route', key: 'route', ellipsis: true, render: (v: string) => <span style={{ fontSize: 13 }}>{v || '—'}</span> },
-        { title: 'Статус заявки', dataIndex: 'status', key: 'status', width: 130, render: (s: string) => <StatusPill status={s} /> },
-        { title: 'Сумма', dataIndex: 'amount', key: 'amount', width: 140, align: 'right' as const, render: (v: number) => <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}</strong> },
         {
-            title: '', key: 'act', width: 130,
-            render: (_: any, r: ActRow) => <Button size="small" type="primary" ghost icon={<FileTextOutlined />} onClick={() => openAct(r.id)}>Открыть акт</Button>,
+            title: '№ акта',
+            dataIndex: 'number',
+            key: 'number',
+            width: 150,
+            render: (value: string, record: AccountingDocumentListItem) => (
+                <a onClick={() => router.push(`/company/accounting/acts/${record.id}`)} style={{ fontWeight: 600 }}>
+                    {value}
+                </a>
+            ),
+        },
+        {
+            title: 'Дата',
+            dataIndex: 'documentDate',
+            key: 'documentDate',
+            width: 100,
+            render: (value: string) => dayjs(value).format('DD.MM.YYYY'),
+        },
+        {
+            title: 'Контрагент',
+            key: 'counterparty',
+            render: (_: unknown, record: AccountingDocumentListItem) => (
+                <div>
+                    <div style={{ fontWeight: 500 }}>{record.counterparty?.name || '—'}</div>
+                    {record.counterparty?.bin && (
+                        <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                            БИН {record.counterparty.bin}
+                        </div>
+                    )}
+                </div>
+            ),
+        },
+        {
+            title: 'Сделка',
+            key: 'orders',
+            width: 150,
+            render: (_: unknown, record: AccountingDocumentListItem) => {
+                const linked = record.orders || [];
+                if (!linked.length) return <span style={{ color: token.colorTextDisabled }}>—</span>;
+                const rest = (record._count?.orders ?? linked.length) - linked.length;
+                return (
+                    <Tooltip title={linked.map((o) => o.order.orderNumber).join(', ')}>
+                        <span style={{ fontSize: 12 }}>
+                            {linked[0].order.orderNumber}
+                            {rest > 0 && <span style={{ color: token.colorTextSecondary }}> +{rest}</span>}
+                        </span>
+                    </Tooltip>
+                );
+            },
+        },
+        {
+            title: 'Сумма',
+            dataIndex: 'total',
+            key: 'total',
+            width: 150,
+            align: 'right' as const,
+            render: (value: number) => <span style={{ fontWeight: 600 }}>{money(value)}</span>,
+        },
+        {
+            title: 'Статус',
+            dataIndex: 'status',
+            key: 'status',
+            width: 110,
+            render: (value: AccountingDocumentStatus) => {
+                const color = value === 'POSTED'
+                    ? token.colorSuccess
+                    : value === 'CANCELLED'
+                        ? token.colorTextDisabled
+                        : token.colorWarning;
+                return (
+                    <span style={{ color, fontWeight: 500, fontSize: 12 }}>
+                        {ACCOUNTING_DOCUMENT_STATUS_LABELS[value]}
+                    </span>
+                );
+            },
+        },
+        {
+            title: '',
+            key: 'actions',
+            width: 100,
+            render: (_: unknown, record: AccountingDocumentListItem) => (
+                <Space size={4}>
+                    <Tooltip title="Открыть">
+                        <Button
+                            type="text"
+                            size="small"
+                            icon={<EyeOutlined />}
+                            onClick={() => router.push(`/company/accounting/acts/${record.id}`)}
+                        />
+                    </Tooltip>
+                    <Tooltip title="Печать">
+                        <Button
+                            type="text"
+                            size="small"
+                            icon={<PrinterOutlined />}
+                            onClick={() => openAccountingDocumentPdf(record.id)}
+                        />
+                    </Tooltip>
+                    <Dropdown
+                        trigger={['click']}
+                        menu={{
+                            items: [
+                                {
+                                    key: 'copy',
+                                    label: 'Скопировать ссылку',
+                                    disabled: record.status !== 'POSTED' || Boolean(record.shareRevokedAt),
+                                    onClick: () => {
+                                        navigator.clipboard.writeText(
+                                            `${window.location.origin}/shared/document/${record.shareToken}`);
+                                        message.success('Ссылка скопирована');
+                                    },
+                                },
+                                {
+                                    key: 'revoke',
+                                    label: 'Отозвать ссылку',
+                                    danger: true,
+                                    disabled: !canChange || Boolean(record.shareRevokedAt),
+                                    onClick: async () => {
+                                        await revokeAccountingDocumentShare(record.id);
+                                        message.success('Ссылка отозвана');
+                                        load();
+                                    },
+                                },
+                            ],
+                        }}
+                    >
+                        <Button type="text" size="small" icon={<MoreOutlined />} />
+                    </Dropdown>
+                </Space>
+            ),
         },
     ];
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1400, margin: '0 auto' }}>
+        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
             <div className="lc2-hero">
                 <div>
-                    <div className="lc-eyebrow">
-                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/finance')} style={{ padding: 0, marginRight: 8, height: 'auto' }} />
-                        Финансы · Документы
-                    </div>
+                    <div className="lc-eyebrow">Финансы · Документы</div>
                     <h1 className="lc2-title">Акты выполненных работ</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0' }}>
-                        Журнал актов по заявкам, где вы — исполнитель для заказчика. Откройте акт по заявке, проверьте и распечатайте.
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
+                        Акт подтверждает, что услуга оказана. Проведённый акт не меняется при правке заявки —
+                        он хранит реквизиты и суммы на момент подписания.
                     </p>
-                </div>
-                <div className="lc2-metrics">
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}><FileTextOutlined /></div>
-                        <div>
-                            <div className="lc2-mlabel">На сумму</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(total)}</div>
-                            <div className="lc2-msub">{filtered.length} актов</div>
-                        </div>
-                    </div>
+                    {canChange && (
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={() => { setCreateCounterparty(undefined); setCreateOpen(true); }}
+                            className="lc-cta"
+                        >
+                            Создать акт
+                        </Button>
+                    )}
                 </div>
             </div>
 
-            <div className="lc-card" style={{ padding: 16, marginBottom: 12 }}>
-                <Space wrap>
-                    <Input placeholder="Поиск: заявка, заказчик, маршрут…" prefix={<SearchOutlined />} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 280 }} allowClear />
-                    <RangePicker value={dateRange} onChange={d => setDateRange(d as any)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} />
+            <div className="lc-card" style={{ padding: 20 }}>
+                <Tabs
+                    activeKey={direction}
+                    onChange={(key) => { setDirection(key as AccountingDocumentDirection); setPage(1); }}
+                    items={[
+                        { key: 'OUTGOING', label: 'Исходящие' },
+                        { key: 'INCOMING', label: 'Входящие' },
+                    ]}
+                    style={{ marginBottom: 12 }}
+                />
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                     <Select
-                        value={onlyCompleted ? 'completed' : 'all'}
-                        onChange={(v) => setOnlyCompleted(v === 'completed')}
-                        style={{ width: 200 }}
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder="Контрагент"
+                        style={{ width: 240 }}
+                        value={counterpartyId}
+                        onChange={(value) => { setCounterpartyId(value); setPage(1); }}
+                        options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
+                    />
+                    <RangePicker
+                        value={period}
+                        onChange={(value) => {
+                            if (value?.[0] && value?.[1]) { setPeriod([value[0], value[1]]); setPage(1); }
+                        }}
+                        format="DD.MM.YYYY"
+                        allowClear={false}
+                    />
+                    <Select
+                        value={status}
+                        onChange={(value) => { setStatus(value); setPage(1); }}
+                        style={{ width: 150 }}
                         options={[
-                            { value: 'all', label: 'Все заявки' },
-                            { value: 'completed', label: 'Только завершённые' },
+                            { value: 'all', label: 'Все статусы' },
+                            { value: 'DRAFT', label: 'Черновик' },
+                            { value: 'POSTED', label: 'Проведён' },
+                            { value: 'CANCELLED', label: 'Отменён' },
                         ]}
                     />
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => { setPickOrder(undefined); setCreateOpen(true); }}>Создать акт</Button>
-                </Space>
-            </div>
+                    <Input
+                        placeholder="Номер или контрагент"
+                        prefix={<SearchOutlined style={{ color: token.colorTextDescription }} />}
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        style={{ width: 220 }}
+                        allowClear
+                    />
+                </div>
 
-            <div className="lc-card" style={{ padding: 0 }}>
                 <Table
                     columns={columns}
-                    dataSource={filtered}
+                    dataSource={visible}
                     rowKey="id"
                     loading={loading}
                     size="small"
-                    locale={{ emptyText: 'Нет заявок для актов' }}
-                    pagination={{ pageSize: 30, showSizeChanger: true, showTotal: (t) => `Всего: ${t}` }}
-                    onRow={(r) => ({ style: { cursor: 'pointer' }, onDoubleClick: () => openAct(r.id) })}
+                    scroll={{ x: 1000 }}
+                    locale={{ emptyText: 'За период актов нет. Создайте акт по завершённому рейсу.' }}
+                    pagination={{
+                        current: page,
+                        pageSize: 30,
+                        total: totalCount,
+                        showSizeChanger: false,
+                        onChange: setPage,
+                        showTotal: (t) => `Всего актов: ${t}`,
+                    }}
+                    summary={() => (
+                        <Table.Summary fixed>
+                            <Table.Summary.Row style={{ background: token.colorFillAlter, fontWeight: 600 }}>
+                                <Table.Summary.Cell index={0} colSpan={4}>Итого за период</Table.Summary.Cell>
+                                <Table.Summary.Cell index={4} align="right">{money(totals.amount)}</Table.Summary.Cell>
+                                <Table.Summary.Cell index={5} colSpan={2} />
+                            </Table.Summary.Row>
+                        </Table.Summary>
+                    )}
                 />
             </div>
 
@@ -139,22 +430,87 @@ export default function ActsJournalPage() {
                 title="Создать акт выполненных работ"
                 open={createOpen}
                 onCancel={() => setCreateOpen(false)}
-                onOk={() => { if (pickOrder) { openAct(pickOrder); setCreateOpen(false); } else message.warning('Выберите заявку'); }}
-                okText="Открыть акт"
+                onOk={createAct}
+                confirmLoading={creating}
+                okText={`Создать акт (${pickedIds.length})`}
                 cancelText="Отмена"
+                width={900}
                 destroyOnClose
             >
-                <p style={{ color: 'var(--lc-text-ter)', fontSize: 12.5, marginTop: 0 }}>
-                    Акт составляется по заявке. Выберите заявку — откроется готовый акт для проверки и печати.
-                </p>
                 <Select
-                    placeholder="Выберите заявку по номеру или заказчику"
-                    style={{ width: '100%' }}
-                    showSearch optionFilterProp="label"
-                    value={pickOrder}
-                    onChange={setPickOrder}
-                    options={rows.map(r => ({ value: r.id, label: `${r.orderNumber} · ${r.customerName}` }))}
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder="Контрагент"
+                    style={{ width: '100%', marginBottom: 12 }}
+                    value={createCounterparty}
+                    onChange={setCreateCounterparty}
+                    options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
                 />
+
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message="Показаны только завершённые рейсы, по которым акта ещё нет."
+                    description="Акт подтверждает оказанную услугу, поэтому рейсы «в работе» сюда не попадают."
+                />
+
+                {!createCounterparty ? (
+                    <div style={{ textAlign: 'center', padding: 32, color: token.colorTextDescription }}>
+                        Выберите контрагента
+                    </div>
+                ) : loadingOrders ? (
+                    <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>
+                ) : (
+                    <Table
+                        rowKey="id"
+                        size="small"
+                        pagination={false}
+                        scroll={{ y: 360 }}
+                        dataSource={orders}
+                        rowSelection={{
+                            selectedRowKeys: pickedIds,
+                            onChange: (keys) => setPickedIds(keys as string[]),
+                        }}
+                        locale={{ emptyText: 'Нет завершённых рейсов без акта у этого контрагента' }}
+                        columns={[
+                            { title: 'Заявка', dataIndex: 'orderNumber', width: 140 },
+                            {
+                                title: 'Маршрут',
+                                key: 'route',
+                                render: (_: unknown, record: BillableOrder) => (
+                                    <div>
+                                        <div style={{ fontSize: 12 }}>
+                                            {routePointsLabel(record.routePoints) || '—'}
+                                        </div>
+                                        {record.assignedDriverName && (
+                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                                {[record.assignedDriverName, record.assignedDriverPlate]
+                                                    .filter(Boolean).join(' · ')}
+                                            </div>
+                                        )}
+                                    </div>
+                                ),
+                            },
+                            {
+                                title: 'Сумма',
+                                key: 'amount',
+                                width: 150,
+                                align: 'right' as const,
+                                render: (_: unknown, record: BillableOrder) => (
+                                    <div>
+                                        <div style={{ fontWeight: 600 }}>{money(record.amount)}</div>
+                                        <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                            {record.hasVat && record.vatRate > 0
+                                                ? `НДС ${record.vatRate} %`
+                                                : 'без НДС'}
+                                        </div>
+                                    </div>
+                                ),
+                            },
+                        ]}
+                    />
+                )}
             </Modal>
         </div>
     );
