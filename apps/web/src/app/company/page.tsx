@@ -153,7 +153,9 @@ export default function CompanyDashboard() {
                 .catch(() => { })
                 .finally(() => setActivityLoading(false));
 
-            api.get('/accounting/counterparty-report')
+            // Дашборду нужны только итоги и топ должников. Список заявок по
+            // каждому контрагенту составляет почти весь объём ответа.
+            api.get('/accounting/counterparty-report?includeOrders=false')
                 .then(res => {
                     setDebtTotals(res.data?.totals || null);
                     setDebtors((res.data?.counterparties || []).filter((c: DebtCounterparty) => c.unpaidTheyOweUs > 0).slice(0, 3));

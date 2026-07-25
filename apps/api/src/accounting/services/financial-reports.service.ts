@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
-import { FinanceCalculatorService } from './finance-calculator.service';
+import { FinanceCalculatorService, ORDER_FINANCE_RELATIONS_SELECT, ORDER_FINANCE_SELECT } from './finance-calculator.service';
 import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
 import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType } from '@prisma/client';
@@ -304,9 +304,7 @@ export class FinancialReportsService {
                 partner: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
                 routePoints: { select: { pointType: true, sequence: true, location: { select: { address: true, city: true } } }, orderBy: { sequence: 'asc' } },
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -403,9 +401,7 @@ export class FinancialReportsService {
                 forwarder: { select: { id: true, name: true } },
                 partner: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -495,9 +491,7 @@ export class FinancialReportsService {
             include: {
                 customerCompany: { select: { id: true, name: true } },
                 customer: { select: { id: true, firstName: true, lastName: true } },
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -562,9 +556,7 @@ export class FinancialReportsService {
                 driver: { select: { id: true, firstName: true, lastName: true, phone: true } },
                 partner: { select: { id: true, name: true } },
                 subForwarder: { select: { id: true, name: true } },
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -612,9 +604,7 @@ export class FinancialReportsService {
             },
             include: {
                 forwarder: { select: { id: true, name: true } },
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -644,7 +634,15 @@ export class FinancialReportsService {
 
     // ==================== COUNTERPARTY REPORT ====================
 
-    async getCounterpartyReport(companyId: string) {
+    /**
+     * Взаиморасчёты по контрагентам.
+     *
+     * includeOrders=false опускает список заявок по каждому контрагенту. Он
+     * составляет почти весь объём ответа (на 5000 заявок это 2.4 МБ против
+     * нескольких килобайт), а дашборду нужны только итоги и топ должников.
+     */
+    async getCounterpartyReport(companyId: string, options?: { includeOrders?: boolean }) {
+        const includeOrders = options?.includeOrders !== false;
         const orders = await this.prisma.order.findMany({
             where: {
                 AND: [
@@ -679,9 +677,7 @@ export class FinancialReportsService {
                     },
                     orderBy: { sequence: 'asc' },
                 },
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -892,6 +888,9 @@ export class FinancialReportsService {
                 unpaidTheyOweUs: toNum(positiveRest(entry.theyOweUs, entry.theyOweUsPaid).plus(openingReceivable)),
                 unpaidWeOweThem: toNum(positiveRest(entry.weOweThem, entry.weOweThemPaid).plus(openingPayable)),
                 totalOrders: entry.orders.length,
+                // Список заявок по контрагенту — почти весь объём ответа.
+                // Дашборду он не нужен, странице взаиморасчётов — нужен.
+                ...(includeOrders ? {} : { orders: undefined }),
             };
         });
 
@@ -953,9 +952,7 @@ export class FinancialReportsService {
                 ],
             },
             include: {
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             },
             orderBy: { createdAt: 'asc' },
         });
@@ -1093,9 +1090,7 @@ export class FinancialReportsService {
             include: {
                 subForwarder: { select: { name: true } },
                 driver: { select: { firstName: true, lastName: true } },
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             },
         });
 
@@ -1638,11 +1633,12 @@ export class FinancialReportsService {
                 ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
-            include: {
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
-            }
+            // Сводке нужны только величины для расчёта: строки заявок наружу не
+            // отдаются, поэтому читаем ровно те поля, которые считает калькулятор.
+            select: {
+                ...ORDER_FINANCE_SELECT,
+                ...ORDER_FINANCE_RELATIONS_SELECT,
+            },
         });
 
         let totalRevenue : Money = ZERO;
@@ -1681,7 +1677,8 @@ export class FinancialReportsService {
                         lte: new Date(endDate),
                     }
                 })
-            }
+            },
+            select: { direction: true, amount: true },
         });
 
         const cashIn = sumOf(payments.filter(p => p.direction === PaymentDirection.IN), (p) => p.amount);
@@ -1985,9 +1982,7 @@ export class FinancialReportsService {
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
             include: {
-                payments: { where: { isDeleted: false } },
-                incomes: { where: { isDeleted: false } },
-                expenses: { where: { isDeleted: false } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
             }
         });
 
