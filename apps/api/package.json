@@ -15,7 +15,8 @@
         "prisma:migrate": "prisma migrate dev",
         "prisma:studio": "prisma studio",
         "prisma:push": "prisma db push",
-        "prisma:deploy": "prisma db push --skip-generate",
+        "prisma:deploy": "node scripts/deploy-db.js",
+        "prisma:baseline": "prisma migrate resolve --applied 0_init",
         "prisma:seed": "npx ts-node --transpile-only prisma/seed.ts"
     },
     "dependencies": {
