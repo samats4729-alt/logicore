@@ -100,6 +100,8 @@ export interface Location {
     contactName?: string;
     contactPhone?: string;
     city?: string;
+    cityId?: string;
+    cityRecord?: City;
     companyId?: string;
     emails?: string;
 }
@@ -108,6 +110,19 @@ export interface Country {
     id: string;
     name: string;
     code: string;
+}
+
+export interface GeoProviderEntity {
+    externalId?: string;
+    name: string;
+}
+
+export interface GeoProviderHierarchy {
+    provider: '2gis';
+    placeId?: string;
+    country?: GeoProviderEntity & { code: string };
+    region?: GeoProviderEntity;
+    city?: GeoProviderEntity;
 }
 
 export interface Region {
@@ -124,7 +139,12 @@ export interface City {
     countryId?: string;
     regionId?: string;
     country?: {
+        id?: string;
         code: string;
+        name: string;
+    };
+    region?: {
+        id: string;
         name: string;
     };
 }

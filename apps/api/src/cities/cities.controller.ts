@@ -4,6 +4,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
+import { ImportProviderGeographyDto } from './dto/import-provider-geography.dto';
 
 @ApiTags('cities')
 @Controller('cities')
@@ -27,6 +28,13 @@ export class CitiesController {
     @Get('regions')
     getRegions(@Query('countryId') countryId: string) {
         return this.citiesService.getRegions(countryId);
+    }
+
+    @Post('import-from-provider')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Сохранить выбранные в геокодере страну, регион и город' })
+    importFromProvider(@Body() dto: ImportProviderGeographyDto) {
+        return this.citiesService.importFromProvider(dto);
     }
 
     // --- Country Endpoints ---

@@ -53,6 +53,7 @@ export class LocationsService {
         notes?: string;
         createdById?: string;
         city?: string;
+        cityId?: string;
         companyId?: string;
         emails?: string;
     }, user?: { sub: string; role: string; companyId?: string }) {
@@ -62,7 +63,7 @@ export class LocationsService {
             const {
                 name, address, latitude, longitude,
                 contactName, contactPhone, notes, createdById,
-                city, companyId, emails
+                city, cityId, companyId, emails
             } = data as any;
 
             const location = await this.prisma.location.create({
@@ -76,6 +77,7 @@ export class LocationsService {
                     notes,
                     createdById,
                     city: city || null,
+                    cityId: cityId || null,
                     companyId: companyId || null,
                     emails: emails || null,
                 }
@@ -137,7 +139,10 @@ export class LocationsService {
                         id: true,
                         name: true
                     }
-                }
+                },
+                cityRecord: {
+                    include: { country: true, region: true },
+                },
             },
             orderBy: { name: 'asc' },
         });
@@ -154,7 +159,10 @@ export class LocationsService {
             include: {
                 company: {
                     select: { id: true, name: true }
-                }
+                },
+                cityRecord: {
+                    include: { country: true, region: true },
+                },
             }
         });
 
@@ -188,6 +196,7 @@ export class LocationsService {
         contactPhone: string;
         notes: string;
         city: string | null;
+        cityId: string | null;
         companyId: string | null;
         emails: string | null;
     }>, user?: { sub: string; role: string; companyId?: string }) {
@@ -214,7 +223,7 @@ export class LocationsService {
             const {
                 name, address, latitude, longitude,
                 contactName, contactPhone, notes,
-                city, companyId, emails
+                city, cityId, companyId, emails
             } = data as any;
 
             const updateData: any = {};
@@ -226,6 +235,7 @@ export class LocationsService {
             if (contactPhone !== undefined) updateData.contactPhone = contactPhone;
             if (notes !== undefined) updateData.notes = notes;
             if (city !== undefined) updateData.city = city || null;
+            if (cityId !== undefined) updateData.cityId = cityId || null;
             if (companyId !== undefined) updateData.companyId = companyId || null;
             if (emails !== undefined) updateData.emails = emails || null;
             

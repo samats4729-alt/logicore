@@ -5,7 +5,7 @@ import {
     Form, Input, Row, Col, Select, Typography, App, Button, FormInstance, Radio, Spin
 } from 'antd';
 import { EnvironmentOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { api, Location, Country, City } from '@/lib/api';
+import { api, Location, Country, City, GeoProviderHierarchy } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import AddressAutocomplete from './AddressAutocomplete';
 
@@ -83,15 +83,25 @@ export default function LocationForm({
             });
 
             setCity(editingLocation.city || undefined);
-            setSelectedCityId(undefined);
-            setCityOptions([]);
-            setCityFocus(undefined);
+            setSelectedCityId(editingLocation.cityId || undefined);
+            if (editingLocation.cityRecord) {
+                setCityOptions([editingLocation.cityRecord]);
+                setSelectedCountryId(editingLocation.cityRecord.countryId);
+                setCityFocus({
+                    lat: editingLocation.cityRecord.latitude,
+                    lng: editingLocation.cityRecord.longitude,
+                });
+            } else {
+                setCityOptions([]);
+                setCityFocus(undefined);
+            }
         } else {
             setAddressValue('');
             setLat(undefined);
             setLng(undefined);
             setCity(undefined);
             setSelectedCityId(undefined);
+            setSelectedCountryId(countries.find(c => c.code === 'KZ' || /казах/i.test(c.name))?.id);
             setCityOptions([]);
             setCityFocus(undefined);
             form.resetFields();
@@ -183,15 +193,66 @@ export default function LocationForm({
         form.setFieldsValue({ address: '', latitude: undefined, longitude: undefined });
     };
 
-    const handleAddressSelect = (address: string, latitude: number, longitude: number) => {
+    const importProviderGeography = async (
+        geography: GeoProviderHierarchy | undefined,
+        latitude: number,
+        longitude: number,
+    ) => {
+        if (!geography?.country || !geography.city) return null;
+
+        try {
+            const response = await api.post('/cities/import-from-provider', {
+                provider: geography.provider,
+                country: geography.country,
+                region: geography.region,
+                city: geography.city,
+                latitude,
+                longitude,
+            });
+            const imported = response.data as { country: Country; region?: { id: string; name: string } | null; city: City };
+            const importedCity: City = {
+                ...imported.city,
+                country: imported.country,
+                region: imported.region || undefined,
+            };
+
+            setCountries(current => current.some(country => country.id === imported.country.id)
+                ? current.map(country => country.id === imported.country.id ? imported.country : country)
+                : [...current, imported.country].sort((a, b) => a.name.localeCompare(b.name, 'ru')));
+            setSelectedCountryId(imported.country.id);
+            setSelectedCityId(imported.city.id);
+            setCity(imported.city.name);
+            setCityOptions(current => [
+                importedCity,
+                ...current.filter(option => option.id !== imported.city.id),
+            ]);
+            setCityFocus({ lat: imported.city.latitude, lng: imported.city.longitude });
+            return importedCity;
+        } catch (error) {
+            console.error('Failed to import geography from 2GIS', error);
+            message.warning('Адрес выбран, но город не добавился в справочник. Его можно сохранить и повторить позже.');
+            return null;
+        }
+    };
+
+    const handleAddressSelect = async (
+        address: string,
+        latitude: number,
+        longitude: number,
+        geography?: GeoProviderHierarchy,
+    ) => {
         setAddressValue(address);
         setLat(latitude);
         setLng(longitude);
         form.setFieldsValue({ address, latitude, longitude });
 
-        // full_name у 2ГИС начинается с города: «Алматы, Сатпаева, 90/1»
-        const cityCandidate = address.includes(',') ? address.split(',')[0].trim() : '';
-        if (cityCandidate) setCity(cityCandidate);
+        if (geography?.city?.name) setCity(geography.city.name);
+        const importedCity = await importProviderGeography(geography, latitude, longitude);
+        if (!importedCity && !geography?.city?.name) {
+            // Fallback for providers that returned an address without administrative fields.
+            const cityCandidate = address.includes(',') ? address.split(',')[0].trim() : '';
+            if (cityCandidate) setCity(cityCandidate);
+        }
     };
 
     const handleMapSelect = async (latitude: number, longitude: number, pickedName?: string) => {
@@ -249,6 +310,7 @@ export default function LocationForm({
                 const cityFromGeo = (bestItem.adm_div || []).find((d: any) => d.type === 'city')?.name
                     || (bestItem.full_name ? String(bestItem.full_name).split(',')[0].trim() : '');
                 if (cityFromGeo) setCity(cityFromGeo);
+                await importProviderGeography(bestItem.geography, lat, lng);
             }
         } catch (e) {
             console.error('Manual geocode error', e);
@@ -282,7 +344,8 @@ export default function LocationForm({
                 address: addressValue,
                 latitude: lat,
                 longitude: lng,
-                city: city || null
+                city: city || null,
+                cityId: selectedCityId || null,
             });
         }}>
             <Row gutter={24}>
@@ -344,7 +407,7 @@ export default function LocationForm({
                         required
                         help={city
                             ? `Поиск улицы в городе: ${city}`
-                            : 'Сначала выберите город, затем введите улицу и номер дома'}
+                            : 'Введите полный адрес — страна, регион и город определятся автоматически'}
                     >
                         <AddressAutocomplete
                             value={addressValue}
@@ -355,7 +418,7 @@ export default function LocationForm({
                             onSelect={handleAddressSelect}
                             city={city}
                             proximity={cityFocus}
-                            placeholder={city ? 'Улица и дом, напр.: Сатпаева 90/1' : 'Например: Алматы, Сатпаева 90/1'}
+                            placeholder={city ? 'Улица и дом, напр.: Сатпаева 90/1' : 'Например: Алматы, Казахстан, Сатпаева 90/1'}
                         />
                     </Form.Item>
 

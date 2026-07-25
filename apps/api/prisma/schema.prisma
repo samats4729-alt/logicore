@@ -385,6 +385,8 @@ model Location {
   contactName String?
   contactPhone String?
   city        String?   // <-- Added city field
+  cityId      String?
+  cityRecord  City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
   notes       String?
   emails      String?   // Контактные email-адреса
   companyId   String?   // ID привязанного контрагента
@@ -399,35 +401,45 @@ model Location {
   warehouseGates    WarehouseGate[]
   
   @@index([latitude, longitude])
+  @@index([cityId])
 }
 
 model Country {
-  id        String   @id @default(cuid())
-  name      String   @unique // e.g., "Kazakhstan"
-  code      String   @unique // e.g., "KZ"
-  regions   Region[]
-  cities    City[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String   @unique // e.g., "Kazakhstan"
+  code             String   @unique // e.g., "KZ"
+  externalProvider String?
+  externalId       String?
+  regions          Region[]
+  cities            City[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([externalProvider, externalId])
 }
 
 model Region {
-  id        String   @id @default(cuid())
-  name      String   // e.g., "Almaty Region"
-  countryId String
-  country   Country  @relation(fields: [countryId], references: [id])
-  cities    City[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String   // e.g., "Almaty Region"
+  countryId        String
+  country          Country  @relation(fields: [countryId], references: [id])
+  externalProvider String?
+  externalId       String?
+  cities            City[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@unique([countryId, name])
+  @@unique([externalProvider, externalId])
 }
 
 model City {
-  id        String   @id @default(cuid())
-  name      String
-  latitude  Float
-  longitude Float
+  id               String   @id @default(cuid())
+  name             String
+  latitude         Float
+  longitude        Float
+  externalProvider String?
+  externalId       String?
   
   regionId  String?
   region    Region?  @relation(fields: [regionId], references: [id])
@@ -437,11 +449,13 @@ model City {
 
   originTariffs      RouteTariff[] @relation("OriginTariffs")
   destinationTariffs RouteTariff[] @relation("DestinationTariffs")
+  locations          Location[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([countryId, regionId, name]) // Unique name per region/country
+  @@unique([externalProvider, externalId])
 }
 model Order {
   id              String      @id @default(cuid())

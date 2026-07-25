@@ -3,21 +3,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { AutoComplete, Input, Spin } from 'antd';
 import { EnvironmentOutlined, SearchOutlined } from '@ant-design/icons';
-import { api } from '@/lib/api';
+import { api, GeoProviderHierarchy } from '@/lib/api';
 
-interface MapboxFeature {
+interface DgisAddressFeature {
     id: string;
     place_name: string;
     center: [number, number];
-    context?: { text: string }[];
     text?: string;
-    address?: string;
+    geography?: GeoProviderHierarchy;
 }
 
 interface AddressAutocompleteProps {
     value?: string;
     onChange?: (value: string) => void;
-    onSelect?: (address: string, lat: number, lng: number) => void;
+    onSelect?: (address: string, lat: number, lng: number, geography?: GeoProviderHierarchy) => void;
     placeholder?: string;
     size?: 'small' | 'middle' | 'large';
     proximity?: { lat: number; lng: number };
@@ -35,7 +34,7 @@ export default function AddressAutocomplete({
     city,
     disabled,
 }: AddressAutocompleteProps) {
-    const [options, setOptions] = useState<{ value: string; label: React.ReactNode; data: MapboxFeature }[]>([]);
+    const [options, setOptions] = useState<{ value: string; label: React.ReactNode; data: DgisAddressFeature }[]>([]);
     const [loading, setLoading] = useState(false);
     const [keyMissing, setKeyMissing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -74,14 +73,14 @@ export default function AddressAutocomplete({
                 const items = response.data?.items || [];
 
                 setOptions(
-                    items.map((item: any) => {
+                    items.filter((item: any) => item?.point).map((item: any) => {
                         // 2GIS Mapping
                         // full_name: "Алматы, Сатпаева, 90/1" (Often cleanest)
                         // address_name: "Сатпаева, 90/1"
                         // building_name: "ЖК Симфония" 
                         // name: "Симфония" (POI name)
 
-                        const val = item.full_name || item.address_name || item.name;
+                        const val = item.full_name || item.full_address_name || item.address_name || item.name;
                         const subVal = item.building_name || item.purpose_name || '';
 
                         return {
@@ -91,10 +90,7 @@ export default function AddressAutocomplete({
                                 place_name: val,
                                 center: [item.point.lon, item.point.lat], // Lon, Lat
                                 text: item.address_name || item.name,
-                                address: { // Mocking the OSM structure for compatibility if needed
-                                    house_number: item.building_name,
-                                    road: item.address_name
-                                }
+                                geography: item.geography,
                             },
                             label: (
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0' }}>
@@ -141,7 +137,7 @@ export default function AddressAutocomplete({
         const formattedAddress = feature.place_name;
 
         onChange?.(formattedAddress);
-        onSelect?.(formattedAddress, lat, lng);
+        onSelect?.(formattedAddress, lat, lng, feature.geography);
     };
 
     return (
