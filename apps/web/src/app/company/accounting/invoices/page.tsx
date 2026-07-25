@@ -1,238 +1,221 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-    Typography,
-    Card,
-    Tabs,
-    Table,
-    Tag,
     Button,
-    Space,
+    DatePicker,
+    Dropdown,
     Input,
     Select,
+    Space,
+    Table,
+    Tabs,
+    Tooltip,
     message,
     theme,
-    Tooltip,
-    Modal,
-    Popconfirm
 } from 'antd';
 import {
-    SearchOutlined,
-    PlusOutlined,
-    CopyOutlined,
     EyeOutlined,
-    DeleteOutlined,
-    CheckCircleOutlined,
-    ExclamationCircleOutlined,
-    LinkOutlined,
-    DollarOutlined
+    MoreOutlined,
+    PlusOutlined,
+    PrinterOutlined,
+    SearchOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import dayjs from 'dayjs';
-import StatusPill from '@/components/ui/StatusPill';
+import dayjs, { Dayjs } from 'dayjs';
+import {
+    ACCOUNTING_DOCUMENT_STATUS_LABELS,
+    AccountingDocumentListItem,
+    AccountingDocumentStatus,
+    fetchAccountingDocuments,
+    openAccountingDocumentPdf,
+    revokeAccountingDocumentShare,
+} from '@/lib/accounting-documents';
 
-const { Title, Text } = Typography;
+const { RangePicker } = DatePicker;
 
-const statusLabels: Record<string, string> = {
-    DRAFT: 'Черновик',
-    PENDING: 'Ожидает оплаты',
-    DISPUTED: 'Спор',
-    APPROVED: 'Согласован',
-    PAID: 'Оплачен',
-    CANCELLED: 'Отменен',
-};
+/** Журнал ведётся за период — как в 1С, где список всегда ограничен датами. */
+const DEFAULT_PERIOD: [Dayjs, Dayjs] = [dayjs().startOf('year'), dayjs().endOf('day')];
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'default',
-    PENDING: 'orange',
-    DISPUTED: 'red',
-    APPROVED: 'blue',
-    PAID: 'green',
-    CANCELLED: 'magenta',
-};
+const money = (value: number) => `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
 
-export default function InvoicesPage() {
+export default function InvoicesRegistryPage() {
     const router = useRouter();
     const { token } = theme.useToken();
     const { user } = useAuthStore();
 
-    const [invoices, setInvoices] = useState<any[]>([]);
+    const [documents, setDocuments] = useState<AccountingDocumentListItem[]>([]);
+    const [totals, setTotals] = useState({ amount: 0, paid: 0, due: 0 });
+    const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
+
+    const [direction, setDirection] = useState<'OUTGOING' | 'INCOMING'>('OUTGOING');
+    const [status, setStatus] = useState<AccountingDocumentStatus | 'all'>('all');
+    const [counterpartyId, setCounterpartyId] = useState<string | undefined>();
+    const [period, setPeriod] = useState<[Dayjs, Dayjs]>(DEFAULT_PERIOD);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('all');
-    const [activeTab, setActiveTab] = useState<'INCOMING' | 'OUTGOING'>('OUTGOING');
+    const [page, setPage] = useState(1);
 
-    const cardStyle = {
-        borderRadius: 8,
-        background: token.colorBgContainer,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-    };
+    const [counterparties, setCounterparties] = useState<{ id: string; name: string }[]>([]);
 
-    const isAccountantOrAdmin = useMemo(() => {
-        return ['ACCOUNTANT', 'FORWARDER', 'COMPANY_ADMIN'].includes(user?.role || '');
-    }, [user]);
+    const canChange = useMemo(
+        () => ['ACCOUNTANT', 'FORWARDER', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
+        [user],
+    );
 
-    const loadInvoices = async () => {
+    const load = useCallback(async () => {
         try {
             setLoading(true);
-            const res = await api.get('/invoices');
-            setInvoices(res.data);
-        } catch (e) {
-            message.error('Ошибка загрузки счетов');
+            const result = await fetchAccountingDocuments({
+                type: 'PAYMENT_INVOICE',
+                direction,
+                status: status === 'all' ? undefined : status,
+                counterpartyId,
+                from: period[0].format('YYYY-MM-DD'),
+                to: period[1].format('YYYY-MM-DD'),
+                page,
+                limit: 30,
+            });
+            setDocuments(result.data);
+            setTotals(result.totals);
+            setTotalCount(result.total);
+        } catch {
+            message.error('Не удалось загрузить журнал счетов');
         } finally {
             setLoading(false);
         }
-    };
+    }, [direction, status, counterpartyId, period, page]);
 
     useEffect(() => {
-        loadInvoices();
+        load();
+    }, [load]);
+
+    useEffect(() => {
+        api.get('/partners')
+            .then((res) => setCounterparties(
+                (res.data || []).map((p: any) => ({ id: p.id, name: p.name || 'Без названия' })),
+            ))
+            .catch(() => setCounterparties([]));
     }, []);
 
-    const handleCopyLink = (shareToken: string) => {
-        const url = `${window.location.origin}/shared/invoice/${shareToken}`;
+    // Поиск по номеру и контрагенту — по загруженной странице. Отбор по
+    // контрагенту целиком делает фильтр выше, он работает по всей базе.
+    const visible = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        if (!term) return documents;
+        return documents.filter((doc) =>
+            doc.number.toLowerCase().includes(term)
+            || (doc.counterparty?.name || '').toLowerCase().includes(term));
+    }, [documents, search]);
+
+    const copyShareLink = (doc: AccountingDocumentListItem) => {
+        const url = `${window.location.origin}/shared/document/${doc.shareToken}`;
         navigator.clipboard.writeText(url);
-        message.success('Публичная ссылка скопирована!');
+        message.success('Ссылка скопирована');
     };
 
-    const handleDeleteInvoice = async (id: string) => {
+    const revokeShare = async (doc: AccountingDocumentListItem) => {
         try {
-            await api.delete(`/invoices/${id}`);
-            message.success('Счет успешно удален');
-            loadInvoices();
-        } catch (e) {
-            message.error('Не удалось удалить счет');
+            await revokeAccountingDocumentShare(doc.id);
+            message.success('Ссылка отозвана — прежняя больше не откроется');
+            load();
+        } catch {
+            message.error('Не удалось отозвать ссылку');
         }
-    };
-
-    const handleMarkAsPaid = async (id: string) => {
-        try {
-            await api.put(`/invoices/${id}/status`, { status: 'PAID' });
-            message.success('Счет помечен как оплаченный');
-            loadInvoices();
-        } catch (e) {
-            message.error('Не удалось обновить статус счета');
-        }
-    };
-
-    const filteredInvoices = useMemo(() => {
-        return invoices.filter((inv) => {
-            // Направление счёта — относительно нашей компании (мы выставили или нам выставили)
-            const isOutgoingForMe = inv.issuerId === user?.companyId;
-            const matchesTab = activeTab === 'OUTGOING' ? isOutgoingForMe : !isOutgoingForMe;
-            const matchesStatus = statusFilter === 'all' || inv.status === statusFilter;
-            const counterpartyName = isOutgoingForMe ? (inv.recipient?.name || '') : (inv.issuer?.name || '');
-            const matchesSearch =
-                inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
-                counterpartyName.toLowerCase().includes(search.toLowerCase());
-            return matchesTab && matchesStatus && matchesSearch;
-        });
-    }, [invoices, activeTab, statusFilter, search, user?.companyId]);
-
-    const getInitials = (name: string) => {
-        if (!name || name === '—') return '';
-        const parts = name.trim().split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) {
-            return (parts[0][0] + parts[1][0]).toUpperCase();
-        }
-        return name.slice(0, 2).toUpperCase();
     };
 
     const columns = [
         {
-            title: 'Номер счета',
-            dataIndex: 'invoiceNumber',
-            key: 'invoiceNumber',
-            render: (text: string, record: any) => (
-                <div style={{ fontWeight: 600 }}>
-                    {text}
-                    {record.note && (
-                        <div style={{ fontSize: 11, fontWeight: 400, color: token.colorTextSecondary }}>
-                            {record.note}
-                        </div>
+            title: 'Номер',
+            dataIndex: 'number',
+            key: 'number',
+            width: 150,
+            render: (value: string, record: AccountingDocumentListItem) => (
+                <a onClick={() => router.push(`/company/accounting/invoices/${record.id}`)} style={{ fontWeight: 600 }}>
+                    {value}
+                </a>
+            ),
+        },
+        {
+            title: 'Дата',
+            dataIndex: 'documentDate',
+            key: 'documentDate',
+            width: 100,
+            render: (value: string) => dayjs(value).format('DD.MM.YYYY'),
+        },
+        {
+            title: 'Контрагент',
+            key: 'counterparty',
+            render: (_: unknown, record: AccountingDocumentListItem) => (
+                <div>
+                    <div style={{ fontWeight: 500 }}>{record.counterparty?.name || '—'}</div>
+                    {record.counterparty?.bin && (
+                        <div style={{ fontSize: 11, color: token.colorTextSecondary }}>БИН {record.counterparty.bin}</div>
                     )}
                 </div>
             ),
         },
         {
-            title: activeTab === 'OUTGOING' ? 'Получатель' : 'Отправитель',
-            key: 'counterparty',
-            render: (_: any, record: any) => {
-                const comp = record.issuerId === user?.companyId ? record.recipient : record.issuer;
-                const name = comp?.name || 'Внешняя компания';
-                return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="lc2-avatar lc2-avatar-sm" style={{ background: activeTab === 'OUTGOING' ? '#e0f2fe' : '#f1f2f5', color: activeTab === 'OUTGOING' ? '#0369a1' : '#5f6672', flexShrink: 0 }}>
-                            {getInitials(name) || 'CO'}
-                        </span>
-                        <div>
-                            <div style={{ fontWeight: 500 }}>{name}</div>
-                            {comp?.bin && <div style={{ fontSize: 11, color: token.colorTextSecondary }}>БИН: {comp.bin}</div>}
-                        </div>
-                    </div>
-                );
-            },
-        },
-        {
-            title: 'Дата выставления',
-            dataIndex: 'date',
-            key: 'date',
-            render: (d: string) => dayjs(d).format('DD.MM.YYYY'),
-        },
-        {
-            title: 'Срок оплаты',
-            dataIndex: 'dueDate',
-            key: 'dueDate',
-            render: (d: string) => d ? dayjs(d).format('DD.MM.YYYY') : '—',
-        },
-        {
-            title: 'Рейсы',
+            // «Сделка» в терминах 1С — заявка, по которой выставлен документ.
+            title: 'Сделка',
             key: 'orders',
-            width: 140,
-            render: (_: any, record: any) => {
-                const orders = [...(record.incomingOrders || []), ...(record.outgoingOrders || [])];
-                if (orders.length === 0) return '—';
-                const listContent = (
-                    <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-                        {orders.map((o: any) => (
-                            <div key={o.id} style={{ fontSize: 11, padding: '2px 0' }}>
-                                Рейс №{o.orderNumber}
-                            </div>
-                        ))}
-                    </div>
-                );
+            width: 150,
+            render: (_: unknown, record: AccountingDocumentListItem) => {
+                const orders = record.orders || [];
+                if (!orders.length) return <span style={{ color: token.colorTextDisabled }}>—</span>;
+                const rest = (record._count?.orders ?? orders.length) - orders.length;
                 return (
-                    <Tooltip title={listContent} overlayInnerStyle={{ padding: '8px 12px' }}>
-                        <span style={{ cursor: 'pointer', color: token.colorPrimary, fontWeight: 500, borderBottom: `1px dashed ${token.colorPrimary}` }}>
-                            {orders.length === 1 ? `1 рейс` : `${orders.length} рейса(ов)`}
+                    <Tooltip title={orders.map((o) => o.order.orderNumber).join(', ')}>
+                        <span style={{ fontSize: 12 }}>
+                            {orders[0].order.orderNumber}
+                            {rest > 0 && <span style={{ color: token.colorTextSecondary }}> +{rest}</span>}
                         </span>
                     </Tooltip>
                 );
             },
         },
         {
-            title: 'Сумма',
-            key: 'amount',
-            align: 'right' as const,
-            render: (_: any, record: any) => {
-                const hasDisputedAmount = record.adjustedAmount !== null && record.adjustedAmount !== undefined;
+            title: 'Срок оплаты',
+            dataIndex: 'dueDate',
+            key: 'dueDate',
+            width: 110,
+            render: (value: string | null, record: AccountingDocumentListItem) => {
+                if (!value) return <span style={{ color: token.colorTextDisabled }}>—</span>;
+                const overdue = record.balanceDue > 0
+                    && dayjs(value).isBefore(dayjs(), 'day')
+                    && record.status === 'POSTED';
                 return (
-                    <div style={{ textAlign: 'right' }}>
-                        {hasDisputedAmount ? (
-                            <>
-                                <div style={{ textDecoration: 'line-through', fontSize: 11, color: token.colorTextDisabled }}>
-                                    {record.amount.toLocaleString('ru-RU')} ₸
-                                </div>
-                                <div style={{ fontWeight: 700, color: token.colorError }}>
-                                    {record.adjustedAmount.toLocaleString('ru-RU')} ₸
-                                </div>
-                            </>
-                        ) : (
-                            <div style={{ fontWeight: 700 }}>
-                                {record.amount.toLocaleString('ru-RU')} ₸
+                    <span style={{ color: overdue ? token.colorError : undefined, fontWeight: overdue ? 600 : 400 }}>
+                        {dayjs(value).format('DD.MM.YYYY')}
+                    </span>
+                );
+            },
+        },
+        {
+            title: 'Сумма',
+            dataIndex: 'total',
+            key: 'total',
+            width: 140,
+            align: 'right' as const,
+            render: (value: number) => <span style={{ fontWeight: 600 }}>{money(value)}</span>,
+        },
+        {
+            // Частичные оплаты видны сразу: «оплачено из суммы».
+            title: 'Оплачено',
+            key: 'amountPaid',
+            width: 150,
+            align: 'right' as const,
+            render: (_: unknown, record: AccountingDocumentListItem) => {
+                if (!record.amountPaid) return <span style={{ color: token.colorTextDisabled }}>—</span>;
+                const full = record.balanceDue <= 0;
+                return (
+                    <div>
+                        <div style={{ color: full ? token.colorSuccess : undefined }}>{money(record.amountPaid)}</div>
+                        {!full && (
+                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                остаток {money(record.balanceDue)}
                             </div>
                         )}
                     </div>
@@ -243,67 +226,62 @@ export default function InvoicesPage() {
             title: 'Статус',
             dataIndex: 'status',
             key: 'status',
-            render: (status: string) => <StatusPill status={status} />,
+            width: 110,
+            render: (value: AccountingDocumentStatus) => {
+                const color = value === 'POSTED'
+                    ? token.colorSuccess
+                    : value === 'CANCELLED'
+                        ? token.colorTextDisabled
+                        : token.colorWarning;
+                return <span style={{ color, fontWeight: 500, fontSize: 12 }}>{ACCOUNTING_DOCUMENT_STATUS_LABELS[value]}</span>;
+            },
         },
         {
-            title: 'Действия',
+            title: '',
             key: 'actions',
-            render: (_: any, record: any) => (
-                <Space size={8}>
-                    <Tooltip title="Открыть детали">
+            width: 100,
+            render: (_: unknown, record: AccountingDocumentListItem) => (
+                // Для бухгалтера первичны «Открыть» и «Печать»; всё остальное —
+                // в меню, чтобы строка журнала оставалась спокойной.
+                <Space size={4}>
+                    <Tooltip title="Открыть">
                         <Button
-                            type="primary"
-                            ghost
+                            type="text"
                             size="small"
                             icon={<EyeOutlined />}
                             onClick={() => router.push(`/company/accounting/invoices/${record.id}`)}
                         />
                     </Tooltip>
-
-                    <Tooltip title="Скопировать ссылку для партнера">
+                    <Tooltip title="Печать">
                         <Button
+                            type="text"
                             size="small"
-                            icon={<CopyOutlined />}
-                            onClick={() => handleCopyLink(record.shareToken)}
+                            icon={<PrinterOutlined />}
+                            onClick={() => openAccountingDocumentPdf(record.id)}
                         />
                     </Tooltip>
-
-                    {isAccountantOrAdmin && record.status !== 'PAID' && record.status !== 'CANCELLED' && (
-                        <Popconfirm
-                            title="Отметить счет как оплаченный?"
-                            description="Связанные рейсы также будут автоматически помечены оплаченными."
-                            onConfirm={() => handleMarkAsPaid(record.id)}
-                            okText="Да"
-                            cancelText="Нет"
-                        >
-                            <Tooltip title="Отметить оплату">
-                                <Button
-                                    size="small"
-                                    type="default"
-                                    style={{ color: token.colorSuccess, borderColor: token.colorSuccess }}
-                                    icon={<DollarOutlined />}
-                                />
-                            </Tooltip>
-                        </Popconfirm>
-                    )}
-
-                    {isAccountantOrAdmin && record.status === 'DRAFT' && (
-                        <Popconfirm
-                            title="Удалить этот счет?"
-                            description="Рейсы будут отвязаны и возвращены в реестр для перевыставления."
-                            onConfirm={() => handleDeleteInvoice(record.id)}
-                            okText="Да"
-                            cancelText="Нет"
-                        >
-                            <Tooltip title="Удалить">
-                                <Button
-                                    danger
-                                    size="small"
-                                    icon={<DeleteOutlined />}
-                                />
-                            </Tooltip>
-                        </Popconfirm>
-                    )}
+                    <Dropdown
+                        trigger={['click']}
+                        menu={{
+                            items: [
+                                {
+                                    key: 'copy',
+                                    label: 'Скопировать ссылку',
+                                    disabled: record.status !== 'POSTED' || Boolean(record.shareRevokedAt),
+                                    onClick: () => copyShareLink(record),
+                                },
+                                {
+                                    key: 'revoke',
+                                    label: 'Отозвать ссылку',
+                                    danger: true,
+                                    disabled: !canChange || Boolean(record.shareRevokedAt),
+                                    onClick: () => revokeShare(record),
+                                },
+                            ],
+                        }}
+                    >
+                        <Button type="text" size="small" icon={<MoreOutlined />} />
+                    </Dropdown>
                 </Space>
             ),
         },
@@ -311,78 +289,114 @@ export default function InvoicesPage() {
 
     return (
         <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
-            {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
                     <div className="lc-eyebrow">Финансы · Счета</div>
-                    <h1 className="lc2-title">Реестр счетов</h1>
+                    <h1 className="lc2-title">Журнал счетов</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Исходящие — покупателям, входящие — от поставщиков. Это документы на оплату, а не сами деньги.
                     </p>
-                    {isAccountantOrAdmin && (
+                    {canChange && (
                         <Button
                             type="primary"
                             icon={<PlusOutlined />}
                             onClick={() => router.push('/company/accounting/invoices/create')}
                             className="lc-cta"
                         >
-                            Выставить счет
+                            Выставить счёт
                         </Button>
                     )}
                 </div>
             </div>
 
-            {/* ===== TABLE CARD ===== */}
-            <div className="lc-card" style={{ padding: '20px' }}>
-                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <Input
-                        placeholder="Поиск по номеру счета или контрагенту..."
-                        prefix={<SearchOutlined style={{ color: token.colorTextDescription }} />}
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        style={{ width: 320 }}
+            <div className="lc-card" style={{ padding: 20 }}>
+                <Tabs
+                    activeKey={direction}
+                    onChange={(key) => { setDirection(key as 'OUTGOING' | 'INCOMING'); setPage(1); }}
+                    items={[
+                        { key: 'OUTGOING', label: 'Исходящие' },
+                        { key: 'INCOMING', label: 'Входящие' },
+                    ]}
+                    style={{ marginBottom: 12 }}
+                />
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Select
                         allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder="Контрагент"
+                        style={{ width: 240 }}
+                        value={counterpartyId}
+                        onChange={(value) => { setCounterpartyId(value); setPage(1); }}
+                        options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
+                    />
+                    <RangePicker
+                        value={period}
+                        onChange={(value) => {
+                            if (value?.[0] && value?.[1]) { setPeriod([value[0], value[1]]); setPage(1); }
+                        }}
+                        format="DD.MM.YYYY"
+                        allowClear={false}
                     />
                     <Select
-                        value={statusFilter}
-                        onChange={setStatusFilter}
-                        style={{ width: 180 }}
+                        value={status}
+                        onChange={(value) => { setStatus(value); setPage(1); }}
+                        style={{ width: 150 }}
                         options={[
                             { value: 'all', label: 'Все статусы' },
                             { value: 'DRAFT', label: 'Черновик' },
-                            { value: 'PENDING', label: 'Ожидает оплаты' },
-                            { value: 'DISPUTED', label: 'Спор' },
-                            { value: 'APPROVED', label: 'Согласован' },
-                            { value: 'PAID', label: 'Оплачен' },
-                            { value: 'CANCELLED', label: 'Отменен' },
+                            { value: 'POSTED', label: 'Проведён' },
+                            { value: 'CANCELLED', label: 'Отменён' },
                         ]}
+                    />
+                    <Input
+                        placeholder="Номер или контрагент"
+                        prefix={<SearchOutlined style={{ color: token.colorTextDescription }} />}
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        style={{ width: 220 }}
+                        allowClear
                     />
                 </div>
 
-                <Tabs
-                    activeKey={activeTab}
-                    onChange={(key: any) => setActiveTab(key)}
-                    items={[
-                        {
-                            key: 'OUTGOING',
-                            label: `Исходящие`,
-                        },
-                        {
-                            key: 'INCOMING',
-                            label: `Входящие`,
-                        },
-                    ]}
-                    style={{ marginBottom: 16 }}
-                />
-
                 <Table
                     columns={columns}
-                    dataSource={filteredInvoices}
+                    dataSource={visible}
                     rowKey="id"
                     loading={loading}
-                    pagination={{ pageSize: 15 }}
-                    scroll={{ x: 1000 }}
                     size="small"
+                    scroll={{ x: 1100 }}
+                    pagination={{
+                        current: page,
+                        pageSize: 30,
+                        total: totalCount,
+                        showSizeChanger: false,
+                        onChange: setPage,
+                        showTotal: (t) => `Всего документов: ${t}`,
+                    }}
+                    summary={() => (
+                        // Итоги считаются по всей выборке фильтров, а не по
+                        // странице: «сколько выставлено за период» не должно
+                        // зависеть от листания.
+                        <Table.Summary fixed>
+                            <Table.Summary.Row style={{ background: token.colorFillAlter, fontWeight: 600 }}>
+                                <Table.Summary.Cell index={0} colSpan={5}>
+                                    Итого за период
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={5} align="right">{money(totals.amount)}</Table.Summary.Cell>
+                                <Table.Summary.Cell index={6} align="right">
+                                    <div>{money(totals.paid)}</div>
+                                    {totals.due > 0 && (
+                                        <div style={{ fontSize: 11, fontWeight: 400, color: token.colorTextSecondary }}>
+                                            долг {money(totals.due)}
+                                        </div>
+                                    )}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={7} colSpan={2} />
+                            </Table.Summary.Row>
+                        </Table.Summary>
+                    )}
                 />
             </div>
         </div>

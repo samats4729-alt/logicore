@@ -34,10 +34,14 @@ export class PublicAccountingDocumentController {
     async getPdfByToken(@Param('token') token: string, @Res() res: Response) {
         const document = await this.documents.getPublicByToken(token);
         const buffer = await this.pdf.generatePdf(document as any);
+        // Номер документа кириллический («СЧ-2026-000001»), а в заголовке
+        // HTTP допустим только ASCII — иначе Node роняет ответ.
+        const safeNumber = document.number.replace(/[^a-zA-Z0-9_-]+/g, '_');
         res.set({
             'Content-Type': 'application/pdf',
-            'Content-Disposition': `inline; filename="document-${document.number}.pdf"`,
+            'Content-Disposition': `inline; filename="document_${safeNumber}.pdf"`,
             'Content-Length': String(buffer.length),
+            'Cache-Control': 'private, no-store',
         });
         res.end(buffer);
     }
