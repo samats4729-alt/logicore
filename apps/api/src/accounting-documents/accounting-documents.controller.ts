@@ -87,7 +87,11 @@ export class AccountingDocumentsController {
         const document = await this.documents.getById(req.user.companyId, id);
         const pdfBuffer = await this.pdf.generatePdf(document);
         const safeNumber = document.number.replace(/[^a-zA-Z0-9_-]+/g, '_');
-        const filePrefix = document.type === 'SERVICE_ACT' ? 'ServiceAct_R1' : 'Invoice';
+        const filePrefix = document.type === 'SERVICE_ACT'
+            ? 'ServiceAct_R1'
+            : document.type === 'RECONCILIATION_ACT'
+                ? 'ReconciliationAct'
+                : 'Invoice';
         res.set({
             'Content-Type': 'application/pdf',
             'Content-Disposition': `attachment; filename="${filePrefix}_${safeNumber}.pdf"`,

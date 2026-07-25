@@ -100,4 +100,54 @@ describe('AccountingDocumentPdfService', () => {
         expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
         expect(buffer.length).toBeGreaterThan(20_000);
     });
+
+    it('создаёт PDF акта сверки с оборотами и конечным сальдо', async () => {
+        const buffer = await service.generateReconciliationActPdf({
+            ...sampleDocument(),
+            type: AccountingDocumentType.RECONCILIATION_ACT,
+            number: 'СВ-2026-000031',
+            reportPeriodFrom: new Date('2026-01-01'),
+            reportPeriodTo: new Date('2026-07-31'),
+            openingBalance: new Prisma.Decimal('0'),
+            debitTurnover: new Prisma.Decimal('1420000.00'),
+            creditTurnover: new Prisma.Decimal('900000.00'),
+            closingBalance: new Prisma.Decimal('520000.00'),
+            lines: [],
+            reconciliationLines: [
+                {
+                    lineNumber: 1,
+                    transactionDate: new Date('2026-05-26'),
+                    sourceDocumentType: 'Акт выполненных работ',
+                    sourceDocumentNumber: 'AB00000394',
+                    description: 'Транспортные услуги по заявке AB00002614',
+                    debit: new Prisma.Decimal('900000.00'),
+                    credit: new Prisma.Decimal('0'),
+                    runningBalance: new Prisma.Decimal('900000.00'),
+                },
+                {
+                    lineNumber: 2,
+                    transactionDate: new Date('2026-07-10'),
+                    sourceDocumentType: 'Платёж',
+                    sourceDocumentNumber: 'ПП-819',
+                    description: 'Оплата транспортных услуг',
+                    debit: new Prisma.Decimal('0'),
+                    credit: new Prisma.Decimal('900000.00'),
+                    runningBalance: new Prisma.Decimal('0'),
+                },
+                {
+                    lineNumber: 3,
+                    transactionDate: new Date('2026-07-14'),
+                    sourceDocumentType: 'Акт выполненных работ',
+                    sourceDocumentNumber: 'AB00000552',
+                    description: 'Транспортные услуги по заявке AB00003597',
+                    debit: new Prisma.Decimal('520000.00'),
+                    credit: new Prisma.Decimal('0'),
+                    runningBalance: new Prisma.Decimal('520000.00'),
+                },
+            ],
+        });
+
+        expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+        expect(buffer.length).toBeGreaterThan(20_000);
+    });
 });

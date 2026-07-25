@@ -21,6 +21,17 @@ interface InvoicePdfLine {
     reportDetails?: string | null;
 }
 
+interface ReconciliationPdfLine {
+    lineNumber: number;
+    transactionDate: Date;
+    sourceDocumentType: string | null;
+    sourceDocumentNumber: string | null;
+    description: string | null;
+    debit: Prisma.Decimal;
+    credit: Prisma.Decimal;
+    runningBalance: Prisma.Decimal;
+}
+
 export interface InvoicePdfDocument {
     type: AccountingDocumentType;
     status: AccountingDocumentStatus;
@@ -38,6 +49,10 @@ export interface InvoicePdfDocument {
     subtotal: Prisma.Decimal;
     vatTotal: Prisma.Decimal;
     total: Prisma.Decimal;
+    openingBalance?: Prisma.Decimal | null;
+    debitTurnover?: Prisma.Decimal | null;
+    creditTurnover?: Prisma.Decimal | null;
+    closingBalance?: Prisma.Decimal | null;
     issuerSnapshot: Prisma.JsonValue;
     recipientSnapshot: Prisma.JsonValue;
     issuerSignatorySnapshot?: Prisma.JsonValue | null;
@@ -46,6 +61,7 @@ export interface InvoicePdfDocument {
     createdAt: Date;
     postedAt: Date | null;
     lines: InvoicePdfLine[];
+    reconciliationLines?: ReconciliationPdfLine[];
 }
 
 interface PartySnapshot {
@@ -70,6 +86,9 @@ export class AccountingDocumentPdfService {
         }
         if (document.type === AccountingDocumentType.SERVICE_ACT) {
             return this.generateServiceActPdf(document);
+        }
+        if (document.type === AccountingDocumentType.RECONCILIATION_ACT) {
+            return this.generateReconciliationActPdf(document);
         }
         throw new BadRequestException('Печатная форма для этого типа документа ещё не реализована');
     }
@@ -203,6 +222,299 @@ export class AccountingDocumentPdfService {
             this.addPageNumbers(doc);
             doc.end();
         });
+    }
+
+    async generateReconciliationActPdf(document: InvoicePdfDocument): Promise<Buffer> {
+        if (document.type !== AccountingDocumentType.RECONCILIATION_ACT) {
+            throw new BadRequestException('Эта печатная форма предназначена только для акта сверки');
+        }
+        if (!document.reportPeriodFrom || !document.reportPeriodTo) {
+            throw new BadRequestException('Нельзя сформировать акт сверки без отчётного периода');
+        }
+
+        const issuer = this.party(document.issuerSnapshot);
+        const recipient = this.party(document.recipientSnapshot);
+        const issuerSignatory = this.record(document.issuerSignatorySnapshot ?? null);
+        const recipientSignatory = this.record(document.recipientSignatorySnapshot ?? null);
+        const creationDate = document.postedAt ?? document.createdAt;
+
+        return new Promise<Buffer>((resolve, reject) => {
+            const doc = new PDFDocument({
+                size: 'A4',
+                layout: 'landscape',
+                margins: { top: 28, bottom: 34, left: 30, right: 30 },
+                bufferPages: true,
+                compress: true,
+                info: {
+                    Title: `Акт сверки взаимных расчётов № ${document.number}`,
+                    Author: issuer.name || 'LogiCore',
+                    Subject: 'Акт сверки взаимных расчётов',
+                    CreationDate: creationDate,
+                    ModDate: creationDate,
+                },
+            });
+            const fontsDir = path.join(__dirname, '..', 'contracts', 'fonts');
+            doc.registerFont('Roboto', path.join(fontsDir, 'Roboto-Regular.ttf'));
+            doc.registerFont('Roboto-Bold', path.join(fontsDir, 'Roboto-Bold.ttf'));
+
+            const chunks: Buffer[] = [];
+            doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+
+            const drawDraftWatermark = () => {
+                if (document.status !== AccountingDocumentStatus.DRAFT) return;
+                doc.save();
+                doc.opacity(0.07);
+                doc.font('Roboto-Bold').fontSize(58).fillColor('#6b7280');
+                doc.rotate(-25, { origin: [doc.page.width / 2, doc.page.height / 2] });
+                doc.text('ЧЕРНОВИК', 130, doc.page.height / 2 - 30, {
+                    width: doc.page.width - 260,
+                    align: 'center',
+                    lineBreak: false,
+                });
+                doc.restore();
+            };
+            doc.on('pageAdded', drawDraftWatermark);
+            drawDraftWatermark();
+
+            this.drawReconciliationHeader(doc, document, issuer, recipient);
+            this.drawReconciliationLines(doc, document);
+            this.drawReconciliationFooter(
+                doc,
+                document,
+                issuer,
+                recipient,
+                issuerSignatory,
+                recipientSignatory,
+            );
+            this.addPageNumbers(doc);
+            doc.end();
+        });
+    }
+
+    private drawReconciliationHeader(
+        doc: PDFKit.PDFDocument,
+        document: InvoicePdfDocument,
+        issuer: PartySnapshot,
+        recipient: PartySnapshot,
+    ) {
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+        doc.font('Roboto-Bold').fontSize(14).fillColor('#111111');
+        doc.text('АКТ СВЕРКИ ВЗАИМНЫХ РАСЧЁТОВ', left, 31, { width, align: 'center' });
+        doc.font('Roboto').fontSize(8).fillColor('#333333');
+        doc.text(
+            `за период с ${this.formatDateNumeric(document.reportPeriodFrom!)} по ${this.formatDateNumeric(document.reportPeriodTo!)}`,
+            left,
+            52,
+            { width, align: 'center' },
+        );
+        doc.font('Roboto-Bold').fontSize(8.5).fillColor('#111111');
+        doc.text(`№ ${document.number} от ${this.formatDateNumeric(document.documentDate)}`, left, 68, {
+            width,
+            align: 'center',
+        });
+
+        const gap = 14;
+        const blockWidth = (width - gap) / 2;
+        const boxY = 89;
+        const boxHeight = 58;
+        this.drawReconciliationPartyBox(doc, 'Организация', issuer, left, boxY, blockWidth, boxHeight);
+        this.drawReconciliationPartyBox(doc, 'Контрагент', recipient, left + blockWidth + gap, boxY, blockWidth, boxHeight);
+
+        doc.font('Roboto').fontSize(7.2).fillColor('#222222');
+        doc.text(
+            `Мы, нижеподписавшиеся, составили настоящий акт о том, что состояние взаимных расчётов между указанными сторонами за период с ${this.formatDateNumeric(document.reportPeriodFrom!)} по ${this.formatDateNumeric(document.reportPeriodTo!)} соответствует приведённым ниже данным.`,
+            left,
+            boxY + boxHeight + 10,
+            { width, align: 'justify', lineGap: 1 },
+        );
+        doc.y = boxY + boxHeight + 38;
+    }
+
+    private drawReconciliationPartyBox(
+        doc: PDFKit.PDFDocument,
+        title: string,
+        party: PartySnapshot,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+    ) {
+        doc.roundedRect(x, y, width, height, 4).lineWidth(0.7).strokeColor('#333333').stroke();
+        doc.font('Roboto-Bold').fontSize(7).fillColor('#555555');
+        doc.text(title.toUpperCase(), x + 9, y + 7, { width: width - 18 });
+        doc.font('Roboto-Bold').fontSize(8).fillColor('#111111');
+        doc.text(party.name || '—', x + 9, y + 20, { width: width - 18, height: 20 });
+        doc.font('Roboto').fontSize(7).fillColor('#333333');
+        doc.text(`БИН/ИИН: ${party.bin || '—'}`, x + 9, y + 42, { width: 120 });
+        const address = party.address || party.actualAddress || 'адрес не указан';
+        doc.text(address, x + 137, y + 42, { width: width - 146, height: 11, align: 'right' });
+    }
+
+    private drawReconciliationLines(doc: PDFKit.PDFDocument, document: InvoicePdfDocument) {
+        const left = doc.page.margins.left;
+        const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const widths = [34, 66, 125, 248, 92, 92, contentWidth - 657];
+        const headers = ['№', 'Дата', 'Документ', 'Содержание операции', 'Дебет', 'Кредит', 'Сальдо'];
+        const headerHeight = 26;
+
+        const drawHeader = () => {
+            const y = doc.y;
+            let x = left;
+            headers.forEach((header, index) => {
+                doc.rect(x, y, widths[index], headerHeight).lineWidth(0.5).fillAndStroke('#edf1f5', '#333333');
+                doc.font('Roboto-Bold').fontSize(7).fillColor('#111111');
+                const textHeight = doc.heightOfString(header, { width: widths[index] - 6 });
+                doc.text(header, x + 3, y + (headerHeight - textHeight) / 2, {
+                    width: widths[index] - 6,
+                    align: index >= 4 ? 'right' : 'center',
+                });
+                x += widths[index];
+            });
+            doc.y = y + headerHeight;
+        };
+
+        drawHeader();
+        const opening = document.openingBalance ?? new Prisma.Decimal(0);
+        this.drawReconciliationRow(doc, widths, [
+            '',
+            this.formatDateNumeric(document.reportPeriodFrom!),
+            '',
+            'Сальдо на начало периода',
+            '',
+            '',
+            this.formatMoney(opening),
+        ], true);
+
+        for (const line of document.reconciliationLines ?? []) {
+            const documentName = [line.sourceDocumentType, line.sourceDocumentNumber]
+                .filter(Boolean)
+                .join(' № ');
+            const values = [
+                String(line.lineNumber),
+                this.formatDateNumeric(line.transactionDate),
+                documentName || '—',
+                line.description || '—',
+                line.debit.isZero() ? '' : this.formatMoney(line.debit),
+                line.credit.isZero() ? '' : this.formatMoney(line.credit),
+                this.formatMoney(line.runningBalance),
+            ];
+            doc.font('Roboto').fontSize(7);
+            const rowHeight = Math.max(22, ...values.map((value, index) => doc.heightOfString(value, {
+                width: widths[index] - 8,
+                lineGap: 0.6,
+            }) + 7));
+            if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 128) {
+                doc.addPage();
+                doc.y = doc.page.margins.top + 8;
+                doc.font('Roboto-Bold').fontSize(8).fillColor('#333333');
+                doc.text(`Акт сверки № ${document.number} — продолжение`, left, doc.y, {
+                    width: contentWidth,
+                    align: 'right',
+                });
+                doc.moveDown(0.7);
+                drawHeader();
+            }
+            this.drawReconciliationRow(doc, widths, values, false, rowHeight);
+        }
+
+        const debit = document.debitTurnover ?? new Prisma.Decimal(0);
+        const credit = document.creditTurnover ?? new Prisma.Decimal(0);
+        const closing = document.closingBalance ?? opening.plus(debit).minus(credit);
+        this.drawReconciliationRow(doc, widths, [
+            '', '', '', 'Обороты за период',
+            this.formatMoney(debit),
+            this.formatMoney(credit),
+            '',
+        ], true);
+        this.drawReconciliationRow(doc, widths, [
+            '', '', '', 'Сальдо на конец периода', '', '', this.formatMoney(closing),
+        ], true);
+    }
+
+    private drawReconciliationRow(
+        doc: PDFKit.PDFDocument,
+        widths: number[],
+        values: string[],
+        bold: boolean,
+        height = 22,
+    ) {
+        let x = doc.page.margins.left;
+        const y = doc.y;
+        values.forEach((value, index) => {
+            doc.rect(x, y, widths[index], height).lineWidth(0.45).strokeColor('#444444').stroke();
+            doc.font(bold ? 'Roboto-Bold' : 'Roboto').fontSize(7).fillColor('#111111');
+            const textHeight = doc.heightOfString(value, { width: widths[index] - 8, lineGap: 0.6 });
+            doc.text(value, x + 4, y + Math.max(4, (height - textHeight) / 2), {
+                width: widths[index] - 8,
+                height: height - 5,
+                align: index >= 4 ? 'right' : index < 3 ? 'center' : 'left',
+                lineGap: 0.6,
+            });
+            x += widths[index];
+        });
+        doc.y = y + height;
+    }
+
+    private drawReconciliationFooter(
+        doc: PDFKit.PDFDocument,
+        document: InvoicePdfDocument,
+        issuer: PartySnapshot,
+        recipient: PartySnapshot,
+        issuerSignatory: Record<string, unknown>,
+        recipientSignatory: Record<string, unknown>,
+    ) {
+        this.ensureSpace(doc, 80);
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const closing = document.closingBalance ?? new Prisma.Decimal(0);
+        const debtText = this.reconciliationDebtText(closing, issuer.name || 'организация', recipient.name || 'контрагент');
+
+        doc.moveDown(0.65);
+        doc.font('Roboto-Bold').fontSize(8).fillColor('#111111');
+        doc.text(`По состоянию на ${this.formatDateNumeric(document.reportPeriodTo!)} ${debtText}`, left, doc.y, {
+            width,
+        });
+        if (document.note) {
+            doc.moveDown(0.35);
+            doc.font('Roboto').fontSize(7).text(`Примечание: ${document.note}`, left, doc.y, { width });
+        }
+        doc.moveDown(0.8);
+
+        const gap = 34;
+        const blockWidth = (width - gap) / 2;
+        const y = doc.y;
+        this.actSignatureBlock(
+            doc,
+            'От организации',
+            left,
+            y,
+            blockWidth,
+            this.stringValue(issuerSignatory.position) || 'директор',
+            this.stringValue(issuerSignatory.name) || issuer.directorName || '',
+        );
+        this.actSignatureBlock(
+            doc,
+            'От контрагента',
+            left + blockWidth + gap,
+            y,
+            blockWidth,
+            this.stringValue(recipientSignatory.position) || 'должность',
+            this.stringValue(recipientSignatory.name) || recipient.directorName || '',
+        );
+        doc.font('Roboto-Bold').fontSize(7).text('М.П.', left + 5, y + 47);
+        doc.text('М.П.', left + blockWidth + gap + 5, y + 47);
+    }
+
+    private reconciliationDebtText(balance: Prisma.Decimal, issuerName: string, recipientName: string) {
+        if (balance.isZero()) return 'задолженность между сторонами отсутствует.';
+        if (balance.isPositive()) {
+            return `задолженность контрагента перед организацией составляет ${this.formatMoney(balance)} тенге (должник: ${recipientName}; кредитор: ${issuerName}).`;
+        }
+        return `задолженность организации перед контрагентом составляет ${this.formatMoney(balance.abs())} тенге (должник: ${issuerName}; кредитор: ${recipientName}).`;
     }
 
     private drawServiceActHeader(
