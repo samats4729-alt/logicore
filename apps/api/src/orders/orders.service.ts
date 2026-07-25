@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, OrderStatus, InvoiceStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
@@ -87,7 +87,7 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 };
 
 @Injectable()
-export class OrdersService implements OnModuleInit {
+export class OrdersService {
     constructor(
         private prisma: PrismaService,
         private redis: RedisService,
@@ -96,37 +96,6 @@ export class OrdersService implements OnModuleInit {
         private notificationsService: NotificationsService,
         private payrollService: PayrollService,
     ) { }
-
-    async onModuleInit() {
-        try {
-            const orders = await this.prisma.order.findMany({
-                where: {
-                    isConfirmed: false,
-                    status: 'PENDING',
-                },
-                include: {
-                    customer: { select: { companyId: true } },
-                    customerCompany: { select: { isExternal: true } },
-                }
-            });
-
-            for (const order of orders) {
-                const isCustomerExternal = order.customerCompany?.isExternal ?? false;
-                const creatorCompanyId = order.customer?.companyId;
-                const isCreatorForwarder = creatorCompanyId && order.forwarderId && creatorCompanyId === order.forwarderId;
-
-                if (isCustomerExternal || isCreatorForwarder) {
-                    await this.prisma.order.update({
-                        where: { id: order.id },
-                        data: { isConfirmed: true }
-                    });
-                    console.log(`Auto-confirmed order #${order.orderNumber} (isCustomerExternal=${isCustomerExternal}, isCreatorForwarder=${isCreatorForwarder})`);
-                }
-            }
-        } catch (error) {
-            console.error('Error auto-confirming existing pending orders on init:', error);
-        }
-    }
 
     /**
      * Создание заявки на перевозку

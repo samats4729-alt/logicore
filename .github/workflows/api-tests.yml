@@ -7,6 +7,36 @@ on:
     branches: [ main ]
 
 jobs:
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://build:build@localhost:5432/build"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm --filter api build
+
+      - name: Build web
+        run: pnpm --filter web build
+
   test:
     runs-on: ubuntu-latest
 

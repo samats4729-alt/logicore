@@ -1,11 +1,20 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { captureClientError } from '../common/sentry';
+import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('monitoring')
 @Controller('monitoring')
 export class MonitoringController {
+    constructor(private readonly prisma: PrismaService) {}
+
+    @Get('health')
+    @ApiOperation({ summary: 'Проверка API и соединения с базой' })
+    async health() {
+        await this.prisma.$queryRaw`SELECT 1`;
+        return { status: 'ok' };
+    }
 
     @Post('client-error')
     @Throttle({ default: { limit: 10, ttl: 60000 } })

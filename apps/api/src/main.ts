@@ -68,7 +68,9 @@ async function bootstrap() {
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPassword = process.env.ADMIN_PASSWORD;
 
-    if (adminEmail && adminPassword) {
+    const bootstrapAdmin = process.env.BOOTSTRAP_ADMIN_ON_START === 'true';
+
+    if (bootstrapAdmin && adminEmail && adminPassword) {
         try {
             const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
             if (!existingAdmin) {
@@ -90,7 +92,7 @@ async function bootstrap() {
         } catch (error) {
             logger.error('⚠️ Failed to create admin user:', error);
         }
-    } else {
+    } else if (bootstrapAdmin) {
         logger.warn('⚠️ ADMIN_EMAIL or ADMIN_PASSWORD not set — skipping admin user creation');
     }
 
