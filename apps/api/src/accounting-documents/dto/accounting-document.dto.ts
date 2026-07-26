@@ -385,6 +385,16 @@ export class CancelAccountingDocumentDto {
 }
 
 export class AccountingDocumentListQueryDto {
+    /**
+     * Организация журнала. Пусто — активная компания сессии. Право на чужую
+     * организацию проверяется отдельно: у пользователя должна быть роль
+     * бухгалтерии именно в ней.
+     */
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    companyId?: string;
+
     @IsOptional()
     @IsEnum(AccountingDocumentType)
     type?: AccountingDocumentType;
@@ -437,6 +447,12 @@ export class AccountingDocumentListQueryDto {
  * отмеченные строки (массовое действие «печать выбранных»).
  */
 export class AccountingDocumentRegistryQueryDto {
+    /** Организация журнала — см. AccountingDocumentListQueryDto. */
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    companyId?: string;
+
     @IsOptional()
     @IsEnum(AccountingDocumentType)
     type?: AccountingDocumentType;

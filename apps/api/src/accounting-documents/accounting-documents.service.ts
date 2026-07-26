@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     ConflictException,
+    ForbiddenException,
     Inject,
     Injectable,
     NotFoundException,
@@ -12,6 +13,7 @@ import {
     AccountKind,
     OrderStatus,
     Prisma,
+    UserRole,
 } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -301,6 +303,41 @@ export class AccountingDocumentsService {
         });
 
         return created;
+    }
+
+    /**
+     * Какую организацию показывает журнал — фильтр «Организация» в 1С.
+     *
+     * По умолчанию это активная компания сессии. Пользователь с несколькими
+     * своими организациями может выбрать другую, но право на неё проверяется
+     * заново: источник прав — роль в ВЫБРАННОЙ компании, а не общая роль из
+     * записи User. Иначе логист одной фирмы читал бы бухгалтерию другой,
+     * где он всего лишь водитель.
+     */
+    async resolveJournalCompany(
+        userId: string,
+        activeCompanyId: string | null | undefined,
+        requestedCompanyId: string | undefined,
+        allowedRoles: UserRole[],
+    ): Promise<string> {
+        if (!requestedCompanyId || requestedCompanyId === activeCompanyId) {
+            if (!activeCompanyId) {
+                throw new ForbiddenException('Организация не выбрана');
+            }
+            return activeCompanyId;
+        }
+
+        const relation = await this.prisma.userCompanyRelation.findUnique({
+            where: { userId_companyId: { userId, companyId: requestedCompanyId } },
+            select: { role: true },
+        });
+        if (!relation) {
+            throw new ForbiddenException('Вы не состоите в этой организации');
+        }
+        if (!allowedRoles.includes(relation.role)) {
+            throw new ForbiddenException('В этой организации у вас нет доступа к бухгалтерии');
+        }
+        return requestedCompanyId;
     }
 
     /**

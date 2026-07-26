@@ -134,6 +134,8 @@ export interface AccountingDocumentListResult {
 }
 
 export interface AccountingDocumentListParams {
+    /** Организация журнала. Пусто — активная компания сессии. */
+    companyId?: string;
     type?: AccountingDocumentType;
     direction?: AccountingDocumentDirection;
     status?: AccountingDocumentStatus;
@@ -452,6 +454,7 @@ export function openAccountingDocumentPdf(id: string, withStamp = false) {
 }
 
 export interface AccountingRegistryParams {
+    companyId?: string;
     type?: AccountingDocumentType;
     direction?: AccountingDocumentDirection;
     status?: AccountingDocumentStatus;
@@ -471,6 +474,7 @@ export interface AccountingRegistryParams {
 export function openAccountingRegistryPdf(params: AccountingRegistryParams) {
     const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     const query = new URLSearchParams();
+    if (params.companyId) query.set('companyId', params.companyId);
     if (params.type) query.set('type', params.type);
     if (params.direction) query.set('direction', params.direction);
     if (params.status) query.set('status', params.status);

@@ -1,9 +1,10 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import {
     AccountingDocumentDirection,
     AccountingDocumentStatus,
     AccountingDocumentType,
     Prisma,
+    UserRole,
 } from '@prisma/client';
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
 import { AccountingDocumentsService } from './accounting-documents.service';
@@ -47,6 +48,7 @@ function makeService() {
             findUnique: jest.fn(({ where }: any) => Promise.resolve(companySnapshot(where.id))),
         },
         contract: { findUnique: jest.fn().mockResolvedValue(null) },
+        userCompanyRelation: { findUnique: jest.fn().mockResolvedValue(null) },
         financeAccount: { findFirst: jest.fn().mockResolvedValue(null) },
         order: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
         accountingDocument: {
@@ -708,6 +710,67 @@ describe('AccountingDocumentsService', () => {
                 companyId: COMPANY,
                 status: AccountingDocumentStatus.DRAFT,
             },
+        });
+    });
+
+    // T-15: фильтр «Организация» в журнале. Право на чужую организацию —
+    // это право доступа, а не удобство интерфейса: источником прав служит
+    // роль в ВЫБРАННОЙ компании, иначе логист одной фирмы читал бы
+    // бухгалтерию другой, где он всего лишь водитель.
+    describe('выбор организации журнала', () => {
+        const VIEW_ROLES = [
+            UserRole.ADMIN,
+            UserRole.COMPANY_ADMIN,
+            UserRole.ACCOUNTANT,
+            UserRole.LOGISTICIAN,
+            UserRole.FORWARDER,
+        ];
+
+        it('без запроса берёт активную компанию сессии', async () => {
+            const { service, prisma } = makeService();
+
+            await expect(service.resolveJournalCompany('user-1', COMPANY, undefined, VIEW_ROLES))
+                .resolves.toBe(COMPANY);
+            expect(prisma.userCompanyRelation.findUnique).not.toHaveBeenCalled();
+        });
+
+        it('запрос своей же активной компании не требует проверки связи', async () => {
+            const { service, prisma } = makeService();
+
+            await expect(service.resolveJournalCompany('user-1', COMPANY, COMPANY, VIEW_ROLES))
+                .resolves.toBe(COMPANY);
+            expect(prisma.userCompanyRelation.findUnique).not.toHaveBeenCalled();
+        });
+
+        it('пускает в другую свою организацию с ролью бухгалтерии', async () => {
+            const { service, prisma } = makeService();
+            prisma.userCompanyRelation.findUnique.mockResolvedValue({ role: UserRole.ACCOUNTANT });
+
+            await expect(service.resolveJournalCompany('user-1', COMPANY, 'company-3', VIEW_ROLES))
+                .resolves.toBe('company-3');
+        });
+
+        it('не пускает в организацию, где пользователь не состоит', async () => {
+            const { service, prisma } = makeService();
+            prisma.userCompanyRelation.findUnique.mockResolvedValue(null);
+
+            await expect(service.resolveJournalCompany('user-1', COMPANY, 'company-3', VIEW_ROLES))
+                .rejects.toBeInstanceOf(ForbiddenException);
+        });
+
+        it('не пускает, если в той организации роль без доступа к бухгалтерии', async () => {
+            const { service, prisma } = makeService();
+            prisma.userCompanyRelation.findUnique.mockResolvedValue({ role: UserRole.DRIVER });
+
+            await expect(service.resolveJournalCompany('user-1', COMPANY, 'company-3', VIEW_ROLES))
+                .rejects.toThrow('нет доступа к бухгалтерии');
+        });
+
+        it('без активной компании журнал не открывается', async () => {
+            const { service } = makeService();
+
+            await expect(service.resolveJournalCompany('user-1', null, undefined, VIEW_ROLES))
+                .rejects.toBeInstanceOf(ForbiddenException);
         });
     });
 });

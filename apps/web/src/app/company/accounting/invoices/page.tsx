@@ -63,6 +63,12 @@ export default function InvoicesRegistryPage() {
     const [page, setPage] = useState(1);
 
     const [counterparties, setCounterparties] = useState<{ id: string; name: string }[]>([]);
+    /**
+     * Свои организации. Журнал ведётся по одной из них — как поле
+     * «Организация» в шапке журнала 1С. Пусто — активная компания сессии.
+     */
+    const [myCompanies, setMyCompanies] = useState<{ id: string; name: string }[]>([]);
+    const [companyId, setCompanyId] = useState<string | undefined>();
     /** Отмеченные строки — печать реестра только по ним. */
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [actFromId, setActFromId] = useState<string | null>(null);
@@ -77,6 +83,7 @@ export default function InvoicesRegistryPage() {
             setLoading(true);
             const result = await fetchAccountingDocuments({
                 type: 'PAYMENT_INVOICE',
+                companyId,
                 direction,
                 status: status === 'all' ? undefined : status,
                 counterpartyId,
@@ -93,11 +100,19 @@ export default function InvoicesRegistryPage() {
         } finally {
             setLoading(false);
         }
-    }, [direction, status, counterpartyId, period, page]);
+    }, [companyId, direction, status, counterpartyId, period, page]);
 
     useEffect(() => {
         load();
     }, [load]);
+
+    useEffect(() => {
+        api.get('/company/my-companies')
+            .then((res) => setMyCompanies(
+                (res.data || []).map((c: any) => ({ id: c.id, name: c.name || 'Без названия' })),
+            ))
+            .catch(() => setMyCompanies([]));
+    }, []);
 
     useEffect(() => {
         api.get('/partners')
@@ -147,6 +162,7 @@ export default function InvoicesRegistryPage() {
     const printRegistry = () => {
         openAccountingRegistryPdf({
             type: 'PAYMENT_INVOICE',
+            companyId,
             direction,
             status: status === 'all' ? undefined : status,
             counterpartyId,
@@ -376,6 +392,22 @@ export default function InvoicesRegistryPage() {
                 />
 
                 <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* Организация показывается только при нескольких своих
+                        юрлицах: одному незачем выбирать из одного. */}
+                    {myCompanies.length > 1 && (
+                        <Select
+                            showSearch
+                            optionFilterProp="label"
+                            style={{ width: 220 }}
+                            value={companyId ?? myCompanies[0]?.id}
+                            onChange={(value) => {
+                                setCompanyId(value);
+                                setSelectedIds([]);
+                                setPage(1);
+                            }}
+                            options={myCompanies.map((c) => ({ value: c.id, label: c.name }))}
+                        />
+                    )}
                     <Select
                         allowClear
                         showSearch

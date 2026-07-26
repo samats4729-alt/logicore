@@ -121,8 +121,14 @@ export class AccountingDocumentsController {
     @Get()
     @Roles(...VIEW_ROLES)
     @ApiOperation({ summary: 'Получить список бухгалтерских документов' })
-    list(@Request() req: any, @Query() query: AccountingDocumentListQueryDto) {
-        return this.documents.list(req.user.companyId, query);
+    async list(@Request() req: any, @Query() query: AccountingDocumentListQueryDto) {
+        const companyId = await this.documents.resolveJournalCompany(
+            req.user.id,
+            req.user.companyId,
+            query.companyId,
+            VIEW_ROLES,
+        );
+        return this.documents.list(companyId, query);
     }
 
     // Объявлено до `:id`, иначе путь съедается параметром.
@@ -148,7 +154,13 @@ export class AccountingDocumentsController {
         @Query() query: AccountingDocumentRegistryQueryDto,
         @Res() res: Response,
     ) {
-        const registry = await this.documents.listForRegistry(req.user.companyId, query);
+        const companyId = await this.documents.resolveJournalCompany(
+            req.user.id,
+            req.user.companyId,
+            query.companyId,
+            VIEW_ROLES,
+        );
+        const registry = await this.documents.listForRegistry(companyId, query);
         const pdfBuffer = await this.pdf.generateRegistryPdf({
             kind: registryKind(query),
             companyName: registry.company?.name ?? null,
