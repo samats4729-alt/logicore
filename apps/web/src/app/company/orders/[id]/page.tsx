@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
     Typography, Tag, Button, Descriptions, Card, Row, Col, Table,
@@ -153,20 +153,25 @@ export default function OrderDetailPage() {
     const [paymentForm] = Form.useForm();
     const [paymentLoading, setPaymentLoading] = useState(false);
 
-    useEffect(() => {
-        const fetchFinanceSettings = async () => {
-            try {
-                const [accRes, catRes] = await Promise.all([
-                    api.get('/accounting/finance-accounts'),
-                    api.get('/accounting/finance-categories'),
-                ]);
-                setAccounts(accRes.data || []);
-                setCategories(catRes.data || []);
-            } catch (err) {
-                console.error('Failed to load accounts/categories', err);
-            }
-        };
-        fetchFinanceSettings();
+    /**
+     * Счета и статьи нужны только в модалке платежа. Раньше грузились при
+     * открытии карточки и просто задерживали первый показ.
+     */
+    const financeLoadedRef = useRef(false);
+    const loadFinanceSettings = useCallback(async () => {
+        if (financeLoadedRef.current) return;
+        financeLoadedRef.current = true;
+        try {
+            const [accRes, catRes] = await Promise.all([
+                api.get('/accounting/finance-accounts'),
+                api.get('/accounting/finance-categories'),
+            ]);
+            setAccounts(accRes.data || []);
+            setCategories(catRes.data || []);
+        } catch (err) {
+            financeLoadedRef.current = false;
+            console.error('Failed to load accounts/categories', err);
+        }
     }, []);
 
     // Reference data
@@ -486,17 +491,35 @@ export default function OrderDetailPage() {
     };
 
     useEffect(() => {
+        // На первый показ нужны сама заявка, её документы и контрагенты
+        // (по ним подставляются названия компаний). Остальные справочники
+        // относятся к форме правки и грузятся, когда её открывают.
         fetchData();
         fetchDocuments();
         fetchPartners();
-        fetchLocations();
-        fetchCargoTypes();
     }, [orderId]);
 
-    useEffect(() => {
+    /**
+     * Справочники формы правки: точки маршрута, характер груза, условия и
+     * формы оплаты. Загружаются один раз при первом входе в режим правки.
+     */
+    const editReferenceLoadedRef = useRef(false);
+    const loadEditReference = useCallback(async () => {
+        if (editReferenceLoadedRef.current) return;
+        editReferenceLoadedRef.current = true;
         const activeOnly = (arr: any[]) => (arr || []).filter((x: any) => x.isActive !== false);
-        api.get('/accounting/dictionaries/payment-condition').then(r => setPaymentConditions(activeOnly(r.data))).catch(() => { });
-        api.get('/accounting/dictionaries/payment-form').then(r => setPaymentForms(activeOnly(r.data))).catch(() => { });
+        try {
+            await Promise.all([
+                fetchLocations(),
+                fetchCargoTypes(),
+                api.get('/accounting/dictionaries/payment-condition')
+                    .then(r => setPaymentConditions(activeOnly(r.data))).catch(() => { }),
+                api.get('/accounting/dictionaries/payment-form')
+                    .then(r => setPaymentForms(activeOnly(r.data))).catch(() => { }),
+            ]);
+        } catch {
+            editReferenceLoadedRef.current = false;
+        }
     }, []);
 
     // =================== LOCATION OPTIONS ===================
@@ -573,6 +596,7 @@ export default function OrderDetailPage() {
             method: 'BANK',
             counterpartyId: data?.order?.customerCompanyId || undefined,
         });
+        loadFinanceSettings();
         setPaymentModalOpen(true);
     };
 
@@ -589,6 +613,7 @@ export default function OrderDetailPage() {
             counterpartyId: record.counterpartyId || undefined,
             note: record.note,
         });
+        loadFinanceSettings();
         setPaymentModalOpen(true);
     };
 
@@ -826,6 +851,9 @@ export default function OrderDetailPage() {
         if (fwdId && fwdName && !forwarders.some(f => f.id === fwdId)) {
             setForwarders(prev => [...prev, { id: fwdId, name: fwdName }]);
         }
+        // Справочники подтягиваем в момент открытия правки, а не при
+        // загрузке карточки.
+        loadEditReference();
         setIsEditing(true);
     };
 
@@ -2109,7 +2137,7 @@ export default function OrderDetailPage() {
                                         <div className="lc-card" style={{ padding: 0 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
                                                 <span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: '#16a34a', marginRight: 6 }} />Поступления ({incomes.length})</span>
-                                                {canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); setIncomeModalOpen(true); }}>Добавить</Button>}
+                                                {canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setIncomeModalOpen(true); }}>Добавить</Button>}
                                             </div>
                                             <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
                                         </div>
@@ -2118,7 +2146,7 @@ export default function OrderDetailPage() {
                                         <div className="lc-card" style={{ padding: 0 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
                                                 <span style={{ fontWeight: 600 }}><DollarOutlined style={{ color: '#dc2626', marginRight: 6 }} />Расходы ({expenses.length})</span>
-                                                {canEditFinance && <Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); setExpenseModalOpen(true); }}>Добавить</Button>}
+                                                {canEditFinance && <Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setExpenseModalOpen(true); }}>Добавить</Button>}
                                             </div>
                                             <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
                                         </div>
