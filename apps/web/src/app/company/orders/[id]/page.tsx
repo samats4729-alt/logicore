@@ -27,6 +27,8 @@ const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
+import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
+import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import { createAccountingDocument, fetchAccountingDocuments } from '@/lib/accounting-documents';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
@@ -2249,263 +2251,73 @@ export default function OrderDetailPage() {
             )}
 
             {/* =================== STATUS MODAL =================== */}
-            <Modal title="Изменить статус" open={statusModalOpen} onCancel={() => { setStatusModalOpen(false); setSelectedStatusInModal(null); }} onOk={() => statusForm.submit()} okText="Обновить" cancelText="Отмена" confirmLoading={statusLoading}>
-                <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
-                    <div style={{ marginBottom: 16 }}>Текущий: <Tag color={statusColors[order.status]}>{statusLabels[order.status]}</Tag></div>
-                    <Form.Item name="status" label="Новый статус" rules={[{ required: true }]}>
-                        <Select placeholder="Статус" size="large" onChange={(val: string) => setSelectedStatusInModal(val)}>
-                            {getNextStatuses(order.status).map(s => <Select.Option key={s.value} value={s.value}>{s.label}</Select.Option>)}
-                        </Select>
-                    </Form.Item>
-                    {selectedStatusInModal === 'COMPLETED' && (() => {
-                        const participantIds = [order.customerCompanyId, order.forwarderId, order.partnerId, order.subForwarderId].filter(Boolean);
-                        const uniqueIds = Array.from(new Set(participantIds));
-                        const hasOtherRegistered = uniqueIds.some((id: string) => {
-                            if (id === user?.companyId) return false;
-                            const c = [order.customerCompany, order.forwarder, order.subForwarder, order.partner].find((comp: any) => comp?.id === id);
-                            return c && c.isExternal === false;
-                        });
-                        return hasOtherRegistered ? (
-                            <Alert
-                                type="info"
-                                showIcon
-                                style={{ marginBottom: 16 }}
-                                message="Будет отправлен запрос на подтверждение завершения второй стороне"
-                                description="Статус не изменится сразу — потребуется подтверждение от другого зарегистрированного участника."
-                            />
-                        ) : null;
-                    })()}
-                    {selectedStatusInModal === 'CANCELLED' && payments.length > 0 && (() => {
-                        const paidTotal = payments.reduce((s: number, p: any) => s + (p.amount || 0), 0);
-                        return (
-                            <Alert
-                                type="warning"
-                                showIcon
-                                style={{ marginBottom: 16 }}
-                                message={`По заявке проведены оплаты на ${paidTotal.toLocaleString('ru-RU')} ₸`}
-                                description="При отмене они останутся в учёте — в «Все операции» и ДДС, деньги не пропадут. Если сумму вернут — оформите входящий платёж по контрагенту; если нет — спишите как убыток в «Расходах»."
-                            />
-                        );
-                    })()}
-                    <Form.Item name="comment" label="Комментарий">
-                        <TextArea rows={3} placeholder="Причина..." />
-                    </Form.Item>
-                </Form>
-            </Modal>
+            <OrderOperationModals
+                order={order}
+                user={user}
+                payments={payments}
+                statusColors={statusColors}
+                statusLabels={statusLabels}
+                getNextStatuses={getNextStatuses}
+                statusModalOpen={statusModalOpen}
+                setStatusModalOpen={setStatusModalOpen}
+                statusForm={statusForm}
+                statusLoading={statusLoading}
+                handleStatusChange={handleStatusChange}
+                selectedStatusInModal={selectedStatusInModal}
+                setSelectedStatusInModal={setSelectedStatusInModal}
+                rejectReasonModalOpen={rejectReasonModalOpen}
+                setRejectReasonModalOpen={setRejectReasonModalOpen}
+                rejectReason={rejectReason}
+                setRejectReason={setRejectReason}
+                handleRejectCompletion={handleRejectCompletion}
+                completionActionLoading={completionActionLoading}
+                transferModalOpen={transferModalOpen}
+                setTransferModalOpen={setTransferModalOpen}
+                transferUsers={transferUsers}
+                transferUserId={transferUserId}
+                setTransferUserId={setTransferUserId}
+                transferLoading={transferLoading}
+                handleTransferResponsible={handleTransferResponsible}
+                sharePoAModalOpen={sharePoAModalOpen}
+                setSharePoAModalOpen={setSharePoAModalOpen}
+                sharePoALoading={sharePoALoading}
+                handleSharePoA={handleSharePoA}
+                shareEmailsList={shareEmailsList}
+                setShareEmailsList={setShareEmailsList}
+                customEmailInput={customEmailInput}
+                setCustomEmailInput={setCustomEmailInput}
+                handleAddCustomEmail={handleAddCustomEmail}
+                driverLinkModalOpen={driverLinkModalOpen}
+                setDriverLinkModalOpen={setDriverLinkModalOpen}
+                driverLinkUrl={driverLinkUrl}
+                driverLinkLoading={driverLinkLoading}
+                regenerateDriverLink={regenerateDriverLink}
+                driverPhone={driverPhone}
+            />
 
-            {/* =================== REJECT COMPLETION MODAL =================== */}
-            <Modal
-                title="Отклонить завершение рейса"
-                open={rejectReasonModalOpen}
-                onCancel={() => { setRejectReasonModalOpen(false); setRejectReason(''); }}
-                onOk={handleRejectCompletion}
-                okText="Отклонить"
-                cancelText="Отмена"
-                okButtonProps={{ danger: true }}
-                confirmLoading={completionActionLoading}
-            >
-                <div style={{ marginBottom: 12 }}>
-                    <Text>Укажите причину отклонения (необязательно):</Text>
-                </div>
-                <TextArea
-                    rows={3}
-                    placeholder="Причина отклонения..."
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                />
-            </Modal>
-
-
-
-            {/* =================== SHARE POA MODAL =================== */}
-            <Modal
-                title="Передать заявку другому менеджеру"
-                open={transferModalOpen}
-                onCancel={() => { setTransferModalOpen(false); setTransferUserId(undefined); }}
-                onOk={handleTransferResponsible}
-                okText="Передать"
-                cancelText="Отмена"
-                confirmLoading={transferLoading}
-                okButtonProps={{ disabled: !transferUserId }}
-                width={420}
-            >
-                <div style={{ marginBottom: 10, fontSize: 13, color: 'var(--lc-text-ter)' }}>
-                    Заявка перейдёт в «Мои заявки» выбранного менеджера. Смена ответственного записывается в журнал действий.
-                </div>
-                <Select
-                    style={{ width: '100%' }}
-                    placeholder="Выберите менеджера"
-                    showSearch
-                    optionFilterProp="label"
-                    value={transferUserId}
-                    onChange={setTransferUserId}
-                    options={transferUsers
-                        .filter((u: any) => !['DRIVER', 'RECIPIENT'].includes(u.role))
-                        .map((u: any) => ({ value: u.id, label: `${u.lastName} ${u.firstName}${u.position ? ` — ${u.position}` : ''}` }))}
-                />
-            </Modal>
-
-            <Modal title="Отправить доверенность по email" open={sharePoAModalOpen} onCancel={() => setSharePoAModalOpen(false)} onOk={handleSharePoA} okText="Отправить" cancelText="Отмена" confirmLoading={sharePoALoading} width={480}>
-                <div style={{ marginBottom: 16 }}>
-                    <Text type="secondary">Выберите получателей для отправки доверенности (PDF):</Text>
-                </div>
-                {shareEmailsList.length > 0 ? (
-                    <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 16, border: '1px solid var(--lc-border)', borderRadius: 8, padding: 12 }}>
-                        {shareEmailsList.map((item, idx) => (
-                            <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                                <Checkbox
-                                    checked={item.checked}
-                                    onChange={(e) => { const newList = [...shareEmailsList]; newList[idx].checked = e.target.checked; setShareEmailsList(newList); }}
-                                >
-                                    <Text style={{ fontSize: 13 }}>{item.label}</Text>
-                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', paddingLeft: 24 }}>{item.email}</div>
-                                </Checkbox>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div style={{ textAlign: 'center', padding: 24, background: 'var(--lc-card-2)', borderRadius: 8, marginBottom: 16 }}>
-                        <Text type="secondary">Нет email-адресов.</Text>
-                    </div>
-                )}
-                <div style={{ borderTop: '1px solid var(--lc-border)', paddingTop: 16 }}>
-                    <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>Добавить получателя вручную:</Text>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <Input placeholder="example@mail.com" value={customEmailInput} onChange={(e) => setCustomEmailInput(e.target.value)} onPressEnter={handleAddCustomEmail} />
-                        <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddCustomEmail}>Добавить</Button>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* =================== INCOME MODAL =================== */}
-            <Modal
-                title="Ссылка для водителя"
-                open={driverLinkModalOpen}
-                onCancel={() => setDriverLinkModalOpen(false)}
-                footer={null}
-                width={520}
-            >
-                <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, marginTop: 0 }}>
-                    Отправьте эту ссылку водителю в WhatsApp. Он откроет её на телефоне, увидит адрес и груз (без сумм), включит геолокацию и будет отмечать статусы. Ссылка работает только по этому адресу — храните её в секрете.
-                </p>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                    <Input value={driverLinkUrl} readOnly onFocus={(e) => e.target.select()} />
-                    <Button type="primary" icon={<CopyOutlined />} onClick={() => { navigator.clipboard?.writeText(driverLinkUrl); message.success('Ссылка скопирована'); }}>Копировать</Button>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <Button
-                        icon={<WhatsAppOutlined />}
-                        style={{ background: '#25D366', color: '#fff', borderColor: '#25D366' }}
-                        onClick={() => {
-                            const text = `Здравствуйте! Ссылка на заявку ${order?.orderNumber}: ${driverLinkUrl}\nОткройте на телефоне, включите геолокацию.`;
-                            const phone = (driverPhone ? String(driverPhone) : '').replace(/\D/g, '');
-                            window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                        }}
-                    >
-                        Отправить в WhatsApp
-                    </Button>
-                    <Button icon={<SwapOutlined />} onClick={regenerateDriverLink} loading={driverLinkLoading}>Перевыпустить</Button>
-                </div>
-            </Modal>
-
-            <Modal title="Добавить поступление" open={incomeModalOpen} onCancel={() => setIncomeModalOpen(false)} onOk={() => incomeForm.submit()} okText="Добавить" cancelText="Отмена" confirmLoading={incomeLoading}>
-                <Form form={incomeForm} layout="vertical" onFinish={handleAddIncome}>
-                    <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
-                    <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={incomeCategories} /></Form.Item>
-                    <Form.Item name="description" label="Описание" rules={[{ required: true }]}><Input placeholder="Описание" /></Form.Item>
-                    <Form.Item name="amount" label="Сумма ₸" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
-                    <Form.Item name="note" label="Примечание"><TextArea rows={2} /></Form.Item>
-                </Form>
-            </Modal>
-
-            {/* =================== EXPENSE MODAL =================== */}
-            <Modal title="Добавить расход" open={expenseModalOpen} onCancel={() => setExpenseModalOpen(false)} onOk={() => expenseForm.submit()} okText="Добавить" cancelText="Отмена" confirmLoading={expenseLoading}>
-                <Form form={expenseForm} layout="vertical" onFinish={handleAddExpense}>
-                    <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
-                    <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={expenseCategories} /></Form.Item>
-                    <Form.Item name="description" label="Описание" rules={[{ required: true }]}><Input placeholder="Описание" /></Form.Item>
-                    <Form.Item name="amount" label="Сумма ₸" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
-                    <Form.Item name="note" label="Примечание"><TextArea rows={2} /></Form.Item>
-                </Form>
-            </Modal>
-
-            {/* =================== UNIFIED PAYMENT MODAL =================== */}
-            <Modal
-                title={editingPayment ? "Редактировать платеж" : "Зарегистрировать платеж"}
-                open={paymentModalOpen}
-                onCancel={() => setPaymentModalOpen(false)}
-                onOk={() => paymentForm.submit()}
-                okText={editingPayment ? "Сохранить" : "Добавить"}
-                cancelText="Отмена"
-                confirmLoading={paymentLoading}
-                destroyOnClose
-            >
-                <Form form={paymentForm} layout="vertical" onFinish={handleSavePayment}>
-                    <Form.Item name="direction" label="Направление платежа" rules={[{ required: true }]}>
-                        <Select disabled={!!editingPayment}>
-                            <Select.Option value="IN">Поступление (IN)</Select.Option>
-                            <Select.Option value="OUT">Расход (OUT)</Select.Option>
-                        </Select>
-                    </Form.Item>
-
-                    <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>
-                        <InputNumber min={0.01} style={{ width: '100%' }} placeholder="0" />
-                    </Form.Item>
-
-                    <Form.Item name="date" label="Дата платежа" rules={[{ required: true }]}>
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
-                    </Form.Item>
-
-                    <Form.Item name="method" label="Способ оплаты" rules={[{ required: true }]}>
-                        <Select>
-                            <Select.Option value="BANK">Безналичный (Банк)</Select.Option>
-                            <Select.Option value="CASH">Наличные</Select.Option>
-                            <Select.Option value="CARD">Карта</Select.Option>
-                            <Select.Option value="OTHER">Другой способ</Select.Option>
-                        </Select>
-                    </Form.Item>
-
-                    <Form.Item name="accountId" label="Счет / Касса">
-                        <Select placeholder="По умолчанию" allowClear>
-                            {accounts.map(acc => (
-                                <Select.Option key={acc.id} value={acc.id}>
-                                    {acc.name} ({acc.kind === 'CASH' ? 'Касса' : 'Банк'})
-                                </Select.Option>
-                            ))}
-                        </Select>
-                    </Form.Item>
-
-                    <Form.Item noStyle dependencies={['direction']}>
-                        {({ getFieldValue }) => {
-                            const dir = getFieldValue('direction') || 'IN';
-                            const filteredCats = categories.filter(c => c.direction === dir && c.isActive);
-                            return (
-                                <Form.Item name="categoryId" label="Статья расходов/доходов">
-                                    <Select placeholder="По умолчанию" allowClear>
-                                        {filteredCats.map(cat => (
-                                            <Select.Option key={cat.id} value={cat.id}>
-                                                {cat.name}
-                                            </Select.Option>
-                                        ))}
-                                    </Select>
-                                </Form.Item>
-                            );
-                        }}
-                    </Form.Item>
-
-                    <Form.Item name="counterpartyId" label="Контрагент">
-                        <Select placeholder="Выберите контрагента" allowClear>
-                            {partners.map(p => (
-                                <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
-                            ))}
-                        </Select>
-                    </Form.Item>
-
-                    <Form.Item name="note" label="Примечание">
-                        <TextArea rows={2} placeholder="Примечание или детали платежа" />
-                    </Form.Item>
-                </Form>
-            </Modal>
+            <OrderFinanceModals
+                incomeModalOpen={incomeModalOpen}
+                setIncomeModalOpen={setIncomeModalOpen}
+                incomeForm={incomeForm}
+                incomeLoading={incomeLoading}
+                incomeCategories={incomeCategories}
+                handleAddIncome={handleAddIncome}
+                expenseModalOpen={expenseModalOpen}
+                setExpenseModalOpen={setExpenseModalOpen}
+                expenseForm={expenseForm}
+                expenseLoading={expenseLoading}
+                expenseCategories={expenseCategories}
+                handleAddExpense={handleAddExpense}
+                paymentModalOpen={paymentModalOpen}
+                setPaymentModalOpen={setPaymentModalOpen}
+                paymentForm={paymentForm}
+                paymentLoading={paymentLoading}
+                editingPayment={editingPayment}
+                handleSavePayment={handleSavePayment}
+                accounts={accounts}
+                categories={categories}
+                partners={partners}
+            />
 
             {/* =================== QUICK PARTNER MODAL =================== */}
             <Modal title="Новый контрагент" open={quickPartnerModalOpen} onCancel={() => { setQuickPartnerModalOpen(false); quickPartnerForm.resetFields(); }} onOk={() => quickPartnerForm.submit()} confirmLoading={quickPartnerLoading} okText="Создать" cancelText="Отмена">
