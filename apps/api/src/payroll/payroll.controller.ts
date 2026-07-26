@@ -5,6 +5,7 @@ import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PayrollService } from './payroll.service';
 import { D, ZERO, money, sumOf, toNum } from '../common/utils/money';
+import { kzCurrentMonth } from '../common/utils/business-date';
 
 function getMonthsRange(fromStr: string, toStr: string): string[] {
     try {
@@ -227,7 +228,7 @@ export class PayrollController {
         @Request() req: any,
     ) {
         const companyId = req.user.companyId;
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        const currentMonth = kzCurrentMonth();
         const fromMonth = from || currentMonth;
         const toMonth = to || currentMonth;
 
@@ -319,7 +320,7 @@ export class PayrollController {
     async getMySummary(@Request() req: any) {
         const userId = req.user.id || req.user.sub;
         const companyId = req.user.companyId;
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        const currentMonth = kzCurrentMonth();
 
         if (!companyId) {
             return { total: 0, salary: 0, percentTotal: 0, kpiTotal: 0, ordersCount: 0 };
@@ -377,7 +378,7 @@ export class PayrollController {
     ) {
         const userId = req.user.id || req.user.sub;
         const companyId = req.user.companyId;
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        const currentMonth = kzCurrentMonth();
         const fromMonth = from || currentMonth;
         const toMonth = to || currentMonth;
 

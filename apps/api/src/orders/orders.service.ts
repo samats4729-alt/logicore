@@ -7,6 +7,7 @@ import { PaymentsService } from '../accounting/services/payments.service';
 import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
+import { kzStartOfToday, kzTodayString } from '../common/utils/business-date';
 
 const STATUS_CHAIN = [
     OrderStatus.ASSIGNED,
@@ -1118,8 +1119,10 @@ export class OrdersService {
      * Устаревшая генерация номера заявки (формат: LC-YYYYMMDD-XXXX)
      */
     private async generateLegacyOrderNumber(): Promise<string> {
-        const today = new Date();
-        const datePrefix = today.toISOString().slice(0, 10).replace(/-/g, '');
+        // Дата в номере — календарный день Казахстана: иначе заявки,
+        // созданные ночью, получали вчерашний префикс.
+        const datePrefix = kzTodayString().replace(/-/g, '');
+        const dayStart = kzStartOfToday();
         const redisKey = `order_counter:${datePrefix}`;
         
         let orderSeq: number | null = null;
@@ -1131,9 +1134,7 @@ export class OrdersService {
                 if (!exists) {
                     const count = await this.prisma.order.count({
                         where: {
-                            createdAt: {
-                                gte: new Date(today.setHours(0, 0, 0, 0)),
-                            },
+                            createdAt: { gte: dayStart },
                         },
                     });
                     await redisClient.set(redisKey, String(count), 'EX', 172800, 'NX');
@@ -1149,9 +1150,7 @@ export class OrdersService {
         if (orderSeq === null) {
             const count = await this.prisma.order.count({
                 where: {
-                    createdAt: {
-                        gte: new Date(today.setHours(0, 0, 0, 0)),
-                    },
+                    createdAt: { gte: dayStart },
                 },
             });
             orderSeq = count + 1;

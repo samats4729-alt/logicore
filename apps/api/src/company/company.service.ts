@@ -11,6 +11,7 @@ import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
+import { kzStartOfMonth, kzStartOfMonthShifted, kzStartOfToday } from '../common/utils/business-date';
 
 const ROLE_LABELS_RU: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -683,10 +684,11 @@ export class CompanyService {
      * «завершено» — по месяцу фактического завершения.
      */
     async getDashboardActivity(companyId: string) {
-        const now = new Date();
-        const curStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // Границы месяцев и суток — по Казахстану, а не по часовому поясу
+        // сервера: иначе «сегодня» на дашборде начиналось в 05:00 по Алматы.
+        const curStart = kzStartOfMonth();
+        const prevStart = kzStartOfMonthShifted(-1);
+        const todayStart = kzStartOfToday();
 
         const participant = [
             { customerCompanyId: companyId },
