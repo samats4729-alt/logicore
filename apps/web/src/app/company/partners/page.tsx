@@ -187,7 +187,7 @@ export default function PartnersPage() {
         try {
             if (editingCompany) {
                 await api.patch(`/external-companies/${editingCompany.id}`, body);
-                message.success('Контрагент обновлен');
+                message.success('Контрагент обновлён');
             } else {
                 await api.post('/external-companies', body);
                 message.success('Контрагент добавлен');
@@ -204,7 +204,7 @@ export default function PartnersPage() {
     const handleDelete = async (id: string) => {
         try {
             await api.delete(`/external-companies/${id}`);
-            message.success('Контрагент удален');
+            message.success('Контрагент удалён');
             fetchCounterparties();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка удаления');

@@ -74,7 +74,7 @@ export default function AdminCargoTypesPage() {
     const handleDeleteType = async (id: string) => {
         try {
             await api.delete(`/cargo-types/types/${id}`);
-            message.success('Тип удален');
+            message.success('Тип удалён');
             fetchCargoTypes();
         } catch (error) {
             message.error('Ошибка удаления типа');

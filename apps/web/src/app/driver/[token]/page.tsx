@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import axios from 'axios';
+import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -35,12 +36,8 @@ interface DriverOrder {
     ttnCount: number;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-    PENDING: 'Ожидание', ASSIGNED: 'Назначен', EN_ROUTE_PICKUP: 'Едет на погрузку',
-    AT_PICKUP: 'На погрузке', LOADING: 'Погрузка', IN_TRANSIT: 'В пути',
-    AT_DELIVERY: 'На выгрузке', UNLOADING: 'Выгрузка', COMPLETED: 'Завершён',
-    CANCELLED: 'Отменён', PROBLEM: 'Проблема',
-};
+// Подписи статусов — из общего словаря `lib/vocabulary`.
+const STATUS_LABEL = ORDER_STATUS_LABELS;
 
 const STEPS = ['Погрузка', 'В пути', 'Выгрузка', 'Готово'];
 function stepIndex(status: string): number {

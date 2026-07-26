@@ -7,24 +7,14 @@ import {
 } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, UserAddOutlined } from '@ant-design/icons';
 import { api, Order, Location, User } from '@/lib/api';
+import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-const statusLabels: Record<string, string> = {
-    DRAFT: 'Черновик',
-    PENDING: 'Ожидает',
-    ASSIGNED: 'Назначен',
-    EN_ROUTE_PICKUP: 'Едет на погрузку',
-    AT_PICKUP: 'На погрузке',
-    LOADING: 'Загружается',
-    IN_TRANSIT: 'В пути',
-    AT_DELIVERY: 'На выгрузке',
-    UNLOADING: 'Разгружается',
-    COMPLETED: 'Завершён',
-    CANCELLED: 'Отменён',
-    PROBLEM: 'Проблема',
-};
+// Подписи статусов — из общего словаря `lib/vocabulary`,
+// чтобы один и тот же статус везде назывался одинаково.
+const statusLabels = ORDER_STATUS_LABELS;
 
 const statusColors: Record<string, string> = {
     DRAFT: 'default',

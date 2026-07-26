@@ -1,22 +1,11 @@
 'use client';
 
-export const STATUS_LABELS: Record<string, string> = {
-    DRAFT: 'Черновик',
-    PENDING: 'Ожидает',
-    ASSIGNED: 'Назначен',
-    EN_ROUTE_PICKUP: 'Едет на погр.',
-    AT_PICKUP: 'На погрузке',
-    LOADING: 'Загрузка',
-    IN_TRANSIT: 'В пути',
-    AT_DELIVERY: 'На выгрузке',
-    UNLOADING: 'Разгрузка',
-    COMPLETED: 'Завершён',
-    PROBLEM: 'Проблема',
-    CANCELLED: 'Отменён',
-    // Статус бухгалтерского документа. «Черновик» и «Отменён» уже названы
-    // выше теми же словами, что в журнале 1С, — не дублируем.
-    POSTED: 'Проведён',
-};
+import { STATUS_LABELS } from '@/lib/vocabulary';
+
+// Подписи статусов живут в общем словаре (`lib/vocabulary`), здесь только
+// цвета. Реэкспорт оставлен, потому что STATUS_LABELS импортируют из этого
+// файла больше десятка экранов.
+export { STATUS_LABELS };
 
 export const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
     DRAFT: { bg: '#f1f2f4', fg: '#5f6672' },

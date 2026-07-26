@@ -16,15 +16,14 @@ import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
 import { shortenCompanyName } from '@/lib/company-helper';
 import StatusPill from '@/components/ui/StatusPill';
+import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
-const statusLabels: Record<string, string> = {
-    PENDING: 'Ожидает', ASSIGNED: 'Назначена', EN_ROUTE_PICKUP: 'Едет на погрузку',
-    AT_PICKUP: 'На погрузке', LOADING: 'Загрузка', IN_TRANSIT: 'В пути',
-    AT_DELIVERY: 'На выгрузке', UNLOADING: 'Разгрузка', COMPLETED: 'Завершена', PROBLEM: 'Проблема',
-};
+// Подписи статусов — из общего словаря `lib/vocabulary`,
+// чтобы один и тот же статус везде назывался одинаково.
+const statusLabels = ORDER_STATUS_LABELS;
 
 const statusColors: Record<string, string> = {
     PENDING: 'orange', ASSIGNED: 'blue', EN_ROUTE_PICKUP: 'cyan',
@@ -301,7 +300,7 @@ export default function FinancialRegistryPage() {
     const handleDeletePayment = async (paymentId: string) => {
         try {
             await api.delete(`/accounting/payments/${paymentId}`);
-            message.success('Платёж успешно удален');
+            message.success('Платёж успешно удалён');
             if (selectedOrder) {
                 fetchOrderPayments(selectedOrder.id);
             }
@@ -412,7 +411,7 @@ export default function FinancialRegistryPage() {
                             )}
                         </div>
                         {debt > 0 && canEditFinance && (
-                            <Tooltip title="Зарегистрировать платеж">
+                            <Tooltip title="Зарегистрировать платёж">
                                 <Button
                                     size="small"
                                     type="primary"
@@ -810,7 +809,7 @@ export default function FinancialRegistryPage() {
 
                         <Form.Item
                             name="accountId"
-                            label="Счет / Касса"
+                            label="Счёт / Касса"
                         >
                             <Select size="large" placeholder="По умолчанию" allowClear>
                                 {accounts.map(acc => (

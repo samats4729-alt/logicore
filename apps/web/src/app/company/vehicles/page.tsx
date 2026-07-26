@@ -114,7 +114,7 @@ export default function VehiclesPage() {
                         vehicleType: values.type,
                         trailerNumber: values.trailerNumber || null,
                     });
-                    message.success('Транспорт перевозчика успешно обновлен');
+                    message.success('Транспорт перевозчика успешно обновлён');
                 } else {
                     let finalDriverId = values.driverId;
 
@@ -144,7 +144,7 @@ export default function VehiclesPage() {
                         trailerNumber: values.trailerNumber || null,
                         driverId: finalDriverId || null,
                     });
-                    message.success('Транспорт успешно обновлен');
+                    message.success('Транспорт успешно обновлён');
                 }
             } else {
                 let finalDriverId = values.driverId;
@@ -208,10 +208,10 @@ export default function VehiclesPage() {
                     vehicleType: null,
                     trailerNumber: null,
                 });
-                message.success('Транспорт перевозчика удален');
+                message.success('Транспорт перевозчика удалён');
             } else {
                 await api.delete(`/company/vehicles/${vehicle.id}`);
-                message.success('Транспорт удален');
+                message.success('Транспорт удалён');
             }
             fetchVehicles();
             fetchDrivers();

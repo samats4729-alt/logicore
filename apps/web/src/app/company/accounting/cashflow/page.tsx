@@ -172,7 +172,7 @@ export default function CashflowReportPage() {
 
     const accountColumns = [
         {
-            title: 'Счет / Касса',
+            title: 'Счёт / Касса',
             dataIndex: 'name',
             key: 'name',
             render: (val: string) => <Text strong style={{ fontSize: 13 }}>{val}</Text>

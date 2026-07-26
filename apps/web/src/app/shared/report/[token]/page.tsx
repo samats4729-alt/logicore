@@ -15,22 +15,13 @@ import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
+import { LEGACY_INVOICE_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/vocabulary';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-const statusLabels: Record<string, string> = {
-    DRAFT: 'Черновик',
-    PENDING: 'Ожидает',
-    ASSIGNED: 'Назначен',
-    EN_ROUTE_PICKUP: 'Едет на погр.',
-    AT_PICKUP: 'На погрузке',
-    LOADING: 'Загрузка',
-    IN_TRANSIT: 'В пути',
-    AT_DELIVERY: 'На выгрузке',
-    UNLOADING: 'Разгрузка',
-    COMPLETED: 'Завершён',
-    PROBLEM: 'Проблема',
-    CANCELLED: 'Отменён',
-};
+// Подписи статусов — из общего словаря: контрагент по ссылке должен
+// видеть ровно те же слова, что и мы внутри платформы.
+const statusLabels = ORDER_STATUS_LABELS;
 
 const statusColors: Record<string, string> = {
     DRAFT: 'default',
@@ -114,7 +105,7 @@ export default function SharedReportPage() {
                 orderIds: selectedRowKeys,
                 note: values.note,
             });
-            message.success('Счет успешно сформирован и отправлен в систему!');
+            message.success('Счёт успешно сформирован и отправлен в систему!');
             setModalOpen(false);
             form.resetFields();
             setSelectedRowKeys([]);
@@ -123,7 +114,7 @@ export default function SharedReportPage() {
             const res = await axios.get(`${API_URL}/public/accounting/report/${token}`);
             setData(res.data);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось сформировать счет');
+            message.error(e.response?.data?.message || 'Не удалось сформировать счёт');
         } finally {
             setSubmittingInvoice(false);
         }
@@ -245,7 +236,7 @@ export default function SharedReportPage() {
             render: (v: number) => v ? <span style={{ fontWeight: 600, color: '#09090b' }}>{fmt(v)}</span> : <span style={{ color: '#d1d5db' }}>—</span>,
         },
         {
-            title: 'Счет',
+            title: 'Счёт',
             key: 'invoiceInfo',
             width: 140,
             render: (_: any, r: any) => {
@@ -583,14 +574,7 @@ export default function SharedReportPage() {
                                     dataIndex: 'status',
                                     key: 'status',
                                     render: (status: string) => {
-                                        const invoiceStatusLabels: Record<string, string> = {
-                                            DRAFT: 'Черновик',
-                                            PENDING: 'Ожидает оплаты',
-                                            DISPUTED: 'Спор',
-                                            APPROVED: 'Согласован',
-                                            PAID: 'Оплачен',
-                                            CANCELLED: 'Отменен',
-                                        };
+                                        const invoiceStatusLabels = LEGACY_INVOICE_STATUS_LABELS;
                                         const invoiceStatusColors: Record<string, string> = {
                                             DRAFT: 'default',
                                             PENDING: 'orange',

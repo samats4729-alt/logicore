@@ -130,7 +130,7 @@ export default function OrderFinanceModals({
 
         {/* =================== UNIFIED PAYMENT MODAL =================== */}
         <Modal
-            title={editingPayment ? "Редактировать платеж" : "Зарегистрировать платеж"}
+            title={editingPayment ? "Редактировать платёж" : "Зарегистрировать платёж"}
             open={paymentModalOpen}
             onCancel={() => setPaymentModalOpen(false)}
             onOk={() => paymentForm.submit()}
@@ -164,7 +164,7 @@ export default function OrderFinanceModals({
                     </Select>
                 </Form.Item>
 
-                <Form.Item name="accountId" label="Счет / Касса">
+                <Form.Item name="accountId" label="Счёт / Касса">
                     <Select placeholder="По умолчанию" allowClear>
                         {accounts.map(acc => (
                             <Select.Option key={acc.id} value={acc.id}>

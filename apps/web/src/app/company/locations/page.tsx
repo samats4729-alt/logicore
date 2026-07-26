@@ -50,7 +50,7 @@ export default function CompanyLocationsPage() {
             };
             if (editingLocation) {
                 await api.put(`/locations/${editingLocation.id}`, payload);
-                message.success('Адрес обновлен');
+                message.success('Адрес обновлён');
             } else {
                 await api.post('/locations', payload);
                 message.success('Адрес добавлен');
