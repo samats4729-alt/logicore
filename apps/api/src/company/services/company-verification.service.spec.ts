@@ -22,7 +22,8 @@ const makeService = (overrides: Record<string, any> = {}) => {
         document: { findMany: jest.fn().mockResolvedValue([]) },
         ...overrides,
     };
-    return { service: new CompanyVerificationService(prisma), prisma };
+    const s3: any = { isS3Enabled: jest.fn().mockReturnValue(false), uploadFile: jest.fn() };
+    return { service: new CompanyVerificationService(prisma, s3), prisma, s3 };
 };
 
 const allDocuments = REQUIRED_VERIFICATION_DOCUMENTS.map((type) => ({ type }));

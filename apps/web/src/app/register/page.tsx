@@ -3,12 +3,11 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Form, Input, Button, Typography, message, Steps, Result, Divider, Spin, Checkbox } from 'antd';
-import { UserOutlined, BankOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { UserOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { GoogleLogin } from '@react-oauth/google';
 import AuthShell from '@/components/AuthShell';
-import CompanyFormFields from '@/components/CompanyFormFields';
 
 const { Text, Paragraph } = Typography;
 
@@ -82,19 +81,16 @@ function RegisterContent() {
         try {
             // agreement — только для формы (галочка согласия), бэкенд это поле не принимает
             const { agreement, ...payload } = values;
-            const response = await api.post('/auth/register-company', {
-                ...payload,
-                companyType: 'CUSTOMER',
-            });
+            // Регистрируется человек, а не компания: организация создаётся
+            // отдельно и проходит проверку документов.
+            const response = await api.post('/auth/register', payload);
 
-            setUser(response.data.admin);
+            setUser(response.data.user);
+            setStep(1);
 
-            setStep(2);
-
-            // Через 2 секунды редирект
             setTimeout(() => {
-                router.push('/company');
-            }, 2000);
+                router.push('/company/onboarding');
+            }, 1500);
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка регистрации');
         } finally {
@@ -106,7 +102,7 @@ function RegisterContent() {
         <AuthShell
             eyebrow="(02 — Регистрация)"
             title={<>Начните управлять <em>перевозками</em>.</>}
-            subtitle="Аккаунт компании создаётся за пару минут — сразу после регистрации откроется рабочий кабинет."
+            subtitle="Сначала личный профиль, затем организация. Работа откроется после проверки документов."
             points={[
                 'Заявки и назначение водителей',
                 'Свои контрагенты и тарифы',
@@ -115,8 +111,8 @@ function RegisterContent() {
             cardWidth={560}
         >
                 <div className="lc-auth-card-head">
-                    <div className="lc-auth-card-title">Регистрация компании</div>
-                    <div className="lc-auth-card-sub">Создайте аккаунт для вашей компании</div>
+                    <div className="lc-auth-card-title">Регистрация</div>
+                    <div className="lc-auth-card-sub">Создайте личный профиль</div>
                 </div>
 
                 <Steps
@@ -124,17 +120,16 @@ function RegisterContent() {
                     style={{ marginBottom: 32 }}
                     size="small"
                     items={[
-                        { title: 'Компания', icon: <BankOutlined /> },
-                        { title: 'Админ', icon: <UserOutlined /> },
+                        { title: 'Профиль', icon: <UserOutlined /> },
                         { title: 'Готово', icon: <CheckCircleOutlined /> },
                     ]}
                 />
 
-                {step === 2 ? (
+                {step === 1 ? (
                     <Result
                         status="success"
-                        title="Компания зарегистрирована!"
-                        subTitle="Перенаправляем в личный кабинет..."
+                        title="Профиль создан"
+                        subTitle="Теперь создайте организацию — переходим к следующему шагу…"
                     />
                 ) : (
                     <Form 
@@ -143,20 +138,10 @@ function RegisterContent() {
                         onFinish={handleRegister} 
                         preserve={true}
                     >
-                        {/* Шаг 0: Данные компании */}
                         <div style={{ display: step === 0 ? 'block' : 'none' }}>
-                            <CompanyFormFields form={form} />
-                            <Button type="primary" block size="large" onClick={() => {
-                                form.validateFields(['companyName', 'bin']).then(() => setStep(1));
-                            }}>
-                                Далее
-                            </Button>
-                        </div>
-
-                        {/* Шаг 1: Данные администратора */}
-                        <div style={{ display: step === 1 ? 'block' : 'none' }}>
                             <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-                                Данные администратора компании
+                                Сначала — ваши данные. Организацию создадите следующим шагом,
+                                она начнёт работать после проверки документов.
                             </Paragraph>
                             <Form.Item
                                 name="firstName"
@@ -173,7 +158,7 @@ function RegisterContent() {
                                 <Input size="large" />
                             </Form.Item>
                             <Form.Item
-                                name="adminEmail"
+                                name="email"
                                 label="Email"
                                 rules={[{ required: true, type: 'email' }]}
                             >
@@ -187,7 +172,7 @@ function RegisterContent() {
                                 <Input placeholder="+77001234567" size="large" />
                             </Form.Item>
                             <Form.Item
-                                name="adminPassword"
+                                name="password"
                                 label="Пароль"
                                 rules={[{ required: true, min: 6, message: 'Минимум 6 символов' }]}
                             >

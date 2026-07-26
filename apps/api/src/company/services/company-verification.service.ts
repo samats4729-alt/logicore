@@ -6,7 +6,10 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { CompanyVerificationStatus, DocumentType, Prisma } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { S3Service } from '../../s3/s3.service';
 
 /**
  * Пакет документов, которым в РК подтверждают компанию.
@@ -30,7 +33,63 @@ export const VERIFICATION_DOCUMENT_LABELS: Record<string, string> = {
 
 @Injectable()
 export class CompanyVerificationService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly s3Service: S3Service,
+    ) {}
+
+    /**
+     * Приложить документ к заявке на подтверждение.
+     *
+     * Документ одного вида хранится один: повторная загрузка заменяет
+     * прежний файл, иначе после замечания владельца в карточке лежали бы
+     * две справки и было бы непонятно, какую он смотрел.
+     */
+    async attachDocument(
+        companyId: string,
+        userId: string,
+        type: DocumentType,
+        file: { originalname: string; buffer: Buffer; mimetype: string; size: number },
+    ) {
+        if (!REQUIRED_VERIFICATION_DOCUMENTS.includes(type)) {
+            throw new BadRequestException('Этот вид документа не относится к проверке организации');
+        }
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { id: true, verificationStatus: true },
+        });
+        if (!company) throw new NotFoundException('Организация не найдена');
+        if (company.verificationStatus === CompanyVerificationStatus.VERIFIED) {
+            throw new ConflictException('Организация уже подтверждена');
+        }
+
+        const safeName = file.originalname.replace(/[^\w.\-]+/g, '_').slice(-80);
+        const relativePath = `uploads/verification/${companyId}_${type}_${Date.now()}_${safeName}`;
+
+        if (this.s3Service.isS3Enabled()) {
+            await this.s3Service.uploadFile(relativePath, file.buffer, file.mimetype);
+        } else {
+            const dir = path.join(process.cwd(), 'uploads', 'verification');
+            fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), relativePath), file.buffer);
+        }
+
+        return this.prisma.$transaction(async (tx) => {
+            await tx.document.deleteMany({ where: { companyId, type } });
+            return tx.document.create({
+                data: {
+                    type,
+                    fileName: file.originalname,
+                    fileUrl: relativePath,
+                    fileSize: file.size,
+                    mimeType: file.mimetype,
+                    companyId,
+                    uploadedById: userId,
+                },
+                select: { id: true, type: true, fileName: true, createdAt: true },
+            });
+        });
+    }
 
     /**
      * Состояние проверки для кабинета компании: статус, что уже приложено и
@@ -108,6 +167,34 @@ export class CompanyVerificationService {
             },
             select: { id: true, verificationStatus: true, verificationSubmittedAt: true },
         });
+    }
+
+    /**
+     * Файл документа для просмотра владельцем платформы.
+     *
+     * Отдаётся только через эту ручку и только админу: в пакете есть скан
+     * удостоверения личности, и раздавать его статикой по пути файла
+     * нельзя — ссылку можно было бы угадать или переслать.
+     */
+    async readDocument(documentId: string) {
+        const document = await this.prisma.document.findFirst({
+            where: { id: documentId, type: { in: REQUIRED_VERIFICATION_DOCUMENTS } },
+            select: { fileUrl: true, fileName: true, mimeType: true },
+        });
+        if (!document) throw new NotFoundException('Документ не найден');
+
+        if (this.s3Service.isS3Enabled()) {
+            const { stream, mimeType } = await this.s3Service.downloadFile(document.fileUrl);
+            return { stream, mimeType: mimeType || document.mimeType, fileName: document.fileName };
+        }
+
+        const absolute = path.join(process.cwd(), document.fileUrl);
+        if (!fs.existsSync(absolute)) throw new NotFoundException('Файл не найден');
+        return {
+            stream: fs.createReadStream(absolute),
+            mimeType: document.mimeType,
+            fileName: document.fileName,
+        };
     }
 
     /** Очередь проверки в админке платформы. */

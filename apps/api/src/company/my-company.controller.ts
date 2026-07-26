@@ -4,12 +4,15 @@ import {
     ConflictException,
     Controller,
     Get,
+    Param,
     Post,
     Request,
     UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CompanyType, UserRole } from '@prisma/client';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UploadedFile, UseInterceptors } from '@nestjs/common';
+import { CompanyType, DocumentType, UserRole } from '@prisma/client';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, MaxLength } from 'class-validator';
 import { Response } from 'express';
 import { Res } from '@nestjs/common';
@@ -153,6 +156,37 @@ export class MyCompanyController {
         }, 'web'));
 
         return company;
+    }
+
+    @Post('verification/documents/:type')
+    @UseInterceptors(FileInterceptor('file', {
+        limits: { fileSize: 10 * 1024 * 1024 },
+        fileFilter: (_req, file, cb) => {
+            // Документы присылают сканом или выгрузкой с eGov.
+            const allowed = /^(application\/pdf|image\/(png|jpe?g))$/.test(file.mimetype);
+            cb(allowed ? null : new BadRequestException('Допустимы PDF, PNG и JPG'), allowed);
+        },
+    }))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Приложить документ для подтверждения организации' })
+    async uploadDocument(
+        @Request() req: any,
+        @Param('type') type: string,
+        @UploadedFile() file: Express.Multer.File,
+    ) {
+        if (!req.user.companyId) {
+            throw new BadRequestException('Сначала создайте организацию');
+        }
+        if (!file) throw new BadRequestException('Файл не приложен');
+        if (!(type in DocumentType)) {
+            throw new BadRequestException('Неизвестный вид документа');
+        }
+        return this.verification.attachDocument(
+            req.user.companyId,
+            req.user.sub,
+            type as DocumentType,
+            file,
+        );
     }
 
     @Post('verification/submit')

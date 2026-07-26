@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CompanyVerificationStatus, UserRole } from '@prisma/client';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
@@ -41,6 +42,19 @@ export class CompanyVerificationController {
     @ApiOperation({ summary: 'Организации на проверке' })
     list(@Query() query: ReviewQueueQueryDto) {
         return this.verification.listForReview(query.status);
+    }
+
+    // Объявлено до `:id/...`, иначе путь перехватывается параметром.
+    @Get('documents/:documentId')
+    @ApiOperation({ summary: 'Открыть приложенный документ' })
+    async readDocument(@Param('documentId') documentId: string, @Res() res: Response) {
+        const file = await this.verification.readDocument(documentId);
+        res.set({
+            'Content-Type': file.mimeType || 'application/octet-stream',
+            'Content-Disposition': `inline; filename="document_${documentId}"`,
+            'Cache-Control': 'private, no-store',
+        });
+        file.stream.pipe(res);
     }
 
     @Post(':id/approve')
