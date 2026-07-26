@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
+import { AccountingDocumentDirection, AccountingDocumentType, Prisma, UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
@@ -25,14 +25,28 @@ import { PaymentAllocationService } from './payment-allocation.service';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import {
     AccountingDocumentListQueryDto,
+    AccountingDocumentRegistryQueryDto,
     ApplyAllocationsDto,
     BillableOrdersQueryDto,
     CancelAccountingDocumentDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
+    REGISTRY_MAX_ROWS,
     SuggestAllocationQueryDto,
     UpdateAccountingDocumentDto,
 } from './dto/accounting-document.dto';
+import type { RegistryKind } from './accounting-document-pdf.service';
+
+/** Заголовок печатной формы по фильтрам журнала, из которого её вызвали. */
+function registryKind(query: AccountingDocumentRegistryQueryDto): RegistryKind {
+    if (query.type === AccountingDocumentType.SERVICE_ACT) return 'SERVICE_ACTS';
+    if (query.type === AccountingDocumentType.PAYMENT_INVOICE) {
+        return query.direction === AccountingDocumentDirection.INCOMING
+            ? 'INCOMING_INVOICES'
+            : 'OUTGOING_INVOICES';
+    }
+    return 'DOCUMENTS';
+}
 
 const VIEW_ROLES = [
     UserRole.ADMIN,
@@ -107,8 +121,14 @@ export class AccountingDocumentsController {
     @Get()
     @Roles(...VIEW_ROLES)
     @ApiOperation({ summary: 'Получить список бухгалтерских документов' })
-    list(@Request() req: any, @Query() query: AccountingDocumentListQueryDto) {
-        return this.documents.list(req.user.companyId, query);
+    async list(@Request() req: any, @Query() query: AccountingDocumentListQueryDto) {
+        const companyId = await this.documents.resolveJournalCompany(
+            req.user.id,
+            req.user.companyId,
+            query.companyId,
+            VIEW_ROLES,
+        );
+        return this.documents.list(companyId, query);
     }
 
     // Объявлено до `:id`, иначе путь съедается параметром.
@@ -120,6 +140,65 @@ export class AccountingDocumentsController {
     })
     listBillableOrders(@Request() req: any, @Query() query: BillableOrdersQueryDto) {
         return this.documents.listBillableOrders(req.user.companyId, query);
+    }
+
+    // Тоже до `:id`, иначе путь съедается параметром.
+    @Get('registry/pdf')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({
+        summary: 'Печатная форма «Реестр документов»',
+        description: 'Журнал за период на бумаге. Аналог меню Печать → Реестр документов в 1С.',
+    })
+    async downloadRegistryPdf(
+        @Request() req: any,
+        @Query() query: AccountingDocumentRegistryQueryDto,
+        @Res() res: Response,
+    ) {
+        const companyId = await this.documents.resolveJournalCompany(
+            req.user.id,
+            req.user.companyId,
+            query.companyId,
+            VIEW_ROLES,
+        );
+        const registry = await this.documents.listForRegistry(companyId, query);
+        const pdfBuffer = await this.pdf.generateRegistryPdf({
+            kind: registryKind(query),
+            companyName: registry.company?.name ?? null,
+            companyBin: registry.company?.bin ?? null,
+            counterpartyName: registry.counterpartyName,
+            status: query.status ?? null,
+            from: query.from ? new Date(query.from) : null,
+            to: query.to ? new Date(query.to) : null,
+            selectionOnly: Boolean(query.ids?.length),
+            truncated: registry.documents.length >= REGISTRY_MAX_ROWS,
+            printedAt: new Date(),
+            rows: registry.documents.map((document) => ({
+                number: document.number,
+                documentDate: document.documentDate,
+                status: document.status,
+                counterpartyName: document.counterparty?.name ?? null,
+                counterpartyBin: document.counterparty?.bin ?? null,
+                orderNumbers: document.orders.map((link) => link.order.orderNumber),
+                total: document.total,
+                amountPaid: document.amountPaid,
+                balanceDue: document.balanceDue,
+            })),
+            totals: {
+                amount: new Prisma.Decimal(registry.totals.amount),
+                paid: new Prisma.Decimal(registry.totals.paid),
+                due: new Prisma.Decimal(registry.totals.due),
+            },
+        });
+        // Имя файла только из латиницы и цифр: кириллица в заголовке HTTP
+        // уже роняла отдачу PDF по публичной ссылке.
+        const period = [query.from, query.to].filter(Boolean).join('_') || 'all';
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="Registry_${period.replace(/[^0-9_-]+/g, '')}.pdf"`,
+            'Content-Length': pdfBuffer.length,
+            'Cache-Control': 'private, no-store',
+        });
+        res.end(pdfBuffer);
     }
 
     // Тоже до `:id`, иначе путь съедается параметром.

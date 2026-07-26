@@ -134,6 +134,8 @@ export interface AccountingDocumentListResult {
 }
 
 export interface AccountingDocumentListParams {
+    /** Организация журнала. Пусто — активная компания сессии. */
+    companyId?: string;
     type?: AccountingDocumentType;
     direction?: AccountingDocumentDirection;
     status?: AccountingDocumentStatus;
@@ -449,6 +451,39 @@ export function openAccountingDocumentPdf(id: string, withStamp = false) {
     const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     const query = withStamp ? '?withStamp=true' : '';
     window.open(`${base}/accounting-documents/${id}/pdf${query}`, '_blank', 'noopener');
+}
+
+export interface AccountingRegistryParams {
+    companyId?: string;
+    type?: AccountingDocumentType;
+    direction?: AccountingDocumentDirection;
+    status?: AccountingDocumentStatus;
+    counterpartyId?: string;
+    from?: string;
+    to?: string;
+    /** Отмеченные строки журнала — печать выбранных. */
+    ids?: string[];
+}
+
+/**
+ * «Печать → Реестр документов»: журнал за период на бумаге.
+ *
+ * Фильтры передаются те же, что показаны на экране, — печатается ровно
+ * видимая выборка, а не весь журнал.
+ */
+export function openAccountingRegistryPdf(params: AccountingRegistryParams) {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const query = new URLSearchParams();
+    if (params.companyId) query.set('companyId', params.companyId);
+    if (params.type) query.set('type', params.type);
+    if (params.direction) query.set('direction', params.direction);
+    if (params.status) query.set('status', params.status);
+    if (params.counterpartyId) query.set('counterpartyId', params.counterpartyId);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    // Повторяющийся параметр — так его разбирает DTO реестра.
+    for (const id of params.ids ?? []) query.append('ids', id);
+    window.open(`${base}/accounting-documents/registry/pdf?${query.toString()}`, '_blank', 'noopener');
 }
 
 /**

@@ -6,6 +6,7 @@ import { PaymentsService } from './services/payments.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentDirection, PaymentMethod, CostType, DictionaryKind } from '@prisma/client';
+import { JournalQueryDto } from './dto/accounting.dto';
 
 @Injectable()
 export class AccountingService {
@@ -66,26 +67,26 @@ export class AccountingService {
 
     // ==================== FINANCIAL REGISTRY ====================
 
-    async getFinancialRegistry(companyId: string) {
-        return this.reportsService.getFinancialRegistry(companyId);
+    async getFinancialRegistry(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getFinancialRegistry(companyId, query);
     }
 
-    async getPlannedPayments(companyId: string) {
-        return this.reportsService.getPlannedPayments(companyId);
+    async getPlannedPayments(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getPlannedPayments(companyId, query);
     }
 
     // ==================== PAYMENT JOURNAL ====================
 
-    async getIncomesJournal(companyId: string) {
-        return this.reportsService.getIncomesJournal(companyId);
+    async getIncomesJournal(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getIncomesJournal(companyId, query);
     }
 
-    async getExpensesJournal(companyId: string) {
-        return this.reportsService.getExpensesJournal(companyId);
+    async getExpensesJournal(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getExpensesJournal(companyId, query);
     }
 
-    async getCustomerExpensesJournal(companyId: string) {
-        return this.reportsService.getCustomerExpensesJournal(companyId);
+    async getCustomerExpensesJournal(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getCustomerExpensesJournal(companyId, query);
     }
 
     async markCustomerPaid(companyId: string, orderId: string, paid: boolean, userId: string) {
@@ -102,8 +103,8 @@ export class AccountingService {
 
     // ==================== EXPENSES (manual) ====================
 
-    async getExpenses(companyId: string) {
-        return this.paymentsService.getExpenses(companyId);
+    async getExpenses(companyId: string, period?: { from?: string; to?: string }) {
+        return this.paymentsService.getExpenses(companyId, period);
     }
 
     async createExpense(companyId: string, userId: string, data: {
@@ -135,8 +136,8 @@ export class AccountingService {
 
     // ==================== INCOMES (manual) ====================
 
-    async getIncomes(companyId: string) {
-        return this.paymentsService.getIncomes(companyId);
+    async getIncomes(companyId: string, period?: { from?: string; to?: string }) {
+        return this.paymentsService.getIncomes(companyId, period);
     }
 
     async createIncome(companyId: string, userId: string, data: {
@@ -234,6 +235,15 @@ export class AccountingService {
         orderId?: string;
     }) {
         return this.paymentsService.updatePayment(companyId, paymentId, userId, data);
+    }
+
+    async refundPayment(companyId: string, paymentId: string, userId: string, data: {
+        amount?: number;
+        date?: string;
+        note?: string;
+        accountId?: string;
+    }) {
+        return this.paymentsService.refundPayment(companyId, paymentId, userId, data);
     }
 
     async deletePayment(companyId: string, paymentId: string, userId: string) {

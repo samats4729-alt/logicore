@@ -7,6 +7,23 @@ import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus, P
 import { D, roundMoney, sumOf, toNum } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
 
+/**
+ * Период операций для журнала «Операции».
+ *
+ * Конец периода растягивается до конца суток: у доходов и расходов дата
+ * хранится с временем, и «по 31 июля» иначе теряло всё, что заведено в этот
+ * день. Пусто — ограничения нет, как было раньше.
+ */
+function operationPeriod(period?: { from?: string; to?: string }): Prisma.DateTimeFilter | undefined {
+    if (!period?.from && !period?.to) return undefined;
+    const to = period.to ? new Date(period.to) : null;
+    if (to) to.setUTCHours(23, 59, 59, 999);
+    return {
+        gte: period.from ? new Date(period.from) : undefined,
+        lte: to ?? undefined,
+    };
+}
+
 @Injectable()
 export class PaymentsService {
     private static readonly AUTO_NOTE_CUSTOMER = 'Проведение оплаты заказчика (на остаток)';
@@ -30,9 +47,9 @@ export class PaymentsService {
 
     // ==================== EXPENSES (manual) ====================
 
-    async getExpenses(companyId: string) {
+    async getExpenses(companyId: string, period?: { from?: string; to?: string }) {
         return this.prisma.expense.findMany({
-            where: { companyId, isDeleted: false },
+            where: { companyId, isDeleted: false, date: operationPeriod(period) },
             include: { order: { select: { orderNumber: true } }, account: true },
             orderBy: { date: 'desc' },
         });
@@ -112,9 +129,9 @@ export class PaymentsService {
 
     // ==================== INCOMES (manual) ====================
 
-    async getIncomes(companyId: string) {
+    async getIncomes(companyId: string, period?: { from?: string; to?: string }) {
         return this.prisma.income.findMany({
-            where: { companyId, isDeleted: false },
+            where: { companyId, isDeleted: false, date: operationPeriod(period) },
             orderBy: { date: 'desc' },
             include: {
                 order: {
@@ -222,6 +239,9 @@ export class PaymentsService {
                 counterparty: { select: { name: true } },
                 account: true,
                 category: true,
+                // Возвраты нужны журналу операций: по ним видно, сколько от
+                // платежа уже вернули и можно ли вернуть ещё.
+                refunds: { where: { isDeleted: false }, select: { id: true, amount: true, date: true } },
             },
             orderBy: { date: 'desc' },
         });
@@ -349,6 +369,103 @@ export class PaymentsService {
         return payment;
     }
 
+    /**
+     * Возврат платежа (сторно) — T-20.
+     *
+     * Раньше вернуть деньги можно было только удалив платёж: история
+     * стиралась, а акт сверки и ДДС показывали так, будто денег и не было.
+     * Возврат — отдельный платёж обратного направления со ссылкой на
+     * исходный: обе операции остаются в истории и видны в сверке.
+     *
+     * Разнесения исходного платежа уменьшаются на сумму возврата, иначе
+     * счёт остался бы «оплаченным» деньгами, которые уже вернули.
+     */
+    async refundPayment(companyId: string, paymentId: string, userId: string, data: {
+        amount?: number;
+        date?: string;
+        note?: string;
+        accountId?: string;
+    }) {
+        const source = await this.prisma.payment.findFirst({
+            where: { id: paymentId, companyId, isDeleted: false },
+            include: { refunds: { where: { isDeleted: false }, select: { amount: true } } },
+        });
+        if (!source) throw new NotFoundException('Платеж не найден');
+        if (source.refundOfId) {
+            throw new BadRequestException('Это уже возврат — вернуть возврат нельзя');
+        }
+
+        const already = sumOf(source.refunds, (refund) => refund.amount);
+        const refundable = roundMoney(D(source.amount).minus(already));
+        if (refundable.lte(0)) {
+            throw new BadRequestException('Платёж уже возвращён полностью');
+        }
+
+        const amount = data.amount === undefined ? refundable : roundMoney(D(data.amount));
+        if (amount.lte(0)) {
+            throw new BadRequestException('Сумма возврата должна быть больше нуля');
+        }
+        if (amount.gt(refundable)) {
+            throw new BadRequestException(
+                `Возврат больше остатка платежа: вернуть можно не более ${refundable.toFixed(2)} ₸`,
+            );
+        }
+
+        // Период проверяется по дате возврата: он проводится сегодняшним днём,
+        // а не задним числом исходного платежа.
+        const date = data.date ? new Date(data.date) : new Date();
+        await this.periodClosingService.checkPeriodNotClosed(companyId, date);
+
+        const direction = source.direction === PaymentDirection.IN
+            ? PaymentDirection.OUT
+            : PaymentDirection.IN;
+
+        const { refund, customerPaidBecameTrue } = await this.prisma.$transaction(async (tx) => {
+            const created = await tx.payment.create({
+                data: {
+                    companyId,
+                    orderId: source.orderId,
+                    counterpartyId: source.counterpartyId,
+                    direction,
+                    amount,
+                    date,
+                    method: source.method,
+                    // Статью не наследуем: у неё жёсткое направление, и статья
+                    // прихода не годится расходной операции.
+                    categoryId: null,
+                    accountId: data.accountId ?? source.accountId,
+                    note: data.note?.trim() || `Возврат платежа от ${source.date.toISOString().slice(0, 10)}`,
+                    createdById: userId,
+                    refundOfId: source.id,
+                },
+                include: { order: { select: { orderNumber: true } } },
+            });
+
+            let becameTrue = false;
+            if (created.orderId) {
+                becameTrue = await this.syncOrderPaymentFlagsWithin(tx, created.orderId);
+                await tx.orderChangeLog.create({
+                    data: {
+                        orderId: created.orderId,
+                        userId,
+                        action: 'payment_refunded',
+                        details: `Возврат платежа на сумму ${created.amount} ₸ (${created.note}).`,
+                    },
+                });
+            }
+
+            return { refund: created, customerPaidBecameTrue: becameTrue };
+        }, { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS });
+
+        await this.allocations.reduce(source.id, amount);
+
+        if (refund.orderId) {
+            await this.runCustomerPaidTrigger(refund.orderId, customerPaidBecameTrue);
+        }
+
+        return refund;
+    }
+
     async updatePayment(companyId: string, paymentId: string, userId: string, data: {
         amount?: number;
         date?: string;
@@ -361,8 +478,15 @@ export class PaymentsService {
     }) {
         const payment = await this.prisma.payment.findFirst({
             where: { id: paymentId, companyId, isDeleted: false },
+            include: { refunds: { where: { isDeleted: false }, select: { id: true } } },
         });
         if (!payment) throw new NotFoundException('Платеж не найден');
+
+        // Сумма платежа с возвратом не меняется: возврат считается от неё, и
+        // правка задним числом сделала бы возврат больше самого платежа.
+        if (data.amount !== undefined && payment.refunds.length) {
+            throw new BadRequestException('Нельзя изменить сумму платежа: по нему оформлен возврат. Сначала удалите возврат.');
+        }
 
         await this.periodClosingService.checkPeriodNotClosed(companyId, payment.date);
         if (data.date && new Date(data.date).getTime() !== new Date(payment.date).getTime()) {
@@ -444,8 +568,15 @@ export class PaymentsService {
     async deletePayment(companyId: string, paymentId: string, userId: string) {
         const payment = await this.prisma.payment.findFirst({
             where: { id: paymentId, companyId, isDeleted: false },
+            include: { refunds: { where: { isDeleted: false }, select: { id: true } } },
         });
         if (!payment) throw new NotFoundException('Платеж не найден');
+
+        // Удаление платежа с возвратом оставило бы возврат без основания, а в
+        // сверке — движение денег из ниоткуда. Сначала удаляют возврат.
+        if (payment.refunds.length) {
+            throw new BadRequestException('Нельзя удалить платёж: по нему оформлен возврат. Сначала удалите возврат.');
+        }
 
         await this.periodClosingService.checkPeriodNotClosed(companyId, payment.date);
 

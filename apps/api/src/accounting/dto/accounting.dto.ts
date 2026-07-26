@@ -1,4 +1,5 @@
 import { PaymentDirection, PaymentMethod } from '@prisma/client';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import {
     IsBoolean,
     IsDateString,
@@ -217,4 +218,54 @@ export class UpdatePaymentDto {
     @IsOptional()
     @IsString()
     orderId?: string;
+}
+
+/**
+ * Период и страница для журналов бухгалтерии.
+ *
+ * В 1С журнал всегда ограничен периодом — открыть «вообще всё» там нельзя.
+ * У нас страницы грузили историю целиком, и на большой базе это единственный
+ * запрос, который положит раздел.
+ *
+ * Совместимость: без `page` и `limit` метод отдаёт массив, как раньше, —
+ * меняется только отбор по периоду, если его передали. Страница появляется
+ * в ответе только тогда, когда её явно попросили.
+ */
+export class JournalQueryDto extends PaginationQueryDto {
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+}
+
+/**
+ * Возврат платежа (сторно).
+ *
+ * Сумма необязательна: без неё возвращается весь непогашенный остаток
+ * платежа — самый частый случай. Дата тоже: возврат проводится сегодняшним
+ * числом, а не задним числом исходного платежа.
+ */
+export class RefundPaymentDto {
+    @IsOptional()
+    @IsNumber({ allowInfinity: false, allowNaN: false })
+    @Min(0.01)
+    @Max(MAX_MONEY_AMOUNT)
+    amount?: number;
+
+    @IsOptional()
+    @IsDateString()
+    date?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(2000)
+    note?: string;
+
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    accountId?: string;
 }

@@ -25,6 +25,13 @@ import {
     ValidateNested,
 } from 'class-validator';
 
+/**
+ * Потолок строк в печатном реестре. Реестр — документ для подшивки, а не
+ * выгрузка: за разумный период столько счетов и не бывает, а печатать
+ * неограниченный список значит уронить сервер на одном запросе.
+ */
+export const REGISTRY_MAX_ROWS = 500;
+
 const MONEY = /^\d{1,18}(\.\d{1,2})?$/;
 const SIGNED_MONEY = /^-?\d{1,18}(\.\d{1,2})?$/;
 const QUANTITY = /^\d{1,18}(\.\d{1,3})?$/;
@@ -378,6 +385,16 @@ export class CancelAccountingDocumentDto {
 }
 
 export class AccountingDocumentListQueryDto {
+    /**
+     * Организация журнала. Пусто — активная компания сессии. Право на чужую
+     * организацию проверяется отдельно: у пользователя должна быть роль
+     * бухгалтерии именно в ней.
+     */
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    companyId?: string;
+
     @IsOptional()
     @IsEnum(AccountingDocumentType)
     type?: AccountingDocumentType;
@@ -420,4 +437,56 @@ export class AccountingDocumentListQueryDto {
     @Min(1)
     @Max(100)
     limit?: number;
+}
+
+/**
+ * «Печать → Реестр документов» в 1С: печатная форма самого журнала за период.
+ *
+ * Фильтры повторяют список — печатается ровно то, что бухгалтер видит на
+ * экране. Отдельно можно передать `ids`: тогда в реестр попадают только
+ * отмеченные строки (массовое действие «печать выбранных»).
+ */
+export class AccountingDocumentRegistryQueryDto {
+    /** Организация журнала — см. AccountingDocumentListQueryDto. */
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    companyId?: string;
+
+    @IsOptional()
+    @IsEnum(AccountingDocumentType)
+    type?: AccountingDocumentType;
+
+    @IsOptional()
+    @IsEnum(AccountingDocumentDirection)
+    direction?: AccountingDocumentDirection;
+
+    @IsOptional()
+    @IsEnum(AccountingDocumentStatus)
+    status?: AccountingDocumentStatus;
+
+    @IsOptional()
+    @IsString()
+    counterpartyId?: string;
+
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+
+    /**
+     * Отмеченные строки журнала. Приходят повторяющимся query-параметром
+     * (`ids=a&ids=b`), поэтому одиночное значение приводится к массиву.
+     */
+    @IsOptional()
+    @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
+    @IsArray()
+    @ArrayUnique()
+    @ArrayMaxSize(REGISTRY_MAX_ROWS)
+    @IsString({ each: true })
+    @IsNotEmpty({ each: true })
+    ids?: string[];
 }

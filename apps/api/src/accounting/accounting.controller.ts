@@ -11,6 +11,8 @@ import { Response } from 'express';
 import {
     CreateManualEntryDto,
     CreatePaymentDto,
+    JournalQueryDto,
+    RefundPaymentDto,
     UpdateManualEntryDto,
     UpdateOrderFinanceDto,
     UpdatePaymentDto,
@@ -42,34 +44,34 @@ export class AccountingController {
 
     @Get('financial-registry')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getFinancialRegistry(@Request() req: any) {
-        return this.accountingService.getFinancialRegistry(req.user.companyId);
+    async getFinancialRegistry(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getFinancialRegistry(req.user.companyId, query);
     }
 
     @Get('planned-payments')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getPlannedPayments(@Request() req: any) {
-        return this.accountingService.getPlannedPayments(req.user.companyId);
+    async getPlannedPayments(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getPlannedPayments(req.user.companyId, query);
     }
 
     // ==================== PAYMENT JOURNAL ====================
 
     @Get('incomes-journal')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getIncomesJournal(@Request() req: any) {
-        return this.accountingService.getIncomesJournal(req.user.companyId);
+    async getIncomesJournal(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getIncomesJournal(req.user.companyId, query);
     }
 
     @Get('expenses-journal')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getExpensesJournal(@Request() req: any) {
-        return this.accountingService.getExpensesJournal(req.user.companyId);
+    async getExpensesJournal(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getExpensesJournal(req.user.companyId, query);
     }
 
     @Get('customer-expenses-journal')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getCustomerExpensesJournal(@Request() req: any) {
-        return this.accountingService.getCustomerExpensesJournal(req.user.companyId);
+    async getCustomerExpensesJournal(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getCustomerExpensesJournal(req.user.companyId, query);
     }
 
     @Put('orders/:id/customer-paid')
@@ -100,8 +102,8 @@ export class AccountingController {
 
     @Get('expenses')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getExpenses(@Request() req: any) {
-        return this.accountingService.getExpenses(req.user.companyId);
+    async getExpenses(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getExpenses(req.user.companyId, query);
     }
 
     @Post('expenses')
@@ -144,8 +146,8 @@ export class AccountingController {
 
     @Get('incomes')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getIncomes(@Request() req: any) {
-        return this.accountingService.getIncomes(req.user.companyId);
+    async getIncomes(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getIncomes(req.user.companyId, query);
     }
 
     @Post('incomes')
@@ -291,6 +293,35 @@ export class AccountingController {
             details: { amount: body?.amount ?? null, direction: body?.direction ?? null, orderId: body?.orderId ?? null },
         });
         return result;
+    }
+
+    @Post('payments/:id/refund')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Возврат платежа (сторно)',
+        description: 'Создаёт обратный платёж со ссылкой на исходный. Исходный остаётся в истории.',
+    })
+    async refundPayment(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: RefundPaymentDto,
+    ) {
+        const refund = await this.accountingService.refundPayment(
+            req.user.companyId,
+            id,
+            req.user.id,
+            body,
+        );
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'payment',
+            entityId: refund.id,
+            entityLabel: `Возврат платежа на ${refund.amount} ₸`,
+            details: { refundOfId: id },
+        });
+        return refund;
     }
 
     @Delete('payments/:id')
