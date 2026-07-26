@@ -735,6 +735,31 @@ export class FinancialReportsService {
      * составляет почти весь объём ответа (на 5000 заявок это 2.4 МБ против
      * нескольких килобайт), а дашборду нужны только итоги и топ должников.
      */
+    /**
+     * Состояние оплаты строки рейса.
+     *
+     * Раньше отдавался только флаг «оплачено да/нет», и частичная оплата
+     * выглядела как полная неоплата: по строке нельзя было понять, пришла
+     * половина денег или ничего. Здесь и сумма, и остаток, и состояние.
+     */
+    private orderPaymentView(amount: Money, paid: Money, isPaidFlag: boolean) {
+        const rest = positiveRest(amount, paid);
+        // Флаг остаётся ведущим: он считается с видимостью платежей обеих
+        // сторон, а `paid` — только теми, что видит эта компания.
+        const paymentState = isPaidFlag || rest.lte(0)
+            ? 'PAID'
+            : paid.gt(0)
+                ? 'PARTIAL'
+                : 'UNPAID';
+        return {
+            amount: toNum(amount),
+            paidAmount: toNum(paid),
+            remaining: toNum(rest),
+            paymentState,
+            isPaid: isPaidFlag,
+        };
+    }
+
     async getCounterpartyReport(companyId: string, options?: { includeOrders?: boolean }) {
         const includeOrders = options?.includeOrders !== false;
         const orders = await this.prisma.order.findMany({
@@ -772,6 +797,25 @@ export class FinancialReportsService {
                     orderBy: { sequence: 'asc' },
                 },
                 ...ORDER_FINANCE_RELATIONS_SELECT,
+                // Счета и акты новой модели: по ним видно, выставлен ли
+                // документ на этот рейс и сколько по нему уже пришло.
+                accountingDocuments: {
+                    select: {
+                        document: {
+                            select: {
+                                id: true,
+                                number: true,
+                                type: true,
+                                direction: true,
+                                status: true,
+                                total: true,
+                                amountPaid: true,
+                                balanceDue: true,
+                                dueDate: true,
+                            },
+                        },
+                    },
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -832,6 +876,28 @@ export class FinancialReportsService {
                 || null;
             const vehiclePlate = order.assignedDriverPlate || order.driver?.vehiclePlate || null;
 
+            // Счёт на оплату по рейсу — в ту сторону, куда идут деньги.
+            // Отменённый документ не считается выставленным.
+            const liveDocuments = (order as any).accountingDocuments
+                ?.map((link: any) => link.document)
+                ?.filter((d: any) => d && d.status !== 'CANCELLED') ?? [];
+            const invoiceFor = (direction: 'OUTGOING' | 'INCOMING') => {
+                const doc = liveDocuments.find(
+                    (d: any) => d.type === 'PAYMENT_INVOICE' && d.direction === direction,
+                );
+                return doc
+                    ? {
+                        id: doc.id,
+                        number: doc.number,
+                        status: doc.status,
+                        total: toNum(doc.total),
+                        amountPaid: toNum(doc.amountPaid),
+                        balanceDue: toNum(doc.balanceDue),
+                        dueDate: doc.dueDate,
+                    }
+                    : null;
+            };
+
             const orderData = {
                 id: order.id,
                 orderNumber: order.orderNumber,
@@ -864,12 +930,12 @@ export class FinancialReportsService {
                 if (overdue) entry.overdueWeOweThem = entry.overdueWeOweThem.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount: toNum(amount),
-                    isPaid: fin.isExecutorPaid,
+                    ...this.orderPaymentView(amount, paid, fin.isExecutorPaid),
                     paidAt: order.customerPaidAt,
                     direction: 'weOwe',
                     dueDate: order.driverPaymentDate,
                     isOverdue: overdue,
+                    invoice: invoiceFor('INCOMING'),
                 });
             }
 
@@ -883,12 +949,12 @@ export class FinancialReportsService {
                 if (overdue) entry.overdueTheyOweUs = entry.overdueTheyOweUs.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount: toNum(amount),
-                    isPaid: fin.isCustomerPaid,
+                    ...this.orderPaymentView(amount, paid, fin.isCustomerPaid),
                     paidAt: order.customerPaidAt,
                     direction: 'theyOwe',
                     dueDate: order.customerPaymentDate,
                     isOverdue: overdue,
+                    invoice: invoiceFor('OUTGOING'),
                 });
             }
 
@@ -902,12 +968,12 @@ export class FinancialReportsService {
                 if (overdue) entry.overdueWeOweThem = entry.overdueWeOweThem.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount: toNum(amount),
-                    isPaid: fin.isExecutorPaid,
+                    ...this.orderPaymentView(amount, paid, fin.isExecutorPaid),
                     paidAt: order.subForwarderPaidAt || order.driverPaidAt,
                     direction: 'weOwe',
                     dueDate: order.driverPaymentDate,
                     isOverdue: overdue,
+                    invoice: invoiceFor('INCOMING'),
                 });
             }
 
@@ -921,12 +987,12 @@ export class FinancialReportsService {
                 if (overdue) entry.overdueTheyOweUs = entry.overdueTheyOweUs.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount: toNum(amount),
-                    isPaid: fin.isCustomerPaid,
+                    ...this.orderPaymentView(amount, paid, fin.isCustomerPaid),
                     paidAt: order.subForwarderPaidAt,
                     direction: 'theyOwe',
                     dueDate: order.customerPaymentDate,
                     isOverdue: overdue,
+                    invoice: invoiceFor('OUTGOING'),
                 });
             }
         }
