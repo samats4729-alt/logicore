@@ -1014,6 +1014,24 @@ export default function OrderDetailPage() {
         }
     };
 
+    /** Договор-заявка с перевозчиком — печатается из данных этой заявки. */
+    const handleDownloadContract = async (withStamp = false) => {
+        try {
+            const res = await api.get(`/orders/${orderId}/contract`, {
+                params: withStamp ? { withStamp: 'true' } : undefined,
+                responseType: 'blob',
+            });
+            const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Договор-заявка_${data?.order?.orderNumber || orderId}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось сформировать договор-заявку');
+        }
+    };
+
     /** withStamp — флажок «Подпись и печать»; по умолчанию бланк чистый. */
     const handleDownloadPoA = async (withStamp = false) => {
         try {
@@ -1570,6 +1588,20 @@ export default function OrderDetailPage() {
                                                             }}
                                                         >
                                                             <FileTextOutlined /> Доверенность (PDF)
+                                                        </Dropdown.Button>
+                                                        <Dropdown.Button
+                                                            style={{ width: '100%' }}
+                                                            buttonsRender={([left, right]) => [left, right]}
+                                                            onClick={() => handleDownloadContract()}
+                                                            menu={{
+                                                                items: [{
+                                                                    key: 'stamp',
+                                                                    label: 'С подписью и печатью',
+                                                                    onClick: () => handleDownloadContract(true),
+                                                                }],
+                                                            }}
+                                                        >
+                                                            <FilePdfOutlined /> Договор-заявка (PDF)
                                                         </Dropdown.Button>
                                                         <Button
                                                             icon={<MailOutlined />}

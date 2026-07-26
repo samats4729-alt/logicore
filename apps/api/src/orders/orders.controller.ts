@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
+import { OrderContractService } from './order-contract.service';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -24,6 +25,7 @@ export class OrdersController {
     constructor(
         private ordersService: OrdersService,
         private poaService: PowerOfAttorneyService,
+        private contractService: OrderContractService,
         private emailService: EmailService,
         private prisma: PrismaService,
         private billingService: BillingService,
@@ -137,6 +139,27 @@ export class OrdersController {
         res.set({
             'Content-Type': 'application/pdf',
             'Content-Disposition': `attachment; filename="POA_${id}.pdf"`,
+            'Content-Length': pdfBuffer.length,
+        });
+        res.end(pdfBuffer);
+    }
+
+    @Get(':id/contract')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Скачать договор-заявку на перевозку (PDF)' })
+    async downloadContract(
+        @Param('id') id: string,
+        @Request() req: any,
+        @Res() res: Response,
+        // Флажок «Подпись и печать»: по умолчанию бланк чистый.
+        @Query('withStamp') withStamp?: string,
+    ) {
+        const pdfBuffer = await this.contractService.generatePdf(id, req.user.companyId, {
+            withStamp: withStamp === 'true',
+        });
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="Contract_${id}.pdf"`,
             'Content-Length': pdfBuffer.length,
         });
         res.end(pdfBuffer);
