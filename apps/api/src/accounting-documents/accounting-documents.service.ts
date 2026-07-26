@@ -21,6 +21,8 @@ import { AccountingDocumentCalculatorService } from './accounting-document-calcu
 import { toNum } from '../common/utils/money';
 import {
     AccountingDocumentListQueryDto,
+    AccountingDocumentRegistryQueryDto,
+    REGISTRY_MAX_ROWS,
     BillableOrdersQueryDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
@@ -301,16 +303,23 @@ export class AccountingDocumentsService {
         return created;
     }
 
-    async list(companyId: string, query: AccountingDocumentListQueryDto) {
-        const page = query.page ?? 1;
-        const limit = query.limit ?? 30;
-        const where: Prisma.AccountingDocumentWhereInput = {
+    /**
+     * Отбор журнала. Вынесен отдельно, чтобы печатный реестр отбирал
+     * документы ровно теми же правилами, что и список на экране: иначе
+     * «Итого» на бумаге разойдётся с «Итого» в журнале.
+     */
+    private listWhere(
+        companyId: string,
+        query: AccountingDocumentListQueryDto | AccountingDocumentRegistryQueryDto,
+    ): Prisma.AccountingDocumentWhereInput {
+        const orderId = 'orderId' in query ? query.orderId : undefined;
+        return {
             companyId,
             type: query.type,
             direction: query.direction,
             status: query.status,
             counterpartyId: query.counterpartyId,
-            orders: query.orderId ? { some: { orderId: query.orderId } } : undefined,
+            orders: orderId ? { some: { orderId } } : undefined,
             documentDate: query.from || query.to
                 ? {
                     gte: query.from ? new Date(query.from) : undefined,
@@ -318,6 +327,12 @@ export class AccountingDocumentsService {
                 }
                 : undefined,
         };
+    }
+
+    async list(companyId: string, query: AccountingDocumentListQueryDto) {
+        const page = query.page ?? 1;
+        const limit = query.limit ?? 30;
+        const where = this.listWhere(companyId, query);
         const [data, total, sums] = await this.prisma.$transaction([
             this.prisma.accountingDocument.findMany({
                 where,
@@ -367,6 +382,63 @@ export class AccountingDocumentsService {
         });
         if (!document) throw new NotFoundException('Бухгалтерский документ не найден');
         return document;
+    }
+
+    /**
+     * Данные для печатной формы «Реестр документов» — журнал за период на
+     * бумаге. Отбор тот же, что у списка; пагинации нет, потому что реестр
+     * печатается целиком, но объём ограничен REGISTRY_MAX_ROWS.
+     *
+     * Отмеченные строки (`ids`) сужают выборку, а не заменяют её: печатается
+     * пересечение с фильтрами, иначе в реестр «за июнь» попал бы отмеченный
+     * ранее июльский документ.
+     */
+    async listForRegistry(companyId: string, query: AccountingDocumentRegistryQueryDto) {
+        const where: Prisma.AccountingDocumentWhereInput = {
+            ...this.listWhere(companyId, query),
+            ...(query.ids?.length ? { id: { in: query.ids } } : {}),
+        };
+
+        const [documents, counterparty, company, sums] = await Promise.all([
+            this.prisma.accountingDocument.findMany({
+                where,
+                orderBy: [{ documentDate: 'asc' }, { createdAt: 'asc' }],
+                take: REGISTRY_MAX_ROWS,
+                include: {
+                    counterparty: { select: { id: true, name: true, bin: true } },
+                    orders: {
+                        select: { order: { select: { id: true, orderNumber: true } } },
+                        take: 5,
+                    },
+                },
+            }),
+            query.counterpartyId
+                ? this.prisma.company.findUnique({
+                    where: { id: query.counterpartyId },
+                    select: { name: true },
+                })
+                : Promise.resolve(null),
+            this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: { name: true, bin: true },
+            }),
+            this.prisma.accountingDocument.aggregate({
+                where: { ...where, status: { not: AccountingDocumentStatus.CANCELLED } },
+                _sum: { total: true, amountPaid: true, balanceDue: true },
+            }),
+        ]);
+
+        return {
+            company,
+            documents,
+            counterpartyName: counterparty?.name ?? null,
+            // Итоги считаются, как в журнале: отменённые в сумму не входят.
+            totals: {
+                amount: toNum(sums._sum.total),
+                paid: toNum(sums._sum.amountPaid),
+                due: toNum(sums._sum.balanceDue),
+            },
+        };
     }
 
     /**

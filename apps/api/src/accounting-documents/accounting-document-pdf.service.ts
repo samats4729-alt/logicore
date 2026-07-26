@@ -75,6 +75,57 @@ export interface InvoicePdfDocument {
     reconciliationLines?: ReconciliationPdfLine[];
 }
 
+/** Строка реестра — то же, что строка журнала на экране. */
+export interface RegistryPdfRow {
+    number: string;
+    documentDate: Date;
+    status: AccountingDocumentStatus;
+    counterpartyName: string | null;
+    counterpartyBin: string | null;
+    orderNumbers: string[];
+    total: Prisma.Decimal;
+    amountPaid: Prisma.Decimal;
+    balanceDue: Prisma.Decimal;
+}
+
+/** Какой журнал печатается — заголовок формы и её смысл. */
+export type RegistryKind =
+    | 'OUTGOING_INVOICES'
+    | 'INCOMING_INVOICES'
+    | 'SERVICE_ACTS'
+    | 'DOCUMENTS';
+
+export interface RegistryPdfInput {
+    kind: RegistryKind;
+    companyName: string | null;
+    companyBin: string | null;
+    counterpartyName: string | null;
+    status: AccountingDocumentStatus | null;
+    from: Date | null;
+    to: Date | null;
+    /** Печатаются только отмеченные в журнале строки. */
+    selectionOnly: boolean;
+    /** Выборка упёрлась в потолок строк — в форме об этом сказано прямо. */
+    truncated: boolean;
+    printedAt: Date;
+    rows: RegistryPdfRow[];
+    totals: { amount: Prisma.Decimal; paid: Prisma.Decimal; due: Prisma.Decimal };
+}
+
+const REGISTRY_TITLES: Record<RegistryKind, string> = {
+    OUTGOING_INVOICES: 'Счета на оплату, исходящие',
+    INCOMING_INVOICES: 'Счета на оплату, входящие',
+    SERVICE_ACTS: 'Акты выполненных работ',
+    DOCUMENTS: 'Бухгалтерские документы',
+};
+
+/** Термины журнала 1С — бухгалтер сверяет бумагу с экраном. */
+const REGISTRY_STATUS_LABELS: Record<AccountingDocumentStatus, string> = {
+    [AccountingDocumentStatus.DRAFT]: 'Черновик',
+    [AccountingDocumentStatus.POSTED]: 'Проведён',
+    [AccountingDocumentStatus.CANCELLED]: 'Отменён',
+};
+
 interface PartySnapshot {
     name?: string | null;
     bin?: string | null;
@@ -308,6 +359,202 @@ export class AccountingDocumentPdfService {
             this.addPageNumbers(doc);
             doc.end();
         });
+    }
+
+    /**
+     * «Печать → Реестр документов» в 1С: сам журнал на бумаге.
+     *
+     * Это не первичный документ, а внутренняя опись — утверждённого бланка у
+     * неё нет, поэтому форма свободная. Лист альбомный: колонок девять, и в
+     * книжной ориентации маршрут с контрагентом сминались бы в столбик.
+     */
+    async generateRegistryPdf(input: RegistryPdfInput): Promise<Buffer> {
+        return new Promise<Buffer>((resolve, reject) => {
+            const doc = new PDFDocument({
+                size: 'A4',
+                layout: 'landscape',
+                margins: { top: 28, bottom: 32, left: 28, right: 28 },
+                bufferPages: true,
+                compress: true,
+                info: {
+                    Title: 'Реестр документов',
+                    Author: input.companyName || 'LogiCore',
+                    Subject: 'Реестр документов',
+                    CreationDate: input.printedAt,
+                },
+            });
+            const fontsDir = path.join(__dirname, '..', 'contracts', 'fonts');
+            doc.registerFont('Roboto', path.join(fontsDir, 'Roboto-Regular.ttf'));
+            doc.registerFont('Roboto-Bold', path.join(fontsDir, 'Roboto-Bold.ttf'));
+
+            const chunks: Buffer[] = [];
+            doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+
+            this.drawRegistryHeader(doc, input);
+            this.drawRegistryTable(doc, input);
+            this.drawRegistryFooter(doc, input);
+            this.addPageNumbers(doc);
+            doc.end();
+        });
+    }
+
+    private drawRegistryHeader(doc: PDFKit.PDFDocument, input: RegistryPdfInput) {
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+        doc.font('Roboto-Bold').fontSize(14).fillColor(INK);
+        doc.text('Реестр документов', left, doc.y, { width, align: 'center' });
+        doc.moveDown(0.2);
+
+        doc.font('Roboto').fontSize(9.5);
+        doc.text(REGISTRY_TITLES[input.kind], left, doc.y, { width, align: 'center' });
+        doc.moveDown(0.5);
+
+        const organisation = [input.companyName, input.companyBin && `БИН ${input.companyBin}`]
+            .filter(Boolean)
+            .join(', ');
+        if (organisation) {
+            doc.font('Roboto').fontSize(9);
+            doc.text(`Организация: ${organisation}`, left, doc.y, { width });
+        }
+
+        // Отбор печатается рядом с итогом: иначе по листу нельзя понять, за
+        // что эта сумма — за квартал, за одного контрагента или за галочки.
+        const filters: string[] = [];
+        filters.push(`Период: ${input.from ? this.formatDateNumeric(input.from) : '—'} — ${input.to ? this.formatDateNumeric(input.to) : '—'}`);
+        if (input.counterpartyName) filters.push(`Контрагент: ${input.counterpartyName}`);
+        if (input.status) filters.push(`Статус: ${REGISTRY_STATUS_LABELS[input.status]}`);
+        if (input.selectionOnly) filters.push('Отобранные строки журнала');
+        doc.font('Roboto').fontSize(9);
+        doc.text(filters.join(' · '), left, doc.y, { width });
+        doc.moveDown(0.6);
+    }
+
+    private drawRegistryTable(doc: PDFKit.PDFDocument, input: RegistryPdfInput) {
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        // Ширины подобраны под альбомный A4: суммы фиксированы, контрагенту
+        // отдаётся остаток — его название длиннее прочих полей.
+        const columns: { title: string; width: number; align?: 'left' | 'right' }[] = [
+            { title: '№', width: 26 },
+            { title: 'Номер', width: 96 },
+            { title: 'Дата', width: 60 },
+            { title: 'Контрагент', width: width - 26 - 96 - 60 - 92 - 80 - 80 - 80 - 62 },
+            { title: 'Сделка', width: 92 },
+            { title: 'Сумма', width: 80, align: 'right' },
+            { title: 'Оплачено', width: 80, align: 'right' },
+            { title: 'Остаток', width: 80, align: 'right' },
+            { title: 'Статус', width: 62 },
+        ];
+
+        const drawHead = () => {
+            const y = doc.y;
+            doc.font('Roboto-Bold').fontSize(8);
+            let x = left;
+            for (const column of columns) {
+                doc.text(column.title, x + 3, y + 3, {
+                    width: column.width - 6,
+                    align: column.align || 'left',
+                    lineBreak: false,
+                });
+                x += column.width;
+            }
+            const bottom = y + 15;
+            doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.7).strokeColor(INK).stroke();
+            doc.moveTo(left, bottom).lineTo(left + width, bottom).lineWidth(0.7).stroke();
+            doc.y = bottom + 3;
+        };
+
+        drawHead();
+
+        doc.font('Roboto').fontSize(8);
+        input.rows.forEach((row, index) => {
+            const cells = [
+                String(index + 1),
+                row.number,
+                this.formatDateNumeric(row.documentDate),
+                [row.counterpartyName || '—', row.counterpartyBin ? `БИН ${row.counterpartyBin}` : null]
+                    .filter(Boolean)
+                    .join('\n'),
+                row.orderNumbers.length ? row.orderNumbers.join(', ') : '—',
+                this.formatMoney(row.total),
+                this.formatMoney(row.amountPaid),
+                this.formatMoney(row.balanceDue),
+                REGISTRY_STATUS_LABELS[row.status],
+            ];
+
+            const height = Math.max(
+                ...cells.map((text, cellIndex) => doc.heightOfString(text, {
+                    width: columns[cellIndex].width - 6,
+                })),
+                12,
+            );
+
+            // Разрыв страницы до отрисовки строки — иначе строка разрежется
+            // пополам между листами.
+            if (doc.y + height + 6 > doc.page.height - doc.page.margins.bottom - 40) {
+                doc.addPage();
+                drawHead();
+                doc.font('Roboto').fontSize(8);
+            }
+
+            const y = doc.y;
+            let x = left;
+            cells.forEach((text, cellIndex) => {
+                doc.text(text, x + 3, y, {
+                    width: columns[cellIndex].width - 6,
+                    align: columns[cellIndex].align || 'left',
+                });
+                x += columns[cellIndex].width;
+            });
+            doc.y = y + height + 4;
+            doc.moveTo(left, doc.y - 2).lineTo(left + width, doc.y - 2)
+                .lineWidth(0.3).strokeColor('#999999').stroke();
+        });
+
+        if (!input.rows.length) {
+            doc.font('Roboto').fontSize(9);
+            doc.text('За выбранный период документов нет', left, doc.y + 6, { width, align: 'center' });
+            doc.moveDown(1);
+        }
+    }
+
+    private drawRegistryFooter(doc: PDFKit.PDFDocument, input: RegistryPdfInput) {
+        const left = doc.page.margins.left;
+        const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+        doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(0.7).strokeColor(INK).stroke();
+        doc.y += 5;
+        doc.font('Roboto-Bold').fontSize(9);
+        doc.text(
+            `Документов: ${input.rows.length}    Всего: ${this.formatMoney(input.totals.amount)}    `
+            + `Оплачено: ${this.formatMoney(input.totals.paid)}    Долг: ${this.formatMoney(input.totals.due)}`,
+            left,
+            doc.y,
+            { width, align: 'right' },
+        );
+
+        if (input.truncated) {
+            doc.moveDown(0.4);
+            doc.font('Roboto').fontSize(8);
+            doc.text(
+                `Показаны первые ${input.rows.length} документов. Сузьте период, чтобы реестр поместился целиком.`,
+                left,
+                doc.y,
+                { width },
+            );
+        }
+
+        doc.moveDown(0.6);
+        doc.font('Roboto').fontSize(8);
+        doc.text(
+            `Отменённые документы в итоги не входят. Сформировано ${this.formatDateNumeric(input.printedAt)}.`,
+            left,
+            doc.y,
+            { width },
+        );
     }
 
     private drawReconciliationHeader(

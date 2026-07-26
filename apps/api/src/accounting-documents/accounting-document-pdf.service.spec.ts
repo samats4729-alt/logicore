@@ -8,6 +8,8 @@ import {
 import {
     AccountingDocumentPdfService,
     InvoicePdfDocument,
+    RegistryPdfInput,
+    RegistryPdfRow,
 } from './accounting-document-pdf.service';
 
 const sampleDocument = (): InvoicePdfDocument => ({
@@ -256,5 +258,118 @@ describe('AccountingDocumentPdfService', () => {
 
         expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
         expect(buffer.length).toBeGreaterThan(20_000);
+    });
+
+    // T-15: «Печать → Реестр документов» — журнал за период на бумаге.
+    // Итог на листе обязан совпадать с итогом на экране, а отменённые
+    // документы в него не входят: иначе бухгалтер сверяет разные суммы.
+    describe('реестр документов', () => {
+        const registryRow = (
+            number: string,
+            status: AccountingDocumentStatus,
+            total: string,
+            paid: string,
+        ): RegistryPdfRow => ({
+            number,
+            documentDate: new Date('2026-06-15'),
+            status,
+            counterpartyName: 'ТОО «Компания Эврика»',
+            counterpartyBin: '120140015907',
+            orderNumbers: ['AB00003597'],
+            total: new Prisma.Decimal(total),
+            amountPaid: new Prisma.Decimal(paid),
+            balanceDue: new Prisma.Decimal(total).minus(new Prisma.Decimal(paid)),
+        });
+
+        const sampleRegistry = (): RegistryPdfInput => ({
+            kind: 'OUTGOING_INVOICES',
+            companyName: 'ТОО «Alfa Business Solutions»',
+            companyBin: '100340000596',
+            counterpartyName: null,
+            status: null,
+            from: new Date('2026-06-01'),
+            to: new Date('2026-06-30'),
+            selectionOnly: false,
+            truncated: false,
+            printedAt: new Date('2026-07-26'),
+            rows: [
+                registryRow('СЧ-2026-000619', AccountingDocumentStatus.POSTED, '100000.00', '40000.00'),
+                registryRow('СЧ-2026-000620', AccountingDocumentStatus.DRAFT, '50000.00', '0.00'),
+            ],
+            totals: {
+                amount: new Prisma.Decimal('150000.00'),
+                paid: new Prisma.Decimal('40000.00'),
+                due: new Prisma.Decimal('110000.00'),
+            },
+        });
+
+        const printedStrings = async (input: RegistryPdfInput) => {
+            const printed: string[] = [];
+            const proto = (PDFDocument as any).prototype;
+            const originalText = proto.text;
+            proto.text = function (this: any, value: unknown, ...rest: unknown[]) {
+                printed.push(String(value));
+                return originalText.call(this, value, ...rest);
+            };
+            try {
+                await service.generateRegistryPdf(input);
+            } finally {
+                proto.text = originalText;
+            }
+            return printed;
+        };
+
+        it('создаёт настоящий PDF реестра', async () => {
+            const buffer = await service.generateRegistryPdf(sampleRegistry());
+
+            expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+            expect(buffer.length).toBeGreaterThan(5_000);
+        });
+
+        it('печатает строки журнала и итог по выборке', async () => {
+            const printed = await printedStrings(sampleRegistry());
+
+            expect(printed).toContain('Реестр документов');
+            expect(printed).toContain('Счета на оплату, исходящие');
+            expect(printed).toContain('СЧ-2026-000619');
+            expect(printed).toContain('СЧ-2026-000620');
+            expect(printed).toContain('AB00003597');
+            expect(printed).toContain('Черновик');
+            expect(printed).toContain('Проведён');
+            expect(printed.some((line) => line.includes('Всего: 150 000,00'))).toBe(true);
+            expect(printed.some((line) => line.includes('Долг: 110 000,00'))).toBe(true);
+        });
+
+        it('называет отбор, по которому собран лист', async () => {
+            const printed = await printedStrings({
+                ...sampleRegistry(),
+                counterpartyName: 'ТОО «Компания Эврика»',
+                status: AccountingDocumentStatus.POSTED,
+                selectionOnly: true,
+            });
+
+            const filters = printed.find((line) => line.startsWith('Период:')) || '';
+            expect(filters).toContain('01.06.2026');
+            expect(filters).toContain('30.06.2026');
+            expect(filters).toContain('Контрагент: ТОО «Компания Эврика»');
+            expect(filters).toContain('Статус: Проведён');
+            expect(filters).toContain('Отобранные строки журнала');
+        });
+
+        it('пустой период печатается листом без строк, а не ошибкой', async () => {
+            const printed = await printedStrings({ ...sampleRegistry(), rows: [], totals: {
+                amount: new Prisma.Decimal(0),
+                paid: new Prisma.Decimal(0),
+                due: new Prisma.Decimal(0),
+            } });
+
+            expect(printed).toContain('За выбранный период документов нет');
+        });
+
+        it('предупреждает, когда выборка упёрлась в потолок строк', async () => {
+            const printed = await printedStrings({ ...sampleRegistry(), truncated: true });
+
+            expect(printed.some((line) => line.includes('Сузьте период'))).toBe(true);
+        });
     });
 });
