@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionStatus } from '@prisma/client';
+import { kzStartOfMonth } from '../common/utils/business-date';
 
 const SETTING_ENABLED = 'billing_enabled';
 const SETTING_TRIAL_DAYS = 'billing_trial_days';
@@ -204,9 +205,9 @@ export class BillingService {
         const limits = await this.getPlanLimits(companyId);
         if (!limits?.maxOrdersPerMonth) return;
 
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        monthStart.setHours(0, 0, 0, 0);
+        // Месяц считается по Казахстану: иначе ночью первого числа лимит
+        // ещё не обнулялся и заявку создать было нельзя.
+        const monthStart = kzStartOfMonth();
 
         const count = await this.prisma.order.count({
             where: { customerCompanyId: companyId, createdAt: { gte: monthStart } },

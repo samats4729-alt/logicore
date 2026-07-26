@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinanceCalculatorService } from '../accounting/services/finance-calculator.service';
 import { D, Money, ZERO, money, roundMoney, toNum } from '../common/utils/money';
+import { kzCurrentMonth } from '../common/utils/business-date';
 
 @Injectable()
 export class PayrollService {
@@ -113,7 +114,7 @@ export class PayrollService {
             }
 
             const amount = roundMoney(base.times(D(scheme.percentValue)).div(100));
-            const periodMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+            const periodMonth = kzCurrentMonth(); // 'YYYY-MM'
 
             // Защита от двойного начисления по уникальному индексу @@unique([orderId, userId, kind]).
             // Если начисление уже есть — заявку пересчитали (изменилась цена/маржа) или
@@ -149,7 +150,7 @@ export class PayrollService {
     }
 
     async ensureMonthlyAccruals(companyId: string, userId: string, months: string[]) {
-        const nowStr = new Date().toISOString().slice(0, 7);
+        const nowStr = kzCurrentMonth();
         const filteredMonths = months.filter(m => m <= nowStr);
 
         for (const periodMonth of filteredMonths) {

@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { D, ZERO, toNum } from '../common/utils/money';
+import { kzDaysSince, kzToday } from '../common/utils/business-date';
 
 /** Сколько строк показывать в виджете; счётчик считается по всей выборке. */
 const PREVIEW_LIMIT = 5;
@@ -198,14 +199,15 @@ export class PendingWorkService {
         };
     }
 
-    /** Начало сегодняшнего дня: срок оплаты хранится датой, без времени. */
+    /**
+     * Сегодня по времени Казахстана, а не сервера: иначе с полуночи до
+     * 05:00 счёт со сроком «сегодня» уже числился просроченным.
+     */
     private today(): Date {
-        const now = new Date();
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        return kzToday();
     }
 
     private daysSince(date: Date): number {
-        const diff = this.today().getTime() - new Date(date).getTime();
-        return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)));
+        return kzDaysSince(date);
     }
 }
