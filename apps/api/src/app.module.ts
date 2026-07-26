@@ -34,6 +34,7 @@ import { GeoModule } from './geo/geo.module';
 import { AdminStatsModule } from './admin-stats/admin-stats.module';
 import { IdentityModule } from './identity/identity.module';
 import { AccountingDocumentsModule } from './accounting-documents/accounting-documents.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
     imports: [
@@ -67,6 +68,7 @@ import { AccountingDocumentsModule } from './accounting-documents/accounting-doc
         ExternalCompaniesModule,
         AccountingModule,
         AccountingDocumentsModule,
+        ReportsModule,
         EmailModule,
         InvoiceModule,
         AssistantModule,
