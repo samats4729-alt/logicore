@@ -22,6 +22,7 @@ import { AccountingDocumentsService } from './accounting-documents.service';
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
 import { StampImageService } from '../common/services/stamp-image.service';
 import { PaymentAllocationService } from './payment-allocation.service';
+import { PendingWorkService } from './pending-work.service';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import {
     AccountingDocumentListQueryDto,
@@ -68,6 +69,7 @@ export class AccountingDocumentsController {
         private readonly pdf: AccountingDocumentPdfService,
         private readonly stamps: StampImageService,
         private readonly allocations: PaymentAllocationService,
+        private readonly pendingWork: PendingWorkService,
         private readonly audit: AuditService,
     ) {}
 
@@ -129,6 +131,17 @@ export class AccountingDocumentsController {
             VIEW_ROLES,
         );
         return this.documents.list(companyId, query);
+    }
+
+    // Объявлено до `:id`, иначе путь съедается параметром.
+    @Get('pending-work')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({
+        summary: 'Незакрытые хвосты: рейсы без акта, акты без счёта, просроченные счета',
+        description: 'Данные для виджета «Требует оформления» на дашборде.',
+    })
+    getPendingWork(@Request() req: any) {
+        return this.pendingWork.getPendingWork(req.user.companyId);
     }
 
     // Объявлено до `:id`, иначе путь съедается параметром.

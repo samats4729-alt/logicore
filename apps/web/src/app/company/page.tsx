@@ -24,6 +24,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { STATUS_LABELS } from '@/components/ui/StatusPill';
+import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
 import dayjs from 'dayjs';
 
 // ==================== Типы ====================
@@ -98,6 +99,7 @@ const BLOCKS_LS_KEY = 'lc_dashboard_hidden_blocks';
 const ALL_BLOCKS = [
     { key: 'activity', label: 'Активность' },
     { key: 'debts', label: 'Задолженность' },
+    { key: 'pendingWork', label: 'Требует оформления' },
     { key: 'events', label: 'Уведомления' },
 ];
 
@@ -379,6 +381,9 @@ export default function CompanyDashboard() {
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
+                {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ (только администратор компании) ===== */}
+                {isOwner && show('pendingWork') && <PendingWorkCard />}
+
                 {/* ===== ЗАДОЛЖЕННОСТЬ (только администратор компании) ===== */}
                 {isOwner && show('debts') && debtsAvailable && (
                     <div className="lc-card" style={{ padding: '18px 20px' }}>

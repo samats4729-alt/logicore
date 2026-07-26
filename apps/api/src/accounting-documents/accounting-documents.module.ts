@@ -11,6 +11,7 @@ import { AccountingDocumentPdfService } from './accounting-document-pdf.service'
 import { PublicAccountingDocumentController } from './public-accounting-document.controller';
 import { StampImageService } from '../common/services/stamp-image.service';
 import { PaymentAllocationModule } from './payment-allocation.module';
+import { PendingWorkService } from './pending-work.service';
 import { CompanyVerificationModule } from '../company/company-verification.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { CompanyVerificationModule } from '../company/company-verification.modul
         AccountingDocumentsService,
         AccountingDocumentCalculatorService,
         AccountingDocumentPdfService,
+        PendingWorkService,
         StampImageService,
         { provide: RECONCILIATION_REPORTS, useExisting: FinancialReportsService },
     ],
