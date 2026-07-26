@@ -30,6 +30,7 @@ import StatusPill from '@/components/ui/StatusPill';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
+import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
 import {
     accountingDocumentHref,
     applyAllocations,
@@ -152,6 +153,8 @@ export default function OrderDetailPage() {
     const [uploadingDoc, setUploadingDoc] = useState(false);
     const [actLoading, setActLoading] = useState(false);
     const [invoiceLoading, setInvoiceLoading] = useState(false);
+    /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
+    const [documentChainKey, setDocumentChainKey] = useState(0);
     /** Разнесение платежа по счетам — суммы редактируются в окне платежа. */
     const [allocations, setAllocations] = useState<Record<string, number>>({});
 
@@ -644,6 +647,8 @@ export default function OrderDetailPage() {
             setAllocations({});
             setPaymentModalOpen(false);
             fetchData();
+            // Платёж разнесён по счетам — «Оплата» в цепочке документов устарела
+            setDocumentChainKey((key) => key + 1);
         } catch (err: any) {
             message.error(err.response?.data?.message || 'Ошибка сохранения платежа');
         } finally {
@@ -656,6 +661,7 @@ export default function OrderDetailPage() {
             await api.delete(`/accounting/payments/${id}`);
             message.success('Платеж удален');
             fetchData();
+            setDocumentChainKey((key) => key + 1);
         } catch (err: any) {
             message.error(err.response?.data?.message || 'Ошибка удаления платежа');
         }
@@ -1800,6 +1806,22 @@ export default function OrderDetailPage() {
                                             </Tooltip>
                                         </Space>
                                     </div>
+                                )}
+                                {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
+                                    <OrderDocumentChain
+                                        orderId={orderId}
+                                        orderNumber={order.orderNumber}
+                                        orderStatus={order.status}
+                                        onCreate={openOrCreateOrderDocument}
+                                        creating={
+                                            invoiceLoading
+                                                ? 'PAYMENT_INVOICE'
+                                                : actLoading
+                                                    ? 'SERVICE_ACT'
+                                                    : null
+                                        }
+                                        reloadKey={documentChainKey}
+                                    />
                                 )}
                                 {/* Условия и формы оплаты */}
                                 {(order.customerPaymentCondition || order.customerPaymentForm || order.driverPaymentCondition || order.driverPaymentForm) && (

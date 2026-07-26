@@ -13,6 +13,9 @@ export const STATUS_LABELS: Record<string, string> = {
     COMPLETED: 'Завершён',
     PROBLEM: 'Проблема',
     CANCELLED: 'Отменён',
+    // Статус бухгалтерского документа. «Черновик» и «Отменён» уже названы
+    // выше теми же словами, что в журнале 1С, — не дублируем.
+    POSTED: 'Проведён',
 };
 
 export const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
@@ -28,6 +31,7 @@ export const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
     COMPLETED: { bg: '#e7f8ef', fg: '#15803d' },
     PROBLEM: { bg: '#fee2e2', fg: '#dc2626' },
     CANCELLED: { bg: '#fdeaea', fg: '#b91c1c' },
+    POSTED: { bg: '#e7f8ef', fg: '#15803d' },
 };
 
 export default function StatusPill({ status }: { status: string }) {
