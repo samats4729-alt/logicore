@@ -30,7 +30,13 @@ import StatusPill from '@/components/ui/StatusPill';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
-import { applyAllocations, createAccountingDocument, fetchAccountingDocuments } from '@/lib/accounting-documents';
+import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
+import {
+    accountingDocumentHref,
+    applyAllocations,
+    findOrCreateOrderDocument,
+    type OrderChainDocumentType,
+} from '@/lib/accounting-documents';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -146,6 +152,9 @@ export default function OrderDetailPage() {
     const [documents, setDocuments] = useState<any[]>([]);
     const [uploadingDoc, setUploadingDoc] = useState(false);
     const [actLoading, setActLoading] = useState(false);
+    const [invoiceLoading, setInvoiceLoading] = useState(false);
+    /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
+    const [documentChainKey, setDocumentChainKey] = useState(0);
     /** Разнесение платежа по счетам — суммы редактируются в окне платежа. */
     const [allocations, setAllocations] = useState<Record<string, number>>({});
 
@@ -297,15 +306,16 @@ export default function OrderDetailPage() {
     const [activeRoutePointIndex, setActiveRoutePointIndex] = useState<number | null>(null);
 
     /**
-     * «Акт выполненных работ» на карточке заявки.
+     * «Ввод на основании» из карточки рейса: счёт на оплату и акт
+     * выполненных работ.
      *
-     * Раньше кнопка открывала страницу, которая считала акт из ТЕКУЩЕЙ
+     * Раньше акт открывался страницей, которая считала его из ТЕКУЩЕЙ
      * заявки: правка заявки задним числом меняла уже отданный контрагенту
-     * документ. Теперь акт — сохранённый документ со своим номером и
-     * снимком реквизитов. Если акт по рейсу уже есть, открываем его, а не
-     * плодим второй.
+     * документ. Теперь оба документа — сохранённые, со своим номером и
+     * снимком реквизитов. Если документ по рейсу уже есть, открываем его,
+     * а не плодим второй.
      */
-    const openOrCreateAct = async () => {
+    const openOrCreateOrderDocument = async (type: OrderChainDocumentType) => {
         // Заявку берём из data напрямую: одноимённая переменная объявлена
         // ниже по файлу, и опираться на неё отсюда было бы неочевидно.
         const current = data?.order;
@@ -314,45 +324,29 @@ export default function OrderDetailPage() {
             message.warning('У заявки не указана компания-заказчик');
             return;
         }
+        const isInvoice = type === 'PAYMENT_INVOICE';
+        const setLoading = isInvoice ? setInvoiceLoading : setActLoading;
         try {
-            setActLoading(true);
-            const existing = await fetchAccountingDocuments({
-                type: 'SERVICE_ACT',
+            setLoading(true);
+            const { document, created } = await findOrCreateOrderDocument(type, {
                 orderId,
-                limit: 1,
-            });
-            if (existing.data.length) {
-                router.push(`/company/accounting/acts/${existing.data[0].id}`);
-                return;
-            }
-
-            const amount = Number(current?.customerPrice || 0);
-            const created = await createAccountingDocument({
-                type: 'SERVICE_ACT',
-                direction: 'OUTGOING',
                 counterpartyId,
-                documentDate: dayjs().format('YYYY-MM-DD'),
-                lines: [{
-                    name: 'Транспортные услуги',
-                    quantity: '1',
-                    unit: 'усл',
-                    unitPrice: amount.toFixed(2),
-                    ...(current?.hasVat && Number(current?.vatRate) > 0
-                        ? {
-                            vatTreatment: 'STANDARD' as const,
-                            vatCalculation: 'INCLUDED' as const,
-                            vatRate: String(current.vatRate),
-                        }
-                        : {}),
-                    orderId,
-                }],
+                amount: Number(current?.customerPrice || 0),
+                hasVat: current?.hasVat,
+                vatRate: current?.vatRate,
             });
-            message.success(`Черновик акта № ${created.number} создан`);
-            router.push(`/company/accounting/acts/${created.id}`);
+            if (created) {
+                message.success(
+                    `Черновик ${isInvoice ? 'счёта' : 'акта'} № ${document.number} создан`,
+                );
+            }
+            router.push(accountingDocumentHref({ id: document.id, type }));
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось открыть акт');
+            message.error(
+                e.response?.data?.message || `Не удалось открыть ${isInvoice ? 'счёт' : 'акт'}`,
+            );
         } finally {
-            setActLoading(false);
+            setLoading(false);
         }
     };
 
@@ -653,6 +647,8 @@ export default function OrderDetailPage() {
             setAllocations({});
             setPaymentModalOpen(false);
             fetchData();
+            // Платёж разнесён по счетам — «Оплата» в цепочке документов устарела
+            setDocumentChainKey((key) => key + 1);
         } catch (err: any) {
             message.error(err.response?.data?.message || 'Ошибка сохранения платежа');
         } finally {
@@ -665,6 +661,7 @@ export default function OrderDetailPage() {
             await api.delete(`/accounting/payments/${id}`);
             message.success('Платеж удален');
             fetchData();
+            setDocumentChainKey((key) => key + 1);
         } catch (err: any) {
             message.error(err.response?.data?.message || 'Ошибка удаления платежа');
         }
@@ -1788,8 +1785,15 @@ export default function OrderDetailPage() {
                                             <Button
                                                 type="primary"
                                                 icon={<FileTextOutlined />}
+                                                loading={invoiceLoading}
+                                                onClick={() => openOrCreateOrderDocument('PAYMENT_INVOICE')}
+                                            >
+                                                Выставить счёт
+                                            </Button>
+                                            <Button
+                                                icon={<FileTextOutlined />}
                                                 loading={actLoading}
-                                                onClick={openOrCreateAct}
+                                                onClick={() => openOrCreateOrderDocument('SERVICE_ACT')}
                                             >
                                                 Акт выполненных работ
                                             </Button>
@@ -1802,6 +1806,22 @@ export default function OrderDetailPage() {
                                             </Tooltip>
                                         </Space>
                                     </div>
+                                )}
+                                {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
+                                    <OrderDocumentChain
+                                        orderId={orderId}
+                                        orderNumber={order.orderNumber}
+                                        orderStatus={order.status}
+                                        onCreate={openOrCreateOrderDocument}
+                                        creating={
+                                            invoiceLoading
+                                                ? 'PAYMENT_INVOICE'
+                                                : actLoading
+                                                    ? 'SERVICE_ACT'
+                                                    : null
+                                        }
+                                        reloadKey={documentChainKey}
+                                    />
                                 )}
                                 {/* Условия и формы оплаты */}
                                 {(order.customerPaymentCondition || order.customerPaymentForm || order.driverPaymentCondition || order.driverPaymentForm) && (

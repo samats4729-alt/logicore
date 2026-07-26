@@ -23,6 +23,7 @@ import {
     CheckOutlined,
     DownOutlined,
     DeleteOutlined,
+    FileTextOutlined,
     LinkOutlined,
     MoreOutlined,
     PlusOutlined,
@@ -36,10 +37,11 @@ import {
     ACCOUNTING_DOCUMENT_STATUS_LABELS,
     AccountingDocumentDetails,
     AccountingDocumentLine,
-    AccountingDocumentType,
     CompanyBankAccount,
     CreateAccountingDocumentLineInput,
+    accountingDocumentHref,
     cancelAccountingDocument,
+    createServiceActFromInvoice,
     deleteAccountingDocumentDraft,
     fetchAccountingDocument,
     fetchCompanyBankAccounts,
@@ -332,6 +334,26 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             if (closeAfter) router.push(kind.journalPath);
         } catch (e: any) {
             message.error(e.response?.data?.message || 'Не удалось провести документ');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * «Создать акт на основании» — строки и рейсы переносятся из счёта.
+     * Проведённый счёт уже у контрагента, и акт закрывает ровно его.
+     */
+    const createServiceAct = async () => {
+        if (!document) return;
+        try {
+            setSaving(true);
+            const { document: act, created } = await createServiceActFromInvoice(document);
+            message.success(created
+                ? `Черновик акта № ${act.number} создан`
+                : `По рейсу счёта уже есть акт № ${act.number}`);
+            router.push(accountingDocumentHref({ id: act.id, type: 'SERVICE_ACT' }));
+        } catch (e: any) {
+            message.error(e.response?.data?.message || e.message || 'Не удалось создать акт');
         } finally {
             setSaving(false);
         }
@@ -672,6 +694,19 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         trigger={['click']}
                         menu={{
                             items: [
+                                // «Ввод на основании» из 1С: акт закрывает то,
+                                // что выставлено счётом. У акта основания нет —
+                                // он сам конец цепочки.
+                                ...(type === 'PAYMENT_INVOICE' ? [
+                                    {
+                                        key: 'act',
+                                        icon: <FileTextOutlined />,
+                                        label: 'Создать акт на основании',
+                                        disabled: !canChange || document.status !== 'POSTED',
+                                        onClick: createServiceAct,
+                                    },
+                                    { type: 'divider' as const },
+                                ] : []),
                                 {
                                     key: 'link',
                                     icon: <LinkOutlined />,

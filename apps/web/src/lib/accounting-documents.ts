@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 
 /**
@@ -194,6 +195,141 @@ export async function createAccountingDocument(
 ): Promise<AccountingDocumentDetails> {
     const res = await api.post('/accounting-documents', input);
     return res.data;
+}
+
+/** Виды документов, которые выставляются по рейсу и образуют его цепочку. */
+export type OrderChainDocumentType = Extract<
+    AccountingDocumentType,
+    'PAYMENT_INVOICE' | 'SERVICE_ACT'
+>;
+
+/** Заявка как основание документа: из неё собирается строка черновика. */
+export interface OrderDocumentBasis {
+    orderId: string;
+    counterpartyId: string;
+    /** Сумма к выставлению — цена заказчика по заявке. */
+    amount: number;
+    hasVat?: boolean;
+    vatRate?: number | string | null;
+    serviceName?: string;
+}
+
+export interface OrderDocumentResult {
+    document: AccountingDocumentListItem | AccountingDocumentDetails;
+    /** false — документ по рейсу уже был, открываем его. */
+    created: boolean;
+}
+
+/**
+ * «Ввод на основании» из карточки рейса: открыть уже выставленный документ
+ * этого вида или создать черновик со строкой из заявки.
+ *
+ * Второй документ того же вида по одному рейсу не создаётся — иначе
+ * контрагент получит два счёта за одну перевозку. Отменённый документ
+ * основанием не считается: после отмены счёт выставляют заново.
+ */
+export async function findOrCreateOrderDocument(
+    type: OrderChainDocumentType,
+    basis: OrderDocumentBasis,
+): Promise<OrderDocumentResult> {
+    const existing = await fetchAccountingDocuments({ type, orderId: basis.orderId, limit: 20 });
+    const active = existing.data.find((document) => document.status !== 'CANCELLED');
+    if (active) return { document: active, created: false };
+
+    // НДС описывается тремя полями сразу — см. CreateAccountingDocumentLineInput.
+    const vat = basis.hasVat && Number(basis.vatRate) > 0
+        ? {
+            vatTreatment: 'STANDARD' as const,
+            vatCalculation: 'INCLUDED' as const,
+            vatRate: String(basis.vatRate),
+        }
+        : {};
+
+    const document = await createAccountingDocument({
+        type,
+        direction: 'OUTGOING',
+        counterpartyId: basis.counterpartyId,
+        documentDate: dayjs().format('YYYY-MM-DD'),
+        lines: [{
+            name: basis.serviceName || 'Транспортные услуги',
+            quantity: '1',
+            unit: 'усл',
+            unitPrice: basis.amount.toFixed(2),
+            ...vat,
+            orderId: basis.orderId,
+        }],
+    });
+    return { document, created: true };
+}
+
+/**
+ * «Создать акт на основании счёта» — вход из документа в документ.
+ *
+ * Строки и рейсы переносятся из счёта: акт закрывает ровно то, что
+ * выставлено, и бухгалтеру не приходится набирать услуги второй раз.
+ * Если акт по рейсу счёта уже есть, открываем его — иначе по одной
+ * перевозке уедут два акта.
+ */
+export async function createServiceActFromInvoice(
+    invoice: AccountingDocumentDetails,
+): Promise<OrderDocumentResult> {
+    const counterpartyId = invoice.counterparty?.id;
+    if (!counterpartyId) throw new Error('У счёта не указан контрагент');
+
+    const orderIds = Array.from(new Set((invoice.orders ?? []).map((link) => link.order.id)));
+    for (const orderId of orderIds) {
+        const existing = await fetchAccountingDocuments({
+            type: 'SERVICE_ACT',
+            orderId,
+            limit: 20,
+        });
+        const active = existing.data.find((document) => document.status !== 'CANCELLED');
+        if (active) return { document: active, created: false };
+    }
+
+    const document = await createAccountingDocument({
+        type: 'SERVICE_ACT',
+        direction: invoice.direction,
+        counterpartyId,
+        documentDate: dayjs().format('YYYY-MM-DD'),
+        note: `Основание: счёт № ${invoice.number}`,
+        lines: invoice.lines.map((line) => ({
+            ...(line.serviceCode ? { serviceCode: line.serviceCode } : {}),
+            name: line.name,
+            ...(line.description ? { description: line.description } : {}),
+            quantity: String(line.quantity ?? 1),
+            unit: line.unit?.trim() || 'усл',
+            unitPrice: (line.unitPrice ?? 0).toFixed(2),
+            // Набор полей НДС повторяет карточку документа: API отклоняет
+            // ставку без STANDARD и STANDARD без ставки.
+            ...(line.vatTreatment === 'STANDARD' && Number(line.vatRate) > 0
+                ? {
+                    vatTreatment: 'STANDARD' as const,
+                    vatCalculation: line.vatCalculation,
+                    vatRate: String(line.vatRate),
+                }
+                : {}),
+            ...(line.orderId ? { orderId: line.orderId } : {}),
+        })),
+        orderIds,
+    });
+    return { document, created: true };
+}
+
+/**
+ * Разделы веба с карточкой документа. Акта сверки здесь нет: он живёт на
+ * своей странице `accounting/reconciliation-act` и с рейсом не связан.
+ */
+export const ACCOUNTING_DOCUMENT_ROUTES: Record<OrderChainDocumentType, string> = {
+    PAYMENT_INVOICE: '/company/accounting/invoices',
+    SERVICE_ACT: '/company/accounting/acts',
+};
+
+export function accountingDocumentHref(document: {
+    id: string;
+    type: OrderChainDocumentType;
+}): string {
+    return `${ACCOUNTING_DOCUMENT_ROUTES[document.type]}/${document.id}`;
 }
 
 /**

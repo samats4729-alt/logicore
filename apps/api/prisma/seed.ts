@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { PrismaClient, UserRole } from '@prisma/client';
+import { CompanyVerificationStatus, PrismaClient, UserRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as bcrypt from 'bcryptjs';
@@ -71,7 +71,11 @@ async function main() {
 
     // Тестовые данные (компания/водитель/заказчик/заказ) создаются только при SEED_TEST_DATA=true
     if (process.env.SEED_TEST_DATA === 'true') {
-    // Тестовая компания
+    // Тестовая компания — сразу подтверждённая.
+    // Гейт CompanyVerifiedGuard не пускает компанию в DRAFT создавать заявки
+    // и бухгалтерские документы, а интеграционные тесты работают как раз от
+    // её логиста. В production существующие компании получили VERIFIED
+    // миграцией, но чистая база собирается только из миграций и сида.
     let testCompany = await prisma.company.findFirst({
         where: { bin: '123456789012' }
     });
@@ -83,6 +87,17 @@ async function main() {
                 address: 'г. Алматы, ул. Тестовая, 1',
                 phone: '+77271234567',
                 email: 'info@test.kz',
+                verificationStatus: CompanyVerificationStatus.VERIFIED,
+                verifiedAt: new Date(),
+            },
+        });
+    } else if (testCompany.verificationStatus !== CompanyVerificationStatus.VERIFIED) {
+        // База осталась от прогона до появления верификации
+        testCompany = await prisma.company.update({
+            where: { id: testCompany.id },
+            data: {
+                verificationStatus: CompanyVerificationStatus.VERIFIED,
+                verifiedAt: new Date(),
             },
         });
     }
