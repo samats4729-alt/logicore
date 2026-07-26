@@ -19,6 +19,38 @@ export class LoginEmailDto {
     deviceId: string;
 }
 
+/**
+ * Регистрация личного профиля. Полей компании здесь намеренно нет:
+ * организация создаётся отдельно и проходит проверку документов.
+ */
+export class RegisterUserDto {
+    @ApiProperty({ description: 'Email', example: 'user@example.kz' })
+    @IsEmail()
+    @IsNotEmpty()
+    email: string;
+
+    @ApiProperty({ description: 'Пароль', example: 'password123' })
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(6)
+    password: string;
+
+    @ApiProperty({ description: 'Имя', example: 'Иван' })
+    @IsString()
+    @IsNotEmpty()
+    firstName: string;
+
+    @ApiProperty({ description: 'Фамилия', example: 'Иванов' })
+    @IsString()
+    @IsNotEmpty()
+    lastName: string;
+
+    @ApiProperty({ description: 'Телефон', example: '+77011234567' })
+    @IsString()
+    @IsNotEmpty()
+    phone: string;
+}
+
 export class RegisterCompanyDto {
     @ApiProperty({ description: 'Название компании', example: 'ТОО КазЛогистик' })
     @IsString()

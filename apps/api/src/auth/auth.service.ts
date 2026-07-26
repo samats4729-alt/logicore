@@ -345,6 +345,84 @@ export class AuthService {
     /**
      * Регистрация новой компании-клиента или экспедитора
      */
+    /**
+     * Регистрация ЛИЧНОГО профиля — без компании.
+     *
+     * Компания создаётся отдельно, уже из кабинета, и проходит проверку
+     * документов. Раньше регистрация сразу заводила компанию по введённому
+     * БИН, а БИН в РК — публичные данные: любой мог зарегистрировать
+     * организацию с чужим БИН и выставлять счета от её имени.
+     */
+    async registerUser(data: {
+        email: string;
+        password: string;
+        firstName: string;
+        lastName: string;
+        phone: string;
+    }) {
+        const existingUser = await this.prisma.user.findUnique({ where: { email: data.email } });
+        if (existingUser) {
+            throw new BadRequestException('Email уже зарегистрирован');
+        }
+        const existingPhone = await this.prisma.user.findFirst({ where: { phone: data.phone } });
+        if (existingPhone) {
+            throw new BadRequestException('Телефон уже зарегистрирован');
+        }
+
+        const passwordHash = await bcrypt.hash(data.password, 12);
+        const user = await this.prisma.user.create({
+            data: {
+                email: data.email,
+                phone: data.phone,
+                passwordHash,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                // Роль владельца организации он получит, создав её. Пока
+                // компании нет, роль ни на что не влияет: все рабочие
+                // разделы закрыты гейтом подтверждения.
+                role: UserRole.COMPANY_ADMIN,
+            },
+        });
+
+        // Токен без companyId — пользователь ещё не в организации.
+        const accessToken = await this.issueSession(user.id, {
+            sub: user.id,
+            email: user.email,
+            role: user.role,
+            companyId: null,
+        }, 'web');
+
+        const { passwordHash: _hidden, ...safeUser } = user;
+        return { user: safeUser, accessToken };
+    }
+
+    /**
+     * Подписывает токен и регистрирует сессию.
+     *
+     * Без записи сессии JwtStrategy отвергает даже только что выданный
+     * токен («Сессия недействительна»), поэтому любой путь, выдающий
+     * токен, обязан пройти здесь.
+     */
+    async issueSession(userId: string, payload: Record<string, unknown>, deviceId: string) {
+        const accessToken = this.jwtService.sign(payload);
+        const expiresIn = 60 * 60 * 24 * 7;
+
+        try {
+            await this.redisService.setSession(userId, deviceId, accessToken, expiresIn);
+        } catch (e) {
+            console.warn('Redis setSession failed (ignoring):', e);
+        }
+        await this.prisma.session.create({
+            data: {
+                userId,
+                deviceId,
+                token: accessToken,
+                expiresAt: new Date(Date.now() + expiresIn * 1000),
+            },
+        });
+        return accessToken;
+    }
+
     async registerCompany(data: {
         companyName: string;
         companyType: 'CUSTOMER' | 'FORWARDER';

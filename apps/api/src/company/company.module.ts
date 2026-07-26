@@ -1,8 +1,9 @@
 import { OrdersModule } from '../orders/orders.module';
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BillingModule } from '../billing/billing.module';
 import { CompanyController } from './company.controller';
 import { CompanyVerificationController } from './company-verification.controller';
+import { MyCompanyController } from './my-company.controller';
 import { CompanyService } from './company.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CompanyDriversService } from './services/company-drivers.service';
@@ -12,11 +13,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EmailModule } from '../email/email.module';
 import { IdentityModule } from '../identity/identity.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
     imports: [
         PrismaModule,
         CompanyVerificationModule,
+        forwardRef(() => AuthModule),
         OrdersModule,
         EmailModule,
         BillingModule,
@@ -38,7 +41,7 @@ import { IdentityModule } from '../identity/identity.module';
             inject: [ConfigService],
         }),
     ],
-    controllers: [CompanyController, CompanyVerificationController],
+    controllers: [CompanyController, CompanyVerificationController, MyCompanyController],
     providers: [CompanyService, CompanyDriversService, CompanyTrackingService],
     // Ре-экспорт модулем, а не провайдером: экспортировать чужой
     // провайдер Nest не даёт.

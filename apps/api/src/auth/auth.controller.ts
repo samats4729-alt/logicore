@@ -2,7 +2,7 @@ import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, UseGuards, Re
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { LoginEmailDto, RegisterCompanyDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
+import { LoginEmailDto, RegisterCompanyDto, RegisterUserDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Response } from 'express';
 import { clearAuthCookie, setAuthCookie } from './auth-cookie';
@@ -75,6 +75,19 @@ export class AuthController {
     }
 
     // ==================== Регистрация компании ====================
+
+    @Post('register')
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({
+        summary: 'Регистрация личного профиля',
+        description: 'Организация создаётся отдельно из кабинета и проходит проверку документов.',
+    })
+    async register(@Body() dto: RegisterUserDto, @Res({ passthrough: true }) response: Response) {
+        const result = await this.authService.registerUser(dto);
+        setAuthCookie(response, result.accessToken);
+        return result;
+    }
 
     @Post('register-company')
     @Throttle({ default: { limit: 5, ttl: 60000 } })
