@@ -52,6 +52,20 @@ enum DocumentType {
   ACT // Акт
   INVOICE // Счет
   OTHER // Прочее
+
+  // Пакет для подтверждения компании (практика РК)
+  COMPANY_REGISTRATION // Справка о гос. регистрации юрлица с eGov
+  DIRECTOR_APPOINTMENT // Приказ (решение) о назначении первого руководителя
+  DIRECTOR_ID // Удостоверение личности руководителя
+}
+
+/// Жизненный цикл подтверждения компании владельцем платформы.
+/// Работать (создавать заявки и документы) может только VERIFIED.
+enum CompanyVerificationStatus {
+  DRAFT // Создана, документы ещё не поданы
+  PENDING // Подана на проверку, ждёт решения владельца платформы
+  VERIFIED // Подтверждена — компания может работать
+  REJECTED // Отклонена, причина в rejectionReason; можно подать заново
 }
 
 enum CompanyType {
@@ -91,22 +105,24 @@ enum AffiliationType {
 // ==================== MODELS ====================
 
 model User {
-  id           String   @id @default(cuid())
-  email        String?  @unique
-  googleId     String?  @unique // Google OAuth ID
-  phone        String
-  passwordHash String? // null для водителей (SMS auth)
-  firstName    String
-  lastName     String
-  middleName   String?
-  role         UserRole
-  position     String? // Должность/роль
-  avatarPath   String? // Фото профиля (S3-ключ или локальный путь)
-  permissions  String[] @default([])
-  isActive     Boolean  @default(true)
-  isTrackable  Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String    @id @default(cuid())
+  /// Компании, которые этот пользователь подтвердил как админ платформы.
+  verifiedCompanies Company[] @relation("VerifiedCompanies")
+  email             String?   @unique
+  googleId          String?   @unique // Google OAuth ID
+  phone             String
+  passwordHash      String? // null для водителей (SMS auth)
+  firstName         String
+  lastName          String
+  middleName        String?
+  role              UserRole
+  position          String? // Должность/роль
+  avatarPath        String? // Фото профиля (S3-ключ или локальный путь)
+  permissions       String[]  @default([])
+  isActive          Boolean   @default(true)
+  isTrackable       Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   // Relations
   sessions                     Session[]
@@ -271,8 +287,19 @@ model Company {
   isOurCompany   Boolean      @default(false) // true = LogComp
   isExternal     Boolean      @default(false) // Внешняя компания (справочник)
   isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+
+  // Подтверждение компании владельцем платформы. БИН в РК — публичные
+  // данные, поэтому сам по себе он ничего не доказывает: компания
+  // допускается к работе только после проверки документов человеком.
+  verificationStatus      CompanyVerificationStatus @default(DRAFT)
+  verificationSubmittedAt DateTime?
+  verifiedAt              DateTime?
+  verifiedById            String?
+  verifiedBy              User?                     @relation("VerifiedCompanies", fields: [verifiedById], references: [id], onDelete: SetNull)
+  rejectionReason         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Настройки видимости для менеджеров (LOGISTICIAN) этой компании
   managersSeeOwnOrdersOnly   Boolean @default(true) // менеджер видит только свои заявки
@@ -332,6 +359,7 @@ model Company {
   stockMoves                      StockMove[]                   @relation("CompanyStockMoves")
 
   @@index([bin])
+  @@index([verificationStatus])
 }
 
 // ... existing models ...

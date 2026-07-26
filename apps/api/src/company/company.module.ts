@@ -6,6 +6,8 @@ import { CompanyService } from './company.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CompanyDriversService } from './services/company-drivers.service';
 import { CompanyTrackingService } from './services/company-tracking.service';
+import { CompanyVerificationService } from './services/company-verification.service';
+import { CompanyVerifiedGuard } from './guards/company-verified.guard';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EmailModule } from '../email/email.module';
@@ -36,7 +38,7 @@ import { IdentityModule } from '../identity/identity.module';
         }),
     ],
     controllers: [CompanyController],
-    providers: [CompanyService, CompanyDriversService, CompanyTrackingService],
-    exports: [CompanyService, CompanyDriversService, CompanyTrackingService],
+    providers: [CompanyService, CompanyDriversService, CompanyTrackingService, CompanyVerificationService, CompanyVerifiedGuard],
+    exports: [CompanyService, CompanyDriversService, CompanyTrackingService, CompanyVerificationService, CompanyVerifiedGuard],
 })
 export class CompanyModule { }
