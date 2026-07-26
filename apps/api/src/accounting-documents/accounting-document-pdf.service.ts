@@ -138,6 +138,9 @@ interface PartySnapshot {
     bankName?: string | null;
     bankBic?: string | null;
     kbe?: string | null;
+    vatCertificateSeries?: string | null;
+    vatCertificateNumber?: string | null;
+    vatCertificateDate?: string | Date | null;
 }
 
 @Injectable()
@@ -198,6 +201,11 @@ export class AccountingDocumentPdfService {
 
             const drawDraftWatermark = () => {
                 if (document.status !== AccountingDocumentStatus.DRAFT) return;
+                // doc.save()/restore() возвращают цвет и поворот, но не
+                // курсор текста: после надписи посреди листа он остаётся
+                // там же, и весь документ печатался с середины страницы.
+                const cursorX = doc.x;
+                const cursorY = doc.y;
                 doc.save();
                 doc.opacity(0.07);
                 doc.font('Roboto-Bold').fontSize(54).fillColor('#6b7280');
@@ -208,6 +216,8 @@ export class AccountingDocumentPdfService {
                     lineBreak: false,
                 });
                 doc.restore();
+                doc.x = cursorX;
+                doc.y = cursorY;
             };
             doc.on('pageAdded', drawDraftWatermark);
             drawDraftWatermark();
@@ -262,6 +272,9 @@ export class AccountingDocumentPdfService {
 
             const drawDraftWatermark = () => {
                 if (document.status !== AccountingDocumentStatus.DRAFT) return;
+                // См. выше: курсор текста надо вернуть руками.
+                const cursorX = doc.x;
+                const cursorY = doc.y;
                 doc.save();
                 doc.opacity(0.07);
                 doc.font('Roboto-Bold').fontSize(58).fillColor('#6b7280');
@@ -272,6 +285,8 @@ export class AccountingDocumentPdfService {
                     lineBreak: false,
                 });
                 doc.restore();
+                doc.x = cursorX;
+                doc.y = cursorY;
             };
             doc.on('pageAdded', drawDraftWatermark);
             drawDraftWatermark();
@@ -332,6 +347,9 @@ export class AccountingDocumentPdfService {
 
             const drawDraftWatermark = () => {
                 if (document.status !== AccountingDocumentStatus.DRAFT) return;
+                // См. выше: курсор текста надо вернуть руками.
+                const cursorX = doc.x;
+                const cursorY = doc.y;
                 doc.save();
                 doc.opacity(0.07);
                 doc.font('Roboto-Bold').fontSize(58).fillColor('#6b7280');
@@ -342,6 +360,8 @@ export class AccountingDocumentPdfService {
                     lineBreak: false,
                 });
                 doc.restore();
+                doc.x = cursorX;
+                doc.y = cursorY;
             };
             doc.on('pageAdded', drawDraftWatermark);
             drawDraftWatermark();
@@ -757,7 +777,7 @@ export class AccountingDocumentPdfService {
             left,
             y,
             blockWidth,
-            this.stringValue(issuerSignatory.position) || 'директор',
+            this.stringValue(issuerSignatory.position) || 'Руководитель',
             this.stringValue(issuerSignatory.name) || issuer.directorName || '',
         );
         this.actSignatureBlock(
@@ -766,7 +786,7 @@ export class AccountingDocumentPdfService {
             left + blockWidth + gap,
             y,
             blockWidth,
-            this.stringValue(recipientSignatory.position) || 'должность',
+            this.stringValue(recipientSignatory.position) || 'Руководитель',
             this.stringValue(recipientSignatory.name) || recipient.directorName || '',
         );
         doc.font('Roboto-Bold').fontSize(7).text('М.П.', left + 5, y + 47);
@@ -1039,7 +1059,7 @@ export class AccountingDocumentPdfService {
             left,
             y,
             blockWidth,
-            this.stringValue(issuerSignatory.position) || 'директор',
+            this.stringValue(issuerSignatory.position) || 'Руководитель',
             this.stringValue(issuerSignatory.name) || issuer.directorName || '',
         );
         this.actSignatureBlock(
@@ -1048,7 +1068,7 @@ export class AccountingDocumentPdfService {
             left + blockWidth + gap,
             y,
             blockWidth,
-            this.stringValue(recipientSignatory.position) || 'должность',
+            this.stringValue(recipientSignatory.position) || 'Руководитель',
             this.stringValue(recipientSignatory.name) || recipient.directorName || '',
         );
         doc.font('Roboto-Bold').fontSize(7).text('М.П.', left + 5, y + 47);
@@ -1190,7 +1210,18 @@ export class AccountingDocumentPdfService {
             bankRightW,
             43,
         );
-        doc.y = bankY + bankH + 18;
+        doc.y = bankY + bankH + 6;
+
+        // Свидетельство о постановке на учёт по НДС — обязательный реквизит
+        // счёта у плательщика НДС. Нет номера — компания на учёте не стоит,
+        // и строку печатать не нужно.
+        const vatCertificate = this.vatCertificateLine(issuer);
+        if (vatCertificate) {
+            doc.font('Roboto').fontSize(8).fillColor(INK);
+            doc.text(vatCertificate, left, doc.y, { width });
+            doc.moveDown(0.4);
+        }
+        doc.y += 8;
 
         doc.font('Roboto-Bold').fontSize(16).fillColor(INK);
         doc.text(`Счёт на оплату № ${document.number} от ${this.formatDate(document.documentDate)}`, left, doc.y, {
@@ -1226,6 +1257,16 @@ export class AccountingDocumentPdfService {
             });
             doc.y = y + height;
         };
+
+        // Шапка таблицы не должна оставаться одна внизу страницы: строки
+        // уедут на следующую и напечатают вторую шапку, а счёт из одной
+        // услуги станет двухстраничным. Поэтому проверяем место сразу под
+        // шапку и хотя бы одну строку.
+        const tableBottom = doc.page.height - doc.page.margins.bottom - 125;
+        if (doc.y + 28 + 24 > tableBottom) {
+            doc.addPage();
+            doc.y = doc.page.margins.top + 10;
+        }
 
         drawHeader();
         lines.forEach((line, index) => {
@@ -1300,16 +1341,30 @@ export class AccountingDocumentPdfService {
         this.ensureSpace(doc, stamp ? 130 : 65);
         const left = doc.page.margins.left;
         const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const signatory = this.record(document.issuerSignatorySnapshot ?? null);
+        const signatoryName = this.stringValue(signatory.name) || issuer.directorName || '';
+        const signatoryPosition = this.stringValue(signatory.position) || 'Исполнитель';
         doc.font('Roboto-Bold').fontSize(9);
-        doc.text('Исполнитель', left, doc.y, { continued: true });
+        doc.text(signatoryPosition, left, doc.y, { continued: true });
         doc.font('Roboto').text(' ________________________________ ', { continued: true });
-        doc.font('Roboto').text(issuer.directorName || '/бухгалтер/', { align: 'right' });
+        doc.font('Roboto').text(signatoryName || '/подпись/', { align: 'right' });
         this.drawStamp(doc, stamp, left + 60, doc.y - 6);
         if (document.note) {
             doc.moveDown(1);
             doc.font('Roboto').fontSize(8).fillColor(INK);
             doc.text(`Примечание: ${document.note}`, left, doc.y, { width });
         }
+    }
+
+    /** «Свидетельство по НДС: серия 60001 № 0012345 от 01.01.2024». */
+    private vatCertificateLine(party: PartySnapshot): string | null {
+        if (!party.vatCertificateNumber) return null;
+        const parts = [
+            party.vatCertificateSeries ? `серия ${party.vatCertificateSeries}` : null,
+            `№ ${party.vatCertificateNumber}`,
+            party.vatCertificateDate ? `от ${this.formatDate(new Date(party.vatCertificateDate))}` : null,
+        ].filter(Boolean);
+        return `Свидетельство о постановке на регистрационный учёт по НДС: ${parts.join(' ')}`;
     }
 
     /**
