@@ -12,6 +12,7 @@ import {
     CreateManualEntryDto,
     CreatePaymentDto,
     JournalQueryDto,
+    RefundPaymentDto,
     UpdateManualEntryDto,
     UpdateOrderFinanceDto,
     UpdatePaymentDto,
@@ -292,6 +293,35 @@ export class AccountingController {
             details: { amount: body?.amount ?? null, direction: body?.direction ?? null, orderId: body?.orderId ?? null },
         });
         return result;
+    }
+
+    @Post('payments/:id/refund')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Возврат платежа (сторно)',
+        description: 'Создаёт обратный платёж со ссылкой на исходный. Исходный остаётся в истории.',
+    })
+    async refundPayment(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: RefundPaymentDto,
+    ) {
+        const refund = await this.accountingService.refundPayment(
+            req.user.companyId,
+            id,
+            req.user.id,
+            body,
+        );
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'payment',
+            entityId: refund.id,
+            entityLabel: `Возврат платежа на ${refund.amount} ₸`,
+            details: { refundOfId: id },
+        });
+        return refund;
     }
 
     @Delete('payments/:id')

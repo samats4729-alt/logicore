@@ -237,6 +237,15 @@ export class AccountingService {
         return this.paymentsService.updatePayment(companyId, paymentId, userId, data);
     }
 
+    async refundPayment(companyId: string, paymentId: string, userId: string, data: {
+        amount?: number;
+        date?: string;
+        note?: string;
+        accountId?: string;
+    }) {
+        return this.paymentsService.refundPayment(companyId, paymentId, userId, data);
+    }
+
     async deletePayment(companyId: string, paymentId: string, userId: string) {
         return this.paymentsService.deletePayment(companyId, paymentId, userId);
     }

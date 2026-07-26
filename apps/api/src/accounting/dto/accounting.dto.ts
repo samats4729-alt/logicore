@@ -240,3 +240,32 @@ export class JournalQueryDto extends PaginationQueryDto {
     @IsDateString()
     to?: string;
 }
+
+/**
+ * Возврат платежа (сторно).
+ *
+ * Сумма необязательна: без неё возвращается весь непогашенный остаток
+ * платежа — самый частый случай. Дата тоже: возврат проводится сегодняшним
+ * числом, а не задним числом исходного платежа.
+ */
+export class RefundPaymentDto {
+    @IsOptional()
+    @IsNumber({ allowInfinity: false, allowNaN: false })
+    @Min(0.01)
+    @Max(MAX_MONEY_AMOUNT)
+    amount?: number;
+
+    @IsOptional()
+    @IsDateString()
+    date?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(2000)
+    note?: string;
+
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    accountId?: string;
+}

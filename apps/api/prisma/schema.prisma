@@ -989,11 +989,20 @@ model Payment {
   category            FinanceCategory?              @relation("CategoryPayments", fields: [categoryId], references: [id], onDelete: SetNull)
   documentAllocations AccountingPaymentAllocation[]
 
+  /// Возврат денег по ранее принятому платежу (сторно).
+  /// Хранится отдельным платежом обратного направления со ссылкой на
+  /// исходный: иначе вернуть деньги можно было бы только удалив платёж,
+  /// а это стирает историю и ломает акт сверки.
+  refundOfId          String?
+  refundOf            Payment?                      @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: Restrict)
+  refunds             Payment[]                     @relation("PaymentRefunds")
+
   @@index([companyId, date])
   @@index([orderId])
   @@index([direction])
   @@index([accountId])
   @@index([categoryId])
+  @@index([refundOfId])
 }
 
 enum AccountKind {

@@ -181,6 +181,52 @@ export class PaymentAllocationService {
     }
 
     /**
+     * Уменьшить разнесения платежа на сумму возврата (T-20).
+     *
+     * Гасим с самых поздних разнесений: возврат откатывает последнее, что
+     * этим платежом закрыли, — так же, как бухгалтер отменяет проводку с
+     * конца. Возврат больше разнесённого просто обнуляет разнесения:
+     * лишняя часть возврата к счетам не относится, она уменьшает общую
+     * оплату контрагента.
+     */
+    async reduce(paymentId: string, amount: Prisma.Decimal) {
+        let rest = roundMoney(D(amount));
+        if (rest.lte(ZERO)) return { documents: 0 };
+
+        return this.prisma.$transaction(async (tx) => {
+            const allocations = await tx.accountingPaymentAllocation.findMany({
+                where: { paymentId },
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, documentId: true, amount: true },
+            });
+
+            const touched = new Set<string>();
+            for (const allocation of allocations) {
+                if (rest.lte(ZERO)) break;
+                const current = roundMoney(D(allocation.amount));
+                const cut = Prisma.Decimal.min(current, rest);
+                const left = roundMoney(current.minus(cut));
+
+                if (left.lte(ZERO)) {
+                    await tx.accountingPaymentAllocation.delete({ where: { id: allocation.id } });
+                } else {
+                    await tx.accountingPaymentAllocation.update({
+                        where: { id: allocation.id },
+                        data: { amount: left },
+                    });
+                }
+                touched.add(allocation.documentId);
+                rest = roundMoney(rest.minus(cut));
+            }
+
+            for (const documentId of touched) {
+                await this.recalculate(tx, documentId);
+            }
+            return { documents: touched.size };
+        });
+    }
+
+    /**
      * Пересчитать оплату документа по его разнесениям.
      *
      * Единственное место, где меняются amountPaid и balanceDue, — поэтому
