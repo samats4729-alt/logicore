@@ -263,6 +263,60 @@ export async function findOrCreateOrderDocument(
 }
 
 /**
+ * «Создать акт на основании счёта» — вход из документа в документ.
+ *
+ * Строки и рейсы переносятся из счёта: акт закрывает ровно то, что
+ * выставлено, и бухгалтеру не приходится набирать услуги второй раз.
+ * Если акт по рейсу счёта уже есть, открываем его — иначе по одной
+ * перевозке уедут два акта.
+ */
+export async function createServiceActFromInvoice(
+    invoice: AccountingDocumentDetails,
+): Promise<OrderDocumentResult> {
+    const counterpartyId = invoice.counterparty?.id;
+    if (!counterpartyId) throw new Error('У счёта не указан контрагент');
+
+    const orderIds = Array.from(new Set((invoice.orders ?? []).map((link) => link.order.id)));
+    for (const orderId of orderIds) {
+        const existing = await fetchAccountingDocuments({
+            type: 'SERVICE_ACT',
+            orderId,
+            limit: 20,
+        });
+        const active = existing.data.find((document) => document.status !== 'CANCELLED');
+        if (active) return { document: active, created: false };
+    }
+
+    const document = await createAccountingDocument({
+        type: 'SERVICE_ACT',
+        direction: invoice.direction,
+        counterpartyId,
+        documentDate: dayjs().format('YYYY-MM-DD'),
+        note: `Основание: счёт № ${invoice.number}`,
+        lines: invoice.lines.map((line) => ({
+            ...(line.serviceCode ? { serviceCode: line.serviceCode } : {}),
+            name: line.name,
+            ...(line.description ? { description: line.description } : {}),
+            quantity: String(line.quantity ?? 1),
+            unit: line.unit?.trim() || 'усл',
+            unitPrice: (line.unitPrice ?? 0).toFixed(2),
+            // Набор полей НДС повторяет карточку документа: API отклоняет
+            // ставку без STANDARD и STANDARD без ставки.
+            ...(line.vatTreatment === 'STANDARD' && Number(line.vatRate) > 0
+                ? {
+                    vatTreatment: 'STANDARD' as const,
+                    vatCalculation: line.vatCalculation,
+                    vatRate: String(line.vatRate),
+                }
+                : {}),
+            ...(line.orderId ? { orderId: line.orderId } : {}),
+        })),
+        orderIds,
+    });
+    return { document, created: true };
+}
+
+/**
  * Разделы веба с карточкой документа. Акта сверки здесь нет: он живёт на
  * своей странице `accounting/reconciliation-act` и с рейсом не связан.
  */
