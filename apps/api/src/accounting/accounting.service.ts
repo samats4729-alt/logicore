@@ -67,12 +67,12 @@ export class AccountingService {
 
     // ==================== FINANCIAL REGISTRY ====================
 
-    async getFinancialRegistry(companyId: string) {
-        return this.reportsService.getFinancialRegistry(companyId);
+    async getFinancialRegistry(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getFinancialRegistry(companyId, query);
     }
 
-    async getPlannedPayments(companyId: string) {
-        return this.reportsService.getPlannedPayments(companyId);
+    async getPlannedPayments(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getPlannedPayments(companyId, query);
     }
 
     // ==================== PAYMENT JOURNAL ====================
@@ -85,8 +85,8 @@ export class AccountingService {
         return this.reportsService.getExpensesJournal(companyId, query);
     }
 
-    async getCustomerExpensesJournal(companyId: string) {
-        return this.reportsService.getCustomerExpensesJournal(companyId);
+    async getCustomerExpensesJournal(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getCustomerExpensesJournal(companyId, query);
     }
 
     async markCustomerPaid(companyId: string, orderId: string, paid: boolean, userId: string) {

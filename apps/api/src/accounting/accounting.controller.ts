@@ -43,14 +43,14 @@ export class AccountingController {
 
     @Get('financial-registry')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getFinancialRegistry(@Request() req: any) {
-        return this.accountingService.getFinancialRegistry(req.user.companyId);
+    async getFinancialRegistry(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getFinancialRegistry(req.user.companyId, query);
     }
 
     @Get('planned-payments')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getPlannedPayments(@Request() req: any) {
-        return this.accountingService.getPlannedPayments(req.user.companyId);
+    async getPlannedPayments(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getPlannedPayments(req.user.companyId, query);
     }
 
     // ==================== PAYMENT JOURNAL ====================
@@ -69,8 +69,8 @@ export class AccountingController {
 
     @Get('customer-expenses-journal')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getCustomerExpensesJournal(@Request() req: any) {
-        return this.accountingService.getCustomerExpensesJournal(req.user.companyId);
+    async getCustomerExpensesJournal(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getCustomerExpensesJournal(req.user.companyId, query);
     }
 
     @Put('orders/:id/customer-paid')

@@ -324,28 +324,34 @@ export class FinancialReportsService {
 
     // ==================== FINANCIAL REGISTRY ====================
 
-    async getFinancialRegistry(companyId: string) {
+    async getFinancialRegistry(companyId: string, query?: JournalQueryDto) {
+        const scope = this.journalScope(query);
+        const registryWhere: Prisma.OrderWhereInput = {
+            AND: [
+                {
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                        { responsibleManager: { companyId: companyId } },
+                    ]
+                },
+                {
+                    OR: [
+                        { isConfirmed: true },
+                        { status: { not: 'PENDING' } }
+                    ]
+                }
+            ],
+            status: { notIn: ['DRAFT', 'CANCELLED'] },
+            createdAt: scope.createdAt,
+        };
+        const registryTotal = scope.paginated
+            ? await this.prisma.order.count({ where: registryWhere })
+            : 0;
         const orders = await this.prisma.order.findMany({
-            where: {
-                AND: [
-                    {
-                        OR: [
-                            { customerCompanyId: companyId },
-                            { forwarderId: companyId },
-                            { partnerId: companyId },
-                            { subForwarderId: companyId },
-                            { responsibleManager: { companyId: companyId } },
-                        ]
-                    },
-                    {
-                        OR: [
-                            { isConfirmed: true },
-                            { status: { not: 'PENDING' } }
-                        ]
-                    }
-                ],
-                status: { notIn: ['DRAFT', 'CANCELLED'] },
-            },
+            where: registryWhere,
             include: {
                 customerCompany: { select: { id: true, name: true } },
                 forwarder: { select: { id: true, name: true } },
@@ -356,9 +362,11 @@ export class FinancialReportsService {
                 ...ORDER_FINANCE_RELATIONS_SELECT,
             },
             orderBy: { createdAt: 'desc' },
+            skip: scope.skip,
+            take: scope.take,
         });
 
-        return orders.map(order => {
+        const rows = orders.map(order => {
             const isCustomer = order.customerCompanyId === companyId;
             const fin = this.calculator.computeOrderFinance({
                 order,
@@ -417,34 +425,39 @@ export class FinancialReportsService {
 
             return mapped;
         });
+
+        return this.journalResult(rows, registryTotal, scope);
     }
 
     /**
      * Планируемые платежи: что нам должны заплатить (приход) и что должны мы (расход),
      * по незакрытым долгам заявок, с плановой датой оплаты.
      */
-    async getPlannedPayments(companyId: string) {
+    async getPlannedPayments(companyId: string, query?: JournalQueryDto) {
+        const scope = this.journalScope(query);
+        const plannedWhere: Prisma.OrderWhereInput = {
+            AND: [
+                {
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                        { responsibleManager: { companyId: companyId } },
+                    ],
+                },
+                {
+                    OR: [
+                        { isConfirmed: true },
+                        { status: { not: 'PENDING' } },
+                    ],
+                },
+            ],
+            status: { notIn: ['DRAFT', 'CANCELLED'] },
+            createdAt: scope.createdAt,
+        };
         const orders = await this.prisma.order.findMany({
-            where: {
-                AND: [
-                    {
-                        OR: [
-                            { customerCompanyId: companyId },
-                            { forwarderId: companyId },
-                            { partnerId: companyId },
-                            { subForwarderId: companyId },
-                            { responsibleManager: { companyId: companyId } },
-                        ],
-                    },
-                    {
-                        OR: [
-                            { isConfirmed: true },
-                            { status: { not: 'PENDING' } },
-                        ],
-                    },
-                ],
-                status: { notIn: ['DRAFT', 'CANCELLED'] },
-            },
+            where: plannedWhere,
             include: {
                 customerCompany: { select: { id: true, name: true } },
                 forwarder: { select: { id: true, name: true } },
@@ -664,21 +677,29 @@ export class FinancialReportsService {
         return this.journalResult(rows, total, scope);
     }
 
-    async getCustomerExpensesJournal(companyId: string) {
-        const orders = await this.prisma.order.findMany({
-            where: {
-                customerCompanyId: companyId,
-                customerPrice: { not: null },
-                status: { notIn: ['DRAFT', 'CANCELLED'] },
-            },
-            include: {
-                forwarder: { select: { id: true, name: true } },
-                ...ORDER_FINANCE_RELATIONS_SELECT,
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+    async getCustomerExpensesJournal(companyId: string, query?: JournalQueryDto) {
+        const scope = this.journalScope(query);
+        const where: Prisma.OrderWhereInput = {
+            customerCompanyId: companyId,
+            customerPrice: { not: null },
+            status: { notIn: ['DRAFT', 'CANCELLED'] },
+            createdAt: scope.createdAt,
+        };
+        const [orders, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                include: {
+                    forwarder: { select: { id: true, name: true } },
+                    ...ORDER_FINANCE_RELATIONS_SELECT,
+                },
+                orderBy: { createdAt: 'desc' },
+                skip: scope.skip,
+                take: scope.take,
+            }),
+            scope.paginated ? this.prisma.order.count({ where }) : Promise.resolve(0),
+        ]);
 
-        return orders.map(order => {
+        const rows = orders.map(order => {
             const fin = this.calculator.computeOrderFinance({
                 order,
                 payments: order.payments,
@@ -699,6 +720,8 @@ export class FinancialReportsService {
                 forwarder: order.forwarder,
             };
         });
+
+        return this.journalResult(rows, total, scope);
     }
 
     // ==================== COUNTERPARTY REPORT ====================
@@ -2266,7 +2289,10 @@ export class FinancialReportsService {
     // ==================== EXPORTS ====================
 
     async exportFinancialRegistry(companyId: string): Promise<Buffer> {
-        const registry = await this.getFinancialRegistry(companyId);
+        // Выгрузка идёт по всему реестру, без страниц: без query метод
+        // отдаёт массив, но тип общий на оба режима — разворачиваем явно.
+        const registryResult = await this.getFinancialRegistry(companyId);
+        const registry = Array.isArray(registryResult) ? registryResult : registryResult.data;
 
         const STATUS_RU: Record<string, string> = {
             DRAFT: 'Черновик',

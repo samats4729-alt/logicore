@@ -139,4 +139,53 @@ describe('FinancialReportsService — период и страница журн�
             expect(countWhere).toEqual(listWhere);
         });
     });
+
+    describe('реестр заявок', () => {
+        it('без параметров отдаёт массив', async () => {
+            const { service, prisma } = makeService();
+
+            const result = await service.getFinancialRegistry(COMPANY);
+
+            expect(Array.isArray(result)).toBe(true);
+            expect(prisma.order.count).not.toHaveBeenCalled();
+        });
+
+        it('со страницей отдаёт data и total по тому же отбору', async () => {
+            const { service, prisma } = makeService();
+
+            const result: any = await service.getFinancialRegistry(COMPANY, {
+                from: '2026-06-01',
+                to: '2026-06-30',
+                page: '1',
+                limit: '25',
+            });
+
+            expect(result).toMatchObject({ total: 37, page: 1, limit: 25, totalPages: 2 });
+            expect(prisma.order.count.mock.calls[0][0].where)
+                .toEqual(prisma.order.findMany.mock.calls[0][0].where);
+        });
+    });
+
+    // Планируемые платежи сортируются по сроку оплаты и считают итоги уже в
+    // памяти, по всей выборке. Страница здесь порезала бы итоги, поэтому у
+    // этого журнала только период — форма ответа не меняется.
+    describe('планируемые платежи', () => {
+        it('период фильтрует, а форма ответа остаётся прежней', async () => {
+            const { service, prisma } = makeService();
+
+            const result: any = await service.getPlannedPayments(COMPANY, {
+                from: '2026-06-01',
+                to: '2026-06-30',
+                page: '2',
+                limit: '5',
+            });
+
+            expect(result).toHaveProperty('rows');
+            expect(result).toHaveProperty('totals');
+            const args = prisma.order.findMany.mock.calls[0][0];
+            expect(args.where.createdAt.gte).toEqual(new Date('2026-06-01T00:00:00.000Z'));
+            expect(args.skip).toBeUndefined();
+            expect(args.take).toBeUndefined();
+        });
+    });
 });
