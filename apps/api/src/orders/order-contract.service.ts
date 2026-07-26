@@ -60,6 +60,80 @@ export class OrderContractService {
         private readonly stamps: StampImageService,
     ) {}
 
+    /**
+     * Журнал транспортных документов: рейсы, по которым есть доверенность
+     * или договор-заявка.
+     *
+     * Оба документа печатаются из заявки, поэтому «журнал» — это список
+     * рейсов, у которых есть нужные данные: доверенность имеет смысл при
+     * назначенном водителе, договор-заявка — при выбранном перевозчике.
+     */
+    async listJournal(
+        companyId: string,
+        query: { kind: 'POWER_OF_ATTORNEY' | 'CONTRACT'; from?: string; to?: string },
+    ) {
+        const isContract = query.kind === 'CONTRACT';
+        const orders = await this.prisma.order.findMany({
+            where: {
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+                OR: [
+                    { forwarderId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                    { customerCompanyId: companyId },
+                ],
+                ...(isContract
+                    // Договор-заявка заключается с перевозчиком: без него
+                    // документу не с кем быть подписанным.
+                    ? { AND: [{ OR: [{ partnerId: { not: null } }, { subForwarderId: { not: null } }] }] }
+                    // Доверенность выдаётся водителю.
+                    : { assignedDriverName: { not: null } }),
+                ...(query.from || query.to
+                    ? {
+                        createdAt: {
+                            gte: query.from ? new Date(query.from) : undefined,
+                            lte: query.to ? new Date(`${query.to}T23:59:59.999Z`) : undefined,
+                        },
+                    }
+                    : {}),
+            },
+            select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                createdAt: true,
+                assignedDriverName: true,
+                assignedDriverPlate: true,
+                driverCost: true,
+                customerPrice: true,
+                partner: { select: { id: true, name: true } },
+                subForwarder: { select: { id: true, name: true } },
+                customerCompany: { select: { id: true, name: true } },
+                routePoints: {
+                    orderBy: { sequence: 'asc' },
+                    select: { location: { select: { city: true, address: true } } },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 300,
+        });
+
+        return orders.map((order) => ({
+            id: order.id,
+            orderNumber: order.orderNumber,
+            status: order.status,
+            createdAt: order.createdAt,
+            route: order.routePoints.length
+                ? `${this.place(order.routePoints[0])} — ${this.place(order.routePoints[order.routePoints.length - 1])}`
+                : null,
+            driverName: order.assignedDriverName,
+            driverPlate: order.assignedDriverPlate,
+            carrier: order.subForwarder?.name ?? order.partner?.name ?? null,
+            customer: order.customerCompany?.name ?? null,
+            amount: isContract ? order.driverCost : order.customerPrice,
+        }));
+    }
+
     async generatePdf(orderId: string, companyId: string, options?: { withStamp?: boolean }) {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },

@@ -89,6 +89,7 @@ export default function FinanceHubPage() {
             links: [
                 { label: 'Счета', href: '/company/accounting/invoices', show: acc, desc: 'Счета покупателям и от поставщиков — создание и журнал' },
                 { label: 'Акты выполненных работ', href: '/company/accounting/acts', show: acc, desc: 'Журнал актов по заявкам: открыть, проверить, распечатать' },
+                { label: 'Доверенности и договоры-заявки', href: '/company/accounting/transport-documents', show: acc, desc: 'Документы по рейсам за период: найти и распечатать, не открывая заявку' },
             ],
         },
         {

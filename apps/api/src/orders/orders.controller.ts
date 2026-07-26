@@ -144,6 +144,23 @@ export class OrdersController {
         res.end(pdfBuffer);
     }
 
+    // Объявлено до `:id/...`, иначе путь съедается параметром.
+    @Get('document-journal')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Журнал доверенностей и договоров-заявок' })
+    listDocumentJournal(
+        @Request() req: any,
+        @Query('kind') kind?: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
+    ) {
+        return this.contractService.listJournal(req.user.companyId, {
+            kind: kind === 'CONTRACT' ? 'CONTRACT' : 'POWER_OF_ATTORNEY',
+            from,
+            to,
+        });
+    }
+
     @Get(':id/contract')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Скачать договор-заявку на перевозку (PDF)' })
