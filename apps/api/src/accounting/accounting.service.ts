@@ -6,6 +6,7 @@ import { PaymentsService } from './services/payments.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentDirection, PaymentMethod, CostType, DictionaryKind } from '@prisma/client';
+import { JournalQueryDto } from './dto/accounting.dto';
 
 @Injectable()
 export class AccountingService {
@@ -76,12 +77,12 @@ export class AccountingService {
 
     // ==================== PAYMENT JOURNAL ====================
 
-    async getIncomesJournal(companyId: string) {
-        return this.reportsService.getIncomesJournal(companyId);
+    async getIncomesJournal(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getIncomesJournal(companyId, query);
     }
 
-    async getExpensesJournal(companyId: string) {
-        return this.reportsService.getExpensesJournal(companyId);
+    async getExpensesJournal(companyId: string, query?: JournalQueryDto) {
+        return this.reportsService.getExpensesJournal(companyId, query);
     }
 
     async getCustomerExpensesJournal(companyId: string) {

@@ -10,6 +10,8 @@ import { D, Money, ZERO, money, positiveRest, roundMoney, sumOf, toNum, toNumOrN
 import { PaymentsService } from './payments.service';
 import { FinancialSettingsService } from './financial-settings.service';
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
+import { JournalQueryDto } from '../dto/accounting.dto';
+import { getPaginationParams } from '../../common/dto/pagination.dto';
 import * as XLSX from 'xlsx';
 
 @Injectable()
@@ -23,6 +25,53 @@ export class FinancialReportsService {
         private paymentsService: PaymentsService,
         private settingsService: FinancialSettingsService,
     ) { }
+
+
+    /**
+     * Разбор параметров журнала: период и страница.
+     *
+     * Период фильтрует по дате создания заявки — это её дата в журнале, по
+     * ней же идёт сортировка. `to` расширяется до конца суток, иначе
+     * «по 31 июля» терял всё, что заведено в этот день после полуночи.
+     *
+     * Страница считается только если её попросили: без `page`/`limit` метод
+     * обязан вернуть массив, как раньше.
+     */
+    private journalScope(query?: JournalQueryDto) {
+        const from = query?.from ? new Date(query.from) : null;
+        const to = query?.to ? new Date(query.to) : null;
+        if (to) to.setUTCHours(23, 59, 59, 999);
+        if (from && to && from > to) {
+            throw new BadRequestException('Начало периода позже его окончания');
+        }
+
+        const createdAt = from || to
+            ? { gte: from ?? undefined, lte: to ?? undefined }
+            : undefined;
+
+        const paginated = Boolean(query?.page || query?.limit);
+        const { page, limit, skip, take } = getPaginationParams(query ?? {});
+        return {
+            createdAt,
+            paginated,
+            page,
+            limit,
+            skip: paginated ? skip : undefined,
+            take: paginated ? take : undefined,
+        };
+    }
+
+    /** Ответ журнала: массив по умолчанию, страница — по запросу. */
+    private journalResult<T>(rows: T[], total: number, scope: ReturnType<FinancialReportsService['journalScope']>) {
+        if (!scope.paginated) return rows;
+        return {
+            data: rows,
+            total,
+            page: scope.page,
+            limit: scope.limit,
+            totalPages: Math.max(1, Math.ceil(total / scope.limit)),
+        };
+    }
 
     // ==================== ORDER FINANCIALS ====================
 
@@ -465,38 +514,46 @@ export class FinancialReportsService {
 
     // ==================== PAYMENT JOURNAL ====================
 
-    async getIncomesJournal(companyId: string) {
-        const orders = await this.prisma.order.findMany({
-            where: {
-                AND: [
-                    {
-                        OR: [
-                            { forwarderId: companyId },
-                            { partnerId: companyId },
-                            { subForwarderId: companyId },
-                            { responsibleManager: { companyId: companyId } },
-                        ]
-                    },
-                    { customerCompanyId: { not: companyId } },
-                    {
-                        OR: [
-                            { isConfirmed: true },
-                            { status: { not: 'PENDING' } }
-                        ]
-                    }
-                ],
-                customerPrice: { not: null },
-                status: { notIn: ['DRAFT', 'CANCELLED'] },
-            },
-            include: {
-                customerCompany: { select: { id: true, name: true } },
-                customer: { select: { id: true, firstName: true, lastName: true } },
-                ...ORDER_FINANCE_RELATIONS_SELECT,
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+    async getIncomesJournal(companyId: string, query?: JournalQueryDto) {
+        const scope = this.journalScope(query);
+        const where: Prisma.OrderWhereInput = {
+            AND: [
+                {
+                    OR: [
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                        { responsibleManager: { companyId: companyId } },
+                    ]
+                },
+                { customerCompanyId: { not: companyId } },
+                {
+                    OR: [
+                        { isConfirmed: true },
+                        { status: { not: 'PENDING' } }
+                    ]
+                }
+            ],
+            customerPrice: { not: null },
+            status: { notIn: ['DRAFT', 'CANCELLED'] },
+            createdAt: scope.createdAt,
+        };
+        const [orders, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                include: {
+                    customerCompany: { select: { id: true, name: true } },
+                    customer: { select: { id: true, firstName: true, lastName: true } },
+                    ...ORDER_FINANCE_RELATIONS_SELECT,
+                },
+                orderBy: { createdAt: 'desc' },
+                skip: scope.skip,
+                take: scope.take,
+            }),
+            scope.paginated ? this.prisma.order.count({ where }) : Promise.resolve(0),
+        ]);
 
-        return orders.map(order => {
+        const rows = orders.map(order => {
             const fin = this.calculator.computeOrderFinance({
                 order,
                 payments: order.payments,
@@ -522,46 +579,56 @@ export class FinancialReportsService {
                 customer: order.customer,
             };
         });
+
+        return this.journalResult(rows, total, scope);
     }
 
-    async getExpensesJournal(companyId: string) {
-        const orders = await this.prisma.order.findMany({
-            where: {
-                AND: [
-                    {
-                        OR: [
-                            { forwarderId: companyId },
-                            { partnerId: companyId },
-                            { subForwarderId: companyId },
-                            { responsibleManager: { companyId: companyId } },
-                        ]
-                    },
-                    { customerCompanyId: { not: companyId } },
-                    {
-                        OR: [
-                            { driverCost: { not: null } },
-                            { subForwarderPrice: { not: null } }
-                        ]
-                    },
-                    {
-                        OR: [
-                            { isConfirmed: true },
-                            { status: { not: 'PENDING' } }
-                        ]
-                    }
-                ],
-                status: { notIn: ['DRAFT', 'CANCELLED'] },
-            },
-            include: {
-                driver: { select: { id: true, firstName: true, lastName: true, phone: true } },
-                partner: { select: { id: true, name: true } },
-                subForwarder: { select: { id: true, name: true } },
-                ...ORDER_FINANCE_RELATIONS_SELECT,
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+    async getExpensesJournal(companyId: string, query?: JournalQueryDto) {
+        const scope = this.journalScope(query);
+        const where: Prisma.OrderWhereInput = {
+            AND: [
+                {
+                    OR: [
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                        { responsibleManager: { companyId: companyId } },
+                    ]
+                },
+                { customerCompanyId: { not: companyId } },
+                {
+                    OR: [
+                        { driverCost: { not: null } },
+                        { subForwarderPrice: { not: null } }
+                    ]
+                },
+                {
+                    OR: [
+                        { isConfirmed: true },
+                        { status: { not: 'PENDING' } }
+                    ]
+                }
+            ],
+            status: { notIn: ['DRAFT', 'CANCELLED'] },
+            createdAt: scope.createdAt,
+        };
+        const [orders, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                include: {
+                    driver: { select: { id: true, firstName: true, lastName: true, phone: true } },
+                    partner: { select: { id: true, name: true } },
+                    subForwarder: { select: { id: true, name: true } },
+                    ...ORDER_FINANCE_RELATIONS_SELECT,
+                },
+                orderBy: { createdAt: 'desc' },
+                skip: scope.skip,
+                take: scope.take,
+            }),
+            scope.paginated ? this.prisma.order.count({ where }) : Promise.resolve(0),
+        ]);
 
-        return orders.map(order => {
+        const rows = orders.map(order => {
             const fin = this.calculator.computeOrderFinance({
                 order,
                 payments: order.payments,
@@ -593,6 +660,8 @@ export class FinancialReportsService {
                 subForwarder: order.subForwarder,
             };
         });
+
+        return this.journalResult(rows, total, scope);
     }
 
     async getCustomerExpensesJournal(companyId: string) {

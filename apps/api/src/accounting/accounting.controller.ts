@@ -11,6 +11,7 @@ import { Response } from 'express';
 import {
     CreateManualEntryDto,
     CreatePaymentDto,
+    JournalQueryDto,
     UpdateManualEntryDto,
     UpdateOrderFinanceDto,
     UpdatePaymentDto,
@@ -56,14 +57,14 @@ export class AccountingController {
 
     @Get('incomes-journal')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getIncomesJournal(@Request() req: any) {
-        return this.accountingService.getIncomesJournal(req.user.companyId);
+    async getIncomesJournal(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getIncomesJournal(req.user.companyId, query);
     }
 
     @Get('expenses-journal')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getExpensesJournal(@Request() req: any) {
-        return this.accountingService.getExpensesJournal(req.user.companyId);
+    async getExpensesJournal(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getExpensesJournal(req.user.companyId, query);
     }
 
     @Get('customer-expenses-journal')
