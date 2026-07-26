@@ -29,8 +29,12 @@ import {
     ACCOUNTING_DOCUMENT_STATUS_LABELS,
     AccountingDocumentListItem,
     AccountingDocumentStatus,
+    accountingDocumentHref,
+    createServiceActFromInvoice,
+    fetchAccountingDocument,
     fetchAccountingDocuments,
     openAccountingDocumentPdf,
+    openAccountingRegistryPdf,
     revokeAccountingDocumentShare,
 } from '@/lib/accounting-documents';
 
@@ -59,6 +63,9 @@ export default function InvoicesRegistryPage() {
     const [page, setPage] = useState(1);
 
     const [counterparties, setCounterparties] = useState<{ id: string; name: string }[]>([]);
+    /** Отмеченные строки — печать реестра только по ним. */
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [actFromId, setActFromId] = useState<string | null>(null);
 
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'FORWARDER', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
@@ -114,6 +121,40 @@ export default function InvoicesRegistryPage() {
         const url = `${window.location.origin}/shared/document/${doc.shareToken}`;
         navigator.clipboard.writeText(url);
         message.success('Ссылка скопирована');
+    };
+
+    /**
+     * «Ввод на основании» прямо из журнала: по проведённому счёту сразу
+     * создаётся акт. Карточка счёта для этого открывается запросом — в
+     * списке приходят не все поля, а акт собирается из строк документа.
+     */
+    const createActFrom = async (doc: AccountingDocumentListItem) => {
+        try {
+            setActFromId(doc.id);
+            const invoice = await fetchAccountingDocument(doc.id);
+            const { document, created } = await createServiceActFromInvoice(invoice);
+            message.success(created
+                ? `Черновик акта № ${document.number} создан`
+                : `По рейсу счёта уже есть акт № ${document.number}`);
+            router.push(accountingDocumentHref({ id: document.id, type: 'SERVICE_ACT' }));
+        } catch (e: any) {
+            message.error(e.response?.data?.message || e.message || 'Не удалось создать акт');
+        } finally {
+            setActFromId(null);
+        }
+    };
+
+    const printRegistry = () => {
+        openAccountingRegistryPdf({
+            type: 'PAYMENT_INVOICE',
+            direction,
+            status: status === 'all' ? undefined : status,
+            counterpartyId,
+            from: period[0].format('YYYY-MM-DD'),
+            to: period[1].format('YYYY-MM-DD'),
+            // Пусто — печатается вся выборка фильтров, как на экране.
+            ids: selectedIds,
+        });
     };
 
     const revokeShare = async (doc: AccountingDocumentListItem) => {
@@ -265,6 +306,20 @@ export default function InvoicesRegistryPage() {
                         menu={{
                             items: [
                                 {
+                                    key: 'act',
+                                    label: 'Создать акт на основании',
+                                    // Черновик контрагенту не отдан — актировать
+                                    // по нему нечего; входящий счёт выставил он.
+                                    // Пока акт создаётся, второй запуск закрыт:
+                                    // иначе по двойному клику уедут два акта.
+                                    disabled: !canChange
+                                        || record.status !== 'POSTED'
+                                        || record.direction !== 'OUTGOING'
+                                        || Boolean(actFromId),
+                                    onClick: () => createActFrom(record),
+                                },
+                                { type: 'divider' as const },
+                                {
                                     key: 'copy',
                                     label: 'Скопировать ссылку',
                                     disabled: record.status !== 'POSTED' || Boolean(record.shareRevokedAt),
@@ -358,6 +413,17 @@ export default function InvoicesRegistryPage() {
                         style={{ width: 220 }}
                         allowClear
                     />
+                    {/* Печать журнала — как меню Печать → Реестр документов в 1С.
+                        Без отметок печатается вся выборка фильтров. */}
+                    <Tooltip
+                        title={selectedIds.length
+                            ? `Печать реестра по отмеченным строкам: ${selectedIds.length}`
+                            : 'Печать реестра по текущему отбору'}
+                    >
+                        <Button icon={<PrinterOutlined />} onClick={printRegistry}>
+                            {selectedIds.length ? `Реестр (${selectedIds.length})` : 'Реестр'}
+                        </Button>
+                    </Tooltip>
                 </div>
 
                 <Table
@@ -367,6 +433,13 @@ export default function InvoicesRegistryPage() {
                     loading={loading}
                     size="small"
                     scroll={{ x: 1100 }}
+                    rowSelection={{
+                        selectedRowKeys: selectedIds,
+                        onChange: (keys) => setSelectedIds(keys as string[]),
+                        // Отметки живут только внутри страницы: реестр за
+                        // период печатается фильтрами, а не перелистыванием.
+                        preserveSelectedRowKeys: false,
+                    }}
                     pagination={{
                         current: page,
                         pageSize: 30,
@@ -381,11 +454,13 @@ export default function InvoicesRegistryPage() {
                         // зависеть от листания.
                         <Table.Summary fixed>
                             <Table.Summary.Row style={{ background: token.colorFillAlter, fontWeight: 600 }}>
-                                <Table.Summary.Cell index={0} colSpan={5}>
+                                {/* +1 колонка на галочки выбора строк, иначе
+                                    итоги съезжают под «Сумму» и «Оплачено». */}
+                                <Table.Summary.Cell index={0} colSpan={6}>
                                     Итого за период
                                 </Table.Summary.Cell>
-                                <Table.Summary.Cell index={5} align="right">{money(totals.amount)}</Table.Summary.Cell>
-                                <Table.Summary.Cell index={6} align="right">
+                                <Table.Summary.Cell index={6} align="right">{money(totals.amount)}</Table.Summary.Cell>
+                                <Table.Summary.Cell index={7} align="right">
                                     <div>{money(totals.paid)}</div>
                                     {totals.due > 0 && (
                                         <div style={{ fontSize: 11, fontWeight: 400, color: token.colorTextSecondary }}>
@@ -393,7 +468,7 @@ export default function InvoicesRegistryPage() {
                                         </div>
                                     )}
                                 </Table.Summary.Cell>
-                                <Table.Summary.Cell index={7} colSpan={2} />
+                                <Table.Summary.Cell index={8} colSpan={2} />
                             </Table.Summary.Row>
                         </Table.Summary>
                     )}
