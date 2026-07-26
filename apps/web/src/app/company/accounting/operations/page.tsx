@@ -44,6 +44,8 @@ export default function AllOperationsPage() {
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState<OpRow[]>([]);
     const [typeFilter, setTypeFilter] = useState<'all' | 'IN' | 'OUT'>('all');
+    const [accountFilter, setAccountFilter] = useState<string | undefined>();
+    const [counterpartyFilter, setCounterpartyFilter] = useState<string | undefined>();
     const [search, setSearch] = useState('');
     const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>([
         dayjs().startOf('month'),
@@ -63,7 +65,11 @@ export default function AllOperationsPage() {
     const selectedCat = categories.find(c => c.direction === addDir && c.name === watchedCategory);
     const needsOrder = addDir === 'OUT' && selectedCat?.costType === 'PER_ORDER';
 
-    useEffect(() => { fetchAll(); fetchAccounts(); fetchCategories(); fetchOrders(); }, []);
+    useEffect(() => { fetchAccounts(); fetchCategories(); fetchOrders(); }, []);
+
+    // Смена периода перечитывает операции с сервера, а не режет уже
+    // загруженный список.
+    useEffect(() => { fetchAll(); }, [dateRange]);
 
     const fetchAccounts = async () => {
         try {
@@ -90,10 +96,15 @@ export default function AllOperationsPage() {
     const fetchAll = async () => {
         setLoading(true);
         try {
+            // Период уходит на сервер: страница открывалась загрузкой всей
+            // истории платежей, доходов и расходов разом.
+            const from = dateRange?.[0]?.format('YYYY-MM-DD');
+            const to = dateRange?.[1]?.format('YYYY-MM-DD');
             const [paymentsRes, incomesRes, expensesRes] = await Promise.all([
-                api.get('/accounting/payments'),
-                api.get('/accounting/incomes'),
-                api.get('/accounting/expenses'),
+                // У платежей параметры периода назывались так ещё до T-08
+                api.get('/accounting/payments', { params: { startDate: from, endDate: to } }),
+                api.get('/accounting/incomes', { params: { from, to } }),
+                api.get('/accounting/expenses', { params: { from, to } }),
             ]);
 
             const payments: OpRow[] = (paymentsRes.data || []).map((p: any) => ({
@@ -148,6 +159,8 @@ export default function AllOperationsPage() {
     const filtered = useMemo(() => {
         return rows.filter(r => {
             if (typeFilter !== 'all' && r.direction !== typeFilter) return false;
+            if (accountFilter && r.account !== accountFilter) return false;
+            if (counterpartyFilter && r.counterparty !== counterpartyFilter) return false;
             if (dateRange && dateRange[0] && dateRange[1]) {
                 const d = dayjs(r.date);
                 if (d.isBefore(dateRange[0], 'day') || d.isAfter(dateRange[1], 'day')) return false;
@@ -159,7 +172,18 @@ export default function AllOperationsPage() {
             }
             return true;
         });
-    }, [rows, typeFilter, dateRange, search]);
+    }, [rows, typeFilter, accountFilter, counterpartyFilter, dateRange, search]);
+
+    // Списки для фильтров собираются из самих операций периода: показывать
+    // счета и контрагентов, по которым в периоде ничего не было, незачем.
+    const accountOptions = useMemo(
+        () => Array.from(new Set(rows.map(r => r.account).filter(Boolean) as string[])).sort(),
+        [rows],
+    );
+    const counterpartyOptions = useMemo(
+        () => Array.from(new Set(rows.map(r => r.counterparty).filter(Boolean) as string[])).sort(),
+        [rows],
+    );
 
     const totalIn = filtered.filter(r => r.direction === 'IN').reduce((s, r) => s + r.amount, 0);
     const totalOut = filtered.filter(r => r.direction === 'OUT').reduce((s, r) => s + r.amount, 0);
@@ -328,6 +352,24 @@ export default function AllOperationsPage() {
                     />
                     <Input placeholder="Поиск: контрагент, заявка, примечание..." prefix={<SearchOutlined />} value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 260 }} allowClear />
                     <RangePicker value={dateRange} onChange={(d) => setDateRange(d as any)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} />
+                    <Select
+                        allowClear
+                        showSearch
+                        placeholder="Касса или счёт"
+                        style={{ width: 190 }}
+                        value={accountFilter}
+                        onChange={setAccountFilter}
+                        options={accountOptions.map(a => ({ value: a, label: a }))}
+                    />
+                    <Select
+                        allowClear
+                        showSearch
+                        placeholder="Контрагент"
+                        style={{ width: 210 }}
+                        value={counterpartyFilter}
+                        onChange={setCounterpartyFilter}
+                        options={counterpartyOptions.map(c => ({ value: c, label: c }))}
+                    />
                     <Button icon={<DownloadOutlined />} onClick={exportCsv} disabled={filtered.length === 0}>Экспорт</Button>
                     {canEdit && (
                         <>

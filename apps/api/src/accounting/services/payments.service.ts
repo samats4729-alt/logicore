@@ -7,6 +7,23 @@ import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus, P
 import { D, roundMoney, sumOf, toNum } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
 
+/**
+ * Период операций для журнала «Операции».
+ *
+ * Конец периода растягивается до конца суток: у доходов и расходов дата
+ * хранится с временем, и «по 31 июля» иначе теряло всё, что заведено в этот
+ * день. Пусто — ограничения нет, как было раньше.
+ */
+function operationPeriod(period?: { from?: string; to?: string }): Prisma.DateTimeFilter | undefined {
+    if (!period?.from && !period?.to) return undefined;
+    const to = period.to ? new Date(period.to) : null;
+    if (to) to.setUTCHours(23, 59, 59, 999);
+    return {
+        gte: period.from ? new Date(period.from) : undefined,
+        lte: to ?? undefined,
+    };
+}
+
 @Injectable()
 export class PaymentsService {
     private static readonly AUTO_NOTE_CUSTOMER = 'Проведение оплаты заказчика (на остаток)';
@@ -30,9 +47,9 @@ export class PaymentsService {
 
     // ==================== EXPENSES (manual) ====================
 
-    async getExpenses(companyId: string) {
+    async getExpenses(companyId: string, period?: { from?: string; to?: string }) {
         return this.prisma.expense.findMany({
-            where: { companyId, isDeleted: false },
+            where: { companyId, isDeleted: false, date: operationPeriod(period) },
             include: { order: { select: { orderNumber: true } }, account: true },
             orderBy: { date: 'desc' },
         });
@@ -112,9 +129,9 @@ export class PaymentsService {
 
     // ==================== INCOMES (manual) ====================
 
-    async getIncomes(companyId: string) {
+    async getIncomes(companyId: string, period?: { from?: string; to?: string }) {
         return this.prisma.income.findMany({
-            where: { companyId, isDeleted: false },
+            where: { companyId, isDeleted: false, date: operationPeriod(period) },
             orderBy: { date: 'desc' },
             include: {
                 order: {

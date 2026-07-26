@@ -101,8 +101,8 @@ export class AccountingController {
 
     @Get('expenses')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getExpenses(@Request() req: any) {
-        return this.accountingService.getExpenses(req.user.companyId);
+    async getExpenses(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getExpenses(req.user.companyId, query);
     }
 
     @Post('expenses')
@@ -145,8 +145,8 @@ export class AccountingController {
 
     @Get('incomes')
     @Roles(...FINANCE_VIEW_ROLES)
-    async getIncomes(@Request() req: any) {
-        return this.accountingService.getIncomes(req.user.companyId);
+    async getIncomes(@Request() req: any, @Query() query: JournalQueryDto) {
+        return this.accountingService.getIncomes(req.user.companyId, query);
     }
 
     @Post('incomes')

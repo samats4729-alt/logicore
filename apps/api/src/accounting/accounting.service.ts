@@ -103,8 +103,8 @@ export class AccountingService {
 
     // ==================== EXPENSES (manual) ====================
 
-    async getExpenses(companyId: string) {
-        return this.paymentsService.getExpenses(companyId);
+    async getExpenses(companyId: string, period?: { from?: string; to?: string }) {
+        return this.paymentsService.getExpenses(companyId, period);
     }
 
     async createExpense(companyId: string, userId: string, data: {
@@ -136,8 +136,8 @@ export class AccountingService {
 
     // ==================== INCOMES (manual) ====================
 
-    async getIncomes(companyId: string) {
-        return this.paymentsService.getIncomes(companyId);
+    async getIncomes(companyId: string, period?: { from?: string; to?: string }) {
+        return this.paymentsService.getIncomes(companyId, period);
     }
 
     async createIncome(companyId: string, userId: string, data: {
