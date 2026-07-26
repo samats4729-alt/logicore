@@ -13,6 +13,7 @@ import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../cons
 import { JournalQueryDto } from '../dto/accounting.dto';
 import { getPaginationParams } from '../../common/dto/pagination.dto';
 import * as XLSX from 'xlsx';
+import { SharedReportLinkService } from './shared-report-link.service';
 
 @Injectable()
 export class FinancialReportsService {
@@ -24,6 +25,7 @@ export class FinancialReportsService {
         private periodClosing: PeriodClosingService,
         private paymentsService: PaymentsService,
         private settingsService: FinancialSettingsService,
+        private shareLinks: SharedReportLinkService,
     ) { }
 
 
@@ -1563,44 +1565,33 @@ export class FinancialReportsService {
 
     // ==================== SHARE REPORT ====================
 
-    async generateShareToken(companyId: string, counterpartyId: string, ourRole: string): Promise<{ token: string; shareUrl: string }> {
-        const [company, counterparty] = await Promise.all([
-            this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true } }),
-            this.prisma.company.findUnique({ where: { id: counterpartyId }, select: { id: true, name: true } }),
-        ]);
-
-        if (!company) throw new NotFoundException('Компания не найдена');
-        if (!counterparty) throw new NotFoundException('Контрагент не найден');
-
-        const token = uuidv4();
-        const ttl = 60 * 60 * 24 * 7; // 7 дней
-
-        await this.redisService.set(
-            `share_report:${token}`,
-            JSON.stringify({
-                companyId,
-                companyName: company.name,
-                counterpartyId,
-                counterpartyName: counterparty.name,
-                ourRole,
-                createdAt: new Date().toISOString(),
-            }),
-            ttl,
-        );
-
-        const frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
-        const shareUrl = `${frontendUrl}/shared/report/${token}`;
-
-        return { token, shareUrl };
+    /**
+     * Выдать публичную ссылку на отчёт.
+     *
+     * Хранение и срок жизни — в `SharedReportLinkService`: ссылка живёт в
+     * базе, а не в кэше, поэтому её можно отозвать и увидеть в списке
+     * выданных.
+     */
+    async generateShareToken(
+        companyId: string,
+        counterpartyId: string,
+        ourRole: string,
+        userId: string,
+        sentToEmail?: string,
+    ): Promise<{ token: string; shareUrl: string; expiresAt: Date }> {
+        const link = await this.shareLinks.create(companyId, userId, {
+            counterpartyId,
+            ourRole,
+            sentToEmail,
+        });
+        return { token: link.token, shareUrl: link.shareUrl, expiresAt: link.expiresAt };
     }
 
     async getSharedReport(token: string) {
-        const raw = await this.redisService.get(`share_report:${token}`);
-        if (!raw) {
-            throw new NotFoundException('Ссылка недействительна или истёк срок действия');
-        }
-
-        const { companyId, companyName, counterpartyId, ourRole, createdAt } = JSON.parse(raw);
+        const link = await this.shareLinks.resolve(token);
+        await this.shareLinks.trackView(link.id);
+        const { companyId, companyName, counterpartyId, ourRole } = link;
+        const expiresAt = link.expiresAt;
         const fullReport = await this.getCounterpartyReport(companyId);
 
         const key = `${counterpartyId}__${ourRole}`;
@@ -1654,13 +1645,11 @@ export class FinancialReportsService {
         });
 
         if (!counterparty) {
-            const { counterpartyName: cpName } = JSON.parse(raw);
             return {
                 senderCompany: companyName,
-                counterpartyName: cpName,
+                counterpartyName: link.counterpartyName,
                 ourRole,
-                createdAt,
-                expiresIn: '7 дней',
+                expiresAt,
                 counterparty: null,
                 totals: null,
                 invoices,
@@ -1671,8 +1660,9 @@ export class FinancialReportsService {
             senderCompany: companyName,
             counterpartyName: counterparty.counterparty.name,
             ourRole,
-            createdAt,
-            expiresIn: '7 дней',
+            // Контрагенту показываем настоящий срок жизни ссылки, а не
+            // подпись «7 дней»: ссылку могли отозвать или выдать раньше.
+            expiresAt,
             counterparty,
             totals: {
                 theyOweUs: counterparty.theyOweUs,
@@ -1696,12 +1686,9 @@ export class FinancialReportsService {
             note?: string;
         },
     ) {
-        const raw = await this.redisService.get(`share_report:${token}`);
-        if (!raw) {
-            throw new NotFoundException('Ссылка недействительна или истёк срок действия');
-        }
-
-        const { companyId, counterpartyId } = JSON.parse(raw);
+        // Через тот же разбор токена, что и просмотр: иначе по отозванной
+        // ссылке можно было бы продолжать выставлять счета.
+        const { companyId, counterpartyId } = await this.shareLinks.resolve(token);
 
         if (!dto.orderIds || dto.orderIds.length === 0) {
             throw new BadRequestException('Счет должен содержать как минимум один заказ');

@@ -8,6 +8,7 @@ import { PeriodClosingService } from './services/period-closing.service';
 import { FinancialSettingsService } from './services/financial-settings.service';
 import { PaymentsService } from './services/payments.service';
 import { FinancialReportsService } from './services/financial-reports.service';
+import { SharedReportLinkService } from './services/shared-report-link.service';
 import { EmailModule } from '../email/email.module';
 import { PayrollModule } from '../payroll/payroll.module';
 
@@ -21,6 +22,7 @@ import { PayrollModule } from '../payroll/payroll.module';
         FinancialSettingsService,
         PaymentsService,
         FinancialReportsService,
+        SharedReportLinkService,
     ],
     exports: [
         AccountingService,
@@ -29,6 +31,7 @@ import { PayrollModule } from '../payroll/payroll.module';
         FinancialSettingsService,
         PaymentsService,
         FinancialReportsService,
+        SharedReportLinkService,
     ],
 })
 export class AccountingModule { }

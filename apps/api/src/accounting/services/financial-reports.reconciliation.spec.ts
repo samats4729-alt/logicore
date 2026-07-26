@@ -16,7 +16,9 @@ const makeService = (prisma: any) => new FinancialReportsService(
     {} as any, // periodClosing
     {} as any, // payments
     {} as any, // settings
-);
+
+        {} as any, // shareLinks
+    );
 
 describe('FinancialReportsService — акт сверки', () => {
     it('включает операцию, выполненную вечером последнего дня периода', async () => {
