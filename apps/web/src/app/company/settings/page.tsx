@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Form, Input, Button, DatePicker, message, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
+import { Form, Input, Button, Checkbox, DatePicker, message, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
 import { UploadOutlined, BankOutlined, FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -66,6 +66,8 @@ export default function SettingsPage() {
             await api.post('/company/my-companies', {
                 companyName: values.companyName,
                 bin: values.bin,
+                // Не указан — сервер считает как «перенести», это прежнее поведение.
+                copyTeam: values.copyTeam !== false,
             });
             message.success('Организация успешно добавлена');
             setModalVisible(false);
@@ -584,6 +586,14 @@ export default function SettingsPage() {
                         <div style={{ padding: '16px 0' }}>
                             <Form form={addForm} layout="vertical" onFinish={handleAddCompany}>
                                 <CompanyFormFields form={addForm} />
+                                <Form.Item
+                                    name="copyTeam"
+                                    valuePropName="checked"
+                                    initialValue={true}
+                                    extra="Снимите галочку, если новая организация должна быть видна только вам. Доступ можно выдать позже — в разделе «Сотрудники», кнопка «Доступ к организациям». Водители не переносятся в любом случае."
+                                >
+                                    <Checkbox>Дать доступ текущей команде</Checkbox>
+                                </Form.Item>
                             </Form>
                         </div>
                     </Modal>

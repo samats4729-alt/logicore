@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip, Segmented, Switch } from 'antd';
 import dayjs from 'dayjs';
 import { 
-    MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, 
+    MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, BankOutlined, 
     ApartmentOutlined, FolderOpenOutlined, PlusOutlined, UnorderedListOutlined, UserOutlined,
     DollarOutlined, CalculatorOutlined, TruckOutlined, TeamOutlined, CarryOutOutlined,
     NotificationOutlined, ShopOutlined, CoffeeOutlined, UserAddOutlined, DisconnectOutlined,
@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import UserAvatar from '@/components/UserAvatar';
+import EmployeeAccessModal from '@/components/company/EmployeeAccessModal';
 
 const ROLE_OPTIONS = [
     { label: 'Менеджер', value: 'LOGISTICIAN' },
@@ -211,6 +212,8 @@ export default function CompanyUsersPage() {
     const [generatedLink, setGeneratedLink] = useState<string | null>(null);
     const [unifiedForm] = Form.useForm();
     const [myCompanies, setMyCompanies] = useState<any[]>([]);
+    // Кому сейчас правим доступ к организациям холдинга (A-01).
+    const [accessUser, setAccessUser] = useState<CompanyUser | null>(null);
 
     // Original modals state
     const [editModalOpen, setEditModalOpen] = useState(false);
@@ -1049,6 +1052,11 @@ export default function CompanyUsersPage() {
                                 setEditModalOpen(true);
                             }}
                         />
+                    )}
+                    {myCompanies.length > 1 && record.role !== 'DRIVER' && (
+                        <Tooltip title="Доступ к организациям">
+                            <Button icon={<BankOutlined />} onClick={() => setAccessUser(record)} />
+                        </Tooltip>
                     )}
                     {record.id !== currentUser?.id && record.role !== 'COMPANY_ADMIN' && (
                         <Popconfirm
@@ -2379,6 +2387,14 @@ export default function CompanyUsersPage() {
                     </div>
                 </div>
             </Modal>
+
+            <EmployeeAccessModal
+                userId={accessUser?.id ?? null}
+                userName={accessUser ? `${accessUser.firstName} ${accessUser.lastName}` : ''}
+                defaultRole={accessUser?.role || 'LOGISTICIAN'}
+                onClose={() => setAccessUser(null)}
+                onSaved={fetchData}
+            />
         </div>
     );
 }

@@ -13,6 +13,7 @@ import { BillingService } from '../billing/billing.service';
 import { AuditService } from '../audit/audit.service';
 import { UserRole } from '@prisma/client';
 import { CreateCompanyUserDto, UpdateCompanyProfileDto, CreateDriverDto, UpdateDriverDto, CreateDepartmentDto, UpdateDepartmentDto, AssignUserDepartmentDto, CreateInvitationDto, GetCompanyUsersQueryDto, CreateVehicleDto, UpdateVehicleDto } from './dto/company.dto';
+import { SetEmployeeAccessDto } from './dto/employee-access.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { AssignDriverDto } from '../orders/dto/order.dto';
 import { setAuthCookie } from '../auth/auth-cookie';
@@ -594,9 +595,36 @@ export class CompanyController {
     }
 
     @Post('my-companies')
-    @ApiOperation({ summary: 'Создать дополнительную организацию' })
-    async addMyCompany(@Request() req: any, @Body() dto: { companyName: string; bin: string }) {
+    @ApiOperation({
+        summary: 'Создать дополнительную организацию',
+        description: 'copyTeam=false — организация видна только создателю; по умолчанию команда переносится.',
+    })
+    async addMyCompany(
+        @Request() req: any,
+        @Body() dto: { companyName: string; bin: string; copyTeam?: boolean },
+    ) {
         return this.companyService.addMyCompany(req.user.sub, dto);
+    }
+
+    @Get('employees/:userId/access')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
+    @ApiOperation({ summary: 'В каких организациях холдинга работает сотрудник' })
+    async getEmployeeAccess(@Request() req: any, @Param('userId') userId: string) {
+        return this.companyService.getEmployeeAccess(req.user.sub, userId);
+    }
+
+    @Put('employees/:userId/access')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN)
+    @ApiOperation({
+        summary: 'Задать доступ сотрудника к организациям',
+        description: 'Список приходит целиком: чего в нём нет — отзывается.',
+    })
+    async setEmployeeAccess(
+        @Request() req: any,
+        @Param('userId') userId: string,
+        @Body() dto: SetEmployeeAccessDto,
+    ) {
+        return this.companyService.setEmployeeAccess(req.user.sub, userId, dto.items);
     }
 
     @Post('switch-company/:id')
