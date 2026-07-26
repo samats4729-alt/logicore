@@ -30,7 +30,7 @@ import StatusPill from '@/components/ui/StatusPill';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
-import { createAccountingDocument, fetchAccountingDocuments } from '@/lib/accounting-documents';
+import { applyAllocations, createAccountingDocument, fetchAccountingDocuments } from '@/lib/accounting-documents';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -146,6 +146,8 @@ export default function OrderDetailPage() {
     const [documents, setDocuments] = useState<any[]>([]);
     const [uploadingDoc, setUploadingDoc] = useState(false);
     const [actLoading, setActLoading] = useState(false);
+    /** Разнесение платежа по счетам — суммы редактируются в окне платежа. */
+    const [allocations, setAllocations] = useState<Record<string, number>>({});
 
     // Unified payment states & role checks
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
@@ -628,13 +630,26 @@ export default function OrderDetailPage() {
                 date: values.date.toISOString(),
                 orderId,
             };
-            if (editingPayment) {
-                await api.put(`/accounting/payments/${editingPayment.id}`, payload);
-                message.success('Платеж обновлен');
-            } else {
-                await api.post('/accounting/payments', payload);
-                message.success('Платеж добавлен');
+            const saved = editingPayment
+                ? (await api.put(`/accounting/payments/${editingPayment.id}`, payload)).data
+                : (await api.post('/accounting/payments', payload)).data;
+            message.success(editingPayment ? 'Платеж обновлен' : 'Платеж добавлен');
+
+            // Разносим после сохранения: до этого у платежа нет id. Ошибка
+            // разнесения не отменяет сам платёж — деньги уже учтены.
+            const rows = Object.entries(allocations)
+                .filter(([, amount]) => Number(amount) > 0)
+                .map(([documentId, amount]) => ({ documentId, amount: Number(amount).toFixed(2) }));
+            if (saved?.id && rows.length) {
+                try {
+                    const result = await applyAllocations(saved.id, rows);
+                    message.success(`Разнесено по счетам: ${result.documents}`);
+                } catch (e: any) {
+                    message.warning(e.response?.data?.message || 'Платёж сохранён, но не разнесён по счетам');
+                }
             }
+
+            setAllocations({});
             setPaymentModalOpen(false);
             fetchData();
         } catch (err: any) {
@@ -1958,6 +1973,8 @@ export default function OrderDetailPage() {
                 accounts={accounts}
                 categories={categories}
                 partners={partners}
+                allocations={allocations}
+                setAllocations={setAllocations}
             />
 
             {/* =================== QUICK PARTNER MODAL =================== */}

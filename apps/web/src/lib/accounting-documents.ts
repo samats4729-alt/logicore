@@ -314,3 +314,45 @@ export function openAccountingDocumentPdf(id: string, withStamp = false) {
     const query = withStamp ? '?withStamp=true' : '';
     window.open(`${base}/accounting-documents/${id}/pdf${query}`, '_blank', 'noopener');
 }
+
+/**
+ * Разнесение платежа по счетам.
+ *
+ * Пока платёж не разнесён, он висит «общей суммой» на контрагенте: видно,
+ * что деньги пришли, но непонятно, какие счета закрыты.
+ */
+export interface AllocationSuggestionItem {
+    documentId: string;
+    number: string;
+    documentDate: string;
+    dueDate: string | null;
+    total: number;
+    amountPaid: number;
+    balanceDue: number;
+    suggestedAmount: number;
+}
+
+export interface AllocationSuggestion {
+    documents: AllocationSuggestionItem[];
+    /** Не легло ни на один счёт — аванс или переплата. */
+    unallocated: number;
+}
+
+export async function suggestAllocation(params: {
+    counterpartyId: string;
+    direction: 'IN' | 'OUT';
+    amount: string;
+}): Promise<AllocationSuggestion> {
+    const res = await api.get('/accounting-documents/allocation-suggestion', { params });
+    return res.data;
+}
+
+export async function applyAllocations(
+    paymentId: string,
+    allocations: { documentId: string; amount: string }[],
+): Promise<{ allocated: number; documents: number }> {
+    const res = await api.post(`/accounting-documents/payments/${paymentId}/allocations`, {
+        allocations,
+    });
+    return res.data;
+}

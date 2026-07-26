@@ -1,9 +1,15 @@
 'use client';
 
-import { DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select, Spin, message } from 'antd';
 import type { FormInstance } from 'antd';
+import dayjs from 'dayjs';
+import { AllocationSuggestionItem, suggestAllocation } from '@/lib/accounting-documents';
 
 const { TextArea } = Input;
+
+const money = (value: number) =>
+    `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
 
 interface Option { value: string; label: string }
 interface FinanceAccount { id: string; name: string; kind: 'CASH' | 'BANK' }
@@ -37,6 +43,13 @@ interface OrderFinanceModalsProps {
     accounts: FinanceAccount[];
     categories: FinanceCategory[];
     partners: PartnerOption[];
+
+    /**
+     * Разнесение платежа по счетам контрагента. Суммы редактируются здесь,
+     * а применяются после сохранения платежа — до этого у платежа нет id.
+     */
+    allocations: Record<string, number>;
+    setAllocations: (allocations: Record<string, number>) => void;
 }
 
 /**
@@ -50,8 +63,48 @@ export default function OrderFinanceModals({
     incomeModalOpen, setIncomeModalOpen, incomeForm, incomeLoading, incomeCategories, handleAddIncome,
     expenseModalOpen, setExpenseModalOpen, expenseForm, expenseLoading, expenseCategories, handleAddExpense,
     paymentModalOpen, setPaymentModalOpen, paymentForm, paymentLoading, editingPayment, handleSavePayment,
-    accounts, categories, partners,
+    accounts, categories, partners, allocations, setAllocations,
 }: OrderFinanceModalsProps) {
+    const [openInvoices, setOpenInvoices] = useState<AllocationSuggestionItem[]>([]);
+    const [loadingInvoices, setLoadingInvoices] = useState(false);
+
+    // Следим за суммой, направлением и контрагентом: от них зависит, какие
+    // счета можно закрыть и сколько на них ляжет.
+    const amount = Form.useWatch('amount', paymentForm);
+    const direction = Form.useWatch('direction', paymentForm);
+    const counterpartyId = Form.useWatch('counterpartyId', paymentForm);
+
+    const loadSuggestion = useCallback(async () => {
+        if (!paymentModalOpen || !counterpartyId || !amount || Number(amount) <= 0) {
+            setOpenInvoices([]);
+            return;
+        }
+        try {
+            setLoadingInvoices(true);
+            const result = await suggestAllocation({
+                counterpartyId,
+                direction: direction === 'OUT' ? 'OUT' : 'IN',
+                amount: Number(amount).toFixed(2),
+            });
+            setOpenInvoices(result.documents);
+            // Предложение подставляем как есть; бухгалтер поправит суммы.
+            const proposed: Record<string, number> = {};
+            for (const item of result.documents) {
+                if (item.suggestedAmount > 0) proposed[item.documentId] = item.suggestedAmount;
+            }
+            setAllocations(proposed);
+        } catch {
+            setOpenInvoices([]);
+        } finally {
+            setLoadingInvoices(false);
+        }
+    }, [paymentModalOpen, counterpartyId, amount, direction, setAllocations]);
+
+    useEffect(() => { loadSuggestion(); }, [loadSuggestion]);
+
+    const allocatedTotal = Object.values(allocations).reduce((sum, value) => sum + (value || 0), 0);
+    const rest = Math.round(((Number(amount) || 0) - allocatedTotal) * 100) / 100;
+
     return (
         <>
         <Modal title="Добавить поступление" open={incomeModalOpen} onCancel={() => setIncomeModalOpen(false)} onOk={() => incomeForm.submit()} okText="Добавить" cancelText="Отмена" confirmLoading={incomeLoading}>
@@ -150,6 +203,56 @@ export default function OrderFinanceModals({
                 <Form.Item name="note" label="Примечание">
                     <TextArea rows={2} placeholder="Примечание или детали платежа" />
                 </Form.Item>
+
+                {/* Разнесение по счетам: пока платёж не разнесён, видно
+                    только что деньги пришли, но не какие счета закрыты. */}
+                {loadingInvoices ? (
+                    <div style={{ textAlign: 'center', padding: 12 }}><Spin size="small" /></div>
+                ) : openInvoices.length > 0 && (
+                    <div style={{ marginTop: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                            Разнести по счетам
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', marginBottom: 8 }}>
+                            Предложено по сроку оплаты — сначала самые ранние. Суммы можно поправить.
+                        </div>
+                        {openInvoices.map((invoice) => (
+                            <div
+                                key={invoice.documentId}
+                                style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}
+                            >
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 500 }}>{invoice.number}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>
+                                        остаток {money(invoice.balanceDue)}
+                                        {invoice.dueDate && ` · до ${dayjs(invoice.dueDate).format('DD.MM.YYYY')}`}
+                                    </div>
+                                </div>
+                                <InputNumber
+                                    size="small"
+                                    min={0}
+                                    max={invoice.balanceDue}
+                                    style={{ width: 130 }}
+                                    value={allocations[invoice.documentId] ?? 0}
+                                    onChange={(value) => setAllocations({
+                                        ...allocations,
+                                        [invoice.documentId]: Number(value) || 0,
+                                    })}
+                                />
+                            </div>
+                        ))}
+                        {rest !== 0 && (
+                            <Alert
+                                type={rest < 0 ? 'error' : 'info'}
+                                showIcon
+                                style={{ marginTop: 8 }}
+                                message={rest < 0
+                                    ? `Разнесено больше платежа на ${money(-rest)}`
+                                    : `Не разнесено: ${money(rest)} — останется авансом`}
+                            />
+                        )}
+                    </div>
+                )}
             </Form>
         </Modal>
         </>
