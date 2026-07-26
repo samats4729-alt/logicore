@@ -10,9 +10,10 @@ import {
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
 import { PublicAccountingDocumentController } from './public-accounting-document.controller';
 import { StampImageService } from '../common/services/stamp-image.service';
+import { CompanyVerificationModule } from '../company/company-verification.module';
 
 @Module({
-    imports: [AccountingModule],
+    imports: [AccountingModule, CompanyVerificationModule],
     controllers: [AccountingDocumentsController, PublicAccountingDocumentController],
     providers: [
         AccountingDocumentsService,

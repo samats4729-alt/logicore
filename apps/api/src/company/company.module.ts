@@ -2,12 +2,12 @@ import { OrdersModule } from '../orders/orders.module';
 import { Module } from '@nestjs/common';
 import { BillingModule } from '../billing/billing.module';
 import { CompanyController } from './company.controller';
+import { CompanyVerificationController } from './company-verification.controller';
 import { CompanyService } from './company.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CompanyDriversService } from './services/company-drivers.service';
 import { CompanyTrackingService } from './services/company-tracking.service';
-import { CompanyVerificationService } from './services/company-verification.service';
-import { CompanyVerifiedGuard } from './guards/company-verified.guard';
+import { CompanyVerificationModule } from './company-verification.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EmailModule } from '../email/email.module';
@@ -16,6 +16,7 @@ import { IdentityModule } from '../identity/identity.module';
 @Module({
     imports: [
         PrismaModule,
+        CompanyVerificationModule,
         OrdersModule,
         EmailModule,
         BillingModule,
@@ -37,8 +38,10 @@ import { IdentityModule } from '../identity/identity.module';
             inject: [ConfigService],
         }),
     ],
-    controllers: [CompanyController],
-    providers: [CompanyService, CompanyDriversService, CompanyTrackingService, CompanyVerificationService, CompanyVerifiedGuard],
-    exports: [CompanyService, CompanyDriversService, CompanyTrackingService, CompanyVerificationService, CompanyVerifiedGuard],
+    controllers: [CompanyController, CompanyVerificationController],
+    providers: [CompanyService, CompanyDriversService, CompanyTrackingService],
+    // Ре-экспорт модулем, а не провайдером: экспортировать чужой
+    // провайдер Nest не даёт.
+    exports: [CompanyService, CompanyDriversService, CompanyTrackingService, CompanyVerificationModule],
 })
 export class CompanyModule { }

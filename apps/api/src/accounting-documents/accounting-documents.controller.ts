@@ -21,6 +21,7 @@ import { AuditService } from '../audit/audit.service';
 import { AccountingDocumentsService } from './accounting-documents.service';
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
 import { StampImageService } from '../common/services/stamp-image.service';
+import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import {
     AccountingDocumentListQueryDto,
     BillableOrdersQueryDto,
@@ -42,7 +43,7 @@ const CHANGE_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTAN
 @ApiTags('accounting-documents')
 @ApiBearerAuth()
 @Controller('accounting-documents')
-@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard, CompanyVerifiedGuard)
 @RequirePermissions('accounting')
 export class AccountingDocumentsController {
     constructor(
@@ -54,6 +55,7 @@ export class AccountingDocumentsController {
 
     @Post()
     @Roles(...CHANGE_ROLES)
+    @RequireVerifiedCompany()
     @ApiOperation({ summary: 'Создать черновик бухгалтерского документа' })
     async create(@Request() req: any, @Body() dto: CreateAccountingDocumentDto) {
         const document = await this.documents.createDraft(req.user.companyId, req.user.id, dto);
@@ -70,6 +72,7 @@ export class AccountingDocumentsController {
 
     @Post('reconciliation/from-ledger')
     @Roles(...CHANGE_ROLES)
+    @RequireVerifiedCompany()
     @ApiOperation({ summary: 'Создать черновик акта сверки из заявок и оплат' })
     async createReconciliationFromLedger(
         @Request() req: any,

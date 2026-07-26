@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
+import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
@@ -16,7 +17,7 @@ import { AuditService } from '../audit/audit.service';
 
 @ApiTags('orders')
 @Controller('orders')
-@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard, CompanyVerifiedGuard)
 @RequirePermissions('orders')
 @ApiBearerAuth()
 export class OrdersController {
@@ -30,6 +31,7 @@ export class OrdersController {
     ) { }
 
     @Post()
+    @RequireVerifiedCompany()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Создать заявку на перевозку' })
     async create(@Body() dto: CreateOrderDto, @Request() req: any) {

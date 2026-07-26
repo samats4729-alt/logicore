@@ -1,3 +1,4 @@
+import { CompanyVerificationModule } from '../company/company-verification.module';
 import { Module } from '@nestjs/common';
 import { BillingModule } from '../billing/billing.module';
 import { OrdersService } from './orders.service';
@@ -8,7 +9,7 @@ import { AccountingModule } from '../accounting/accounting.module';
 import { PayrollModule } from '../payroll/payroll.module';
 
 @Module({
-    imports: [EmailModule, AccountingModule, PayrollModule, BillingModule],
+    imports: [EmailModule, AccountingModule, PayrollModule, BillingModule, CompanyVerificationModule],
     controllers: [OrdersController],
     providers: [OrdersService, PowerOfAttorneyService],
     exports: [OrdersService],
