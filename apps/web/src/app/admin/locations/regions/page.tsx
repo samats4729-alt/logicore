@@ -63,7 +63,7 @@ export default function AdminRegionsPage() {
 
             if (editingId) {
                 await api.patch(`/cities/regions/${editingId}`, payload);
-                message.success('Регион обновлен');
+                message.success('Регион обновлён');
             } else {
                 await api.post('/cities/regions', payload);
                 message.success('Регион создан');
@@ -85,7 +85,7 @@ export default function AdminRegionsPage() {
     const handleDelete = async (id: string) => {
         try {
             await api.delete(`/cities/regions/${id}`);
-            message.success('Регион удален');
+            message.success('Регион удалён');
             if (selectedCountryId) fetchRegions(selectedCountryId);
         } catch (error) {
             message.error('Ошибка удаления');

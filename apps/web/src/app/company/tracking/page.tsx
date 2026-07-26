@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 
 const DgisTrackingMap = dynamic(() => import('@/components/ui/DgisTrackingMap'), {
     ssr: false,
@@ -74,11 +75,8 @@ interface ActiveTrip {
     driver: { latitude: number; longitude: number; speed: number; heading: number; updatedAt: string } | null;
 }
 
-const STATUS_RU: Record<string, string> = {
-    ASSIGNED: 'Назначен', EN_ROUTE_PICKUP: 'Едет на погрузку', AT_PICKUP: 'На погрузке',
-    LOADING: 'Погрузка', IN_TRANSIT: 'В пути', AT_DELIVERY: 'На выгрузке',
-    UNLOADING: 'Выгрузка', PROBLEM: 'Проблема',
-};
+// Подписи статусов — из общего словаря `lib/vocabulary`.
+const STATUS_RU = ORDER_STATUS_LABELS;
 
 function tripCity(p: TripPoint | undefined): string {
     if (!p) return '—';

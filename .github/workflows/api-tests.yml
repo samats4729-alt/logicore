@@ -31,6 +31,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Подписи статусов уже один раз разошлись по семи копиям — держим
+      # словарь единым автоматически, а не на честном слове.
+      - name: Check interface vocabulary
+        run: node scripts/check-vocabulary.js
+
       - name: Build API
         run: pnpm --filter api build
 

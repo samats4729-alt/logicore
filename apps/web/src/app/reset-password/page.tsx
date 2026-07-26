@@ -49,7 +49,7 @@ function ResetPasswordForm() {
                 <div className="lc-auth-card-title">Новый пароль</div>
                 <div className="lc-auth-card-sub">
                     {isSuccess
-                        ? 'Пароль успешно обновлен'
+                        ? 'Пароль успешно обновлён'
                         : 'Придумайте новый надежный пароль'
                     }
                 </div>

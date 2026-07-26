@@ -31,6 +31,7 @@ import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
 import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
+import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import {
     accountingDocumentHref,
     applyAllocations,
@@ -48,12 +49,9 @@ const statusColors: Record<string, string> = {
     COMPLETED: 'green', PROBLEM: 'red', CANCELLED: '#f5222d',
 };
 
-const statusLabels: Record<string, string> = {
-    DRAFT: 'Черновик', PENDING: 'Ожидает', ASSIGNED: 'Назначен',
-    EN_ROUTE_PICKUP: 'Едет на погр.', AT_PICKUP: 'На погрузке', LOADING: 'Загрузка',
-    IN_TRANSIT: 'В пути', AT_DELIVERY: 'На выгрузке', UNLOADING: 'Разгрузка',
-    COMPLETED: 'Завершён', PROBLEM: 'Проблема', CANCELLED: 'Отменён',
-};
+// Подписи статусов — из общего словаря `lib/vocabulary`,
+// чтобы один и тот же статус везде назывался одинаково.
+const statusLabels = ORDER_STATUS_LABELS;
 
 const expenseCategories = [
     { value: 'fuel', label: 'Топливо' },
@@ -628,7 +626,7 @@ export default function OrderDetailPage() {
             const saved = editingPayment
                 ? (await api.put(`/accounting/payments/${editingPayment.id}`, payload)).data
                 : (await api.post('/accounting/payments', payload)).data;
-            message.success(editingPayment ? 'Платеж обновлен' : 'Платеж добавлен');
+            message.success(editingPayment ? 'Платёж обновлён' : 'Платёж добавлен');
 
             // Разносим после сохранения: до этого у платежа нет id. Ошибка
             // разнесения не отменяет сам платёж — деньги уже учтены.
@@ -659,7 +657,7 @@ export default function OrderDetailPage() {
     const handleDeletePayment = async (id: string) => {
         try {
             await api.delete(`/accounting/payments/${id}`);
-            message.success('Платеж удален');
+            message.success('Платёж удалён');
             fetchData();
             setDocumentChainKey((key) => key + 1);
         } catch (err: any) {
@@ -1251,11 +1249,11 @@ export default function OrderDetailPage() {
             },
         },
         {
-            title: 'Счет / Касса',
+            title: 'Счёт / Касса',
             dataIndex: 'account',
             key: 'account',
             width: 140,
-            render: (_: any, r: any) => r.account?.name || (r.method === 'CASH' ? 'Наличные' : 'Расчетный счет'),
+            render: (_: any, r: any) => r.account?.name || (r.method === 'CASH' ? 'Наличные' : 'Расчетный счёт'),
         },
         {
             title: 'Статья',
@@ -1285,7 +1283,7 @@ export default function OrderDetailPage() {
                 canEditFinance && (
                     <Space size={4}>
                         <Button size="small" icon={<EditOutlined />} onClick={() => handleEditPaymentClick(r)} />
-                        <Popconfirm title="Удалить платеж?" onConfirm={() => handleDeletePayment(r.id)} okText="Да" cancelText="Нет">
+                        <Popconfirm title="Удалить платёж?" onConfirm={() => handleDeletePayment(r.id)} okText="Да" cancelText="Нет">
                             <Button size="small" danger icon={<DeleteOutlined />} />
                         </Popconfirm>
                     </Space>

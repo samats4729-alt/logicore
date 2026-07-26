@@ -502,7 +502,7 @@ export default function FinanceSettingsPage() {
 
             {/* Account Modal */}
             <Modal
-                title="Редактировать счет / кассу"
+                title="Редактировать счёт / кассу"
                 open={accountModalOpen}
                 onCancel={() => setAccountModalOpen(false)}
                 onOk={() => accountForm.submit()}

@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
+import { DOCUMENT_STATUS_LABELS } from '@/lib/vocabulary';
 
 /**
  * Типизированный доступ к бухгалтерским документам (счета, акты, акты сверки).
@@ -13,11 +14,9 @@ export type AccountingDocumentDirection = 'OUTGOING' | 'INCOMING';
 export type AccountingDocumentStatus = 'DRAFT' | 'POSTED' | 'CANCELLED';
 
 /** Термины журнала документов 1С — бухгалтер переходит оттуда. */
-export const ACCOUNTING_DOCUMENT_STATUS_LABELS: Record<AccountingDocumentStatus, string> = {
-    DRAFT: 'Черновик',
-    POSTED: 'Проведён',
-    CANCELLED: 'Отменён',
-};
+/** Подписи берутся из общего словаря — см. `lib/vocabulary`. */
+export const ACCOUNTING_DOCUMENT_STATUS_LABELS: Record<AccountingDocumentStatus, string> =
+    DOCUMENT_STATUS_LABELS as Record<AccountingDocumentStatus, string>;
 
 export interface AccountingDocumentParty {
     id: string;

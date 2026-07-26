@@ -33,17 +33,12 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { LEGACY_INVOICE_STATUS_LABELS } from '@/lib/vocabulary';
 
 const { Title, Text } = Typography;
 
-const statusLabels: Record<string, string> = {
-    DRAFT: 'Черновик',
-    PENDING: 'Ожидает оплаты',
-    DISPUTED: 'Спор (на согласовании)',
-    APPROVED: 'Согласован',
-    PAID: 'Оплачен',
-    CANCELLED: 'Отменен',
-};
+// Из общего словаря: у контрагента по ссылке те же слова, что у нас.
+const statusLabels = LEGACY_INVOICE_STATUS_LABELS;
 
 const statusColors: Record<string, string> = {
     DRAFT: 'default',
@@ -93,7 +88,7 @@ export default function PublicInvoicePage() {
             });
             setProposedPrices(pricesMap);
         } catch (e: any) {
-            message.error('Счет не найден или срок действия ссылки истек');
+            message.error('Счёт не найден или срок действия ссылки истёк');
         } finally {
             setLoading(false);
         }
@@ -177,7 +172,7 @@ export default function PublicInvoicePage() {
             <div style={{ padding: 40, maxWidth: 600, margin: '40px auto' }}>
                 <Alert
                     message="Ссылка недействительна"
-                    description="Запрошенный счет не найден или срок действия ссылки истек."
+                    description="Запрошенный счёт не найден или срок действия ссылки истёк."
                     type="error"
                     showIcon
                 />
@@ -308,8 +303,8 @@ export default function PublicInvoicePage() {
                 {isLocked && (
                     <Alert
                         style={{ marginBottom: 20 }}
-                        message="Счет согласован или оплачен"
-                        description="Этот счет уже прошел стадию согласования, согласован или оплачен бухгалтерией. Внесение изменений невозможно."
+                        message="Счёт согласован или оплачен"
+                        description="Этот счёт уже прошёл стадию согласования, согласован или оплачен бухгалтерией. Внесение изменений невозможно."
                         type="info"
                         showIcon
                     />

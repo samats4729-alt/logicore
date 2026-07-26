@@ -413,7 +413,7 @@ export default function CompanyUsersPage() {
                 name: values.name,
                 icon: values.icon || 'FolderOpenOutlined',
             });
-            message.success('Отдел обновлен');
+            message.success('Отдел обновлён');
             setRenameModalOpen(false);
             renameForm.resetFields();
             fetchData();
@@ -425,7 +425,7 @@ export default function CompanyUsersPage() {
     const handleDeleteDept = async (id: string) => {
         try {
             await api.delete(`/company/departments/${id}`);
-            message.success('Отдел удален. Сотрудники переведены в нераспределенные.');
+            message.success('Отдел удалён. Сотрудники переведены в нераспределенные.');
             fetchData();
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка удаления отдела');
