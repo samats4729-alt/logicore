@@ -1,5 +1,7 @@
 import * as PDFDocument from 'pdfkit';
 import { OrderContractService } from './order-contract.service';
+import { OrderDocumentsService } from './order-documents.service';
+import { PowerOfAttorneyService } from './power-of-attorney.service';
 
 const COMPANY = 'company-1';
 const CARRIER = 'company-2';
@@ -93,10 +95,10 @@ function makeService(stampAllowed = false) {
     const saved: any[] = [];
     const prisma: any = {
         order: { findUnique: jest.fn().mockResolvedValue(order()) },
-        orderContractDocument: {
+        orderDocument: {
             findFirst: jest.fn(async ({ where, orderBy }: any) => {
                 if (orderBy?.version) {
-                    const versions = saved.filter((d) => d.orderId === where.orderId);
+                    const versions = saved.filter((d) => d.orderId === where.orderId && d.kind === where.kind);
                     return versions.length ? versions[versions.length - 1] : null;
                 }
                 return saved.find((d) => d.id === where.id) ?? null;
@@ -121,7 +123,10 @@ function makeService(stampAllowed = false) {
                 : { stamp: null, signature: null }
         )),
     };
-    return { service: new OrderContractService(prisma, stamps), prisma, stamps, stampBuffer, saved };
+    const service = new OrderContractService(prisma, stamps);
+    const poa = new PowerOfAttorneyService(prisma, stamps);
+    const documents = new OrderDocumentsService(prisma, service, poa);
+    return { service, documents, poa, prisma, stamps, stampBuffer, saved };
 }
 
 describe('OrderContractService — договор-заявка', () => {
@@ -196,9 +201,9 @@ describe('OrderContractService — договор-заявка', () => {
     // заявку потом правят.
     describe('фиксация версий', () => {
         it('снимок не меняется, когда в заявке поменяли сумму', async () => {
-            const { service, prisma, saved } = makeService();
+            const { documents, prisma, saved } = makeService();
 
-            await service.formDocument('order-1', COMPANY, 'user-1');
+            await documents.form('CONTRACT', 'order-1', COMPANY, 'user-1');
 
             // Заявку правят задним числом: ставка выросла.
             const changed = order();
@@ -207,7 +212,7 @@ describe('OrderContractService — договор-заявка', () => {
             prisma.order.findUnique.mockResolvedValue(changed);
 
             const all = (await printedText(
-                () => service.generateSavedPdf('doc-1', COMPANY),
+                () => documents.printSaved('doc-1', COMPANY),
             )).join('\n');
 
             // Печатаем сохранённую версию — в ней прежние цифры.
@@ -218,13 +223,13 @@ describe('OrderContractService — договор-заявка', () => {
         });
 
         it('исправленный договор добавляется рядом, прежний остаётся', async () => {
-            const { service, prisma, saved } = makeService();
+            const { documents, prisma, saved } = makeService();
 
-            await service.formDocument('order-1', COMPANY, 'user-1');
+            await documents.form('CONTRACT', 'order-1', COMPANY, 'user-1');
             const changed = order();
             changed.driverCost = 350000;
             prisma.order.findUnique.mockResolvedValue(changed);
-            const second = await service.formDocument('order-1', COMPANY, 'user-1');
+            const second = await documents.form('CONTRACT', 'order-1', COMPANY, 'user-1');
 
             expect(second.version).toBe(2);
             expect(saved).toHaveLength(2);
@@ -233,11 +238,11 @@ describe('OrderContractService — договор-заявка', () => {
         });
 
         it('в самом документе пометки о версии нет', async () => {
-            const { service } = makeService();
-            await service.formDocument('order-1', COMPANY, 'user-1');
+            const { documents } = makeService();
+            await documents.form('CONTRACT', 'order-1', COMPANY, 'user-1');
 
             const all = (await printedText(
-                () => service.generateSavedPdf('doc-1', COMPANY),
+                () => documents.printSaved('doc-1', COMPANY),
             )).join('\n');
 
             // Официальная бумага выглядит одинаково у любой версии: номер

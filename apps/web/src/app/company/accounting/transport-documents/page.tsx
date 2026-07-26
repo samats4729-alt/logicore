@@ -36,7 +36,7 @@ const KIND_VIEW: Record<DocumentKind, { path: string; fileName: string; hint: st
     POWER_OF_ATTORNEY: {
         path: 'power-of-attorney',
         fileName: 'Доверенность',
-        hint: 'Доверенность выдаётся водителю на получение груза. Показаны рейсы с назначенным водителем.',
+        hint: 'Журнал учёта выданных доверенностей: сюда попадает то, что действительно выдали водителю. Каждая доверенность хранит данные на момент выдачи — если заявку потом правили, выданный документ не изменился.',
     },
     CONTRACT: {
         path: 'contract',
@@ -51,9 +51,9 @@ const money = (value: number | null) =>
     value == null ? '—' : `${value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
 
 interface JournalRow {
+    /** id сформированного документа. */
     id: string;
-    /** У договора это id документа, у доверенности — id рейса. */
-    orderId?: string;
+    orderId: string;
     orderNumber: string;
     status: string;
     createdAt: string;
@@ -63,9 +63,9 @@ interface JournalRow {
     carrier: string | null;
     customer: string | null;
     amount: number | null;
-    /** Только у договоров: номер версии и признак действующей. */
-    version?: number;
-    isCurrent?: boolean;
+    /** Номер версии и признак действующей. */
+    version: number;
+    isCurrent: boolean;
     createdBy?: { firstName: string | null; lastName: string | null } | null;
 }
 
@@ -115,11 +115,8 @@ export default function TransportDocumentsPage() {
 
     const download = async (row: JournalRow, withStamp: boolean) => {
         try {
-            // Договор печатается из сохранённой версии, доверенность — из рейса.
-            const endpoint = kind === 'CONTRACT'
-                ? `/orders/contracts/${row.id}/pdf`
-                : `/orders/${row.id}/power-of-attorney`;
-            const res = await api.get(endpoint, {
+            // Печатаем ровно ту версию, что выдали: из её снимка.
+            const res = await api.get(`/orders/documents/${row.id}/pdf`, {
                 params: withStamp ? { withStamp: 'true' } : undefined,
                 responseType: 'blob',
             });
@@ -142,7 +139,7 @@ export default function TransportDocumentsPage() {
             width: 140,
             render: (value: string, record: JournalRow) => (
                 <a
-                    onClick={() => router.push(`/company/orders/${record.orderId ?? record.id}`)}
+                    onClick={() => router.push(`/company/orders/${record.orderId}`)}
                     style={{ fontWeight: 600 }}
                 >
                     {value}
@@ -150,7 +147,7 @@ export default function TransportDocumentsPage() {
             ),
         },
         {
-            title: 'Дата',
+            title: 'Выдан',
             dataIndex: 'createdAt',
             key: 'createdAt',
             width: 100,
@@ -184,7 +181,7 @@ export default function TransportDocumentsPage() {
                 width: 220,
                 render: (value: string | null) => value || '—',
             },
-        ...(kind === 'CONTRACT' ? [{
+        {
             title: 'Версия',
             key: 'version',
             width: 150,
@@ -201,7 +198,7 @@ export default function TransportDocumentsPage() {
                     )}
                 </div>
             ),
-        }] : []),
+        },
         {
             title: 'Статус рейса',
             dataIndex: 'status',
@@ -228,7 +225,7 @@ export default function TransportDocumentsPage() {
                             type="text"
                             size="small"
                             icon={<EyeOutlined />}
-                            onClick={() => router.push(`/company/orders/${record.id}`)}
+                            onClick={() => router.push(`/company/orders/${record.orderId}`)}
                         />
                     </Tooltip>
                     <Dropdown.Button
@@ -257,7 +254,7 @@ export default function TransportDocumentsPage() {
                     <div className="lc-eyebrow">Финансы · Документы</div>
                     <h1 className="lc2-title">Доверенности и договоры-заявки</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0' }}>
-                        Документы по рейсам за период — чтобы найти нужный, не открывая каждую заявку.
+                        Выданные документы по рейсам за период — с историей исправлений.
                     </p>
                 </div>
             </div>
@@ -309,7 +306,7 @@ export default function TransportDocumentsPage() {
                             <Empty
                                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                                 description={kind === 'POWER_OF_ATTORNEY'
-                                    ? 'За период нет рейсов с назначенным водителем'
+                                    ? 'За период доверенности не выдавались. Доверенность выдаётся в карточке рейса.'
                                     : 'За период договоры не формировались. Договор создаётся в карточке рейса.'}
                             />
                         ),

@@ -3,13 +3,14 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { OrdersService } from './orders.service';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
+import { OrderDocumentsService } from './order-documents.service';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { CreateOrderDto, UpdateStatusDto, AssignDriverDto } from './dto/order.dto';
-import { UserRole, OrderStatus } from '@prisma/client';
+import { UserRole, OrderStatus, OrderDocumentKind } from '@prisma/client';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,6 +27,7 @@ export class OrdersController {
         private ordersService: OrdersService,
         private poaService: PowerOfAttorneyService,
         private contractService: OrderContractService,
+        private orderDocuments: OrderDocumentsService,
         private emailService: EmailService,
         private prisma: PrismaService,
         private billingService: BillingService,
@@ -147,69 +149,73 @@ export class OrdersController {
     // Объявлено до `:id/...`, иначе путь съедается параметром.
     @Get('document-journal')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER)
-    @ApiOperation({ summary: 'Журнал доверенностей и договоров-заявок' })
+    @ApiOperation({
+        summary: 'Журнал выданных доверенностей и договоров-заявок',
+        description: 'Сформированные документы со снимком, включая прежние версии.',
+    })
     listDocumentJournal(
         @Request() req: any,
         @Query('kind') kind?: string,
         @Query('from') from?: string,
         @Query('to') to?: string,
     ) {
-        // Договоры — сформированные документы со снимком; доверенности —
-        // рейсы, потому что версий у них нет.
-        if (kind === 'CONTRACT') {
-            return this.contractService.listContractJournal(req.user.companyId, { from, to });
-        }
-        return this.contractService.listJournal(req.user.companyId, {
-            kind: kind === 'CONTRACT' ? 'CONTRACT' : 'POWER_OF_ATTORNEY',
+        return this.orderDocuments.listJournal(req.user.companyId, {
+            kind: this.documentKind(kind),
             from,
             to,
         });
     }
 
-    @Get(':id/contracts')
+    @Get('documents/:documentId/pdf')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER)
-    @ApiOperation({ summary: 'Сформированные договоры-заявки по рейсу' })
-    listContracts(@Param('id') id: string, @Request() req: any) {
-        return this.contractService.listForOrder(id, req.user.companyId);
-    }
-
-    @Post(':id/contracts')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
-    @ApiOperation({
-        summary: 'Сформировать договор-заявку',
-        description: 'Снимает данные заявки; прежние версии остаются в истории.',
-    })
-    async formContract(@Param('id') id: string, @Request() req: any) {
-        const document = await this.contractService.formDocument(id, req.user.companyId, req.user.sub);
-        await this.auditService.log({
-            companyId: req.user.companyId,
-            user: req.user,
-            action: 'CREATE',
-            entity: 'order_contract',
-            entityId: document.id,
-            entityLabel: `Договор-заявка по рейсу, версия ${document.version}`,
-        });
-        return document;
-    }
-
-    @Get('contracts/:documentId/pdf')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER)
-    @ApiOperation({ summary: 'Печать сохранённой версии договора-заявки' })
-    async downloadSavedContract(
+    @ApiOperation({ summary: 'Печать сохранённой версии документа по рейсу' })
+    async downloadSavedDocument(
         @Param('documentId') documentId: string,
         @Request() req: any,
         @Res() res: Response,
         @Query('withStamp') withStamp?: string,
     ) {
-        const pdfBuffer = await this.contractService.generateSavedPdf(documentId, req.user.companyId, {
+        const pdfBuffer = await this.orderDocuments.printSaved(documentId, req.user.companyId, {
             withStamp: withStamp === 'true',
         });
         res.set({
             'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="Contract_${documentId}.pdf"`,
+            'Content-Disposition': `attachment; filename="Document_${documentId}.pdf"`,
             'Content-Length': pdfBuffer.length,
         });
         res.end(pdfBuffer);
+    }
+
+    @Get(':id/documents')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Сформированные версии документа по рейсу' })
+    listOrderDocuments(@Param('id') id: string, @Request() req: any, @Query('kind') kind?: string) {
+        return this.orderDocuments.listForOrder(this.documentKind(kind), id, req.user.companyId);
+    }
+
+    @Post(':id/documents')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({
+        summary: 'Сформировать документ по рейсу',
+        description: 'Снимает данные заявки; прежние версии остаются в истории.',
+    })
+    async formOrderDocument(@Param('id') id: string, @Request() req: any, @Query('kind') kind?: string) {
+        const documentKind = this.documentKind(kind);
+        const document = await this.orderDocuments.form(documentKind, id, req.user.companyId, req.user.sub);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'order_document',
+            entityId: document.id,
+            entityLabel: `${documentKind === 'CONTRACT' ? 'Договор-заявка' : 'Доверенность'} по рейсу, версия ${document.version}`,
+        });
+        return document;
+    }
+
+    /** Вид документа из строки запроса; по умолчанию — доверенность. */
+    private documentKind(kind?: string): OrderDocumentKind {
+        return kind === 'CONTRACT' ? OrderDocumentKind.CONTRACT : OrderDocumentKind.POWER_OF_ATTORNEY;
     }
 
     @Get(':id/contract')

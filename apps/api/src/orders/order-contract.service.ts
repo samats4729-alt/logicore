@@ -61,210 +61,36 @@ export class OrderContractService {
     ) {}
 
     /**
-     * Журнал сформированных договоров-заявок.
+     * Собрать снимок договора-заявки из текущих данных заявки.
      *
-     * Здесь именно документы, а не рейсы: договор существует как
-     * сохранённая версия со снимком, и в журнале должно быть видно то же
-     * самое, что подписано, — включая прежние версии.
+     * Снимок — это то, что подписывают: заявку после подписания ещё правят,
+     * а документ меняться не должен.
      */
-    async listContractJournal(companyId: string, query: { from?: string; to?: string }) {
-        const documents = await this.prisma.orderContractDocument.findMany({
-            where: {
-                companyId,
-                ...(query.from || query.to
-                    ? {
-                        createdAt: {
-                            gte: query.from ? new Date(query.from) : undefined,
-                            lte: query.to ? new Date(`${query.to}T23:59:59.999Z`) : undefined,
-                        },
-                    }
-                    : {}),
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 300,
-            select: {
-                id: true,
-                orderId: true,
-                version: true,
-                createdAt: true,
-                snapshot: true,
-                createdBy: { select: { firstName: true, lastName: true } },
-                order: { select: { orderNumber: true, status: true } },
-            },
-        });
-
-        // Действующая версия — с наибольшим номером в рамках заявки.
-        const latest = new Map<string, number>();
-        for (const document of documents) {
-            latest.set(document.orderId, Math.max(latest.get(document.orderId) ?? 0, document.version));
-        }
-
-        return documents.map((document) => {
-            const snapshot = document.snapshot as any;
-            const points = snapshot?.order?.routePoints ?? [];
-            return {
-                id: document.id,
-                orderId: document.orderId,
-                orderNumber: snapshot?.order?.orderNumber ?? document.order?.orderNumber ?? null,
-                status: document.order?.status ?? null,
-                version: document.version,
-                isCurrent: latest.get(document.orderId) === document.version,
-                createdAt: document.createdAt,
-                createdBy: document.createdBy,
-                route: points.length
-                    ? `${this.place(points[0])} — ${this.place(points[points.length - 1])}`
-                    : null,
-                carrier: snapshot?.carrier?.name ?? null,
-                driverName: snapshot?.order?.assignedDriverName ?? null,
-                driverPlate: snapshot?.order?.assignedDriverPlate ?? null,
-                amount: snapshot?.order?.driverCost ?? null,
-            };
-        });
-    }
-
-    /**
-     * Журнал доверенностей: рейсы с назначенным водителем.
-     *
-     * Доверенность, в отличие от договора, не фиксируется версиями —
-     * она разовая, и печатается из текущих данных заявки.
-     */
-    async listJournal(
-        companyId: string,
-        query: { kind: 'POWER_OF_ATTORNEY' | 'CONTRACT'; from?: string; to?: string },
-    ) {
-        const isContract = query.kind === 'CONTRACT';
-        const orders = await this.prisma.order.findMany({
-            where: {
-                status: { notIn: ['DRAFT', 'CANCELLED'] },
-                OR: [
-                    { forwarderId: companyId },
-                    { partnerId: companyId },
-                    { subForwarderId: companyId },
-                    { customerCompanyId: companyId },
-                ],
-                ...(isContract
-                    // Договор-заявка заключается с перевозчиком: без него
-                    // документу не с кем быть подписанным.
-                    ? { AND: [{ OR: [{ partnerId: { not: null } }, { subForwarderId: { not: null } }] }] }
-                    // Доверенность выдаётся водителю.
-                    : { assignedDriverName: { not: null } }),
-                ...(query.from || query.to
-                    ? {
-                        createdAt: {
-                            gte: query.from ? new Date(query.from) : undefined,
-                            lte: query.to ? new Date(`${query.to}T23:59:59.999Z`) : undefined,
-                        },
-                    }
-                    : {}),
-            },
-            select: {
-                id: true,
-                orderNumber: true,
-                status: true,
-                createdAt: true,
-                assignedDriverName: true,
-                assignedDriverPlate: true,
-                driverCost: true,
-                customerPrice: true,
-                partner: { select: { id: true, name: true } },
-                subForwarder: { select: { id: true, name: true } },
-                customerCompany: { select: { id: true, name: true } },
-                routePoints: {
-                    orderBy: { sequence: 'asc' },
-                    select: { location: { select: { city: true, address: true } } },
-                },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 300,
-        });
-
-        return orders.map((order) => ({
-            id: order.id,
-            orderNumber: order.orderNumber,
-            status: order.status,
-            createdAt: order.createdAt,
-            route: order.routePoints.length
-                ? `${this.place(order.routePoints[0])} — ${this.place(order.routePoints[order.routePoints.length - 1])}`
-                : null,
-            driverName: order.assignedDriverName,
-            driverPlate: order.assignedDriverPlate,
-            carrier: order.subForwarder?.name ?? order.partner?.name ?? null,
-            customer: order.customerCompany?.name ?? null,
-            amount: isContract ? order.driverCost : order.customerPrice,
-        }));
-    }
-
-    /**
-     * Сформировать договор-заявку: снять данные заявки и сохранить.
-     *
-     * Каждое формирование — новая версия. Прежняя остаётся: если сумма
-     * изменилась и перевозчику отправили исправленный договор, старый
-     * подписанный вариант всё равно должен быть виден.
-     */
-    async formDocument(orderId: string, companyId: string, userId: string) {
+    async snapshotFor(orderId: string, companyId: string) {
         const { order, customer, carrier } = await this.collect(orderId, companyId);
-        const snapshot = this.snapshotOf(order, customer, carrier);
-
-        return this.prisma.$transaction(async (tx) => {
-            const last = await tx.orderContractDocument.findFirst({
-                where: { orderId },
-                orderBy: { version: 'desc' },
-                select: { version: true },
-            });
-            return tx.orderContractDocument.create({
-                data: {
-                    companyId,
-                    orderId,
-                    version: (last?.version ?? 0) + 1,
-                    snapshot: snapshot as any,
-                    createdById: userId,
-                },
-                select: { id: true, version: true, createdAt: true },
-            });
-        });
+        return this.snapshotOf(order, customer, carrier);
     }
 
-    /** Версии договора по заявке — история для карточки рейса. */
-    async listForOrder(orderId: string, companyId: string) {
-        const documents = await this.prisma.orderContractDocument.findMany({
-            where: { orderId, companyId },
-            orderBy: { version: 'desc' },
-            select: {
-                id: true,
-                version: true,
-                createdAt: true,
-                snapshot: true,
-                createdBy: { select: { firstName: true, lastName: true } },
-            },
-        });
-        return documents.map((document, index) => {
-            const snapshot = document.snapshot as any;
-            return {
-                id: document.id,
-                version: document.version,
-                createdAt: document.createdAt,
-                createdBy: document.createdBy,
-                // Действующей считается последняя сформированная версия.
-                isCurrent: index === 0,
-                rate: snapshot?.order?.driverCost ?? null,
-                carrierName: snapshot?.carrier?.name ?? null,
-                driverName: snapshot?.order?.assignedDriverName ?? null,
-            };
-        });
+    /** Короткая строка для журнала — без открытия PDF. */
+    summaryOf(snapshot: any) {
+        const points = snapshot?.order?.routePoints ?? [];
+        return {
+            orderNumber: snapshot?.order?.orderNumber ?? null,
+            route: points.length
+                ? `${this.place(points[0])} — ${this.place(points[points.length - 1])}`
+                : null,
+            driverName: snapshot?.order?.assignedDriverName ?? null,
+            driverPlate: snapshot?.order?.assignedDriverPlate ?? null,
+            carrier: snapshot?.carrier?.name ?? null,
+            amount: snapshot?.order?.driverCost ?? null,
+        };
     }
 
-    /** Печать сохранённой версии — строго из её снимка. */
-    async generateSavedPdf(documentId: string, companyId: string, options?: { withStamp?: boolean }) {
-        const document = await this.prisma.orderContractDocument.findFirst({
-            where: { id: documentId, companyId },
-            select: { snapshot: true },
-        });
-        if (!document) throw new NotFoundException('Договор-заявка не найден');
-
-        const snapshot = document.snapshot as any;
+    /** Печать снимка: и для «живого» договора, и для сохранённой версии. */
+    async renderFromSnapshot(snapshot: any, companyId: string, options?: { withStamp?: boolean }) {
         const { stamp, signature } = await this.stamps.loadFor(
             snapshot.customer,
-            options?.withStamp === true,
+            options?.withStamp === true && snapshot.customer?.id === companyId,
         );
         return this.render(snapshot.order, snapshot.customer, snapshot.carrier, { stamp, signature });
     }
@@ -349,15 +175,8 @@ export class OrderContractService {
     }
 
     async generatePdf(orderId: string, companyId: string, options?: { withStamp?: boolean }) {
-        const { order, customer, carrier } = await this.collect(orderId, companyId);
-
-        // Печать только своя и только по флажку — см. правило T-04.
-        const { stamp, signature } = await this.stamps.loadFor(
-            customer,
-            options?.withStamp === true,
-        );
-
-        return this.render(order, customer, carrier, { stamp, signature });
+        const snapshot = await this.snapshotFor(orderId, companyId);
+        return this.renderFromSnapshot(snapshot, companyId, options);
     }
 
     private render(

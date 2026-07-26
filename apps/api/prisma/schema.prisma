@@ -108,7 +108,7 @@ model User {
   id                    String                  @id @default(cuid())
   /// Компании, которые этот пользователь подтвердил как админ платформы.
   verifiedCompanies     Company[]               @relation("VerifiedCompanies")
-  createdOrderContracts OrderContractDocument[] @relation("CreatedOrderContracts")
+  createdOrderDocuments OrderDocument[] @relation("CreatedOrderDocuments")
   email                 String?                 @unique
   googleId              String?                 @unique // Google OAuth ID
   phone                 String
@@ -359,7 +359,7 @@ model Company {
   stockWarehouses                 StockWarehouse[]              @relation("CompanyWarehouses")
   stockMoves                      StockMove[]                   @relation("CompanyStockMoves")
 
-  orderContracts OrderContractDocument[] @relation("CompanyOrderContracts")
+  orderDocuments OrderDocument[] @relation("CompanyOrderDocuments")
 
   @@index([bin])
   @@index([verificationStatus])
@@ -491,7 +491,7 @@ model City {
 
 model Order {
   id                      String                    @id @default(cuid())
-  contractDocuments       OrderContractDocument[]   @relation("OrderContracts")
+  formedDocuments         OrderDocument[]           @relation("OrderDocuments")
   orderNumber             String                    @unique // Номер заявки
   status                  OrderStatus               @default(DRAFT)
   accountingDocumentLines AccountingDocumentLine[]
@@ -1675,24 +1675,42 @@ model AccountingPaymentAllocation {
 /// заявки, как в образце заказчика. Версия — внутренний признак платформы
 /// и в документ не попадает, иначе на официальной бумаге появилась бы
 /// пометка «исправление».
-model OrderContractDocument {
+/// Вид документа по рейсу, который сохраняется версиями.
+enum OrderDocumentKind {
+  /// Договор-заявка на перевозку.
+  CONTRACT
+  /// Доверенность на водителя (форма М-2).
+  POWER_OF_ATTORNEY
+}
+
+/// Сформированный документ по рейсу со снимком данных.
+///
+/// Печатная форма собирается из заявки, а заявку правят: меняется ставка,
+/// водитель, дата. Подписанный документ от этого меняться не должен, поэтому
+/// каждое формирование сохраняет снимок и получает свой номер версии.
+/// Прежние версии не удаляются — «исправленный» документ добавляется рядом.
+/// Номера версии в самой печатной форме нет: это внутренняя пометка
+/// платформы, а не реквизит официального бланка.
+model OrderDocument {
   id        String  @id @default(cuid())
   companyId String
-  company   Company @relation("CompanyOrderContracts", fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company @relation("CompanyOrderDocuments", fields: [companyId], references: [id], onDelete: Cascade)
   orderId   String
-  order     Order   @relation("OrderContracts", fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order   @relation("OrderDocuments", fields: [orderId], references: [id], onDelete: Cascade)
 
-  /// Порядковый номер версии в рамках одной заявки: 1, 2, 3…
+  kind OrderDocumentKind
+
+  /// Порядковый номер версии в рамках заявки и вида документа: 1, 2, 3…
   version  Int
-  /// Данные заявки и обеих сторон на момент формирования.
+  /// Данные заявки и сторон на момент формирования.
   snapshot Json
 
   createdById String
-  createdBy   User     @relation("CreatedOrderContracts", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy   User     @relation("CreatedOrderDocuments", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
 
-  @@unique([orderId, version])
-  @@index([companyId, createdAt])
+  @@unique([orderId, kind, version])
+  @@index([companyId, kind, createdAt])
 }
 
 model AccountingDocumentLink {

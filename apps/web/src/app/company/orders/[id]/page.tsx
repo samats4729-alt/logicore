@@ -1016,50 +1016,102 @@ export default function OrderDetailPage() {
     };
 
     /**
-     * Договор-заявка. Сформированные версии хранят снимок данных заявки:
-     * подписанный документ не меняется, если заявку потом правят.
+     * Документы по рейсу: договор-заявка и доверенность.
+     *
+     * Сформированные версии хранят снимок данных заявки — подписанный
+     * документ не меняется, если заявку потом правят. Исправление
+     * добавляет версию рядом, прежняя остаётся.
      */
-    const [contracts, setContracts] = useState<any[]>([]);
-    const [contractBusy, setContractBusy] = useState(false);
-
-    const loadContracts = async () => {
-        try {
-            const res = await api.get(`/orders/${orderId}/contracts`);
-            setContracts(res.data || []);
-        } catch { setContracts([]); }
+    type OrderDocKind = 'CONTRACT' | 'POWER_OF_ATTORNEY';
+    const DOC_TITLE: Record<OrderDocKind, string> = {
+        CONTRACT: 'Договор-заявка',
+        POWER_OF_ATTORNEY: 'Доверенность',
     };
 
-    const formContract = async () => {
+    const [contracts, setContracts] = useState<any[]>([]);
+    const [poaDocuments, setPoaDocuments] = useState<any[]>([]);
+    const [docBusy, setDocBusy] = useState<OrderDocKind | null>(null);
+
+    const applyDocumentRows = (kind: OrderDocKind, rows: any[]) => {
+        if (kind === 'CONTRACT') setContracts(rows);
+        else setPoaDocuments(rows);
+    };
+
+    const loadDocuments = async (kind: OrderDocKind) => {
         try {
-            setContractBusy(true);
-            const res = await api.post(`/orders/${orderId}/contracts`);
+            const res = await api.get(`/orders/${orderId}/documents`, { params: { kind } });
+            applyDocumentRows(kind, res.data || []);
+        } catch { applyDocumentRows(kind, []); }
+    };
+
+    const loadContracts = async () => {
+        await Promise.all([loadDocuments('CONTRACT'), loadDocuments('POWER_OF_ATTORNEY')]);
+    };
+
+    const formDocument = async (kind: OrderDocKind) => {
+        try {
+            setDocBusy(kind);
+            const res = await api.post(`/orders/${orderId}/documents`, null, { params: { kind } });
             message.success(res.data.version > 1
-                ? `Сформирован исправленный договор (версия ${res.data.version}); прежний сохранён`
-                : 'Договор-заявка сформирован');
-            await loadContracts();
+                ? `${DOC_TITLE[kind]}: сформирована версия ${res.data.version}, прежняя сохранена`
+                : `${DOC_TITLE[kind]} сформирован${kind === 'CONTRACT' ? '' : 'а'}`);
+            await loadDocuments(kind);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось сформировать договор-заявку');
+            message.error(e.response?.data?.message || `Не удалось сформировать: ${DOC_TITLE[kind]}`);
         } finally {
-            setContractBusy(false);
+            setDocBusy(null);
         }
     };
 
-    const downloadContract = async (documentId: string, withStamp = false) => {
+    const downloadDocument = async (kind: OrderDocKind, documentId: string, withStamp = false) => {
         try {
-            const res = await api.get(`/orders/contracts/${documentId}/pdf`, {
+            const res = await api.get(`/orders/documents/${documentId}/pdf`, {
                 params: withStamp ? { withStamp: 'true' } : undefined,
                 responseType: 'blob',
             });
             const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Договор-заявка_${data?.order?.orderNumber || orderId}.pdf`;
+            a.download = `${DOC_TITLE[kind]}_${data?.order?.orderNumber || orderId}.pdf`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось скачать договор');
+            message.error(e.response?.data?.message || 'Не удалось скачать документ');
         }
     };
+
+    /** Список сохранённых версий с кнопкой печати каждой. */
+    const renderDocumentVersions = (kind: OrderDocKind, rows: any[]) => rows.map((row) => (
+        <div
+            key={row.id}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12 }}
+        >
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div>
+                    от {dayjs(row.createdAt).format('DD.MM.YYYY HH:mm')}
+                    {row.isCurrent && <Tag color="green" style={{ marginLeft: 6 }}>действующий</Tag>}
+                </div>
+                <div style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>
+                    {kind === 'CONTRACT'
+                        ? `ставка ${(row.amount || 0).toLocaleString('ru-RU')} ₸`
+                        : row.driverName || '—'}
+                </div>
+            </div>
+            <Dropdown.Button
+                size="small"
+                onClick={() => downloadDocument(kind, row.id)}
+                menu={{
+                    items: [{
+                        key: 'stamp',
+                        label: 'С подписью и печатью',
+                        onClick: () => downloadDocument(kind, row.id, true),
+                    }],
+                }}
+            >
+                Скачать
+            </Dropdown.Button>
+        </div>
+    ));
 
     /** withStamp — флажок «Подпись и печать»; по умолчанию бланк чистый. */
     const handleDownloadPoA = async (withStamp = false) => {
@@ -1620,48 +1672,26 @@ export default function OrderDetailPage() {
                                                         </Dropdown.Button>
                                                         <Button
                                                             icon={<FilePdfOutlined />}
-                                                            loading={contractBusy}
-                                                            onClick={formContract}
+                                                            loading={docBusy === 'POWER_OF_ATTORNEY'}
+                                                            onClick={() => formDocument('POWER_OF_ATTORNEY')}
+                                                            block
+                                                        >
+                                                            {poaDocuments.length
+                                                                ? 'Выдать исправленную доверенность'
+                                                                : 'Выдать доверенность (в журнал)'}
+                                                        </Button>
+                                                        {renderDocumentVersions('POWER_OF_ATTORNEY', poaDocuments)}
+                                                        <Button
+                                                            icon={<FilePdfOutlined />}
+                                                            loading={docBusy === 'CONTRACT'}
+                                                            onClick={() => formDocument('CONTRACT')}
                                                             block
                                                         >
                                                             {contracts.length
                                                                 ? 'Сформировать исправленный договор'
                                                                 : 'Сформировать договор-заявку'}
                                                         </Button>
-                                                        {contracts.map((contract) => (
-                                                            <div
-                                                                key={contract.id}
-                                                                style={{
-                                                                    display: 'flex', alignItems: 'center', gap: 8,
-                                                                    padding: '6px 0', fontSize: 12,
-                                                                }}
-                                                            >
-                                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                                    <div>
-                                                                        от {dayjs(contract.createdAt).format('DD.MM.YYYY HH:mm')}
-                                                                        {contract.isCurrent && (
-                                                                            <Tag color="green" style={{ marginLeft: 6 }}>действующий</Tag>
-                                                                        )}
-                                                                    </div>
-                                                                    <div style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>
-                                                                        ставка {(contract.rate || 0).toLocaleString('ru-RU')} ₸
-                                                                    </div>
-                                                                </div>
-                                                                <Dropdown.Button
-                                                                    size="small"
-                                                                    onClick={() => downloadContract(contract.id)}
-                                                                    menu={{
-                                                                        items: [{
-                                                                            key: 'stamp',
-                                                                            label: 'С подписью и печатью',
-                                                                            onClick: () => downloadContract(contract.id, true),
-                                                                        }],
-                                                                    }}
-                                                                >
-                                                                    Скачать
-                                                                </Dropdown.Button>
-                                                            </div>
-                                                        ))}
+                                                        {renderDocumentVersions('CONTRACT', contracts)}
                                                         <Button
                                                             icon={<MailOutlined />}
                                                             onClick={openSharePoAModal}

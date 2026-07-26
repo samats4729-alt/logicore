@@ -1,9 +1,42 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { S3Service } from '../s3/s3.service';
+import { StampImageService } from '../common/services/stamp-image.service';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
-import * as fs from 'fs';
+
+/**
+ * Снимок доверенности: ровно те значения, которые попадают в бланк.
+ *
+ * Хранится в OrderDocument и больше не пересчитывается. Поэтому здесь
+ * только готовые строки: если завтра поменяется способ склонения ФИО или
+ * формат реквизитов, уже выданная доверенность напечатается как прежде.
+ */
+export interface PowerOfAttorneySnapshot {
+    orderNumber: string;
+    issuedAt: string;
+    validTo: string;
+    driverName: string;
+    driverShort: string;
+    driverDocType: string;
+    driverDocNumber: string;
+    driverDocIssuedBy: string;
+    driverDocIssuedAt: string | null;
+    vehicleInfo: string;
+    driverPlate: string;
+    supplierName: string;
+    route: string;
+    cargoDescription: string;
+    cargoWeightKg: number;
+    issuer: {
+        id: string;
+        name: string;
+        directorName: string;
+        orgDetails: string;
+        bankDetails: string;
+        stampImage: string | null;
+        signatureImage: string | null;
+    };
+}
 
 @Injectable()
 export class PowerOfAttorneyService {
@@ -11,22 +44,17 @@ export class PowerOfAttorneyService {
 
     constructor(
         private prisma: PrismaService,
-        private s3Service: S3Service,
+        private stamps: StampImageService,
     ) { }
 
     /**
-     * PDF доверенности на водителя.
+     * Собрать снимок доверенности из текущих данных заявки.
      *
-     * Печать и подпись — только по явному запросу (`withStamp`) и только
-     * если доверенность выписывает та же компания, которая её печатает.
-     * Эмитентом может оказаться другая сторона заявки (например, когда мы
-     * на рейсе лишь партнёр) — ставить её печать система права не имеет.
+     * Выделено из печати, потому что доверенность теперь сохраняется
+     * версиями: сформированный документ печатается из снимка, а не из
+     * заявки, которую после выдачи ещё могут править.
      */
-    async generatePdf(
-        orderId: string,
-        companyId: string,
-        options?: { withStamp?: boolean },
-    ): Promise<Buffer> {
+    async snapshotFor(orderId: string, companyId: string): Promise<PowerOfAttorneySnapshot> {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: {
@@ -42,7 +70,7 @@ export class PowerOfAttorneyService {
 
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        // Определяем компанию-эмитента (кто выписывает доверенность) и исполнителя (кто везет груз)
+        // Компания-эмитент (кто выписывает доверенность) и исполнитель (кто везёт груз)
         let issuerCompany: any = null;
         let executorCompany: any = null;
 
@@ -60,31 +88,13 @@ export class PowerOfAttorneyService {
         if (!issuerCompany) throw new NotFoundException('Компания-отправитель не найдена');
         if (!executorCompany) throw new NotFoundException('Компания-исполнитель не найдена');
 
-        // Загружаем буферы для печати и подписи компании-эмитента (Заказчика)
-        let stampBuffer: Buffer | null = null;
-        let signatureBuffer: Buffer | null = null;
-
-        this.logger.log(`[PoA] Issuer company "${issuerCompany.name}" (ID: ${issuerCompany.id}) has stampImage="${issuerCompany.stampImage}", signatureImage="${issuerCompany.signatureImage}"`);
-
-        // Не загружаем изображения вовсе, если печать не запрошена или
-        // эмитент — не мы: чего нет в буфере, то не попадёт в документ.
-        const mayStamp = options?.withStamp === true && issuerCompany.id === companyId;
-        if (mayStamp && issuerCompany.stampImage) {
-            stampBuffer = await this.getImageBuffer(issuerCompany.stampImage);
-            this.logger.log(`[PoA] Loaded stampBuffer: ${stampBuffer ? stampBuffer.length + ' bytes' : 'failed/null'}`);
-        }
-        if (mayStamp && issuerCompany.signatureImage) {
-            signatureBuffer = await this.getImageBuffer(issuerCompany.signatureImage);
-            this.logger.log(`[PoA] Loaded signatureBuffer: ${signatureBuffer ? signatureBuffer.length + ' bytes' : 'failed/null'}`);
-        }
-
         // Данные водителя
         const driver = order.driver;
-        
+
         let driverLastName = '—';
         let driverFirstName = '';
         let driverMiddleName = '';
-        
+
         if (driver) {
             driverLastName = driver.lastName || '';
             driverFirstName = driver.firstName || '';
@@ -95,16 +105,16 @@ export class PowerOfAttorneyService {
             if (parts.length > 1) driverFirstName = parts[1];
             if (parts.length > 2) driverMiddleName = parts.slice(2).join(' ');
         }
-        
+
         const driverName = driver
             ? `${driver.lastName} ${driver.firstName} ${driver.middleName || ''}`.trim()
             : (order.assignedDriverName || '—');
         const driverDoc = driver?.docNumber || driver?.iin || '—';
         const driverPlate = driver?.vehiclePlate || order.assignedDriverPlate || '—';
         const driverTrailer = driver?.trailerNumber || order.assignedDriverTrailer || '—';
-        
+
         const driverShort = `${driverLastName} ${driverFirstName ? driverFirstName[0] + '.' : ''} ${driverMiddleName ? driverMiddleName[0] + '.' : ''}`.trim();
-        let docTypeStr = driver?.docType === 'PASSPORT' ? 'Иностранный паспорт' : 'Удостоверение личности';
+        const docTypeStr = driver?.docType === 'PASSPORT' ? 'Иностранный паспорт' : 'Удостоверение личности';
         const docIssuedBy = driver?.docIssuedBy || '—';
 
         // Получатель груза (из точки доставки)
@@ -116,13 +126,107 @@ export class PowerOfAttorneyService {
         const deliveryCity = deliveryPoint?.location?.city || deliveryPoint?.location?.address || '—';
         const route = `${pickupCity} - ${deliveryCity}`;
 
+        const vehicleParts: string[] = [];
+        if (driver?.vehicleModel) vehicleParts.push(driver.vehicleModel);
+        if (driverPlate && driverPlate !== '—') vehicleParts.push(driverPlate);
+        if (driverTrailer && driverTrailer !== '—') vehicleParts.push(`ПП ${driverTrailer}`);
+
+        // «На получение от» — наименование поставщика (форма М-2).
+        // Для экспедитора/перевозчика поставщик — компания-заказчик перевозки;
+        // если доверенность выписывает сам заказчик — название точки погрузки.
+        const customerName = order.customerCompany?.name || order.customer?.company?.name || '';
+        const pickupName = pickupPoint?.location?.name || '';
+        const isIssuerCustomer = !!issuerCompany?.id && issuerCompany.id === order.customerCompanyId;
+        const supplierRaw = isIssuerCustomer
+            ? (pickupName || customerName)
+            : (customerName || pickupName);
+
+        const validToDate = deliveryPoint?.expectedDate
+            ? new Date(deliveryPoint.expectedDate)
+            : new Date(order.createdAt.getTime() + 10 * 24 * 60 * 60 * 1000);
+
+        return {
+            orderNumber: order.orderNumber,
+            issuedAt: order.createdAt.toISOString(),
+            validTo: validToDate.toISOString(),
+            driverName,
+            driverShort,
+            driverDocType: docTypeStr,
+            driverDocNumber: driverDoc,
+            driverDocIssuedBy: docIssuedBy,
+            driverDocIssuedAt: driver?.docIssuedAt ? new Date(driver.docIssuedAt).toISOString() : null,
+            vehicleInfo: vehicleParts.join(' ') || '—',
+            driverPlate,
+            supplierName: this.formatFullCompanyName(supplierRaw || '—'),
+            route,
+            cargoDescription: order.cargoDescription || '—',
+            cargoWeightKg: Number(order.cargoWeight || 0),
+            issuer: {
+                id: issuerCompany.id,
+                name: issuerCompany.name,
+                directorName: issuerCompany.directorName || '—',
+                orgDetails: this.formatCompanyDetails(issuerCompany),
+                bankDetails: this.formatBankDetails(issuerCompany),
+                stampImage: issuerCompany.stampImage ?? null,
+                signatureImage: issuerCompany.signatureImage ?? null,
+            },
+        };
+    }
+
+    /** Короткая строка для журнала — без открытия PDF. */
+    summaryOf(snapshot: PowerOfAttorneySnapshot) {
+        return {
+            orderNumber: snapshot.orderNumber,
+            route: snapshot.route,
+            driverName: snapshot.driverName,
+            driverPlate: snapshot.driverPlate === '—' ? null : snapshot.driverPlate,
+            carrier: snapshot.issuer.name,
+            amount: null as number | null,
+        };
+    }
+
+    /**
+     * PDF доверенности на водителя.
+     *
+     * Печать и подпись — только по явному запросу (`withStamp`) и только
+     * если доверенность выписывает та же компания, которая её печатает.
+     * Эмитентом может оказаться другая сторона заявки (например, когда мы
+     * на рейсе лишь партнёр) — ставить её печать система права не имеет.
+     */
+    async generatePdf(
+        orderId: string,
+        companyId: string,
+        options?: { withStamp?: boolean },
+    ): Promise<Buffer> {
+        const snapshot = await this.snapshotFor(orderId, companyId);
+        return this.renderFromSnapshot(snapshot, companyId, options);
+    }
+
+    /** Печать снимка: и для «живой» доверенности, и для сохранённой версии. */
+    async renderFromSnapshot(
+        snapshot: PowerOfAttorneySnapshot,
+        companyId: string,
+        options?: { withStamp?: boolean },
+    ): Promise<Buffer> {
+        const { stamp: stampBuffer, signature: signatureBuffer } = await this.stamps.loadFor(
+            snapshot.issuer,
+            options?.withStamp === true && snapshot.issuer.id === companyId,
+        );
+        return this.render(snapshot, stampBuffer, signatureBuffer);
+    }
+
+    private render(
+        view: PowerOfAttorneySnapshot,
+        stampBuffer: Buffer | null,
+        signatureBuffer: Buffer | null,
+    ): Promise<Buffer> {
         return new Promise<Buffer>((resolve, reject) => {
             const doc = new PDFDocument({
                 size: 'A4',
                 margins: { top: 30, bottom: 30, left: 30, right: 30 },
                 info: {
-                    Title: `Доверенность к заявке ${order.orderNumber}`,
-                    Author: issuerCompany.name,
+                    Title: `Доверенность к заявке ${view.orderNumber}`,
+                    Author: view.issuer.name,
                 },
             });
 
@@ -140,26 +244,13 @@ export class PowerOfAttorneyService {
             const rightEdge = doc.page.width - doc.page.margins.right;
             const tableWidth = rightEdge - leftM; // 535 pt
 
-            // Format fields
-            const orgDetails = this.formatCompanyDetails(issuerCompany);
-            const bankDetails = this.formatBankDetails(issuerCompany);
+            const orgDetails = view.issuer.orgDetails;
+            const bankDetails = view.issuer.bankDetails;
+            const vehicleInfo = view.vehicleInfo;
+            const issuedAt = new Date(view.issuedAt);
+            const validToDate = new Date(view.validTo);
 
-            const vehicleParts: string[] = [];
-            if (driver?.vehicleModel) vehicleParts.push(driver.vehicleModel);
-            if (driverPlate && driverPlate !== '—') vehicleParts.push(driverPlate);
-            if (driverTrailer && driverTrailer !== '—') vehicleParts.push(`ПП ${driverTrailer}`);
-            const vehicleInfo = vehicleParts.join(' ') || '—';
-
-            // «На получение от» — наименование поставщика (форма М-2).
-            // Для экспедитора/перевозчика поставщик — компания-заказчик перевозки;
-            // если доверенность выписывает сам заказчик — название точки погрузки.
-            const customerName = order.customerCompany?.name || order.customer?.company?.name || '';
-            const pickupName = pickupPoint?.location?.name || '';
-            const isIssuerCustomer = !!issuerCompany?.id && issuerCompany.id === order.customerCompanyId;
-            const supplierRaw = isIssuerCustomer
-                ? (pickupName || customerName)
-                : (customerName || pickupName);
-            const supplierNameFormatted = this.formatFullCompanyName(supplierRaw || '—');
+            const supplierNameFormatted = view.supplierName;
 
             // ============================================
             // 1. TOP STUB TABLE (Корешок доверенности)
@@ -223,14 +314,11 @@ export class PowerOfAttorneyService {
                 doc.text(text, x + 3, curY + 6, { width: w - 6, align: 'center', lineBreak: false });
             };
 
-            const validToDate = deliveryPoint?.expectedDate 
-                ? new Date(deliveryPoint.expectedDate) 
-                : new Date(order.createdAt.getTime() + 10 * 24 * 60 * 60 * 1000);
 
-            drawCellValue(x1, w1, order.orderNumber, true);
-            drawCellValue(x2, w2, this.formatDateDDMMYYYY(order.createdAt));
+            drawCellValue(x1, w1, view.orderNumber, true);
+            drawCellValue(x2, w2, this.formatDateDDMMYYYY(issuedAt));
             drawCellValue(x3, w3, this.formatDateDDMMYYYY(validToDate));
-            drawCellValue(x4, w4, `Водитель ${driverShort}`, true);
+            drawCellValue(x4, w4, `Водитель ${view.driverShort}`, true);
             drawCellValue(x5, w5, '');
 
             curY += 20;
@@ -309,12 +397,12 @@ export class PowerOfAttorneyService {
             curY += 45;
 
             // Power of Attorney Title
-            doc.fontSize(12).font('Roboto-Bold').text(`ДОВЕРЕННОСТЬ № ${order.orderNumber}`, leftM, curY, { align: 'center', width: tableWidth });
+            doc.fontSize(12).font('Roboto-Bold').text(`ДОВЕРЕННОСТЬ № ${view.orderNumber}`, leftM, curY, { align: 'center', width: tableWidth });
             curY += 20;
 
             // Issue & validity dates
             doc.fontSize(8).font('Roboto').text('Дата выдачи', leftM + 50, curY, { width: 80 });
-            doc.fontSize(8).font('Roboto-Bold').text(this.formatDateLong(order.createdAt), leftM + 135, curY, { width: 250 });
+            doc.fontSize(8).font('Roboto-Bold').text(this.formatDateLong(issuedAt), leftM + 135, curY, { width: 250 });
             doc.moveTo(leftM + 135, curY + 9).lineTo(leftM + 385, curY + 9).stroke();
             curY += 15;
 
@@ -353,24 +441,24 @@ export class PowerOfAttorneyService {
             doc.fontSize(6).font('Roboto').text('должность', leftM + 110, curY + 11, { width: 80, align: 'center' });
             
             // Name
-            doc.fontSize(8).font('Roboto-Bold').text(driverName, leftM + 195, curY, { width: tableWidth - 195, align: 'center' });
+            doc.fontSize(8).font('Roboto-Bold').text(view.driverName, leftM + 195, curY, { width: tableWidth - 195, align: 'center' });
             doc.moveTo(leftM + 195, curY + 9).lineTo(rightEdge, curY + 9).stroke();
             doc.fontSize(6).font('Roboto').text('фамилия, имя, отчество', leftM + 195, curY + 11, { width: tableWidth - 195, align: 'center' });
             curY += 22;
 
             // Passport
-            doc.fontSize(8).font('Roboto').text(docTypeStr + ':', leftM, curY, { width: 110 });
-            doc.fontSize(8).font('Roboto-Bold').text(driverDoc, leftM + 110, curY, { width: tableWidth - 110 });
+            doc.fontSize(8).font('Roboto').text(view.driverDocType + ':', leftM, curY, { width: 110 });
+            doc.fontSize(8).font('Roboto-Bold').text(view.driverDocNumber, leftM + 110, curY, { width: tableWidth - 110 });
             doc.moveTo(leftM + 110, curY + 9).lineTo(rightEdge, curY + 9).stroke();
             curY += 15;
 
             doc.fontSize(8).font('Roboto').text('Кем выдан', leftM, curY, { width: 110 });
-            doc.fontSize(8).font('Roboto-Bold').text(docIssuedBy, leftM + 110, curY, { width: tableWidth - 110 });
+            doc.fontSize(8).font('Roboto-Bold').text(view.driverDocIssuedBy, leftM + 110, curY, { width: tableWidth - 110 });
             doc.moveTo(leftM + 110, curY + 9).lineTo(rightEdge, curY + 9).stroke();
             curY += 15;
 
             doc.fontSize(8).font('Roboto').text('Дата выдачи', leftM, curY, { width: 110 });
-            doc.fontSize(8).font('Roboto-Bold').text(driver?.docIssuedAt ? this.formatDocDate(driver.docIssuedAt) : '—', leftM + 110, curY, { width: tableWidth - 110 });
+            doc.fontSize(8).font('Roboto-Bold').text(view.driverDocIssuedAt ? this.formatDocDate(new Date(view.driverDocIssuedAt)) : '—', leftM + 110, curY, { width: tableWidth - 110 });
             doc.moveTo(leftM + 110, curY + 9).lineTo(rightEdge, curY + 9).stroke();
             curY += 15;
 
@@ -389,7 +477,7 @@ export class PowerOfAttorneyService {
 
             // Contract/order details
             doc.fontSize(8).font('Roboto').text('материальных ценностей по', leftM, curY, { width: 130 });
-            const docText = `Договор-заявка №${order.orderNumber} от ${this.formatDateDDMMYYYY(order.createdAt)} ${route}`;
+            const docText = `Договор-заявка №${view.orderNumber} от ${this.formatDateDDMMYYYY(issuedAt)} ${view.route}`;
             doc.fontSize(8).font('Roboto-Bold').text(docText, leftM + 130, curY, { width: tableWidth - 130 });
             doc.moveTo(leftM + 130, curY + 9).lineTo(rightEdge, curY + 9).stroke();
             doc.fontSize(6).font('Roboto').text('(наименование, номер и дата документа)', leftM + 130, curY + 11, { width: tableWidth - 130, align: 'center' });
@@ -444,11 +532,11 @@ export class PowerOfAttorneyService {
                 doc.fontSize(7).font(isBold ? 'Roboto-Bold' : 'Roboto').text(text, x + 4, curY + 6, { width: w - 8, align: x === gtX2 ? 'left' : 'center' });
             };
 
-            const tons = (order.cargoWeight || 0) / 1000;
+            const tons = view.cargoWeightKg / 1000;
             const qtyText = `${tons} (${this.numberToRussianWords(tons)})`;
 
             drawGtValue(gtX1, gtW1, '1');
-            drawGtValue(gtX2, gtW2, order.cargoDescription || '—', true);
+            drawGtValue(gtX2, gtW2, view.cargoDescription, true);
             drawGtValue(gtX3, gtW3, 'Тонна');
             drawGtValue(gtX4, gtW4, qtyText, true);
 
@@ -485,7 +573,7 @@ export class PowerOfAttorneyService {
                 }
             }
 
-            doc.fontSize(8).font('Roboto-Bold').text(issuerCompany.directorName || '—', leftM + 240, directorY, { width: 150, align: 'center' });
+            doc.fontSize(8).font('Roboto-Bold').text(view.issuer.directorName, leftM + 240, directorY, { width: 150, align: 'center' });
             doc.moveTo(leftM + 240, directorY + 9).lineTo(leftM + 390, directorY + 9).stroke();
             doc.fontSize(6).font('Roboto').text('расшифровка подписи', leftM + 240, directorY + 11, { width: 150, align: 'center' });
 
@@ -732,39 +820,6 @@ export class PowerOfAttorneyService {
 
     private stripCompanyPrefix(name: string): string {
         return name.replace(/^(ТОО|TOO|тоо)\s+/i, '').trim();
-    }
-
-    private async getImageBuffer(relativePath: string): Promise<Buffer | null> {
-        if (this.s3Service.isS3Enabled()) {
-            try {
-                this.logger.log(`[PoA] Attempting S3 download for path: ${relativePath}`);
-                const { stream } = await this.s3Service.downloadFile(relativePath);
-                return new Promise<Buffer>((resolve, reject) => {
-                    const chunks: Buffer[] = [];
-                    stream.on('data', (chunk) => chunks.push(chunk));
-                    stream.on('end', () => resolve(Buffer.concat(chunks)));
-                    stream.on('error', (err) => reject(err));
-                });
-            } catch (error: any) {
-                this.logger.warn(`[PoA] S3 download failed for ${relativePath}. Falling back to local file. Error: ${error.message}`);
-            }
-        } else {
-            this.logger.log(`[PoA] S3 is not enabled, using local storage check`);
-        }
-
-        const localPath = path.join(process.cwd(), relativePath);
-        this.logger.log(`[PoA] Checking local path: ${localPath}`);
-        if (fs.existsSync(localPath)) {
-            try {
-                return fs.readFileSync(localPath);
-            } catch (e) {
-                this.logger.error(`[PoA] Failed to read local file at ${localPath}:`, e);
-                return null;
-            }
-        } else {
-            this.logger.warn(`[PoA] Local file not found at: ${localPath}`);
-        }
-        return null;
     }
 
     private declineNameToGenitive(fullName: string): string {
