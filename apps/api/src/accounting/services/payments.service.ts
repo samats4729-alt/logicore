@@ -239,6 +239,9 @@ export class PaymentsService {
                 counterparty: { select: { name: true } },
                 account: true,
                 category: true,
+                // Возвраты нужны журналу операций: по ним видно, сколько от
+                // платежа уже вернули и можно ли вернуть ещё.
+                refunds: { where: { isDeleted: false }, select: { id: true, amount: true, date: true } },
             },
             orderBy: { date: 'desc' },
         });
