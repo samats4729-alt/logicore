@@ -1,13 +1,93 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Table, Statistic, Row, Col, Button, Space, DatePicker, Tag, Tabs, Spin, Alert, Divider, theme } from 'antd';
-import { PrinterOutlined, ReloadOutlined, ArrowLeftOutlined, BarChartOutlined, DollarOutlined, TeamOutlined, CarOutlined } from '@ant-design/icons';
+import { Table, Statistic, Row, Col, Button, Space, DatePicker, Tag, Tabs, Spin, Alert, Divider, message, theme } from 'antd';
+import { PrinterOutlined, ReloadOutlined, ArrowLeftOutlined, BarChartOutlined, DollarOutlined, TeamOutlined, CarOutlined, FileExcelOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 
 const { RangePicker } = DatePicker;
+
+type ReportType = 'pnl' | 'counterparties' | 'profitability' | 'drivers' | 'summary';
+
+/**
+ * Готовые отчёты в один клик.
+ *
+ * Три вопроса, которые владелец задаёт чаще всего: сколько заработали за
+ * месяц, какие рейсы вытягивают прибыль, и кто кому сколько должен.
+ * Без пресетов каждый из них — это выбрать вкладку и вручную выставить
+ * период, и границы периода каждый раз получаются разные.
+ */
+const PRESETS: {
+    key: string;
+    title: string;
+    hint: string;
+    report: ReportType;
+    range: () => [dayjs.Dayjs, dayjs.Dayjs];
+}[] = [
+    {
+        key: 'month-pnl',
+        title: 'Итоги месяца',
+        hint: 'доходы и расходы за текущий месяц',
+        report: 'pnl',
+        range: () => [dayjs().startOf('month'), dayjs().endOf('day')],
+    },
+    {
+        key: 'quarter-profit',
+        title: 'Рентабельность за квартал',
+        hint: 'какие рейсы приносят прибыль',
+        report: 'profitability',
+        range: () => [dayjs().subtract(3, 'month').startOf('day'), dayjs().endOf('day')],
+    },
+    {
+        key: 'year-counterparties',
+        title: 'Расчёты за год',
+        hint: 'кто кому сколько должен',
+        report: 'counterparties',
+        range: () => [dayjs().startOf('year'), dayjs().endOf('day')],
+    },
+];
+
+/** Колонки для выгрузки: те же поля, что в таблице на экране. */
+const EXPORT_COLUMNS: Record<Exclude<ReportType, 'summary'>, { key: string; title: string; numeric?: boolean }[]> = {
+    pnl: [
+        { key: 'month', title: 'Период' },
+        { key: 'income', title: 'Доходы, ₸', numeric: true },
+        { key: 'expense', title: 'Расходы, ₸', numeric: true },
+        { key: 'margin', title: 'Маржа, ₸', numeric: true },
+    ],
+    counterparties: [
+        { key: 'name', title: 'Контрагент' },
+        { key: 'income', title: 'Поступления, ₸', numeric: true },
+        { key: 'expense', title: 'Выплаты, ₸', numeric: true },
+        { key: 'balance', title: 'Сальдо, ₸', numeric: true },
+    ],
+    profitability: [
+        { key: 'orderNumber', title: 'Заявка' },
+        { key: 'route', title: 'Маршрут' },
+        { key: 'revenue', title: 'Ставка, ₸', numeric: true },
+        { key: 'cost', title: 'Затраты, ₸', numeric: true },
+        { key: 'margin', title: 'Маржа, ₸', numeric: true },
+        { key: 'pct', title: 'Маржинальность, %', numeric: true },
+    ],
+    drivers: [
+        { key: 'name', title: 'Водитель' },
+        { key: 'vehicle', title: 'Транспорт' },
+        { key: 'orders', title: 'Рейсов', numeric: true },
+        { key: 'completed', title: 'Завершено', numeric: true },
+        { key: 'revenue', title: 'Выручка, ₸', numeric: true },
+        { key: 'margin', title: 'Маржа, ₸', numeric: true },
+    ],
+};
+
+const REPORT_TITLES: Record<ReportType, string> = {
+    pnl: 'Прибыли и убытки',
+    counterparties: 'Расчёты с контрагентами',
+    profitability: 'Рентабельность рейсов',
+    drivers: 'Отчёт по водителям',
+    summary: 'Сводка',
+};
 
 interface DriverReportEntry {
     id: string;
@@ -23,7 +103,9 @@ export default function ReportsPage() {
     const { token } = theme.useToken();
     const router = useRouter();
 
-    const [reportType, setReportType] = useState<'pnl' | 'counterparties' | 'profitability' | 'drivers' | 'summary'>('pnl');
+    const [reportType, setReportType] = useState<ReportType>('pnl');
+    const [activePreset, setActivePreset] = useState<string | null>(null);
+    const [exporting, setExporting] = useState(false);
     const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>([
         dayjs().subtract(90, 'day'), dayjs(),
     ]);
@@ -193,6 +275,72 @@ export default function ReportsPage() {
     }, [filteredOrders, drivers]);
 
 
+    /** Данные активной вкладки — то, что сейчас видно в таблице. */
+    const currentRows = useMemo((): Record<string, unknown>[] => {
+        if (reportType === 'pnl') return pnlData;
+        if (reportType === 'counterparties') return cpData;
+        if (reportType === 'profitability') return profitData;
+        if (reportType === 'drivers') return driverData as unknown as Record<string, unknown>[];
+        return [];
+    }, [reportType, pnlData, cpData, profitData, driverData]);
+
+    const applyPreset = (preset: typeof PRESETS[number]) => {
+        setReportType(preset.report);
+        setDateRange(preset.range());
+        setActivePreset(preset.key);
+    };
+
+    /**
+     * Выгрузка в Excel.
+     *
+     * Строки уходят на сервер как есть: отчёты считаются здесь, на экране,
+     * и пересчитывать их заново на сервере — значит завести вторую версию
+     * тех же цифр. Шапку (организацию, период, дату) добавляет сервер.
+     */
+    const handleExport = async () => {
+        if (reportType === 'summary') {
+            message.info('Сводка не выгружается — выберите отчёт с таблицей');
+            return;
+        }
+        if (currentRows.length === 0) {
+            message.warning('За выбранный период нет данных для выгрузки');
+            return;
+        }
+
+        setExporting(true);
+        try {
+            const columns = EXPORT_COLUMNS[reportType];
+            const totals = columns.reduce<Record<string, number>>((acc, column) => {
+                if (!column.numeric || column.key === 'pct') return acc;
+                acc[column.key] = currentRows.reduce((sum, row) => sum + Number(row[column.key] ?? 0), 0);
+                return acc;
+            }, {});
+
+            const res = await api.post('/reports/export', {
+                title: REPORT_TITLES[reportType],
+                periodFrom: dateRange?.[0]?.format('YYYY-MM-DD'),
+                periodTo: dateRange?.[1]?.format('YYYY-MM-DD'),
+                columns,
+                rows: currentRows,
+                totals,
+            }, { responseType: 'blob' });
+
+            const url = URL.createObjectURL(new Blob([res.data], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${REPORT_TITLES[reportType]}_${dayjs().format('YYYY-MM-DD')}.xlsx`;
+            link.click();
+            URL.revokeObjectURL(url);
+            message.success('Отчёт выгружен');
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось выгрузить отчёт');
+        } finally {
+            setExporting(false);
+        }
+    };
+
     if (loading && orders.length === 0 && payments.length === 0) {
         return (
             <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -231,8 +379,16 @@ export default function ReportsPage() {
                     </p>
                     <Space wrap>
                         <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchAll} className="lc-cta">Обновить</Button>
-                        <RangePicker value={dateRange as any} onChange={(d) => setDateRange(d as any)} format="DD.MM.YYYY" allowClear={false} style={{ boxShadow: `0 1px 3px ${token.colorBorderSecondary}`, borderRadius: 8 }} />
+                        <RangePicker value={dateRange as any} onChange={(d) => { setDateRange(d as any); setActivePreset(null); }} format="DD.MM.YYYY" allowClear={false} style={{ boxShadow: `0 1px 3px ${token.colorBorderSecondary}`, borderRadius: 8 }} />
                         <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Печать</Button>
+                        <Button
+                            icon={<FileExcelOutlined />}
+                            loading={exporting}
+                            onClick={handleExport}
+                            disabled={reportType === 'summary'}
+                        >
+                            Выгрузить в Excel
+                        </Button>
                     </Space>
                 </div>
                 <div className="lc2-metrics">
@@ -289,9 +445,55 @@ export default function ReportsPage() {
                 </div>
             </div>
 
+            {/* ===== ГОТОВЫЕ ОТЧЁТЫ ===== */}
+            <div className="lc-card" style={{ padding: '14px 20px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <ThunderboltOutlined style={{ color: '#fa8c16' }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)' }}>Готовые отчёты</span>
+                    <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
+                        один клик вместо выбора вкладки и периода
+                    </span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {PRESETS.map((preset) => {
+                        const active = activePreset === preset.key;
+                        return (
+                            <button
+                                key={preset.key}
+                                type="button"
+                                onClick={() => applyPreset(preset)}
+                                style={{
+                                    textAlign: 'left',
+                                    padding: '10px 14px',
+                                    borderRadius: 12,
+                                    cursor: 'pointer',
+                                    minWidth: 210,
+                                    border: `1px solid ${active ? 'var(--lc-text)' : 'var(--lc-border)'}`,
+                                    background: active ? 'var(--lc-text)' : 'transparent',
+                                    color: active ? '#fff' : 'var(--lc-text)',
+                                }}
+                            >
+                                <div style={{ fontSize: 13, fontWeight: 600 }}>{preset.title}</div>
+                                <div style={{
+                                    fontSize: 11,
+                                    marginTop: 2,
+                                    color: active ? 'rgba(255,255,255,0.7)' : 'var(--lc-text-ter)',
+                                }}>
+                                    {preset.hint}
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
             {/* ===== TABS & TABLE CARD ===== */}
             <div className="lc-card" style={{ padding: 20 }}>
-                <Tabs activeKey={reportType} onChange={(k) => setReportType(k as any)} style={{ marginBottom: 20 }}>
+                <Tabs
+                    activeKey={reportType}
+                    onChange={(k) => { setReportType(k as ReportType); setActivePreset(null); }}
+                    style={{ marginBottom: 20 }}
+                >
                     <Tabs.TabPane tab="P&L" key="pnl" />
                     <Tabs.TabPane tab="Контрагенты" key="counterparties" />
                     <Tabs.TabPane tab="Рентабельность" key="profitability" />
