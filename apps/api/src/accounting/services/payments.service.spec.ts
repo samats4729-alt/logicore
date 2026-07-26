@@ -96,6 +96,7 @@ describe('PaymentsService atomicity', () => {
             { checkPeriodNotClosed: jest.fn().mockResolvedValue(undefined) } as any,
             { ensureCompanyFinanceSettings: jest.fn().mockResolvedValue(undefined) } as any,
             payrollService as any,
+            { release: jest.fn().mockResolvedValue({ documents: 0 }) } as any,
         );
 
         return { service, prisma, tx, payrollService, calls };

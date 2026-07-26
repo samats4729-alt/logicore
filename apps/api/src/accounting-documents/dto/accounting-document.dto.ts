@@ -5,6 +5,7 @@ import {
     AccountingDocumentType,
     AccountingVatCalculation,
     AccountingVatTreatment,
+    PaymentDirection,
 } from '@prisma/client';
 import {
     ArrayMaxSize,
@@ -337,6 +338,36 @@ export class BillableOrdersQueryDto {
     @Transform(({ value }) => value === true || value === 'true')
     @IsBoolean()
     includeInProgress?: boolean;
+}
+
+export class SuggestAllocationQueryDto {
+    @IsString()
+    @IsNotEmpty()
+    counterpartyId!: string;
+
+    @IsEnum(PaymentDirection)
+    direction!: PaymentDirection;
+
+    @Matches(MONEY)
+    amount!: string;
+}
+
+export class AllocationItemDto {
+    @IsString()
+    @IsNotEmpty()
+    documentId!: string;
+
+    @Matches(MONEY)
+    amount!: string;
+}
+
+/** Разнесение платежа по счетам. Пустой массив снимает разнесение. */
+export class ApplyAllocationsDto {
+    @IsArray()
+    @ArrayMaxSize(100)
+    @ValidateNested({ each: true })
+    @Type(() => AllocationItemDto)
+    allocations!: AllocationItemDto[];
 }
 
 export class CancelAccountingDocumentDto {

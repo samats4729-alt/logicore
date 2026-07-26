@@ -21,13 +21,16 @@ import { AuditService } from '../audit/audit.service';
 import { AccountingDocumentsService } from './accounting-documents.service';
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
 import { StampImageService } from '../common/services/stamp-image.service';
+import { PaymentAllocationService } from './payment-allocation.service';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import {
     AccountingDocumentListQueryDto,
+    ApplyAllocationsDto,
     BillableOrdersQueryDto,
     CancelAccountingDocumentDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
+    SuggestAllocationQueryDto,
     UpdateAccountingDocumentDto,
 } from './dto/accounting-document.dto';
 
@@ -50,6 +53,7 @@ export class AccountingDocumentsController {
         private readonly documents: AccountingDocumentsService,
         private readonly pdf: AccountingDocumentPdfService,
         private readonly stamps: StampImageService,
+        private readonly allocations: PaymentAllocationService,
         private readonly audit: AuditService,
     ) {}
 
@@ -116,6 +120,43 @@ export class AccountingDocumentsController {
     })
     listBillableOrders(@Request() req: any, @Query() query: BillableOrdersQueryDto) {
         return this.documents.listBillableOrders(req.user.companyId, query);
+    }
+
+    // Тоже до `:id`, иначе путь съедается параметром.
+    @Get('allocation-suggestion')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Предложить разнесение платежа по неоплаченным счетам',
+        description: 'FIFO по сроку оплаты — как бухгалтер гасит вручную.',
+    })
+    suggestAllocation(@Request() req: any, @Query() query: SuggestAllocationQueryDto) {
+        return this.allocations.suggest(req.user.companyId, query);
+    }
+
+    @Post('payments/:paymentId/allocations')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Разнести платёж по счетам' })
+    async applyAllocations(
+        @Request() req: any,
+        @Param('paymentId') paymentId: string,
+        @Body() dto: ApplyAllocationsDto,
+    ) {
+        const result = await this.allocations.apply(
+            req.user.companyId,
+            req.user.sub,
+            paymentId,
+            dto.allocations,
+        );
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'payment',
+            entityId: paymentId,
+            entityLabel: 'Разнесение платежа по счетам',
+            details: { documents: result.documents, allocated: result.allocated.toFixed(2) },
+        });
+        return result;
     }
 
     @Get(':id')

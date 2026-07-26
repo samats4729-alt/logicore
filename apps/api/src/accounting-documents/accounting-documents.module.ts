@@ -10,10 +10,11 @@ import {
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
 import { PublicAccountingDocumentController } from './public-accounting-document.controller';
 import { StampImageService } from '../common/services/stamp-image.service';
+import { PaymentAllocationModule } from './payment-allocation.module';
 import { CompanyVerificationModule } from '../company/company-verification.module';
 
 @Module({
-    imports: [AccountingModule, CompanyVerificationModule],
+    imports: [AccountingModule, CompanyVerificationModule, PaymentAllocationModule],
     controllers: [AccountingDocumentsController, PublicAccountingDocumentController],
     providers: [
         AccountingDocumentsService,
@@ -22,6 +23,6 @@ import { CompanyVerificationModule } from '../company/company-verification.modul
         StampImageService,
         { provide: RECONCILIATION_REPORTS, useExisting: FinancialReportsService },
     ],
-    exports: [AccountingDocumentsService, AccountingDocumentCalculatorService, AccountingDocumentPdfService],
+    exports: [AccountingDocumentsService, AccountingDocumentCalculatorService, AccountingDocumentPdfService, PaymentAllocationModule],
 })
 export class AccountingDocumentsModule {}

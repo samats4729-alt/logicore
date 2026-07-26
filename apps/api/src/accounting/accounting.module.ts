@@ -1,3 +1,4 @@
+import { PaymentAllocationModule } from '../accounting-documents/payment-allocation.module';
 import { Module, forwardRef } from '@nestjs/common';
 import { AccountingController } from './accounting.controller';
 import { PublicAccountingController } from './public-accounting.controller';
@@ -11,7 +12,7 @@ import { EmailModule } from '../email/email.module';
 import { PayrollModule } from '../payroll/payroll.module';
 
 @Module({
-    imports: [EmailModule, forwardRef(() => PayrollModule)],
+    imports: [PaymentAllocationModule, EmailModule, forwardRef(() => PayrollModule)],
     controllers: [AccountingController, PublicAccountingController],
     providers: [
         AccountingService,

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PeriodClosingService } from './period-closing.service';
+import { PaymentAllocationService } from '../../accounting-documents/payment-allocation.service';
 import { FinancialSettingsService } from './financial-settings.service';
 import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus, Prisma } from '@prisma/client';
 import { D, roundMoney, sumOf, toNum } from '../../common/utils/money';
@@ -24,6 +25,7 @@ export class PaymentsService {
         private financialSettingsService: FinancialSettingsService,
         @Inject(forwardRef(() => PayrollService))
         private payrollService: PayrollService,
+        private allocations: PaymentAllocationService,
     ) { }
 
     // ==================== EXPENSES (manual) ====================
@@ -487,6 +489,10 @@ export class PaymentsService {
 
             return { updated: row, customerPaidBecameTrue: becameTrue };
         }, { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS });
+
+        // Разнесение по счетам снимаем: иначе счёт остался бы «оплаченным»
+        // деньгами удалённого платежа.
+        await this.allocations.release(paymentId);
 
         if (updated.orderId) {
             await this.runCustomerPaidTrigger(updated.orderId, customerPaidBecameTrue);
