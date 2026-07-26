@@ -134,7 +134,137 @@ export class OrderContractService {
         }));
     }
 
-    async generatePdf(orderId: string, companyId: string, options?: { withStamp?: boolean }) {
+    /**
+     * Сформировать договор-заявку: снять данные заявки и сохранить.
+     *
+     * Каждое формирование — новая версия. Прежняя остаётся: если сумма
+     * изменилась и перевозчику отправили исправленный договор, старый
+     * подписанный вариант всё равно должен быть виден.
+     */
+    async formDocument(orderId: string, companyId: string, userId: string) {
+        const { order, customer, carrier } = await this.collect(orderId, companyId);
+        const snapshot = this.snapshotOf(order, customer, carrier);
+
+        return this.prisma.$transaction(async (tx) => {
+            const last = await tx.orderContractDocument.findFirst({
+                where: { orderId },
+                orderBy: { version: 'desc' },
+                select: { version: true },
+            });
+            return tx.orderContractDocument.create({
+                data: {
+                    companyId,
+                    orderId,
+                    version: (last?.version ?? 0) + 1,
+                    snapshot: snapshot as any,
+                    createdById: userId,
+                },
+                select: { id: true, version: true, createdAt: true },
+            });
+        });
+    }
+
+    /** Версии договора по заявке — история для карточки рейса. */
+    async listForOrder(orderId: string, companyId: string) {
+        const documents = await this.prisma.orderContractDocument.findMany({
+            where: { orderId, companyId },
+            orderBy: { version: 'desc' },
+            select: {
+                id: true,
+                version: true,
+                createdAt: true,
+                snapshot: true,
+                createdBy: { select: { firstName: true, lastName: true } },
+            },
+        });
+        return documents.map((document, index) => {
+            const snapshot = document.snapshot as any;
+            return {
+                id: document.id,
+                version: document.version,
+                createdAt: document.createdAt,
+                createdBy: document.createdBy,
+                // Действующей считается последняя сформированная версия.
+                isCurrent: index === 0,
+                rate: snapshot?.order?.driverCost ?? null,
+                carrierName: snapshot?.carrier?.name ?? null,
+                driverName: snapshot?.order?.assignedDriverName ?? null,
+            };
+        });
+    }
+
+    /** Печать сохранённой версии — строго из её снимка. */
+    async generateSavedPdf(documentId: string, companyId: string, options?: { withStamp?: boolean }) {
+        const document = await this.prisma.orderContractDocument.findFirst({
+            where: { id: documentId, companyId },
+            select: { snapshot: true },
+        });
+        if (!document) throw new NotFoundException('Договор-заявка не найден');
+
+        const snapshot = document.snapshot as any;
+        const { stamp, signature } = await this.stamps.loadFor(
+            snapshot.customer,
+            options?.withStamp === true,
+        );
+        return this.render(snapshot.order, snapshot.customer, snapshot.carrier, { stamp, signature });
+    }
+
+    /** Снимок: ровно то, что нужно печатной форме, и ничего лишнего. */
+    private snapshotOf(order: any, customer: any, carrier: any) {
+        const party = (company: any) => company && {
+            id: company.id,
+            name: company.name,
+            bin: company.bin,
+            address: company.address,
+            actualAddress: company.actualAddress,
+            phone: company.phone,
+            email: company.email,
+            directorName: company.directorName,
+            bankAccount: company.bankAccount,
+            bankName: company.bankName,
+            bankBic: company.bankBic,
+            stampImage: company.stampImage,
+            signatureImage: company.signatureImage,
+        };
+        return {
+            order: {
+                orderNumber: order.orderNumber,
+                createdAt: order.createdAt,
+                cargoDescription: order.cargoDescription,
+                cargoWeight: order.cargoWeight,
+                cargoVolume: order.cargoVolume,
+                cargoType: order.cargoType,
+                vehicleModel: order.vehicleModel,
+                driverCost: toNum(order.driverCost ?? order.subForwarderPrice ?? 0),
+                executorHasVat: order.executorHasVat,
+                driverPaymentCondition: order.driverPaymentCondition,
+                assignedDriverName: order.assignedDriverName,
+                assignedDriverPhone: order.assignedDriverPhone,
+                assignedDriverPlate: order.assignedDriverPlate,
+                assignedDriverTrailer: order.assignedDriverTrailer,
+                driver: order.driver && {
+                    firstName: order.driver.firstName,
+                    lastName: order.driver.lastName,
+                    phone: order.driver.phone,
+                },
+                routePoints: (order.routePoints || []).map((point: any) => ({
+                    pointType: point.pointType,
+                    expectedDate: point.expectedDate,
+                    notes: point.notes,
+                    location: point.location && {
+                        city: point.location.city,
+                        address: point.location.address,
+                        contactName: point.location.contactName,
+                    },
+                })),
+            },
+            customer: party(customer),
+            carrier: party(carrier),
+        };
+    }
+
+    /** Заявка и обе стороны для формирования и «живой» печати. */
+    private async collect(orderId: string, companyId: string) {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: {
@@ -143,15 +273,11 @@ export class OrderContractService {
                 subForwarder: true,
                 partner: true,
                 driver: true,
-                routePoints: {
-                    include: { location: true },
-                    orderBy: { sequence: 'asc' },
-                },
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
             },
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        // Заказчик перевозки — мы; перевозчик — тот, кому мы платим за рейс.
         const customer = [order.forwarder, order.partner, order.subForwarder, order.customerCompany]
             .find((company) => company?.id === companyId);
         if (!customer) {
@@ -159,6 +285,11 @@ export class OrderContractService {
         }
         const carrier = [order.subForwarder, order.partner]
             .find((company) => company && company.id !== companyId) ?? null;
+        return { order, customer, carrier };
+    }
+
+    async generatePdf(orderId: string, companyId: string, options?: { withStamp?: boolean }) {
+        const { order, customer, carrier } = await this.collect(orderId, companyId);
 
         // Печать только своя и только по флажку — см. правило T-04.
         const { stamp, signature } = await this.stamps.loadFor(

@@ -105,24 +105,25 @@ enum AffiliationType {
 // ==================== MODELS ====================
 
 model User {
-  id                String    @id @default(cuid())
+  id                    String                  @id @default(cuid())
   /// Компании, которые этот пользователь подтвердил как админ платформы.
-  verifiedCompanies Company[] @relation("VerifiedCompanies")
-  email             String?   @unique
-  googleId          String?   @unique // Google OAuth ID
-  phone             String
-  passwordHash      String? // null для водителей (SMS auth)
-  firstName         String
-  lastName          String
-  middleName        String?
-  role              UserRole
-  position          String? // Должность/роль
-  avatarPath        String? // Фото профиля (S3-ключ или локальный путь)
-  permissions       String[]  @default([])
-  isActive          Boolean   @default(true)
-  isTrackable       Boolean   @default(false)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  verifiedCompanies     Company[]               @relation("VerifiedCompanies")
+  createdOrderContracts OrderContractDocument[] @relation("CreatedOrderContracts")
+  email                 String?                 @unique
+  googleId              String?                 @unique // Google OAuth ID
+  phone                 String
+  passwordHash          String? // null для водителей (SMS auth)
+  firstName             String
+  lastName              String
+  middleName            String?
+  role                  UserRole
+  position              String? // Должность/роль
+  avatarPath            String? // Фото профиля (S3-ключ или локальный путь)
+  permissions           String[]                @default([])
+  isActive              Boolean                 @default(true)
+  isTrackable           Boolean                 @default(false)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 
   // Relations
   sessions                     Session[]
@@ -358,6 +359,8 @@ model Company {
   stockWarehouses                 StockWarehouse[]              @relation("CompanyWarehouses")
   stockMoves                      StockMove[]                   @relation("CompanyStockMoves")
 
+  orderContracts OrderContractDocument[] @relation("CompanyOrderContracts")
+
   @@index([bin])
   @@index([verificationStatus])
 }
@@ -488,6 +491,7 @@ model City {
 
 model Order {
   id                      String                    @id @default(cuid())
+  contractDocuments       OrderContractDocument[]   @relation("OrderContracts")
   orderNumber             String                    @unique // Номер заявки
   status                  OrderStatus               @default(DRAFT)
   accountingDocumentLines AccountingDocumentLine[]
@@ -1659,6 +1663,36 @@ model AccountingPaymentAllocation {
 
   @@unique([documentId, paymentId])
   @@index([paymentId])
+}
+
+/// Сформированный договор-заявка на перевозку.
+///
+/// Хранит СНИМОК данных заявки на момент формирования: подписанный
+/// документ не должен меняться, если заявку потом правят. Изменилась
+/// сумма — формируется новая версия, прежняя остаётся в истории.
+///
+/// Своего номера у документа нет намеренно: в печатной форме стоит номер
+/// заявки, как в образце заказчика. Версия — внутренний признак платформы
+/// и в документ не попадает, иначе на официальной бумаге появилась бы
+/// пометка «исправление».
+model OrderContractDocument {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation("CompanyOrderContracts", fields: [companyId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     Order   @relation("OrderContracts", fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Порядковый номер версии в рамках одной заявки: 1, 2, 3…
+  version  Int
+  /// Данные заявки и обеих сторон на момент формирования.
+  snapshot Json
+
+  createdById String
+  createdBy   User     @relation("CreatedOrderContracts", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  @@unique([orderId, version])
+  @@index([companyId, createdAt])
 }
 
 model AccountingDocumentLink {

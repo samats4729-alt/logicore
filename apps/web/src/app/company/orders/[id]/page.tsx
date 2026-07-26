@@ -502,6 +502,7 @@ export default function OrderDetailPage() {
         fetchData();
         fetchDocuments();
         fetchPartners();
+        loadContracts();
     }, [orderId]);
 
     /**
@@ -1014,10 +1015,38 @@ export default function OrderDetailPage() {
         }
     };
 
-    /** Договор-заявка с перевозчиком — печатается из данных этой заявки. */
-    const handleDownloadContract = async (withStamp = false) => {
+    /**
+     * Договор-заявка. Сформированные версии хранят снимок данных заявки:
+     * подписанный документ не меняется, если заявку потом правят.
+     */
+    const [contracts, setContracts] = useState<any[]>([]);
+    const [contractBusy, setContractBusy] = useState(false);
+
+    const loadContracts = async () => {
         try {
-            const res = await api.get(`/orders/${orderId}/contract`, {
+            const res = await api.get(`/orders/${orderId}/contracts`);
+            setContracts(res.data || []);
+        } catch { setContracts([]); }
+    };
+
+    const formContract = async () => {
+        try {
+            setContractBusy(true);
+            const res = await api.post(`/orders/${orderId}/contracts`);
+            message.success(res.data.version > 1
+                ? `Сформирован исправленный договор (версия ${res.data.version}); прежний сохранён`
+                : 'Договор-заявка сформирован');
+            await loadContracts();
+        } catch (e: any) {
+            message.error(e.response?.data?.message || 'Не удалось сформировать договор-заявку');
+        } finally {
+            setContractBusy(false);
+        }
+    };
+
+    const downloadContract = async (documentId: string, withStamp = false) => {
+        try {
+            const res = await api.get(`/orders/contracts/${documentId}/pdf`, {
                 params: withStamp ? { withStamp: 'true' } : undefined,
                 responseType: 'blob',
             });
@@ -1028,7 +1057,7 @@ export default function OrderDetailPage() {
             a.click();
             URL.revokeObjectURL(url);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось сформировать договор-заявку');
+            message.error(e.response?.data?.message || 'Не удалось скачать договор');
         }
     };
 
@@ -1589,20 +1618,50 @@ export default function OrderDetailPage() {
                                                         >
                                                             <FileTextOutlined /> Доверенность (PDF)
                                                         </Dropdown.Button>
-                                                        <Dropdown.Button
-                                                            style={{ width: '100%' }}
-                                                            buttonsRender={([left, right]) => [left, right]}
-                                                            onClick={() => handleDownloadContract()}
-                                                            menu={{
-                                                                items: [{
-                                                                    key: 'stamp',
-                                                                    label: 'С подписью и печатью',
-                                                                    onClick: () => handleDownloadContract(true),
-                                                                }],
-                                                            }}
+                                                        <Button
+                                                            icon={<FilePdfOutlined />}
+                                                            loading={contractBusy}
+                                                            onClick={formContract}
+                                                            block
                                                         >
-                                                            <FilePdfOutlined /> Договор-заявка (PDF)
-                                                        </Dropdown.Button>
+                                                            {contracts.length
+                                                                ? 'Сформировать исправленный договор'
+                                                                : 'Сформировать договор-заявку'}
+                                                        </Button>
+                                                        {contracts.map((contract) => (
+                                                            <div
+                                                                key={contract.id}
+                                                                style={{
+                                                                    display: 'flex', alignItems: 'center', gap: 8,
+                                                                    padding: '6px 0', fontSize: 12,
+                                                                }}
+                                                            >
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <div>
+                                                                        от {dayjs(contract.createdAt).format('DD.MM.YYYY HH:mm')}
+                                                                        {contract.isCurrent && (
+                                                                            <Tag color="green" style={{ marginLeft: 6 }}>действующий</Tag>
+                                                                        )}
+                                                                    </div>
+                                                                    <div style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>
+                                                                        ставка {(contract.rate || 0).toLocaleString('ru-RU')} ₸
+                                                                    </div>
+                                                                </div>
+                                                                <Dropdown.Button
+                                                                    size="small"
+                                                                    onClick={() => downloadContract(contract.id)}
+                                                                    menu={{
+                                                                        items: [{
+                                                                            key: 'stamp',
+                                                                            label: 'С подписью и печатью',
+                                                                            onClick: () => downloadContract(contract.id, true),
+                                                                        }],
+                                                                    }}
+                                                                >
+                                                                    Скачать
+                                                                </Dropdown.Button>
+                                                            </div>
+                                                        ))}
                                                         <Button
                                                             icon={<MailOutlined />}
                                                             onClick={openSharePoAModal}

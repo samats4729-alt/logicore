@@ -90,7 +90,26 @@ async function printedText(run: () => Promise<Buffer>) {
 }
 
 function makeService(stampAllowed = false) {
-    const prisma: any = { order: { findUnique: jest.fn().mockResolvedValue(order()) } };
+    const saved: any[] = [];
+    const prisma: any = {
+        order: { findUnique: jest.fn().mockResolvedValue(order()) },
+        orderContractDocument: {
+            findFirst: jest.fn(async ({ where, orderBy }: any) => {
+                if (orderBy?.version) {
+                    const versions = saved.filter((d) => d.orderId === where.orderId);
+                    return versions.length ? versions[versions.length - 1] : null;
+                }
+                return saved.find((d) => d.id === where.id) ?? null;
+            }),
+            findMany: jest.fn(async () => [...saved].reverse()),
+            create: jest.fn(async ({ data }: any) => {
+                const row = { id: `doc-${saved.length + 1}`, ...data, createdAt: new Date() };
+                saved.push(row);
+                return row;
+            }),
+        },
+        $transaction: jest.fn(async (fn: any) => fn(prisma)),
+    };
     const stampBuffer = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
         'base64',
@@ -102,7 +121,7 @@ function makeService(stampAllowed = false) {
                 : { stamp: null, signature: null }
         )),
     };
-    return { service: new OrderContractService(prisma, stamps), prisma, stamps, stampBuffer };
+    return { service: new OrderContractService(prisma, stamps), prisma, stamps, stampBuffer, saved };
 }
 
 describe('OrderContractService — договор-заявка', () => {
@@ -171,6 +190,65 @@ describe('OrderContractService — договор-заявка', () => {
         expect(all).toContain('4.1.');
         expect(all).toContain('4.15.');
         expect(all).toContain('Арбитражном суде по месту нахождения Истца');
+    });
+
+    // Главное свойство: подписанный документ не должен меняться, если
+    // заявку потом правят.
+    describe('фиксация версий', () => {
+        it('снимок не меняется, когда в заявке поменяли сумму', async () => {
+            const { service, prisma, saved } = makeService();
+
+            await service.formDocument('order-1', COMPANY, 'user-1');
+
+            // Заявку правят задним числом: ставка выросла.
+            const changed = order();
+            changed.driverCost = 350000;
+            changed.assignedDriverName = 'Другой водитель';
+            prisma.order.findUnique.mockResolvedValue(changed);
+
+            const all = (await printedText(
+                () => service.generateSavedPdf('doc-1', COMPANY),
+            )).join('\n');
+
+            // Печатаем сохранённую версию — в ней прежние цифры.
+            expect(all.replace(/\u00a0/g, ' ')).toContain('300 000,00 (Триста тысяч тенге)');
+            expect(all).toContain('Дусанов Абдисаттар Ургенишбаевич');
+            expect(all).not.toContain('Другой водитель');
+            expect(saved[0].snapshot.order.driverCost).toBe(300000);
+        });
+
+        it('исправленный договор добавляется рядом, прежний остаётся', async () => {
+            const { service, prisma, saved } = makeService();
+
+            await service.formDocument('order-1', COMPANY, 'user-1');
+            const changed = order();
+            changed.driverCost = 350000;
+            prisma.order.findUnique.mockResolvedValue(changed);
+            const second = await service.formDocument('order-1', COMPANY, 'user-1');
+
+            expect(second.version).toBe(2);
+            expect(saved).toHaveLength(2);
+            expect(saved[0].snapshot.order.driverCost).toBe(300000);
+            expect(saved[1].snapshot.order.driverCost).toBe(350000);
+        });
+
+        it('в самом документе пометки о версии нет', async () => {
+            const { service } = makeService();
+            await service.formDocument('order-1', COMPANY, 'user-1');
+
+            const all = (await printedText(
+                () => service.generateSavedPdf('doc-1', COMPANY),
+            )).join('\n');
+
+            // Официальная бумага выглядит одинаково у любой версии: номер
+            // заявки и дата, без «версия 2» или «исправление №2».
+            // Слово «исправления» в тексте условий договора законно
+            // («любые исправления, сделанные от руки»), поэтому ищем
+            // именно пометку о версии.
+            expect(all).toContain('ДОГОВОР-ЗАЯВКА № AB00003824');
+            expect(all).not.toMatch(/верси[яию]\s*№?\s*\d/i);
+            expect(all).not.toMatch(/исправлени[ея]\s*№\s*\d/i);
+        });
     });
 
     // Правило T-04: чужую печать система не ставит никогда.

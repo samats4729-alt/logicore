@@ -161,6 +161,52 @@ export class OrdersController {
         });
     }
 
+    @Get(':id/contracts')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Сформированные договоры-заявки по рейсу' })
+    listContracts(@Param('id') id: string, @Request() req: any) {
+        return this.contractService.listForOrder(id, req.user.companyId);
+    }
+
+    @Post(':id/contracts')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({
+        summary: 'Сформировать договор-заявку',
+        description: 'Снимает данные заявки; прежние версии остаются в истории.',
+    })
+    async formContract(@Param('id') id: string, @Request() req: any) {
+        const document = await this.contractService.formDocument(id, req.user.companyId, req.user.sub);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'order_contract',
+            entityId: document.id,
+            entityLabel: `Договор-заявка по рейсу, версия ${document.version}`,
+        });
+        return document;
+    }
+
+    @Get('contracts/:documentId/pdf')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Печать сохранённой версии договора-заявки' })
+    async downloadSavedContract(
+        @Param('documentId') documentId: string,
+        @Request() req: any,
+        @Res() res: Response,
+        @Query('withStamp') withStamp?: string,
+    ) {
+        const pdfBuffer = await this.contractService.generateSavedPdf(documentId, req.user.companyId, {
+            withStamp: withStamp === 'true',
+        });
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="Contract_${documentId}.pdf"`,
+            'Content-Length': pdfBuffer.length,
+        });
+        res.end(pdfBuffer);
+    }
+
     @Get(':id/contract')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Скачать договор-заявку на перевозку (PDF)' })
