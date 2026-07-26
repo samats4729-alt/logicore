@@ -61,12 +61,72 @@ export class OrderContractService {
     ) {}
 
     /**
-     * Журнал транспортных документов: рейсы, по которым есть доверенность
-     * или договор-заявка.
+     * Журнал сформированных договоров-заявок.
      *
-     * Оба документа печатаются из заявки, поэтому «журнал» — это список
-     * рейсов, у которых есть нужные данные: доверенность имеет смысл при
-     * назначенном водителе, договор-заявка — при выбранном перевозчике.
+     * Здесь именно документы, а не рейсы: договор существует как
+     * сохранённая версия со снимком, и в журнале должно быть видно то же
+     * самое, что подписано, — включая прежние версии.
+     */
+    async listContractJournal(companyId: string, query: { from?: string; to?: string }) {
+        const documents = await this.prisma.orderContractDocument.findMany({
+            where: {
+                companyId,
+                ...(query.from || query.to
+                    ? {
+                        createdAt: {
+                            gte: query.from ? new Date(query.from) : undefined,
+                            lte: query.to ? new Date(`${query.to}T23:59:59.999Z`) : undefined,
+                        },
+                    }
+                    : {}),
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 300,
+            select: {
+                id: true,
+                orderId: true,
+                version: true,
+                createdAt: true,
+                snapshot: true,
+                createdBy: { select: { firstName: true, lastName: true } },
+                order: { select: { orderNumber: true, status: true } },
+            },
+        });
+
+        // Действующая версия — с наибольшим номером в рамках заявки.
+        const latest = new Map<string, number>();
+        for (const document of documents) {
+            latest.set(document.orderId, Math.max(latest.get(document.orderId) ?? 0, document.version));
+        }
+
+        return documents.map((document) => {
+            const snapshot = document.snapshot as any;
+            const points = snapshot?.order?.routePoints ?? [];
+            return {
+                id: document.id,
+                orderId: document.orderId,
+                orderNumber: snapshot?.order?.orderNumber ?? document.order?.orderNumber ?? null,
+                status: document.order?.status ?? null,
+                version: document.version,
+                isCurrent: latest.get(document.orderId) === document.version,
+                createdAt: document.createdAt,
+                createdBy: document.createdBy,
+                route: points.length
+                    ? `${this.place(points[0])} — ${this.place(points[points.length - 1])}`
+                    : null,
+                carrier: snapshot?.carrier?.name ?? null,
+                driverName: snapshot?.order?.assignedDriverName ?? null,
+                driverPlate: snapshot?.order?.assignedDriverPlate ?? null,
+                amount: snapshot?.order?.driverCost ?? null,
+            };
+        });
+    }
+
+    /**
+     * Журнал доверенностей: рейсы с назначенным водителем.
+     *
+     * Доверенность, в отличие от договора, не фиксируется версиями —
+     * она разовая, и печатается из текущих данных заявки.
      */
     async listJournal(
         companyId: string,

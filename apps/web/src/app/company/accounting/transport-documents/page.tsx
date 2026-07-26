@@ -12,6 +12,7 @@ import {
     Space,
     Table,
     Tabs,
+    Tag,
     Tooltip,
     message,
     theme,
@@ -40,7 +41,7 @@ const KIND_VIEW: Record<DocumentKind, { path: string; fileName: string; hint: st
     CONTRACT: {
         path: 'contract',
         fileName: 'Договор-заявка',
-        hint: 'Договор-заявка подписывается с перевозчиком и служит основанием для оплаты. Показаны рейсы с выбранным перевозчиком.',
+        hint: 'Сформированные договоры. Каждый хранит суммы на момент формирования: если заявку потом правили, документ не изменился. Исправленный договор добавляется рядом, прежний остаётся.',
     },
 };
 
@@ -51,6 +52,8 @@ const money = (value: number | null) =>
 
 interface JournalRow {
     id: string;
+    /** У договора это id документа, у доверенности — id рейса. */
+    orderId?: string;
     orderNumber: string;
     status: string;
     createdAt: string;
@@ -60,6 +63,10 @@ interface JournalRow {
     carrier: string | null;
     customer: string | null;
     amount: number | null;
+    /** Только у договоров: номер версии и признак действующей. */
+    version?: number;
+    isCurrent?: boolean;
+    createdBy?: { firstName: string | null; lastName: string | null } | null;
 }
 
 /**
@@ -108,7 +115,11 @@ export default function TransportDocumentsPage() {
 
     const download = async (row: JournalRow, withStamp: boolean) => {
         try {
-            const res = await api.get(`/orders/${row.id}/${KIND_VIEW[kind].path}`, {
+            // Договор печатается из сохранённой версии, доверенность — из рейса.
+            const endpoint = kind === 'CONTRACT'
+                ? `/orders/contracts/${row.id}/pdf`
+                : `/orders/${row.id}/power-of-attorney`;
+            const res = await api.get(endpoint, {
                 params: withStamp ? { withStamp: 'true' } : undefined,
                 responseType: 'blob',
             });
@@ -130,7 +141,10 @@ export default function TransportDocumentsPage() {
             key: 'orderNumber',
             width: 140,
             render: (value: string, record: JournalRow) => (
-                <a onClick={() => router.push(`/company/orders/${record.id}`)} style={{ fontWeight: 600 }}>
+                <a
+                    onClick={() => router.push(`/company/orders/${record.orderId ?? record.id}`)}
+                    style={{ fontWeight: 600 }}
+                >
                     {value}
                 </a>
             ),
@@ -170,6 +184,24 @@ export default function TransportDocumentsPage() {
                 width: 220,
                 render: (value: string | null) => value || '—',
             },
+        ...(kind === 'CONTRACT' ? [{
+            title: 'Версия',
+            key: 'version',
+            width: 150,
+            render: (_: unknown, record: JournalRow) => (
+                <div>
+                    <div style={{ fontSize: 12 }}>
+                        от {dayjs(record.createdAt).format('DD.MM.YY HH:mm')}
+                        {record.isCurrent && <Tag color="green" style={{ marginLeft: 6 }}>действующий</Tag>}
+                    </div>
+                    {record.createdBy && (
+                        <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                            {[record.createdBy.lastName, record.createdBy.firstName].filter(Boolean).join(' ')}
+                        </div>
+                    )}
+                </div>
+            ),
+        }] : []),
         {
             title: 'Статус рейса',
             dataIndex: 'status',
@@ -278,7 +310,7 @@ export default function TransportDocumentsPage() {
                                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                                 description={kind === 'POWER_OF_ATTORNEY'
                                     ? 'За период нет рейсов с назначенным водителем'
-                                    : 'За период нет рейсов с выбранным перевозчиком'}
+                                    : 'За период договоры не формировались. Договор создаётся в карточке рейса.'}
                             />
                         ),
                     }}

@@ -154,6 +154,11 @@ export class OrdersController {
         @Query('from') from?: string,
         @Query('to') to?: string,
     ) {
+        // Договоры — сформированные документы со снимком; доверенности —
+        // рейсы, потому что версий у них нет.
+        if (kind === 'CONTRACT') {
+            return this.contractService.listContractJournal(req.user.companyId, { from, to });
+        }
         return this.contractService.listJournal(req.user.companyId, {
             kind: kind === 'CONTRACT' ? 'CONTRACT' : 'POWER_OF_ATTORNEY',
             from,
