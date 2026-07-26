@@ -67,6 +67,11 @@ const sampleDocument = (): InvoicePdfDocument => ({
     ],
 });
 
+/** Сколько страниц в готовом PDF — по объектам страниц внутри файла. */
+function pageCount(buffer: Buffer): number {
+    return (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+}
+
 describe('AccountingDocumentPdfService', () => {
     const service = new AccountingDocumentPdfService();
 
@@ -102,6 +107,128 @@ describe('AccountingDocumentPdfService', () => {
         expect(printed).toContain('АО «KASPI BANK»');
         expect(printed).toContain('CASPKZKA');
         expect(printed).toContain('17');
+    });
+
+    // T-10: реквизиты, которые раньше вбивались в каждый документ руками
+    // (КНП) или не печатались вовсе (свидетельство НДС, должность
+    // подписанта). Всё берётся из снимка документа, а не из карточки
+    // организации: реквизиты меняются, а выданный счёт — нет.
+    describe('реквизиты организации в печати (T-10)', () => {
+        const printedOf = async (document: InvoicePdfDocument) => {
+            const printed: string[] = [];
+            const proto = (PDFDocument as any).prototype;
+            const originalText = proto.text;
+            proto.text = function (this: any, value: unknown, ...rest: unknown[]) {
+                printed.push(String(value));
+                return originalText.call(this, value, ...rest);
+            };
+            try {
+                await service.generateInvoicePdf(document);
+            } finally {
+                proto.text = originalText;
+            }
+            return printed.join('\n');
+        };
+
+        it('печатает свидетельство о постановке на учёт по НДС', async () => {
+            const document = sampleDocument();
+            (document.issuerSnapshot as any).vatCertificateSeries = '60001';
+            (document.issuerSnapshot as any).vatCertificateNumber = '0012345';
+            (document.issuerSnapshot as any).vatCertificateDate = '2024-01-09';
+
+            const all = await printedOf(document);
+
+            expect(all).toContain('Свидетельство о постановке на регистрационный учёт по НДС');
+            expect(all).toContain('серия 60001');
+            expect(all).toContain('№ 0012345');
+        });
+
+        it('не печатает строку про НДС у компании без свидетельства', async () => {
+            // Не плательщик НДС: пустая строка «Свидетельство: —» в счёте
+            // выглядит как незаполненный реквизит, а не как «не состоит».
+            const all = await printedOf(sampleDocument());
+
+            expect(all).not.toContain('Свидетельство о постановке');
+        });
+
+        it('печатает должность подписанта из снимка', async () => {
+            const document = sampleDocument();
+            document.issuerSignatorySnapshot = { position: 'Финансовый директор', name: 'Сериков А.Б.' };
+
+            const all = await printedOf(document);
+
+            expect(all).toContain('Финансовый директор');
+            expect(all).toContain('Сериков А.Б.');
+        });
+
+        it('без подписанта в счёте остаётся роль «Исполнитель», а не чужая должность', async () => {
+            const all = await printedOf(sampleDocument());
+
+            expect(all).toContain('Исполнитель');
+            // Раньше на месте ФИО печаталась заглушка «/бухгалтер/» —
+            // подпись ставит руководитель, а не бухгалтер.
+            expect(all).not.toContain('/бухгалтер/');
+        });
+
+        it('в акте без подписанта печатается «Руководитель», а не зашитое «директор»', async () => {
+            // У ИП и у компании, где подписывает финдиректор, строка
+            // «директор» была прямой неправдой.
+            const act = sampleDocument();
+            act.type = AccountingDocumentType.SERVICE_ACT;
+            const printed: string[] = [];
+            const proto = (PDFDocument as any).prototype;
+            const originalText = proto.text;
+            proto.text = function (this: any, value: unknown, ...rest: unknown[]) {
+                printed.push(String(value));
+                return originalText.call(this, value, ...rest);
+            };
+            try {
+                await service.generateServiceActPdf(act);
+            } finally {
+                proto.text = originalText;
+            }
+
+            expect(printed.join('\n')).toContain('Руководитель');
+            expect(printed).not.toContain('директор');
+        });
+
+        it('печатает КНП из документа', async () => {
+            const all = await printedOf(sampleDocument());
+
+            expect(all).toContain('819');
+            expect(all).toContain('Код назначения платежа');
+        });
+    });
+
+    // Водяной знак «ЧЕРНОВИК» рисуется посреди листа. doc.save()/restore()
+    // возвращают цвет и поворот, но не курсор текста — из-за этого черновик
+    // счёта печатался начиная с середины страницы и уезжал на вторую.
+    describe('черновик со штампом «ЧЕРНОВИК»', () => {
+        const draftInvoice = () => {
+            const document = sampleDocument();
+            document.status = AccountingDocumentStatus.DRAFT;
+            return document;
+        };
+
+        it('черновик занимает столько же страниц, сколько проведённый счёт', async () => {
+            const posted = await service.generateInvoicePdf(sampleDocument());
+            const draft = await service.generateInvoicePdf(draftInvoice());
+
+            expect(pageCount(draft)).toBe(pageCount(posted));
+            expect(pageCount(draft)).toBe(1);
+        });
+
+        it('черновик акта тоже не разъезжается на лишнюю страницу', async () => {
+            const act = draftInvoice();
+            act.type = AccountingDocumentType.SERVICE_ACT;
+            const postedAct = sampleDocument();
+            postedAct.type = AccountingDocumentType.SERVICE_ACT;
+
+            const draft = await service.generateServiceActPdf(act);
+            const posted = await service.generateServiceActPdf(postedAct);
+
+            expect(pageCount(draft)).toBe(pageCount(posted));
+        });
     });
 
     // T-04: печать ставится только по флажку и только своей стороны.

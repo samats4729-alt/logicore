@@ -12,7 +12,7 @@ import { AccountingDocumentsService } from './accounting-documents.service';
 const COMPANY = 'company-1';
 const COUNTERPARTY = 'company-2';
 
-const companySnapshot = (id: string) => ({
+const companySnapshot = (id: string, extra: Record<string, unknown> = {}) => ({
     id,
     name: id === COMPANY ? 'Наша компания' : 'Контрагент',
     bin: id === COMPANY ? '123456789012' : '987654321098',
@@ -20,11 +20,18 @@ const companySnapshot = (id: string) => ({
     actualAddress: null,
     phone: null,
     email: null,
-    directorName: null,
+    directorName: id === COMPANY ? 'Нысанов А.Е.' : 'Директор контрагента',
     bankAccount: null,
     bankName: null,
     bankBic: null,
     kbe: null,
+    paymentPurposeCode: null,
+    signatoryPosition: null,
+    signatoryName: null,
+    vatCertificateSeries: null,
+    vatCertificateNumber: null,
+    vatCertificateDate: null,
+    ...extra,
 });
 
 function makeService() {
@@ -209,6 +216,82 @@ describe('AccountingDocumentsService', () => {
     // организации хранится только один комплект реквизитов. В счёт обязаны
     // попасть реквизиты того счёта, с которого его выставили, — иначе
     // контрагент заплатит не в тот банк.
+    // T-10: реквизиты, которые бухгалтер вбивал в каждый документ руками.
+    describe('реквизиты организации подставляются в документ (T-10)', () => {
+        const invoiceDto = (extra: Record<string, unknown> = {}) => ({
+            type: AccountingDocumentType.PAYMENT_INVOICE,
+            direction: AccountingDocumentDirection.OUTGOING,
+            counterpartyId: COUNTERPARTY,
+            documentDate: '2026-07-22',
+            lines: [{ name: 'Транспортные услуги', unitPrice: '20000.00' }],
+            ...extra,
+        }) as any;
+
+        it('КНП берётся из настроек организации, если в документе не указан', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.company.findUnique.mockImplementation(({ where }: any) =>
+                Promise.resolve(companySnapshot(where.id, { paymentPurposeCode: '859' })));
+
+            await service.createDraft(COMPANY, 'user-1', invoiceDto());
+
+            expect(tx.accountingDocument.create.mock.calls[0][0].data.paymentPurposeCode).toBe('859');
+        });
+
+        it('КНП, введённый в документе, важнее настройки организации', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.company.findUnique.mockImplementation(({ where }: any) =>
+                Promise.resolve(companySnapshot(where.id, { paymentPurposeCode: '859' })));
+
+            await service.createDraft(COMPANY, 'user-1', invoiceDto({ paymentPurposeCode: '710' }));
+
+            expect(tx.accountingDocument.create.mock.calls[0][0].data.paymentPurposeCode).toBe('710');
+        });
+
+        it('свидетельство НДС попадает в снимок, а не читается при печати', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.company.findUnique.mockImplementation(({ where }: any) =>
+                Promise.resolve(companySnapshot(where.id, {
+                    vatCertificateSeries: '60001',
+                    vatCertificateNumber: '0012345',
+                })));
+
+            await service.createDraft(COMPANY, 'user-1', invoiceDto());
+
+            // Снимок — потому что реквизиты меняются, а выданный счёт нет.
+            expect(tx.accountingDocument.create.mock.calls[0][0].data.issuerSnapshot).toMatchObject({
+                vatCertificateSeries: '60001',
+                vatCertificateNumber: '0012345',
+            });
+        });
+
+        it('подписант сохраняется отдельным снимком: должность и ФИО', async () => {
+            const { service, prisma, tx } = makeService();
+            prisma.company.findUnique.mockImplementation(({ where }: any) =>
+                Promise.resolve(companySnapshot(where.id, {
+                    signatoryPosition: 'Финансовый директор',
+                    signatoryName: 'Сериков А.Б.',
+                })));
+
+            await service.createDraft(COMPANY, 'user-1', invoiceDto());
+
+            expect(tx.accountingDocument.create.mock.calls[0][0].data.issuerSignatorySnapshot).toEqual({
+                position: 'Финансовый директор',
+                name: 'Сериков А.Б.',
+            });
+        });
+
+        it('без отдельного подписанта документ подписывает директор', async () => {
+            const { service, tx } = makeService();
+
+            await service.createDraft(COMPANY, 'user-1', invoiceDto());
+
+            expect(tx.accountingDocument.create.mock.calls[0][0].data.issuerSignatorySnapshot).toEqual({
+                position: null,
+                name: 'Нысанов А.Е.',
+            });
+        });
+    });
+
     describe('расчётный счёт организации в документе', () => {
         const bankAccount = {
             id: 'acc-kaspi',

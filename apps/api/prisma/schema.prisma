@@ -280,6 +280,21 @@ model Company {
   bankName       String? // Название банка
   bankBic        String? // БИК банка
   kbe            String? // КБЕ
+
+  // Реквизиты, которые печатаются в документах, но раньше их приходилось
+  // вбивать в каждый документ руками (или они не печатались вовсе).
+  /// КНП по умолчанию — код назначения платежа в счёте на оплату.
+  paymentPurposeCode String?
+  /// Должность подписанта в актах и счетах: «Директор», «Генеральный директор».
+  /// Раньше в акте была зашита строка «директор» независимо от компании.
+  signatoryPosition String?
+  /// ФИО подписанта, если документы подписывает не директор.
+  signatoryName String?
+  /// Свидетельство о постановке на учёт по НДС: печатается в счёте.
+  /// Пустой номер означает, что компания не состоит на учёте по НДС.
+  vatCertificateSeries String?
+  vatCertificateNumber String?
+  vatCertificateDate   DateTime? @db.Date
   stampImage     String? // Путь к PNG печати
   signatureImage String? // Путь к PNG подписи
   type           CompanyType? @default(CUSTOMER)

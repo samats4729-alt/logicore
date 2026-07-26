@@ -44,6 +44,14 @@ const COMPANY_SNAPSHOT_SELECT = {
     bankName: true,
     bankBic: true,
     kbe: true,
+    // Печатаются в счёте и акте. Хранятся в снимке, а не берутся из
+    // карточки при печати: реквизиты меняются, а выданный документ нет.
+    paymentPurposeCode: true,
+    signatoryPosition: true,
+    signatoryName: true,
+    vatCertificateSeries: true,
+    vatCertificateNumber: true,
+    vatCertificateDate: true,
 } satisfies Prisma.CompanySelect;
 
 const BANK_ACCOUNT_SELECT = {
@@ -225,8 +233,9 @@ export class AccountingDocumentsService {
         const bankAccount = await this.resolveBankAccount(companyId, dto.bankAccountId);
 
         const ownSnapshot = this.applyBankAccount(company, bankAccount);
-        const issuerSnapshot = dto.direction === AccountingDocumentDirection.OUTGOING ? ownSnapshot : counterparty;
-        const recipientSnapshot = dto.direction === AccountingDocumentDirection.OUTGOING ? counterparty : ownSnapshot;
+        const outgoingDocument = dto.direction === AccountingDocumentDirection.OUTGOING;
+        const issuerSnapshot = outgoingDocument ? ownSnapshot : counterparty;
+        const recipientSnapshot = outgoingDocument ? counterparty : ownSnapshot;
         const lineCalculation = dto.type === AccountingDocumentType.RECONCILIATION_ACT
             ? null
             : this.calculator.calculateLines(dto.lines ?? []);
@@ -273,6 +282,8 @@ export class AccountingDocumentsService {
                     bankAccountId: bankAccount?.id ?? null,
                     issuerSnapshot,
                     recipientSnapshot,
+                    issuerSignatorySnapshot: this.signatoryOf(issuerSnapshot),
+                    recipientSignatorySnapshot: this.signatoryOf(recipientSnapshot),
                     basisSnapshot: contract
                         ? {
                             contractId: contract.id,
@@ -282,7 +293,10 @@ export class AccountingDocumentsService {
                             endDate: contract.endDate?.toISOString() ?? null,
                         }
                         : undefined,
-                    paymentPurposeCode: dto.paymentPurposeCode?.trim() || null,
+                    // КНП: явно введённый в документе, иначе — из настроек
+                    // организации. Бухгалтер вбивал один и тот же код в
+                    // каждый счёт, хотя он у компании не меняется.
+                    paymentPurposeCode: dto.paymentPurposeCode?.trim() || company.paymentPurposeCode || null,
                     paymentTerms: dto.paymentTerms?.trim() || null,
                     customerMaterialsInfo: dto.customerMaterialsInfo?.trim() || null,
                     appendixInfo: dto.appendixInfo?.trim() || null,
@@ -540,6 +554,8 @@ export class AccountingDocumentsService {
             bankAccountId: string | null;
             issuerSnapshot: Prisma.InputJsonValue;
             recipientSnapshot: Prisma.InputJsonValue;
+            issuerSignatorySnapshot: Prisma.InputJsonValue;
+            recipientSignatorySnapshot: Prisma.InputJsonValue;
         } | null = null;
         if (bankAccountTouched) {
             const [company, counterparty] = await Promise.all([
@@ -555,10 +571,14 @@ export class AccountingDocumentsService {
             const bankAccount = await this.resolveBankAccount(companyId, dto.bankAccountId ?? undefined);
             const ownSnapshot = this.applyBankAccount(company, bankAccount);
             const outgoing = document.direction === AccountingDocumentDirection.OUTGOING;
+            const issuer = outgoing ? ownSnapshot : counterparty;
+            const recipient = outgoing ? counterparty : ownSnapshot;
             snapshots = {
                 bankAccountId: bankAccount?.id ?? null,
-                issuerSnapshot: (outgoing ? ownSnapshot : counterparty) as Prisma.InputJsonValue,
-                recipientSnapshot: (outgoing ? counterparty : ownSnapshot) as Prisma.InputJsonValue,
+                issuerSnapshot: issuer as Prisma.InputJsonValue,
+                recipientSnapshot: recipient as Prisma.InputJsonValue,
+                issuerSignatorySnapshot: this.signatoryOf(issuer) as Prisma.InputJsonValue,
+                recipientSignatorySnapshot: this.signatoryOf(recipient) as Prisma.InputJsonValue,
             };
         }
 
@@ -793,6 +813,25 @@ export class AccountingDocumentsService {
             bankName: account.bankName || company.bankName,
             bankBic: account.bankBic || company.bankBic,
             kbe: account.kbe || company.kbe,
+        };
+    }
+
+    /**
+     * Кто подписывает документ со стороны компании.
+     *
+     * Должность раньше была зашита в печатную форму строкой «директор» —
+     * у ИП или у компании, где документы подписывает финдиректор, это
+     * просто неправда. ФИО берётся из отдельного поля, если подписывает не
+     * директор, иначе — директор.
+     */
+    private signatoryOf(party: {
+        signatoryPosition?: string | null;
+        signatoryName?: string | null;
+        directorName?: string | null;
+    }) {
+        return {
+            position: party.signatoryPosition || null,
+            name: party.signatoryName || party.directorName || null,
         };
     }
 

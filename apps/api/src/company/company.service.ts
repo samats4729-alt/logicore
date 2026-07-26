@@ -816,6 +816,12 @@ export class CompanyService {
         bankName?: string;
         bankBic?: string;
         kbe?: string;
+        paymentPurposeCode?: string;
+        signatoryPosition?: string;
+        signatoryName?: string;
+        vatCertificateSeries?: string;
+        vatCertificateNumber?: string;
+        vatCertificateDate?: string;
         managersSeeOwnOrdersOnly?: boolean;
         managersSeeOwnPartnersOnly?: boolean;
     }) {
@@ -826,9 +832,17 @@ export class CompanyService {
             throw new NotFoundException('Компания не найдена');
         }
 
+        const { vatCertificateDate, ...rest } = data;
         return this.prisma.company.update({
             where: { id: companyId },
-            data,
+            data: {
+                ...rest,
+                // Дата приходит строкой из формы; пустая строка означает
+                // «очистить», а не «оставить как есть».
+                ...(vatCertificateDate !== undefined
+                    ? { vatCertificateDate: vatCertificateDate ? new Date(vatCertificateDate) : null }
+                    : {}),
+            },
         });
     }
 

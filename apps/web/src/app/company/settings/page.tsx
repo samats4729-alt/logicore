@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Form, Input, Button, message, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
-import { UploadOutlined, BankOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Form, Input, Button, DatePicker, message, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
+import { UploadOutlined, BankOutlined, FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
+import dayjs from 'dayjs';
 import CompanyFormFields from '@/components/CompanyFormFields';
 
 const { Text } = Typography;
@@ -123,6 +124,12 @@ export default function SettingsPage() {
                 bankName: company.bankName,
                 bankBic: company.bankBic,
                 kbe: company.kbe,
+                paymentPurposeCode: company.paymentPurposeCode,
+                signatoryPosition: company.signatoryPosition,
+                signatoryName: company.signatoryName,
+                vatCertificateSeries: company.vatCertificateSeries,
+                vatCertificateNumber: company.vatCertificateNumber,
+                vatCertificateDate: company.vatCertificateDate ? dayjs(company.vatCertificateDate) : null,
             });
         } catch (error) {
             console.error('Ошибка загрузки профиля компании:', error);
@@ -152,7 +159,14 @@ export default function SettingsPage() {
     const handleCompanyUpdate = async (values: any) => {
         setCompanyLoading(true);
         try {
-            await api.put('/company/profile', values);
+            await api.put('/company/profile', {
+                ...values,
+                // Дата свидетельства уходит строкой: на сервере это поле типа
+                // «дата», без времени и часового пояса.
+                vatCertificateDate: values.vatCertificateDate
+                    ? dayjs(values.vatCertificateDate).format('YYYY-MM-DD')
+                    : undefined,
+            });
             message.success('Данные компании обновлены');
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Ошибка обновления данных компании');
@@ -421,6 +435,69 @@ export default function SettingsPage() {
                                                     rules={[{ required: true, message: 'Введите КБЕ' }]}
                                                 >
                                                     <Input size="large" placeholder="17" maxLength={2} />
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
+                                    </div>
+                                ),
+                            },
+                            {
+                                key: 'documents',
+                                label: 'Реквизиты для документов',
+                                children: (
+                                    <div className="lc-card lc-pad">
+                                        <div className="lc-sec-title"><FileTextOutlined style={{ marginRight: 8 }} />Реквизиты для документов</div>
+                                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>
+                                            Подставляются в счета и акты автоматически. Заполните один раз — не придётся вбивать в каждый документ
+                                        </div>
+                                        <Row gutter={24}>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="paymentPurposeCode"
+                                                    label="КНП по умолчанию"
+                                                    tooltip="Код назначения платежа. Печатается в счёте на оплату; у транспортных услуг обычно 859"
+                                                >
+                                                    <Input size="large" placeholder="859" maxLength={3} />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="signatoryPosition"
+                                                    label="Должность подписанта"
+                                                    tooltip="Печатается в акте и счёте рядом с подписью. Если не заполнить, напечатается «Руководитель»"
+                                                >
+                                                    <Input size="large" placeholder="Директор" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item
+                                                    name="signatoryName"
+                                                    label="ФИО подписанта"
+                                                    tooltip="Заполняйте, только если документы подписывает не директор. Иначе берётся ФИО директора"
+                                                >
+                                                    <Input size="large" placeholder="как в ФИО директора" />
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
+
+                                        <div className="lc-sec-title" style={{ marginTop: 8 }}>Свидетельство о постановке на учёт по НДС</div>
+                                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>
+                                            Печатается в счёте. Заполняйте, только если компания стоит на учёте по НДС — иначе строки в документе не будет
+                                        </div>
+                                        <Row gutter={24}>
+                                            <Col xs={24} md={8}>
+                                                <Form.Item name="vatCertificateSeries" label="Серия">
+                                                    <Input size="large" placeholder="60001" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={8}>
+                                                <Form.Item name="vatCertificateNumber" label="Номер">
+                                                    <Input size="large" placeholder="0012345" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={8}>
+                                                <Form.Item name="vatCertificateDate" label="Дата выдачи">
+                                                    <DatePicker size="large" format="DD.MM.YYYY" style={{ width: '100%' }} />
                                                 </Form.Item>
                                             </Col>
                                         </Row>

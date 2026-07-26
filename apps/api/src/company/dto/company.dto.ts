@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional, IsIn, IsBoolean, IsArray } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional, IsIn, IsBoolean, IsArray, IsDateString } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -131,6 +131,36 @@ export class UpdateCompanyProfileDto {
     @IsString()
     @IsOptional()
     kbe?: string;
+
+    @ApiProperty({ description: 'КНП по умолчанию — код назначения платежа в счёте', required: false })
+    @IsString()
+    @IsOptional()
+    paymentPurposeCode?: string;
+
+    @ApiProperty({ description: 'Должность подписанта документов', required: false })
+    @IsString()
+    @IsOptional()
+    signatoryPosition?: string;
+
+    @ApiProperty({ description: 'ФИО подписанта, если это не директор', required: false })
+    @IsString()
+    @IsOptional()
+    signatoryName?: string;
+
+    @ApiProperty({ description: 'Свидетельство НДС: серия', required: false })
+    @IsString()
+    @IsOptional()
+    vatCertificateSeries?: string;
+
+    @ApiProperty({ description: 'Свидетельство НДС: номер', required: false })
+    @IsString()
+    @IsOptional()
+    vatCertificateNumber?: string;
+
+    @ApiProperty({ description: 'Свидетельство НДС: дата выдачи (YYYY-MM-DD)', required: false })
+    @IsDateString()
+    @IsOptional()
+    vatCertificateDate?: string;
 
     @ApiProperty({ description: 'Менеджеры видят только свои заявки', required: false })
     @IsBoolean()
