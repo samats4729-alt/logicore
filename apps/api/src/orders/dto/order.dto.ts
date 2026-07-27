@@ -78,6 +78,20 @@ export class CreateOrderDto {
     @IsOptional()
     palletCount?: number;
 
+    @IsOptional()
+    @IsArray()
+    pallets?: any[];
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    loadingTypes?: string[];
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    packagingTypes?: string[];
+
     @ApiProperty({ required: false, example: 'Строительные материалы' })
     @IsString()
     @IsOptional()

@@ -112,6 +112,9 @@ export class OrdersService {
         cargoWidth?: number;
         cargoHeight?: number;
         palletCount?: number;
+        pallets?: any[];
+        loadingTypes?: string[];
+        packagingTypes?: string[];
         cargoType?: string;
         requirements?: string;
         customerPrice?: number;
@@ -212,6 +215,9 @@ export class OrdersService {
                 cargoWidth: data.cargoWidth,
                 cargoHeight: data.cargoHeight,
                 palletCount: data.palletCount,
+                pallets: data.pallets ?? undefined,
+                loadingTypes: data.loadingTypes ?? undefined,
+                packagingTypes: data.packagingTypes ?? undefined,
                 cargoType: data.cargoType,
                 requirements: data.requirements,
                 customerPrice: data.customerPrice,
@@ -869,6 +875,9 @@ export class OrdersService {
         cargoWidth?: number;
         cargoHeight?: number;
         palletCount?: number;
+        pallets?: any[];
+        loadingTypes?: string[];
+        packagingTypes?: string[];
         cargoType?: string;
         requirements?: string;
         customerPrice?: number;

@@ -28,6 +28,8 @@ interface Partner {
 }
 
 import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEmails';
+import { CargoComposition } from '@/components/orders/CargoComposition';
+import { totalPallets, type PalletLine } from '@/lib/cargo';
 
 interface LocationState {
     city: string;
@@ -158,6 +160,11 @@ export default function CreateOrderPage() {
     };
 
     // Route points
+    // Состав груза: паллеты списком, способ погрузки и упаковка.
+    const [cargo, setCargo] = useState<{ pallets: PalletLine[]; loadingTypes: string[]; packagingTypes: string[] }>({
+        pallets: [], loadingTypes: [], packagingTypes: [],
+    });
+
     const [routePointsState, setRoutePointsState] = useState<Array<LocationState & { pointType: string }>>([
         { city: '', address: '', pointType: 'PICKUP' },
         { city: '', address: '', pointType: 'DELIVERY' }
@@ -275,6 +282,12 @@ export default function CreateOrderPage() {
                     hasVat: o.hasVat ?? undefined,
                     executorVatRate: o.executorVatRate ?? undefined,
                     executorHasVat: o.executorHasVat ?? undefined,
+                });
+
+                setCargo({
+                    pallets: Array.isArray(o.pallets) ? o.pallets : [],
+                    loadingTypes: o.loadingTypes || [],
+                    packagingTypes: o.packagingTypes || [],
                 });
 
                 if (Array.isArray(o.routePoints) && o.routePoints.length > 0) {
@@ -639,7 +652,12 @@ export default function CreateOrderPage() {
                 cargoLength: showDims ? values.cargoLength : undefined,
                 cargoWidth: showDims ? values.cargoWidth : undefined,
                 cargoHeight: showDims ? values.cargoHeight : undefined,
-                palletCount: values.palletCount,
+                // Итог по местам считаем из состава — на него смотрят
+                // карточка рейса, кабинет водителя и печатные формы.
+                palletCount: cargo.pallets.length ? totalPallets(cargo.pallets) : values.palletCount,
+                pallets: cargo.pallets,
+                loadingTypes: cargo.loadingTypes,
+                packagingTypes: cargo.packagingTypes,
                 cargoType: values.cargoType,
                 requirements: values.requirements,
                 customerPrice: finalCustomerPrice,
@@ -891,7 +909,7 @@ export default function CreateOrderPage() {
                     </Form.Item>
                 </Col>
                 <Col xs={12} md={8}>
-                    <Form.Item name="palletCount" label="Количество палет">
+                    <Form.Item name="palletCount" label="Количество палет" hidden>
                         <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
                     </Form.Item>
                 </Col>
@@ -923,6 +941,15 @@ export default function CreateOrderPage() {
                     </Col>
                 </Row>
             )}
+
+            <div className="mb-4 rounded-2xl bg-card p-4 shadow-soft">
+                <CargoComposition
+                    pallets={cargo.pallets}
+                    loadingTypes={cargo.loadingTypes}
+                    packagingTypes={cargo.packagingTypes}
+                    onChange={setCargo}
+                />
+            </div>
 
             <Form.Item name="requirements" label="Дополнительная информация">
                 <TextArea rows={2} placeholder="Ремни, коники, гидроборт, особые пожелания..." />

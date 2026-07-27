@@ -527,10 +527,20 @@ model Order {
   cargoLength             Float? // Длина груза, м
   cargoWidth              Float? // Ширина груза, м
   cargoHeight             Float? // Высота груза, м
-  palletCount             Int? // Количество палет
-  cargoType               String? // Тип транспорта (Тент, Реф и т.д.)
-  natureOfCargo           String? // Характер груза (Сыпучие, Твердые и т.д.)
-  requirements            String? // Особые требования
+  palletCount             Int? // Количество палет — итог по составу ниже
+
+  /// Состав паллет: [{ kind, length, width, count }].
+  /// Список, а не одно число: в рейсе бывает вперемешку — например пять
+  /// европаллет и десять финских. `palletCount` остаётся суммой, на него
+  /// опираются карточка рейса, кабинет водителя и печатные формы.
+  pallets        Json?
+  /// Как грузят: задняя, боковая, верхняя. Сразу несколько — обычное дело.
+  loadingTypes   String[]
+  /// В чём груз: паллеты, мешки, коробки, биг-бэги, россыпью.
+  packagingTypes String[]
+  cargoType      String? // Тип транспорта (Тент, Реф и т.д.)
+  natureOfCargo  String? // Характер груза (Сыпучие, Твердые и т.д.)
+  requirements   String? // Особые требования
 
   // Участники
   customerId String
