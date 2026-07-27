@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import dayjs, { Dayjs } from 'dayjs';
 import {
     ArrowLeft, ArrowDownLeft, ArrowUpRight, List, ChevronLeft, ChevronRight,
-    AlertCircle, CalendarDays,
+    AlertCircle, CalendarDays, FileText, Clock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -38,15 +38,31 @@ interface PlannedTotals {
     overdueOut: number;
 }
 
+interface DayBucket {
+    in: number;
+    out: number;
+    items: PlannedRow[];
+    overdue: boolean;
+}
+
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const WEEKDAYS_SHORT = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 const MONTHS = [
     'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
     'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
 ];
+const MONTHS_GEN = [
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+];
+const MONTHS_ABBR = [
+    'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+];
 
-/** Деньги приходящие и уходящие: единственные два цвета на экране. */
-const IN_TEXT = 'text-[#16a34a]';
-const OUT_TEXT = 'text-[#dc2626]';
+/** Приход и расход — единственные два цвета на экране. */
+const IN_HEX = '#16a34a';
+const OUT_HEX = '#dc2626';
 
 export default function PaymentCalendarPage() {
     const router = useRouter();
@@ -78,9 +94,9 @@ export default function PaymentCalendarPage() {
         return String(v);
     };
 
-    // Группировка по дню — платежи без плановой даты в календарь не попадают
+    // Группировка по дню — счета без срока оплаты в календарь не попадают
     const byDay = useMemo(() => {
-        const m = new Map<string, { in: number; out: number; items: PlannedRow[]; overdue: boolean }>();
+        const m = new Map<string, DayBucket>();
         for (const r of rows) {
             if (!r.dueDate) continue;
             const key = dayjs(r.dueDate).format('YYYY-MM-DD');
@@ -100,33 +116,24 @@ export default function PaymentCalendarPage() {
      */
     useEffect(() => {
         if (!rows.length) return;
-        const today = dayjs().format('YYYY-MM-DD');
-        if (rows.some(r => r.dueDate && dayjs(r.dueDate).format('YYYY-MM-DD') === today)) return;
-        const upcoming = rows
-            .filter(r => r.dueDate)
-            .map(r => dayjs(r.dueDate as string))
-            .filter(d => !d.isBefore(dayjs(), 'day'))
-            .sort((a, b) => a.valueOf() - b.valueOf())[0];
-        const target = upcoming ?? rows
-            .filter(r => r.dueDate)
-            .map(r => dayjs(r.dueDate as string))
-            .sort((a, b) => b.valueOf() - a.valueOf())[0];
+        const todayKey = dayjs().format('YYYY-MM-DD');
+        if (rows.some(r => r.dueDate && dayjs(r.dueDate).format('YYYY-MM-DD') === todayKey)) return;
+        const dated = rows.filter(r => r.dueDate).map(r => dayjs(r.dueDate as string));
+        const next = dated.filter(d => !d.isBefore(dayjs(), 'day')).sort((a, b) => a.valueOf() - b.valueOf())[0];
+        const target = next ?? dated.sort((a, b) => b.valueOf() - a.valueOf())[0];
         if (target) { setSelected(target); setMonth(target.startOf('month')); }
     }, [rows]);
 
     const noDate = useMemo(() => rows.filter(r => !r.dueDate), [rows]);
-    // Итоги берём с сервера: он же считает просрочку и знает про счета,
-    // которые в текущую выборку не попали.
     const totalIn = totals?.totalIn ?? rows.filter(r => r.direction === 'IN').reduce((s, r) => s + r.amount, 0);
     const totalOut = totals?.totalOut ?? rows.filter(r => r.direction === 'OUT').reduce((s, r) => s + r.amount, 0);
+    const overdueTotal = (totals?.overdueIn ?? 0) + (totals?.overdueOut ?? 0);
 
-    const selectedKey = selected.format('YYYY-MM-DD');
-    const selectedDay = byDay.get(selectedKey);
+    const selectedDay = byDay.get(selected.format('YYYY-MM-DD'));
 
     // Итоги месяца, который сейчас открыт в сетке
     const monthTotals = useMemo(() => {
         let mIn = 0, mOut = 0;
-        // Array.from вместо перебора Map напрямую: цель сборки ниже es2015
         Array.from(byDay.entries()).forEach(([key, day]) => {
             if (dayjs(key).isSame(month, 'month')) { mIn += day.in; mOut += day.out; }
         });
@@ -135,236 +142,348 @@ export default function PaymentCalendarPage() {
 
     /**
      * Сетка месяца: шесть недель с понедельника, чтобы высота не прыгала
-     * при переключении месяцев. Дни соседних месяцев показываем приглушённо —
+     * при перелистывании. Дни соседних месяцев показываем приглушённо —
      * без них последняя неделя выглядит обрубленной.
      */
     const grid = useMemo(() => {
         const first = month.startOf('month');
-        const offset = (first.day() + 6) % 7; // неделя начинается с понедельника
+        const offset = (first.day() + 6) % 7;
         const start = first.subtract(offset, 'day');
         return Array.from({ length: 42 }, (_, i) => start.add(i, 'day'));
     }, [month]);
 
+    /** Ближайшие платежи вперёд от сегодня — левая половина нижней полосы. */
+    const upcoming = useMemo(() => rows
+        .filter(r => r.dueDate && !dayjs(r.dueDate).isBefore(dayjs(), 'day'))
+        .sort((a, b) => dayjs(a.dueDate as string).valueOf() - dayjs(b.dueDate as string).valueOf())
+        .slice(0, 5), [rows]);
+
+    const overdueRows = useMemo(() => rows.filter(r => r.isOverdue).slice(0, 5), [rows]);
+
     const today = dayjs();
+    const todayIdx = (today.day() + 6) % 7;
 
     return (
-        <div className="mx-auto max-w-[1180px] px-6 py-5">
-            {/* Шапка в одну строку: куда вернуться, что за экран и две суммы */}
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 shadow-soft"
+        <div className="mx-auto max-w-[1280px] px-5 py-4">
+            {/* ============ Шапка ============ */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                    <button
                         onClick={() => router.push('/company/finance')}
                         aria-label="Назад в финансы"
+                        className="flex h-8 w-8 items-center justify-center rounded-[10px] border-0 bg-card text-muted-foreground shadow-soft transition-colors hover:text-foreground"
                     >
                         <ArrowLeft className="h-4 w-4" />
-                    </Button>
+                    </button>
                     <div>
-                        <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                        <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                             Финансы · Планирование
                         </div>
-                        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                        <h1 className="text-[19px] font-semibold leading-tight tracking-tight text-foreground">
                             Платёжный календарь
                         </h1>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2.5 rounded-xl bg-card px-3 py-2 shadow-soft">
-                        <span className={cn('flex h-7 w-7 items-center justify-center rounded-lg bg-[#16a34a]/10', IN_TEXT)}>
-                            <ArrowDownLeft className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="leading-tight">
-                            <span className="block text-[11px] text-muted-foreground">Нам должны</span>
-                            <b className={cn('block text-sm font-semibold tabular-nums', IN_TEXT)}>{money(totalIn)}</b>
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2.5 rounded-xl bg-card px-3 py-2 shadow-soft">
-                        <span className={cn('flex h-7 w-7 items-center justify-center rounded-lg bg-[#dc2626]/10', OUT_TEXT)}>
-                            <ArrowUpRight className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="leading-tight">
-                            <span className="block text-[11px] text-muted-foreground">Мы должны</span>
-                            <b className={cn('block text-sm font-semibold tabular-nums', OUT_TEXT)}>{money(totalOut)}</b>
-                        </span>
-                    </div>
-                    <Button variant="outline" size="sm" className="h-[46px] shadow-soft" onClick={() => router.push('/company/accounting/planned')}>
+                    <Money label="Нам должны" value={money(totalIn)} tone="in" />
+                    <Money label="Мы должны" value={money(totalOut)} tone="out" />
+                    {overdueTotal > 0 && <Money label="Просрочено" value={money(overdueTotal)} tone="out" alert />}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-[42px] rounded-[10px] border-0 bg-card px-3.5 shadow-soft"
+                        onClick={() => router.push('/company/accounting/planned')}
+                    >
                         <List className="mr-1.5 h-3.5 w-3.5" /> Списком
                     </Button>
                 </div>
             </div>
 
-            {noDate.length > 0 && (
-                <div className="mb-3 flex items-center gap-2 rounded-xl bg-card px-3.5 py-2.5 text-[13px] shadow-soft">
-                    <AlertCircle className="h-4 w-4 shrink-0 text-[#e67e22]" />
-                    <span className="text-muted-foreground">
-                        {noDate.length}&nbsp;{noDate.length === 1 ? 'платёж' : 'платежей'} без плановой даты — в календарь не попадают.{' '}
-                        <button className="border-0 bg-transparent p-0 font-[inherit] font-medium text-primary hover:underline" onClick={() => router.push('/company/accounting/planned')}>
-                            Открыть списком
-                        </button>
-                    </span>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_356px]">
-                {/* ============ Сетка месяца ============ */}
-                <div className="rounded-2xl bg-card p-4 shadow-soft">
-                    <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-baseline gap-1.5">
-                            <span className="text-lg font-semibold tracking-tight text-foreground">
-                                {MONTHS[month.month()]}
-                            </span>
-                            <span className="text-lg font-normal text-muted-foreground">{month.year()}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            {(monthTotals.in > 0 || monthTotals.out > 0) && (
-                                <div className="flex items-center gap-2.5 text-[12.5px] tabular-nums">
-                                    {monthTotals.in > 0 && <span className={cn('font-semibold', IN_TEXT)}>+{short(monthTotals.in)}</span>}
-                                    {monthTotals.out > 0 && <span className={cn('font-semibold', OUT_TEXT)}>−{short(monthTotals.out)}</span>}
-                                </div>
-                            )}
-                            <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMonth(m => m.subtract(1, 'month'))} aria-label="Предыдущий месяц">
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <Button variant="outline" size="sm" className="h-8" onClick={() => { setMonth(dayjs().startOf('month')); setSelected(dayjs()); }}>
-                                    Сегодня
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMonth(m => m.add(1, 'month'))} aria-label="Следующий месяц">
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
+            {/* ============ Общий контейнер: сетка месяца и день ============ */}
+            <div className="rounded-[20px] bg-card p-2.5 shadow-soft">
+                <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1fr)_384px]">
+                    {/* ---- Месяц ---- */}
+                    <section className="rounded-2xl border border-solid border-border/70 p-3.5">
+                        <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-baseline gap-1.5">
+                                <span className="text-[19px] font-semibold tracking-tight text-foreground">
+                                    {MONTHS[month.month()]}
+                                </span>
+                                <span className="text-[19px] text-muted-foreground">{month.year()}</span>
                             </div>
-                        </div>
-                    </div>
-
-                    <div className="mb-1.5 grid grid-cols-7 gap-1.5">
-                        {WEEKDAYS.map((d, i) => (
-                            <div
-                                key={d}
-                                className={cn(
-                                    'rounded-lg py-1.5 text-center text-[11px] font-medium uppercase tracking-wide',
-                                    // Текущий день недели подсвечен — так в сетке
-                                    // сразу видно вертикаль сегодняшнего дня
-                                    i === (today.day() + 6) % 7
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground',
+                            <div className="flex items-center gap-2">
+                                {(monthTotals.in > 0 || monthTotals.out > 0) && (
+                                    <span className="mr-1 hidden items-center gap-2 text-[12px] font-semibold tabular-nums sm:flex">
+                                        {monthTotals.in > 0 && <span style={{ color: IN_HEX }}>+{short(monthTotals.in)}</span>}
+                                        {monthTotals.out > 0 && <span style={{ color: OUT_HEX }}>−{short(monthTotals.out)}</span>}
+                                    </span>
                                 )}
-                            >
-                                {d}
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1.5">
-                        {grid.map((d) => {
-                            const key = d.format('YYYY-MM-DD');
-                            const day = byDay.get(key);
-                            const isOther = !d.isSame(month, 'month');
-                            const isSelected = d.isSame(selected, 'day');
-                            const isToday = d.isSame(today, 'day');
-                            const overdue = !!day?.overdue;
-                            return (
-                                <button
-                                    key={key}
-                                    onClick={() => { setSelected(d); if (isOther) setMonth(d.startOf('month')); }}
-                                    className={cn(
-                                        'relative flex h-[54px] flex-col items-center justify-start gap-0.5 rounded-xl px-1 pt-1.5',
-                                        'border-0 font-[inherit] text-[13px] transition-colors',
-                                        isSelected
-                                            ? 'bg-foreground text-background'
-                                            : day
-                                                ? 'bg-muted hover:bg-accent'
-                                                : 'bg-muted/45 hover:bg-muted',
-                                        isOther && !isSelected && 'text-muted-foreground/45',
-                                        isToday && !isSelected && 'ring-1 ring-inset ring-foreground/25',
-                                    )}
-                                >
-                                    <span className={cn('tabular-nums', (isToday || day) && !isOther && 'font-semibold')}>
-                                        {d.date()}
-                                    </span>
-                                    {day && (
-                                        <span className="flex flex-col items-center gap-px leading-none">
-                                            {day.in > 0 && (
-                                                <span className={cn('text-[10.5px] font-semibold tabular-nums', isSelected ? 'text-background' : IN_TEXT)}>
-                                                    +{short(day.in)}
-                                                </span>
-                                            )}
-                                            {day.out > 0 && (
-                                                <span className={cn('text-[10.5px] font-semibold tabular-nums', isSelected ? 'text-background/80' : OUT_TEXT)}>
-                                                    −{short(day.out)}
-                                                </span>
-                                            )}
-                                        </span>
-                                    )}
-                                    {overdue && (
-                                        <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#dc2626]" />
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* ============ Платежи выбранного дня ============ */}
-                <div className="rounded-2xl bg-card p-4 shadow-soft">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                        <div>
-                            <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                                {selected.isSame(today, 'day') ? 'Сегодня' : 'Выбранный день'}
-                            </div>
-                            <div className="text-[15px] font-semibold tracking-tight text-foreground">
-                                {selected.date()} {MONTHS[selected.month()].toLowerCase()} {selected.year()}
-                            </div>
-                        </div>
-                        {selectedDay && (
-                            <div className="text-right text-[12.5px] tabular-nums leading-tight">
-                                {selectedDay.in > 0 && <div className={cn('font-semibold', IN_TEXT)}>+{money(selectedDay.in)}</div>}
-                                {selectedDay.out > 0 && <div className={cn('font-semibold', OUT_TEXT)}>−{money(selectedDay.out)}</div>}
-                            </div>
-                        )}
-                    </div>
-
-                    {selectedDay ? (
-                        <div className="flex flex-col gap-1.5">
-                            {selectedDay.items.map((r, i) => (
-                                <button
-                                    key={`${r.orderId}_${r.direction}_${i}`}
-                                    onClick={() => r.orderId && router.push(`/company/orders/${r.orderId}`)}
-                                    className="flex items-center gap-3 rounded-xl border border-solid border-border/70 bg-transparent px-3 py-2.5 text-left font-[inherit] transition-colors hover:bg-accent"
-                                >
-                                    <span
-                                        className={cn(
-                                            'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
-                                            r.direction === 'IN' ? cn('bg-[#16a34a]/10', IN_TEXT) : cn('bg-[#dc2626]/10', OUT_TEXT),
-                                        )}
+                                <div className="flex items-center gap-1 rounded-[10px] border border-solid border-border/70 p-0.5">
+                                    <NavBtn onClick={() => setMonth(m => m.subtract(1, 'month'))} label="Предыдущий месяц">
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </NavBtn>
+                                    <button
+                                        onClick={() => { setMonth(dayjs().startOf('month')); setSelected(dayjs()); }}
+                                        className="h-7 rounded-lg border-0 bg-transparent px-2.5 font-[inherit] text-[12.5px] font-medium text-foreground hover:bg-accent"
                                     >
-                                        {r.direction === 'IN' ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
-                                    </span>
-                                    <span className="min-w-0 flex-1 leading-tight">
-                                        <span className="block truncate text-[13px] font-medium text-foreground">{r.party}</span>
-                                        <span className="block truncate text-[11.5px] text-muted-foreground">
-                                            счёт {r.invoiceNumber}
-                                            {r.orderNumber && r.orderNumber !== '—' && ` · рейс ${r.orderNumber}`}
-                                        </span>
-                                    </span>
-                                    <b className={cn('shrink-0 text-[13px] font-semibold tabular-nums', r.direction === 'IN' ? IN_TEXT : OUT_TEXT)}>
-                                        {r.direction === 'IN' ? '+' : '−'}{money(r.amount)}
-                                    </b>
-                                </button>
+                                        Сегодня
+                                    </button>
+                                    <NavBtn onClick={() => setMonth(m => m.add(1, 'month'))} label="Следующий месяц">
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </NavBtn>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div className="mb-1.5 grid grid-cols-7 gap-1.5">
+                            {WEEKDAYS_SHORT.map((d, i) => (
+                                <div
+                                    key={d}
+                                    className={cn(
+                                        'rounded-lg py-1.5 text-center text-[10.5px] font-medium tracking-[0.06em]',
+                                        // Столбец сегодняшнего дня подсвечен — так в сетке
+                                        // видно вертикаль текущей даты
+                                        i === todayIdx ? 'bg-secondary text-foreground' : 'bg-muted/60 text-muted-foreground',
+                                    )}
+                                >
+                                    {d}
+                                </div>
                             ))}
                         </div>
-                    ) : (
-                        <div className="flex flex-col items-center gap-2 py-10 text-center">
-                            <CalendarDays className="h-7 w-7 text-muted-foreground/45" strokeWidth={1.5} />
-                            <span className="text-[12.5px] text-muted-foreground">
-                                {loading ? 'Загружаем платежи…' : 'На этот день платежей нет'}
-                            </span>
+
+                        <div className="grid grid-cols-7 gap-1.5">
+                            {grid.map((d) => {
+                                const key = d.format('YYYY-MM-DD');
+                                const day = byDay.get(key);
+                                const isOther = !d.isSame(month, 'month');
+                                const isSelected = d.isSame(selected, 'day');
+                                const isToday = d.isSame(today, 'day');
+                                return (
+                                    <button
+                                        key={key}
+                                        onClick={() => { setSelected(d); if (isOther) setMonth(d.startOf('month')); }}
+                                        title={day ? [
+                                            day.in > 0 ? `придёт ${money(day.in)}` : null,
+                                            day.out > 0 ? `уйдёт ${money(day.out)}` : null,
+                                        ].filter(Boolean).join(', ') : undefined}
+                                        className={cn(
+                                            'relative flex h-[52px] flex-col items-center justify-center gap-1 rounded-[13px]',
+                                            'border-0 font-[inherit] text-[13.5px] transition-colors',
+                                            isSelected
+                                                ? 'bg-foreground text-background'
+                                                : isOther
+                                                    ? 'bg-muted/35 text-muted-foreground/40'
+                                                    : 'bg-muted/70 text-foreground hover:bg-secondary',
+                                            isToday && !isSelected && 'ring-1 ring-inset ring-foreground/30',
+                                        )}
+                                    >
+                                        {/* Точки вместо сумм: в клетке 52 точки цифры
+                                            превращаются в кашу, а «есть платёж и какой»
+                                            точка сообщает мгновенно. Суммы — в подсказке,
+                                            в шапке месяца и в панели дня. */}
+                                        <span className="flex h-1.5 items-center gap-[3px]">
+                                            {day?.in ? (
+                                                <i
+                                                    className="h-1.5 w-1.5 rounded-full"
+                                                    style={{ background: isSelected ? '#fff' : IN_HEX }}
+                                                />
+                                            ) : null}
+                                            {day?.out ? (
+                                                <i
+                                                    className="h-1.5 w-1.5 rounded-full"
+                                                    style={{ background: isSelected ? 'rgba(255,255,255,.55)' : OUT_HEX }}
+                                                />
+                                            ) : null}
+                                        </span>
+                                        <span className={cn('tabular-nums leading-none', day && !isOther && 'font-semibold')}>
+                                            {d.date()}
+                                        </span>
+                                        {day?.overdue && !isSelected && (
+                                            <span
+                                                className="absolute right-1.5 top-1.5 h-[5px] w-[5px] rounded-full"
+                                                style={{ background: OUT_HEX }}
+                                            />
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
-                    )}
+                    </section>
+
+                    {/* ---- Платежи выбранного дня ---- */}
+                    <section className="flex flex-col rounded-2xl border border-solid border-border/70 p-3.5">
+                        <header className="mb-3 flex items-start justify-between gap-2">
+                            <div>
+                                <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                    {selected.isSame(today, 'day') ? 'Сегодня' : WEEKDAYS[(selected.day() + 6) % 7]}
+                                </div>
+                                <div className="text-[16px] font-semibold leading-tight tracking-tight text-foreground">
+                                    {selected.date()} {MONTHS_GEN[selected.month()]} {selected.year()}
+                                </div>
+                            </div>
+                            {selectedDay && (
+                                <div className="text-right text-[12.5px] font-semibold tabular-nums leading-tight">
+                                    {selectedDay.in > 0 && <div style={{ color: IN_HEX }}>+{money(selectedDay.in)}</div>}
+                                    {selectedDay.out > 0 && <div style={{ color: OUT_HEX }}>−{money(selectedDay.out)}</div>}
+                                </div>
+                            )}
+                        </header>
+
+                        {selectedDay ? (
+                            <div className="flex flex-col gap-1.5">
+                                {selectedDay.items.map((r, i) => (
+                                    <PaymentRow key={`${r.documentId}_${i}`} row={r} money={money} router={router} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
+                                <CalendarDays className="h-7 w-7 text-muted-foreground/40" strokeWidth={1.5} />
+                                <span className="text-[12.5px] text-muted-foreground">
+                                    {loading ? 'Загружаем платежи…' : 'На этот день платежей нет'}
+                                </span>
+                            </div>
+                        )}
+                    </section>
                 </div>
             </div>
+
+            {/* ============ Нижняя полоса: ближайшее и хвосты ============ */}
+            <div className="mt-2.5 grid grid-cols-1 items-stretch gap-2.5 lg:grid-cols-2">
+                <Panel title="Ближайшие платежи" hint="Впереди платежей нет">
+                    {upcoming.map((r, i) => (
+                        <PaymentRow key={`up_${r.documentId}_${i}`} row={r} money={money} router={router} withDate />
+                    ))}
+                </Panel>
+
+                <Panel title={overdueRows.length ? 'Просрочено' : 'Требуют внимания'} hint="Всё в порядке">
+                    {overdueRows.map((r, i) => (
+                        <PaymentRow key={`ov_${r.documentId}_${i}`} row={r} money={money} router={router} withDate />
+                    ))}
+                    {noDate.length > 0 && (
+                        <button
+                            key="nodate"
+                            onClick={() => router.push('/company/accounting/planned')}
+                            className="flex items-center gap-2.5 rounded-xl border border-solid border-border/70 bg-transparent px-3 py-2.5 text-left font-[inherit] transition-colors hover:bg-accent"
+                        >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#e67e22]/10 text-[#e67e22]">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="min-w-0 flex-1 leading-tight">
+                                <span className="block text-[13px] font-medium text-foreground">
+                                    {noDate.length}&nbsp;{noDate.length === 1 ? 'счёт' : 'счетов'} без срока оплаты
+                                </span>
+                                <span className="block text-[11.5px] text-muted-foreground">
+                                    в календарь не попадают — проставьте срок
+                                </span>
+                            </span>
+                        </button>
+                    )}
+                </Panel>
+            </div>
         </div>
+    );
+}
+
+/* ============================ Части экрана ============================ */
+
+/** Сумма в шапке: подпись, значок направления и само число. */
+function Money({ label, value, tone, alert }: { label: string; value: string; tone: 'in' | 'out'; alert?: boolean }) {
+    const hex = tone === 'in' ? IN_HEX : OUT_HEX;
+    return (
+        <div className="flex items-center gap-2.5 rounded-[10px] bg-card px-3 py-2 shadow-soft">
+            <span
+                className="flex h-7 w-7 items-center justify-center rounded-lg"
+                style={{ background: `${hex}1a`, color: hex }}
+            >
+                {alert ? <Clock className="h-3.5 w-3.5" />
+                    : tone === 'in' ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
+            </span>
+            <span className="leading-tight">
+                <span className="block text-[10.5px] text-muted-foreground">{label}</span>
+                <b className="block text-[13.5px] font-semibold tabular-nums" style={{ color: hex }}>{value}</b>
+            </span>
+        </div>
+    );
+}
+
+function NavBtn({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
+    return (
+        <button
+            onClick={onClick}
+            aria-label={label}
+            className="flex h-7 w-7 items-center justify-center rounded-lg border-0 bg-transparent text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+            {children}
+        </button>
+    );
+}
+
+/** Панель нижней полосы: тот же двойной корпус, что и у календаря. */
+function Panel({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+    const items = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
+    return (
+        <div className="flex h-full flex-col rounded-[20px] bg-card p-2.5 shadow-soft">
+            <div className="flex flex-1 flex-col rounded-2xl border border-solid border-border/70 p-3.5">
+                <div className="mb-2.5 text-[13.5px] font-semibold tracking-tight text-foreground">{title}</div>
+                {items.length === 0 ? (
+                    <div className="flex flex-1 items-center justify-center py-5 text-center text-[12.5px] text-muted-foreground">{hint}</div>
+                ) : (
+                    <div className="flex flex-col gap-1.5">{items}</div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Строка платежа: слева направление, потом контрагент и счёт, справа сумма.
+ * С датой — когда строка стоит вне календаря и день сам себя не объясняет.
+ */
+function PaymentRow({
+    row, money, router, withDate,
+}: {
+    row: PlannedRow;
+    money: (v: number) => string;
+    router: ReturnType<typeof useRouter>;
+    withDate?: boolean;
+}) {
+    const hex = row.direction === 'IN' ? IN_HEX : OUT_HEX;
+    return (
+        <button
+            onClick={() => row.orderId && router.push(`/company/orders/${row.orderId}`)}
+            className="flex items-center gap-2.5 rounded-xl border border-solid border-border/70 bg-transparent px-3 py-2.5 text-left font-[inherit] transition-colors hover:bg-accent"
+        >
+            <span
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+                style={{ background: `${hex}1a`, color: hex }}
+            >
+                {row.direction === 'IN' ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
+            </span>
+            <span className="min-w-0 flex-1 leading-tight">
+                <span className="block truncate text-[13px] font-medium text-foreground">{row.party}</span>
+                <span className="flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">
+                    <FileText className="h-3 w-3 shrink-0" />
+                    {row.invoiceNumber}
+                    {withDate && row.dueDate && (
+                        <>
+                            <span className="text-border">·</span>
+                            {dayjs(row.dueDate).date()} {MONTHS_ABBR[dayjs(row.dueDate).month()]}
+                        </>
+                    )}
+                    {row.isOverdue && (
+                        <span
+                            className="ml-0.5 rounded-md px-1.5 py-px text-[10.5px] font-medium"
+                            style={{ background: `${OUT_HEX}1a`, color: OUT_HEX }}
+                        >
+                            просрочен
+                        </span>
+                    )}
+                </span>
+            </span>
+            <b className="shrink-0 text-[13px] font-semibold tabular-nums" style={{ color: hex }}>
+                {row.direction === 'IN' ? '+' : '−'}{money(row.amount)}
+            </b>
+        </button>
     );
 }
