@@ -47,6 +47,9 @@ const makeService = () => {
             ]),
             count: jest.fn().mockResolvedValue(37),
         },
+        accountingDocument: {
+            findMany: jest.fn().mockResolvedValue([]),
+        },
     };
     const service = new FinancialReportsService(
         prisma,
@@ -171,6 +174,9 @@ describe('FinancialReportsService — период и страница журн�
     // Планируемые платежи сортируются по сроку оплаты и считают итоги уже в
     // памяти, по всей выборке. Страница здесь порезала бы итоги, поэтому у
     // этого журнала только период — форма ответа не меняется.
+    //
+    // Источник теперь — выставленные счета, а не заявки: срок оплаты
+    // начинается со счёта. Период фильтрует по дате документа.
     describe('планируемые платежи', () => {
         it('период фильтрует, а форма ответа остаётся прежней', async () => {
             const { service, prisma } = makeService();
@@ -184,8 +190,8 @@ describe('FinancialReportsService — период и страница журн�
 
             expect(result).toHaveProperty('rows');
             expect(result).toHaveProperty('totals');
-            const args = prisma.order.findMany.mock.calls[0][0];
-            expect(args.where.createdAt.gte).toEqual(new Date('2026-06-01T00:00:00.000Z'));
+            const args = prisma.accountingDocument.findMany.mock.calls[0][0];
+            expect(args.where.documentDate.gte).toEqual(new Date('2026-06-01T00:00:00.000Z'));
             expect(args.skip).toBeUndefined();
             expect(args.take).toBeUndefined();
         });

@@ -14,6 +14,7 @@ import { JournalQueryDto } from '../dto/accounting.dto';
 import { getPaginationParams } from '../../common/dto/pagination.dto';
 import * as XLSX from 'xlsx';
 import { SharedReportLinkService } from './shared-report-link.service';
+import { kzToday } from '../../common/utils/business-date';
 
 @Injectable()
 export class FinancialReportsService {
@@ -432,86 +433,72 @@ export class FinancialReportsService {
     }
 
     /**
-     * Планируемые платежи: что нам должны заплатить (приход) и что должны мы (расход),
-     * по незакрытым долгам заявок, с плановой датой оплаты.
+     * Планируемые платежи: чего ждём и что должны заплатить сами.
+     *
+     * Отсчёт идёт ОТ ВЫСТАВЛЕННОГО СЧЁТА, а не от даты, вписанной в карточку
+     * рейса руками. Так это и работает в бухгалтерии: пока счёт не выставлен
+     * («не закрыжен»), платить контрагенту не с чего и требовать оплату не
+     * на основании чего, а дата в заявке — это лишь договорённость менеджера.
+     *
+     * Раньше список строился из заявок и брал срок из
+     * `customerPaymentDate`/`driverPaymentDate`. Долг попадал в план, даже
+     * если счёта не существовало, а срок жил своей жизнью: счёт мог быть
+     * выставлен позже с совсем другим сроком оплаты.
+     *
+     * Сделки с долгом, но без счёта, не исчезают: они возвращаются
+     * отдельным блоком `withoutInvoice`, чтобы бухгалтер видел, что именно
+     * не оформлено, а не короткий список без объяснений.
      */
     async getPlannedPayments(companyId: string, query?: JournalQueryDto) {
         const scope = this.journalScope(query);
-        const plannedWhere: Prisma.OrderWhereInput = {
-            AND: [
-                {
-                    OR: [
-                        { customerCompanyId: companyId },
-                        { forwarderId: companyId },
-                        { partnerId: companyId },
-                        { subForwarderId: companyId },
-                        { responsibleManager: { companyId: companyId } },
-                    ],
-                },
-                {
-                    OR: [
-                        { isConfirmed: true },
-                        { status: { not: 'PENDING' } },
-                    ],
-                },
-            ],
-            status: { notIn: ['DRAFT', 'CANCELLED'] },
-            createdAt: scope.createdAt,
-        };
-        const orders = await this.prisma.order.findMany({
-            where: plannedWhere,
-            include: {
-                customerCompany: { select: { id: true, name: true } },
-                forwarder: { select: { id: true, name: true } },
-                partner: { select: { id: true, name: true } },
-                subForwarder: { select: { id: true, name: true } },
-                ...ORDER_FINANCE_RELATIONS_SELECT,
+
+        const documents = await this.prisma.accountingDocument.findMany({
+            where: {
+                companyId,
+                type: AccountingDocumentType.PAYMENT_INVOICE,
+                // Черновик никому не отправлен: обязательства он не создаёт.
+                status: AccountingDocumentStatus.POSTED,
+                balanceDue: { gt: 0 },
+                ...(scope.createdAt ? { documentDate: scope.createdAt } : {}),
             },
-            orderBy: { createdAt: 'desc' },
+            orderBy: [{ dueDate: 'asc' }, { documentDate: 'asc' }],
+            select: {
+                id: true,
+                number: true,
+                direction: true,
+                documentDate: true,
+                dueDate: true,
+                total: true,
+                amountPaid: true,
+                balanceDue: true,
+                counterparty: { select: { id: true, name: true } },
+                orders: { select: { order: { select: { id: true, orderNumber: true } } } },
+            },
         });
 
-        const rows: any[] = [];
+        const today = kzToday();
 
-        for (const order of orders) {
-            const fin = this.calculator.computeOrderFinance({
-                order,
-                payments: order.payments,
-                incomes: order.incomes,
-                expenses: order.expenses,
-                companyId,
-            });
-
-            // Нам должен заказчик (приход)
-            if (fin.customerDebt.gt(0) && order.customerCompany) {
-                rows.push({
-                    orderId: order.id,
-                    orderNumber: order.orderNumber,
-                    direction: 'IN',
-                    party: order.customerCompany.name,
-                    amount: toNum(fin.customerDebt),
-                    dueDate: order.customerPaymentDate,
-                });
-            }
-
-            // Мы должны перевозчику/исполнителю (расход) — только если исполнитель внешний
-            if (fin.executorDebt.gt(0)) {
-                const externalParty = order.subForwarder?.name
-                    || (order.forwarder && order.forwarder.id !== companyId ? order.forwarder.name : null)
-                    || order.partner?.name
-                    || order.assignedDriverName
-                    || null;
-                if (externalParty) {
-                    rows.push({
-                        orderId: order.id,
-                        orderNumber: order.orderNumber,
-                        direction: 'OUT',
-                        party: externalParty,
-                        amount: toNum(fin.executorDebt),
-                        dueDate: order.driverPaymentDate,
-                    });
-                }
-            }
-        }
+        const rows = documents.map((doc) => {
+            const orders = doc.orders.map((link) => link.order);
+            return {
+                documentId: doc.id,
+                invoiceNumber: doc.number,
+                // Ссылка на рейс остаётся: по счёту их может быть несколько,
+                // в строку кладём первый, полный список — рядом.
+                orderId: orders[0]?.id ?? null,
+                orderNumber: orders.map((o) => o.orderNumber).join(', ') || '—',
+                orders,
+                direction: doc.direction === AccountingDocumentDirection.OUTGOING ? 'IN' : 'OUT',
+                party: doc.counterparty.name,
+                counterpartyId: doc.counterparty.id,
+                amount: toNum(doc.balanceDue),
+                invoiceTotal: toNum(doc.total),
+                paidAmount: toNum(doc.amountPaid),
+                issuedAt: doc.documentDate,
+                dueDate: doc.dueDate,
+                isOverdue: !!doc.dueDate && doc.dueDate < today,
+            };
+        });
 
         // Сортировка: сперва с датой (по возрастанию), потом без даты
         rows.sort((a, b) => {
@@ -523,8 +510,106 @@ export class FinancialReportsService {
 
         const totalIn = rows.filter(r => r.direction === 'IN').reduce((s, r) => s + r.amount, 0);
         const totalOut = rows.filter(r => r.direction === 'OUT').reduce((s, r) => s + r.amount, 0);
+        const overdueIn = rows.filter(r => r.direction === 'IN' && r.isOverdue).reduce((s, r) => s + r.amount, 0);
+        const overdueOut = rows.filter(r => r.direction === 'OUT' && r.isOverdue).reduce((s, r) => s + r.amount, 0);
 
-        return { rows, totals: { totalIn, totalOut } };
+        return {
+            rows,
+            totals: { totalIn, totalOut, overdueIn, overdueOut },
+            withoutInvoice: await this.debtWithoutInvoice(companyId, scope),
+        };
+    }
+
+    /**
+     * Долги, по которым счёт ещё не выставлен.
+     *
+     * Это не платежи, а работа для бухгалтера: пока счёта нет, срок оплаты
+     * не начался. Показываем сумму и несколько примеров, чтобы из плана
+     * платежей было видно, чего в нём не хватает.
+     */
+    private async debtWithoutInvoice(companyId: string, scope: ReturnType<FinancialReportsService['journalScope']>) {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                AND: [
+                    {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { subForwarderId: companyId },
+                            { responsibleManager: { companyId } },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { isConfirmed: true },
+                            { status: { not: 'PENDING' } },
+                        ],
+                    },
+                ],
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+                createdAt: scope.createdAt,
+                // Ни одного действующего счёта по рейсу — ни нашего, ни чужого.
+                accountingDocuments: {
+                    none: {
+                        document: {
+                            type: AccountingDocumentType.PAYMENT_INVOICE,
+                            status: AccountingDocumentStatus.POSTED,
+                        },
+                    },
+                },
+            },
+            include: {
+                customerCompany: { select: { id: true, name: true } },
+                forwarder: { select: { id: true, name: true } },
+                partner: { select: { id: true, name: true } },
+                subForwarder: { select: { id: true, name: true } },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 500,
+        });
+
+        let amountIn = ZERO;
+        let amountOut = ZERO;
+        let withDebt = 0;
+        const items: any[] = [];
+
+        for (const order of orders) {
+            const fin = this.calculator.computeOrderFinance({
+                order,
+                payments: order.payments,
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+            // Канонический флаг оплаты важнее арифметики: платёж мог
+            // провести встречная сторона, тогда мы его не видим, но рейс
+            // закрыт и оформлять по нему уже нечего.
+            const customerDebt = fin.isCustomerPaid ? ZERO : fin.customerDebt;
+            const executorDebt = fin.isExecutorPaid ? ZERO : fin.executorDebt;
+            if (customerDebt.lte(0) && executorDebt.lte(0)) continue;
+
+            withDebt += 1;
+            amountIn = amountIn.plus(customerDebt);
+            amountOut = amountOut.plus(executorDebt);
+            if (items.length < 10) {
+                items.push({
+                    orderId: order.id,
+                    orderNumber: order.orderNumber,
+                    party: order.customerCompany?.name ?? order.subForwarder?.name ?? null,
+                    amountIn: toNum(customerDebt),
+                    amountOut: toNum(executorDebt),
+                });
+            }
+        }
+
+        return {
+            count: withDebt,
+            totalIn: toNum(amountIn),
+            totalOut: toNum(amountOut),
+            items,
+        };
     }
 
     // ==================== PAYMENT JOURNAL ====================
