@@ -29,6 +29,9 @@ interface Partner {
 
 import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEmails';
 import { CargoComposition } from '@/components/orders/CargoComposition';
+import { AddressPicker } from '@/components/orders/AddressPicker';
+import { cn } from '@/lib/utils';
+import { Plus, X } from 'lucide-react';
 import { totalPallets, type PalletLine } from '@/lib/cargo';
 
 interface LocationState {
@@ -40,6 +43,13 @@ interface LocationState {
     /** Почта, закреплённая за адресом: куда слать доверенность. */
     emails?: string[];
 }
+
+/** Типы точек маршрута: их всего три, показываем пилюлями. */
+const POINT_TYPES = [
+    { key: 'PICKUP', label: 'Погрузка' },
+    { key: 'ADDITIONAL_PICKUP', label: 'Доп. погрузка' },
+    { key: 'DELIVERY', label: 'Выгрузка' },
+];
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -744,117 +754,119 @@ export default function CreateOrderPage() {
                 <div className="h">Погрузка, выгрузка и промежуточные точки по порядку</div>
             </div>
 
-            {routePointsState.map((pt, i) => (
-                <div key={i} style={{
-                    padding: '12px 16px',
-                    background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff',
-                    borderRadius: 10,
-                    marginBottom: 12,
-                    border: pt.pointType === 'DELIVERY' ? '1px solid #b7eb8f' : '1px solid #adc6ff',
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <Select
-                            value={pt.pointType}
-                            onChange={val => { const newPts = [...routePointsState]; newPts[i].pointType = val; setRoutePointsState(newPts); }}
-                            size="small"
-                            style={{ width: 160, fontWeight: 600 }}
-                            variant="borderless"
-                        >
-                            <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }} /> Погрузка</Select.Option>
-                            <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }} /> Доп. погрузка</Select.Option>
-                            <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }} /> Выгрузка</Select.Option>
-                        </Select>
-                        {routePointsState.length > 2 && (
-                            <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => {
-                                const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts);
-                            }} />
-                        )}
-                    </div>
-                    <Select
-                        placeholder="Выберите адрес / склад"
-                        allowClear showSearch optionFilterProp="children"
-                        style={{ width: '100%' }}
-                        size="large"
-                        value={pt.id || undefined}
-                        onChange={(val) => {
-                            const newPts = [...routePointsState];
-                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined, latitude: undefined, longitude: undefined, emails: [] }; }
-                            else {
-                                const loc = locations.find(l => l.id === val);
-                                if (loc) {
-                                    newPts[i] = { 
-                                        ...newPts[i], 
-                                        city: loc.city || '', 
-                                        address: loc.address, 
-                                        id: loc.id,
-                                        latitude: loc.latitude,
-                                        longitude: loc.longitude,
-                                        // Подставляем почту, уже закреплённую за адресом.
-                                        emails: parseEmails((loc as any).emails),
-                                    };
-                                    const firstPickup = newPts.find(p => p.pointType === 'PICKUP');
-                                    const lastDelivery = [...newPts].reverse().find(p => p.pointType === 'DELIVERY');
-                                    if (firstPickup?.city && lastDelivery?.city) {
-                                        lookupTariff(firstPickup.city, lastDelivery.city);
-                                    }
-                                }
-                            }
-                            setRoutePointsState(newPts);
-                        }}
-                        dropdownRender={(menu) => (
-                            <>
-                                {menu}
-                                <Divider style={{ margin: '4px 0' }} />
-                                <Button
-                                    type="text"
-                                    icon={<PlusOutlined />}
-                                    block
-                                    onClick={() => {
-                                        setActiveRoutePointIndex(i);
-                                        setQuickLocationModalOpen(true);
-                                    }}
-                                    style={{ textAlign: 'left', padding: '4px 12px', height: 'auto', color: '#1677ff' }}
-                                >
-                                    Добавить новый адрес
-                                </Button>
-                            </>
-                        )}
-                    >
-                        {pt.id && !locations.some(l => l.id === pt.id) && (
-                            <Select.Option key={pt.id} value={pt.id}>
-                                Казахстан{pt.city ? `, ${pt.city}` : ''}, {pt.address || 'Выбранный адрес'}
-                            </Select.Option>
-                        )}
-                        {getLocationOptions().map(group => (
-                            <Select.OptGroup key={group.label} label={group.label}>
-                                {group.options.map(l => (
-                                    <Select.Option key={l.id} value={l.id}>
-                                        {l.name}, Казахстан{l.city ? `, ${l.city}` : ''}, {l.address}
-                                    </Select.Option>
-                                ))}
-                            </Select.OptGroup>
-                        ))}
-                    </Select>
+            <div className="flex flex-col gap-2">
+                {routePointsState.map((pt, i) => {
+                    const selected = locations.find((l) => l.id === pt.id);
+                    const label = selected
+                        ? `${selected.name}${selected.city ? `, ${selected.city}` : ''}, ${selected.address}`
+                        : pt.address
+                            ? `${pt.city ? `${pt.city}, ` : ''}${pt.address}`
+                            : '';
+                    return (
+                        <div key={i} className="rounded-2xl bg-card p-3 shadow-soft">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                                {/* Тип точки — пилюлями: вариантов три, выпадающий список тут лишний. */}
+                                <div className="inline-flex items-center gap-0.5 rounded-full bg-secondary p-0.5">
+                                    {POINT_TYPES.map((type) => {
+                                        const active = pt.pointType === type.key;
+                                        return (
+                                            <button
+                                                key={type.key}
+                                                type="button"
+                                                onClick={() => {
+                                                    const next = [...routePointsState];
+                                                    next[i].pointType = type.key;
+                                                    setRoutePointsState(next);
+                                                }}
+                                                className={cn(
+                                                    'rounded-full px-3 py-1.5 text-[12px] font-medium leading-none transition-colors',
+                                                    active
+                                                        ? 'bg-card text-foreground shadow-soft'
+                                                        : 'text-muted-foreground hover:text-foreground',
+                                                )}
+                                            >
+                                                {type.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
 
-                    <RoutePointEmails
-                        locationId={pt.id}
-                        value={pt.emails ?? []}
-                        onChange={(emails) => {
-                            const newPts = [...routePointsState];
-                            newPts[i] = { ...newPts[i], emails };
-                            setRoutePointsState(newPts);
-                        }}
-                    />
-                </div>
-            ))}
-            <Button
-                type="dashed"
-                icon={<PlusOutlined />}
+                                {routePointsState.length > 2 && (
+                                    <button
+                                        type="button"
+                                        aria-label="Убрать точку"
+                                        className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                        onClick={() => {
+                                            const next = [...routePointsState];
+                                            next.splice(i, 1);
+                                            setRoutePointsState(next);
+                                        }}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+
+                            <AddressPicker
+                                groups={getLocationOptions()}
+                                valueId={pt.id}
+                                valueLabel={label}
+                                onCreateNew={() => {
+                                    setActiveRoutePointIndex(i);
+                                    setQuickLocationModalOpen(true);
+                                }}
+                                onSelect={(val) => {
+                                    const newPts = [...routePointsState];
+                                    if (!val) {
+                                        newPts[i] = {
+                                            ...newPts[i], city: '', address: '', id: undefined,
+                                            latitude: undefined, longitude: undefined, emails: [],
+                                        };
+                                    } else {
+                                        const loc = locations.find((l) => l.id === val);
+                                        if (loc) {
+                                            newPts[i] = {
+                                                ...newPts[i],
+                                                city: loc.city || '',
+                                                address: loc.address,
+                                                id: loc.id,
+                                                latitude: loc.latitude,
+                                                longitude: loc.longitude,
+                                                // Подставляем почту, уже закреплённую за адресом.
+                                                emails: parseEmails((loc as any).emails),
+                                            };
+                                            const firstPickup = newPts.find((p) => p.pointType === 'PICKUP');
+                                            const lastDelivery = [...newPts].reverse().find((p) => p.pointType === 'DELIVERY');
+                                            if (firstPickup?.city && lastDelivery?.city) {
+                                                lookupTariff(firstPickup.city, lastDelivery.city);
+                                            }
+                                        }
+                                    }
+                                    setRoutePointsState(newPts);
+                                }}
+                            />
+
+                            <RoutePointEmails
+                                locationId={pt.id}
+                                value={pt.emails ?? []}
+                                onChange={(emails) => {
+                                    const newPts = [...routePointsState];
+                                    newPts[i] = { ...newPts[i], emails };
+                                    setRoutePointsState(newPts);
+                                }}
+                            />
+                        </div>
+                    );
+                })}
+            </div>
+
+            <button
+                type="button"
                 onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])}
-                style={{ width: '100%' }}
+                className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-                Добавить точку
-            </Button>
+                <Plus className="h-4 w-4" /> Добавить точку
+            </button>
         </Card>
     );
 
