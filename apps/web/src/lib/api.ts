@@ -10,6 +10,22 @@ export const api = axios.create({
     },
 });
 
+/**
+ * Пустое тело запроса не должно уезжать строкой «null».
+ *
+ * Заголовок `Content-Type: application/json` стоит на всех запросах, поэтому
+ * `api.post(url, null)` отправляет ровно четыре символа `null`. Разбор JSON
+ * на сервере принимает только объект или массив и отвечает 400 ещё до
+ * проверки прав — пользователь видел «Unexpected token 'n'» вместо действия.
+ * Тело `null` всегда означает «тела нет», так его и передаём.
+ */
+api.interceptors.request.use((config) => {
+    if (config.data === null) {
+        config.data = undefined;
+    }
+    return config;
+});
+
 // Удаляем токены, сохранённые старыми версиями веб-клиента. Пользовательские
 // данные можно оставить для быстрой отрисовки; сессия проверяется по httpOnly cookie.
 if (typeof window !== 'undefined') {

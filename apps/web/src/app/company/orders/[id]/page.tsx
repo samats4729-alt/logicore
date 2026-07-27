@@ -1046,7 +1046,9 @@ export default function OrderDetailPage() {
     const formDocument = async (kind: OrderDocKind) => {
         try {
             setDocBusy(kind);
-            const res = await api.post(`/orders/${orderId}/documents`, null, { params: { kind } });
+            // Тело пустое, но не `null`: с общим заголовком application/json
+            // строка «null» не проходит разбор JSON на сервере.
+            const res = await api.post(`/orders/${orderId}/documents`, {}, { params: { kind } });
             message.success(res.data.version > 1
                 ? `${DOC_TITLE[kind]}: сформирована версия ${res.data.version}, прежняя сохранена`
                 : `${DOC_TITLE[kind]} сформирован${kind === 'CONTRACT' ? '' : 'а'}`);
@@ -1082,18 +1084,27 @@ export default function OrderDetailPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12 }}
         >
             <div style={{ flex: 1, minWidth: 0 }}>
-                <div>
-                    от {dayjs(row.createdAt).format('DD.MM.YYYY HH:mm')}
-                    {row.isCurrent && <Tag color="green" style={{ marginLeft: 6 }}>действующий</Tag>}
+                {/* Дату, время и сумму не разрываем: в узкой колонке они
+                    иначе переносятся по кускам и читаются как мусор. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ whiteSpace: 'nowrap' }}>
+                        от {dayjs(row.createdAt).format('DD.MM.YYYY HH:mm')}
+                    </span>
+                    {row.isCurrent && <Tag color="green" style={{ margin: 0 }}>действующий</Tag>}
                 </div>
-                <div style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>
+                <div style={{
+                    color: 'var(--lc-text-ter)', fontSize: 11,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
                     {kind === 'CONTRACT'
                         ? `ставка ${(row.amount || 0).toLocaleString('ru-RU')} ₸`
                         : row.driverName || '—'}
                 </div>
             </div>
+            {/* Кнопка не сжимается — иначе она отъедает ширину у текста. */}
             <Dropdown.Button
                 size="small"
+                style={{ flexShrink: 0, width: 'auto' }}
                 onClick={() => downloadDocument(kind, row.id)}
                 menu={{
                     items: [{
