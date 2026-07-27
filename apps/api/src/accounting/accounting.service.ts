@@ -179,8 +179,14 @@ export class AccountingService {
 
     // ==================== SHARE REPORT ====================
 
-    async generateShareToken(companyId: string, counterpartyId: string, ourRole: string) {
-        return this.reportsService.generateShareToken(companyId, counterpartyId, ourRole);
+    async generateShareToken(
+        companyId: string,
+        counterpartyId: string,
+        ourRole: string,
+        userId: string,
+        sentToEmail?: string,
+    ) {
+        return this.reportsService.generateShareToken(companyId, counterpartyId, ourRole, userId, sentToEmail);
     }
 
     async getSharedReport(token: string) {

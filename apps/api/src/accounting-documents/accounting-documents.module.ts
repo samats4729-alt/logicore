@@ -12,6 +12,7 @@ import { PublicAccountingDocumentController } from './public-accounting-document
 import { StampImageService } from '../common/services/stamp-image.service';
 import { PaymentAllocationModule } from './payment-allocation.module';
 import { PendingWorkService } from './pending-work.service';
+import { SharedReportInvoiceService } from './shared-report-invoice.service';
 import { CompanyVerificationModule } from '../company/company-verification.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { CompanyVerificationModule } from '../company/company-verification.modul
         AccountingDocumentCalculatorService,
         AccountingDocumentPdfService,
         PendingWorkService,
+        SharedReportInvoiceService,
         StampImageService,
         { provide: RECONCILIATION_REPORTS, useExisting: FinancialReportsService },
     ],

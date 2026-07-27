@@ -56,6 +56,8 @@ const makeService = () => {
         {} as any,
         {} as any,
         {} as any,
+    
+        {} as any, // shareLinks
     );
     return { service, prisma };
 };

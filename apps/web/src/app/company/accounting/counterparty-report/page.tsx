@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Collapse, Space, Empty, Spin, Drawer, Descriptions, Modal, Button, message, theme } from 'antd';
+import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Collapse, Space, Empty, Spin, Drawer, Descriptions, Modal, Button, Segmented, message, theme } from 'antd';
 import {
     SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined,
     CheckCircleOutlined, CloseCircleOutlined, TeamOutlined,
@@ -38,6 +38,19 @@ interface OrderItem {
     vehiclePlate?: string | null;
     amount: number;
     isPaid: boolean;
+    /** Сколько по этому рейсу уже пришло и сколько осталось. */
+    paidAmount?: number;
+    remaining?: number;
+    paymentState?: 'UNPAID' | 'PARTIAL' | 'PAID';
+    /** Выставленный счёт по рейсу; null — счёта ещё нет. */
+    invoice?: {
+        id: string;
+        number: string;
+        status: string;
+        total: number;
+        amountPaid: number;
+        balanceDue: number;
+    } | null;
     paidAt?: string;
     direction: 'theyOwe' | 'weOwe';
     dueDate?: string | null;
@@ -120,6 +133,7 @@ export default function CounterpartyReportPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
+    const [sideFilter, setSideFilter] = useState<'all' | 'customers' | 'carriers'>('all');
     const [paymentFilter, setPaymentFilter] = useState<string>('all');
     const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
     const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
@@ -230,8 +244,17 @@ export default function CounterpartyReportPage() {
             result = result.filter(c => (c.overdueTheyOweUs || 0) > 0 || (c.overdueWeOweThem || 0) > 0);
         }
 
+        // Заказчики и перевозчики — разные разговоры и разные деньги.
+        // Компания может быть и тем и другим, тогда она видна в обеих
+        // вкладках: это честно, а не ошибка.
+        if (sideFilter === 'customers') {
+            result = result.filter(c => c.theyOweUs > 0 || c.orders.some(o => o.direction === 'theyOwe'));
+        } else if (sideFilter === 'carriers') {
+            result = result.filter(c => c.weOweThem > 0 || c.orders.some(o => o.direction === 'weOwe'));
+        }
+
         return result;
-    }, [data, search, roleFilter, paymentFilter]);
+    }, [data, search, roleFilter, paymentFilter, sideFilter]);
 
     // Пересчитанные итоги по фильтрованным
     const filteredTotals = useMemo(() => {
@@ -291,17 +314,42 @@ export default function CounterpartyReportPage() {
             render: (v: number) => v ? <span style={{ fontSize: 12, fontWeight: 600 }}>{fmt(v)}</span> : <span style={{ color: token.colorTextDisabled }}>—</span>,
         },
         {
-            title: 'Оплата', key: 'paid', width: 110, align: 'center' as const,
-            render: (_: any, r: OrderItem) => (
-                <Space size={4}>
-                    {r.isPaid
-                        ? <Tag color="green" style={{ fontSize: 11, margin: 0 }}><CheckCircleOutlined /> Да</Tag>
-                        : r.isOverdue
-                            ? <Tag color="red" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Просрочено</Tag>
-                            : <Tag color="orange" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Нет</Tag>
-                    }
-                </Space>
-            ),
+            title: 'Счёт', key: 'invoice', width: 150,
+            render: (_: any, r: OrderItem) => (r.invoice ? (
+                <div>
+                    <div style={{ fontSize: 11, fontWeight: 600 }}>{r.invoice.number}</div>
+                    <div style={{ fontSize: 10, color: token.colorTextSecondary }}>
+                        {r.invoice.status === 'POSTED' ? 'проведён' : 'черновик'}
+                    </div>
+                </div>
+            ) : (
+                <Tag style={{ fontSize: 11, margin: 0 }}>не выставлен</Tag>
+            )),
+        },
+        {
+            title: 'Оплата', key: 'paid', width: 170, align: 'right' as const,
+            render: (_: any, r: OrderItem) => {
+                // Частичная оплата раньше выглядела как полная неоплата:
+                // был только флаг «да/нет». Показываем сколько пришло и
+                // сколько осталось.
+                const state = r.paymentState ?? (r.isPaid ? 'PAID' : 'UNPAID');
+                if (state === 'PAID') {
+                    return <Tag color="green" style={{ fontSize: 11, margin: 0 }}><CheckCircleOutlined /> Оплачено</Tag>;
+                }
+                if (state === 'PARTIAL') {
+                    return (
+                        <div>
+                            <Tag color="gold" style={{ fontSize: 11, margin: 0 }}>Частично</Tag>
+                            <div style={{ fontSize: 10, color: token.colorTextSecondary, marginTop: 2 }}>
+                                пришло {fmt(r.paidAmount || 0)}, осталось {fmt(r.remaining || 0)}
+                            </div>
+                        </div>
+                    );
+                }
+                return r.isOverdue
+                    ? <Tag color="red" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Просрочено</Tag>
+                    : <Tag color="orange" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Не оплачено</Tag>;
+            },
         },
     ];
 
@@ -405,6 +453,15 @@ export default function CounterpartyReportPage() {
                         onChange={e => setSearch(e.target.value)}
                         style={{ width: 300 }}
                         allowClear
+                    />
+                    <Segmented
+                        value={sideFilter}
+                        onChange={(v) => setSideFilter(v as 'all' | 'customers' | 'carriers')}
+                        options={[
+                            { value: 'all', label: 'Все' },
+                            { value: 'customers', label: 'Заказчики' },
+                            { value: 'carriers', label: 'Перевозчики' },
+                        ]}
                     />
                     <Select
                         value={roleFilter}
@@ -602,18 +659,32 @@ export default function CounterpartyReportPage() {
                                         summary={() => {
                                             if (cp.orders.length < 2) return null;
                                             const totalAmount = cp.orders.reduce((s, o) => s + o.amount, 0);
-                                            const paidAmount = cp.orders.filter(o => o.isPaid).reduce((s, o) => s + o.amount, 0);
+                                            // Считаем фактически пришедшие деньги. Раньше суммировались
+                                            // только полностью оплаченные рейсы, целой суммой, — рейс с
+                                            // частичной оплатой давал ноль, и итог расходился с шапкой.
+                                            const paidAmount = cp.orders.reduce(
+                                                (sum, o) => sum + (o.paidAmount ?? (o.isPaid ? o.amount : 0)),
+                                                0,
+                                            );
+                                            const restAmount = Math.max(0, totalAmount - paidAmount);
+                                            // Колонок 11: последняя — «Оплата», перед ней «Счёт».
                                             return (
                                                 <Table.Summary>
                                                     <Table.Summary.Row>
-                                                        <Table.Summary.Cell index={0} colSpan={6}>
+                                                        <Table.Summary.Cell index={0} colSpan={8}>
                                                             <Text strong style={{ fontSize: 12 }}>ИТОГО</Text>
                                                         </Table.Summary.Cell>
-                                                        <Table.Summary.Cell index={6} align="right">
+                                                        <Table.Summary.Cell index={8} align="right">
                                                             <Text strong style={{ fontSize: 12 }}>{fmt(totalAmount)} ₸</Text>
                                                         </Table.Summary.Cell>
-                                                        <Table.Summary.Cell index={7} align="center">
-                                                            <Text style={{ fontSize: 11, color: token.colorTextSecondary }}>{fmt(paidAmount)} опл.</Text>
+                                                        <Table.Summary.Cell index={9} />
+                                                        <Table.Summary.Cell index={10} align="right">
+                                                            <Text style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                                                оплачено {fmt(paidAmount)} ₸
+                                                            </Text>
+                                                            <div style={{ fontSize: 11, fontWeight: 600 }}>
+                                                                осталось {fmt(restAmount)} ₸
+                                                            </div>
                                                         </Table.Summary.Cell>
                                                     </Table.Summary.Row>
                                                 </Table.Summary>

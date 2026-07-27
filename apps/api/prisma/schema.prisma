@@ -109,6 +109,7 @@ model User {
   /// Компании, которые этот пользователь подтвердил как админ платформы.
   verifiedCompanies     Company[]               @relation("VerifiedCompanies")
   createdOrderDocuments OrderDocument[] @relation("CreatedOrderDocuments")
+  createdSharedReports  SharedReportLink[] @relation("CreatedSharedReports")
   email                 String?                 @unique
   googleId              String?                 @unique // Google OAuth ID
   phone                 String
@@ -375,6 +376,8 @@ model Company {
   stockMoves                      StockMove[]                   @relation("CompanyStockMoves")
 
   orderDocuments OrderDocument[] @relation("CompanyOrderDocuments")
+  sharedReports             SharedReportLink[] @relation("CompanySharedReports")
+  sharedReportsAsCounterparty SharedReportLink[] @relation("CounterpartySharedReports")
 
   @@index([bin])
   @@index([verificationStatus])
@@ -1275,6 +1278,44 @@ model ServiceCatalogItem {
 }
 
 // Начальные долги контрагентов на дату старта учёта (ввод остатков → заказчики/перевозчики)
+/// Публичная ссылка на отчёт по взаиморасчётам с контрагентом.
+///
+/// Раньше ссылка жила только в Redis: перезапуск кэша убивал все ссылки
+/// разом, отозвать конкретную было нечем, а список выданных нигде не
+/// хранился. Здесь она — обычная запись: срок действия честный, отзыв
+/// возможен, и видно кому что отправляли.
+model SharedReportLink {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation("CompanySharedReports", fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// Контрагент, по которому собран отчёт.
+  counterpartyId String
+  counterparty   Company @relation("CounterpartySharedReports", fields: [counterpartyId], references: [id], onDelete: Cascade)
+
+  /// Наша роль в этих сделках: заказчик мы или исполнитель.
+  ourRole String
+
+  token     String   @unique @default(uuid())
+  expiresAt DateTime
+  /// Отозвана вручную — ссылка перестаёт работать раньше срока.
+  revokedAt DateTime?
+
+  /// Кому отправляли — для журнала выданных ссылок.
+  sentToEmail String?
+
+  /// Отпечаток посещений: сколько раз открывали и когда в последний раз.
+  viewCount    Int       @default(0)
+  lastViewedAt DateTime?
+
+  createdById String
+  createdBy   User     @relation("CreatedSharedReports", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([companyId, counterpartyId])
+}
+
 model CounterpartyOpeningBalance {
   id                String    @id @default(cuid())
   companyId         String

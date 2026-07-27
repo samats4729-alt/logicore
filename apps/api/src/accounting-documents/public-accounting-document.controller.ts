@@ -1,9 +1,11 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccountingDocumentsService } from './accounting-documents.service';
 import { AccountingDocumentPdfService } from './accounting-document-pdf.service';
+import { SharedReportInvoiceService } from './shared-report-invoice.service';
+import { SharedReportInvoiceDto } from './dto/shared-report-invoice.dto';
 
 /**
  * Публичный доступ к документу по ссылке — для контрагента, у которого нет
@@ -19,7 +21,21 @@ export class PublicAccountingDocumentController {
     constructor(
         private readonly documents: AccountingDocumentsService,
         private readonly pdf: AccountingDocumentPdfService,
+        private readonly sharedReportInvoices: SharedReportInvoiceService,
     ) {}
+
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @Post('from-shared-report/:token')
+    @ApiOperation({
+        summary: 'Контрагент выставляет счёт по отмеченным сделкам',
+        description: 'Появляется у нас входящим ЧЕРНОВИКОМ: проводит бухгалтер, а не отправитель.',
+    })
+    async createFromSharedReport(
+        @Param('token') token: string,
+        @Body() dto: SharedReportInvoiceDto,
+    ) {
+        return this.sharedReportInvoices.createFromSharedReport(token, dto);
+    }
 
     @Throttle({ default: { limit: 20, ttl: 60000 } })
     @Get(':token')

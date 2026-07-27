@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Query, Res, BadRequestException } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import { AccountingService } from './accounting.service';
+import { SharedReportLinkService } from './services/shared-report-link.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
@@ -29,6 +30,7 @@ export class AccountingController {
         private readonly accountingService: AccountingService,
         private readonly emailService: EmailService,
         private readonly auditService: AuditService,
+        private readonly shareLinks: SharedReportLinkService,
     ) { }
 
     // ==================== ORDER FINANCIALS ====================
@@ -218,6 +220,21 @@ export class AccountingController {
 
     // ==================== SHARE REPORT ====================
 
+    @Get('share-report/links')
+    @Roles(...FINANCE_VIEW_ROLES)
+    @ApiOperation({ summary: 'Выданные ссылки на отчёт: срок, отзыв, просмотры' })
+    async listShareLinks(@Request() req: any, @Query('counterpartyId') counterpartyId?: string) {
+        return this.shareLinks.list(req.user.companyId, counterpartyId);
+    }
+
+    @Post('share-report/links/:id/revoke')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({ summary: 'Отозвать ссылку досрочно' })
+    async revokeShareLink(@Request() req: any, @Param('id') id: string) {
+        return this.shareLinks.revoke(req.user.companyId, id);
+    }
+
+
     @Post('share-report')
     @Roles(...FINANCE_CHANGE_ROLES)
     async shareReport(
@@ -228,6 +245,8 @@ export class AccountingController {
             req.user.companyId,
             body.counterpartyId,
             body.ourRole,
+            req.user.sub,
+            body.email,
         );
 
         if (body.email) {

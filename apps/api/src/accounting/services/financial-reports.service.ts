@@ -5,7 +5,7 @@ import { RedisService } from '../../redis/redis.service';
 import { FinanceCalculatorService, ORDER_FINANCE_RELATIONS_SELECT, ORDER_FINANCE_SELECT } from './finance-calculator.service';
 import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType, AccountingDocumentStatus, AccountingDocumentType } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType, AccountingDocumentStatus, AccountingDocumentType, AccountingDocumentDirection } from '@prisma/client';
 import { D, Money, ZERO, money, positiveRest, roundMoney, sumOf, toNum, toNumOrNull } from '../../common/utils/money';
 import { PaymentsService } from './payments.service';
 import { FinancialSettingsService } from './financial-settings.service';
@@ -13,6 +13,7 @@ import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../cons
 import { JournalQueryDto } from '../dto/accounting.dto';
 import { getPaginationParams } from '../../common/dto/pagination.dto';
 import * as XLSX from 'xlsx';
+import { SharedReportLinkService } from './shared-report-link.service';
 
 @Injectable()
 export class FinancialReportsService {
@@ -24,6 +25,7 @@ export class FinancialReportsService {
         private periodClosing: PeriodClosingService,
         private paymentsService: PaymentsService,
         private settingsService: FinancialSettingsService,
+        private shareLinks: SharedReportLinkService,
     ) { }
 
 
@@ -733,6 +735,31 @@ export class FinancialReportsService {
      * составляет почти весь объём ответа (на 5000 заявок это 2.4 МБ против
      * нескольких килобайт), а дашборду нужны только итоги и топ должников.
      */
+    /**
+     * Состояние оплаты строки рейса.
+     *
+     * Раньше отдавался только флаг «оплачено да/нет», и частичная оплата
+     * выглядела как полная неоплата: по строке нельзя было понять, пришла
+     * половина денег или ничего. Здесь и сумма, и остаток, и состояние.
+     */
+    private orderPaymentView(amount: Money, paid: Money, isPaidFlag: boolean) {
+        const rest = positiveRest(amount, paid);
+        // Флаг остаётся ведущим: он считается с видимостью платежей обеих
+        // сторон, а `paid` — только теми, что видит эта компания.
+        const paymentState = isPaidFlag || rest.lte(0)
+            ? 'PAID'
+            : paid.gt(0)
+                ? 'PARTIAL'
+                : 'UNPAID';
+        return {
+            amount: toNum(amount),
+            paidAmount: toNum(paid),
+            remaining: toNum(rest),
+            paymentState,
+            isPaid: isPaidFlag,
+        };
+    }
+
     async getCounterpartyReport(companyId: string, options?: { includeOrders?: boolean }) {
         const includeOrders = options?.includeOrders !== false;
         const orders = await this.prisma.order.findMany({
@@ -770,6 +797,25 @@ export class FinancialReportsService {
                     orderBy: { sequence: 'asc' },
                 },
                 ...ORDER_FINANCE_RELATIONS_SELECT,
+                // Счета и акты новой модели: по ним видно, выставлен ли
+                // документ на этот рейс и сколько по нему уже пришло.
+                accountingDocuments: {
+                    select: {
+                        document: {
+                            select: {
+                                id: true,
+                                number: true,
+                                type: true,
+                                direction: true,
+                                status: true,
+                                total: true,
+                                amountPaid: true,
+                                balanceDue: true,
+                                dueDate: true,
+                            },
+                        },
+                    },
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -830,6 +876,28 @@ export class FinancialReportsService {
                 || null;
             const vehiclePlate = order.assignedDriverPlate || order.driver?.vehiclePlate || null;
 
+            // Счёт на оплату по рейсу — в ту сторону, куда идут деньги.
+            // Отменённый документ не считается выставленным.
+            const liveDocuments = (order as any).accountingDocuments
+                ?.map((link: any) => link.document)
+                ?.filter((d: any) => d && d.status !== 'CANCELLED') ?? [];
+            const invoiceFor = (direction: 'OUTGOING' | 'INCOMING') => {
+                const doc = liveDocuments.find(
+                    (d: any) => d.type === 'PAYMENT_INVOICE' && d.direction === direction,
+                );
+                return doc
+                    ? {
+                        id: doc.id,
+                        number: doc.number,
+                        status: doc.status,
+                        total: toNum(doc.total),
+                        amountPaid: toNum(doc.amountPaid),
+                        balanceDue: toNum(doc.balanceDue),
+                        dueDate: doc.dueDate,
+                    }
+                    : null;
+            };
+
             const orderData = {
                 id: order.id,
                 orderNumber: order.orderNumber,
@@ -862,12 +930,12 @@ export class FinancialReportsService {
                 if (overdue) entry.overdueWeOweThem = entry.overdueWeOweThem.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount: toNum(amount),
-                    isPaid: fin.isExecutorPaid,
+                    ...this.orderPaymentView(amount, paid, fin.isExecutorPaid),
                     paidAt: order.customerPaidAt,
                     direction: 'weOwe',
                     dueDate: order.driverPaymentDate,
                     isOverdue: overdue,
+                    invoice: invoiceFor('INCOMING'),
                 });
             }
 
@@ -881,12 +949,12 @@ export class FinancialReportsService {
                 if (overdue) entry.overdueTheyOweUs = entry.overdueTheyOweUs.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount: toNum(amount),
-                    isPaid: fin.isCustomerPaid,
+                    ...this.orderPaymentView(amount, paid, fin.isCustomerPaid),
                     paidAt: order.customerPaidAt,
                     direction: 'theyOwe',
                     dueDate: order.customerPaymentDate,
                     isOverdue: overdue,
+                    invoice: invoiceFor('OUTGOING'),
                 });
             }
 
@@ -900,12 +968,12 @@ export class FinancialReportsService {
                 if (overdue) entry.overdueWeOweThem = entry.overdueWeOweThem.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount: toNum(amount),
-                    isPaid: fin.isExecutorPaid,
+                    ...this.orderPaymentView(amount, paid, fin.isExecutorPaid),
                     paidAt: order.subForwarderPaidAt || order.driverPaidAt,
                     direction: 'weOwe',
                     dueDate: order.driverPaymentDate,
                     isOverdue: overdue,
+                    invoice: invoiceFor('INCOMING'),
                 });
             }
 
@@ -919,12 +987,12 @@ export class FinancialReportsService {
                 if (overdue) entry.overdueTheyOweUs = entry.overdueTheyOweUs.plus(positiveRest(amount, paid));
                 entry.orders.push({
                     ...orderData,
-                    amount: toNum(amount),
-                    isPaid: fin.isCustomerPaid,
+                    ...this.orderPaymentView(amount, paid, fin.isCustomerPaid),
                     paidAt: order.subForwarderPaidAt,
                     direction: 'theyOwe',
                     dueDate: order.customerPaymentDate,
                     isOverdue: overdue,
+                    invoice: invoiceFor('OUTGOING'),
                 });
             }
         }
@@ -1563,44 +1631,33 @@ export class FinancialReportsService {
 
     // ==================== SHARE REPORT ====================
 
-    async generateShareToken(companyId: string, counterpartyId: string, ourRole: string): Promise<{ token: string; shareUrl: string }> {
-        const [company, counterparty] = await Promise.all([
-            this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true } }),
-            this.prisma.company.findUnique({ where: { id: counterpartyId }, select: { id: true, name: true } }),
-        ]);
-
-        if (!company) throw new NotFoundException('Компания не найдена');
-        if (!counterparty) throw new NotFoundException('Контрагент не найден');
-
-        const token = uuidv4();
-        const ttl = 60 * 60 * 24 * 7; // 7 дней
-
-        await this.redisService.set(
-            `share_report:${token}`,
-            JSON.stringify({
-                companyId,
-                companyName: company.name,
-                counterpartyId,
-                counterpartyName: counterparty.name,
-                ourRole,
-                createdAt: new Date().toISOString(),
-            }),
-            ttl,
-        );
-
-        const frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
-        const shareUrl = `${frontendUrl}/shared/report/${token}`;
-
-        return { token, shareUrl };
+    /**
+     * Выдать публичную ссылку на отчёт.
+     *
+     * Хранение и срок жизни — в `SharedReportLinkService`: ссылка живёт в
+     * базе, а не в кэше, поэтому её можно отозвать и увидеть в списке
+     * выданных.
+     */
+    async generateShareToken(
+        companyId: string,
+        counterpartyId: string,
+        ourRole: string,
+        userId: string,
+        sentToEmail?: string,
+    ): Promise<{ token: string; shareUrl: string; expiresAt: Date }> {
+        const link = await this.shareLinks.create(companyId, userId, {
+            counterpartyId,
+            ourRole,
+            sentToEmail,
+        });
+        return { token: link.token, shareUrl: link.shareUrl, expiresAt: link.expiresAt };
     }
 
     async getSharedReport(token: string) {
-        const raw = await this.redisService.get(`share_report:${token}`);
-        if (!raw) {
-            throw new NotFoundException('Ссылка недействительна или истёк срок действия');
-        }
-
-        const { companyId, companyName, counterpartyId, ourRole, createdAt } = JSON.parse(raw);
+        const link = await this.shareLinks.resolve(token);
+        await this.shareLinks.trackView(link.id);
+        const { companyId, companyName, counterpartyId, ourRole } = link;
+        const expiresAt = link.expiresAt;
         const fullReport = await this.getCounterpartyReport(companyId);
 
         const key = `${counterpartyId}__${ourRole}`;
@@ -1653,17 +1710,76 @@ export class FinancialReportsService {
             orderBy: { createdAt: 'desc' },
         });
 
+        // Счета в действующей модели документов.
+        //
+        // Наш неотправленный черновик контрагенту видеть незачем — это ещё
+        // не выставленный счёт. А вот черновик, который прислал он сам,
+        // показываем обязательно: иначе после отправки счёт у него нигде не
+        // виден, и он отправляет его повторно.
+        const documents = await this.prisma.accountingDocument.findMany({
+            where: {
+                type: AccountingDocumentType.PAYMENT_INVOICE,
+                status: { not: AccountingDocumentStatus.CANCELLED },
+                OR: [
+                    {
+                        companyId,
+                        counterpartyId,
+                        // Наши документы — только выставленные.
+                        OR: [
+                            { direction: AccountingDocumentDirection.OUTGOING, status: { not: AccountingDocumentStatus.DRAFT } },
+                            { direction: AccountingDocumentDirection.INCOMING },
+                        ],
+                    },
+                    { companyId: counterpartyId, counterpartyId: companyId },
+                ],
+            },
+            orderBy: { documentDate: 'desc' },
+            take: 200,
+            select: {
+                id: true,
+                number: true,
+                externalNumber: true,
+                direction: true,
+                status: true,
+                documentDate: true,
+                dueDate: true,
+                total: true,
+                amountPaid: true,
+                balanceDue: true,
+                shareToken: true,
+                shareRevokedAt: true,
+                orders: { select: { order: { select: { id: true, orderNumber: true } } } },
+            },
+        });
+
+        const documentsView = documents.map((doc) => ({
+            id: doc.id,
+            number: doc.number,
+            externalNumber: doc.externalNumber,
+            // Направление разворачиваем: в базе оно записано с нашей точки
+            // зрения, а читает страницу контрагент.
+            issuedByUs: doc.direction === AccountingDocumentDirection.OUTGOING,
+            status: doc.status,
+            documentDate: doc.documentDate,
+            dueDate: doc.dueDate,
+            total: toNum(doc.total),
+            amountPaid: toNum(doc.amountPaid),
+            balanceDue: toNum(doc.balanceDue),
+            // Отозванная ссылка на документ не должна оставаться кликабельной.
+            shareToken: doc.shareRevokedAt ? null : doc.shareToken,
+            orders: doc.orders.map((link) => link.order),
+        }));
+
         if (!counterparty) {
-            const { counterpartyName: cpName } = JSON.parse(raw);
             return {
                 senderCompany: companyName,
-                counterpartyName: cpName,
+                counterpartyName: link.counterpartyName,
                 ourRole,
-                createdAt,
-                expiresIn: '7 дней',
+                expiresAt,
                 counterparty: null,
                 totals: null,
                 invoices,
+                documents: documentsView,
             };
         }
 
@@ -1671,8 +1787,9 @@ export class FinancialReportsService {
             senderCompany: companyName,
             counterpartyName: counterparty.counterparty.name,
             ourRole,
-            createdAt,
-            expiresIn: '7 дней',
+            // Контрагенту показываем настоящий срок жизни ссылки, а не
+            // подпись «7 дней»: ссылку могли отозвать или выдать раньше.
+            expiresAt,
             counterparty,
             totals: {
                 theyOweUs: counterparty.theyOweUs,
@@ -1683,6 +1800,7 @@ export class FinancialReportsService {
                 totalOrders: counterparty.totalOrders,
             },
             invoices,
+            documents: documentsView,
         };
     }
 
@@ -1696,12 +1814,9 @@ export class FinancialReportsService {
             note?: string;
         },
     ) {
-        const raw = await this.redisService.get(`share_report:${token}`);
-        if (!raw) {
-            throw new NotFoundException('Ссылка недействительна или истёк срок действия');
-        }
-
-        const { companyId, counterpartyId } = JSON.parse(raw);
+        // Через тот же разбор токена, что и просмотр: иначе по отозванной
+        // ссылке можно было бы продолжать выставлять счета.
+        const { companyId, counterpartyId } = await this.shareLinks.resolve(token);
 
         if (!dto.orderIds || dto.orderIds.length === 0) {
             throw new BadRequestException('Счет должен содержать как минимум один заказ');
