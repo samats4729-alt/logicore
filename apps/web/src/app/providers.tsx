@@ -6,6 +6,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { SWRConfig } from 'swr';
 import ruRU from 'antd/locale/ru_RU';
 import ThemeProvider, { useTheme } from '@/components/ThemeProvider';
+import { Toaster } from '@/components/ui/sonner';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com';
 
@@ -103,7 +104,11 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                         dedupingInterval: 4000,
                     }}
                 >
-                    <AntdApp>{children}</AntdApp>
+                    <AntdApp>
+                        {children}
+                        {/* Уведомления теперь sonner, а не message из antd */}
+                        <Toaster />
+                    </AntdApp>
                 </SWRConfig>
             </ConfigProvider>
         </GoogleOAuthProvider>

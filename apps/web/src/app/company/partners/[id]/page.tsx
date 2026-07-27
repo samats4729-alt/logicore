@@ -2,11 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-    Card, Tabs, Table, Button, Typography, Space, Tag, Avatar,
-    Descriptions, message, Modal, Form, Input, Select, Row, Col,
-    Divider, DatePicker, Popconfirm, Spin, Empty, theme
-} from 'antd';
+import { Card, Tabs, Table, Button, Typography, Space, Tag, Avatar, Descriptions, Modal, Form, Input, Select, Row, Col, Divider, DatePicker, Popconfirm, Spin, Empty, theme } from 'antd';
 import {
     ShopOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined,
     PlusOutlined, UserOutlined, UserAddOutlined, CarOutlined,
@@ -16,6 +12,7 @@ import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import LocationForm from '@/components/ui/LocationForm';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 
@@ -94,13 +91,13 @@ export default function PartnerDetailPage() {
                     setPartner(systemPartner);
                     setIsExternal(false);
                 } else {
-                    message.error('Контрагент не найден');
+                    toast.error('Контрагент не найден');
                     router.push('/company/partners');
                 }
             }
         } catch (error) {
             console.error('Failed to fetch partner:', error);
-            message.error('Ошибка загрузки контрагента');
+            toast.error('Ошибка загрузки контрагента');
         } finally {
             setLoading(false);
         }
@@ -113,7 +110,7 @@ export default function PartnerDetailPage() {
             setDrivers(res.data);
         } catch (error) {
             console.error('Failed to fetch drivers:', error);
-            message.error('Ошибка загрузки водителей');
+            toast.error('Ошибка загрузки водителей');
         } finally {
             setDriversLoading(false);
         }
@@ -143,7 +140,7 @@ export default function PartnerDetailPage() {
             setAddresses((res.data || []).filter((l: any) => l.companyId === partnerId));
             setAddressesLoaded(true);
         } catch (error) {
-            message.error('Ошибка загрузки адресов');
+            toast.error('Ошибка загрузки адресов');
         } finally {
             setAddressesLoading(false);
         }
@@ -165,27 +162,27 @@ export default function PartnerDetailPage() {
             const payload = { ...values, emails: values.emails ? values.emails.join(',') : null };
             if (editingAddress) {
                 await api.put(`/locations/${editingAddress.id}`, payload);
-                message.success('Адрес обновлён');
+                toast.success('Адрес обновлён');
             } else {
                 await api.post('/locations', payload);
-                message.success('Адрес добавлен');
+                toast.success('Адрес добавлен');
             }
             setAddressModalOpen(false);
             setEditingAddress(null);
             addressForm.resetFields();
             fetchAddresses();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сохранения адреса');
+            toast.error(error.response?.data?.message || 'Ошибка сохранения адреса');
         }
     };
 
     const handleAddressDelete = async (id: string) => {
         try {
             await api.delete(`/locations/${id}`);
-            message.success('Адрес удалён');
+            toast.success('Адрес удалён');
             fetchAddresses();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка удаления адреса');
+            toast.error(error.response?.data?.message || 'Ошибка удаления адреса');
         }
     };
 
@@ -199,11 +196,11 @@ export default function PartnerDetailPage() {
         setEditSubmitting(true);
         try {
             await api.patch(`/external-companies/${partnerId}`, values);
-            message.success('Данные контрагента обновлены');
+            toast.success('Данные контрагента обновлены');
             setEditModalOpen(false);
             fetchPartner();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сохранения');
+            toast.error(error.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setEditSubmitting(false);
         }
@@ -237,16 +234,16 @@ export default function PartnerDetailPage() {
         try {
             if (editingDriver) {
                 await api.put(`/company/drivers/${editingDriver.id}`, body);
-                message.success('Данные водителя обновлены');
+                toast.success('Данные водителя обновлены');
             } else {
                 const res = await api.post('/company/drivers', {
                     ...body,
                     companyId: partnerId,
                 });
                 if (res.data?.alreadyExists) {
-                    message.info('Использован существующий водитель');
+                    toast.info('Использован существующий водитель');
                 } else {
-                    message.success('Водитель добавлен');
+                    toast.success('Водитель добавлен');
                 }
             }
             setDriverModalOpen(false);
@@ -254,7 +251,7 @@ export default function PartnerDetailPage() {
             setEditingDriver(null);
             fetchDrivers();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сохранения водителя');
+            toast.error(error.response?.data?.message || 'Ошибка сохранения водителя');
         } finally {
             setDriverSubmitting(false);
         }
@@ -263,10 +260,10 @@ export default function PartnerDetailPage() {
     const handleDriverDeactivate = async (driverId: string) => {
         try {
             await api.delete(`/company/drivers/${driverId}`);
-            message.success('Водитель деактивирован');
+            toast.success('Водитель деактивирован');
             fetchDrivers();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка деактивации водителя');
+            toast.error(error.response?.data?.message || 'Ошибка деактивации водителя');
         }
     };
 
@@ -687,7 +684,7 @@ export default function PartnerDetailPage() {
                                     if (res.data.address) updateObj.address = res.data.address;
                                     if (res.data.directorName) updateObj.directorName = res.data.directorName;
                                     editForm.setFieldsValue(updateObj);
-                                    message.success('Реквизиты компании подтянуты');
+                                    toast.success('Реквизиты компании подтянуты');
                                 }
                             } catch {}
                         }

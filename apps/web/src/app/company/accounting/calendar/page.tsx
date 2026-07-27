@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { message } from 'antd';
 import { useRouter } from 'next/navigation';
 import dayjs, { Dayjs } from 'dayjs';
 import {
@@ -11,6 +10,7 @@ import {
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 /**
  * Строка приходит из `/accounting/planned-payments`. Обязательство создаёт
@@ -81,7 +81,7 @@ export default function PaymentCalendarPage() {
             setRows(res.data?.rows || []);
             setTotals(res.data?.totals || null);
         } catch {
-            message.error('Не удалось загрузить платёжный календарь');
+            toast.error('Не удалось загрузить платёжный календарь');
         } finally {
             setLoading(false);
         }

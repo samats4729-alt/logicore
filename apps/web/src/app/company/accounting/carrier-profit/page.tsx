@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, DatePicker, Tag, App } from 'antd';
+import { Table, Button, DatePicker, Tag } from 'antd';
 import { ArrowLeftOutlined, CalendarOutlined, WalletOutlined, BarChartOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { downloadCsv } from '@/lib/exportCsv';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
+import { toast } from 'sonner';
 dayjs.extend(quarterOfYear);
 
 const { RangePicker } = DatePicker;
@@ -19,7 +20,6 @@ const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
 
 export default function CarrierProfitPage() {
     const router = useRouter();
-    const { message } = App.useApp();
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState<Row[]>([]);
     const [totals, setTotals] = useState<Totals>({ orders: 0, revenue: 0, cost: 0, margin: 0 });
@@ -36,7 +36,7 @@ export default function CarrierProfitPage() {
             setRows(res.data?.rows || []);
             setTotals(res.data?.totals || { orders: 0, revenue: 0, cost: 0, margin: 0 });
         } catch {
-            message.error('Не удалось загрузить отчёт');
+            toast.error('Не удалось загрузить отчёт');
         } finally {
             setLoading(false);
         }

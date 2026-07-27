@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, message, Segmented, Modal, Form, InputNumber, Popconfirm, Drawer, Descriptions, Divider, theme } from 'antd';
+import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, Segmented, Modal, Form, InputNumber, Popconfirm, Drawer, Descriptions, Divider, theme } from 'antd';
 import {
     SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, DollarOutlined,
 } from '@ant-design/icons';
@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
 import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -80,12 +81,12 @@ export default function CompanyExpensesPage() {
                 orderId: needsOrder ? (values.orderId || undefined) : undefined,
                 note: values.note,
             };
-            if (editingExpense) { await api.put(`/accounting/expenses/${editingExpense.id}`, payload); message.success('Обновлено'); }
-            else { await api.post('/accounting/expenses', payload); message.success('Добавлено'); }
+            if (editingExpense) { await api.put(`/accounting/expenses/${editingExpense.id}`, payload); toast.success('Обновлено'); }
+            else { await api.post('/accounting/expenses', payload); toast.success('Добавлено'); }
             setModalOpen(false); setEditingExpense(null); form.resetFields(); fetchManual();
-        } catch { message.error('Ошибка сохранения'); }
+        } catch { toast.error('Ошибка сохранения'); }
     };
-    const handleDeleteManual = async (id: string) => { try { await api.delete(`/accounting/expenses/${id}`); message.success('Удалено'); fetchManual(); } catch { message.error('Ошибка удаления'); } };
+    const handleDeleteManual = async (id: string) => { try { await api.delete(`/accounting/expenses/${id}`); toast.success('Удалено'); fetchManual(); } catch { toast.error('Ошибка удаления'); } };
 
     const filtered = entries.filter(e => {
         if (searchQuery) { const q = searchQuery.toLowerCase(); if (!e.orderNumber.toLowerCase().includes(q) && !getCarrierName(e).toLowerCase().includes(q) && !e.cargoDescription.toLowerCase().includes(q)) return false; }

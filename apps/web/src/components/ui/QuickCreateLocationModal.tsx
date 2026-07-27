@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Modal, Form, App } from 'antd';
+import { Modal, Form } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import LocationForm from './LocationForm';
 import { api, Location } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface QuickCreateLocationModalProps {
     open: boolean;
@@ -23,7 +24,6 @@ export default function QuickCreateLocationModal({
     customerCompany,
     carrierCompany
 }: QuickCreateLocationModalProps) {
-    const { message } = App.useApp();
     const [form] = Form.useForm();
     const [submitting, setSubmitting] = useState(false);
 
@@ -36,11 +36,11 @@ export default function QuickCreateLocationModal({
             };
 
             const response = await api.post('/locations', payload);
-            message.success('Адрес успешно добавлен');
+            toast.success('Адрес успешно добавлен');
             onSuccess(response.data);
             form.resetFields();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сохранения адреса');
+            toast.error(error.response?.data?.message || 'Ошибка сохранения адреса');
         } finally {
             setSubmitting(false);
         }

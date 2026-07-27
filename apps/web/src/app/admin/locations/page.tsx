@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Input, Space, Typography, Tag, Tabs, message, Modal, Form, Select } from 'antd';
+import { Table, Card, Button, Input, Space, Typography, Tag, Tabs, Modal, Form, Select } from 'antd';
 import { usePathname, useRouter } from 'next/navigation';
 import {
     PlusOutlined, SearchOutlined, EnvironmentOutlined,
     GlobalOutlined, AppstoreOutlined, EditOutlined, DeleteOutlined
 } from '@ant-design/icons';
 import { api, City, Country, Region } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -39,7 +40,7 @@ export default function AdminLocationsPage() {
             const res = await api.get('/cities');
             setCities(res.data);
         } catch (error) {
-            message.error('Ошибка загрузки городов');
+            toast.error('Ошибка загрузки городов');
         } finally {
             setLoading(false);
         }
@@ -49,14 +50,14 @@ export default function AdminLocationsPage() {
         try {
             const res = await api.get('/cities/countries');
             setCountries(res.data);
-        } catch (error) { message.error('Ошибка загрузки стран'); }
+        } catch (error) { toast.error('Ошибка загрузки стран'); }
     };
 
     const fetchRegions = async (countryId: string) => {
         try {
             const res = await api.get(`/cities/regions?countryId=${countryId}`);
             setRegions(res.data);
-        } catch (error) { message.error('Ошибка загрузки регионов'); }
+        } catch (error) { toast.error('Ошибка загрузки регионов'); }
     };
 
     const handleCountryChange = (val: string) => {
@@ -83,16 +84,16 @@ export default function AdminLocationsPage() {
             // Check if API supports creating cities. For now mockup or basic endpoint
             if (editingId) {
                 // await api.patch(`/cities/${editingId}`, values);
-                message.info('Редактирование пока не реализовано на API');
+                toast.info('Редактирование пока не реализовано на API');
             } else {
                 await api.post('/cities', values);
-                message.success('Город создан');
+                toast.success('Город создан');
             }
             setModalOpen(false);
             form.resetFields();
             fetchCities();
         } catch (error) {
-            message.error('Ошибка сохранения');
+            toast.error('Ошибка сохранения');
         }
     };
 
@@ -147,7 +148,7 @@ export default function AdminLocationsPage() {
         //             }} />
         //             <Button danger icon={<DeleteOutlined />} onClick={() => {
         //                 // api.delete...
-        //                 message.info('Удаление пока не реализовано');
+        //                 toast.info('Удаление пока не реализовано');
         //             }} />
         //         </Space>
         //     )

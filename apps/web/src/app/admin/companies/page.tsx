@@ -1,24 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import {
-    Alert,
-    Button,
-    Descriptions,
-    Empty,
-    Input,
-    Modal,
-    Segmented,
-    Space,
-    Spin,
-    Table,
-    Tag,
-    message,
-    theme,
-} from 'antd';
+import { Alert, Button, Descriptions, Empty, Input, Modal, Segmented, Space, Spin, Table, Tag, theme } from 'antd';
 import { CheckOutlined, CloseOutlined, FileTextOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 const DOCUMENT_LABELS: Record<string, string> = {
     COMPANY_REGISTRATION: 'Справка о госрегистрации',
@@ -66,7 +53,7 @@ export default function AdminCompaniesPage() {
             const res = await api.get('/admin/company-verification', { params: { status } });
             setRows(res.data || []);
         } catch {
-            message.error('Не удалось загрузить очередь проверки');
+            toast.error('Не удалось загрузить очередь проверки');
         } finally {
             setLoading(false);
         }
@@ -84,7 +71,7 @@ export default function AdminCompaniesPage() {
                 setActing(company.id);
                 try {
                     await api.post(`/admin/company-verification/${company.id}/approve`);
-                    message.success('Организация подтверждена');
+                    toast.success('Организация подтверждена');
                     await load();
                 } finally {
                     setActing(null);
@@ -114,7 +101,7 @@ export default function AdminCompaniesPage() {
             cancelText: 'Отмена',
             onOk: async () => {
                 if (!reason.trim()) {
-                    message.warning('Укажите причину отказа');
+                    toast.warning('Укажите причину отказа');
                     return Promise.reject();
                 }
                 setActing(company.id);
@@ -122,7 +109,7 @@ export default function AdminCompaniesPage() {
                     await api.post(`/admin/company-verification/${company.id}/reject`, {
                         reason: reason.trim(),
                     });
-                    message.success('Организация отклонена');
+                    toast.success('Организация отклонена');
                     await load();
                 } finally {
                     setActing(null);

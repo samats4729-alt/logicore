@@ -1,19 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Select, Space, Tag, App } from 'antd';
+import { Table, Button, Select, Space, Tag } from 'antd';
 import { ArrowLeftOutlined, DatabaseOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { downloadCsv } from '@/lib/exportCsv';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 interface Row { warehouseId: string; warehouse: string; nomenclatureId: string; nomenclature: string; unit: string; quantity: number; avgCost: number; value: number }
 interface Wh { id: string; name: string }
 
 export default function StockBalancesPage() {
     const router = useRouter();
-    const { message } = App.useApp();
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState<Row[]>([]);
     const [warehouses, setWarehouses] = useState<Wh[]>([]);
@@ -29,7 +29,7 @@ export default function StockBalancesPage() {
             setRows(res.data?.rows || []);
             setWarehouses(res.data?.warehouses || []);
             setTotalValue(res.data?.totalValue || 0);
-        } catch { message.error('Не удалось загрузить остатки'); }
+        } catch { toast.error('Не удалось загрузить остатки'); }
         finally { setLoading(false); }
     };
 

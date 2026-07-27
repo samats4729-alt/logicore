@@ -2,22 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    Alert,
-    Button,
-    DatePicker,
-    Dropdown,
-    Input,
-    Modal,
-    Select,
-    Space,
-    Spin,
-    Table,
-    Tabs,
-    Tooltip,
-    message,
-    theme,
-} from 'antd';
+import { Alert, Button, DatePicker, Dropdown, Input, Modal, Select, Space, Spin, Table, Tabs, Tooltip, theme } from 'antd';
 import {
     EyeOutlined,
     MoreOutlined,
@@ -41,6 +26,7 @@ import {
     revokeAccountingDocumentShare,
     routePointsLabel,
 } from '@/lib/accounting-documents';
+import { toast } from 'sonner';
 
 const { RangePicker } = DatePicker;
 
@@ -107,7 +93,7 @@ export default function ActsJournalPage() {
             setTotals(result.totals);
             setTotalCount(result.total);
         } catch {
-            message.error('Не удалось загрузить журнал актов');
+            toast.error('Не удалось загрузить журнал актов');
         } finally {
             setLoading(false);
         }
@@ -135,7 +121,7 @@ export default function ActsJournalPage() {
                 counterpartyId: createCounterparty,
             }));
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось загрузить заявки');
+            toast.error(e.response?.data?.message || 'Не удалось загрузить заявки');
             setOrders([]);
         } finally {
             setLoadingOrders(false);
@@ -145,8 +131,8 @@ export default function ActsJournalPage() {
     useEffect(() => { if (createOpen) loadOrders(); }, [createOpen, loadOrders]);
 
     const createAct = async () => {
-        if (!createCounterparty) { message.warning('Выберите контрагента'); return; }
-        if (!pickedIds.length) { message.warning('Выберите хотя бы один рейс'); return; }
+        if (!createCounterparty) { toast.warning('Выберите контрагента'); return; }
+        if (!pickedIds.length) { toast.warning('Выберите хотя бы один рейс'); return; }
         try {
             setCreating(true);
             const picked = orders.filter((order) => pickedIds.includes(order.id));
@@ -172,11 +158,11 @@ export default function ActsJournalPage() {
                     orderId: order.id,
                 })),
             });
-            message.success(`Черновик акта № ${created.number} создан`);
+            toast.success(`Черновик акта № ${created.number} создан`);
             setCreateOpen(false);
             router.push(`/company/accounting/acts/${created.id}`);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось создать акт');
+            toast.error(e.response?.data?.message || 'Не удалось создать акт');
         } finally {
             setCreating(false);
         }
@@ -300,7 +286,7 @@ export default function ActsJournalPage() {
                                     onClick: () => {
                                         navigator.clipboard.writeText(
                                             `${window.location.origin}/shared/document/${record.shareToken}`);
-                                        message.success('Ссылка скопирована');
+                                        toast.success('Ссылка скопирована');
                                     },
                                 },
                                 {
@@ -310,7 +296,7 @@ export default function ActsJournalPage() {
                                     disabled: !canChange || Boolean(record.shareRevokedAt),
                                     onClick: async () => {
                                         await revokeAccountingDocumentShare(record.id);
-                                        message.success('Ссылка отозвана');
+                                        toast.success('Ссылка отозвана');
                                         load();
                                     },
                                 },

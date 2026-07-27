@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Button, Table, Modal, Form, Input, Select, message, Space, Typography, Popconfirm, Collapse, List } from 'antd';
+import { Card, Button, Table, Modal, Form, Input, Select, Space, Typography, Popconfirm, Collapse, List } from 'antd';
 import { PlusOutlined, DeleteOutlined, FolderAddOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -26,7 +27,7 @@ export default function AdminCargoTypesPage() {
             const response = await api.get('/cargo-types');
             setCategories(response.data);
         } catch (error) {
-            message.error('Ошибка загрузки типов грузов');
+            toast.error('Ошибка загрузки типов грузов');
         } finally {
             setLoading(false);
         }
@@ -39,12 +40,12 @@ export default function AdminCargoTypesPage() {
     const handleCreateCategory = async (values: { name: string }) => {
         try {
             await api.post('/cargo-types/categories', values);
-            message.success('Категория создана');
+            toast.success('Категория создана');
             setIsCategoryModalOpen(false);
             categoryForm.resetFields();
             fetchCargoTypes();
         } catch (error) {
-            message.error('Ошибка создания категории');
+            toast.error('Ошибка создания категории');
         }
     };
 
@@ -52,32 +53,32 @@ export default function AdminCargoTypesPage() {
         if (!selectedCategoryId) return;
         try {
             await api.post('/cargo-types/types', { ...values, categoryId: selectedCategoryId });
-            message.success('Тип груза добавлен');
+            toast.success('Тип груза добавлен');
             setIsTypeModalOpen(false);
             typeForm.resetFields();
             fetchCargoTypes();
         } catch (error) {
-            message.error('Ошибка добавления типа');
+            toast.error('Ошибка добавления типа');
         }
     };
 
     const handleDeleteCategory = async (id: string) => {
         try {
             await api.delete(`/cargo-types/categories/${id}`);
-            message.success('Категория удалена');
+            toast.success('Категория удалена');
             fetchCargoTypes();
         } catch (error) {
-            message.error('Ошибка удаления категории');
+            toast.error('Ошибка удаления категории');
         }
     };
 
     const handleDeleteType = async (id: string) => {
         try {
             await api.delete(`/cargo-types/types/${id}`);
-            message.success('Тип удалён');
+            toast.success('Тип удалён');
             fetchCargoTypes();
         } catch (error) {
-            message.error('Ошибка удаления типа');
+            toast.error('Ошибка удаления типа');
         }
     };
 

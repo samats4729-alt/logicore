@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, message, List, Modal, Form, Select, Popconfirm, Checkbox } from 'antd';
+import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, List, Modal, Form, Select, Popconfirm, Checkbox } from 'antd';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
     CheckCircleOutlined, CloseCircleOutlined, ShopOutlined,
@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 
@@ -79,7 +80,7 @@ export default function PartnersPage() {
             setCounterparties([...systemPartners, ...externalCompanies]);
         } catch (error) {
             console.error('Failed to fetch counterparties:', error);
-            message.error('Ошибка загрузки контрагентов');
+            toast.error('Ошибка загрузки контрагентов');
         } finally {
             setLoading(false);
         }
@@ -124,7 +125,7 @@ export default function PartnersPage() {
                 setHasMore(true);
             }
         } catch (error) {
-            message.error('Ошибка загрузки');
+            toast.error('Ошибка загрузки');
         } finally {
             setSearchLoading(false);
         }
@@ -137,34 +138,34 @@ export default function PartnersPage() {
     const sendInvite = async (companyId: string) => {
         try {
             await api.post('/partners/invite', { recipientId: companyId });
-            message.success('Приглашение отправлено');
+            toast.success('Приглашение отправлено');
             setSearchResults(prev => prev.map(c =>
                 c.id === companyId ? { ...c, partnershipStatus: 'PENDING' } : c
             ));
             fetchRequests();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка отправки');
+            toast.error(error.response?.data?.message || 'Ошибка отправки');
         }
     };
 
     const acceptInvite = async (id: string) => {
         try {
             await api.put(`/partners/${id}/accept`);
-            message.success('Приглашение принято');
+            toast.success('Приглашение принято');
             fetchRequests();
             fetchCounterparties();
         } catch (error) {
-            message.error('Ошибка');
+            toast.error('Ошибка');
         }
     };
 
     const rejectInvite = async (id: string) => {
         try {
             await api.put(`/partners/${id}/reject`);
-            message.success('Приглашение отклонено');
+            toast.success('Приглашение отклонено');
             fetchRequests();
         } catch (error) {
-            message.error('Ошибка');
+            toast.error('Ошибка');
         }
     };
 
@@ -187,27 +188,27 @@ export default function PartnersPage() {
         try {
             if (editingCompany) {
                 await api.patch(`/external-companies/${editingCompany.id}`, body);
-                message.success('Контрагент обновлён');
+                toast.success('Контрагент обновлён');
             } else {
                 await api.post('/external-companies', body);
-                message.success('Контрагент добавлен');
+                toast.success('Контрагент добавлен');
             }
             setModalOpen(false);
             form.resetFields();
             setEditingCompany(null);
             fetchCounterparties();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сохранения');
+            toast.error(error.response?.data?.message || 'Ошибка сохранения');
         }
     };
 
     const handleDelete = async (id: string) => {
         try {
             await api.delete(`/external-companies/${id}`);
-            message.success('Контрагент удалён');
+            toast.success('Контрагент удалён');
             fetchCounterparties();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка удаления');
+            toast.error(error.response?.data?.message || 'Ошибка удаления');
         }
     };
 
@@ -612,7 +613,7 @@ export default function PartnersPage() {
                                     if (res.data.email) updateObj.email = res.data.email;
                                     
                                     form.setFieldsValue(updateObj);
-                                    message.success('Реквизиты компании подтянуты');
+                                    toast.success('Реквизиты компании подтянуты');
                                 }
                             } catch (e) {
                                 // Ignore

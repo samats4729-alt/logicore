@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'antd';
+import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
+import { toast } from 'sonner';
 
 const DgisTrackingMap = dynamic(() => import('@/components/ui/DgisTrackingMap'), {
     ssr: false,
@@ -89,7 +90,6 @@ function tripCity(p: TripPoint | undefined): string {
 }
 
 export default function CompanyTrackingPage() {
-    const { message } = App.useApp();
     const [drivers, setDrivers] = useState<DriverPosition[]>([]);
     const [trips, setTrips] = useState<ActiveTrip[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
@@ -200,16 +200,16 @@ export default function CompanyTrackingPage() {
                     setMyLocation({ latitude, longitude });
                     dgisMapRef.current?.setCenter([longitude, latitude]);
                     dgisMapRef.current?.setZoom(14);
-                    message.success('Карта центрирована на вашем местоположении');
+                    toast.success('Карта центрирована на вашем местоположении');
                 },
                 (error) => {
-                    message.error('Не удалось определить местоположение');
+                    toast.error('Не удалось определить местоположение');
                     console.error('Geolocation error:', error);
                 },
                 { enableHighAccuracy: true }
             );
         } else {
-            message.error('Геолокация не поддерживается');
+            toast.error('Геолокация не поддерживается');
         }
     };
 

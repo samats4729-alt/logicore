@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Tag, Typography, Input, Select, DatePicker, Upload, message, App, Dropdown, Modal } from 'antd';
+import { Card, Table, Button, Space, Tag, Typography, Input, Select, DatePicker, Upload, Dropdown, Modal } from 'antd';
 import {
     FileTextOutlined,
     DownloadOutlined,
@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -41,7 +42,6 @@ const documentTypes: Record<string, { label: string; color: string }> = {
 };
 
 export default function DocumentsPage() {
-    const { message: msg } = App.useApp();
     const [documents, setDocuments] = useState<Document[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchText, setSearchText] = useState('');
@@ -54,7 +54,7 @@ export default function DocumentsPage() {
             setDocuments(response.data);
         } catch (error) {
             console.error(error);
-            // msg.error('Не удалось загрузить документы');
+            // toast.error('Не удалось загрузить документы');
         } finally {
             setLoading(false);
         }
@@ -66,14 +66,14 @@ export default function DocumentsPage() {
 
     const handleDownload = async (doc: Document) => {
         if (!doc.filePath) {
-            msg.warning('Файл недоступен');
+            toast.warning('Файл недоступен');
             return;
         }
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
             window.open(`${apiUrl}${doc.filePath}`, '_blank');
         } catch (error) {
-            msg.error('Ошибка скачивания');
+            toast.error('Ошибка скачивания');
         }
     };
 
@@ -87,10 +87,10 @@ export default function DocumentsPage() {
             onOk: async () => {
                 try {
                     await api.delete(`/documents/${id}`);
-                    msg.success('Документ удалён');
+                    toast.success('Документ удалён');
                     fetchDocuments();
                 } catch (error) {
-                    msg.error('Не удалось удалить документ');
+                    toast.error('Не удалось удалить документ');
                 }
             },
         });

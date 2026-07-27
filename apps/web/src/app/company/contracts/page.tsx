@@ -1,17 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-    Card, Button, Tag, Space, Modal, message, Typography,
-    Collapse, Table, Empty, Badge, Input, Tooltip, Tabs,
-    Form, Select, DatePicker, InputNumber, Row, Col, Popconfirm, Divider, Dropdown, theme
-} from 'antd';
+import { Card, Button, Tag, Space, Modal, Typography, Collapse, Table, Empty, Badge, Input, Tooltip, Tabs, Form, Select, DatePicker, InputNumber, Row, Col, Popconfirm, Divider, Dropdown, theme } from 'antd';
 import {
     CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined,
     ExclamationCircleOutlined, PlusOutlined, SendOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, DownOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -201,12 +198,12 @@ export default function CompanyContractsPage() {
                 endDate: values.endDate?.toISOString(),
                 notes: values.notes,
             });
-            message.success('Договор создан');
+            toast.success('Договор создан');
             setContractModalOpen(false);
             contractForm.resetFields();
             fetchContracts();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания договора');
+            toast.error(error.response?.data?.message || 'Ошибка создания договора');
         }
     };
 
@@ -228,9 +225,9 @@ export default function CompanyContractsPage() {
             link.download = `Договор_${contractNumber}.pdf`;
             link.click();
             window.URL.revokeObjectURL(url);
-            message.success('PDF скачан');
+            toast.success('PDF скачан');
         } catch (error) {
-            message.error('Ошибка скачивания PDF');
+            toast.error('Ошибка скачивания PDF');
         }
     };
 
@@ -238,11 +235,11 @@ export default function CompanyContractsPage() {
     const handleApprove = async (agreementId: string) => {
         try {
             await api.put(`/contracts/agreements/${agreementId}/approve`);
-            message.success('Доп. соглашение утверждено!');
+            toast.success('Доп. соглашение утверждено!');
             fetchContracts();
             fetchPendingAgreements();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка утверждения');
+            toast.error(error.response?.data?.message || 'Ошибка утверждения');
         }
     };
 
@@ -258,12 +255,12 @@ export default function CompanyContractsPage() {
             await api.put(`/contracts/agreements/${rejectingId}/reject`, {
                 reason: rejectReason,
             });
-            message.success('Доп. соглашение отклонено');
+            toast.success('Доп. соглашение отклонено');
             setRejectModalOpen(false);
             fetchContracts();
             fetchPendingAgreements();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка при отклонении');
+            toast.error(error.response?.data?.message || 'Ошибка при отклонении');
         }
     };
 
@@ -283,12 +280,12 @@ export default function CompanyContractsPage() {
                 validTo: values.dates?.[1]?.toISOString(),
                 notes: values.notes,
             });
-            message.success('Доп. соглашение создано');
+            toast.success('Доп. соглашение создано');
             setAgreementModalOpen(false);
             agreementForm.resetFields();
             fetchContracts();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания');
+            toast.error(error.response?.data?.message || 'Ошибка создания');
         }
     };
 
@@ -323,35 +320,35 @@ export default function CompanyContractsPage() {
                 vehicleType: values.vehicleType,
             });
             if (selectedAgreementStatus === 'APPROVED') {
-                message.success('Тариф добавлен. ДС отправлено на повторное согласование');
+                toast.success('Тариф добавлен. ДС отправлено на повторное согласование');
             } else {
-                message.success('Тариф добавлен');
+                toast.success('Тариф добавлен');
             }
             setTariffModalOpen(false);
             tariffForm.resetFields();
             fetchContracts();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка добавления тарифа');
+            toast.error(error.response?.data?.message || 'Ошибка добавления тарифа');
         }
     };
 
     const handleDeleteTariff = async (tariffId: string) => {
         try {
             await api.delete(`/contracts/tariffs/${tariffId}`);
-            message.success('Тариф удалён');
+            toast.success('Тариф удалён');
             fetchContracts();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка удаления');
+            toast.error(error.response?.data?.message || 'Ошибка удаления');
         }
     };
 
     const sendForApproval = async (agreementId: string) => {
         try {
             await api.put(`/contracts/agreements/${agreementId}/send`);
-            message.success('Отправлено на согласование экспедитору');
+            toast.success('Отправлено на согласование экспедитору');
             fetchContracts();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка отправки');
+            toast.error(error.response?.data?.message || 'Ошибка отправки');
         }
     };
 

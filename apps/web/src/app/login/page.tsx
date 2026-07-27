@@ -2,19 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Form, Input, Button, Typography, App, Divider } from 'antd';
+import { Form, Input, Button, Typography, Divider } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import AuthShell from '@/components/AuthShell';
 import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
 export default function LoginPage() {
     const router = useRouter();
-    const { message } = App.useApp();
     const { login, setUser } = useAuthStore();
     const [loading, setLoading] = useState(false);
     const [hydrated, setHydrated] = useState(false);
@@ -58,7 +58,7 @@ export default function LoginPage() {
         setLoading(true);
         try {
             await login(values.email, values.password, getDeviceId());
-            message.success('Вход выполнен успешно');
+            toast.success('Вход выполнен успешно');
 
             // Получаем данные пользователя для редиректа
             const meResponse = await api.post('/auth/me');
@@ -74,7 +74,7 @@ export default function LoginPage() {
                 router.push('/');
             }
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка входа');
+            toast.error(error.response?.data?.message || 'Ошибка входа');
         } finally {
             setLoading(false);
         }
@@ -93,14 +93,14 @@ export default function LoginPage() {
             if (response.data.needsRegistration) {
                 sessionStorage.setItem('googleToken', credentialResponse.credential);
                 sessionStorage.setItem('googleData', JSON.stringify(response.data.googleData));
-                message.info('Аккаунт не найден. Завершите регистрацию.');
+                toast.info('Аккаунт не найден. Завершите регистрацию.');
                 router.push('/register?google=1');
                 return;
             }
 
             const { user } = response.data;
             setUser(user);
-            message.success('Вход через Google выполнен успешно');
+            toast.success('Вход через Google выполнен успешно');
 
             // Редирект по роли
             const userRole = user.role;
@@ -112,7 +112,7 @@ export default function LoginPage() {
                 router.push('/');
             }
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка входа через Google');
+            toast.error(error.response?.data?.message || 'Ошибка входа через Google');
         } finally {
             setLoading(false);
         }
@@ -180,7 +180,7 @@ export default function LoginPage() {
                     <GoogleLogin
                         onSuccess={handleGoogleSuccess}
                         onError={() => {
-                            message.error('Ошибка входа через Google');
+                            toast.error('Ошибка входа через Google');
                         }}
                         theme="outline"
                         size="large"

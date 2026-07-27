@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
-import { Alert, Button, DatePicker, Spin, Empty, App } from 'antd';
+import { Alert, Button, DatePicker, Spin, Empty } from 'antd';
 import {
     ArrowLeftOutlined,
     CalendarOutlined,
@@ -17,6 +17,7 @@ import type { AccountingDocumentDraft } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { amountToWordsKzt } from '@/lib/amountToWords';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { RangePicker } = DatePicker;
 
@@ -51,7 +52,6 @@ const fmt = (n: number) => (n || 0).toLocaleString('ru-RU', { minimumFractionDig
 function ReconciliationActInner() {
     const router = useRouter();
     const params = useSearchParams();
-    const { message } = App.useApp();
     const cpId = params.get('cp') || '';
 
     const [loading, setLoading] = useState(true);
@@ -73,11 +73,11 @@ function ReconciliationActInner() {
             const res = await api.get(`/accounting/reconciliation-act/${cpId}`, { params: q });
             setData(res.data);
         } catch {
-            message.error('Не удалось сформировать акт сверки');
+            toast.error('Не удалось сформировать акт сверки');
         } finally {
             setLoading(false);
         }
-    }, [cpId, range, message]);
+    }, [cpId, range]);
 
     useEffect(() => { fetchAct(); }, [fetchAct]);
 
@@ -88,7 +88,7 @@ function ReconciliationActInner() {
 
     const createOfficialDraft = async () => {
         if (!range?.[0] || !range?.[1] || !data) {
-            message.warning('Сначала выберите период и дождитесь расчёта');
+            toast.warning('Сначала выберите период и дождитесь расчёта');
             return;
         }
         setCreatingDraft(true);
@@ -100,9 +100,9 @@ function ReconciliationActInner() {
                 documentDate: range[1].format('YYYY-MM-DD'),
             });
             setCreatedDraft(draft);
-            message.success(`Черновик акта № ${draft.number} создан`);
+            toast.success(`Черновик акта № ${draft.number} создан`);
         } catch {
-            message.error('Не удалось создать официальный черновик акта');
+            toast.error('Не удалось создать официальный черновик акта');
         } finally {
             setCreatingDraft(false);
         }
@@ -122,7 +122,7 @@ function ReconciliationActInner() {
             link.remove();
             URL.revokeObjectURL(url);
         } catch {
-            message.error('Не удалось скачать официальный PDF');
+            toast.error('Не удалось скачать официальный PDF');
         } finally {
             setDownloadingPdf(false);
         }

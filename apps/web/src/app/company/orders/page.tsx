@@ -2,11 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    Table, Button, Tag, Space, Modal, Form, Input, message, Typography,
-    Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col,
-    DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio
-} from 'antd';
+import { Table, Button, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col, DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
 import dayjs from 'dayjs';
 import {
     UserAddOutlined, CheckCircleOutlined, PlusOutlined,
@@ -26,6 +22,7 @@ import AssignDriverModal from '@/components/AssignDriverModal';
 import OrdersMobileList from '@/components/OrdersMobileList';
 import StatusPill, { STATUS_PILL, STATUS_LABELS } from '@/components/ui/StatusPill';
 import { useIsMobile } from '@/lib/useIsMobile';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -260,7 +257,7 @@ export default function CompanyOrdersPage() {
     const handleSharePoA = async () => {
         const selectedEmails = shareEmailsList.filter(item => item.checked).map(item => item.email);
         if (selectedEmails.length === 0) {
-            message.warning('Выберите хотя бы один email для отправки');
+            toast.warning('Выберите хотя бы один email для отправки');
             return;
         }
 
@@ -272,10 +269,10 @@ export default function CompanyOrdersPage() {
             await api.post(`/orders/${selectedOrder?.id}/share-power-of-attorney`, {
                 emails: uniqueEmails,
             });
-            message.success('Доверенность успешно отправлена на выбранные email-адреса');
+            toast.success('Доверенность успешно отправлена на выбранные email-адреса');
             setSharePoAModalOpen(false);
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка отправки доверенности');
+            toast.error(error.response?.data?.message || 'Ошибка отправки доверенности');
         } finally {
             setSharePoALoading(false);
         }
@@ -287,17 +284,17 @@ export default function CompanyOrdersPage() {
         
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            message.error('Некорректный формат email');
+            toast.error('Некорректный формат email');
             return;
         }
         
         if (shareEmailsList.some(item => item.email === email)) {
-            message.warning('Этот email уже добавлен');
+            toast.warning('Этот email уже добавлен');
             return;
         }
         
         if (shareEmailsList.length >= 15) {
-            message.warning('Максимум 15 получателей');
+            toast.warning('Максимум 15 получателей');
             return;
         }
         
@@ -370,12 +367,12 @@ export default function CompanyOrdersPage() {
                 isCarrier: true,
                 type: 'FORWARDER'
             });
-            message.success('Контрагент успешно добавлен');
+            toast.success('Контрагент успешно добавлен');
             setQuickPartnerModalOpen(false);
             quickPartnerForm.resetFields();
             await fetchPartners();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка при создании контрагента');
+            toast.error(error.response?.data?.message || 'Ошибка при создании контрагента');
         } finally {
             setQuickPartnerLoading(false);
         }
@@ -464,7 +461,7 @@ export default function CompanyOrdersPage() {
             const response = await api.get('/company/drivers');
             setDrivers(response.data);
         } catch {
-            message.error('Ошибка загрузки водителей');
+            toast.error('Ошибка загрузки водителей');
         } finally {
             setDriversLoading(false);
         }
@@ -745,7 +742,7 @@ export default function CompanyOrdersPage() {
             if (response.data?.price) {
                 setAppliedTariff(response.data);
                 createForm.setFieldsValue({ customerPrice: response.data.price });
-                message.success(`Тариф: ${response.data.price.toLocaleString('ru-RU')} ₸`);
+                toast.success(`Тариф: ${response.data.price.toLocaleString('ru-RU')} ₸`);
             } else { setAppliedTariff(null); }
         } catch { setAppliedTariff(null); } finally { setTariffLoading(false); }
     };
@@ -863,12 +860,12 @@ export default function CompanyOrdersPage() {
             }
 
             await api.put(`/orders/${selectedOrder.id}`, updateData);
-            message.success('Заявка обновлена');
+            toast.success('Заявка обновлена');
             mutateAll();
             setEditModalOpen(false);
             setDetailDrawerOpen(false);
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка обновления');
+            toast.error(error.response?.data?.message || 'Ошибка обновления');
         }
     };
 
@@ -915,21 +912,21 @@ export default function CompanyOrdersPage() {
         setStatusLoading(true);
         try {
             await api.put(`/company/orders/${selectedOrder.id}/status`, values);
-            message.success('Статус обновлён');
+            toast.success('Статус обновлён');
             mutateAll();
             setStatusModalOpen(false); setDetailDrawerOpen(false);
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка');
+            toast.error(error.response?.data?.message || 'Ошибка');
         } finally { setStatusLoading(false); }
     };
 
     const handleAccept = async (orderId: string) => {
         try {
             await api.put(`/company/orders/${orderId}/accept`);
-            message.success('Заявка принята в работу');
+            toast.success('Заявка принята в работу');
             mutateAll();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка принятия заявки');
+            toast.error(error.response?.data?.message || 'Ошибка принятия заявки');
         }
     };
 
@@ -943,10 +940,10 @@ export default function CompanyOrdersPage() {
             onOk: async () => {
                 try {
                     await api.put(`/company/orders/${orderId}/reject`);
-                    message.success('Заявка отклонена');
+                    toast.success('Заявка отклонена');
                     mutateAll();
                 } catch (error: any) {
-                    message.error(error.response?.data?.message || 'Ошибка отклонения заявки');
+                    toast.error(error.response?.data?.message || 'Ошибка отклонения заявки');
                 }
             }
         });
@@ -965,8 +962,8 @@ export default function CompanyOrdersPage() {
             for (let i = 0; i < routePointsState.length; i++) {
                 const p = routePointsState[i];
                 if (!p.city && !p.address && !p.id) {
-                    if (p.pointType === 'PICKUP') { message.error('Заполните адрес погрузки'); return; }
-                    if (p.pointType === 'DELIVERY') { message.error('Заполните адрес выгрузки'); return; }
+                    if (p.pointType === 'PICKUP') { toast.error('Заполните адрес погрузки'); return; }
+                    if (p.pointType === 'DELIVERY') { toast.error('Заполните адрес выгрузки'); return; }
                     continue;
                 }
                 const locId = await getLocId(p);
@@ -978,7 +975,7 @@ export default function CompanyOrdersPage() {
                 });
             }
             if (routePoints.length < 2) {
-                message.error('Укажите минимум 2 точки маршрута');
+                toast.error('Укажите минимум 2 точки маршрута');
                 return;
             }
 
@@ -1007,14 +1004,14 @@ export default function CompanyOrdersPage() {
             }
 
             await api.post('/orders', { ...ov, routePoints, customerId: user?.id, appliedTariffId: appliedTariff?.id || undefined });
-            message.success('Заявка создана');
+            toast.success('Заявка создана');
             mutateAll();
             
             // Автоматически переключаемся на вкладку «Все заявки»
             setActiveTab('all');
 
             setCreateModalOpen(false); createForm.resetFields();
-        } catch (error: any) { message.error(error.response?.data?.message || 'Ошибка создания'); }
+        } catch (error: any) { toast.error(error.response?.data?.message || 'Ошибка создания'); }
     };
 
     // =================== COLUMNS ===================
@@ -1808,7 +1805,7 @@ export default function CompanyOrdersPage() {
                                                 a.click();
                                                 URL.revokeObjectURL(url);
                                             } catch {
-                                                message.error('Ошибка скачивания доверенности');
+                                                toast.error('Ошибка скачивания доверенности');
                                             }
                                         }}
                                         block
@@ -1842,17 +1839,17 @@ export default function CompanyOrdersPage() {
                                     onConfirm={async () => {
                                         try {
                                             await api.put(`/orders/${selectedOrder.id}/status`, { status: 'CANCELLED', comment: 'Отменено пользователем' });
-                                            message.success('Заявка отменена');
+                                            toast.success('Заявка отменена');
                                             mutateAll();
                                             setDetailDrawerOpen(false);
                                         } catch (error: any) {
                                             try {
                                                 await api.put(`/company/orders/${selectedOrder.id}/status`, { status: 'CANCELLED', comment: 'Отменено пользователем' });
-                                                message.success('Заявка отменена');
+                                                toast.success('Заявка отменена');
                                                 mutateAll();
                                                 setDetailDrawerOpen(false);
                                             } catch (err: any) {
-                                                message.error(err.response?.data?.message || 'Ошибка отмены');
+                                                toast.error(err.response?.data?.message || 'Ошибка отмены');
                                             }
                                         }
                                     }}
@@ -2157,7 +2154,7 @@ export default function CompanyOrdersPage() {
                                     if (res.data.email) updateObj.email = res.data.email;
                                     
                                     quickPartnerForm.setFieldsValue(updateObj);
-                                    message.success('Реквизиты компании подтянуты');
+                                    toast.success('Реквизиты компании подтянуты');
                                 }
                             } catch (e) {
                                 // Ignore

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Upload, message, Divider, Tag, Form, Input, Row, Col, Space } from 'antd';
+import { Button, Upload, Divider, Tag, Form, Input, Row, Col, Space } from 'antd';
 import { CameraOutlined, UserOutlined, MailOutlined, PhoneOutlined, BankOutlined, IdcardOutlined, LockOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import UserAvatar, { notifyAvatarUpdated } from '@/components/UserAvatar';
 import { shortenCompanyName } from '@/lib/company-helper';
+import { toast } from 'sonner';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -44,9 +45,9 @@ export default function ProfilePage() {
         try {
             await api.put('/users/profile', values);
             await checkAuth();
-            message.success('Профиль обновлён');
+            toast.success('Профиль обновлён');
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка обновления профиля');
+            toast.error(error.response?.data?.message || 'Ошибка обновления профиля');
         } finally {
             setProfileLoading(false);
         }
@@ -54,7 +55,7 @@ export default function ProfilePage() {
 
     const handlePasswordChange = async (values: any) => {
         if (values.newPassword !== values.confirmPassword) {
-            message.error('Пароли не совпадают');
+            toast.error('Пароли не совпадают');
             return;
         }
         setPasswordLoading(true);
@@ -63,10 +64,10 @@ export default function ProfilePage() {
                 currentPassword: values.currentPassword,
                 newPassword: values.newPassword,
             });
-            message.success('Пароль успешно изменён');
+            toast.success('Пароль успешно изменён');
             passwordForm.resetFields();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка изменения пароля');
+            toast.error(error.response?.data?.message || 'Ошибка изменения пароля');
         } finally {
             setPasswordLoading(false);
         }
@@ -86,9 +87,9 @@ export default function ProfilePage() {
             setHasAvatar(true);
             notifyAvatarUpdated(user.id);
             await checkAuth();
-            message.success('Фото профиля обновлено');
+            toast.success('Фото профиля обновлено');
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Не удалось загрузить фото');
+            toast.error(error.response?.data?.message || 'Не удалось загрузить фото');
         } finally {
             setUploading(false);
         }

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Tag, Select, Typography, message, Space, Segmented } from 'antd';
+import { Table, Tag, Select, Typography, Space, Segmented } from 'antd';
 import { CustomerServiceOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -40,7 +41,7 @@ export default function AdminSupportPage() {
             const res = await api.get('/assistant/support/tickets');
             setTickets(res.data || []);
         } catch {
-            message.error('Не удалось загрузить обращения');
+            toast.error('Не удалось загрузить обращения');
         } finally {
             setLoading(false);
         }
@@ -54,9 +55,9 @@ export default function AdminSupportPage() {
         try {
             await api.patch(`/assistant/support/tickets/${id}`, { status });
             setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
-            message.success('Статус обновлён');
+            toast.success('Статус обновлён');
         } catch {
-            message.error('Не удалось обновить статус');
+            toast.error('Не удалось обновить статус');
         }
     };
 

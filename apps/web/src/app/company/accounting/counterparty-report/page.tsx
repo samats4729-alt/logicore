@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Collapse, Space, Empty, Spin, Drawer, Descriptions, Modal, Button, Segmented, message, theme } from 'antd';
+import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Collapse, Space, Empty, Spin, Drawer, Descriptions, Modal, Button, Segmented, theme } from 'antd';
 import {
     SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined,
     CheckCircleOutlined, CloseCircleOutlined, TeamOutlined,
@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import StatusPill from '@/components/ui/StatusPill';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 
@@ -155,7 +156,7 @@ export default function CounterpartyReportPage() {
             const res = await api.post('/accounting/share-report', { counterpartyId, ourRole });
             setShareUrl(res.data.shareUrl);
         } catch {
-            message.error('Ошибка генерации ссылки');
+            toast.error('Ошибка генерации ссылки');
         } finally {
             setShareLoading(false);
         }
@@ -163,22 +164,22 @@ export default function CounterpartyReportPage() {
 
     const handleCopyLink = () => {
         navigator.clipboard.writeText(shareUrl);
-        message.success('Ссылка скопирована!');
+        toast.success('Ссылка скопирована!');
     };
 
     const handleSendEmail = async () => {
-        if (!shareEmail) { message.warning('Введите email'); return; }
-        if (!shareUrl) { message.warning('Сначала дождитесь генерации ссылки'); return; }
+        if (!shareEmail) { toast.warning('Введите email'); return; }
+        if (!shareUrl) { toast.warning('Сначала дождитесь генерации ссылки'); return; }
         setEmailSending(true);
         try {
             await api.post('/accounting/send-report-email', {
                 shareUrl,
                 email: shareEmail,
             });
-            message.success('Отчёт отправлен на ' + shareEmail);
+            toast.success('Отчёт отправлен на ' + shareEmail);
             setShareEmail('');
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка отправки письма');
+            toast.error(e.response?.data?.message || 'Ошибка отправки письма');
         } finally {
             setEmailSending(false);
         }
@@ -198,9 +199,9 @@ export default function CounterpartyReportPage() {
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
-            message.success('Отчет экспортирован успешно');
+            toast.success('Отчет экспортирован успешно');
         } catch {
-            message.error('Ошибка при экспорте в Excel');
+            toast.error('Ошибка при экспорте в Excel');
         } finally {
             setExporting(false);
         }

@@ -1,8 +1,9 @@
 'use client';
 
-import { Form, Input, message, Spin } from 'antd';
+import { Form, Input, Spin } from 'antd';
 import { api } from '@/lib/api';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface CompanyFormFieldsProps {
     form: any;
@@ -36,7 +37,7 @@ export default function CompanyFormFields({ form, isSettings = false }: CompanyF
                     }
 
                     form.setFieldsValue(updateVals);
-                    message.success(`Данные компании подтянуты: ${res.data.name}`);
+                    toast.success(`Данные компании подтянуты: ${res.data.name}`);
                 }
             } catch (err) {
                 // Ignore error to avoid blocking user flow

@@ -2,21 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    Alert,
-    Button,
-    DatePicker,
-    Dropdown,
-    Empty,
-    Input,
-    Space,
-    Table,
-    Tabs,
-    Tag,
-    Tooltip,
-    message,
-    theme,
-} from 'antd';
+import { Alert, Button, DatePicker, Dropdown, Empty, Input, Space, Table, Tabs, Tag, Tooltip, theme } from 'antd';
 import {
     DownOutlined,
     EyeOutlined,
@@ -27,6 +13,7 @@ import {
 import dayjs, { Dayjs } from 'dayjs';
 import { api } from '@/lib/api';
 import StatusPill from '@/components/ui/StatusPill';
+import { toast } from 'sonner';
 
 const { RangePicker } = DatePicker;
 
@@ -98,7 +85,7 @@ export default function TransportDocumentsPage() {
             });
             setRows(res.data || []);
         } catch {
-            message.error('Не удалось загрузить журнал документов');
+            toast.error('Не удалось загрузить журнал документов');
         } finally {
             setLoading(false);
         }
@@ -127,7 +114,7 @@ export default function TransportDocumentsPage() {
             link.click();
             URL.revokeObjectURL(url);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось сформировать документ');
+            toast.error(e.response?.data?.message || 'Не удалось сформировать документ');
         }
     };
 

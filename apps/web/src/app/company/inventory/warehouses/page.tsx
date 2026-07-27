@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Typography, Switch, Modal, Form, Input, App } from 'antd';
+import { Table, Button, Typography, Switch, Modal, Form, Input } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, EditOutlined, HomeOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
@@ -13,7 +14,6 @@ interface Warehouse { id: string; name: string; isActive: boolean }
 
 export default function WarehousesPage() {
     const router = useRouter();
-    const { message } = App.useApp();
     const { user } = useAuthStore();
     const canEdit = ['COMPANY_ADMIN', 'ACCOUNTANT', 'ADMIN'].includes(user?.role || '');
 
@@ -29,7 +29,7 @@ export default function WarehousesPage() {
     const fetchItems = async () => {
         setLoading(true);
         try { setItems((await api.get('/inventory/warehouses')).data || []); }
-        catch { message.error('Не удалось загрузить склады'); }
+        catch { toast.error('Не удалось загрузить склады'); }
         finally { setLoading(false); }
     };
 
@@ -41,15 +41,15 @@ export default function WarehousesPage() {
         try {
             if (editing) await api.put(`/inventory/warehouses/${editing.id}`, values);
             else await api.post('/inventory/warehouses', values);
-            message.success(editing ? 'Склад обновлён' : 'Склад добавлен');
+            toast.success(editing ? 'Склад обновлён' : 'Склад добавлен');
             setModalOpen(false); fetchItems();
-        } catch (e: any) { message.error(e.response?.data?.message || 'Ошибка сохранения'); }
+        } catch (e: any) { toast.error(e.response?.data?.message || 'Ошибка сохранения'); }
         finally { setSaving(false); }
     };
 
     const toggleActive = async (r: Warehouse, isActive: boolean) => {
         try { await api.put(`/inventory/warehouses/${r.id}`, { isActive }); fetchItems(); }
-        catch { message.error('Не удалось изменить статус'); }
+        catch { toast.error('Не удалось изменить статус'); }
     };
 
     const columns = [

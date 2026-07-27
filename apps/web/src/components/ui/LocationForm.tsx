@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-    Form, Input, Row, Col, Select, Typography, App, Button, FormInstance, Radio, Spin
-} from 'antd';
+import { Form, Input, Row, Col, Select, Typography, Button, FormInstance, Radio, Spin } from 'antd';
 import { EnvironmentOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api, Location, Country, City, GeoProviderHierarchy } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import AddressAutocomplete from './AddressAutocomplete';
+import { toast } from 'sonner';
 
 const MapPicker = dynamic(() => import('./MapPicker'), {
     ssr: false,
@@ -36,7 +35,6 @@ export default function LocationForm({
     customerCompany,
     carrierCompany
 }: LocationFormProps) {
-    const { message } = App.useApp();
 
     // Coordinates managed manually to sync with Map
     const [lat, setLat] = useState<number | undefined>();
@@ -230,7 +228,7 @@ export default function LocationForm({
             return importedCity;
         } catch (error) {
             console.error('Failed to import geography from 2GIS', error);
-            message.warning('Адрес выбран, но город не добавился в справочник. Его можно сохранить и повторить позже.');
+            toast.warning('Адрес выбран, но город не добавился в справочник. Его можно сохранить и повторить позже.');
             return null;
         }
     };
@@ -263,14 +261,14 @@ export default function LocationForm({
         if (pickedName) {
             setAddressValue(pickedName);
             form.setFieldsValue({ address: pickedName });
-            message.success({ content: `Выбрано: ${pickedName}`, key: 'geo' });
+            toast.success(`Выбрано: ${pickedName}`, { id: 'geo' });
             return;
         }
 
         const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
         setAddressValue(coords);
         form.setFieldsValue({ address: coords });
-        message.info({ content: 'Точка выбрана. Нажмите "Определить адрес", если нужно.', key: 'geo' });
+        toast.info('Точка выбрана. Нажмите "Определить адрес", если нужно.', { id: 'geo' });
     };
 
     const handleManualGeocode = async () => {
@@ -281,7 +279,7 @@ export default function LocationForm({
             // Обратный геокодинг через наш API (/geo/reverse) с кэшем
             const res = await api.get('/geo/reverse', { params: { lat, lon: lng } });
             if (res.data?.configured === false) {
-                message.warning('Геокодер не настроен: задайте DGIS_API_KEY на api-сервисе');
+                toast.warning('Геокодер не настроен: задайте DGIS_API_KEY на api-сервисе');
                 return;
             }
             const data2gis = { result: { items: res.data?.items || [] } };
@@ -300,9 +298,9 @@ export default function LocationForm({
             if (finalName) {
                 setAddressValue(finalName);
                 form.setFieldsValue({ address: finalName });
-                message.success({ content: `Адрес: ${finalName}`, key: 'geo' });
+                toast.success(`Адрес: ${finalName}`, { id: 'geo' });
             } else {
-                message.warning('Не удалось определить точный адрес. Введите вручную.');
+                toast.warning('Не удалось определить точный адрес. Введите вручную.');
             }
 
             if (data2gis?.result?.items?.length > 0) {
@@ -314,7 +312,7 @@ export default function LocationForm({
             }
         } catch (e) {
             console.error('Manual geocode error', e);
-            message.error('Ошибка соединения с 2GIS');
+            toast.error('Ошибка соединения с 2GIS');
         } finally {
             setIsFetchingAddress(false);
         }
@@ -323,7 +321,7 @@ export default function LocationForm({
     return (
         <Form form={form} layout="vertical" onFinish={(values) => {
             if (!lat || !lng) {
-                message.error('Укажите адрес или точку на карте');
+                toast.error('Укажите адрес или точку на карте');
                 return;
             }
             let finalCompanyId = values.companyId;

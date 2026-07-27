@@ -1,12 +1,13 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
-import { Button, Select, Spin, Empty, App } from 'antd';
+import { Button, Select, Spin, Empty } from 'antd';
 import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { amountToWordsKzt } from '@/lib/amountToWords';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 interface Party {
     id: string;
@@ -49,7 +50,6 @@ const partyLine = (p: Party | null) => {
 function ActOfWorkInner() {
     const router = useRouter();
     const params = useSearchParams();
-    const { message } = App.useApp();
     const orderId = params.get('order') || '';
 
     const [loading, setLoading] = useState(true);
@@ -64,11 +64,11 @@ function ActOfWorkInner() {
             setData(res.data);
             setServiceName(res.data?.service?.name || '');
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось сформировать акт');
+            toast.error(e.response?.data?.message || 'Не удалось сформировать акт');
         } finally {
             setLoading(false);
         }
-    }, [orderId, message]);
+    }, [orderId]);
 
     useEffect(() => { fetchAct(); }, [fetchAct]);
 

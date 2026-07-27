@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-    Modal, Form, Radio, Select, Button, Row, Col, Divider,
-    Input, DatePicker, message, Steps, theme
-} from 'antd';
+import { Modal, Form, Radio, Select, Button, Row, Col, Divider, Input, DatePicker, Steps, theme } from 'antd';
 import {
     CarOutlined, UserOutlined, FileTextOutlined, PlusOutlined,
     CheckCircleOutlined
@@ -11,6 +8,7 @@ import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 interface AssignDriverModalProps {
     open: boolean;
@@ -113,7 +111,7 @@ export default function AssignDriverModal({
             const external = externalRes.data.filter((e: any) => e.isCarrier).map((e: any) => ({ ...e, isExternal: true }));
             setCarriers([...regular, ...external]);
         } catch (error) {
-            message.error('Ошибка загрузки перевозчиков');
+            toast.error('Ошибка загрузки перевозчиков');
         } finally {
             setCarriersLoading(false);
         }
@@ -125,7 +123,7 @@ export default function AssignDriverModal({
             const response = await api.get('/company/vehicles');
             setVehicles(response.data);
         } catch (error) {
-            message.error('Ошибка загрузки автопарка');
+            toast.error('Ошибка загрузки автопарка');
         } finally {
             setVehiclesLoading(false);
         }
@@ -174,7 +172,7 @@ export default function AssignDriverModal({
                 });
             }
         } catch (error) {
-            message.error('Ошибка загрузки водителей');
+            toast.error('Ошибка загрузки водителей');
         } finally {
             setDriversLoading(false);
         }
@@ -232,14 +230,14 @@ export default function AssignDriverModal({
                 isCarrier: true,
                 type: 'FORWARDER'
             });
-            message.success('Перевозчик успешно добавлен');
+            toast.success('Перевозчик успешно добавлен');
             setQuickCarrierModalOpen(false);
             quickCarrierForm.resetFields();
             await fetchCarriers();
             setSelectedCarrierId(res.data.id);
             form.setFieldsValue({ partnerId: res.data.id });
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания перевозчика');
+            toast.error(error.response?.data?.message || 'Ошибка создания перевозчика');
         } finally {
             setQuickCarrierLoading(false);
         }
@@ -309,7 +307,7 @@ export default function AssignDriverModal({
                     });
                     finalDriverId = res.data.id;
                     if (res.data.alreadyExists) {
-                        message.info('Использован существующий водитель');
+                        toast.info('Использован существующий водитель');
                     }
                 } else {
                     // Update details for our own drivers, ignore/skip for carrier drivers if forbidden
@@ -333,11 +331,11 @@ export default function AssignDriverModal({
             };
 
             await api.put(`/company/orders/${orderId}/assign-driver`, payload);
-            message.success('Водитель успешно назначен');
+            toast.success('Водитель успешно назначен');
             onSuccess();
             onCancel();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка при сохранении назначения');
+            toast.error(error.response?.data?.message || 'Ошибка при сохранении назначения');
         } finally {
             setLoading(false);
         }
@@ -651,7 +649,7 @@ export default function AssignDriverModal({
                                     if (res.data.phone) updateObj.phone = res.data.phone;
                                     if (res.data.email) updateObj.email = res.data.email;
                                     quickCarrierForm.setFieldsValue(updateObj);
-                                    message.success('Реквизиты подтянуты');
+                                    toast.success('Реквизиты подтянуты');
                                 }
                             } catch { }
                         }

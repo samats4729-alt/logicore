@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Empty, Modal, Input, Skeleton, Tag, message } from 'antd';
+import { Button, Empty, Modal, Input, Skeleton, Tag } from 'antd';
 import { PaperClipOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface PaymentProof {
     id: string;
@@ -62,10 +63,10 @@ export default function PaymentProofsCard() {
         try {
             setBusy(proof.id);
             await api.post(`/payment-proofs/${proof.id}/accept`, {});
-            message.success('Чек подтверждён. Платёж проведите отдельно после сверки с банком');
+            toast.success('Чек подтверждён. Платёж проведите отдельно после сверки с банком');
             await load();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось подтвердить чек');
+            toast.error(e.response?.data?.message || 'Не удалось подтвердить чек');
         } finally {
             setBusy(null);
         }
@@ -76,12 +77,12 @@ export default function PaymentProofsCard() {
         try {
             setBusy(rejecting.id);
             await api.post(`/payment-proofs/${rejecting.id}/reject`, { reason: reason.trim() || undefined });
-            message.success('Чек отклонён');
+            toast.success('Чек отклонён');
             setRejecting(null);
             setReason('');
             await load();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось отклонить чек');
+            toast.error(e.response?.data?.message || 'Не удалось отклонить чек');
         } finally {
             setBusy(null);
         }

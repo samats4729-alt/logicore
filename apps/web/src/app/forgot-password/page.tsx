@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Form, Input, Button, App } from 'antd';
+import { Form, Input, Button } from 'antd';
 import { UserOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import AuthShell from '@/components/AuthShell';
+import { toast } from 'sonner';
 
 export default function ForgotPasswordPage() {
     const router = useRouter();
-    const { message } = App.useApp();
     const [loading, setLoading] = useState(false);
     const [isSent, setIsSent] = useState(false);
 
@@ -18,11 +18,11 @@ export default function ForgotPasswordPage() {
         try {
             await api.post('/auth/forgot-password', { email: values.email });
             setIsSent(true);
-            message.success('Инструкции отправлены на почту');
+            toast.success('Инструкции отправлены на почту');
         } catch (error: any) {
             // Even on error we might want to say it's sent for security, 
             // but if it's a network error we can show it
-            message.error(error.response?.data?.message || 'Ошибка отправки запроса');
+            toast.error(error.response?.data?.message || 'Ошибка отправки запроса');
         } finally {
             setLoading(false);
         }

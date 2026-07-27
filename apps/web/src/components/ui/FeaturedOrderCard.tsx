@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useMemo, useState } from 'react';
-import { Button, Dropdown, message } from 'antd';
+import { Button, Dropdown } from 'antd';
 import { RightOutlined, PhoneOutlined, EnvironmentOutlined, WhatsAppOutlined, CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import StatusPill, { STATUS_LABELS } from './StatusPill';
 import { shortenCompanyName } from '@/lib/company-helper';
 import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
 import { useTheme } from '@/components/ThemeProvider';
+import { toast } from 'sonner';
 
 // Грубый прогресс рейса по позиции статуса (точный % по GPS — этап 5 REDESIGN_PLAN.md)
 export const ORDER_STATUS_PROGRESS: Record<string, number> = {
@@ -328,7 +329,7 @@ export default function FeaturedOrderCard({ order, onOpen }: { order: any; onOpe
                                         else if (key === 'call') window.location.href = `tel:${raw}`;
                                         else if (key === 'copy') {
                                             navigator.clipboard?.writeText(raw);
-                                            message.success('Номер водителя скопирован');
+                                            toast.success('Номер водителя скопирован');
                                         }
                                     },
                                 }}

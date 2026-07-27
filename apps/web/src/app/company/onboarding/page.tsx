@@ -2,23 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    Alert,
-    Button,
-    Form,
-    Input,
-    Result,
-    Select,
-    Space,
-    Spin,
-    Steps,
-    Tag,
-    Upload,
-    message,
-    theme,
-} from 'antd';
+import { Alert, Button, Form, Input, Result, Select, Space, Spin, Steps, Tag, Upload, theme } from 'antd';
 import { CheckCircleOutlined, InboxOutlined, UploadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 /**
  * Документы, которыми в Казахстане подтверждают организацию.
@@ -81,7 +68,7 @@ export default function CompanyOnboardingPage() {
             setCompany(res.data.company);
             setVerification(res.data.verification);
         } catch {
-            message.error('Не удалось загрузить данные организации');
+            toast.error('Не удалось загрузить данные организации');
         } finally {
             setLoading(false);
         }
@@ -99,10 +86,10 @@ export default function CompanyOnboardingPage() {
                 directorName: values.directorName || undefined,
                 address: values.address || undefined,
             });
-            message.success('Организация создана. Приложите документы для проверки');
+            toast.success('Организация создана. Приложите документы для проверки');
             await load();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось создать организацию');
+            toast.error(e.response?.data?.message || 'Не удалось создать организацию');
         } finally {
             setSaving(false);
         }
@@ -112,10 +99,10 @@ export default function CompanyOnboardingPage() {
         try {
             setSaving(true);
             await api.post('/my-company/verification/submit');
-            message.success('Заявка отправлена на проверку');
+            toast.success('Заявка отправлена на проверку');
             await load();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось отправить заявку');
+            toast.error(e.response?.data?.message || 'Не удалось отправить заявку');
         } finally {
             setSaving(false);
         }
@@ -277,11 +264,11 @@ export default function CompanyOnboardingPage() {
                                                     `/my-company/verification/documents/${document.type}`,
                                                     data,
                                                 );
-                                                message.success('Документ приложен');
+                                                toast.success('Документ приложен');
                                                 await load();
                                                 onSuccess?.({});
                                             } catch (e: any) {
-                                                message.error(e.response?.data?.message || 'Не удалось загрузить');
+                                                toast.error(e.response?.data?.message || 'Не удалось загрузить');
                                                 onError?.(e);
                                             }
                                         }}

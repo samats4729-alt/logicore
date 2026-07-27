@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Modal, Form, Input, message, Space, Typography } from 'antd';
+import { Table, Card, Button, Modal, Form, Input, Space, Typography } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, GlobalOutlined } from '@ant-design/icons';
 import { api, Country } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Title } = Typography;
 
@@ -20,7 +21,7 @@ export default function AdminCountriesPage() {
             const res = await api.get('/cities/countries');
             setCountries(res.data);
         } catch (error) {
-            message.error('Ошибка загрузки стран');
+            toast.error('Ошибка загрузки стран');
         } finally {
             setLoading(false);
         }
@@ -34,16 +35,16 @@ export default function AdminCountriesPage() {
         try {
             if (editingId) {
                 await api.patch(`/cities/countries/${editingId}`, values);
-                message.success('Страна обновлена');
+                toast.success('Страна обновлена');
             } else {
                 await api.post('/cities/countries', values);
-                message.success('Страна создана');
+                toast.success('Страна создана');
             }
             setModalOpen(false);
             form.resetFields();
             fetchCountries();
         } catch (error) {
-            message.error('Ошибка сохранения');
+            toast.error('Ошибка сохранения');
         }
     };
 
@@ -56,10 +57,10 @@ export default function AdminCountriesPage() {
     const handleDelete = async (id: string) => {
         try {
             await api.delete(`/cities/countries/${id}`);
-            message.success('Страна удалена');
+            toast.success('Страна удалена');
             fetchCountries();
         } catch (error) {
-            message.error('Ошибка удаления');
+            toast.error('Ошибка удаления');
         }
     };
 

@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-    Table, Card, Button, Tag, Space, Modal, Form,
-    Input, Select, Typography, App, Switch
-} from 'antd';
+import { Table, Card, Button, Tag, Space, Modal, Form, Input, Select, Typography, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, StopOutlined } from '@ant-design/icons';
 import { api, User } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -30,7 +28,6 @@ const roleColors: Record<string, string> = {
 };
 
 export default function UsersPage() {
-    const { message } = App.useApp();
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
@@ -45,7 +42,7 @@ export default function UsersPage() {
             const response = await api.get('/users');
             setUsers(response.data);
         } catch (error) {
-            message.error('Ошибка загрузки пользователей');
+            toast.error('Ошибка загрузки пользователей');
         } finally {
             setLoading(false);
         }
@@ -54,12 +51,12 @@ export default function UsersPage() {
     const handleCreate = async (values: any) => {
         try {
             await api.post('/users', values);
-            message.success('Пользователь создан');
+            toast.success('Пользователь создан');
             setModalOpen(false);
             form.resetFields();
             fetchUsers();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания');
+            toast.error(error.response?.data?.message || 'Ошибка создания');
         }
     };
 
@@ -73,10 +70,10 @@ export default function UsersPage() {
             onOk: async () => {
                 try {
                     await api.delete(`/users/${id}`);
-                    message.success('Пользователь деактивирован');
+                    toast.success('Пользователь деактивирован');
                     fetchUsers();
                 } catch {
-                    message.error('Ошибка деактивации');
+                    toast.error('Ошибка деактивации');
                 }
             },
         });

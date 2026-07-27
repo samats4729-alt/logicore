@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -44,7 +45,7 @@ const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
 
 export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) {
     const router = useRouter();
-    const { message, modal } = App.useApp();
+    const { modal } = App.useApp();
     const { user } = useAuthStore();
     const canEdit = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
 
@@ -92,7 +93,7 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
             const list = ordRes.data?.data || ordRes.data || [];
             setOrders(list.map((o: any) => ({ id: o.id, orderNumber: o.orderNumber })));
         } catch {
-            message.error('Не удалось загрузить данные');
+            toast.error('Не удалось загрузить данные');
         } finally {
             setLoading(false);
         }
@@ -158,15 +159,15 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
             };
             if (editing) {
                 await api.put(`/accounting/payments/${editing.id}`, payload);
-                message.success('Документ обновлён');
+                toast.success('Документ обновлён');
             } else {
                 await api.post('/accounting/payments', payload);
-                message.success(isIn ? 'Поступление создано' : 'Расход создан');
+                toast.success(isIn ? 'Поступление создано' : 'Расход создан');
             }
             setModalOpen(false);
             fetchAll();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка сохранения');
+            toast.error(e.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setSaving(false);
         }
@@ -180,10 +181,10 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
             onOk: async () => {
                 try {
                     await api.delete(`/accounting/payments/${r.id}`);
-                    message.success('Документ удалён');
+                    toast.success('Документ удалён');
                     fetchAll();
                 } catch (e: any) {
-                    message.error(e.response?.data?.message || 'Не удалось удалить');
+                    toast.error(e.response?.data?.message || 'Не удалось удалить');
                 }
             },
         });

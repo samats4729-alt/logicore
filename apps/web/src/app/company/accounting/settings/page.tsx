@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, InputNumber, DatePicker, Select, Space, App, Tag, theme, Spin } from 'antd';
+import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Tag, theme, Spin } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
@@ -57,7 +58,6 @@ export default function FinanceSettingsPage() {
     const { token } = theme.useToken();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { message } = App.useApp();
     const { user } = useAuthStore();
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
 
@@ -104,7 +104,7 @@ export default function FinanceSettingsPage() {
             setCategories(catRes.data || []);
             setServices(svcRes.data || []);
         } catch {
-            message.error('Не удалось загрузить настройки');
+            toast.error('Не удалось загрузить настройки');
         } finally {
             setLoading(false);
         }
@@ -150,11 +150,11 @@ export default function FinanceSettingsPage() {
                     kbe: values.kbe?.trim() || null,
                 } : {}),
             });
-            message.success('Счёт сохранён');
+            toast.success('Счёт сохранён');
             setAccountModalOpen(false);
             fetchSettings();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка сохранения');
+            toast.error(err.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setSaving(false);
         }
@@ -182,19 +182,19 @@ export default function FinanceSettingsPage() {
                     name: values.name,
                     ...(editingCategory.direction === 'OUT' ? { costType: values.costType ?? null } : {}),
                 });
-                message.success('Статья обновлена');
+                toast.success('Статья обновлена');
             } else {
                 await api.post('/accounting/finance-categories', {
                     name: values.name,
                     direction: values.direction,
                     ...(values.direction === 'OUT' ? { costType: values.costType ?? null } : {}),
                 });
-                message.success('Статья добавлена');
+                toast.success('Статья добавлена');
             }
             setCategoryModalOpen(false);
             fetchSettings();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка сохранения статьи');
+            toast.error(err.response?.data?.message || 'Ошибка сохранения статьи');
         } finally {
             setSaving(false);
         }
@@ -203,10 +203,10 @@ export default function FinanceSettingsPage() {
     const handleToggleCategoryActive = async (id: string, active: boolean) => {
         try {
             await api.put(`/accounting/finance-categories/${id}/deactivate`, { active });
-            message.success(active ? 'Статья активирована' : 'Статья деактивирована');
+            toast.success(active ? 'Статья активирована' : 'Статья деактивирована');
             fetchSettings();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Не удалось изменить статус статьи');
+            toast.error(err.response?.data?.message || 'Не удалось изменить статус статьи');
         }
     };
 
@@ -230,15 +230,15 @@ export default function FinanceSettingsPage() {
         try {
             if (editingService) {
                 await api.put(`/accounting/service-catalog/${editingService.id}`, values);
-                message.success('Услуга обновлена');
+                toast.success('Услуга обновлена');
             } else {
                 await api.post('/accounting/service-catalog', values);
-                message.success('Услуга добавлена');
+                toast.success('Услуга добавлена');
             }
             setServiceModalOpen(false);
             fetchSettings();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка сохранения услуги');
+            toast.error(err.response?.data?.message || 'Ошибка сохранения услуги');
         } finally {
             setSaving(false);
         }
@@ -247,10 +247,10 @@ export default function FinanceSettingsPage() {
     const handleToggleServiceActive = async (id: string, active: boolean) => {
         try {
             await api.put(`/accounting/service-catalog/${id}/deactivate`, { active });
-            message.success(active ? 'Услуга активирована' : 'Услуга скрыта');
+            toast.success(active ? 'Услуга активирована' : 'Услуга скрыта');
             fetchSettings();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Не удалось изменить статус услуги');
+            toast.error(err.response?.data?.message || 'Не удалось изменить статус услуги');
         }
     };
 

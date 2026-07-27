@@ -1,13 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-    Table, Card, Button, Tag, Space, Modal, Form,
-    Input, Select, Typography, App, InputNumber, Drawer, Descriptions, Divider
-} from 'antd';
+import { Table, Card, Button, Tag, Space, Modal, Form, Input, Select, Typography, InputNumber, Drawer, Descriptions, Divider } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, UserAddOutlined } from '@ant-design/icons';
 import { api, Order, Location, User } from '@/lib/api';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -32,7 +30,6 @@ const statusColors: Record<string, string> = {
 };
 
 export default function OrdersPage() {
-    const { message } = App.useApp();
     const [orders, setOrders] = useState<Order[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
@@ -51,14 +48,14 @@ export default function OrdersPage() {
     const handleCreateLocation = async (values: any) => {
         try {
             const res = await api.post('/locations', values);
-            message.success('Адрес добавлен');
+            toast.success('Адрес добавлен');
             setLocationModalOpen(false);
             locationForm.resetFields();
             // Refresh locations
             const newLocationsRes = await api.get('/locations');
             setLocations(newLocationsRes.data);
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания адреса');
+            toast.error(error.response?.data?.message || 'Ошибка создания адреса');
         }
     };
 
@@ -78,7 +75,7 @@ export default function OrdersPage() {
             setLocations(locationsRes.data);
             setDrivers(driversRes.data || []);
         } catch (error) {
-            message.error('Ошибка загрузки данных');
+            toast.error('Ошибка загрузки данных');
         } finally {
             setLoading(false);
         }
@@ -87,12 +84,12 @@ export default function OrdersPage() {
     const handleCreate = async (values: any) => {
         try {
             await api.post('/orders', values);
-            message.success('Заявка создана');
+            toast.success('Заявка создана');
             setModalOpen(false);
             form.resetFields();
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания');
+            toast.error(error.response?.data?.message || 'Ошибка создания');
         }
     };
 
@@ -100,23 +97,23 @@ export default function OrdersPage() {
         if (!selectedOrder) return;
         try {
             await api.put(`/orders/${selectedOrder.id}`, values);
-            message.success('Заявка обновлена');
+            toast.success('Заявка обновлена');
             setEditModalOpen(false);
             editForm.resetFields();
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка обновления');
+            toast.error(error.response?.data?.message || 'Ошибка обновления');
         }
     };
 
     const handleAssignDriver = async (orderId: string, driverId: string) => {
         try {
             await api.put(`/orders/${orderId}/assign`, { driverId });
-            message.success('Водитель назначен');
+            toast.success('Водитель назначен');
             fetchData();
             setDrawerOpen(false);
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка назначения');
+            toast.error(error.response?.data?.message || 'Ошибка назначения');
         }
     };
 

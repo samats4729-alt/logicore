@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Tabs, Card, Table, Form, InputNumber, Select, Button, Space, Row, Col, Modal, DatePicker, message, Popconfirm, Tag, Spin } from 'antd';
+import { Typography, Tabs, Card, Table, Form, InputNumber, Select, Button, Space, Row, Col, Modal, DatePicker, Popconfirm, Tag, Spin } from 'antd';
 import { SettingOutlined, TableOutlined, PlusOutlined, DeleteOutlined, UserOutlined, PercentageOutlined, DollarOutlined, StarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -91,7 +92,7 @@ export default function PayrollAdminPage() {
             setKpiRules(kpiRes.data || []);
         } catch (err) {
             console.error('Failed to load payroll setup data', err);
-            message.error('Ошибка загрузки данных настроек');
+            toast.error('Ошибка загрузки данных настроек');
         } finally {
             setLoading(false);
         }
@@ -106,7 +107,7 @@ export default function PayrollAdminPage() {
             setReportData(res.data);
         } catch (err) {
             console.error('Failed to load payroll report', err);
-            message.error('Ошибка построения отчета');
+            toast.error('Ошибка построения отчета');
         } finally {
             setReportLoading(false);
         }
@@ -125,59 +126,59 @@ export default function PayrollAdminPage() {
     const handleSaveGeneral = async (values: any) => {
         try {
             await api.put('/payroll/schemes', values);
-            message.success('Общая схема успешно обновлена');
+            toast.success('Общая схема успешно обновлена');
             loadData();
         } catch (err) {
             console.error(err);
-            message.error('Не удалось сохранить общую схему');
+            toast.error('Не удалось сохранить общую схему');
         }
     };
 
     const handleAddPersonal = async (values: any) => {
         try {
             await api.put(`/payroll/schemes/user/${values.userId}`, values);
-            message.success('Персональная схема создана/обновлена');
+            toast.success('Персональная схема создана/обновлена');
             setPersonalModalVisible(false);
             personalForm.resetFields();
             loadData();
         } catch (err) {
             console.error(err);
-            message.error('Не удалось сохранить персональную схему');
+            toast.error('Не удалось сохранить персональную схему');
         }
     };
 
     const handleDeletePersonal = async (userId: string) => {
         try {
             await api.delete(`/payroll/schemes/user/${userId}`);
-            message.success('Персональная схема удалена');
+            toast.success('Персональная схема удалена');
             loadData();
         } catch (err) {
             console.error(err);
-            message.error('Не удалось удалить персональную схему');
+            toast.error('Не удалось удалить персональную схему');
         }
     };
 
     const handleAddKpi = async (values: any) => {
         try {
             await api.post('/payroll/kpi-rules', values);
-            message.success('KPI правило добавлено');
+            toast.success('KPI правило добавлено');
             setKpiModalVisible(false);
             kpiForm.resetFields();
             loadData();
         } catch (err) {
             console.error(err);
-            message.error('Не удалось добавить KPI правило');
+            toast.error('Не удалось добавить KPI правило');
         }
     };
 
     const handleDeleteKpi = async (id: string) => {
         try {
             await api.delete(`/payroll/kpi-rules/${id}`);
-            message.success('KPI правило удалено');
+            toast.success('KPI правило удалено');
             loadData();
         } catch (err) {
             console.error(err);
-            message.error('Не удалось удалить KPI правило');
+            toast.error('Не удалось удалить KPI правило');
         }
     };
 

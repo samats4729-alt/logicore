@@ -2,24 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    Alert,
-    Button,
-    DatePicker,
-    Empty,
-    Input,
-    InputNumber,
-    Modal,
-    Segmented,
-    Select,
-    Space,
-    Spin,
-    Switch,
-    Table,
-    Tooltip,
-    message,
-    theme,
-} from 'antd';
+import { Alert, Button, DatePicker, Empty, Input, InputNumber, Modal, Segmented, Select, Space, Spin, Switch, Table, Tooltip, theme } from 'antd';
 import {
     ArrowLeftOutlined,
     DeleteOutlined,
@@ -39,6 +22,7 @@ import {
     fetchCompanyBankAccounts,
     routePointsLabel,
 } from '@/lib/accounting-documents';
+import { toast } from 'sonner';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
@@ -130,7 +114,7 @@ export default function CreateInvoicePage() {
                 ...(partners.data || []).map((p: any) => ({ id: p.id, name: p.name || 'Без названия' })),
                 ...(external.data || []).map((e: any) => ({ id: e.id, name: `${e.name} (офлайн)` })),
             ]))
-            .catch(() => message.error('Не удалось загрузить список контрагентов'));
+            .catch(() => toast.error('Не удалось загрузить список контрагентов'));
 
         fetchCompanyBankAccounts()
             .then((accounts) => {
@@ -159,7 +143,7 @@ export default function CreateInvoicePage() {
             const data = await fetchBillableOrders({ direction, counterpartyId, includeInProgress });
             setOrders(data);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось загрузить заявки');
+            toast.error(e.response?.data?.message || 'Не удалось загрузить заявки');
             setOrders([]);
         } finally {
             setLoadingOrders(false);
@@ -187,7 +171,7 @@ export default function CreateInvoicePage() {
 
     const openPicker = () => {
         if (!counterpartyId) {
-            message.warning('Сначала выберите контрагента');
+            toast.warning('Сначала выберите контрагента');
             return;
         }
         // Уже добавленные рейсы отмечены — окно показывает текущий выбор.
@@ -222,15 +206,15 @@ export default function CreateInvoicePage() {
 
     const submit = async () => {
         if (!counterpartyId) {
-            message.warning('Выберите контрагента');
+            toast.warning('Выберите контрагента');
             return;
         }
         if (!lines.length) {
-            message.warning('Добавьте хотя бы одну строку — подбором по заявкам или вручную');
+            toast.warning('Добавьте хотя бы одну строку — подбором по заявкам или вручную');
             return;
         }
         if (lines.some((line) => !line.name.trim())) {
-            message.warning('У каждой строки должно быть наименование услуги');
+            toast.warning('У каждой строки должно быть наименование услуги');
             return;
         }
         try {
@@ -245,11 +229,11 @@ export default function CreateInvoicePage() {
                 note: note.trim() || undefined,
                 lines: lines.map(toPayload),
             });
-            message.success(`Черновик счёта № ${created.number} создан`);
+            toast.success(`Черновик счёта № ${created.number} создан`);
             // Дальше работа идёт в карточке: там документ проводят и печатают.
             router.push(`/company/accounting/invoices/${created.id}`);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось создать счёт');
+            toast.error(e.response?.data?.message || 'Не удалось создать счёт');
         } finally {
             setSubmitting(false);
         }

@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import {
-    Card, Button, Input, message, Typography, Collapse,
-    Space, Spin, Popconfirm, Tooltip, Alert
-} from 'antd';
+import { Card, Button, Input, Typography, Collapse, Space, Spin, Popconfirm, Tooltip, Alert } from 'antd';
 import {
     SaveOutlined, UndoOutlined, ArrowLeftOutlined,
     PlusOutlined, DeleteOutlined, EditOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useParams, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -53,7 +51,7 @@ export default function EditContractContentPage() {
 
             setHasChanges(false);
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка загрузки содержимого договора');
+            toast.error(err.response?.data?.message || 'Ошибка загрузки содержимого договора');
         } finally {
             setLoading(false);
         }
@@ -65,10 +63,10 @@ export default function EditContractContentPage() {
         try {
             setSaving(true);
             await api.put(`/contracts/${contractId}/content`, { content: articles });
-            message.success('Текст договора сохранён');
+            toast.success('Текст договора сохранён');
             setHasChanges(false);
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка сохранения');
+            toast.error(err.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setSaving(false);
         }
@@ -78,10 +76,10 @@ export default function EditContractContentPage() {
         try {
             setSaving(true);
             await api.post(`/contracts/${contractId}/reset-content`);
-            message.success('Текст сброшен к шаблону по умолчанию');
+            toast.success('Текст сброшен к шаблону по умолчанию');
             await fetchContent();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка сброса');
+            toast.error(err.response?.data?.message || 'Ошибка сброса');
         } finally {
             setSaving(false);
         }

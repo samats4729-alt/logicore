@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, message, Segmented, Modal, Form, InputNumber, Popconfirm, theme } from 'antd';
+import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, Segmented, Modal, Form, InputNumber, Popconfirm, theme } from 'antd';
 import { SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -37,8 +38,8 @@ export default function CompanyIncomesPage() {
     const fetchAccounts = async () => { try { const res = await api.get('/accounting/finance-accounts'); setAccounts((res.data || []).filter((a: any) => a.isActive !== false)); } catch {} };
     const fetchCategories = async () => { try { const res = await api.get('/accounting/finance-categories'); setCategories((res.data || []).filter((c: any) => c.isActive !== false)); } catch {} };
 
-    const handleSaveManual = async (values: any) => { try { const payload = { category: values.category, description: values.category, amount: values.amount, date: values.date.toISOString(), accountId: values.accountId || undefined, note: values.note }; if (editingIncome) { await api.put(`/accounting/incomes/${editingIncome.id}`, payload); message.success('Обновлено'); } else { await api.post('/accounting/incomes', payload); message.success('Добавлено'); } setModalOpen(false); setEditingIncome(null); form.resetFields(); fetchManual(); } catch { message.error('Ошибка сохранения'); } };
-    const handleDeleteManual = async (id: string) => { try { await api.delete(`/accounting/incomes/${id}`); message.success('Удалено'); fetchManual(); } catch { message.error('Ошибка удаления'); } };
+    const handleSaveManual = async (values: any) => { try { const payload = { category: values.category, description: values.category, amount: values.amount, date: values.date.toISOString(), accountId: values.accountId || undefined, note: values.note }; if (editingIncome) { await api.put(`/accounting/incomes/${editingIncome.id}`, payload); toast.success('Обновлено'); } else { await api.post('/accounting/incomes', payload); toast.success('Добавлено'); } setModalOpen(false); setEditingIncome(null); form.resetFields(); fetchManual(); } catch { toast.error('Ошибка сохранения'); } };
+    const handleDeleteManual = async (id: string) => { try { await api.delete(`/accounting/incomes/${id}`); toast.success('Удалено'); fetchManual(); } catch { toast.error('Ошибка удаления'); } };
 
     const orderIncomes = manualIncomes.filter(inc => {
         if (!inc.order) return false;

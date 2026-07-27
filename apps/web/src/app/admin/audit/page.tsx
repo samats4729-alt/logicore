@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Table, Tag, Select, Switch, Space, Typography, message, Tooltip } from 'antd';
+import { Card, Table, Tag, Select, Switch, Space, Typography, Tooltip } from 'antd';
 import { HistoryOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 
@@ -49,7 +50,7 @@ export default function AdminAuditPage() {
             setRows(res.data.data || []);
             setTotal(res.data.total || 0);
         } catch {
-            message.error('Ошибка загрузки журнала');
+            toast.error('Ошибка загрузки журнала');
         } finally {
             setLoading(false);
         }
@@ -66,11 +67,11 @@ export default function AdminAuditPage() {
         try {
             await api.put('/audit/admin/settings', { companiesEnabled: enabled });
             setCompaniesEnabled(enabled);
-            message.success(enabled
+            toast.success(enabled
                 ? 'Журнал действий включён для админов компаний'
                 : 'Журнал действий скрыт от компаний');
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка сохранения');
+            toast.error(e.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setSavingFlag(false);
         }

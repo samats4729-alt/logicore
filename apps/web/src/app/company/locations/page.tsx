@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import {
-    Table, Button, Space, Modal, Form,
-    Input, App, Tag, Tooltip, Segmented
-} from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Tag, Tooltip, Segmented } from 'antd';
 import {
     PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined,
     SearchOutlined, MailOutlined, UserOutlined, GlobalOutlined,
@@ -12,9 +9,9 @@ import {
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import LocationForm from '@/components/ui/LocationForm';
+import { toast } from 'sonner';
 
 export default function CompanyLocationsPage() {
-    const { message } = App.useApp();
     const [locations, setLocations] = useState<Location[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
@@ -36,7 +33,7 @@ export default function CompanyLocationsPage() {
             const response = await api.get('/locations');
             setLocations(response.data);
         } catch (error) {
-            message.error('Ошибка загрузки адресов');
+            toast.error('Ошибка загрузки адресов');
         } finally {
             setLoading(false);
         }
@@ -50,10 +47,10 @@ export default function CompanyLocationsPage() {
             };
             if (editingLocation) {
                 await api.put(`/locations/${editingLocation.id}`, payload);
-                message.success('Адрес обновлён');
+                toast.success('Адрес обновлён');
             } else {
                 await api.post('/locations', payload);
-                message.success('Адрес добавлен');
+                toast.success('Адрес добавлен');
             }
             setModalOpen(false);
             setEditingLocation(null);
@@ -61,7 +58,7 @@ export default function CompanyLocationsPage() {
             form.resetFields();
             fetchLocations();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сохранения');
+            toast.error(error.response?.data?.message || 'Ошибка сохранения');
         }
     };
 
@@ -88,10 +85,10 @@ export default function CompanyLocationsPage() {
             onOk: async () => {
                 try {
                     await api.delete(`/locations/${id}`);
-                    message.success('Адрес удалён');
+                    toast.success('Адрес удалён');
                     fetchLocations();
                 } catch (error: any) {
-                    message.error(error.response?.data?.message || 'Ошибка удаления');
+                    toast.error(error.response?.data?.message || 'Ошибка удаления');
                 }
             },
         });

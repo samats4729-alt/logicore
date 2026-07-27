@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Typography, Space, Tag, Input, Switch, Modal, Form, Select, App } from 'antd';
+import { Table, Button, Typography, Space, Tag, Input, Switch, Modal, Form, Select } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, EditOutlined, SearchOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
@@ -13,7 +14,6 @@ interface Item { id: string; name: string; unit: string; sku: string | null; isA
 
 export default function NomenclaturePage() {
     const router = useRouter();
-    const { message } = App.useApp();
     const { user } = useAuthStore();
     const canEdit = ['COMPANY_ADMIN', 'ACCOUNTANT', 'ADMIN'].includes(user?.role || '');
 
@@ -30,7 +30,7 @@ export default function NomenclaturePage() {
     const fetchItems = async () => {
         setLoading(true);
         try { setItems((await api.get('/inventory/nomenclature')).data || []); }
-        catch { message.error('Не удалось загрузить номенклатуру'); }
+        catch { toast.error('Не удалось загрузить номенклатуру'); }
         finally { setLoading(false); }
     };
 
@@ -44,15 +44,15 @@ export default function NomenclaturePage() {
         try {
             if (editing) await api.put(`/inventory/nomenclature/${editing.id}`, values);
             else await api.post('/inventory/nomenclature', values);
-            message.success(editing ? 'Позиция обновлена' : 'Позиция добавлена');
+            toast.success(editing ? 'Позиция обновлена' : 'Позиция добавлена');
             setModalOpen(false); fetchItems();
-        } catch (e: any) { message.error(e.response?.data?.message || 'Ошибка сохранения'); }
+        } catch (e: any) { toast.error(e.response?.data?.message || 'Ошибка сохранения'); }
         finally { setSaving(false); }
     };
 
     const toggleActive = async (r: Item, isActive: boolean) => {
         try { await api.put(`/inventory/nomenclature/${r.id}`, { isActive }); fetchItems(); }
-        catch { message.error('Не удалось изменить статус'); }
+        catch { toast.error('Не удалось изменить статус'); }
     };
 
     const columns = [

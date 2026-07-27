@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Button, DatePicker, Table, Tabs, Space, Spin, App, Tag, theme } from 'antd';
+import { Typography, Button, DatePicker, Table, Tabs, Space, Spin, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, FileExcelOutlined, ArrowUpOutlined, ArrowDownOutlined, WalletOutlined, SwapOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -38,7 +39,6 @@ interface CashflowReport {
 export default function CashflowReportPage() {
     const { token } = theme.useToken();
     const router = useRouter();
-    const { message } = App.useApp();
 
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
@@ -63,7 +63,7 @@ export default function CashflowReportPage() {
             const res = await api.get('/accounting/cashflow', { params });
             setReport(res.data);
         } catch {
-            message.error('Не удалось загрузить отчет ДДС');
+            toast.error('Не удалось загрузить отчет ДДС');
         } finally {
             setLoading(false);
         }
@@ -91,9 +91,9 @@ export default function CashflowReportPage() {
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
-            message.success('Отчет ДДС экспортирован в Excel');
+            toast.success('Отчет ДДС экспортирован в Excel');
         } catch {
-            message.error('Ошибка при экспорте отчета');
+            toast.error('Ошибка при экспорте отчета');
         } finally {
             setExporting(false);
         }

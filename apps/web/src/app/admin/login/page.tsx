@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Form, Input, Button, Card, Typography, message, Layout } from 'antd';
+import { Form, Input, Button, Card, Typography, Layout } from 'antd';
 import { UserOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { Content } = Layout;
@@ -54,13 +55,13 @@ export default function AdminLoginPage() {
             // Let's rely on the layout redirect for simplicity, BUT for better UX let's try to verify.
 
             router.push('/admin');
-            message.success('Добро пожаловать в Панель Администратора');
+            toast.success('Добро пожаловать в Панель Администратора');
         } catch (error: any) {
             console.error(error);
             if (error.response?.status === 401) {
-                message.error('Неверный логин или пароль');
+                toast.error('Неверный логин или пароль');
             } else {
-                message.error('Ошибка входа');
+                toast.error('Ошибка входа');
             }
         } finally {
             setLoading(false);

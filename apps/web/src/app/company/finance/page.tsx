@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Row, Col, DatePicker, Space, App, Typography } from 'antd';
+import { Row, Col, DatePicker, Space, Typography } from 'antd';
 import {
     WalletOutlined,
     BarChartOutlined,
@@ -16,6 +16,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
+import { toast } from 'sonner';
 dayjs.extend(quarterOfYear);
 
 const { RangePicker } = DatePicker;
@@ -43,7 +44,6 @@ interface Group {
 
 export default function FinanceHubPage() {
     const router = useRouter();
-    const { message } = App.useApp();
     const { user } = useAuthStore();
 
     const isAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
@@ -70,7 +70,7 @@ export default function FinanceHubPage() {
                 const res = await api.get('/accounting/dashboard-summary', { params });
                 setSummary(res.data);
             } catch (err: any) {
-                message.error('Не удалось загрузить сводные показатели');
+                toast.error('Не удалось загрузить сводные показатели');
             } finally {
                 setLoading(false);
             }

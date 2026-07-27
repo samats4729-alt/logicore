@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Button, DatePicker, Table, Space, Spin, App, Tag, theme } from 'antd';
+import { Typography, Button, DatePicker, Table, Space, Spin, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, FileExcelOutlined, DollarOutlined, LineChartOutlined, WalletOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -25,7 +26,6 @@ interface PnLReport {
 export default function PnLReportPage() {
     const { token } = theme.useToken();
     const router = useRouter();
-    const { message } = App.useApp();
 
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
@@ -50,7 +50,7 @@ export default function PnLReportPage() {
             const res = await api.get('/accounting/pnl', { params });
             setReport(res.data);
         } catch {
-            message.error('Не удалось загрузить отчет P&L');
+            toast.error('Не удалось загрузить отчет P&L');
         } finally {
             setLoading(false);
         }
@@ -78,9 +78,9 @@ export default function PnLReportPage() {
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
-            message.success('Отчет P&L экспортирован в Excel');
+            toast.success('Отчет P&L экспортирован в Excel');
         } catch {
-            message.error('Ошибка при экспорте отчета');
+            toast.error('Ошибка при экспорте отчета');
         } finally {
             setExporting(false);
         }

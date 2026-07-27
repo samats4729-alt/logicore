@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, Typography, Form, Input, Button, Switch, Divider, Space, App, Tabs } from 'antd';
+import { Card, Typography, Form, Input, Button, Switch, Divider, Space, Tabs } from 'antd';
 import {
     SettingOutlined,
     UserOutlined,
@@ -9,11 +9,11 @@ import {
     BellOutlined,
     SaveOutlined,
 } from '@ant-design/icons';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 
 export default function SettingsPage() {
-    const { message } = App.useApp();
     const [loading, setLoading] = useState(false);
 
     const handleSaveProfile = async (values: any) => {
@@ -21,9 +21,9 @@ export default function SettingsPage() {
         try {
             // TODO: Implement API call
             await new Promise(resolve => setTimeout(resolve, 500));
-            message.success('Профиль сохранён');
+            toast.success('Профиль сохранён');
         } catch (error) {
-            message.error('Ошибка сохранения');
+            toast.error('Ошибка сохранения');
         } finally {
             setLoading(false);
         }
@@ -31,16 +31,16 @@ export default function SettingsPage() {
 
     const handleChangePassword = async (values: any) => {
         if (values.newPassword !== values.confirmPassword) {
-            message.error('Пароли не совпадают');
+            toast.error('Пароли не совпадают');
             return;
         }
         setLoading(true);
         try {
             // TODO: Implement API call
             await new Promise(resolve => setTimeout(resolve, 500));
-            message.success('Пароль изменён');
+            toast.success('Пароль изменён');
         } catch (error) {
-            message.error('Ошибка изменения пароля');
+            toast.error('Ошибка изменения пароля');
         } finally {
             setLoading(false);
         }

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Modal, Form, Input, message, Select, Space, Typography } from 'antd';
+import { Table, Card, Button, Modal, Form, Input, Select, Space, Typography } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api, Country, Region } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -41,7 +42,7 @@ export default function AdminRegionsPage() {
                 setSelectedCountryId((kazakhstan || list[0]).id);
             }
         } catch (error) {
-            message.error('Ошибка загрузки стран');
+            toast.error('Ошибка загрузки стран');
         }
     };
 
@@ -51,7 +52,7 @@ export default function AdminRegionsPage() {
             const res = await api.get(`/cities/regions?countryId=${countryId}`);
             setRegions(res.data);
         } catch (error) {
-            message.error('Ошибка загрузки регионов');
+            toast.error('Ошибка загрузки регионов');
         } finally {
             setLoading(false);
         }
@@ -63,16 +64,16 @@ export default function AdminRegionsPage() {
 
             if (editingId) {
                 await api.patch(`/cities/regions/${editingId}`, payload);
-                message.success('Регион обновлён');
+                toast.success('Регион обновлён');
             } else {
                 await api.post('/cities/regions', payload);
-                message.success('Регион создан');
+                toast.success('Регион создан');
             }
             setModalOpen(false);
             form.resetFields();
             if (selectedCountryId) fetchRegions(selectedCountryId);
         } catch (error) {
-            message.error('Ошибка сохранения');
+            toast.error('Ошибка сохранения');
         }
     };
 
@@ -85,10 +86,10 @@ export default function AdminRegionsPage() {
     const handleDelete = async (id: string) => {
         try {
             await api.delete(`/cities/regions/${id}`);
-            message.success('Регион удалён');
+            toast.success('Регион удалён');
             if (selectedCountryId) fetchRegions(selectedCountryId);
         } catch (error) {
-            message.error('Ошибка удаления');
+            toast.error('Ошибка удаления');
         }
     };
 

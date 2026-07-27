@@ -2,11 +2,12 @@
 
 import { Suspense } from 'react';
 import { useEffect, useState } from 'react';
-import { Button, Card, Form, Input, message, Typography, Row, Col, Space, Divider } from 'antd';
+import { Button, Card, Form, Input, Typography, Row, Col, Space, Divider } from 'antd';
 import { UserOutlined, PhoneOutlined, LockOutlined, SafetyOutlined } from '@ant-design/icons';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 
@@ -52,7 +53,7 @@ function InviteForm() {
             
             setUser(res.data.user);
             
-            message.success('Регистрация успешна!');
+            toast.success('Регистрация успешна!');
             
             // Redirect based on role and company type
             const user = res.data.user;
@@ -64,7 +65,7 @@ function InviteForm() {
                 router.push(`/${user.role.toLowerCase()}`);
             }
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка регистрации');
+            toast.error(err.response?.data?.message || 'Ошибка регистрации');
         } finally {
             setSubmitting(false);
         }

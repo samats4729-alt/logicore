@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Tabs, Table, Button, Typography, Modal, Form, InputNumber, DatePicker, Input, Tag, App } from 'antd';
+import { Tabs, Table, Button, Typography, Modal, Form, InputNumber, DatePicker, Input, Tag } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, BankOutlined, InboxOutlined, CarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
@@ -37,7 +38,6 @@ const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
 
 export default function OpeningBalancesPage() {
     const router = useRouter();
-    const { message } = App.useApp();
 
     const [loading, setLoading] = useState(true);
     const [accounts, setAccounts] = useState<AccountRow[]>([]);
@@ -65,7 +65,7 @@ export default function OpeningBalancesPage() {
             setPartners((partRes.data || []).filter((p: Partner) => p && p.id));
             setOpenings(openRes.data || []);
         } catch {
-            message.error('Не удалось загрузить остатки');
+            toast.error('Не удалось загрузить остатки');
         } finally {
             setLoading(false);
         }
@@ -85,11 +85,11 @@ export default function OpeningBalancesPage() {
                 openingBalance: vals.openingBalance ?? 0,
                 openingDate: vals.openingDate ? vals.openingDate.toISOString() : null,
             });
-            message.success('Начальный остаток сохранён');
+            toast.success('Начальный остаток сохранён');
             setAccModal(null);
             fetchAll();
         } catch {
-            message.error('Не удалось сохранить');
+            toast.error('Не удалось сохранить');
         }
     };
 
@@ -115,11 +115,11 @@ export default function OpeningBalancesPage() {
         };
         try {
             await api.put(`/accounting/counterparty-openings/${partner.id}`, payload);
-            message.success('Начальный долг сохранён');
+            toast.success('Начальный долг сохранён');
             setCpModal(null);
             fetchAll();
         } catch {
-            message.error('Не удалось сохранить');
+            toast.error('Не удалось сохранить');
         }
     };
 

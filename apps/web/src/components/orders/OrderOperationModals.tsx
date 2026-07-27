@@ -1,8 +1,9 @@
 'use client';
 
-import { Alert, Button, Checkbox, Form, Input, Modal, Select, Tag, Typography, message } from 'antd';
+import { Alert, Button, Checkbox, Form, Input, Modal, Select, Tag, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import { CopyOutlined, MailOutlined, PlusOutlined, SwapOutlined, WhatsAppOutlined } from '@ant-design/icons';
+import { toast } from 'sonner';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -229,7 +230,7 @@ export default function OrderOperationModals(props: OrderOperationModalsProps) {
             </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <Input value={driverLinkUrl} readOnly onFocus={(e) => e.target.select()} />
-                <Button type="primary" icon={<CopyOutlined />} onClick={() => { navigator.clipboard?.writeText(driverLinkUrl); message.success('Ссылка скопирована'); }}>Копировать</Button>
+                <Button type="primary" icon={<CopyOutlined />} onClick={() => { navigator.clipboard?.writeText(driverLinkUrl); toast.success('Ссылка скопирована'); }}>Копировать</Button>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Button

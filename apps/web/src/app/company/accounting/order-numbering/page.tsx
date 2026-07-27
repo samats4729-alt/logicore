@@ -6,12 +6,13 @@ import { ArrowLeftOutlined, NumberOutlined, SaveOutlined, RetweetOutlined } from
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
 export default function OrderNumberingPage() {
     const router = useRouter();
-    const { message, modal } = App.useApp();
+    const { modal } = App.useApp();
     const { user } = useAuthStore();
     const canEdit = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT' || user?.role === 'ADMIN';
 
@@ -32,7 +33,7 @@ export default function OrderNumberingPage() {
             const res = await api.get('/orders/numbering-settings');
             form.setFieldsValue({ prefix: res.data?.prefix || '', padding: res.data?.padding ?? 9, nextNumber: res.data?.nextNumber ?? 1 });
         } catch {
-            message.error('Не удалось загрузить настройку нумерации');
+            toast.error('Не удалось загрузить настройку нумерации');
         } finally {
             setLoading(false);
         }
@@ -55,10 +56,10 @@ export default function OrderNumberingPage() {
                 setRenumbering(true);
                 try {
                     const res = await api.post('/orders/renumber');
-                    message.success(`Перенумеровано заявок: ${res.data?.renumbered ?? 0}`);
+                    toast.success(`Перенумеровано заявок: ${res.data?.renumbered ?? 0}`);
                     fetchSettings();
                 } catch (e: any) {
-                    message.error(e.response?.data?.message || 'Не удалось перенумеровать');
+                    toast.error(e.response?.data?.message || 'Не удалось перенумеровать');
                 } finally {
                     setRenumbering(false);
                 }
@@ -74,10 +75,10 @@ export default function OrderNumberingPage() {
                 padding: values.padding,
                 nextNumber: values.nextNumber,
             });
-            message.success('Настройка нумерации сохранена');
+            toast.success('Настройка нумерации сохранена');
             fetchSettings();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка сохранения');
+            toast.error(e.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setSaving(false);
         }

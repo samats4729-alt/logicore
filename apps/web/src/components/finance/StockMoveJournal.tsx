@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 type MoveType = 'receipt' | 'transfer' | 'writeoff';
 
@@ -31,7 +32,7 @@ const CFG: Record<MoveType, { title: string; eyebrow: string; create: string; wh
 
 export default function StockMoveJournal({ type }: { type: MoveType }) {
     const router = useRouter();
-    const { message, modal } = App.useApp();
+    const { modal } = App.useApp();
     const { user } = useAuthStore();
     const canEdit = ['COMPANY_ADMIN', 'ACCOUNTANT', 'ADMIN'].includes(user?.role || '');
     const cfg = CFG[type];
@@ -63,7 +64,7 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
             setWarehouses((whRes.data || []).filter((w: Wh) => w.isActive !== false));
             setNomen((nmRes.data || []).filter((n: Nomen) => n.isActive !== false));
             setCategories((catRes.data || []).filter((c: Cat) => c.isActive !== false && c.direction === 'OUT'));
-        } catch { message.error('Не удалось загрузить документы'); }
+        } catch { toast.error('Не удалось загрузить документы'); }
         finally { setLoading(false); }
     };
 
@@ -102,9 +103,9 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
             };
             if (editing) await api.put(`/inventory/moves/${editing.id}`, payload);
             else await api.post(`/inventory/moves/${type}`, payload);
-            message.success(editing ? 'Документ обновлён' : 'Документ создан');
+            toast.success(editing ? 'Документ обновлён' : 'Документ создан');
             setModalOpen(false); fetchAll();
-        } catch (e: any) { message.error(e.response?.data?.message || 'Ошибка сохранения'); }
+        } catch (e: any) { toast.error(e.response?.data?.message || 'Ошибка сохранения'); }
         finally { setSaving(false); }
     };
 
@@ -112,7 +113,7 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
         modal.confirm({
             title: 'Удалить документ?', content: `${m.number} от ${dayjs(m.date).format('DD.MM.YYYY')}`,
             okText: 'Удалить', okButtonProps: { danger: true }, cancelText: 'Отмена',
-            onOk: async () => { try { await api.delete(`/inventory/moves/${m.id}`); message.success('Документ удалён'); fetchAll(); } catch (e: any) { message.error(e.response?.data?.message || 'Не удалось удалить'); } },
+            onOk: async () => { try { await api.delete(`/inventory/moves/${m.id}`); toast.success('Документ удалён'); fetchAll(); } catch (e: any) { toast.error(e.response?.data?.message || 'Не удалось удалить'); } },
         });
     };
 

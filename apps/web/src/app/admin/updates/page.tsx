@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Card, Input, Tag, Typography, message, Space, Empty, Spin, Popconfirm } from 'antd';
+import { Button, Card, Input, Tag, Typography, Space, Empty, Spin, Popconfirm } from 'antd';
 import { NotificationOutlined, RobotOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -31,7 +32,7 @@ export default function AdminUpdatesPage() {
             const res = await api.get('/assistant/updates');
             setUpdates(res.data || []);
         } catch {
-            message.error('Не удалось загрузить нововведения');
+            toast.error('Не удалось загрузить нововведения');
         } finally {
             setLoading(false);
         }
@@ -43,10 +44,10 @@ export default function AdminUpdatesPage() {
         setGenerating(true);
         try {
             const res = await api.post('/assistant/updates/generate');
-            message.info(res.data?.message || 'Готово');
+            toast.info(res.data?.message || 'Готово');
             load();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка генерации');
+            toast.error(e.response?.data?.message || 'Ошибка генерации');
         } finally {
             setGenerating(false);
         }
@@ -66,7 +67,7 @@ export default function AdminUpdatesPage() {
                 description: e.description,
                 status,
             });
-            message.success(
+            toast.success(
                 status === 'PUBLISHED'
                     ? 'Опубликовано — гид уже в курсе'
                     : status === 'DRAFT'
@@ -76,7 +77,7 @@ export default function AdminUpdatesPage() {
             setEdits(prev => { const c = { ...prev }; delete c[u.id]; return c; });
             load();
         } catch {
-            message.error('Не удалось обновить');
+            toast.error('Не удалось обновить');
         }
     };
 

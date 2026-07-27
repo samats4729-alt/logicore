@@ -1,13 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-    Card, Table, Button, Tag, Modal, Form, Input, InputNumber, Select, Switch,
-    message, Popconfirm, Space, Typography, Alert, Divider,
-} from 'antd';
+import { Card, Table, Button, Tag, Modal, Form, Input, InputNumber, Select, Switch, Popconfirm, Space, Typography, Alert, Divider } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 
@@ -65,7 +63,7 @@ export default function AdminBillingPage() {
             setPlans(plansRes.data || []);
             setSubs(subsRes.data || []);
         } catch {
-            message.error('Ошибка загрузки данных биллинга');
+            toast.error('Ошибка загрузки данных биллинга');
         } finally {
             setLoading(false);
         }
@@ -82,13 +80,13 @@ export default function AdminBillingPage() {
                 const res = await api.put('/billing/admin/settings', { enabled });
                 setSettings({ enabled: res.data.enabled, trialDays: res.data.trialDays });
                 if (enabled && res.data.trialsCreated > 0) {
-                    message.success(`Биллинг включён. Пробный период выдан ${res.data.trialsCreated} компаниям.`);
+                    toast.success(`Биллинг включён. Пробный период выдан ${res.data.trialsCreated} компаниям.`);
                 } else {
-                    message.success(enabled ? 'Биллинг включён' : 'Биллинг выключен — все ограничения сняты');
+                    toast.success(enabled ? 'Биллинг включён' : 'Биллинг выключен — все ограничения сняты');
                 }
                 loadAll();
             } catch (e: any) {
-                message.error(e.response?.data?.message || 'Ошибка сохранения');
+                toast.error(e.response?.data?.message || 'Ошибка сохранения');
             } finally {
                 setSavingSettings(false);
             }
@@ -112,9 +110,9 @@ export default function AdminBillingPage() {
         try {
             const res = await api.put('/billing/admin/settings', { trialDays });
             setSettings({ enabled: res.data.enabled, trialDays: res.data.trialDays });
-            message.success('Длительность пробного периода сохранена');
+            toast.success('Длительность пробного периода сохранена');
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка сохранения');
+            toast.error(e.response?.data?.message || 'Ошибка сохранения');
         }
     };
 
@@ -142,25 +140,25 @@ export default function AdminBillingPage() {
         try {
             if (editingPlan) {
                 await api.put(`/billing/admin/plans/${editingPlan.id}`, payload);
-                message.success('План обновлён');
+                toast.success('План обновлён');
             } else {
                 await api.post('/billing/admin/plans', payload);
-                message.success('План создан');
+                toast.success('План создан');
             }
             setPlanModalOpen(false);
             loadAll();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка сохранения плана');
+            toast.error(e.response?.data?.message || 'Ошибка сохранения плана');
         }
     };
 
     const handleDeletePlan = async (id: string) => {
         try {
             await api.delete(`/billing/admin/plans/${id}`);
-            message.success('План удалён');
+            toast.success('План удалён');
             loadAll();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка удаления');
+            toast.error(e.response?.data?.message || 'Ошибка удаления');
         }
     };
 
@@ -186,11 +184,11 @@ export default function AdminBillingPage() {
                 months: values.months || undefined,
                 note: values.note || null,
             });
-            message.success('Подписка обновлена');
+            toast.success('Подписка обновлена');
             setSubModalOpen(false);
             loadAll();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка сохранения подписки');
+            toast.error(e.response?.data?.message || 'Ошибка сохранения подписки');
         }
     };
 

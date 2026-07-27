@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Table, Statistic, Row, Col, Button, Space, DatePicker, Tag, Tabs, Spin, Alert, Divider, message, theme } from 'antd';
+import { Table, Statistic, Row, Col, Button, Space, DatePicker, Tag, Tabs, Spin, Alert, Divider, theme } from 'antd';
 import { PrinterOutlined, ReloadOutlined, ArrowLeftOutlined, BarChartOutlined, DollarOutlined, TeamOutlined, CarOutlined, FileExcelOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 const { RangePicker } = DatePicker;
 
@@ -299,11 +300,11 @@ export default function ReportsPage() {
      */
     const handleExport = async () => {
         if (reportType === 'summary') {
-            message.info('Сводка не выгружается — выберите отчёт с таблицей');
+            toast.info('Сводка не выгружается — выберите отчёт с таблицей');
             return;
         }
         if (currentRows.length === 0) {
-            message.warning('За выбранный период нет данных для выгрузки');
+            toast.warning('За выбранный период нет данных для выгрузки');
             return;
         }
 
@@ -333,9 +334,9 @@ export default function ReportsPage() {
             link.download = `${REPORT_TITLES[reportType]}_${dayjs().format('YYYY-MM-DD')}.xlsx`;
             link.click();
             URL.revokeObjectURL(url);
-            message.success('Отчёт выгружен');
+            toast.success('Отчёт выгружен');
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось выгрузить отчёт');
+            toast.error(e.response?.data?.message || 'Не удалось выгрузить отчёт');
         } finally {
             setExporting(false);
         }

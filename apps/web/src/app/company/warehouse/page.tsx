@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Table, Tag, Typography, Spin, Button, message, Space, List, Avatar } from 'antd';
+import { Card, Table, Tag, Typography, Spin, Button, Space, List, Avatar } from 'antd';
 import { CarOutlined, ClockCircleOutlined, ReloadOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';

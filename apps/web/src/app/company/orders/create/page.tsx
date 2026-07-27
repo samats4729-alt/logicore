@@ -3,10 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import {
-    Typography, Button, Form, Input, InputNumber, Select, DatePicker,
-    message, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox
-} from 'antd';
+import { Typography, Button, Form, Input, InputNumber, Select, DatePicker, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
     DeleteOutlined, SendOutlined, CheckCircleOutlined, ExclamationCircleOutlined
@@ -34,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { Plus, X } from 'lucide-react';
 import { totalPallets, type PalletLine } from '@/lib/cargo';
 import { VAT_RATES, vatRateWhenEnabled } from '@/lib/tax';
+import { toast } from 'sonner';
 
 interface LocationState {
     city: string;
@@ -110,7 +108,7 @@ export default function CreateOrderPage() {
             setDriversLoading(true);
             api.get('/company/drivers', { params: { companyId: targetCompanyId } })
                 .then(res => setDrivers(res.data))
-                .catch(() => message.error('Ошибка загрузки водителей'))
+                .catch(() => toast.error('Ошибка загрузки водителей'))
                 .finally(() => setDriversLoading(false));
         } else {
             setDrivers([]);
@@ -120,7 +118,7 @@ export default function CreateOrderPage() {
             setVehiclesLoading(true);
             api.get('/company/vehicles', { params: { companyId: selectedMyCompanyId } })
                 .then(res => setVehicles(res.data))
-                .catch(() => message.error('Ошибка загрузки автопарка'))
+                .catch(() => toast.error('Ошибка загрузки автопарка'))
                 .finally(() => setVehiclesLoading(false));
         } else {
             setVehicles([]);
@@ -325,9 +323,9 @@ export default function CreateOrderPage() {
                 }
                 setPendingParties({ customer, carrier });
 
-                message.success(`Скопированы данные заявки ${o.orderNumber}. Проверьте и укажите дату погрузки.`);
+                toast.success(`Скопированы данные заявки ${o.orderNumber}. Проверьте и укажите дату погрузки.`);
             } catch {
-                message.error('Не удалось загрузить заявку для дублирования');
+                toast.error('Не удалось загрузить заявку для дублирования');
             }
         })();
     }, []);
@@ -451,7 +449,7 @@ export default function CreateOrderPage() {
                 } else {
                     form.setFieldsValue({ driverCost: response.data.price });
                 }
-                message.success(`Тариф найден: ${response.data.price.toLocaleString('ru-RU')} ₸`);
+                toast.success(`Тариф найден: ${response.data.price.toLocaleString('ru-RU')} ₸`);
             } else { setAppliedTariff(null); }
         } catch { setAppliedTariff(null); }
     };
@@ -465,7 +463,7 @@ export default function CreateOrderPage() {
                 isCarrier: true,
                 type: 'FORWARDER'
             });
-            message.success('Контрагент добавлен');
+            toast.success('Контрагент добавлен');
             setQuickPartnerModalOpen(false);
             quickPartnerForm.resetFields();
             await fetchPartners();
@@ -475,7 +473,7 @@ export default function CreateOrderPage() {
                 setSelectedCarrier(res.data.id);
             }
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка при создании контрагента');
+            toast.error(error.response?.data?.message || 'Ошибка при создании контрагента');
         } finally {
             setQuickPartnerLoading(false);
             setQuickPartnerTarget(null);
@@ -499,11 +497,11 @@ export default function CreateOrderPage() {
     const validateStep = async () => {
         if (currentStep === 0) { // Parties
             if (!selectedCustomer) {
-                message.error('Укажите заказчика');
+                toast.error('Укажите заказчика');
                 return false;
             }
             if (!selectedCarrier) {
-                message.error('Укажите перевозчика');
+                toast.error('Укажите перевозчика');
                 return false;
             }
             if (isOwnOrExternalCarrier && selectedDriverId === '__NEW_DRIVER__') {
@@ -520,13 +518,13 @@ export default function CreateOrderPage() {
             // Validate route
             const pickupDate = form.getFieldValue('pickupDate');
             if (!pickupDate) {
-                message.error('Укажите дату погрузки');
+                toast.error('Укажите дату погрузки');
                 return false;
             }
             const hasPickup = routePointsState.some(p => p.pointType === 'PICKUP' && (p.id || p.city));
             const hasDelivery = routePointsState.some(p => p.pointType === 'DELIVERY' && (p.id || p.city));
-            if (!hasPickup) { message.error('Укажите точку погрузки'); return false; }
-            if (!hasDelivery) { message.error('Укажите точку выгрузки'); return false; }
+            if (!hasPickup) { toast.error('Укажите точку погрузки'); return false; }
+            if (!hasDelivery) { toast.error('Укажите точку выгрузки'); return false; }
             return true;
         }
         if (currentStep === 2) { // Cargo
@@ -547,8 +545,8 @@ export default function CreateOrderPage() {
 
     const handleSubmit = async () => {
         // Validate parties
-        if (!selectedCustomer) { message.error('Укажите заказчика'); return; }
-        if (!selectedCarrier) { message.error('Укажите перевозчика'); return; }
+        if (!selectedCustomer) { toast.error('Укажите заказчика'); return; }
+        if (!selectedCarrier) { toast.error('Укажите перевозчика'); return; }
 
         setSubmitting(true);
         try {
@@ -588,7 +586,7 @@ export default function CreateOrderPage() {
                     });
                     finalDriverId = res.data.id;
                     if (res.data.alreadyExists) {
-                        message.info('Использован существующий водитель');
+                        toast.info('Использован существующий водитель');
                     }
                 } else if (selectedDriverId) {
                     // Update details for our own drivers
@@ -646,7 +644,7 @@ export default function CreateOrderPage() {
             }
 
             if (routePoints.length < 2) {
-                message.error('Укажите минимум 2 точки маршрута');
+                toast.error('Укажите минимум 2 точки маршрута');
                 setSubmitting(false);
                 return;
             }
@@ -722,10 +720,10 @@ export default function CreateOrderPage() {
             }
 
             await api.post('/orders', orderData);
-            message.success('Заявка создана!');
+            toast.success('Заявка создана!');
             router.push('/company/orders');
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания заявки');
+            toast.error(error.response?.data?.message || 'Ошибка создания заявки');
         } finally {
             setSubmitting(false);
         }
@@ -1569,7 +1567,7 @@ export default function CreateOrderPage() {
                                     if (res.data.phone) updateObj.phone = res.data.phone;
                                     if (res.data.email) updateObj.email = res.data.email;
                                     quickPartnerForm.setFieldsValue(updateObj);
-                                    message.success('Реквизиты подтянуты');
+                                    toast.success('Реквизиты подтянуты');
                                 }
                             } catch { }
                         }

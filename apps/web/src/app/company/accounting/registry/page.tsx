@@ -1,11 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import {
-    Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker,
-    Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress,
-    Modal, Form, InputNumber, App, theme, Spin
-} from 'antd';
+import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker, Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress, Modal, Form, InputNumber, theme, Spin } from 'antd';
 import {
     ArrowUpOutlined, ArrowDownOutlined, DollarOutlined,
     SearchOutlined, EyeOutlined, PlusOutlined, FileExcelOutlined,
@@ -17,6 +13,7 @@ import { useAuthStore } from '@/store/auth';
 import { shortenCompanyName } from '@/lib/company-helper';
 import StatusPill from '@/components/ui/StatusPill';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -82,7 +79,6 @@ export default function FinancialRegistryPage() {
         border: `1px solid ${token.colorBorderSecondary}`,
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
     };
-    const { message } = App.useApp();
     const { user } = useAuthStore();
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
     const [orders, setOrders] = useState<RegistryOrder[]>([]);
@@ -130,7 +126,7 @@ export default function FinancialRegistryPage() {
             const res = await api.get('/accounting/financial-registry');
             setOrders(res.data);
         } catch {
-            message.error('Ошибка загрузки финансового реестра');
+            toast.error('Ошибка загрузки финансового реестра');
         } finally {
             setLoading(false);
         }
@@ -155,7 +151,7 @@ export default function FinancialRegistryPage() {
             const res = await api.get(`/accounting/payments/order/${orderId}`);
             setSelectedOrderPayments(res.data);
         } catch {
-            message.error('Ошибка загрузки платежей по заявке');
+            toast.error('Ошибка загрузки платежей по заявке');
         } finally {
             setLoadingPayments(false);
         }
@@ -228,9 +224,9 @@ export default function FinancialRegistryPage() {
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
-            message.success('Реестр экспортирован успешно');
+            toast.success('Реестр экспортирован успешно');
         } catch {
-            message.error('Ошибка при экспорте в Excel');
+            toast.error('Ошибка при экспорте в Excel');
         } finally {
             setExporting(false);
         }
@@ -289,24 +285,24 @@ export default function FinancialRegistryPage() {
                 categoryId: values.categoryId || undefined,
                 note: values.note
             });
-            message.success('Платёж успешно добавлен');
+            toast.success('Платёж успешно добавлен');
             setPaymentModalOpen(false);
             fetchData();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка сохранения платежа');
+            toast.error(err.response?.data?.message || 'Ошибка сохранения платежа');
         }
     };
 
     const handleDeletePayment = async (paymentId: string) => {
         try {
             await api.delete(`/accounting/payments/${paymentId}`);
-            message.success('Платёж успешно удалён');
+            toast.success('Платёж успешно удалён');
             if (selectedOrder) {
                 fetchOrderPayments(selectedOrder.id);
             }
             fetchData();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка удаления платежа');
+            toast.error(err.response?.data?.message || 'Ошибка удаления платежа');
         }
     };
 

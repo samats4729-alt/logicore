@@ -2,12 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-    Typography, Tag, Button, Descriptions, Card, Row, Col, Table,
-    Modal, Form, Input, InputNumber, Select, DatePicker, message, Timeline,
-    Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip,
-    Alert, theme, AutoComplete, Dropdown
-} from 'antd';
+import { Typography, Tag, Button, Descriptions, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Timeline, Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
 import {
     ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
     DollarOutlined, WalletOutlined, CheckCircleOutlined, ClockCircleOutlined,
@@ -38,6 +33,7 @@ import {
     findOrCreateOrderDocument,
     type OrderChainDocumentType,
 } from '@/lib/accounting-documents';
+import { toast } from 'sonner';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -319,7 +315,7 @@ export default function OrderDetailPage() {
         const current = data?.order;
         const counterpartyId = current?.customerCompanyId;
         if (!counterpartyId) {
-            message.warning('У заявки не указана компания-заказчик');
+            toast.warning('У заявки не указана компания-заказчик');
             return;
         }
         const isInvoice = type === 'PAYMENT_INVOICE';
@@ -334,13 +330,13 @@ export default function OrderDetailPage() {
                 vatRate: current?.vatRate,
             });
             if (created) {
-                message.success(
+                toast.success(
                     `Черновик ${isInvoice ? 'счёта' : 'акта'} № ${document.number} создан`,
                 );
             }
             router.push(accountingDocumentHref({ id: document.id, type }));
         } catch (e: any) {
-            message.error(
+            toast.error(
                 e.response?.data?.message || `Не удалось открыть ${isInvoice ? 'счёт' : 'акт'}`,
             );
         } finally {
@@ -355,7 +351,7 @@ export default function OrderDetailPage() {
             const res = await api.get(`/accounting/orders/${orderId}/financials`);
             setData(res.data);
         } catch (err: any) {
-            message.error('Не удалось загрузить заявку');
+            toast.error('Не удалось загрузить заявку');
         } finally {
             setLoading(false);
         }
@@ -376,7 +372,7 @@ export default function OrderDetailPage() {
             const raw = Array.isArray(res.data) ? res.data : (res.data?.data || []);
             setTransferUsers(raw);
         } catch {
-            message.error('Не удалось загрузить список сотрудников');
+            toast.error('Не удалось загрузить список сотрудников');
         }
     };
 
@@ -385,12 +381,12 @@ export default function OrderDetailPage() {
         setTransferLoading(true);
         try {
             await api.put(`/company/orders/${orderId}/responsible`, { userId: transferUserId });
-            message.success('Заявка передана другому менеджеру');
+            toast.success('Заявка передана другому менеджеру');
             setTransferModalOpen(false);
             setTransferUserId(undefined);
             fetchData();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось передать заявку');
+            toast.error(e.response?.data?.message || 'Не удалось передать заявку');
         } finally {
             setTransferLoading(false);
         }
@@ -561,11 +557,11 @@ export default function OrderDetailPage() {
             await api.post(`/documents/upload/${orderId}`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-            message.success('ТТН успешно загружена');
+            toast.success('ТТН успешно загружена');
             onSuccess("ok");
             fetchDocuments();
         } catch (err) {
-            message.error('Ошибка загрузки документа');
+            toast.error('Ошибка загрузки документа');
             onError(err);
         } finally { setUploadingDoc(false); }
     };
@@ -580,7 +576,7 @@ export default function OrderDetailPage() {
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
-        } catch { message.error('Ошибка при скачивании файла'); }
+        } catch { toast.error('Ошибка при скачивании файла'); }
     };
 
     // =================== UNIFIED PAYMENT HANDLERS ===================
@@ -626,7 +622,7 @@ export default function OrderDetailPage() {
             const saved = editingPayment
                 ? (await api.put(`/accounting/payments/${editingPayment.id}`, payload)).data
                 : (await api.post('/accounting/payments', payload)).data;
-            message.success(editingPayment ? 'Платёж обновлён' : 'Платёж добавлен');
+            toast.success(editingPayment ? 'Платёж обновлён' : 'Платёж добавлен');
 
             // Разносим после сохранения: до этого у платежа нет id. Ошибка
             // разнесения не отменяет сам платёж — деньги уже учтены.
@@ -636,9 +632,9 @@ export default function OrderDetailPage() {
             if (saved?.id && rows.length) {
                 try {
                     const result = await applyAllocations(saved.id, rows);
-                    message.success(`Разнесено по счетам: ${result.documents}`);
+                    toast.success(`Разнесено по счетам: ${result.documents}`);
                 } catch (e: any) {
-                    message.warning(e.response?.data?.message || 'Платёж сохранён, но не разнесён по счетам');
+                    toast.warning(e.response?.data?.message || 'Платёж сохранён, но не разнесён по счетам');
                 }
             }
 
@@ -648,7 +644,7 @@ export default function OrderDetailPage() {
             // Платёж разнесён по счетам — «Оплата» в цепочке документов устарела
             setDocumentChainKey((key) => key + 1);
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка сохранения платежа');
+            toast.error(err.response?.data?.message || 'Ошибка сохранения платежа');
         } finally {
             setPaymentLoading(false);
         }
@@ -657,11 +653,11 @@ export default function OrderDetailPage() {
     const handleDeletePayment = async (id: string) => {
         try {
             await api.delete(`/accounting/payments/${id}`);
-            message.success('Платёж удалён');
+            toast.success('Платёж удалён');
             fetchData();
             setDocumentChainKey((key) => key + 1);
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка удаления платежа');
+            toast.error(err.response?.data?.message || 'Ошибка удаления платежа');
         }
     };
 
@@ -671,32 +667,32 @@ export default function OrderDetailPage() {
         setIncomeLoading(true);
         try {
             await api.post('/accounting/incomes', { ...values, date: values.date.toISOString(), orderId });
-            message.success('Поступление добавлено');
+            toast.success('Поступление добавлено');
             setIncomeModalOpen(false);
             incomeForm.resetFields();
             fetchData();
-        } catch { message.error('Ошибка'); } finally { setIncomeLoading(false); }
+        } catch { toast.error('Ошибка'); } finally { setIncomeLoading(false); }
     };
 
     const handleAddExpense = async (values: any) => {
         setExpenseLoading(true);
         try {
             await api.post('/accounting/expenses', { ...values, date: values.date.toISOString(), orderId });
-            message.success('Расход добавлен');
+            toast.success('Расход добавлен');
             setExpenseModalOpen(false);
             expenseForm.resetFields();
             fetchData();
-        } catch { message.error('Ошибка'); } finally { setExpenseLoading(false); }
+        } catch { toast.error('Ошибка'); } finally { setExpenseLoading(false); }
     };
 
     const handleDeleteIncome = async (id: string) => {
-        try { await api.delete(`/accounting/incomes/${id}`); message.success('Удалено'); fetchData(); }
-        catch { message.error('Ошибка удаления'); }
+        try { await api.delete(`/accounting/incomes/${id}`); toast.success('Удалено'); fetchData(); }
+        catch { toast.error('Ошибка удаления'); }
     };
 
     const handleDeleteExpense = async (id: string) => {
-        try { await api.delete(`/accounting/expenses/${id}`); message.success('Удалено'); fetchData(); }
-        catch { message.error('Ошибка удаления'); }
+        try { await api.delete(`/accounting/expenses/${id}`); toast.success('Удалено'); fetchData(); }
+        catch { toast.error('Ошибка удаления'); }
     };
 
     // =================== ASSIGN DRIVER ===================
@@ -711,11 +707,11 @@ export default function OrderDetailPage() {
         setStatusLoading(true);
         try {
             await api.put(`/company/orders/${orderId}/status`, values);
-            message.success('Статус обновлён');
+            toast.success('Статус обновлён');
             setStatusModalOpen(false);
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка');
+            toast.error(error.response?.data?.message || 'Ошибка');
         } finally { setStatusLoading(false); }
     };
 
@@ -725,10 +721,10 @@ export default function OrderDetailPage() {
         setCompletionActionLoading(true);
         try {
             await api.put(`/company/orders/${orderId}/confirm-completion`);
-            message.success('Завершение рейса подтверждено');
+            toast.success('Завершение рейса подтверждено');
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка подтверждения');
+            toast.error(error.response?.data?.message || 'Ошибка подтверждения');
         } finally { setCompletionActionLoading(false); }
     };
 
@@ -736,12 +732,12 @@ export default function OrderDetailPage() {
         setCompletionActionLoading(true);
         try {
             await api.put(`/company/orders/${orderId}/reject-completion`, { reason: rejectReason || undefined });
-            message.success('Запрос на завершение отклонён');
+            toast.success('Запрос на завершение отклонён');
             setRejectReasonModalOpen(false);
             setRejectReason('');
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка отклонения');
+            toast.error(error.response?.data?.message || 'Ошибка отклонения');
         } finally { setCompletionActionLoading(false); }
     };
 
@@ -749,25 +745,25 @@ export default function OrderDetailPage() {
         setCompletionActionLoading(true);
         try {
             await api.put(`/company/orders/${orderId}/cancel-completion`);
-            message.success('Запрос на завершение отменён');
+            toast.success('Запрос на завершение отменён');
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка отмены');
+            toast.error(error.response?.data?.message || 'Ошибка отмены');
         } finally { setCompletionActionLoading(false); }
     };
 
     const handleCancelOrder = async () => {
         try {
             await api.put(`/orders/${orderId}/status`, { status: 'CANCELLED', comment: 'Отменено пользователем' });
-            message.success('Заявка отменена');
+            toast.success('Заявка отменена');
             fetchData();
         } catch {
             try {
                 await api.put(`/company/orders/${orderId}/status`, { status: 'CANCELLED', comment: 'Отменено пользователем' });
-                message.success('Заявка отменена');
+                toast.success('Заявка отменена');
                 fetchData();
             } catch (err: any) {
-                message.error(err.response?.data?.message || 'Ошибка отмены');
+                toast.error(err.response?.data?.message || 'Ошибка отмены');
             }
         }
     };
@@ -876,8 +872,8 @@ export default function OrderDetailPage() {
     };
 
     const handleEditOrder = async (values: any) => {
-        if (!selectedCustomer) { message.error('Укажите заказчика'); return; }
-        if (!selectedCarrier) { message.error('Укажите перевозчика'); return; }
+        if (!selectedCustomer) { toast.error('Укажите заказчика'); return; }
+        if (!selectedCarrier) { toast.error('Укажите перевозчика'); return; }
 
         try {
             const getLocId = async (loc: LocationState) => {
@@ -910,7 +906,7 @@ export default function OrderDetailPage() {
             }
 
             if (routePoints.length < 2) {
-                message.error('Укажите минимум 2 точки маршрута');
+                toast.error('Укажите минимум 2 точки маршрута');
                 return;
             }
 
@@ -972,11 +968,11 @@ export default function OrderDetailPage() {
             }
 
             await api.put(`/orders/${orderId}`, updateData);
-            message.success('Заявка обновлена');
+            toast.success('Заявка обновлена');
             setIsEditing(false);
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка обновления');
+            toast.error(error.response?.data?.message || 'Ошибка обновления');
         }
     };
 
@@ -991,7 +987,7 @@ export default function OrderDetailPage() {
             setDriverLinkToken(res.data?.token || '');
             setDriverLinkModalOpen(true);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось создать ссылку');
+            toast.error(e.response?.data?.message || 'Не удалось создать ссылку');
         } finally {
             setDriverLinkLoading(false);
         }
@@ -1002,9 +998,9 @@ export default function OrderDetailPage() {
         try {
             const res = await api.post(`/orders/${orderId}/driver-link`, { regenerate: true });
             setDriverLinkToken(res.data?.token || '');
-            message.success('Ссылка обновлена, старая больше не работает');
+            toast.success('Ссылка обновлена, старая больше не работает');
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось обновить ссылку');
+            toast.error(e.response?.data?.message || 'Не удалось обновить ссылку');
         } finally {
             setDriverLinkLoading(false);
         }
@@ -1049,12 +1045,12 @@ export default function OrderDetailPage() {
             // Тело пустое, но не `null`: с общим заголовком application/json
             // строка «null» не проходит разбор JSON на сервере.
             const res = await api.post(`/orders/${orderId}/documents`, {}, { params: { kind } });
-            message.success(res.data.version > 1
+            toast.success(res.data.version > 1
                 ? `${DOC_TITLE[kind]}: сформирована версия ${res.data.version}, прежняя сохранена`
                 : `${DOC_TITLE[kind]} сформирован${kind === 'CONTRACT' ? '' : 'а'}`);
             await loadDocuments(kind);
         } catch (e: any) {
-            message.error(e.response?.data?.message || `Не удалось сформировать: ${DOC_TITLE[kind]}`);
+            toast.error(e.response?.data?.message || `Не удалось сформировать: ${DOC_TITLE[kind]}`);
         } finally {
             setDocBusy(null);
         }
@@ -1073,7 +1069,7 @@ export default function OrderDetailPage() {
             a.click();
             URL.revokeObjectURL(url);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось скачать документ');
+            toast.error(e.response?.data?.message || 'Не удалось скачать документ');
         }
     };
 
@@ -1133,7 +1129,7 @@ export default function OrderDetailPage() {
             a.download = `Доверенность_${data?.order?.orderNumber || orderId}.pdf`;
             a.click();
             URL.revokeObjectURL(url);
-        } catch { message.error('Ошибка скачивания доверенности'); }
+        } catch { toast.error('Ошибка скачивания доверенности'); }
     };
 
     const openSharePoAModal = () => {
@@ -1172,24 +1168,24 @@ export default function OrderDetailPage() {
 
     const handleSharePoA = async () => {
         const selectedEmails = shareEmailsList.filter(item => item.checked).map(item => item.email);
-        if (selectedEmails.length === 0) { message.warning('Выберите хотя бы один email'); return; }
+        if (selectedEmails.length === 0) { toast.warning('Выберите хотя бы один email'); return; }
         const uniqueEmails = Array.from(new Set(selectedEmails));
         setSharePoALoading(true);
         try {
             await api.post(`/orders/${orderId}/share-power-of-attorney`, { emails: uniqueEmails });
-            message.success('Доверенность отправлена');
+            toast.success('Доверенность отправлена');
             setSharePoAModalOpen(false);
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка отправки');
+            toast.error(error.response?.data?.message || 'Ошибка отправки');
         } finally { setSharePoALoading(false); }
     };
 
     const handleAddCustomEmail = () => {
         const email = customEmailInput.trim();
         if (!email) return;
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { message.error('Некорректный email'); return; }
-        if (shareEmailsList.some(item => item.email === email)) { message.warning('Email уже добавлен'); return; }
-        if (shareEmailsList.length >= 15) { message.warning('Максимум 15 получателей'); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Некорректный email'); return; }
+        if (shareEmailsList.some(item => item.email === email)) { toast.warning('Email уже добавлен'); return; }
+        if (shareEmailsList.length >= 15) { toast.warning('Максимум 15 получателей'); return; }
         setShareEmailsList([...shareEmailsList, { email, checked: true, label: `Вручную: ${email}` }]);
         setCustomEmailInput('');
     };
@@ -1200,12 +1196,12 @@ export default function OrderDetailPage() {
         setQuickPartnerLoading(true);
         try {
             await api.post('/external-companies', { ...values, isCustomer: false, isCarrier: true, type: 'FORWARDER' });
-            message.success('Контрагент добавлен');
+            toast.success('Контрагент добавлен');
             setQuickPartnerModalOpen(false);
             quickPartnerForm.resetFields();
             await fetchPartners();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка');
+            toast.error(error.response?.data?.message || 'Ошибка');
         } finally { setQuickPartnerLoading(false); }
     };
 
@@ -1630,7 +1626,7 @@ export default function OrderDetailPage() {
                                                                     </Tooltip>
                                                                     <Tooltip title="Скопировать номер">
                                                                         <a
-                                                                            onClick={() => { navigator.clipboard?.writeText(String(driverPhone)); message.success('Номер водителя скопирован'); }}
+                                                                            onClick={() => { navigator.clipboard?.writeText(String(driverPhone)); toast.success('Номер водителя скопирован'); }}
                                                                             style={{ color: 'var(--lc-text-ter)', cursor: 'pointer', fontSize: 15 }}
                                                                         >
                                                                             <CopyOutlined />
@@ -2143,7 +2139,7 @@ export default function OrderDetailPage() {
                                     if (res.data.phone) updateObj.phone = res.data.phone;
                                     if (res.data.email) updateObj.email = res.data.email;
                                     quickPartnerForm.setFieldsValue(updateObj);
-                                    message.success('Реквизиты подтянуты');
+                                    toast.success('Реквизиты подтянуты');
                                 }
                             } catch { }
                         }

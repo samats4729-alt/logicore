@@ -2,15 +2,15 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Form, Input, Button, App } from 'antd';
+import { Form, Input, Button } from 'antd';
 import { LockOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import AuthShell from '@/components/AuthShell';
+import { toast } from 'sonner';
 
 function ResetPasswordForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { message } = App.useApp();
     const [loading, setLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     
@@ -18,10 +18,10 @@ function ResetPasswordForm() {
 
     useEffect(() => {
         if (!token) {
-            message.error('Неверная ссылка для восстановления пароля');
+            toast.error('Неверная ссылка для восстановления пароля');
             router.push('/login');
         }
-    }, [token, router, message]);
+    }, [token, router]);
 
     const handleFinish = async (values: any) => {
         if (!token) return;
@@ -33,9 +33,9 @@ function ResetPasswordForm() {
                 newPassword: values.password 
             });
             setIsSuccess(true);
-            message.success('Пароль успешно изменен');
+            toast.success('Пароль успешно изменен');
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сброса пароля. Возможно ссылка устарела.');
+            toast.error(error.response?.data?.message || 'Ошибка сброса пароля. Возможно ссылка устарела.');
         } finally {
             setLoading(false);
         }

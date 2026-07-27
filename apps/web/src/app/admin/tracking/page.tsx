@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button, App } from 'antd';
+import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 const InteractiveAdminMap = dynamic(() => import('@/components/ui/InteractiveAdminMap'), {
     ssr: false,
@@ -49,7 +50,6 @@ interface DriverPosition {
 }
 
 export default function TrackingMapPage() {
-    const { message } = App.useApp();
     const [drivers, setDrivers] = useState<DriverPosition[]>([]);
     const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -124,16 +124,16 @@ export default function TrackingMapPage() {
                     const { latitude, longitude } = position.coords;
                     setMyLocation({ latitude, longitude });
                     setViewState(prev => ({ ...prev, latitude, longitude, zoom: 14 }));
-                    message.success('Карта центрирована на вашем местоположении');
+                    toast.success('Карта центрирована на вашем местоположении');
                 },
                 (error) => {
-                    message.error('Не удалось определить местоположение');
+                    toast.error('Не удалось определить местоположение');
                     console.error('Geolocation error:', error);
                 },
                 { enableHighAccuracy: true }
             );
         } else {
-            message.error('Геолокация не поддерживается');
+            toast.error('Геолокация не поддерживается');
         }
     };
 

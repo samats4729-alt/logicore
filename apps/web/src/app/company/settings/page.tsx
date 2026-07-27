@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Form, Input, Button, Checkbox, DatePicker, message, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
+import { Form, Input, Button, Checkbox, DatePicker, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
 import { UploadOutlined, BankOutlined, FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import CompanyFormFields from '@/components/CompanyFormFields';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
@@ -51,12 +52,12 @@ export default function SettingsPage() {
             
             setUser(res.data.user);
             
-            message.success('Организация успешно переключена');
+            toast.success('Организация успешно переключена');
             setTimeout(() => {
                 window.location.reload();
             }, 100);
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка переключения организации');
+            toast.error(err.response?.data?.message || 'Ошибка переключения организации');
         }
     };
 
@@ -69,12 +70,12 @@ export default function SettingsPage() {
                 // Не указан — сервер считает как «перенести», это прежнее поведение.
                 copyTeam: values.copyTeam !== false,
             });
-            message.success('Организация успешно добавлена');
+            toast.success('Организация успешно добавлена');
             setModalVisible(false);
             addForm.resetFields();
             loadCompanies();
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка добавления организации');
+            toast.error(err.response?.data?.message || 'Ошибка добавления организации');
         } finally {
             setSubmitLoading(false);
         }
@@ -84,7 +85,7 @@ export default function SettingsPage() {
         setSubmitLoading(true);
         try {
             const res = await api.delete(`/company/my-companies/${companyId}`);
-            message.success('Организация успешно удалена');
+            toast.success('Организация успешно удалена');
             
             if (res.data.switched) {
                 // Сервер уже обновил защищённую cookie активной организации.
@@ -97,7 +98,7 @@ export default function SettingsPage() {
                 loadCompanies();
             }
         } catch (err: any) {
-            message.error(err.response?.data?.message || 'Ошибка удаления организации');
+            toast.error(err.response?.data?.message || 'Ошибка удаления организации');
         } finally {
             setSubmitLoading(false);
         }
@@ -169,9 +170,9 @@ export default function SettingsPage() {
                     ? dayjs(values.vatCertificateDate).format('YYYY-MM-DD')
                     : undefined,
             });
-            message.success('Данные компании обновлены');
+            toast.success('Данные компании обновлены');
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка обновления данных компании');
+            toast.error(error.response?.data?.message || 'Ошибка обновления данных компании');
         } finally {
             setCompanyLoading(false);
         }
@@ -185,10 +186,10 @@ export default function SettingsPage() {
             await api.post('/company/stamp', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-            message.success('Печать загружена');
+            toast.success('Печать загружена');
             loadStamp();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка загрузки печати');
+            toast.error(error.response?.data?.message || 'Ошибка загрузки печати');
         } finally {
             setStampLoading(false);
         }
@@ -203,10 +204,10 @@ export default function SettingsPage() {
             await api.post('/company/signature', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-            message.success('Подпись загружена');
+            toast.success('Подпись загружена');
             loadSignature();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка загрузки подписи');
+            toast.error(error.response?.data?.message || 'Ошибка загрузки подписи');
         } finally {
             setSignatureLoading(false);
         }
@@ -241,7 +242,7 @@ export default function SettingsPage() {
                                         if (res.data.email) updateObj.email = res.data.email;
 
                                         companyForm.setFieldsValue(updateObj);
-                                        message.success('Реквизиты компании подтянуты');
+                                        toast.success('Реквизиты компании подтянуты');
                                     }
                                 } catch (e) {
                                     // Ignore

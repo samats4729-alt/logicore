@@ -2,22 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    Alert,
-    Button,
-    DatePicker,
-    Dropdown,
-    Input,
-    InputNumber,
-    Modal,
-    Select,
-    Space,
-    Spin,
-    Table,
-    Tooltip,
-    message,
-    theme,
-} from 'antd';
+import { Alert, Button, DatePicker, Dropdown, Input, InputNumber, Modal, Select, Space, Spin, Table, Tooltip, theme } from 'antd';
 import {
     ArrowLeftOutlined,
     CheckOutlined,
@@ -51,6 +36,7 @@ import {
     revokeAccountingDocumentShare,
     updateAccountingDocument,
 } from '@/lib/accounting-documents';
+import { toast } from 'sonner';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
@@ -291,12 +277,12 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const save = async (): Promise<boolean> => {
         if (!document) return false;
         if (!lines.length) {
-            message.warning('В документе должна остаться хотя бы одна строка');
+            toast.warning('В документе должна остаться хотя бы одна строка');
             return false;
         }
         const empty = lines.find((line) => !line.name.trim());
         if (empty) {
-            message.warning('У каждой строки должно быть наименование услуги');
+            toast.warning('У каждой строки должно быть наименование услуги');
             return false;
         }
         try {
@@ -312,10 +298,10 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 ...(kind.showBankAccount ? { bankAccountId } : {}),
             });
             applyDocument(saved);
-            message.success('Записано');
+            toast.success('Записано');
             return true;
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось записать документ');
+            toast.error(e.response?.data?.message || 'Не удалось записать документ');
             return false;
         } finally {
             setSaving(false);
@@ -330,10 +316,10 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             setSaving(true);
             const posted = await postAccountingDocument(document.id);
             applyDocument(posted);
-            message.success(kind.postedMessage(posted.number));
+            toast.success(kind.postedMessage(posted.number));
             if (closeAfter) router.push(kind.journalPath);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось провести документ');
+            toast.error(e.response?.data?.message || 'Не удалось провести документ');
         } finally {
             setSaving(false);
         }
@@ -348,12 +334,12 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
         try {
             setSaving(true);
             const { document: act, created } = await createServiceActFromInvoice(document);
-            message.success(created
+            toast.success(created
                 ? `Черновик акта № ${act.number} создан`
                 : `По рейсу счёта уже есть акт № ${act.number}`);
             router.push(accountingDocumentHref({ id: act.id, type: 'SERVICE_ACT' }));
         } catch (e: any) {
-            message.error(e.response?.data?.message || e.message || 'Не удалось создать акт');
+            toast.error(e.response?.data?.message || e.message || 'Не удалось создать акт');
         } finally {
             setSaving(false);
         }
@@ -380,11 +366,11 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             cancelText: 'Закрыть',
             onOk: async () => {
                 if (!reason.trim()) {
-                    message.warning('Укажите причину отмены');
+                    toast.warning('Укажите причину отмены');
                     return Promise.reject();
                 }
                 await cancelAccountingDocument(document!.id, reason.trim());
-                message.success(kind.cancelledTitle);
+                toast.success(kind.cancelledTitle);
                 return load();
             },
         });
@@ -399,7 +385,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             cancelText: 'Отмена',
             onOk: async () => {
                 await deleteAccountingDocumentDraft(id);
-                message.success('Черновик удалён');
+                toast.success('Черновик удалён');
                 router.push(kind.journalPath);
             },
         });
@@ -408,7 +394,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const copyShareLink = () => {
         if (!document) return;
         navigator.clipboard.writeText(`${window.location.origin}/shared/document/${document.shareToken}`);
-        message.success('Ссылка скопирована — по ней контрагент откроет счёт без входа');
+        toast.success('Ссылка скопирована — по ней контрагент откроет счёт без входа');
     };
 
     if (loading) {
@@ -720,7 +706,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                                     disabled: !canChange || Boolean(document.shareRevokedAt),
                                     onClick: async () => {
                                         await revokeAccountingDocumentShare(document.id);
-                                        message.success('Ссылка отозвана');
+                                        toast.success('Ссылка отозвана');
                                         load();
                                     },
                                 },

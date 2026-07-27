@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select, Spin, message } from 'antd';
+import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select, Spin } from 'antd';
 import type { FormInstance } from 'antd';
 import dayjs from 'dayjs';
 import { AllocationSuggestionItem, suggestAllocation } from '@/lib/accounting-documents';

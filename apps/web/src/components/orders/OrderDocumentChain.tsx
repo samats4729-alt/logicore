@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Skeleton, message } from 'antd';
+import { Button, Skeleton } from 'antd';
 import {
     AccountingDocumentListItem,
     OrderChainDocumentType,
@@ -10,6 +10,7 @@ import {
     fetchAccountingDocuments,
 } from '@/lib/accounting-documents';
 import StatusPill from '@/components/ui/StatusPill';
+import { toast } from 'sonner';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
@@ -57,7 +58,7 @@ export default function OrderDocumentChain({
             const res = await fetchAccountingDocuments({ orderId, limit: 50 });
             setDocuments(res.data);
         } catch {
-            message.error('Не удалось загрузить документы по рейсу');
+            toast.error('Не удалось загрузить документы по рейсу');
         } finally {
             setLoading(false);
         }

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Typography, Space, Tag, DatePicker, Input, Segmented, message, Modal, Form, InputNumber, Select } from 'antd';
+import { Table, Button, Typography, Space, Tag, DatePicker, Input, Segmented, Modal, Form, InputNumber, Select } from 'antd';
 import { SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -168,7 +169,7 @@ export default function AllOperationsPage() {
             const all = [...payments, ...incomes, ...expenses].sort((a, b) => dayjs(b.date).unix() - dayjs(a.date).unix());
             setRows(all);
         } catch {
-            message.error('Не удалось загрузить операции');
+            toast.error('Не удалось загрузить операции');
         } finally {
             setLoading(false);
         }
@@ -223,11 +224,11 @@ export default function AllOperationsPage() {
                 date: values.date?.toISOString(),
                 note: values.note || undefined,
             });
-            message.success('Возврат оформлен');
+            toast.success('Возврат оформлен');
             setRefundTarget(null);
             fetchAll();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось оформить возврат');
+            toast.error(e.response?.data?.message || 'Не удалось оформить возврат');
         } finally {
             setRefunding(false);
         }
@@ -254,12 +255,12 @@ export default function AllOperationsPage() {
             };
             if (addDir === 'IN') await api.post('/accounting/incomes', payload);
             else await api.post('/accounting/expenses', payload);
-            message.success('Операция добавлена');
+            toast.success('Операция добавлена');
             setAddOpen(false);
             form.resetFields();
             fetchAll();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка сохранения');
+            toast.error(e.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setSaving(false);
         }

@@ -2,12 +2,13 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Form, Input, Button, Typography, message, Steps, Result, Divider, Spin, Checkbox } from 'antd';
+import { Form, Input, Button, Typography, Steps, Result, Divider, Spin, Checkbox } from 'antd';
 import { UserOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { GoogleLogin } from '@react-oauth/google';
 import AuthShell from '@/components/AuthShell';
+import { toast } from 'sonner';
 
 const { Text, Paragraph } = Typography;
 
@@ -33,20 +34,20 @@ function RegisterContent() {
                     firstName: data.firstName,
                     lastName: data.lastName,
                 });
-                message.info('Заполните данные компании и телефон для завершения регистрации через Google');
+                toast.info('Заполните данные компании и телефон для завершения регистрации через Google');
             }
         }
     }, [searchParams]);
 
     const handleGoogleRegisterSuccess = async (credentialResponse: any) => {
         if (!form.getFieldValue('agreement')) {
-            message.warning('Сначала примите условия Публичной оферты и Политики конфиденциальности');
+            toast.warning('Сначала примите условия Публичной оферты и Политики конфиденциальности');
             return;
         }
         // Проверяем что телефон заполнен
         const phone = form.getFieldValue('phone');
         if (!phone) {
-            message.warning('Сначала укажите номер телефона');
+            toast.warning('Сначала укажите номер телефона');
             return;
         }
 
@@ -70,7 +71,7 @@ function RegisterContent() {
                 router.push('/company');
             }, 2000);
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка регистрации через Google');
+            toast.error(error.response?.data?.message || 'Ошибка регистрации через Google');
         } finally {
             setLoading(false);
         }
@@ -92,7 +93,7 @@ function RegisterContent() {
                 router.push('/company/onboarding');
             }, 1500);
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка регистрации');
+            toast.error(error.response?.data?.message || 'Ошибка регистрации');
         } finally {
             setLoading(false);
         }
@@ -208,7 +209,7 @@ function RegisterContent() {
                                 <GoogleLogin
                                     onSuccess={handleGoogleRegisterSuccess}
                                     onError={() => {
-                                        message.error('Ошибка входа через Google');
+                                        toast.error('Ошибка входа через Google');
                                     }}
                                     theme="outline"
                                     size="large"

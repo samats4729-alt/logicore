@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Typography, Tag, message } from 'antd';
+import { Table, Button, Typography, Tag } from 'antd';
 import { ArrowLeftOutlined, WalletOutlined, BankOutlined, SettingOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
@@ -35,7 +36,7 @@ export default function AccountBalancesPage() {
             setAccounts(res.data?.accounts || []);
             setTotals(res.data?.totals || { openingBalance: 0, totalIn: 0, totalOut: 0, balance: 0 });
         } catch {
-            message.error('Не удалось загрузить остатки');
+            toast.error('Не удалось загрузить остатки');
         } finally {
             setLoading(false);
         }

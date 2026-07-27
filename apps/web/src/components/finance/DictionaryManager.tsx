@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Typography, Space, Tag, Input, Switch, Modal, Form, App } from 'antd';
+import { Table, Button, Typography, Space, Tag, Input, Switch, Modal, Form } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, EditOutlined, SearchOutlined, BookOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Text } = Typography;
 
@@ -28,7 +29,6 @@ export default function DictionaryManager({
     namePlaceholder?: string;
 }) {
     const router = useRouter();
-    const { message } = App.useApp();
     const { user } = useAuthStore();
     const canEdit = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
 
@@ -48,7 +48,7 @@ export default function DictionaryManager({
             const res = await api.get(`/accounting/dictionaries/${kind}`);
             setItems(res.data || []);
         } catch {
-            message.error('Не удалось загрузить справочник');
+            toast.error('Не удалось загрузить справочник');
         } finally {
             setLoading(false);
         }
@@ -65,12 +65,12 @@ export default function DictionaryManager({
         setSaving(true);
         try {
             const payload = { name: values.name, code: hasCode ? values.code : undefined, isDefault: values.isDefault };
-            if (editing) { await api.put(`/accounting/dictionaries/item/${editing.id}`, payload); message.success('Запись обновлена'); }
-            else { await api.post(`/accounting/dictionaries/${kind}`, payload); message.success('Запись добавлена'); }
+            if (editing) { await api.put(`/accounting/dictionaries/item/${editing.id}`, payload); toast.success('Запись обновлена'); }
+            else { await api.post(`/accounting/dictionaries/${kind}`, payload); toast.success('Запись добавлена'); }
             setModalOpen(false);
             fetchItems();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка сохранения');
+            toast.error(e.response?.data?.message || 'Ошибка сохранения');
         } finally {
             setSaving(false);
         }
@@ -79,10 +79,10 @@ export default function DictionaryManager({
     const toggleActive = async (r: DictItem, active: boolean) => {
         try {
             await api.put(`/accounting/dictionaries/item/${r.id}/deactivate`, { active });
-            message.success(active ? 'Запись активирована' : 'Запись скрыта');
+            toast.success(active ? 'Запись активирована' : 'Запись скрыта');
             fetchItems();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось изменить статус');
+            toast.error(e.response?.data?.message || 'Не удалось изменить статус');
         }
     };
 

@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Checkbox, Modal, Select, Skeleton, Tag, message } from 'antd';
+import { Alert, Checkbox, Modal, Select, Skeleton, Tag } from 'antd';
 import { BankOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 /** Роли, которые можно выдать сотруднику в организации холдинга. */
 const ROLE_OPTIONS = [
@@ -64,7 +65,7 @@ export default function EmployeeAccessModal({
             setCompanies(res.data?.companies || []);
             setCanShare(res.data?.user?.canShare !== false);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось загрузить доступы');
+            toast.error(e.response?.data?.message || 'Не удалось загрузить доступы');
             onClose();
         } finally {
             setLoading(false);
@@ -93,11 +94,11 @@ export default function EmployeeAccessModal({
         setSaving(true);
         try {
             await api.put(`/company/employees/${userId}/access`, { items });
-            message.success('Доступ к организациям сохранён');
+            toast.success('Доступ к организациям сохранён');
             onSaved?.();
             onClose();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось сохранить доступ');
+            toast.error(e.response?.data?.message || 'Не удалось сохранить доступ');
         } finally {
             setSaving(false);
         }

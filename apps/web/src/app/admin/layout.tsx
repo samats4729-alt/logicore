@@ -2,17 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import {
-    Layout,
-    Menu,
-    Avatar,
-    Dropdown,
-    Typography,
-    Spin,
-    Button,
-    Drawer,
-    message,
-} from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Typography, Spin, Button, Drawer } from 'antd';
 import {
     DashboardOutlined,
     TeamOutlined,
@@ -34,6 +24,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -138,7 +129,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             router.push('/admin/login');
         } else if (user?.role !== 'ADMIN') {
             // Logged in but not Admin -> Kick out
-            message.error('У вас нет прав администратора');
+            toast.error('У вас нет прав администратора');
             router.push('/'); // Or access-denied
         }
     }, [loading, isAuthenticated, user, router]);

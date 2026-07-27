@@ -2,19 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-    Button,
-    DatePicker,
-    Dropdown,
-    Input,
-    Select,
-    Space,
-    Table,
-    Tabs,
-    Tooltip,
-    message,
-    theme,
-} from 'antd';
+import { Button, DatePicker, Dropdown, Input, Select, Space, Table, Tabs, Tooltip, theme } from 'antd';
 import {
     EyeOutlined,
     MoreOutlined,
@@ -37,6 +25,7 @@ import {
     openAccountingRegistryPdf,
     revokeAccountingDocumentShare,
 } from '@/lib/accounting-documents';
+import { toast } from 'sonner';
 
 const { RangePicker } = DatePicker;
 
@@ -96,7 +85,7 @@ export default function InvoicesRegistryPage() {
             setTotals(result.totals);
             setTotalCount(result.total);
         } catch {
-            message.error('Не удалось загрузить журнал счетов');
+            toast.error('Не удалось загрузить журнал счетов');
         } finally {
             setLoading(false);
         }
@@ -135,7 +124,7 @@ export default function InvoicesRegistryPage() {
     const copyShareLink = (doc: AccountingDocumentListItem) => {
         const url = `${window.location.origin}/shared/document/${doc.shareToken}`;
         navigator.clipboard.writeText(url);
-        message.success('Ссылка скопирована');
+        toast.success('Ссылка скопирована');
     };
 
     /**
@@ -148,12 +137,12 @@ export default function InvoicesRegistryPage() {
             setActFromId(doc.id);
             const invoice = await fetchAccountingDocument(doc.id);
             const { document, created } = await createServiceActFromInvoice(invoice);
-            message.success(created
+            toast.success(created
                 ? `Черновик акта № ${document.number} создан`
                 : `По рейсу счёта уже есть акт № ${document.number}`);
             router.push(accountingDocumentHref({ id: document.id, type: 'SERVICE_ACT' }));
         } catch (e: any) {
-            message.error(e.response?.data?.message || e.message || 'Не удалось создать акт');
+            toast.error(e.response?.data?.message || e.message || 'Не удалось создать акт');
         } finally {
             setActFromId(null);
         }
@@ -176,10 +165,10 @@ export default function InvoicesRegistryPage() {
     const revokeShare = async (doc: AccountingDocumentListItem) => {
         try {
             await revokeAccountingDocumentShare(doc.id);
-            message.success('Ссылка отозвана — прежняя больше не откроется');
+            toast.success('Ссылка отозвана — прежняя больше не откроется');
             load();
         } catch {
-            message.error('Не удалось отозвать ссылку');
+            toast.error('Не удалось отозвать ссылку');
         }
     };
 

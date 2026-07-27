@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Typography, Table, Tag, Empty, Spin, Button, Modal, Form, Input, DatePicker, message, Tooltip, Alert, Checkbox } from 'antd';
+import { Typography, Table, Tag, Empty, Spin, Button, Modal, Form, Input, DatePicker, Tooltip, Alert, Checkbox } from 'antd';
 import {
     CheckCircleFilled,
     ClockCircleFilled,
@@ -17,6 +17,7 @@ import dayjs from 'dayjs';
 const { Title, Text } = Typography;
 
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
+import { toast } from 'sonner';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -213,14 +214,14 @@ export default function SharedReportPage() {
                 dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : undefined,
                 note: values.note || undefined,
             });
-            message.success(`Счёт ${res.data.number} отправлен на проверку`);
+            toast.success(`Счёт ${res.data.number} отправлен на проверку`);
             setModalOpen(false);
             form.resetFields();
             setSelectedRowKeys([]);
             await loadReport();
         } catch (e: any) {
             const detail = e.response?.data?.message;
-            message.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось выставить счёт');
+            toast.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось выставить счёт');
         } finally {
             setSubmittingInvoice(false);
         }
@@ -237,7 +238,7 @@ export default function SharedReportPage() {
 
     const handleSubmitProof = async (values: any) => {
         if (!proofFile) {
-            message.error('Приложите файл чека');
+            toast.error('Приложите файл чека');
             return;
         }
         try {
@@ -250,14 +251,14 @@ export default function SharedReportPage() {
             if (values.note) payload.append('note', values.note);
 
             await axios.post(`${API_URL}/public/payment-proofs/${token}`, payload);
-            message.success('Чек отправлен на проверку');
+            toast.success('Чек отправлен на проверку');
             setProofOrder(null);
             setProofFile(null);
             proofForm.resetFields();
             await loadReport();
         } catch (e: any) {
             const detail = e.response?.data?.message;
-            message.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось отправить чек');
+            toast.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось отправить чек');
         } finally {
             setSubmittingProof(false);
         }

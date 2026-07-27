@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Button, Input, Modal, Form, Select, message, Space, Popconfirm, Segmented, Tag, Checkbox, Row, Col, Divider } from 'antd';
+import { Table, Button, Input, Modal, Form, Select, Space, Popconfirm, Segmented, Tag, Checkbox, Row, Col, Divider } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, CarOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
+import { toast } from 'sonner';
 
 interface Vehicle {
     id: string;
@@ -79,7 +80,7 @@ export default function VehiclesPage() {
             }
             setCarrierVehicles(carrierVehiclesList);
         } catch (error) {
-            message.error('Ошибка загрузки транспорта');
+            toast.error('Ошибка загрузки транспорта');
         } finally {
             setLoading(false);
         }
@@ -114,7 +115,7 @@ export default function VehiclesPage() {
                         vehicleType: values.type,
                         trailerNumber: values.trailerNumber || null,
                     });
-                    message.success('Транспорт перевозчика успешно обновлён');
+                    toast.success('Транспорт перевозчика успешно обновлён');
                 } else {
                     let finalDriverId = values.driverId;
 
@@ -144,7 +145,7 @@ export default function VehiclesPage() {
                         trailerNumber: values.trailerNumber || null,
                         driverId: finalDriverId || null,
                     });
-                    message.success('Транспорт успешно обновлён');
+                    toast.success('Транспорт успешно обновлён');
                 }
             } else {
                 let finalDriverId = values.driverId;
@@ -167,7 +168,7 @@ export default function VehiclesPage() {
                     trailerNumber: values.trailerNumber || null,
                     driverId: finalDriverId || null,
                 });
-                message.success('Транспорт успешно добавлен');
+                toast.success('Транспорт успешно добавлен');
             }
             setModalOpen(false);
             setEditingVehicle(null);
@@ -175,7 +176,7 @@ export default function VehiclesPage() {
             fetchVehicles();
             fetchDrivers();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка сохранения');
+            toast.error(error.response?.data?.message || 'Ошибка сохранения');
         }
     };
 
@@ -208,15 +209,15 @@ export default function VehiclesPage() {
                     vehicleType: null,
                     trailerNumber: null,
                 });
-                message.success('Транспорт перевозчика удалён');
+                toast.success('Транспорт перевозчика удалён');
             } else {
                 await api.delete(`/company/vehicles/${vehicle.id}`);
-                message.success('Транспорт удалён');
+                toast.success('Транспорт удалён');
             }
             fetchVehicles();
             fetchDrivers();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка удаления');
+            toast.error(error.response?.data?.message || 'Ошибка удаления');
         }
     };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Table, Card, Button, Tag, Modal, Form, Input, Select, message, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip, Segmented, Switch } from 'antd';
+import { Table, Card, Button, Tag, Modal, Form, Input, Select, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip, Segmented, Switch } from 'antd';
 import dayjs from 'dayjs';
 import { 
     MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, BankOutlined, 
@@ -16,6 +16,7 @@ import { useAuthStore } from '@/store/auth';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import UserAvatar from '@/components/UserAvatar';
 import EmployeeAccessModal from '@/components/company/EmployeeAccessModal';
+import { toast } from 'sonner';
 
 const ROLE_OPTIONS = [
     { label: 'Менеджер', value: 'LOGISTICIAN' },
@@ -274,10 +275,10 @@ export default function CompanyUsersPage() {
             await api.put('/company/profile', key === 'orders'
                 ? { managersSeeOwnOrdersOnly: value }
                 : { managersSeeOwnPartnersOnly: value });
-            message.success('Настройка сохранена');
+            toast.success('Настройка сохранена');
         } catch (e: any) {
             setManagerToggles(prev);
-            message.error(e.response?.data?.message || 'Не удалось сохранить настройку');
+            toast.error(e.response?.data?.message || 'Не удалось сохранить настройку');
         } finally {
             setToggleSaving(false);
         }
@@ -400,12 +401,12 @@ export default function CompanyUsersPage() {
                 parentDepartmentId: selectedParentDeptId || undefined,
                 icon: values.icon || 'FolderOpenOutlined',
             });
-            message.success('Отдел успешно создан');
+            toast.success('Отдел успешно создан');
             setDeptModalOpen(false);
             deptForm.resetFields();
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания отдела');
+            toast.error(error.response?.data?.message || 'Ошибка создания отдела');
         }
     };
 
@@ -416,22 +417,22 @@ export default function CompanyUsersPage() {
                 name: values.name,
                 icon: values.icon || 'FolderOpenOutlined',
             });
-            message.success('Отдел обновлён');
+            toast.success('Отдел обновлён');
             setRenameModalOpen(false);
             renameForm.resetFields();
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка обновления отдела');
+            toast.error(error.response?.data?.message || 'Ошибка обновления отдела');
         }
     };
 
     const handleDeleteDept = async (id: string) => {
         try {
             await api.delete(`/company/departments/${id}`);
-            message.success('Отдел удалён. Сотрудники переведены в нераспределенные.');
+            toast.success('Отдел удалён. Сотрудники переведены в нераспределенные.');
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка удаления отдела');
+            toast.error(error.response?.data?.message || 'Ошибка удаления отдела');
         }
     };
 
@@ -441,12 +442,12 @@ export default function CompanyUsersPage() {
                 userId: values.userId,
                 departmentId: assignDeptId,
             });
-            message.success('Сотрудник назначен в отдел');
+            toast.success('Сотрудник назначен в отдел');
             setAssignModalOpen(false);
             assignForm.resetFields();
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка назначения сотрудника');
+            toast.error(error.response?.data?.message || 'Ошибка назначения сотрудника');
         }
     };
 
@@ -456,10 +457,10 @@ export default function CompanyUsersPage() {
                 userId,
                 departmentId: null,
             });
-            message.success('Сотрудник убран из отдела');
+            toast.success('Сотрудник убран из отдела');
             fetchData();
         } catch (error: any) {
-            message.error('Ошибка');
+            toast.error('Ошибка');
         }
     };
 
@@ -484,7 +485,7 @@ export default function CompanyUsersPage() {
 
     const handleInlineCreateDept = async () => {
         if (!newDeptName.trim()) {
-            message.warning('Введите название отдела');
+            toast.warning('Введите название отдела');
             return;
         }
         setAddingDeptLoading(true);
@@ -493,12 +494,12 @@ export default function CompanyUsersPage() {
                 name: newDeptName.trim(),
                 icon: 'FolderOpenOutlined',
             });
-            message.success('Отдел успешно создан');
+            toast.success('Отдел успешно создан');
             setNewDeptName('');
             await fetchData();
             unifiedForm.setFieldsValue({ departmentId: res.data.id });
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка создания отдела');
+            toast.error(error.response?.data?.message || 'Ошибка создания отдела');
         } finally {
             setAddingDeptLoading(false);
         }
@@ -517,17 +518,17 @@ export default function CompanyUsersPage() {
 
                 if (editingRecord) {
                     await api.put(`/company/drivers/${editingRecord.id}`, payload);
-                    message.success('Данные водителя обновлены');
+                    toast.success('Данные водителя обновлены');
                 } else {
                     await api.post('/company/drivers', payload);
-                    message.success('Водитель добавлен');
+                    toast.success('Водитель добавлен');
                 }
                 setUnifiedModalOpen(false);
                 setEditingRecord(null);
                 unifiedForm.resetFields();
                 fetchData();
             } catch (error: any) {
-                message.error(error.response?.data?.message || 'Ошибка');
+                toast.error(error.response?.data?.message || 'Ошибка');
             }
         } else {
             // Office employee invite
@@ -551,9 +552,9 @@ export default function CompanyUsersPage() {
             try {
                 const res = await api.post('/company/invitations', payload);
                 if (res.data.emailSent) {
-                    message.success(`Приглашение отправлено на ${payload.email}`);
+                    toast.success(`Приглашение отправлено на ${payload.email}`);
                 } else {
-                    message.warning('Приглашение создано, но письмо не отправлено — передайте ссылку вручную');
+                    toast.warning('Приглашение создано, но письмо не отправлено — передайте ссылку вручную');
                 }
                 const link = `${window.location.origin}/invite?token=${res.data.token}`;
                 setGeneratedLink(link);
@@ -561,7 +562,7 @@ export default function CompanyUsersPage() {
                 unifiedForm.resetFields(['email', 'position', 'departmentId', 'permissions']);
                 fetchData();
             } catch (error: any) {
-                message.error(error.response?.data?.message || 'Ошибка');
+                toast.error(error.response?.data?.message || 'Ошибка');
             }
         }
     };
@@ -597,10 +598,10 @@ export default function CompanyUsersPage() {
     const handleCancelInvitation = async (id: string) => {
         try {
             await api.delete(`/company/invitations/${id}`);
-            message.success('Приглашение отменено');
+            toast.success('Приглашение отменено');
             fetchData();
         } catch (error) {
-            message.error('Ошибка');
+            toast.error('Ошибка');
         }
     };
 
@@ -610,28 +611,28 @@ export default function CompanyUsersPage() {
             await api.put(`/company/users/${editingUser.id}/permissions`, {
                 permissions: values.permissions || [],
             });
-            message.success('Права доступа обновлены');
+            toast.success('Права доступа обновлены');
             setEditModalOpen(false);
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка');
+            toast.error(error.response?.data?.message || 'Ошибка');
         }
     };
 
     const handleDeleteUser = async (userId: string) => {
         try {
             await api.delete(`/company/users/${userId}`);
-            message.success('Пользователь удалён');
+            toast.success('Пользователь удалён');
             fetchData();
         } catch (error: any) {
-            message.error(error.response?.data?.message || 'Ошибка');
+            toast.error(error.response?.data?.message || 'Ошибка');
         }
     };
 
     const copyToClipboard = () => {
         if (generatedLink) {
             navigator.clipboard.writeText(generatedLink);
-            message.success('Ссылка скопирована в буфер обмена');
+            toast.success('Ссылка скопирована в буфер обмена');
         }
     };
 

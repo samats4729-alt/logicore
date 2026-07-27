@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Card, Button, Table, Tag, Space, Alert, message, Spin, Statistic, Row, Col, Select, Popconfirm } from 'antd';
+import { Typography, Card, Button, Table, Tag, Space, Alert, Spin, Statistic, Row, Col, Select, Popconfirm } from 'antd';
 import { ReloadOutlined, TeamOutlined, MergeCellsOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -114,7 +115,7 @@ export default function AdminIdentityPage() {
             const res = await api.get('/admin/identity/reconcile-reads');
             setReadRecon(res.data);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось проверить паритет чтения');
+            toast.error(e.response?.data?.message || 'Не удалось проверить паритет чтения');
         } finally {
             setReadReconLoading(false);
         }
@@ -126,11 +127,11 @@ export default function AdminIdentityPage() {
             const res = await api.post('/admin/identity/reads/enable-all');
             const en = res.data?.enabled || {};
             const onCount = Object.values(en).filter(Boolean).length;
-            message.success(res.data?.allOk ? 'Переключено на новый слой полностью' : `Переключено частично (${onCount}/3): включено только там, где сверка идеальная`);
+            toast.success(res.data?.allOk ? 'Переключено на новый слой полностью' : `Переключено частично (${onCount}/3): включено только там, где сверка идеальная`);
             await loadFlags();
             await loadReadRecon();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось переключить');
+            toast.error(e.response?.data?.message || 'Не удалось переключить');
         } finally {
             setFlagSaving(false);
         }
@@ -140,10 +141,10 @@ export default function AdminIdentityPage() {
         setFlagSaving(true);
         try {
             await api.post('/admin/identity/reads/disable-all');
-            message.success('Возврат на старое чтение');
+            toast.success('Возврат на старое чтение');
             await loadFlags();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось вернуть');
+            toast.error(e.response?.data?.message || 'Не удалось вернуть');
         } finally {
             setFlagSaving(false);
         }
@@ -155,7 +156,7 @@ export default function AdminIdentityPage() {
             const res = await api.get('/admin/identity/reconcile');
             setRecon(res.data);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось выполнить сверку');
+            toast.error(e.response?.data?.message || 'Не удалось выполнить сверку');
         } finally {
             setReconLoading(false);
         }
@@ -174,10 +175,10 @@ export default function AdminIdentityPage() {
         setBackfillingVeh(true);
         try {
             const res = await api.post('/admin/identity/backfill-vehicle-drivers');
-            message.success(`Транспорт: связано машин с водителями ${res.data?.linked ?? 0} из ${res.data?.candidates ?? 0}`);
+            toast.success(`Транспорт: связано машин с водителями ${res.data?.linked ?? 0} из ${res.data?.candidates ?? 0}`);
             loadVeh();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка бэкфилла транспорта');
+            toast.error(e.response?.data?.message || 'Ошибка бэкфилла транспорта');
         } finally {
             setBackfillingVeh(false);
         }
@@ -197,10 +198,10 @@ export default function AdminIdentityPage() {
         try {
             const res = await api.post('/admin/identity/backfill-affiliations');
             const { created, desired, skippedUsersWithoutPerson } = res.data || {};
-            message.success(`Членство: создано ${created} из ${desired}${skippedUsersWithoutPerson ? `, пропущено без личности ${skippedUsersWithoutPerson}` : ''}`);
+            toast.success(`Членство: создано ${created} из ${desired}${skippedUsersWithoutPerson ? `, пропущено без личности ${skippedUsersWithoutPerson}` : ''}`);
             loadAff();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка бэкфилла членства');
+            toast.error(e.response?.data?.message || 'Ошибка бэкфилла членства');
         } finally {
             setBackfillingAff(false);
         }
@@ -219,11 +220,11 @@ export default function AdminIdentityPage() {
         setReverting(mergeId);
         try {
             const res = await api.post(`/admin/identity/merges/${mergeId}/revert`);
-            message.success(`Разъединено: возвращено пользователей ${res.data?.restoredUsers ?? 0}, восстановлено личностей ${res.data?.restoredPersons ?? 0}`);
+            toast.success(`Разъединено: возвращено пользователей ${res.data?.restoredUsers ?? 0}, восстановлено личностей ${res.data?.restoredPersons ?? 0}`);
             loadHistory();
             loadReport();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка отката');
+            toast.error(e.response?.data?.message || 'Ошибка отката');
         } finally {
             setReverting(null);
         }
@@ -235,7 +236,7 @@ export default function AdminIdentityPage() {
             const res = await api.get('/admin/identity/duplicate-persons');
             setReport(res.data);
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Не удалось загрузить отчёт');
+            toast.error(e.response?.data?.message || 'Не удалось загрузить отчёт');
         } finally {
             setLoading(false);
         }
@@ -255,7 +256,7 @@ export default function AdminIdentityPage() {
         const selectedUserIds = sel[gk] || [];
         const selectedUsers = g.users.filter(u => selectedUserIds.includes(u.userId) && u.personId);
         if (selectedUsers.length < 2) {
-            message.warning('Выберите минимум две записи одного человека');
+            toast.warning('Выберите минимум две записи одного человека');
             return;
         }
         const survivorUserId = surv[gk] && selectedUsers.some(u => u.userId === surv[gk]) ? surv[gk] : selectedUsers[0].userId;
@@ -264,7 +265,7 @@ export default function AdminIdentityPage() {
             selectedUsers.filter(u => u.personId && u.personId !== survivor.personId).map(u => u.personId as string)
         ));
         if (sourcePersonIds.length === 0) {
-            message.info('Выбранные записи уже относятся к одной личности');
+            toast.info('Выбранные записи уже относятся к одной личности');
             return;
         }
         setMerging(gk);
@@ -273,13 +274,13 @@ export default function AdminIdentityPage() {
                 targetPersonId: survivor.personId,
                 sourcePersonIds,
             });
-            message.success(`Объединено: перецеплено пользователей ${res.data?.repointedUsers ?? 0}. Объединение можно отменить ниже.`);
+            toast.success(`Объединено: перецеплено пользователей ${res.data?.repointedUsers ?? 0}. Объединение можно отменить ниже.`);
             setSel(prev => { const n = { ...prev }; delete n[gk]; return n; });
             setSurv(prev => { const n = { ...prev }; delete n[gk]; return n; });
             loadReport();
             loadHistory();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка слияния');
+            toast.error(e.response?.data?.message || 'Ошибка слияния');
         } finally {
             setMerging(null);
         }
@@ -290,10 +291,10 @@ export default function AdminIdentityPage() {
         try {
             const res = await api.post('/admin/identity/backfill-persons');
             const { total, created, alreadyLinked } = res.data || {};
-            message.success(`Готово: создано личностей ${created}, уже было ${alreadyLinked}, всего пользователей ${total}`);
+            toast.success(`Готово: создано личностей ${created}, уже было ${alreadyLinked}, всего пользователей ${total}`);
             loadReport();
         } catch (e: any) {
-            message.error(e.response?.data?.message || 'Ошибка бэкфилла');
+            toast.error(e.response?.data?.message || 'Ошибка бэкфилла');
         } finally {
             setBackfilling(false);
         }

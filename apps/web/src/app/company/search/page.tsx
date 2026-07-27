@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Tag, Space, message, Typography, Modal, Tooltip, Drawer } from 'antd';
+import { Table, Card, Button, Tag, Space, Typography, Modal, Tooltip, Drawer } from 'antd';
 import { CheckCircleOutlined, InfoCircleOutlined, EyeOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { toast } from 'sonner';
 
 const { Title, Text } = Typography;
 
@@ -63,10 +64,10 @@ export default function ForwarderSearchPage() {
             onOk: async () => {
                 try {
                     await api.put(`/company/orders/${order.id}/take`);
-                    message.success('Заявка взята в работу! Теперь она в списке "Мои заявки".');
+                    toast.success('Заявка взята в работу! Теперь она в списке "Мои заявки".');
                     fetchOrders();
                 } catch (error: any) {
-                    message.error(error.response?.data?.message || 'Ошибка');
+                    toast.error(error.response?.data?.message || 'Ошибка');
                 }
             },
         });
