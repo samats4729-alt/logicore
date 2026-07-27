@@ -164,9 +164,11 @@ export default function PaymentCalendarPage() {
     const todayIdx = (today.day() + 6) % 7;
 
     return (
-        <div className="w-full px-5 py-4">
+        // Высота шапки кабинета 60 точек — вычитаем её, чтобы страница
+        // заняла ровно остаток экрана и серый фон не выглядывал снизу.
+        <div className="flex h-[calc(100vh-60px)] w-full flex-col gap-3 p-4">
             {/* ============ Шапка ============ */}
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                     <button
                         onClick={() => router.push('/company/finance')}
@@ -203,12 +205,12 @@ export default function PaymentCalendarPage() {
             {/* Три колонки: лист с месяцем и днём, справа сводки. При полной
                 ширине в две колонки клетки растягивались в полосы — третья
                 колонка забирает лишнее и держит клетку близкой к квадрату. */}
-            <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_404px]">
-            <div className="rounded-[24px] bg-card p-3 shadow-soft">
-                <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_396px]">
+            <div className="flex min-h-0 flex-col rounded-[24px] bg-card p-3 shadow-soft">
+                <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_336px]">
                     {/* ---- Месяц ---- */}
-                    <section className="rounded-2xl border border-solid border-border/70 p-4">
-                        <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <section className="flex min-h-0 flex-col rounded-2xl border border-solid border-border/70 p-4">
+                        <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
                             <div className="flex items-baseline gap-1.5">
                                 <span className="text-[19px] font-semibold tracking-tight text-foreground">
                                     {MONTHS[month.month()]}
@@ -239,7 +241,7 @@ export default function PaymentCalendarPage() {
                             </div>
                         </header>
 
-                        <div className="mb-1.5 grid grid-cols-7 gap-1.5">
+                        <div className="mb-1.5 grid shrink-0 grid-cols-7 gap-1.5">
                             {WEEKDAYS_SHORT.map((d, i) => (
                                 <div
                                     key={d}
@@ -255,7 +257,7 @@ export default function PaymentCalendarPage() {
                             ))}
                         </div>
 
-                        <div className="grid grid-cols-7 gap-1.5">
+                        <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-1.5">
                             {grid.map((d) => {
                                 const key = d.format('YYYY-MM-DD');
                                 const day = byDay.get(key);
@@ -271,7 +273,7 @@ export default function PaymentCalendarPage() {
                                             day.out > 0 ? `уйдёт ${money(day.out)}` : null,
                                         ].filter(Boolean).join(', ') : undefined}
                                         className={cn(
-                                            'relative flex h-[62px] flex-col items-center justify-center gap-1.5 rounded-[14px]',
+                                            'relative flex h-full min-h-[52px] flex-col items-center justify-center gap-1.5 rounded-[14px]',
                                             'border-0 font-[inherit] text-[13.5px] transition-colors',
                                             isSelected
                                                 ? 'bg-foreground text-background'
@@ -285,26 +287,35 @@ export default function PaymentCalendarPage() {
                                             isToday && !isSelected && 'ring-1 ring-inset ring-foreground/30',
                                         )}
                                     >
-                                        {/* Одна метка на клетку, как в образце. Раньше их
-                                            было три — две по направлениям и отдельная в
-                                            углу на просрочку, — и сетка рябила. Цвет метки
-                                            берёт преобладающее направление, просрочку
-                                            показываем цветом самого числа. */}
-                                        <span className="flex h-1 items-center">
-                                            {day && (
-                                                <i
-                                                    className="h-1 w-1 rounded-full"
-                                                    style={{
-                                                        background: isSelected
-                                                            ? '#fff'
-                                                            : day.in >= day.out ? IN_HEX : OUT_HEX,
-                                                    }}
-                                                />
-                                            )}
-                                        </span>
+                                        {/* Клетка тянется по высоте колонки, поэтому в ней
+                                            снова есть место для сумм. Раньше они не влезали
+                                            в 52 точки и превращались в кашу; в высокой
+                                            клетке пустота выглядит хуже, чем цифры. Точку
+                                            при этом убираем — знак и цвет суммы уже
+                                            говорят направление. */}
                                         <span className={cn('tabular-nums leading-none', day && !isOther && 'font-semibold')}>
                                             {d.date()}
                                         </span>
+                                        {day && (
+                                            <span className="flex flex-col items-center gap-0.5 leading-none">
+                                                {day.in > 0 && (
+                                                    <span
+                                                        className="text-[11px] font-semibold tabular-nums"
+                                                        style={{ color: isSelected ? '#fff' : IN_HEX }}
+                                                    >
+                                                        +{short(day.in)}
+                                                    </span>
+                                                )}
+                                                {day.out > 0 && (
+                                                    <span
+                                                        className="text-[11px] font-semibold tabular-nums"
+                                                        style={{ color: isSelected ? 'rgba(255,255,255,.7)' : OUT_HEX }}
+                                                    >
+                                                        −{short(day.out)}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        )}
                                     </button>
                                 );
                             })}
@@ -312,7 +323,7 @@ export default function PaymentCalendarPage() {
                     </section>
 
                     {/* ---- Платежи выбранного дня ---- */}
-                    <section className="flex flex-col rounded-2xl border border-solid border-border/70 p-4">
+                    <section className="flex min-h-0 flex-col rounded-2xl border border-solid border-border/70 p-4">
                         <header className="mb-3 flex items-start justify-between gap-2">
                             <div>
                                 <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -331,7 +342,7 @@ export default function PaymentCalendarPage() {
                         </header>
 
                         {selectedDay ? (
-                            <div className="flex flex-col gap-1.5">
+                            <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
                                 {selectedDay.items.map((r, i) => (
                                     <PaymentRow key={`${r.documentId}_${i}`} row={r} money={money} router={router} />
                                 ))}
@@ -349,7 +360,10 @@ export default function PaymentCalendarPage() {
             </div>
 
             {/* ============ Правая колонка: ближайшее и хвосты ============ */}
-            <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-1">
+            {/* Сетка по умолчанию растягивает ряды поровну — от этого у
+                верхней карточки с двумя строками пустовала нижняя половина.
+                Тянется только нижняя: в ней строк заведомо больше. */}
+            <div className="grid min-h-0 grid-cols-1 gap-3 overflow-y-auto md:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[auto_minmax(0,1fr)]">
                 <Panel title="Ближайшие платежи" hint="Впереди платежей нет">
                     {upcoming.map((r, i) => (
                         <PaymentRow key={`up_${r.documentId}_${i}`} row={r} money={money} router={router} withDate />
