@@ -9,6 +9,7 @@ import {
     ExclamationCircleOutlined,
     FileTextOutlined,
     MinusCircleFilled,
+    PaperClipOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -89,6 +90,13 @@ const DOC_STATUS: Record<string, { label: string; color: string }> = {
     CANCELLED: { label: 'Отменён', color: 'red' },
 };
 
+/** Состояние присланного чека. */
+const PROOF_VIEW: Record<string, { label: string; color: string }> = {
+    PENDING: { label: 'На проверке', color: 'gold' },
+    ACCEPTED: { label: 'Принят', color: 'green' },
+    REJECTED: { label: 'Отклонён', color: 'red' },
+};
+
 /**
  * Подпись статуса счёта глазами читателя страницы.
  *
@@ -153,6 +161,11 @@ export default function SharedReportPage() {
     const [form] = Form.useForm();
     const isNarrow = useIsNarrow();
 
+    const [proofOrder, setProofOrder] = useState<any>(null);
+    const [proofFile, setProofFile] = useState<File | null>(null);
+    const [submittingProof, setSubmittingProof] = useState(false);
+    const [proofForm] = Form.useForm();
+
     const loadReport = async () => {
         try {
             setLoading(true);
@@ -211,6 +224,52 @@ export default function SharedReportPage() {
         } finally {
             setSubmittingInvoice(false);
         }
+    };
+
+    const openProofModal = (order: any) => {
+        setProofOrder(order);
+        setProofFile(null);
+        proofForm.setFieldsValue({
+            claimedAmount: order.remaining ? String(Math.round(order.remaining)) : undefined,
+            claimedDate: dayjs(),
+        });
+    };
+
+    const handleSubmitProof = async (values: any) => {
+        if (!proofFile) {
+            message.error('Приложите файл чека');
+            return;
+        }
+        try {
+            setSubmittingProof(true);
+            const payload = new FormData();
+            payload.append('file', proofFile);
+            payload.append('orderId', proofOrder.id);
+            if (values.claimedAmount) payload.append('claimedAmount', String(values.claimedAmount));
+            if (values.claimedDate) payload.append('claimedDate', values.claimedDate.format('YYYY-MM-DD'));
+            if (values.note) payload.append('note', values.note);
+
+            await axios.post(`${API_URL}/public/payment-proofs/${token}`, payload);
+            message.success('Чек отправлен на проверку');
+            setProofOrder(null);
+            setProofFile(null);
+            proofForm.resetFields();
+            await loadReport();
+        } catch (e: any) {
+            const detail = e.response?.data?.message;
+            message.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось отправить чек');
+        } finally {
+            setSubmittingProof(false);
+        }
+    };
+
+    /** Состояние присланных по рейсу чеков — одной строкой. */
+    const proofSummary = (row: any) => {
+        const proofs = row.paymentProofs ?? [];
+        if (!proofs.length) return null;
+        const latest = proofs[0];
+        const view = PROOF_VIEW[latest.status] || PROOF_VIEW.PENDING;
+        return { latest, view, count: proofs.length };
     };
 
     const orderColumns = (opts: { owedToReader: boolean }) => [
@@ -317,6 +376,51 @@ export default function SharedReportPage() {
                 );
             },
         },
+        // Чек прикладывают там, где платит читатель страницы.
+        ...(opts.owedToReader ? [] : [{
+            title: 'Чек об оплате',
+            key: 'proof',
+            width: 190,
+            render: (_: any, r: any) => {
+                const summary = proofSummary(r);
+                if (!summary) {
+                    return (
+                        <Button
+                            size="small"
+                            icon={<PaperClipOutlined />}
+                            style={{ borderRadius: 8 }}
+                            onClick={() => openProofModal(r)}
+                        >
+                            Приложить
+                        </Button>
+                    );
+                }
+                return (
+                    <div style={{ minWidth: 0 }}>
+                        <Tag color={summary.view.color} style={{ borderRadius: 6, margin: 0 }}>
+                            {summary.view.label}
+                        </Tag>
+                        {summary.latest.status === 'REJECTED' && (
+                            <>
+                                {summary.latest.rejectionReason && (
+                                    <div style={{ fontSize: 11, color: C.textTer, marginTop: 2 }}>
+                                        {summary.latest.rejectionReason}
+                                    </div>
+                                )}
+                                <Button
+                                    type="link"
+                                    size="small"
+                                    style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                                    onClick={() => openProofModal(r)}
+                                >
+                                    Прислать другой
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                );
+            },
+        }]),
     ];
 
     /** Тот же рейс, что и строка таблицы, но для телефона. */
@@ -370,6 +474,40 @@ export default function SharedReportPage() {
                                 <span style={{ fontSize: 12, color: C.red }}>Просрочен</span>
                             )}
                         </div>
+
+                        {!selectable && (() => {
+                            const summary = proofSummary(row);
+                            return (
+                                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 13, color: C.textSec }}>Чек:</span>
+                                    {summary ? (
+                                        <>
+                                            <Tag color={summary.view.color} style={{ borderRadius: 6, margin: 0 }}>
+                                                {summary.view.label}
+                                            </Tag>
+                                            {summary.latest.status === 'REJECTED' && (
+                                                <Button
+                                                    size="small"
+                                                    style={{ borderRadius: 8 }}
+                                                    onClick={() => openProofModal(row)}
+                                                >
+                                                    Прислать другой
+                                                </Button>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <Button
+                                            size="small"
+                                            icon={<PaperClipOutlined />}
+                                            style={{ borderRadius: 8 }}
+                                            onClick={() => openProofModal(row)}
+                                        >
+                                            Приложить
+                                        </Button>
+                                    )}
+                                </div>
+                            );
+                        })()}
 
                         <div style={{ marginTop: 8, fontSize: 13 }}>
                             {invoiceView ? (
@@ -507,6 +645,9 @@ export default function SharedReportPage() {
                                             </div>
                                         </div>
                                     </Table.Summary.Cell>
+                                    {/* У раздела с чеками колонок на одну больше —
+                                        иначе итог уезжает под чужой заголовок. */}
+                                    {!selectable && <Table.Summary.Cell index={4} />}
                                 </Table.Summary.Row>
                             </Table.Summary>
                         )}
@@ -932,6 +1073,76 @@ export default function SharedReportPage() {
                             placeholder="Условия оплаты, реквизиты, любая важная информация"
                             rows={3}
                             maxLength={1000}
+                            showCount
+                        />
+                    </Form.Item>
+                </Form>
+            </Modal>
+
+            <Modal
+                title={<span style={{ fontWeight: 700, fontSize: 16 }}>Подтверждение оплаты</span>}
+                open={!!proofOrder}
+                onCancel={() => {
+                    setProofOrder(null);
+                    setProofFile(null);
+                    proofForm.resetFields();
+                }}
+                onOk={() => proofForm.submit()}
+                confirmLoading={submittingProof}
+                okText="Отправить чек"
+                cancelText="Отмена"
+                okButtonProps={{ style: { borderRadius: 10, fontWeight: 600 } }}
+                cancelButtonProps={{ style: { borderRadius: 10 } }}
+                width={520}
+            >
+                {proofOrder && (
+                    <div style={{ background: '#f4f5f7', borderRadius: 14, padding: '14px 16px', margin: '16px 0 18px' }}>
+                        <div style={{ fontSize: 13, color: C.textSec }}>
+                            Заявка №{proofOrder.orderNumber} · {getRoute(proofOrder)}
+                        </div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
+                            К оплате {money(proofOrder.remaining ?? proofOrder.amount)}
+                        </div>
+                    </div>
+                )}
+
+                <Alert
+                    type="warning"
+                    showIcon
+                    style={{ borderRadius: 12, marginBottom: 18 }}
+                    message="Чек не закрывает задолженность автоматически"
+                    description="Бухгалтер сверит платёж с банковской выпиской и проведёт его. До этого сумма остаётся в долге."
+                />
+
+                <Form form={proofForm} layout="vertical" onFinish={handleSubmitProof} requiredMark={false}>
+                    <Form.Item label="Файл чека" required>
+                        <input
+                            type="file"
+                            accept="application/pdf,image/jpeg,image/png,image/heic,image/webp"
+                            onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                            style={{
+                                width: '100%', padding: 10, borderRadius: 10,
+                                border: `1px dashed ${C.border}`, background: '#fafbfc',
+                            }}
+                        />
+                        <div style={{ fontSize: 12, color: C.textTer, marginTop: 6 }}>
+                            PDF или фото платёжного поручения, до 10 МБ
+                        </div>
+                    </Form.Item>
+
+                    <Form.Item name="claimedAmount" label="Сумма платежа">
+                        <Input suffix="₸" inputMode="decimal" maxLength={30} />
+                    </Form.Item>
+
+                    <Form.Item name="claimedDate" label="Дата платежа">
+                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                    </Form.Item>
+
+                    <Form.Item name="note" label="Комментарий">
+                        <Input.TextArea
+                            placeholder="Номер платёжного поручения, назначение платежа"
+                            rows={2}
+                            maxLength={500}
                             showCount
                         />
                     </Form.Item>

@@ -6,6 +6,7 @@ import { FinanceCalculatorService } from '../accounting/services/finance-calcula
 import { AccountingDocumentsService } from './accounting-documents.service';
 import { D, ZERO, toNum } from '../common/utils/money';
 import { SharedReportInvoiceDto } from './dto/shared-report-invoice.dto';
+import { counterpartyIsExecutor } from '../common/utils/settlement';
 
 /** Сколько сделок можно включить в один счёт из публичной страницы. */
 const MAX_ORDERS = 200;
@@ -73,7 +74,7 @@ export class SharedReportInvoiceService {
             // Два разных отказа, и путать их нельзя: «сделка не ваша» —
             // это граница доступа, «сумма не указана» — обычная недоделка
             // в карточке, которую видно и нам, и контрагенту.
-            if (!this.isSettlementWith(order, companyId, counterpartyId)) {
+            if (!counterpartyIsExecutor(order, companyId, counterpartyId)) {
                 throw new BadRequestException(
                     `Сделка №${order.orderNumber} не относится к взаиморасчётам с вами`,
                 );
@@ -136,37 +137,6 @@ export class SharedReportInvoiceService {
             total: toNum(total),
             ordersCount: orders.length,
         };
-    }
-
-    /**
-     * Относится ли сделка к взаиморасчётам, где платим мы, а получает
-     * контрагент.
-     *
-     * Это граница доступа, а не расчёт. Публичная страница позволяет
-     * выставить счёт только В НАШУ сторону: контрагент без учётной записи не
-     * может выпускать документы от нашего имени. Поэтому подходят лишь две
-     * связки — он субподрядчик на нашем рейсе, либо он экспедитор, а мы
-     * заказчик перевозки. Всё остальное, включая чужие сделки и сделки, где
-     * должны нам, сюда не попадает.
-     */
-    private isSettlementWith(
-        order: {
-            customerCompanyId: string | null;
-            forwarderId: string | null;
-            partnerId: string | null;
-            subForwarderId: string | null;
-        },
-        companyId: string,
-        counterpartyId: string,
-    ): boolean {
-        const forwarder = order.forwarderId || order.partnerId;
-
-        const theyAreOurSubcontractor =
-            order.subForwarderId === counterpartyId && forwarder === companyId;
-        const theyCarryForUs =
-            forwarder === counterpartyId && order.customerCompanyId === companyId;
-
-        return theyAreOurSubcontractor || theyCarryForUs;
     }
 
     /**

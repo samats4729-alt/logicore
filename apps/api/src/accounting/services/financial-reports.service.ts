@@ -1670,6 +1670,29 @@ export class FinancialReportsService {
         // экспедитор, видящий свою себестоимость). Но публичная ссылка уходит контрагенту
         // (в т.ч. заказчику), которому эта себестоимость видна быть не должна — скрываем
         // её всегда, независимо от роли отправителя.
+        // Чеки, которые этот контрагент уже присылал: отправитель должен
+        // видеть их состояние, иначе шлёт одно и то же повторно.
+        const proofs = await this.prisma.orderPaymentProof.findMany({
+            where: { companyId, counterpartyId },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                orderId: true,
+                status: true,
+                fileName: true,
+                claimedAmount: true,
+                claimedDate: true,
+                rejectionReason: true,
+                createdAt: true,
+            },
+        });
+        const proofsByOrder = new Map<string, any[]>();
+        for (const proof of proofs) {
+            const list = proofsByOrder.get(proof.orderId) ?? [];
+            list.push({ ...proof, claimedAmount: toNumOrNull(proof.claimedAmount) });
+            proofsByOrder.set(proof.orderId, list);
+        }
+
         const counterparty = rawCounterparty
             ? {
                 ...rawCounterparty,
@@ -1678,6 +1701,7 @@ export class FinancialReportsService {
                     driverCost: null,
                     subForwarderPrice: null,
                     subForwarderId: null,
+                    paymentProofs: proofsByOrder.get(o.id) ?? [],
                 })),
             }
             : rawCounterparty;

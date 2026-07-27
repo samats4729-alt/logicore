@@ -105,13 +105,14 @@ enum AffiliationType {
 // ==================== MODELS ====================
 
 model User {
-  id                    String                  @id @default(cuid())
+  id                    String              @id @default(cuid())
   /// Компании, которые этот пользователь подтвердил как админ платформы.
-  verifiedCompanies     Company[]               @relation("VerifiedCompanies")
-  createdOrderDocuments OrderDocument[] @relation("CreatedOrderDocuments")
-  createdSharedReports  SharedReportLink[] @relation("CreatedSharedReports")
-  email                 String?                 @unique
-  googleId              String?                 @unique // Google OAuth ID
+  verifiedCompanies     Company[]           @relation("VerifiedCompanies")
+  createdOrderDocuments OrderDocument[]     @relation("CreatedOrderDocuments")
+  createdSharedReports  SharedReportLink[]  @relation("CreatedSharedReports")
+  reviewedPaymentProofs OrderPaymentProof[] @relation("ReviewedPaymentProofs")
+  email                 String?             @unique
+  googleId              String?             @unique // Google OAuth ID
   phone                 String
   passwordHash          String? // null для водителей (SMS auth)
   firstName             String
@@ -120,11 +121,11 @@ model User {
   role                  UserRole
   position              String? // Должность/роль
   avatarPath            String? // Фото профиля (S3-ключ или локальный путь)
-  permissions           String[]                @default([])
-  isActive              Boolean                 @default(true)
-  isTrackable           Boolean                 @default(false)
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  permissions           String[]            @default([])
+  isActive              Boolean             @default(true)
+  isTrackable           Boolean             @default(false)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   // Relations
   sessions                     Session[]
@@ -269,41 +270,41 @@ model PersonMergeItem {
 }
 
 model Company {
-  id             String       @id @default(cuid())
-  name           String
-  bin            String? // БИН/ИИН
-  address        String? // Юридический адрес
-  actualAddress  String? // Фактический адрес
-  phone          String?
-  email          String? // Email компании
-  directorName   String? // ФИО директора
-  bankAccount    String? // ИИК (номер счёта)
-  bankName       String? // Название банка
-  bankBic        String? // БИК банка
-  kbe            String? // КБЕ
+  id            String  @id @default(cuid())
+  name          String
+  bin           String? // БИН/ИИН
+  address       String? // Юридический адрес
+  actualAddress String? // Фактический адрес
+  phone         String?
+  email         String? // Email компании
+  directorName  String? // ФИО директора
+  bankAccount   String? // ИИК (номер счёта)
+  bankName      String? // Название банка
+  bankBic       String? // БИК банка
+  kbe           String? // КБЕ
 
   // Реквизиты, которые печатаются в документах, но раньше их приходилось
   // вбивать в каждый документ руками (или они не печатались вовсе).
   /// КНП по умолчанию — код назначения платежа в счёте на оплату.
-  paymentPurposeCode String?
+  paymentPurposeCode   String?
   /// Должность подписанта в актах и счетах: «Директор», «Генеральный директор».
   /// Раньше в акте была зашита строка «директор» независимо от компании.
-  signatoryPosition String?
+  signatoryPosition    String?
   /// ФИО подписанта, если документы подписывает не директор.
-  signatoryName String?
+  signatoryName        String?
   /// Свидетельство о постановке на учёт по НДС: печатается в счёте.
   /// Пустой номер означает, что компания не состоит на учёте по НДС.
   vatCertificateSeries String?
   vatCertificateNumber String?
-  vatCertificateDate   DateTime? @db.Date
-  stampImage     String? // Путь к PNG печати
-  signatureImage String? // Путь к PNG подписи
-  type           CompanyType? @default(CUSTOMER)
-  isCustomer     Boolean      @default(true)
-  isCarrier      Boolean      @default(false)
-  isOurCompany   Boolean      @default(false) // true = LogComp
-  isExternal     Boolean      @default(false) // Внешняя компания (справочник)
-  isActive       Boolean      @default(true)
+  vatCertificateDate   DateTime?    @db.Date
+  stampImage           String? // Путь к PNG печати
+  signatureImage       String? // Путь к PNG подписи
+  type                 CompanyType? @default(CUSTOMER)
+  isCustomer           Boolean      @default(true)
+  isCarrier            Boolean      @default(false)
+  isOurCompany         Boolean      @default(false) // true = LogComp
+  isExternal           Boolean      @default(false) // Внешняя компания (справочник)
+  isActive             Boolean      @default(true)
 
   // Подтверждение компании владельцем платформы. БИН в РК — публичные
   // данные, поэтому сам по себе он ничего не доказывает: компания
@@ -375,9 +376,11 @@ model Company {
   stockWarehouses                 StockWarehouse[]              @relation("CompanyWarehouses")
   stockMoves                      StockMove[]                   @relation("CompanyStockMoves")
 
-  orderDocuments OrderDocument[] @relation("CompanyOrderDocuments")
-  sharedReports             SharedReportLink[] @relation("CompanySharedReports")
-  sharedReportsAsCounterparty SharedReportLink[] @relation("CounterpartySharedReports")
+  orderDocuments              OrderDocument[]     @relation("CompanyOrderDocuments")
+  sharedReports               SharedReportLink[]  @relation("CompanySharedReports")
+  sharedReportsAsCounterparty SharedReportLink[]  @relation("CounterpartySharedReports")
+  paymentProofs               OrderPaymentProof[] @relation("CompanyPaymentProofs")
+  paymentProofsAsCounterparty OrderPaymentProof[] @relation("CounterpartyPaymentProofs")
 
   @@index([bin])
   @@index([verificationStatus])
@@ -661,6 +664,7 @@ model Order {
   proposedCustomerPrice     Decimal?             @db.Decimal(18, 2)
   proposedDriverCost        Decimal?             @db.Decimal(18, 2)
   proposedSubForwarderPrice Decimal?             @db.Decimal(18, 2)
+  paymentProofs             OrderPaymentProof[]
 
   @@index([status])
   @@index([customerId])
@@ -1011,9 +1015,9 @@ model Payment {
   /// Хранится отдельным платежом обратного направления со ссылкой на
   /// исходный: иначе вернуть деньги можно было бы только удалив платёж,
   /// а это стирает историю и ломает акт сверки.
-  refundOfId          String?
-  refundOf            Payment?                      @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: Restrict)
-  refunds             Payment[]                     @relation("PaymentRefunds")
+  refundOfId String?
+  refundOf   Payment?  @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: Restrict)
+  refunds    Payment[] @relation("PaymentRefunds")
 
   @@index([companyId, date])
   @@index([orderId])
@@ -1296,7 +1300,7 @@ model SharedReportLink {
   /// Наша роль в этих сделках: заказчик мы или исполнитель.
   ourRole String
 
-  token     String   @unique @default(uuid())
+  token     String    @unique @default(uuid())
   expiresAt DateTime
   /// Отозвана вручную — ссылка перестаёт работать раньше срока.
   revokedAt DateTime?
@@ -1993,4 +1997,58 @@ model OrderResponsible {
   @@unique([orderId, companyId])
   @@index([userId])
   @@index([companyId])
+}
+
+/// Состояние присланного контрагентом подтверждения оплаты.
+enum PaymentProofStatus {
+  /// Прислан, ждёт проверки бухгалтера.
+  PENDING
+  /// Бухгалтер сверил и подтвердил.
+  ACCEPTED
+  /// Отклонён: сумма не та, чужой платёж, нечитаемый файл.
+  REJECTED
+}
+
+/// Чек об оплате, присланный контрагентом по ссылке на отчёт.
+///
+/// Это ЗАЯВЛЕНИЕ стороны, а не факт поступления денег. Поэтому чек не
+/// создаёт платёж и не гасит долг сам по себе: иначе любой, у кого есть
+/// ссылка, закрывал бы свою задолженность картинкой. Деньги проводит
+/// бухгалтер после сверки с банком.
+model OrderPaymentProof {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Чья бухгалтерия проверяет чек — получатель денег.
+  companyId String
+  company   Company @relation("CompanyPaymentProofs", fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// Кто прислал.
+  counterpartyId String
+  counterparty   Company @relation("CounterpartyPaymentProofs", fields: [counterpartyId], references: [id], onDelete: Cascade)
+
+  /// По какой ссылке пришёл — чтобы было видно происхождение.
+  sharedReportLinkId String?
+
+  fileName String
+  fileUrl  String
+  fileSize Int
+  mimeType String
+
+  /// Сумма и дата со слов отправителя. Проверяются, а не принимаются на веру.
+  claimedAmount Decimal?  @db.Decimal(20, 2)
+  claimedDate   DateTime? @db.Date
+  note          String?
+
+  status          PaymentProofStatus @default(PENDING)
+  reviewedById    String?
+  reviewedBy      User?              @relation("ReviewedPaymentProofs", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, status])
+  @@index([orderId])
 }

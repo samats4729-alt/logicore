@@ -25,6 +25,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { STATUS_LABELS } from '@/components/ui/StatusPill';
 import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
+import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
 import dayjs from 'dayjs';
 
 // ==================== Типы ====================
@@ -383,6 +384,7 @@ export default function CompanyDashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
                 {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ (только администратор компании) ===== */}
                 {isOwner && show('pendingWork') && <PendingWorkCard />}
+                {isOwner && <PaymentProofsCard />}
 
                 {/* ===== ЗАДОЛЖЕННОСТЬ (только администратор компании) ===== */}
                 {isOwner && show('debts') && debtsAvailable && (
