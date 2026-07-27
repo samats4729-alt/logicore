@@ -164,7 +164,7 @@ export default function PaymentCalendarPage() {
     const todayIdx = (today.day() + 6) % 7;
 
     return (
-        <div className="mx-auto max-w-[1120px] px-5 py-4">
+        <div className="mx-auto max-w-[1060px] px-5 py-4">
             {/* ============ Шапка ============ */}
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
@@ -200,11 +200,13 @@ export default function PaymentCalendarPage() {
                 </div>
             </div>
 
-            {/* Панели самостоятельные: общая обёртка поверх обеих делала из
-                экрана один сплошной прямоугольник во всю ширину. */}
-            <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
-                {/* ---- Месяц ---- */}
-                <section className="rounded-2xl bg-card p-4 shadow-soft">
+            {/* Общий белый лист с полями по краям, внутри — панели с тонкой
+                рамкой. Лист не идёт от края до края: поля держит полоса
+                содержимого выше. */}
+            <div className="rounded-[24px] bg-card p-3 shadow-soft">
+                <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_352px]">
+                    {/* ---- Месяц ---- */}
+                    <section className="rounded-2xl border border-solid border-border/70 p-4">
                         <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-baseline gap-1.5">
                                 <span className="text-[19px] font-semibold tracking-tight text-foreground">
@@ -268,51 +270,48 @@ export default function PaymentCalendarPage() {
                                             day.out > 0 ? `уйдёт ${money(day.out)}` : null,
                                         ].filter(Boolean).join(', ') : undefined}
                                         className={cn(
-                                            'relative flex h-[52px] flex-col items-center justify-center gap-1 rounded-[13px]',
+                                            'relative flex h-[62px] flex-col items-center justify-center gap-1.5 rounded-[14px]',
                                             'border-0 font-[inherit] text-[13.5px] transition-colors',
                                             isSelected
                                                 ? 'bg-foreground text-background'
                                                 : isOther
                                                     ? 'bg-muted/35 text-muted-foreground/40'
                                                     : 'bg-muted/70 text-foreground hover:bg-secondary',
+                                            // Просрочку показываем тихой подложкой, а не
+                                            // красным числом: восемь красных чисел в сетке
+                                            // кричат громче, чем стоит эта информация.
+                                            day?.overdue && !isSelected && !isOther && 'bg-[#dc2626]/[0.07]',
                                             isToday && !isSelected && 'ring-1 ring-inset ring-foreground/30',
                                         )}
                                     >
-                                        {/* Точки вместо сумм: в клетке 52 точки цифры
-                                            превращаются в кашу, а «есть платёж и какой»
-                                            точка сообщает мгновенно. Суммы — в подсказке,
-                                            в шапке месяца и в панели дня. */}
-                                        <span className="flex h-1.5 items-center gap-[3px]">
-                                            {day?.in ? (
+                                        {/* Одна метка на клетку, как в образце. Раньше их
+                                            было три — две по направлениям и отдельная в
+                                            углу на просрочку, — и сетка рябила. Цвет метки
+                                            берёт преобладающее направление, просрочку
+                                            показываем цветом самого числа. */}
+                                        <span className="flex h-1 items-center">
+                                            {day && (
                                                 <i
-                                                    className="h-1.5 w-1.5 rounded-full"
-                                                    style={{ background: isSelected ? '#fff' : IN_HEX }}
+                                                    className="h-1 w-1 rounded-full"
+                                                    style={{
+                                                        background: isSelected
+                                                            ? '#fff'
+                                                            : day.in >= day.out ? IN_HEX : OUT_HEX,
+                                                    }}
                                                 />
-                                            ) : null}
-                                            {day?.out ? (
-                                                <i
-                                                    className="h-1.5 w-1.5 rounded-full"
-                                                    style={{ background: isSelected ? 'rgba(255,255,255,.55)' : OUT_HEX }}
-                                                />
-                                            ) : null}
+                                            )}
                                         </span>
                                         <span className={cn('tabular-nums leading-none', day && !isOther && 'font-semibold')}>
                                             {d.date()}
                                         </span>
-                                        {day?.overdue && !isSelected && (
-                                            <span
-                                                className="absolute right-1.5 top-1.5 h-[5px] w-[5px] rounded-full"
-                                                style={{ background: OUT_HEX }}
-                                            />
-                                        )}
                                     </button>
                                 );
                             })}
                         </div>
                     </section>
 
-                {/* ---- Платежи выбранного дня ---- */}
-                <section className="flex flex-col rounded-2xl bg-card p-4 shadow-soft">
+                    {/* ---- Платежи выбранного дня ---- */}
+                    <section className="flex flex-col rounded-2xl border border-solid border-border/70 p-4">
                         <header className="mb-3 flex items-start justify-between gap-2">
                             <div>
                                 <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -344,7 +343,8 @@ export default function PaymentCalendarPage() {
                                 </span>
                             </div>
                         )}
-                </section>
+                    </section>
+                </div>
             </div>
 
             {/* ============ Нижняя полоса: ближайшее и хвосты ============ */}
@@ -446,39 +446,55 @@ function PaymentRow({
     withDate?: boolean;
 }) {
     const hex = row.direction === 'IN' ? IN_HEX : OUT_HEX;
+    const due = row.dueDate ? dayjs(row.dueDate) : null;
     return (
         <button
             onClick={() => row.orderId && router.push(`/company/orders/${row.orderId}`)}
-            className="flex items-center gap-2.5 rounded-xl border border-solid border-border/70 bg-transparent px-3 py-2.5 text-left font-[inherit] transition-colors hover:bg-accent"
+            className="flex items-center gap-3 rounded-xl border border-solid border-border/70 bg-transparent px-3 py-2.5 text-left font-[inherit] transition-colors hover:bg-accent"
         >
-            <span
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
-                style={{ background: `${hex}1a`, color: hex }}
-            >
-                {row.direction === 'IN' ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
-            </span>
+            {/* Блок даты слева, как в образце: число крупно, день недели под
+                ним. В списке вне календаря это единственная опора взгляда. */}
+            {withDate && due ? (
+                <span className="flex w-9 shrink-0 flex-col items-center leading-none">
+                    <b className="text-[17px] font-semibold tabular-nums text-foreground">{due.date()}</b>
+                    <span className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {WEEKDAYS_SHORT[(due.day() + 6) % 7]}
+                    </span>
+                </span>
+            ) : (
+                <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                    style={{ background: `${hex}1a`, color: hex }}
+                >
+                    {row.direction === 'IN' ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                </span>
+            )}
+
             <span className="min-w-0 flex-1 leading-tight">
-                <span className="block truncate text-[13px] font-medium text-foreground">{row.party}</span>
-                <span className="flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">
-                    <FileText className="h-3 w-3 shrink-0" />
-                    {row.invoiceNumber}
-                    {withDate && row.dueDate && (
-                        <>
-                            <span className="text-border">·</span>
-                            {dayjs(row.dueDate).date()} {MONTHS_ABBR[dayjs(row.dueDate).month()]}
-                        </>
-                    )}
+                <span className="block truncate text-[13.5px] font-semibold text-foreground">{row.party}</span>
+                <span className="mt-1 flex items-center gap-1.5">
+                    <span
+                        className="rounded-md px-1.5 py-px text-[10.5px] font-medium"
+                        style={{ background: `${hex}1a`, color: hex }}
+                    >
+                        {row.direction === 'IN' ? 'придёт' : 'уйдёт'}
+                    </span>
                     {row.isOverdue && (
                         <span
-                            className="ml-0.5 rounded-md px-1.5 py-px text-[10.5px] font-medium"
+                            className="rounded-md px-1.5 py-px text-[10.5px] font-medium"
                             style={{ background: `${OUT_HEX}1a`, color: OUT_HEX }}
                         >
                             просрочен
                         </span>
                     )}
+                    <span className="flex min-w-0 items-center gap-1 truncate text-[11.5px] text-muted-foreground">
+                        <FileText className="h-3 w-3 shrink-0" />
+                        {row.invoiceNumber}
+                    </span>
                 </span>
             </span>
-            <b className="shrink-0 text-[13px] font-semibold tabular-nums" style={{ color: hex }}>
+
+            <b className="shrink-0 text-[13.5px] font-semibold tabular-nums" style={{ color: hex }}>
                 {row.direction === 'IN' ? '+' : '−'}{money(row.amount)}
             </b>
         </button>
