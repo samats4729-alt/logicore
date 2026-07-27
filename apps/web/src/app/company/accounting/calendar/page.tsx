@@ -164,7 +164,7 @@ export default function PaymentCalendarPage() {
     const todayIdx = (today.day() + 6) % 7;
 
     return (
-        <div className="mx-auto max-w-[1060px] px-5 py-4">
+        <div className="w-full px-5 py-4">
             {/* ============ Шапка ============ */}
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
@@ -200,11 +200,12 @@ export default function PaymentCalendarPage() {
                 </div>
             </div>
 
-            {/* Общий белый лист с полями по краям, внутри — панели с тонкой
-                рамкой. Лист не идёт от края до края: поля держит полоса
-                содержимого выше. */}
+            {/* Три колонки: лист с месяцем и днём, справа сводки. При полной
+                ширине в две колонки клетки растягивались в полосы — третья
+                колонка забирает лишнее и держит клетку близкой к квадрату. */}
+            <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_404px]">
             <div className="rounded-[24px] bg-card p-3 shadow-soft">
-                <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_352px]">
+                <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
                     {/* ---- Месяц ---- */}
                     <section className="rounded-2xl border border-solid border-border/70 p-4">
                         <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -347,8 +348,8 @@ export default function PaymentCalendarPage() {
                 </div>
             </div>
 
-            {/* ============ Нижняя полоса: ближайшее и хвосты ============ */}
-            <div className="mt-3 grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+            {/* ============ Правая колонка: ближайшее и хвосты ============ */}
+            <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-1">
                 <Panel title="Ближайшие платежи" hint="Впереди платежей нет">
                     {upcoming.map((r, i) => (
                         <PaymentRow key={`up_${r.documentId}_${i}`} row={r} money={money} router={router} withDate />
@@ -379,6 +380,7 @@ export default function PaymentCalendarPage() {
                         </button>
                     )}
                 </Panel>
+            </div>
             </div>
         </div>
     );
@@ -487,9 +489,9 @@ function PaymentRow({
                             просрочен
                         </span>
                     )}
-                    <span className="flex min-w-0 items-center gap-1 truncate text-[11.5px] text-muted-foreground">
+                    <span className="hidden min-w-0 items-center gap-1 truncate text-[11.5px] text-muted-foreground sm:flex">
                         <FileText className="h-3 w-3 shrink-0" />
-                        {row.invoiceNumber}
+                        <span className="truncate">{row.invoiceNumber}</span>
                     </span>
                 </span>
             </span>
