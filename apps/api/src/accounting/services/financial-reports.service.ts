@@ -1791,33 +1791,8 @@ export class FinancialReportsService {
             }
             : rawCounterparty;
 
-        const invoices = await this.prisma.invoice.findMany({
-            where: {
-                OR: [
-                    { issuerId: companyId, recipientId: counterpartyId },
-                    { issuerId: counterpartyId, recipientId: companyId },
-                ],
-                // Контрагенту показываем только действующие счета
-                status: { notIn: [InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED] },
-            },
-            include: {
-                issuer: { select: { id: true, name: true } },
-                recipient: { select: { id: true, name: true } },
-                incomingOrders: {
-                    select: {
-                        id: true,
-                        orderNumber: true,
-                    },
-                },
-                outgoingOrders: {
-                    select: {
-                        id: true,
-                        orderNumber: true,
-                    },
-                },
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+        // Старые счета из публичного отчёта убраны: страница давно
+        // показывает документы новой модели, у которых ссылку можно отозвать.
 
         // Счета в действующей модели документов.
         //
@@ -1887,7 +1862,6 @@ export class FinancialReportsService {
                 expiresAt,
                 counterparty: null,
                 totals: null,
-                invoices,
                 documents: documentsView,
             };
         }
@@ -1908,132 +1882,9 @@ export class FinancialReportsService {
                 balance: counterparty.balance,
                 totalOrders: counterparty.totalOrders,
             },
-            invoices,
             documents: documentsView,
         };
     }
-
-    async createPublicInvoiceFromReport(
-        token: string,
-        dto: {
-            invoiceNumber: string;
-            date: string;
-            dueDate?: string;
-            orderIds: string[];
-            note?: string;
-        },
-    ) {
-        // Через тот же разбор токена, что и просмотр: иначе по отозванной
-        // ссылке можно было бы продолжать выставлять счета.
-        const { companyId, counterpartyId } = await this.shareLinks.resolve(token);
-
-        if (!dto.orderIds || dto.orderIds.length === 0) {
-            throw new BadRequestException('Счет должен содержать как минимум один заказ');
-        }
-
-        const orders = await this.prisma.order.findMany({
-            where: {
-                id: { in: dto.orderIds },
-            },
-        });
-
-        if (orders.length !== dto.orderIds.length) {
-            throw new BadRequestException('Некоторые заказы не найдены');
-        }
-
-        // Каждый заказ обязан относиться к паре companyId<->counterpartyId,
-        // все — к одному «потоку» денег:
-        //  - customer: заказчик платит экспедитору (сумма = customerPrice, слот outgoingInvoiceId)
-        //  - executor: экспедитор платит суб-экспедитору (сумма = subForwarderPrice, слот incomingInvoiceId)
-        const pair = new Set([companyId, counterpartyId]);
-        let flow: 'customer' | 'executor' | null = null;
-        let issuerId = '';
-        let recipientId = '';
-
-        for (const o of orders) {
-            const fwd = o.forwarderId || o.partnerId;
-            let f: 'customer' | 'executor' | null = null;
-            let iss = '';
-            let rec = '';
-            if (o.customerCompanyId && fwd && o.customerCompanyId !== fwd && pair.has(o.customerCompanyId) && pair.has(fwd)) {
-                f = 'customer';
-                iss = fwd;
-                rec = o.customerCompanyId;
-            } else if (fwd && o.subForwarderId && fwd !== o.subForwarderId && pair.has(fwd) && pair.has(o.subForwarderId)) {
-                f = 'executor';
-                iss = o.subForwarderId;
-                rec = fwd;
-            }
-            if (!f) {
-                throw new BadRequestException(`Заказ №${o.orderNumber} не относится к взаиморасчётам этих компаний`);
-            }
-            if (!flow) {
-                flow = f;
-                issuerId = iss;
-                recipientId = rec;
-            } else if (flow !== f || issuerId !== iss || recipientId !== rec) {
-                throw new BadRequestException('Все заказы в счёте должны относиться к одной паре компаний и одному направлению расчётов');
-            }
-        }
-
-        let amount: Money = ZERO;
-        for (const o of orders) {
-            amount = amount.plus(D(flow === 'customer' ? o.customerPrice : o.subForwarderPrice));
-        }
-
-        // Тип счёта следует потоку денег (единая конвенция со слотами и страницами счёта):
-        // customer-поток (экспедитор выставляет заказчику) = OUTGOING, executor-поток = INCOMING
-        const type = flow === 'customer' ? InvoiceType.OUTGOING : InvoiceType.INCOMING;
-
-        // Проверяем, что заказы ещё не засчётованы по этому направлению
-        for (const order of orders) {
-            const already = flow === 'customer' ? order.outgoingInvoiceId : order.incomingInvoiceId;
-            if (already) {
-                throw new BadRequestException(`Заказ №${order.orderNumber} уже включён в счёт по этому направлению`);
-            }
-        }
-
-        const companyUser = await this.prisma.user.findFirst({
-            where: { companyId, role: { in: ['ACCOUNTANT', 'COMPANY_ADMIN', 'FORWARDER'] } },
-        });
-
-        if (!companyUser) {
-            throw new BadRequestException('Не найден ответственный пользователь для привязки к счету');
-        }
-
-        const invoice = await this.prisma.invoice.create({
-            data: {
-                invoiceNumber: dto.invoiceNumber,
-                type,
-                status: InvoiceStatus.PENDING,
-                issuerId,
-                recipientId,
-                date: new Date(dto.date),
-                dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-                amount,
-                note: dto.note,
-                createdById: companyUser.id,
-            },
-        });
-
-        // Слот привязки зависит от потока денег, а не от типа счёта:
-        // customer-поток занимает outgoingInvoiceId, executor-поток — incomingInvoiceId
-        if (flow === 'customer') {
-            await this.prisma.order.updateMany({
-                where: { id: { in: dto.orderIds } },
-                data: { outgoingInvoiceId: invoice.id },
-            });
-        } else {
-            await this.prisma.order.updateMany({
-                where: { id: { in: dto.orderIds } },
-                data: { incomingInvoiceId: invoice.id },
-            });
-        }
-
-        return invoice;
-    }
-
-    // ==================== DASHBOARD SUMMARY ====================
 
     async getDashboardSummary(companyId: string, query: { startDate?: string; endDate?: string }) {
         const { startDate, endDate } = query;

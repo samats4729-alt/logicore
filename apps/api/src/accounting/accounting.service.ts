@@ -193,21 +193,6 @@ export class AccountingService {
         return this.reportsService.getSharedReport(token);
     }
 
-    async createPublicInvoiceFromReport(
-        token: string,
-        dto: {
-            invoiceNumber: string;
-            date: string;
-            dueDate?: string;
-            orderIds: string[];
-            note?: string;
-        },
-    ) {
-        return this.reportsService.createPublicInvoiceFromReport(token, dto);
-    }
-
-    // ==================== PAYMENTS CRUD ====================
-
     async getPayments(companyId: string, query: { startDate?: string; endDate?: string; direction?: PaymentDirection }) {
         return this.paymentsService.getPayments(companyId, query);
     }
