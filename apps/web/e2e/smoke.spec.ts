@@ -34,10 +34,12 @@ test('мастер заявки доходит до груза и показыв
     // берём первую ещё не заполненную.
     for (let i = 0; i < 2; i++) {
         await page.getByRole('button', { name: /Выберите адрес или склад/ }).first().click();
-        const option = page.locator('[cmdk-item]').first();
+        // Адрес выбирается в отдельном окне с поиском и фильтрами.
+        await expect(page.getByRole('dialog')).toBeVisible();
+        const option = page.getByRole('dialog').locator('button').filter({ hasText: /Склад|ул\.|г\./ }).first();
         await expect(option).toBeVisible();
         await option.click();
-        await page.waitForTimeout(400);
+        await expect(page.getByRole('dialog')).toBeHidden();
     }
 
     await page.getByRole('button', { name: /Далее/ }).first().click();
