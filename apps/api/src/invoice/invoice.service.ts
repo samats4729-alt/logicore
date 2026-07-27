@@ -173,18 +173,13 @@ export class InvoiceService {
             throw new BadRequestException('У вас нет доступа к этому счёту');
         }
 
-        const frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
-        const shareUrl = `${frontendUrl}/shared/invoice/${invoice.shareToken}`;
-
-        await this.emailService.sendInvoiceEmail(
-            target,
-            shareUrl,
-            invoice.issuer?.name || 'LogiCore',
-            invoice.invoiceNumber,
-            toNum(invoice.amount),
+        // Публичная страница старого счёта снята: её ссылка была вечной и
+        // неотзываемой — кто угодно смотрел счёт бессрочно. Отправлять
+        // адрес, которого больше нет, нельзя, поэтому говорим прямо.
+        throw new BadRequestException(
+            'Отправка старых счетов по ссылке отключена: та ссылка была бессрочной и её нельзя было отозвать. '
+            + 'Выставьте счёт в разделе «Документы» — там ссылку можно отозвать в любой момент.',
         );
-
-        return { message: `Счёт отправлен на ${target}` };
     }
 
     async getInvoices(
