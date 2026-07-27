@@ -27,12 +27,16 @@ interface Partner {
     isCarrier?: boolean;
 }
 
+import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEmails';
+
 interface LocationState {
     city: string;
     address: string;
     id?: string;
     latitude?: number;
     longitude?: number;
+    /** Почта, закреплённая за адресом: куда слать доверенность. */
+    emails?: string[];
 }
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
@@ -281,6 +285,7 @@ export default function CreateOrderPage() {
                         latitude: rp.location?.latitude,
                         longitude: rp.location?.longitude,
                         pointType: rp.pointType,
+                        emails: parseEmails(rp.location?.emails),
                     })));
                 }
 
@@ -755,7 +760,7 @@ export default function CreateOrderPage() {
                         value={pt.id || undefined}
                         onChange={(val) => {
                             const newPts = [...routePointsState];
-                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined, latitude: undefined, longitude: undefined }; }
+                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined, latitude: undefined, longitude: undefined, emails: [] }; }
                             else {
                                 const loc = locations.find(l => l.id === val);
                                 if (loc) {
@@ -765,7 +770,9 @@ export default function CreateOrderPage() {
                                         address: loc.address, 
                                         id: loc.id,
                                         latitude: loc.latitude,
-                                        longitude: loc.longitude
+                                        longitude: loc.longitude,
+                                        // Подставляем почту, уже закреплённую за адресом.
+                                        emails: parseEmails((loc as any).emails),
                                     };
                                     const firstPickup = newPts.find(p => p.pointType === 'PICKUP');
                                     const lastDelivery = [...newPts].reverse().find(p => p.pointType === 'DELIVERY');
@@ -810,6 +817,16 @@ export default function CreateOrderPage() {
                             </Select.OptGroup>
                         ))}
                     </Select>
+
+                    <RoutePointEmails
+                        locationId={pt.id}
+                        value={pt.emails ?? []}
+                        onChange={(emails) => {
+                            const newPts = [...routePointsState];
+                            newPts[i] = { ...newPts[i], emails };
+                            setRoutePointsState(newPts);
+                        }}
+                    />
                 </div>
             ))}
             <Button
