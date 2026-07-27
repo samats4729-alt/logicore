@@ -33,6 +33,7 @@ import { AddressPicker } from '@/components/orders/AddressPicker';
 import { cn } from '@/lib/utils';
 import { Plus, X } from 'lucide-react';
 import { totalPallets, type PalletLine } from '@/lib/cargo';
+import { VAT_RATES, vatRateWhenEnabled } from '@/lib/tax';
 
 interface LocationState {
     city: string;
@@ -1145,7 +1146,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="hasVat" label="НДС заказчика" initialValue={false}>
-                                <Select onChange={(val: boolean) => { form.setFieldsValue({ vatRate: val ? 16 : 0 }); }}>
+                                <Select onChange={(val: boolean) => { form.setFieldsValue({ vatRate: vatRateWhenEnabled(val) }); }}>
                                     <Select.Option value={false}>Без НДС</Select.Option>
                                     <Select.Option value={true}>С НДС</Select.Option>
                                 </Select>
@@ -1154,9 +1155,9 @@ export default function CreateOrderPage() {
                         <Col xs={12} md={8}>
                             <Form.Item name="vatRate" label="Ставка НДС" initialValue={0}>
                                 <Select>
-                                    <Select.Option value={0}>0%</Select.Option>
-                                    <Select.Option value={12}>12%</Select.Option>
-                                    <Select.Option value={16}>16%</Select.Option>
+                                    {VAT_RATES.map((rate) => (
+                                        <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
+                                    ))}
                                 </Select>
                             </Form.Item>
                         </Col>
@@ -1174,7 +1175,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="executorHasVat" label="НДС перевозчика" initialValue={false}>
-                                <Select onChange={(val: boolean) => { form.setFieldsValue({ executorVatRate: val ? 16 : 0 }); }}>
+                                <Select onChange={(val: boolean) => { form.setFieldsValue({ executorVatRate: vatRateWhenEnabled(val) }); }}>
                                     <Select.Option value={false}>Без НДС</Select.Option>
                                     <Select.Option value={true}>С НДС</Select.Option>
                                 </Select>
@@ -1183,9 +1184,9 @@ export default function CreateOrderPage() {
                         <Col xs={12} md={8}>
                             <Form.Item name="executorVatRate" label="Ставка НДС" initialValue={0}>
                                 <Select>
-                                    <Select.Option value={0}>0%</Select.Option>
-                                    <Select.Option value={12}>12%</Select.Option>
-                                    <Select.Option value={16}>16%</Select.Option>
+                                    {VAT_RATES.map((rate) => (
+                                        <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
+                                    ))}
                                 </Select>
                             </Form.Item>
                         </Col>

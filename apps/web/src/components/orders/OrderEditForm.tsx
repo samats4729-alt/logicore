@@ -5,6 +5,7 @@ import type { FormInstance } from 'antd';
 import { CheckCircleOutlined, DeleteOutlined, EnvironmentOutlined, FlagOutlined, InboxOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { prepareCompanyOptions } from '@/lib/company-helper';
+import { DEFAULT_VAT_RATE, VAT_RATES } from '@/lib/tax';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -332,11 +333,11 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                     </Form.Item>
                                 </Col>
                                 <Col span={6}>
-                                    <Form.Item name="vatRate" label="Ставка" initialValue={16}>
+                                    <Form.Item name="vatRate" label="Ставка" initialValue={DEFAULT_VAT_RATE}>
                                         <Select size="large" disabled={!canEditFinance}>
-                                            <Select.Option value={0}>0%</Select.Option>
-                                            <Select.Option value={12}>12%</Select.Option>
-                                            <Select.Option value={16}>16%</Select.Option>
+                                            {VAT_RATES.map((rate) => (
+                                                <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
+                                            ))}
                                         </Select>
                                     </Form.Item>
                                 </Col>
@@ -359,11 +360,11 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                     </Form.Item>
                                 </Col>
                                 <Col span={6}>
-                                    <Form.Item name="executorVatRate" label="Ставка" initialValue={16}>
+                                    <Form.Item name="executorVatRate" label="Ставка" initialValue={DEFAULT_VAT_RATE}>
                                         <Select size="large" disabled={!canEditFinance}>
-                                            <Select.Option value={0}>0%</Select.Option>
-                                            <Select.Option value={12}>12%</Select.Option>
-                                            <Select.Option value={16}>16%</Select.Option>
+                                            {VAT_RATES.map((rate) => (
+                                                <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
+                                            ))}
                                         </Select>
                                     </Form.Item>
                                 </Col>
