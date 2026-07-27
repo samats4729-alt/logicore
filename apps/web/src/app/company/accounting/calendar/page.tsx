@@ -164,7 +164,7 @@ export default function PaymentCalendarPage() {
     const todayIdx = (today.day() + 6) % 7;
 
     return (
-        <div className="mx-auto max-w-[1280px] px-5 py-4">
+        <div className="mx-auto max-w-[1120px] px-5 py-4">
             {/* ============ Шапка ============ */}
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
@@ -200,11 +200,11 @@ export default function PaymentCalendarPage() {
                 </div>
             </div>
 
-            {/* ============ Общий контейнер: сетка месяца и день ============ */}
-            <div className="rounded-[20px] bg-card p-2.5 shadow-soft">
-                <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1fr)_384px]">
-                    {/* ---- Месяц ---- */}
-                    <section className="rounded-2xl border border-solid border-border/70 p-3.5">
+            {/* Панели самостоятельные: общая обёртка поверх обеих делала из
+                экрана один сплошной прямоугольник во всю ширину. */}
+            <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+                {/* ---- Месяц ---- */}
+                <section className="rounded-2xl bg-card p-4 shadow-soft">
                         <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-baseline gap-1.5">
                                 <span className="text-[19px] font-semibold tracking-tight text-foreground">
@@ -311,8 +311,8 @@ export default function PaymentCalendarPage() {
                         </div>
                     </section>
 
-                    {/* ---- Платежи выбранного дня ---- */}
-                    <section className="flex flex-col rounded-2xl border border-solid border-border/70 p-3.5">
+                {/* ---- Платежи выбранного дня ---- */}
+                <section className="flex flex-col rounded-2xl bg-card p-4 shadow-soft">
                         <header className="mb-3 flex items-start justify-between gap-2">
                             <div>
                                 <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -337,19 +337,18 @@ export default function PaymentCalendarPage() {
                                 ))}
                             </div>
                         ) : (
-                            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
+                            <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
                                 <CalendarDays className="h-7 w-7 text-muted-foreground/40" strokeWidth={1.5} />
                                 <span className="text-[12.5px] text-muted-foreground">
                                     {loading ? 'Загружаем платежи…' : 'На этот день платежей нет'}
                                 </span>
                             </div>
                         )}
-                    </section>
-                </div>
+                </section>
             </div>
 
             {/* ============ Нижняя полоса: ближайшее и хвосты ============ */}
-            <div className="mt-2.5 grid grid-cols-1 items-stretch gap-2.5 lg:grid-cols-2">
+            <div className="mt-3 grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
                 <Panel title="Ближайшие платежи" hint="Впереди платежей нет">
                     {upcoming.map((r, i) => (
                         <PaymentRow key={`up_${r.documentId}_${i}`} row={r} money={money} router={router} withDate />
@@ -423,15 +422,13 @@ function NavBtn({ onClick, label, children }: { onClick: () => void; label: stri
 function Panel({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
     const items = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
     return (
-        <div className="flex h-full flex-col rounded-[20px] bg-card p-2.5 shadow-soft">
-            <div className="flex flex-1 flex-col rounded-2xl border border-solid border-border/70 p-3.5">
-                <div className="mb-2.5 text-[13.5px] font-semibold tracking-tight text-foreground">{title}</div>
-                {items.length === 0 ? (
-                    <div className="flex flex-1 items-center justify-center py-5 text-center text-[12.5px] text-muted-foreground">{hint}</div>
-                ) : (
-                    <div className="flex flex-col gap-1.5">{items}</div>
-                )}
-            </div>
+        <div className="flex flex-col rounded-2xl bg-card p-4 shadow-soft">
+            <div className="mb-2.5 text-[13.5px] font-semibold tracking-tight text-foreground">{title}</div>
+            {items.length === 0 ? (
+                <div className="py-5 text-center text-[12.5px] text-muted-foreground">{hint}</div>
+            ) : (
+                <div className="flex flex-col gap-1.5">{items}</div>
+            )}
         </div>
     );
 }

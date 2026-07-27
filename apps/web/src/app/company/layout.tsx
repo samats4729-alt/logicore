@@ -323,14 +323,17 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <Header
                 className="app-header-2026"
                 style={{
-                    background: 'var(--lc-bg)',
+                    // Шапка белая, холст страницы серый — так верхняя полоса
+                    // читается как отдельный слой, а не как продолжение фона.
+                    // Раньше здесь стоял --lc-bg, то есть тот же серый.
+                    background: 'var(--lc-card)',
                     backdropFilter: 'saturate(1.9) blur(20px)',
                     WebkitBackdropFilter: 'saturate(1.9) blur(20px)',
                     padding: '0 24px',
                     display: 'flex',
                     alignItems: 'center',
                     height: 60,
-                    borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+                    borderBottom: '1px solid var(--lc-border)',
                     position: 'sticky',
                     left: 0,
                     right: 0,
