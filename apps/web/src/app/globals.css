@@ -1,3 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Токены оформления для компонентов shadcn/ui.
+ *
+ * Значения — те же цвета, что и в переменных `--lc-*` ниже, только в HSL:
+ * shadcn обращается к ним как `hsl(var(--border))`. Держим их
+ * синхронными, иначе новые экраны будут выглядеть чужими рядом со старыми.
+ */
+:root {
+  --background: 220 16% 96%;        /* #f4f5f7 — фон страницы */
+  --foreground: 223 24% 6%;         /* #0b0d12 — основной текст */
+  --card: 0 0% 100%;                /* #ffffff */
+  --card-foreground: 223 24% 6%;
+  --primary: 215 100% 54%;          /* #1677ff — акцентный синий */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 94%;
+  --secondary-foreground: 223 24% 6%;
+  --muted: 220 14% 94%;
+  --muted-foreground: 218 9% 41%;   /* #5f6672 — вторичный текст */
+  --accent: 220 14% 94%;
+  --accent-foreground: 223 24% 6%;
+  --destructive: 0 72% 51%;         /* #dc2626 */
+  --destructive-foreground: 0 0% 100%;
+  --border: 228 12% 92%;            /* #e7e8ec */
+  --input: 228 12% 92%;
+  --ring: 215 100% 54%;
+  --radius: 0.75rem;
+}
+
+[data-theme='dark'] {
+  --background: 220 22% 7%;         /* #0d0f14 */
+  --foreground: 228 30% 93%;        /* #e8eaf0 */
+  --card: 222 18% 11%;              /* #161920 */
+  --card-foreground: 228 30% 93%;
+  --primary: 215 100% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 16% 14%;
+  --secondary-foreground: 228 30% 93%;
+  --muted: 222 16% 14%;
+  --muted-foreground: 218 11% 64%;  /* #9aa1ad */
+  --accent: 222 16% 14%;
+  --accent-foreground: 228 30% 93%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 14% 17%;            /* #262a33 */
+  --input: 220 14% 17%;
+  --ring: 215 100% 60%;
+}
+
 :root {
   --lc-bg: #f4f5f7;
   --lc-card: #ffffff;

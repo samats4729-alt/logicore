@@ -20,8 +20,11 @@
         "@types/uuid": "^9.0.0",
         "antd": "^5.13.0",
         "axios": "^1.6.5",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
         "dayjs": "^1.11.19",
         "leaflet": "^1.9.4",
+        "lucide-react": "^1.27.0",
         "mapbox-gl": "^3.18.1",
         "maplibre-gl": "^5.24.0",
         "next": "^14.1.0",
@@ -31,13 +34,17 @@
         "react-map-gl": "^8.1.0",
         "socket.io-client": "^4.6.1",
         "swr": "^2.4.1",
+        "tailwind-merge": "^3.6.0",
         "three": "^0.160.1",
         "uuid": "^9.0.0",
         "zustand": "^4.5.0"
     },
     "devDependencies": {
+        "autoprefixer": "^10.5.4",
         "eslint": "^8.56.0",
         "eslint-config-next": "^14.1.0",
+        "postcss": "^8.5.23",
+        "tailwindcss": "^3.4.19",
         "typescript": "^5.3.0"
     }
 }
