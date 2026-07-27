@@ -251,7 +251,7 @@ export default function ProfilePage() {
             {/* ===== ИЗМЕНИТЬ ПАРОЛЬ ===== */}
             <div className="lc-card lc-pad" style={{ marginTop: 16, maxWidth: 560 }}>
                 <div className="lc-sec-title"><LockOutlined style={{ marginRight: 8 }} />Изменить пароль</div>
-                <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Минимум 6 символов. После смены текущая сессия сохранится</div>
+                <div className="lc-sec-hint" style={{ marginBottom: 18 }}>Минимум 8 символов. После смены текущая сессия сохранится</div>
                 <Form
                     form={passwordForm}
                     layout="vertical"
@@ -271,7 +271,7 @@ export default function ProfilePage() {
                             label="Новый пароль"
                             rules={[
                                 { required: true, message: 'Введите новый пароль' },
-                                { min: 6, message: 'Минимум 6 символов' },
+                                { min: 8, message: 'Минимум 8 символов' },
                             ]}
                         >
                             <Input.Password prefix={<LockOutlined />} size="large" />

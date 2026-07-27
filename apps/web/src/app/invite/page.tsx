@@ -111,7 +111,7 @@ function InviteForm() {
                     <Input prefix={<PhoneOutlined />} placeholder="+77001234567" />
                 </Form.Item>
 
-                <Form.Item name="password" rules={[{ required: true, min: 6, message: 'Минимум 6 символов' }]}>
+                <Form.Item name="password" rules={[{ required: true, min: 8, message: 'Минимум 8 символов' }]}>
                     <Input.Password prefix={<LockOutlined />} placeholder="Придумайте пароль" />
                 </Form.Item>
 

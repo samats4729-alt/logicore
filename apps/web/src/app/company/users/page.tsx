@@ -2161,9 +2161,9 @@ export default function CompanyUsersPage() {
                                     name="password"
                                     label="Пароль для мобильного приложения"
                                     extra={editingRecord ? 'Оставьте пустым, чтобы не менять пароль' : 'Водитель входит в приложение по телефону и этому паролю'}
-                                    rules={[{ min: 6, message: 'Минимум 6 символов' }]}
+                                    rules={[{ min: 8, message: 'Минимум 8 символов' }]}
                                 >
-                                    <Input.Password placeholder="Минимум 6 символов" autoComplete="new-password" />
+                                    <Input.Password placeholder="Минимум 8 символов" autoComplete="new-password" />
                                 </Form.Item>
 
                                 <Divider><CarOutlined style={{ marginRight: 6 }} />Транспорт</Divider>

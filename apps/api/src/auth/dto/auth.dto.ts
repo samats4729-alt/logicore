@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../password-policy';
 import { IsString, IsEmail, IsNotEmpty, MinLength, Matches, Length } from 'class-validator';
 
 export class LoginEmailDto {
@@ -32,7 +33,7 @@ export class RegisterUserDto {
     @ApiProperty({ description: 'Пароль', example: 'password123' })
     @IsString()
     @IsNotEmpty()
-    @MinLength(6)
+    @MinLength(MIN_PASSWORD_LENGTH, { message: PASSWORD_TOO_SHORT })
     password: string;
 
     @ApiProperty({ description: 'Имя', example: 'Иван' })
@@ -76,7 +77,7 @@ export class RegisterCompanyDto {
     @ApiProperty({ description: 'Пароль админа', example: 'password123' })
     @IsString()
     @IsNotEmpty()
-    @MinLength(6)
+    @MinLength(MIN_PASSWORD_LENGTH, { message: PASSWORD_TOO_SHORT })
     adminPassword: string;
 
     @ApiProperty({ description: 'Имя админа', example: 'Иван' })
@@ -121,7 +122,7 @@ export class RegisterInvitedUserDto {
     @ApiProperty()
     @IsString()
     @IsNotEmpty()
-    @MinLength(6)
+    @MinLength(MIN_PASSWORD_LENGTH, { message: PASSWORD_TOO_SHORT })
     password: string;
 }
 
@@ -141,6 +142,6 @@ export class ResetPasswordDto {
     @ApiProperty({ description: 'Новый пароль', example: 'newpassword123' })
     @IsString()
     @IsNotEmpty()
-    @MinLength(6)
+    @MinLength(MIN_PASSWORD_LENGTH, { message: PASSWORD_TOO_SHORT })
     newPassword: string;
 }

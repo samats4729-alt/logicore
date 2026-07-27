@@ -61,7 +61,7 @@ function ResetPasswordForm() {
                         name="password"
                         rules={[
                             { required: true, message: 'Введите новый пароль' },
-                            { min: 6, message: 'Пароль должен содержать минимум 6 символов' }
+                            { min: 8, message: 'Пароль должен содержать минимум 8 символов' }
                         ]}
                         hasFeedback
                     >

@@ -1,4 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../../auth/password-policy';
 import { IsString, IsEmail, IsEnum, IsOptional, IsNotEmpty, MinLength, Matches } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
@@ -17,7 +18,7 @@ export class CreateUserDto {
     @ApiProperty({ required: false, example: 'password123' })
     @IsString()
     @IsOptional()
-    @MinLength(6)
+    @MinLength(MIN_PASSWORD_LENGTH, { message: PASSWORD_TOO_SHORT })
     password?: string;
 
     @ApiProperty({ example: 'Иван' })

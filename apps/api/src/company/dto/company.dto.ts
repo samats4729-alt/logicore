@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../../auth/password-policy';
 import { IsString, IsEmail, IsNotEmpty, MinLength, IsEnum, IsOptional, IsIn, IsBoolean, IsArray, IsDateString } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
@@ -35,7 +36,7 @@ export class CreateCompanyUserDto {
     @ApiProperty({ description: 'Пароль', example: 'password123' })
     @IsString()
     @IsNotEmpty()
-    @MinLength(6)
+    @MinLength(MIN_PASSWORD_LENGTH, { message: PASSWORD_TOO_SHORT })
     password: string;
 
     @ApiProperty({ description: 'Имя', example: 'Иван' })
@@ -72,7 +73,7 @@ export class UpdateCompanyUserDto {
     @ApiProperty({ required: false })
     @IsString()
     @IsOptional()
-    @MinLength(6)
+    @MinLength(MIN_PASSWORD_LENGTH, { message: PASSWORD_TOO_SHORT })
     password?: string;
 }
 

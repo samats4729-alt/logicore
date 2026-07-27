@@ -174,7 +174,7 @@ function RegisterContent() {
                             <Form.Item
                                 name="password"
                                 label="Пароль"
-                                rules={[{ required: true, min: 6, message: 'Минимум 6 символов' }]}
+                                rules={[{ required: true, min: 8, message: 'Минимум 8 символов' }]}
                             >
                                 <Input.Password size="large" />
                             </Form.Item>
