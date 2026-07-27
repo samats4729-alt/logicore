@@ -295,6 +295,9 @@ importers:
       antd:
         specifier: ^5.13.0
         version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      autoprefixer:
+        specifier: ^10.5.4
+        version: 10.5.4(postcss@8.5.23)
       axios:
         specifier: ^1.6.5
         version: 1.13.2
@@ -322,6 +325,9 @@ importers:
       next:
         specifier: ^14.1.0
         version: 14.2.35(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      postcss:
+        specifier: ^8.5.23
+        version: 8.5.23
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -343,6 +349,9 @@ importers:
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
+      tailwindcss:
+        specifier: ^3.4.19
+        version: 3.4.19(yaml@2.8.2)
       three:
         specifier: ^0.160.1
         version: 0.160.1
@@ -353,21 +362,12 @@ importers:
         specifier: ^4.5.0
         version: 4.5.7(@types/react@18.3.27)(react@18.3.1)
     devDependencies:
-      autoprefixer:
-        specifier: ^10.5.4
-        version: 10.5.4(postcss@8.5.23)
       eslint:
         specifier: ^8.56.0
         version: 8.57.1
       eslint-config-next:
         specifier: ^14.1.0
         version: 14.2.35(eslint@8.57.1)(typescript@5.9.3)
-      postcss:
-        specifier: ^8.5.23
-        version: 8.5.23
-      tailwindcss:
-        specifier: ^3.4.19
-        version: 3.4.19(yaml@2.8.2)
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
