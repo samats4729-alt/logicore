@@ -152,3 +152,104 @@ jobs:
         working-directory: tests/bruno
         run: |
           npx @usebruno/cli run --env local
+
+  # Браузерные тесты веба (A-05). До них фронт не проверялся вовсе:
+  # поломки интерфейса находил владелец, а не CI.
+  e2e:
+    name: Web smoke
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_USER: logcomp
+          POSTGRES_PASSWORD: logcomp_secret
+          POSTGRES_DB: logcomp
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://logcomp:logcomp_secret@localhost:5433/logcomp?schema=public"
+      REDIS_URL: "redis://localhost:6379"
+      JWT_SECRET: "test-secret-key-at-least-64-characters-long-key-for-jwt-security-purposes"
+      JWT_EXPIRES_IN: "7d"
+      PORT: 3001
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+      E2E_BASE_URL: "http://localhost:3000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare database
+        working-directory: apps/api
+        run: |
+          npx prisma migrate deploy
+          npx prisma generate
+          node prisma/seed-demo.js
+
+      - name: Install Chromium for Playwright
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build and start API
+        working-directory: apps/api
+        run: |
+          npx nest build
+          node dist/main &
+          for i in {1..40}; do
+            curl -sf -o /dev/null http://localhost:3001/api/docs && break
+            sleep 3
+          done
+
+      - name: Build and start web
+        working-directory: apps/web
+        run: |
+          pnpm build
+          pnpm start -p 3000 &
+          for i in {1..40}; do
+            curl -sf -o /dev/null http://localhost:3000/login && break
+            sleep 3
+          done
+
+      - name: Run web smoke tests
+        working-directory: apps/web
+        run: pnpm e2e
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 7

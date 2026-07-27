@@ -48,3 +48,7 @@ dump.rdb
 
 # Образцы печатных форм из scripts/generate-*-sample.ts
 output/
+
+# Отчёты браузерных тестов
+apps/web/test-results/
+apps/web/playwright-report/
