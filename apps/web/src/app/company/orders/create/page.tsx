@@ -745,7 +745,7 @@ export default function CreateOrderPage() {
                     format="DD.MM.YYYY HH:mm"
                     showTime={{ format: 'HH:mm' }}
                     placeholder="Выберите дату и время"
-                    size="large"
+                   
                 />
             </Form.Item>
 
@@ -872,7 +872,7 @@ export default function CreateOrderPage() {
 
     const stepCargo = (
         <Card size="small" className="lc-wiz-panel">
-            <Row gutter={16}>
+            <Row gutter={12}>
                 <Col xs={24} md={12}>
                     <Form.Item
                         name="natureOfCargo"
@@ -881,7 +881,7 @@ export default function CreateOrderPage() {
                     >
                         <AutoComplete
                             placeholder="Выберите или впишите свой вариант..."
-                            size="large"
+                           
                             options={cargoCategories.map(cat => ({
                                 label: cat.name,
                                 options: (cat.types || []).map((t: any) => ({ value: t.name, label: t.name })),
@@ -896,7 +896,7 @@ export default function CreateOrderPage() {
                     <Form.Item name="cargoType" label="Тип кузова">
                         <Select
                             placeholder="Тент, Реф..."
-                            allowClear showSearch optionFilterProp="children" size="large"
+                            allowClear showSearch optionFilterProp="children"
                             filterOption={(input, option) =>
                                 (option?.children as unknown as string ?? '').toLowerCase().includes(input.toLowerCase())
                             }
@@ -909,20 +909,20 @@ export default function CreateOrderPage() {
             <Form.Item name="cargoDescription" label="Описание груза">
                 <TextArea rows={2} placeholder="Мебель, 20 коробок, палеты..." />
             </Form.Item>
-            <Row gutter={16}>
+            <Row gutter={12}>
                 <Col xs={12} md={8}>
                     <Form.Item name="cargoWeight" label="Вес (кг)">
-                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                     </Form.Item>
                 </Col>
                 <Col xs={12} md={8}>
                     <Form.Item name="cargoVolume" label="Объём (м³)">
-                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                     </Form.Item>
                 </Col>
                 <Col xs={12} md={8}>
                     <Form.Item name="palletCount" label="Количество палет" hidden>
-                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                     </Form.Item>
                 </Col>
             </Row>
@@ -935,20 +935,20 @@ export default function CreateOrderPage() {
                 Указать габариты груза (Длина × Ширина × Высота, м)
             </Checkbox>
             {showDims && (
-                <Row gutter={16}>
+                <Row gutter={12}>
                     <Col xs={8}>
                         <Form.Item name="cargoLength" label="Длина, м">
-                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" />
                         </Form.Item>
                     </Col>
                     <Col xs={8}>
                         <Form.Item name="cargoWidth" label="Ширина, м">
-                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" />
                         </Form.Item>
                     </Col>
                     <Col xs={8}>
                         <Form.Item name="cargoHeight" label="Высота, м">
-                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
+                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" />
                         </Form.Item>
                     </Col>
                 </Row>
@@ -974,7 +974,7 @@ export default function CreateOrderPage() {
             {myCompanies.length > 1 && (
                 <Form.Item label="Организация" required style={{ marginBottom: 16 }}>
                     <Select
-                        size="large"
+                       
                         value={selectedMyCompanyId}
                         onChange={value => {
                             setSelectedMyCompanyId(value);
@@ -1002,14 +1002,14 @@ export default function CreateOrderPage() {
                 <span>{roleInfo.text}</span>
             </div>
 
-            <Row gutter={24}>
+            <Row gutter={12}>
                 <Col xs={24} md={12}>
                     <div className="lc-wiz-field">
                         <div className="lc-wiz-lbl">Заказчик</div>
                         <Select
                             placeholder="Выберите заказчика"
                             style={{ width: '100%' }}
-                            size="large"
+                           
                             value={selectedCustomer || undefined}
                             onChange={setSelectedCustomer}
                             showSearch
@@ -1048,7 +1048,7 @@ export default function CreateOrderPage() {
                         <Select
                             placeholder="Выберите перевозчика"
                             style={{ width: '100%' }}
-                            size="large"
+                           
                             value={selectedCarrier || undefined}
                             onChange={(val) => {
                                 setSelectedCarrier(val);
@@ -1097,7 +1097,7 @@ export default function CreateOrderPage() {
                 <div className="lc-wiz-lbl">Ответственный менеджер</div>
                 <Select
                     style={{ width: '100%' }}
-                    size="large"
+                   
                     value={responsibleChoice}
                     onChange={setResponsibleChoice}
                     showSearch
@@ -1130,12 +1130,12 @@ export default function CreateOrderPage() {
                 <div className="h">Стоимость перевозки и налоговые условия</div>
             </div>
 
-            <Row gutter={24}>
+            <Row gutter={12}>
                 {showCustomerPriceField && (
                     <>
                         <Col xs={24} md={8}>
                             <Form.Item name="customerPrice" label={customerPriceLabel}>
-                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                             </Form.Item>
                             {appliedTariff && (
                                 <div style={{ marginTop: -12, marginBottom: 8, padding: '4px 8px', background: token.colorSuccessBg, border: `1px solid ${token.colorSuccessBorder}`, borderRadius: 6, fontSize: 11 }}>
@@ -1145,7 +1145,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="hasVat" label="НДС заказчика" initialValue={false}>
-                                <Select size="large" onChange={(val: boolean) => { form.setFieldsValue({ vatRate: val ? 16 : 0 }); }}>
+                                <Select onChange={(val: boolean) => { form.setFieldsValue({ vatRate: val ? 16 : 0 }); }}>
                                     <Select.Option value={false}>Без НДС</Select.Option>
                                     <Select.Option value={true}>С НДС</Select.Option>
                                 </Select>
@@ -1153,7 +1153,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="vatRate" label="Ставка НДС" initialValue={0}>
-                                <Select size="large">
+                                <Select>
                                     <Select.Option value={0}>0%</Select.Option>
                                     <Select.Option value={12}>12%</Select.Option>
                                     <Select.Option value={16}>16%</Select.Option>
@@ -1164,17 +1164,17 @@ export default function CreateOrderPage() {
                 )}
             </Row>
 
-            <Row gutter={24}>
+            <Row gutter={12}>
                 {showDriverCostField && (
                     <>
                         <Col xs={24} md={8}>
                             <Form.Item name="driverCost" label={driverCostLabel}>
-                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                             </Form.Item>
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="executorHasVat" label="НДС перевозчика" initialValue={false}>
-                                <Select size="large" onChange={(val: boolean) => { form.setFieldsValue({ executorVatRate: val ? 16 : 0 }); }}>
+                                <Select onChange={(val: boolean) => { form.setFieldsValue({ executorVatRate: val ? 16 : 0 }); }}>
                                     <Select.Option value={false}>Без НДС</Select.Option>
                                     <Select.Option value={true}>С НДС</Select.Option>
                                 </Select>
@@ -1182,7 +1182,7 @@ export default function CreateOrderPage() {
                         </Col>
                         <Col xs={12} md={8}>
                             <Form.Item name="executorVatRate" label="Ставка НДС" initialValue={0}>
-                                <Select size="large">
+                                <Select>
                                     <Select.Option value={0}>0%</Select.Option>
                                     <Select.Option value={12}>12%</Select.Option>
                                     <Select.Option value={16}>16%</Select.Option>
@@ -1193,10 +1193,10 @@ export default function CreateOrderPage() {
                 )}
             </Row>
 
-            <Row gutter={24}>
+            <Row gutter={12}>
                 <Col xs={24} md={12}>
                     <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
-                        <Select style={{ width: '100%' }} size="large">
+                        <Select style={{ width: '100%' }}>
                             <Select.Option value="FIXED">За рейс</Select.Option>
                             <Select.Option value="PER_KM">За км</Select.Option>
                             <Select.Option value="PER_TON">За тонну</Select.Option>
@@ -1205,36 +1205,36 @@ export default function CreateOrderPage() {
                 </Col>
             </Row>
 
-            <Row gutter={24}>
+            <Row gutter={12}>
                 {showCustomerPriceField && (
                     <Col xs={24} md={12}>
                         <Form.Item name="customerPaymentDate" label="Плановая дата оплаты заказчиком">
-                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" size="large" placeholder="Когда заказчик оплатит" />
+                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="Когда заказчик оплатит" />
                         </Form.Item>
                     </Col>
                 )}
                 {showDriverCostField && (
                     <Col xs={24} md={12}>
                         <Form.Item name="driverPaymentDate" label="Плановая дата оплаты перевозчику">
-                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" size="large" placeholder="Когда оплатим перевозчику" />
+                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="Когда оплатим перевозчику" />
                         </Form.Item>
                     </Col>
                 )}
             </Row>
 
             {/* Условия и формы оплаты (из справочников) */}
-            <Row gutter={24}>
+            <Row gutter={12}>
                 {showCustomerPriceField && (
                     <>
                         <Col xs={24} md={6}>
                             <Form.Item name="customerPaymentCondition" label="Условие оплаты заказчика">
-                                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                <Select allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                     options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
                             </Form.Item>
                         </Col>
                         <Col xs={24} md={6}>
                             <Form.Item name="customerPaymentForm" label="Форма оплаты заказчика">
-                                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                <Select allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                     options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
                             </Form.Item>
                         </Col>
@@ -1244,13 +1244,13 @@ export default function CreateOrderPage() {
                     <>
                         <Col xs={24} md={6}>
                             <Form.Item name="driverPaymentCondition" label="Условие оплаты перевозчика">
-                                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                <Select allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                     options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
                             </Form.Item>
                         </Col>
                         <Col xs={24} md={6}>
                             <Form.Item name="driverPaymentForm" label="Форма оплаты перевозчика">
-                                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                <Select allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
                                     options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
                             </Form.Item>
                         </Col>
@@ -1306,7 +1306,7 @@ export default function CreateOrderPage() {
                         <Form.Item label="Выбрать ТС из автопарка (опционально)">
                             <Select
                                 placeholder="Выберите транспортное средство"
-                                size="large"
+                               
                                 loading={vehiclesLoading}
                                 onChange={handleVehicleSelect}
                                 allowClear
@@ -1322,7 +1322,7 @@ export default function CreateOrderPage() {
                     <Form.Item name="driverId" label="Водитель (не обязательно)">
                         <Select
                             placeholder="Выберите водителя из списка"
-                            size="large"
+                           
                             loading={driversLoading}
                             onChange={handleDriverSelect}
                             showSearch
@@ -1342,43 +1342,43 @@ export default function CreateOrderPage() {
                     {selectedDriverId && (
                         <div>
                             <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Данные водителя</Divider>
-                            <Row gutter={16}>
+                            <Row gutter={12}>
                                 <Col span={8}>
                                     <Form.Item name="lastName" label="Фамилия" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите фамилию' }]}>
-                                        <Input size="large" placeholder="Иванов" />
+                                        <Input placeholder="Иванов" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={8}>
                                     <Form.Item name="firstName" label="Имя" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите имя' }]}>
-                                        <Input size="large" placeholder="Иван" />
+                                        <Input placeholder="Иван" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={8}>
                                     <Form.Item name="middleName" label="Отчество">
-                                        <Input size="large" placeholder="Иванович" />
+                                        <Input placeholder="Иванович" />
                                     </Form.Item>
                                 </Col>
                             </Row>
-                            <Row gutter={16}>
+                            <Row gutter={12}>
                                 <Col span={12}>
                                     <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите телефон' }]}>
-                                        <Input size="large" placeholder="+77001234567" />
+                                        <Input placeholder="+77001234567" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={12}>
                                     <Form.Item name="iin" label="ИИН">
-                                        <Input size="large" placeholder="123456789012" maxLength={12} />
+                                        <Input placeholder="123456789012" maxLength={12} />
                                     </Form.Item>
                                 </Col>
                             </Row>
 
                             <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Транспортное средство</Divider>
-                            <Row gutter={16}>
+                            <Row gutter={12}>
                                 <Col span={12}>
                                     <Form.Item name="vehicleType" label="Тип транспорта">
                                         <Select
                                             placeholder="Выберите тип кузова"
-                                            size="large"
+                                           
                                             options={VEHICLE_TYPES.map(t => ({ label: t, value: t }))}
                                             showSearch
                                         />
@@ -1386,28 +1386,28 @@ export default function CreateOrderPage() {
                                 </Col>
                                 <Col span={12}>
                                     <Form.Item name="vehicleModel" label="Модель автомобиля">
-                                        <Input size="large" placeholder="Volvo FH12" />
+                                        <Input placeholder="Volvo FH12" />
                                     </Form.Item>
                                 </Col>
                             </Row>
-                            <Row gutter={16}>
+                            <Row gutter={12}>
                                 <Col span={12}>
                                     <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите госномер' }]}>
-                                        <Input size="large" placeholder="123 ABC 01" />
+                                        <Input placeholder="123 ABC 01" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={12}>
                                     <Form.Item name="trailerNumber" label="Госномер прицепа">
-                                        <Input size="large" placeholder="1234 XX 01" />
+                                        <Input placeholder="1234 XX 01" />
                                     </Form.Item>
                                 </Col>
                             </Row>
 
                             <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Документы</Divider>
-                            <Row gutter={16}>
+                            <Row gutter={12}>
                                 <Col span={12}>
                                     <Form.Item name="docType" label="Тип документа">
-                                        <Select placeholder="Выберите документ" size="large">
+                                        <Select placeholder="Выберите документ">
                                             <Select.Option value="ID_CARD">Удостоверение личности</Select.Option>
                                             <Select.Option value="PASSPORT">Паспорт</Select.Option>
                                         </Select>
@@ -1415,24 +1415,24 @@ export default function CreateOrderPage() {
                                 </Col>
                                 <Col span={12}>
                                     <Form.Item name="docNumber" label="Номер документа">
-                                        <Input size="large" placeholder="012345678" />
+                                        <Input placeholder="012345678" />
                                     </Form.Item>
                                 </Col>
                             </Row>
-                            <Row gutter={16}>
+                            <Row gutter={12}>
                                 <Col span={8}>
                                     <Form.Item name="docIssuedAt" label="Дата выдачи">
-                                        <DatePicker style={{ width: '100%' }} size="large" format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={8}>
                                     <Form.Item name="docExpiresAt" label="Срок действия">
-                                        <DatePicker style={{ width: '100%' }} size="large" format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={8}>
                                     <Form.Item name="docIssuedBy" label="Кем выдан">
-                                        <Input size="large" placeholder="МВД РК" />
+                                        <Input placeholder="МВД РК" />
                                     </Form.Item>
                                 </Col>
                             </Row>
@@ -1518,22 +1518,22 @@ export default function CreateOrderPage() {
             <div className="lc-wizard-nav" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, marginBottom: 32 }}>
                 <div>
                     {currentStep > 0 && (
-                        <Button size="large" onClick={goBack}>
+                        <Button onClick={goBack}>
                             ← Назад
                         </Button>
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
-                    <Button size="large" onClick={() => router.back()}>
+                    <Button onClick={() => router.back()}>
                         Отмена
                     </Button>
                     {currentStep < steps.length - 1 ? (
-                        <Button type="primary" size="large" onClick={goNext}>
+                        <Button type="primary" onClick={goNext}>
                             Далее →
                         </Button>
                     ) : (
                         <Button
-                            type="primary" size="large"
+                            type="primary"
                             onClick={handleSubmit}
                             loading={submitting}
                             disabled={!selectedCustomer || !selectedCarrier}
