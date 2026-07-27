@@ -5,7 +5,7 @@ import { RedisService } from '../../redis/redis.service';
 import { FinanceCalculatorService, ORDER_FINANCE_RELATIONS_SELECT, ORDER_FINANCE_SELECT } from './finance-calculator.service';
 import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType, AccountingDocumentStatus, AccountingDocumentType } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType, AccountingDocumentStatus, AccountingDocumentType, AccountingDocumentDirection } from '@prisma/client';
 import { D, Money, ZERO, money, positiveRest, roundMoney, sumOf, toNum, toNumOrNull } from '../../common/utils/money';
 import { PaymentsService } from './payments.service';
 import { FinancialSettingsService } from './financial-settings.service';
@@ -1710,6 +1710,66 @@ export class FinancialReportsService {
             orderBy: { createdAt: 'desc' },
         });
 
+        // Счета в действующей модели документов.
+        //
+        // Наш неотправленный черновик контрагенту видеть незачем — это ещё
+        // не выставленный счёт. А вот черновик, который прислал он сам,
+        // показываем обязательно: иначе после отправки счёт у него нигде не
+        // виден, и он отправляет его повторно.
+        const documents = await this.prisma.accountingDocument.findMany({
+            where: {
+                type: AccountingDocumentType.PAYMENT_INVOICE,
+                status: { not: AccountingDocumentStatus.CANCELLED },
+                OR: [
+                    {
+                        companyId,
+                        counterpartyId,
+                        // Наши документы — только выставленные.
+                        OR: [
+                            { direction: AccountingDocumentDirection.OUTGOING, status: { not: AccountingDocumentStatus.DRAFT } },
+                            { direction: AccountingDocumentDirection.INCOMING },
+                        ],
+                    },
+                    { companyId: counterpartyId, counterpartyId: companyId },
+                ],
+            },
+            orderBy: { documentDate: 'desc' },
+            take: 200,
+            select: {
+                id: true,
+                number: true,
+                externalNumber: true,
+                direction: true,
+                status: true,
+                documentDate: true,
+                dueDate: true,
+                total: true,
+                amountPaid: true,
+                balanceDue: true,
+                shareToken: true,
+                shareRevokedAt: true,
+                orders: { select: { order: { select: { id: true, orderNumber: true } } } },
+            },
+        });
+
+        const documentsView = documents.map((doc) => ({
+            id: doc.id,
+            number: doc.number,
+            externalNumber: doc.externalNumber,
+            // Направление разворачиваем: в базе оно записано с нашей точки
+            // зрения, а читает страницу контрагент.
+            issuedByUs: doc.direction === AccountingDocumentDirection.OUTGOING,
+            status: doc.status,
+            documentDate: doc.documentDate,
+            dueDate: doc.dueDate,
+            total: toNum(doc.total),
+            amountPaid: toNum(doc.amountPaid),
+            balanceDue: toNum(doc.balanceDue),
+            // Отозванная ссылка на документ не должна оставаться кликабельной.
+            shareToken: doc.shareRevokedAt ? null : doc.shareToken,
+            orders: doc.orders.map((link) => link.order),
+        }));
+
         if (!counterparty) {
             return {
                 senderCompany: companyName,
@@ -1719,6 +1779,7 @@ export class FinancialReportsService {
                 counterparty: null,
                 totals: null,
                 invoices,
+                documents: documentsView,
             };
         }
 
@@ -1739,6 +1800,7 @@ export class FinancialReportsService {
                 totalOrders: counterparty.totalOrders,
             },
             invoices,
+            documents: documentsView,
         };
     }
 
