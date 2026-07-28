@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Typography, Tag, Button, Descriptions, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Timeline, Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
+import { Typography, Tag, Descriptions, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Timeline, Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
 import {
-    ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
-    DollarOutlined, WalletOutlined, CheckCircleOutlined, ClockCircleOutlined,
-    EditOutlined, DeleteOutlined, FilePdfOutlined, UploadOutlined,
-    UserAddOutlined, MailOutlined, FileTextOutlined, SwapOutlined,
-    CloseCircleOutlined, CarOutlined, InboxOutlined, TeamOutlined,
-    ExclamationCircleOutlined, CopyOutlined, WhatsAppOutlined
+    EnvironmentOutlined, FlagOutlined, DollarOutlined, WalletOutlined, ClockCircleOutlined, FilePdfOutlined, FileTextOutlined, SwapOutlined, CarOutlined, InboxOutlined, TeamOutlined, ExclamationCircleOutlined, CopyOutlined, WhatsAppOutlined,
 } from '@ant-design/icons';
+import {
+    ArrowLeft, ArrowLeftRight, CheckCircle2, Copy, FileDown, FileText,
+    Loader2, Mail, MapPin, Pencil, Plus, Trash2, Upload as UploadIcon,
+    UserPlus, XCircle,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import dayjs from 'dayjs';
@@ -1289,9 +1290,9 @@ export default function OrderDetailPage() {
             render: (_: any, r: any) => (
                 canEditFinance && (
                     <Space size={4}>
-                        <Button size="small" icon={<EditOutlined />} onClick={() => handleEditPaymentClick(r)} />
+                        <Button variant="outline" size="icon" aria-label="Изменить платёж" className="h-7 w-7" onClick={() => handleEditPaymentClick(r)}><Pencil className="h-3.5 w-3.5" /></Button>
                         <Popconfirm title="Удалить платёж?" onConfirm={() => handleDeletePayment(r.id)} okText="Да" cancelText="Нет">
-                            <Button size="small" danger icon={<DeleteOutlined />} />
+                            <Button variant="outline" size="icon" aria-label="Удалить платёж" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
                         </Popconfirm>
                     </Space>
                 )
@@ -1332,7 +1333,7 @@ export default function OrderDetailPage() {
         { title: 'Описание', dataIndex: 'description', key: 'desc', ellipsis: true, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{d}</Text> },
         { title: 'Сумма ₸', dataIndex: 'amount', key: 'amount', width: 120, align: 'right' as const, render: (a: number, r: any) => <Text delete={r.isDeleted} strong style={{ color: r.isDeleted ? 'var(--lc-text-ter)' : '#389e0d' }}>{fmt(a)}</Text> },
         { title: '', key: 'actions', width: 50, render: (_: any, r: any) => (
-            !r.isDeleted && <Popconfirm title="Удалить?" onConfirm={() => handleDeleteIncome(r.id)} okText="Да" cancelText="Нет"><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm>
+            !r.isDeleted && <Popconfirm title="Удалить?" onConfirm={() => handleDeleteIncome(r.id)} okText="Да" cancelText="Нет"><Button variant="outline" size="icon" aria-label="Удалить поступление" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></Popconfirm>
         )},
     ];
 
@@ -1342,7 +1343,7 @@ export default function OrderDetailPage() {
         { title: 'Описание', dataIndex: 'description', key: 'desc', ellipsis: true, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{d}</Text> },
         { title: 'Сумма ₸', dataIndex: 'amount', key: 'amount', width: 120, align: 'right' as const, render: (a: number, r: any) => <Text delete={r.isDeleted} strong style={{ color: r.isDeleted ? 'var(--lc-text-ter)' : '#cf1322' }}>{fmt(a)}</Text> },
         { title: '', key: 'actions', width: 50, render: (_: any, r: any) => (
-            !r.isDeleted && <Popconfirm title="Удалить?" onConfirm={() => handleDeleteExpense(r.id)} okText="Да" cancelText="Нет"><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm>
+            !r.isDeleted && <Popconfirm title="Удалить?" onConfirm={() => handleDeleteExpense(r.id)} okText="Да" cancelText="Нет"><Button variant="outline" size="icon" aria-label="Удалить расход" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></Popconfirm>
         )},
     ];
 
@@ -1352,7 +1353,7 @@ export default function OrderDetailPage() {
         { title: 'Размер', dataIndex: 'fileSize', key: 'size', width: 100, render: (s: number) => `${(s / 1024).toFixed(1)} KB` },
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 130, render: (d: string) => dayjs(d).format('DD.MM.YY HH:mm') },
         { title: '', key: 'action', width: 80, render: (_: any, r: any) => (
-            <Button size="small" type="link" onClick={() => handleDownloadDoc(r)}>Скачать</Button>
+            <Button variant="link" size="sm" onClick={() => handleDownloadDoc(r)}>Скачать</Button>
         )}
     ];
 
@@ -1361,7 +1362,7 @@ export default function OrderDetailPage() {
             {/* =================== HEADER =================== */}
             <div className="lc2-hero" style={{ borderBottom: '1px solid var(--lc-border)', paddingBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} />
+                    <Button variant="outline" size="icon" aria-label="Назад" onClick={() => router.back()}><ArrowLeft className="h-4 w-4" /></Button>
                     <div>
                         <div className="lc-eyebrow">Заявки · Детали</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1382,17 +1383,18 @@ export default function OrderDetailPage() {
                 {!isEditing && (
                     <Space wrap size="small">
                         {canChangeStatus && (
-                            <Button type="primary" icon={<SwapOutlined />} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
+                            <Button onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
+                                <ArrowLeftRight className="h-4 w-4" />
                                 {order.status === 'CANCELLED' ? 'Вернуть заявку в работу' : order.status === 'COMPLETED' ? 'Вернуть / изменить статус' : 'Изменить статус'}
                             </Button>
                         )}
                         {isNotFinished && (
-                            <Button icon={<EditOutlined />} onClick={startEditing}>
-                                Редактировать
+                            <Button variant="outline" onClick={startEditing}>
+                                <Pencil className="h-4 w-4" /> Редактировать
                             </Button>
                         )}
-                        <Button icon={<CopyOutlined />} onClick={() => router.push(`/company/orders/create?from=${orderId}`)}>
-                            Дублировать
+                        <Button variant="outline" onClick={() => router.push(`/company/orders/create?from=${orderId}`)}>
+                            <Copy className="h-4 w-4" /> Дублировать
                         </Button>
                         {isNotFinished && (
                             <Popconfirm
@@ -1403,8 +1405,8 @@ export default function OrderDetailPage() {
                                 cancelText="Нет"
                                 okButtonProps={{ danger: true }}
                             >
-                                <Button danger icon={<CloseCircleOutlined />}>
-                                    Отменить заявку
+                                <Button variant="destructive">
+                                    <XCircle className="h-4 w-4" /> Отменить заявку
                                 </Button>
                             </Popconfirm>
                         )}
@@ -1432,19 +1434,22 @@ export default function OrderDetailPage() {
                             </Text>
                             <Space>
                                 <Button
-                                    type="primary"
-                                    icon={<CheckCircleOutlined />}
-                                    loading={completionActionLoading}
+                                    disabled={completionActionLoading}
                                     onClick={handleConfirmCompletion}
                                 >
+                                    {completionActionLoading
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <CheckCircle2 className="h-4 w-4" />}
                                     Подтвердить завершение
                                 </Button>
                                 <Button
-                                    danger
-                                    icon={<CloseCircleOutlined />}
-                                    loading={completionActionLoading}
+                                    variant="destructive"
+                                    disabled={completionActionLoading}
                                     onClick={() => setRejectReasonModalOpen(true)}
                                 >
+                                    {completionActionLoading
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <XCircle className="h-4 w-4" />}
                                     Отклонить
                                 </Button>
                             </Space>
@@ -1476,9 +1481,12 @@ export default function OrderDetailPage() {
                                 cancelText="Нет"
                             >
                                 <Button
-                                    icon={<CloseCircleOutlined />}
-                                    loading={completionActionLoading}
+                                    variant="outline"
+                                    disabled={completionActionLoading}
                                 >
+                                    {completionActionLoading
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <XCircle className="h-4 w-4" />}
                                     Отменить запрос
                                 </Button>
                             </Popconfirm>
@@ -1643,20 +1651,21 @@ export default function OrderDetailPage() {
 
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                                         <Button
-                                                            type="primary"
-                                                            icon={<EnvironmentOutlined />}
+                                                            className="w-full"
                                                             onClick={openDriverLink}
-                                                            loading={driverLinkLoading}
-                                                            block
+                                                            disabled={driverLinkLoading}
                                                         >
+                                                            {driverLinkLoading
+                                                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                                : <MapPin className="h-4 w-4" />}
                                                             Ссылка для водителя
                                                         </Button>
                                                         <Button
-                                                            icon={<UserAddOutlined />}
+                                                            variant="outline"
+                                                            className="w-full"
                                                             onClick={openAssignModal}
-                                                            block
                                                         >
-                                                            Изменить водителя
+                                                            <UserPlus className="h-4 w-4" /> Изменить водителя
                                                         </Button>
                                                         <Dropdown.Button
                                                             style={{ width: '100%' }}
@@ -1673,33 +1682,39 @@ export default function OrderDetailPage() {
                                                             <FileTextOutlined /> Доверенность (PDF)
                                                         </Dropdown.Button>
                                                         <Button
-                                                            icon={<FilePdfOutlined />}
-                                                            loading={docBusy === 'POWER_OF_ATTORNEY'}
+                                                            variant="outline"
+                                                            className="w-full"
+                                                            disabled={docBusy === 'POWER_OF_ATTORNEY'}
                                                             onClick={() => formDocument('POWER_OF_ATTORNEY')}
-                                                            block
                                                         >
+                                                            {docBusy === 'POWER_OF_ATTORNEY'
+                                                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                                : <FileDown className="h-4 w-4" />}
                                                             {poaDocuments.length
                                                                 ? 'Выдать исправленную доверенность'
                                                                 : 'Выдать доверенность (в журнал)'}
                                                         </Button>
                                                         {renderDocumentVersions('POWER_OF_ATTORNEY', poaDocuments)}
                                                         <Button
-                                                            icon={<FilePdfOutlined />}
-                                                            loading={docBusy === 'CONTRACT'}
+                                                            variant="outline"
+                                                            className="w-full"
+                                                            disabled={docBusy === 'CONTRACT'}
                                                             onClick={() => formDocument('CONTRACT')}
-                                                            block
                                                         >
+                                                            {docBusy === 'CONTRACT'
+                                                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                                : <FileDown className="h-4 w-4" />}
                                                             {contracts.length
                                                                 ? 'Сформировать исправленный договор'
                                                                 : 'Сформировать договор-заявку'}
                                                         </Button>
                                                         {renderDocumentVersions('CONTRACT', contracts)}
                                                         <Button
-                                                            icon={<MailOutlined />}
+                                                            variant="outline"
+                                                            className="w-full"
                                                             onClick={openSharePoAModal}
-                                                            block
                                                         >
-                                                            Отправить доверенность по email
+                                                            <Mail className="h-4 w-4" /> Отправить доверенность по email
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1709,12 +1724,10 @@ export default function OrderDetailPage() {
                                                         <Tag color="warning" style={{ fontSize: 13, padding: '4px 16px', borderRadius: 4 }}>Водитель не назначен</Tag>
                                                     </div>
                                                     <Button
-                                                        type="primary"
-                                                        icon={<UserAddOutlined />}
+                                                        className="w-full"
                                                         onClick={openAssignModal}
-                                                        block
                                                     >
-                                                        Назначить водителя
+                                                        <UserPlus className="h-4 w-4" /> Назначить водителя
                                                     </Button>
                                                 </div>
                                             )}
@@ -1761,7 +1774,7 @@ export default function OrderDetailPage() {
                                                     >
                                                         <Text strong>{r.user?.lastName} {r.user?.firstName}</Text>
                                                         {r.companyId === user?.companyId && ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '') && (
-                                                            <Button size="small" type="link" onClick={openTransferModal}>
+                                                            <Button variant="link" size="sm" onClick={openTransferModal}>
                                                                 Передать
                                                             </Button>
                                                         )}
@@ -1788,22 +1801,27 @@ export default function OrderDetailPage() {
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
                                         <Space size={8}>
                                             <Button
-                                                type="primary"
-                                                icon={<FileTextOutlined />}
-                                                loading={invoiceLoading}
+                                                disabled={invoiceLoading}
                                                 onClick={() => openOrCreateOrderDocument('PAYMENT_INVOICE')}
                                             >
+                                                {invoiceLoading
+                                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                    : <FileText className="h-4 w-4" />}
                                                 Выставить счёт
                                             </Button>
                                             <Button
-                                                icon={<FileTextOutlined />}
-                                                loading={actLoading}
+                                                variant="outline"
+                                                disabled={actLoading}
                                                 onClick={() => openOrCreateOrderDocument('SERVICE_ACT')}
                                             >
+                                                {actLoading
+                                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                    : <FileText className="h-4 w-4" />}
                                                 Акт выполненных работ
                                             </Button>
                                             <Tooltip title="Расчёт по текущим данным заявки — меняется вместе с ней">
                                                 <Button
+                                                    variant="outline"
                                                     onClick={() => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank')}
                                                 >
                                                     Предпросмотр
@@ -1931,7 +1949,7 @@ export default function OrderDetailPage() {
                                 <div className="lc-card" style={{ padding: 0, marginBottom: 16 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
                                         <span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: token.colorPrimary, marginRight: 6 }} />Платежи по заявке ({payments.length})</span>
-                                        {canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={handleAddPaymentClick}>Зарегистрировать платёж</Button>}
+                                        {canEditFinance && <Button size="sm" onClick={handleAddPaymentClick}><Plus className="h-3.5 w-3.5" /> Зарегистрировать платёж</Button>}
                                     </div>
                                     <Table columns={paymentColumns} dataSource={payments} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет зарегистрированных платежей' }} scroll={{ x: true }} />
                                 </div>
@@ -1941,7 +1959,7 @@ export default function OrderDetailPage() {
                                         <div className="lc-card" style={{ padding: 0 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
                                                 <span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: '#16a34a', marginRight: 6 }} />Поступления ({incomes.length})</span>
-                                                {canEditFinance && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setIncomeModalOpen(true); }}>Добавить</Button>}
+                                                {canEditFinance && <Button size="sm" onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setIncomeModalOpen(true); }}><Plus className="h-3.5 w-3.5" /> Добавить</Button>}
                                             </div>
                                             <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
                                         </div>
@@ -1950,7 +1968,7 @@ export default function OrderDetailPage() {
                                         <div className="lc-card" style={{ padding: 0 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
                                                 <span style={{ fontWeight: 600 }}><DollarOutlined style={{ color: '#dc2626', marginRight: 6 }} />Расходы ({expenses.length})</span>
-                                                {canEditFinance && <Button size="small" type="primary" danger icon={<PlusOutlined />} onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setExpenseModalOpen(true); }}>Добавить</Button>}
+                                                {canEditFinance && <Button size="sm" variant="destructive" onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setExpenseModalOpen(true); }}><Plus className="h-3.5 w-3.5" /> Добавить</Button>}
                                             </div>
                                             <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
                                         </div>
@@ -1973,7 +1991,10 @@ export default function OrderDetailPage() {
                                 title={<span style={{ fontWeight: 600 }}><FilePdfOutlined style={{ color: '#1890ff', marginRight: 6 }} />Документы ({documents.length})</span>}
                                 extra={
                                     <Upload customRequest={customUploadTTN} showUploadList={false}>
-                                        <Button size="small" type="primary" icon={<UploadOutlined />} loading={uploadingDoc}>
+                                        <Button size="sm" disabled={uploadingDoc}>
+                                            {uploadingDoc
+                                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                : <UploadIcon className="h-3.5 w-3.5" />}
                                             Загрузить ТТН
                                         </Button>
                                     </Upload>

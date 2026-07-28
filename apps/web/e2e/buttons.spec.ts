@@ -62,3 +62,29 @@ test('главная кнопка списка заявок сохранила �
     const image = await cta.evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(image, 'кнопка «Создать заявку» потеряла фирменный градиент').toContain('linear-gradient');
 });
+
+test('antd Upload по-прежнему получает клик от кнопки shadcn', async ({ page }) => {
+    // Кнопка живёт внутри antd Upload: обработчик висит на обёртке
+    // `span.ant-upload`, а клик до неё должен всплыть от самой кнопки.
+    // У кнопки shadcn это обычный <button>, но выключенное состояние,
+    // pointer-events или лишняя обёртка легко проглотят клик — и кнопка
+    // останется на месте, будет нажиматься, а окно выбора файла не
+    // откроется. Ни типы, ни сборка такого не покажут, поэтому ждём
+    // настоящее событие браузера.
+    await login(page);
+    await page.goto('/company/orders');
+
+    const firstRow = page.locator('.ant-table-row').first();
+    await expect(firstRow).toBeVisible();
+    await firstRow.locator('button').last().click();
+    await page.waitForURL(/\/company\/orders\/[^/]+$/);
+
+    await page.getByRole('tab', { name: /Документы/ }).first().click();
+
+    const upload = page.getByRole('button', { name: /Загрузить ТТН/ }).first();
+    await expect(upload).toBeVisible();
+
+    const chooser = page.waitForEvent('filechooser', { timeout: 10_000 });
+    await upload.click();
+    await chooser;
+});
