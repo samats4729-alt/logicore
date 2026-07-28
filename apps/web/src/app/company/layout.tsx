@@ -198,6 +198,17 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
+        // --- ЗАПРОСЫ (этап до заявки: клиент спросил цену) ---
+        // Сразу после «Заявок»: это предыдущий шаг той же работы, и в
+        // повседневном порядке он идёт перед ней, а не в стороне.
+        if (hasPerm('orders')) {
+            items.push({
+                key: '/company/requests',
+                icon: <CalculatorOutlined />,
+                label: 'Запросы',
+            });
+        }
+
         // --- МОНИТОРИНГ ---
         const monitoringChildren: any[] = [];
         if (hasPerm('tracking')) {

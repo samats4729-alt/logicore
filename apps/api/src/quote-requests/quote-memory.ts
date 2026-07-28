@@ -116,15 +116,22 @@ export function buildQuoteMemory(
 
     const last = decided[0];
 
+    // Незаполненное поле — это «ещё не ввели», а не «изменилось».
+    //
+    // Менеджер открывает форму и первым делом выбирает клиента и маршрут:
+    // вес и кузов он допечатывает после. Если считать пустоту отличием,
+    // панель в этот момент кричит «условия изменились: вес был 20 т, стал
+    // не указан» — и приучает себя не читать, ровно когда она нужнее всего.
+    // Про то, чего мы не знаем, честно молчать.
     const differences: string[] = [];
-    if (!sameNumber(last.cargoWeight, current.cargoWeight)) {
+    if (current.cargoWeight != null && !sameNumber(last.cargoWeight, current.cargoWeight)) {
         differences.push(formatDiff('вес', last.cargoWeight, current.cargoWeight, (v) => `${v / 1000} т`));
     }
-    if (!sameNumber(last.cargoVolume, current.cargoVolume)) {
+    if (current.cargoVolume != null && !sameNumber(last.cargoVolume, current.cargoVolume)) {
         differences.push(formatDiff('объём', last.cargoVolume, current.cargoVolume, (v) => `${v} м³`));
     }
-    if ((last.cargoType || null) !== (current.cargoType || null)) {
-        differences.push(`кузов: было ${last.cargoType || 'не указан'}, стало ${current.cargoType || 'не указан'}`);
+    if (current.cargoType && (last.cargoType || null) !== current.cargoType) {
+        differences.push(`кузов: было ${last.cargoType || 'не указан'}, стало ${current.cargoType}`);
     }
     const sameConditions = differences.length === 0;
 
