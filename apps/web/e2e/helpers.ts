@@ -1,21 +1,30 @@
-import { expect, type Page } from '@playwright/test';
+import { type Page, expect } from '@playwright/test';
+import * as path from 'path';
 
 export const E2E_EMAIL = process.env.E2E_EMAIL || 'admin@p3.kz';
 export const E2E_PASSWORD = process.env.E2E_PASSWORD || 'Test12345!';
 
+/** Куда `auth.setup.ts` кладёт сессию, которую забирают остальные тесты. */
+export const AUTH_STATE = path.join(__dirname, '.auth', 'state.json');
+
 /**
- * Вход в кабинет.
+ * Открыть кабинет под уже сохранённой сессией.
  *
- * Ждём именно перехода на `/company`, а не таймаута: если страница не
- * ожила (например, кэш dev-сервера стёрт сборкой и чанки отдают 404),
- * кнопка молча ничего не делает — и тест должен падать с понятной
- * причиной, а не «элемент не найден» через минуту.
+ * Формы входа тут больше нет, и это важно. `POST /auth/login` ограничен
+ * пятью запросами в минуту с адреса — защита от подбора пароля, ради
+ * тестов её не ослабляют. Пока каждый тест логинился сам, шестой по счёту
+ * упирался в лимит: вход не проходил, тест падал по таймауту ожидания
+ * перехода, и выглядело это как поломка страницы. Локально не
+ * воспроизводилось — тесты идут по полминуты, и пять входов не помещались
+ * в одно окно, а в CI пролетают за секунды. Вход теперь один на прогон,
+ * его делает `auth.setup.ts`.
+ *
+ * Ждём именно перехода на `/company`: если страница не ожила (например,
+ * кэш дев-сервера стёрт сборкой и чанки отдают 404), тест должен падать с
+ * понятной причиной, а не «элемент не найден» через минуту.
  */
 export async function login(page: Page) {
-    await page.goto('/login');
-    await page.locator('input').first().fill(E2E_EMAIL);
-    await page.locator('input[type="password"]').first().fill(E2E_PASSWORD);
-    await page.getByRole('button', { name: 'Войти' }).click();
+    await page.goto('/company');
     await page.waitForURL('**/company**', { timeout: 45_000 });
 }
 

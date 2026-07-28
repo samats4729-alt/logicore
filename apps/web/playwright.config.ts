@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as fs from 'fs';
+import { AUTH_STATE } from './e2e/helpers';
 
 /**
  * Браузерные тесты веба (задача A-05).
@@ -41,6 +42,14 @@ export default defineConfig({
         },
     },
     projects: [
-        { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+        // Вход делается один раз: у `POST /auth/login` лимит пять запросов
+        // в минуту, и прогон, где логинится каждый тест, сам себя блокирует.
+        { name: 'setup', testMatch: /auth\.setup\.ts/ },
+        {
+            name: 'chromium',
+            use: { ...devices['Desktop Chrome'], storageState: AUTH_STATE },
+            dependencies: ['setup'],
+            testIgnore: /auth\.setup\.ts/,
+        },
     ],
 });

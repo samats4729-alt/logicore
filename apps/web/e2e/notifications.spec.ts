@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { E2E_EMAIL, E2E_PASSWORD } from './helpers';
 
+// Эти два теста проверяют саму форму входа, поэтому идут без сохранённой
+// сессии — иначе `/login` сразу уводит в кабинет. Два запроса к `/auth/login`
+// плюс один из `auth.setup.ts` укладываются в лимит в пять штук за минуту.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 /**
  * Уведомления переехали с `message` из antd на sonner.
  *
