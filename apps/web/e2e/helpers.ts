@@ -24,27 +24,7 @@ export const AUTH_STATE = path.join(__dirname, '.auth', 'state.json');
  * понятной причиной, а не «элемент не найден» через минуту.
  */
 export async function login(page: Page) {
-    // Начинаем со страницы входа, а не с кабинета. Это важно: переход
-    // «кабинет → вход» для неопознанного посетителя происходит уже в
-    // браузере, и проверять адрес сразу после перехода бесполезно — он
-    // ещё не сменился. Так тест уезжал дальше «как будто вошёл» и падал
-    // потом, на чужой проверке, с невнятным «элемент не найден».
-    await page.goto('/login');
-
-    // Если сессия из `auth.setup.ts` жива, страница входа сама уводит в
-    // кабинет и формы здесь не будет. Если не жива — входим сами.
-    const password = page.locator('input[type="password"]').first();
-    const hasForm = await password
-        .waitFor({ state: 'visible', timeout: 5_000 })
-        .then(() => true)
-        .catch(() => false);
-
-    if (hasForm) {
-        await page.locator('input').first().fill(E2E_EMAIL);
-        await password.fill(E2E_PASSWORD);
-        await page.getByRole('button', { name: 'Войти' }).click();
-    }
-
+    await page.goto('/company');
     await page.waitForURL('**/company**', { timeout: 45_000 });
 }
 
