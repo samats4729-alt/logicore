@@ -384,6 +384,7 @@ model Company {
 
   @@index([bin])
   @@index([verificationStatus])
+  locationEmailLists LocationEmailList[]
 }
 
 // ... existing models ...
@@ -451,6 +452,7 @@ model Location {
   // Relations
   routePoints    OrderRoutePoint[]
   warehouseGates WarehouseGate[]
+  emailLists     LocationEmailList[]
 
   @@index([latitude, longitude])
   @@index([cityId])
@@ -2079,4 +2081,27 @@ model OrderPaymentProof {
 
   @@index([companyId, status])
   @@index([orderId])
+}
+
+/// Кому слать доверенность по этому адресу — список у каждой компании свой.
+///
+/// В самом адресе почты держать нельзя: справочник адресов общий, у складов
+/// `companyId` пустой, и правка возвращала 403 — справедливо, иначе одна
+/// компания перетирала бы контакты другой. Поэтому список привязан к паре
+/// «адрес + компания».
+model LocationEmailList {
+  id         String   @id @default(cuid())
+  locationId String
+  companyId  String
+  /// Почты через запятую. Числом не ограничены: у крупного склада их
+  /// бывает и пятнадцать, и пятьдесят.
+  emails     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, companyId])
+  @@index([companyId])
 }

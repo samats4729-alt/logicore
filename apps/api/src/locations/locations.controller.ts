@@ -46,6 +46,17 @@ export class LocationsController {
         return this.locationsService.update(id, dto, req.user);
     }
 
+    @Put(':id/emails')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Задать свой список email-адресов для этой точки' })
+    async setEmails(
+        @Param('id') id: string,
+        @Body() body: { emails?: string },
+        @Request() req: any,
+    ) {
+        return this.locationsService.setEmails(id, req.user.companyId, body?.emails || '');
+    }
+
     @Delete(':id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Удалить точку' })

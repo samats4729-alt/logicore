@@ -423,6 +423,28 @@ export class OrdersService {
             }
         }
 
+        // Почты у точек маршрута подменяем на список этой компании. Справочник
+        // адресов общий: в самой карточке склада почт нет и быть не может, а
+        // окно «Отправить доверенность» собирает получателей именно отсюда.
+        // Без подмены менеджер завёл бы адреса и не увидел их при отправке.
+        if (userContext?.companyId && order.routePoints?.length) {
+            const locationIds = order.routePoints
+                .map((p: any) => p.locationId)
+                .filter(Boolean);
+            if (locationIds.length) {
+                const lists = await this.prisma.locationEmailList.findMany({
+                    where: { companyId: userContext.companyId, locationId: { in: locationIds } },
+                    select: { locationId: true, emails: true },
+                });
+                const own = new Map(lists.map(l => [l.locationId, l.emails]));
+                for (const point of order.routePoints as any[]) {
+                    if (point.location && own.has(point.locationId)) {
+                        point.location.emails = own.get(point.locationId) || null;
+                    }
+                }
+            }
+        }
+
         return order;
     }
 
