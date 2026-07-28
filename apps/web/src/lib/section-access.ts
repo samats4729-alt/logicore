@@ -18,6 +18,7 @@ const PERMISSION_MANAGED_ROLES = ['LOGISTICIAN', 'ACCOUNTANT', 'WAREHOUSE_MANAGE
 const SECTIONS: { prefix: string; permission: string; title: string }[] = [
     { prefix: '/company/accounting', permission: 'accounting', title: 'Бухгалтерия' },
     { prefix: '/company/orders', permission: 'orders', title: 'Заявки' },
+    { prefix: '/company/requests', permission: 'orders', title: 'Запросы' },
     { prefix: '/company/tracking', permission: 'tracking', title: 'GPS-мониторинг' },
     { prefix: '/company/partners', permission: 'partners', title: 'Контрагенты' },
     { prefix: '/company/carriers', permission: 'partners', title: 'Перевозчики' },
