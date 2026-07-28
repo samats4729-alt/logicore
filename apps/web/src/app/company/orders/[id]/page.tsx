@@ -27,6 +27,7 @@ import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
 import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
+import OrderHistory from '@/components/orders/OrderHistory';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import {
     adrLabel, EMPTY_CARGO, loadingLabel, packagingLabel, palletsSummary, totalPallets,
@@ -2099,44 +2100,20 @@ export default function OrderDetailPage() {
                         label: (
                             <span>
                                 <ClockCircleOutlined style={{ marginRight: 6 }} />
-                                История ({order.statusHistory?.length || 0})
+                                История
                             </span>
                         ),
                         children: (
                             <Card
-                                title={<span style={{ fontWeight: 600 }}><ClockCircleOutlined style={{ color: '#1677ff', marginRight: 8 }} />История изменения статусов</span>}
+                                title={<span style={{ fontWeight: 600 }}><ClockCircleOutlined style={{ color: '#1677ff', marginRight: 8 }} />Что происходило с рейсом</span>}
                                 bordered={false}
                                 className="premium-card"
                             >
-                                {order.statusHistory && order.statusHistory.length > 0 ? (
-                                    <Timeline
-                                        style={{ marginTop: 16, paddingLeft: 8 }}
-                                        items={order.statusHistory.map((h: any) => ({
-                                            color: h.status === 'COMPLETED' ? 'green' : h.status === 'PROBLEM' ? 'red' : 'blue',
-                                            children: (
-                                                <div style={{ marginBottom: 12 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                                        <Tag color={statusColors[h.status]} style={{ margin: 0 }}>
-                                                            {statusLabels[h.status] || h.status}
-                                                        </Tag>
-                                                        <Text type="secondary" style={{ fontSize: 12 }}>
-                                                            {dayjs(h.changedAt).format('DD.MM.YYYY HH:mm:ss')}
-                                                        </Text>
-                                                    </div>
-                                                    {h.comment && (
-                                                        <div style={{ fontSize: 13, color: 'var(--lc-text-sec)', marginTop: 4, background: 'var(--lc-hover)', padding: '6px 12px', borderRadius: 4, display: 'inline-block' }}>
-                                                            {h.comment}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ),
-                                        }))}
-                                    />
-                                ) : (
-                                    <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                                        <Text type="secondary">История статусов пуста</Text>
-                                    </div>
-                                )}
+                                {/* Смены статуса и действия людей — одной лентой.
+                                    Раньше здесь были только статусы, и даже они без
+                                    автора: «кто вложил этот документ» узнать было
+                                    негде. */}
+                                <OrderHistory orderId={orderId} />
                             </Card>
                         )
                     }

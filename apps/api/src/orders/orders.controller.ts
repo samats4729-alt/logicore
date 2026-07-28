@@ -74,6 +74,7 @@ export class OrdersController {
             entityId: order.id,
             entityLabel: `Заявка №${order.orderNumber}`,
             details: { customerPrice: dto.customerPrice ?? null, driverCost: dto.driverCost ?? null },
+            orderId: order.id,
         });
 
         return order;
@@ -214,6 +215,7 @@ export class OrdersController {
             entity: 'order_document',
             entityId: document.id,
             entityLabel: `${documentKind === 'CONTRACT' ? 'Договор-заявка' : 'Доверенность'} по рейсу, версия ${document.version}`,
+            orderId: id,
         });
         return document;
     }
@@ -325,6 +327,19 @@ export class OrdersController {
         });
     }
 
+    @Get(':id/history')
+    @ApiOperation({ summary: 'История рейса: смены статуса и действия людей одной лентой' })
+    async history(@Param('id') id: string, @Request() req: any) {
+        // Через findById, чтобы права на заявку проверялись ровно так же, как
+        // при её открытии: историю видит тот, кто видит сам рейс.
+        await this.ordersService.findById(id, {
+            userId: req.user.sub,
+            role: req.user.role,
+            companyId: req.user.companyId,
+        });
+        return this.auditService.getOrderHistory(id);
+    }
+
     @Put(':id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Обновить заявку' })
@@ -352,6 +367,7 @@ export class OrdersController {
             entityId: id,
             entityLabel: `Заявка №${(updated as any)?.orderNumber || id}`,
             details: Object.keys(moneyChanges).length ? moneyChanges : null,
+            orderId: id,
         });
 
         return updated;
@@ -373,6 +389,7 @@ export class OrdersController {
                 entityId: id,
                 entityLabel: `Заявка №${(result as any)?.orderNumber || id}`,
                 details: { status: dto.status, comment: dto.comment ?? null },
+                orderId: id,
             });
         }
 
