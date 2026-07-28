@@ -41,13 +41,21 @@ async function main() {
     });
 
     // Роль берётся из связи с компанией — без неё запросы отвечают 401.
-    const relation = await prisma.userCompanyRelation.findFirst({
-        where: { userId: admin.id, companyId: us.id },
-    });
-    if (!relation) {
-        await prisma.userCompanyRelation.create({
-            data: { userId: admin.id, companyId: us.id, role: 'COMPANY_ADMIN' },
+    //
+    // Связь заводится каждому, а не только администратору. Раньше её имел
+    // один admin@p3.kz, и это выглядело как исправная демо-база: заказчик и
+    // водитель спокойно входили, а дальше любой запрос отвечал «Пользователь
+    // не найден». Вход есть, работы нет — и разобраться по сообщению
+    // невозможно.
+    for (const [person, company] of [[admin, us], [clientUser, client], [driver, us]]) {
+        const relation = await prisma.userCompanyRelation.findFirst({
+            where: { userId: person.id, companyId: company.id },
         });
+        if (!relation) {
+            await prisma.userCompanyRelation.create({
+                data: { userId: person.id, companyId: company.id, role: person.role },
+            });
+        }
     }
 
     const specs = [
