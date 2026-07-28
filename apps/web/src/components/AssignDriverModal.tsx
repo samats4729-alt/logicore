@@ -314,8 +314,16 @@ export default function AssignDriverModal({
                     if (transportType === 'own') {
                         try {
                             await api.put(`/company/drivers/${selectedDriverId}`, driverData);
-                        } catch (err) {
-                            // Non-critical update failure
+                        } catch (err: any) {
+                            // Молчать здесь нельзя. Человек правит номер машины
+                            // или документы водителя, видит «водитель назначен»
+                            // и уходит — а правка не сохранилась. Назначение при
+                            // этом состоялось, поэтому не ошибка, а
+                            // предупреждение: рейс поехал, данные — нет.
+                            toast.warning(
+                                err?.response?.data?.message
+                                || 'Водитель назначен, но его данные сохранить не удалось',
+                            );
                         }
                     }
                 }

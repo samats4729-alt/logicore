@@ -231,6 +231,7 @@ export class CompanyDriversService {
             firstName?: string;
             lastName?: string;
             middleName?: string;
+            phone?: string;
             iin?: string;
             vehicleType?: string;
             vehiclePlate?: string;
@@ -265,6 +266,19 @@ export class CompanyDriversService {
  
         if (!hasAccess) {
             throw new ForbiddenException('У вас нет доступа к этому водителю');
+        }
+
+        // Телефон водителя — это его вход в мобильное приложение. Два водителя
+        // с одинаковым номером сделали бы вход неоднозначным, поэтому меняем
+        // только на свободный и говорим прямо, если номер занят.
+        if (data.phone && data.phone !== driver.phone) {
+            const taken = await this.prisma.user.findFirst({
+                where: { phone: data.phone, id: { not: driverId }, isActive: true },
+                select: { id: true },
+            });
+            if (taken) {
+                throw new BadRequestException('Этот номер телефона уже занят другим сотрудником');
+            }
         }
 
         const { password, ...updateData } = data;
