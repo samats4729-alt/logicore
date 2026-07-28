@@ -330,12 +330,12 @@ export default function PartnersPage() {
         
         return (
             <div style={{ minHeight: 400, paddingTop: 8 }}>
-                <div style={{ marginBottom: 16 }}>
-                    <Title level={4} style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-                        {tabType === 'customers' ? 'Список заказчиков' : 'Список перевозчиков'}
-                    </Title>
+                {/* Заголовок «Список заказчиков» повторял название вкладки прямо
+                    над ним — две строки на то, что уже написано. Осталась одна
+                    подсказка, и то короткая. */}
+                <div style={{ marginBottom: 10 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                        Нажмите на строку — откроется карточка контрагента. «Изменить» — правка данных и роли.
+                        Нажмите на строку — откроется карточка контрагента.
                     </Text>
                 </div>
                 <Table
@@ -433,20 +433,15 @@ export default function PartnersPage() {
         <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
+                {/* Кнопка и подпись занимали по отдельной строке, и до первой
+                    строки списка уходило 417 пикселей из 1000. Кнопка ушла
+                    вправо, к плиткам, подпись сжата в одну строку. */}
                 <div>
                     <div className="lc-eyebrow">Справочники · Контрагенты</div>
                     <h1 className="lc2-title">Контрагенты</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Управление заказчиками, перевозчиками и входящими запросами на партнерство
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '4px 0 0' }}>
+                        Заказчики, перевозчики и запросы на партнёрство.
                     </p>
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={openCreate}
-                        className="lc-cta"
-                    >
-                        Добавить контрагента
-                    </Button>
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
@@ -488,6 +483,14 @@ export default function PartnersPage() {
                         </div>
                     </div>
                 </div>
+                <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={openCreate}
+                    className="lc-cta"
+                >
+                    Добавить контрагента
+                </Button>
             </div>
 
             {/* ===== TABS CARD ===== */}
