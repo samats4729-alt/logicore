@@ -369,6 +369,9 @@ model Company {
   serviceCatalog                  ServiceCatalogItem[]          @relation("CompanyServiceCatalog")
   dictionaries                    DictionaryItem[]              @relation("CompanyDictionaries")
   orderNumbering                  OrderNumbering?               @relation("CompanyOrderNumbering")
+  quoteRequests                   QuoteRequest[]                @relation("CompanyQuoteRequests")
+  quoteRequestsAsCustomer         QuoteRequest[]                @relation("CustomerQuoteRequests")
+  quoteRequestNumbering           QuoteRequestNumbering?        @relation("CompanyQuoteRequestNumbering")
   nomenclature                    NomenclatureItem[]            @relation("CompanyNomenclature")
   stockWarehouses                 StockWarehouse[]              @relation("CompanyWarehouses")
   stockMoves                      StockMove[]                   @relation("CompanyStockMoves")
@@ -501,6 +504,9 @@ model City {
   originTariffs      RouteTariff[] @relation("OriginTariffs")
   destinationTariffs RouteTariff[] @relation("DestinationTariffs")
   locations          Location[]
+
+  originQuoteRequests      QuoteRequest[] @relation("OriginQuoteRequests")
+  destinationQuoteRequests QuoteRequest[] @relation("DestinationQuoteRequests")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -688,6 +694,8 @@ model Order {
   proposedDriverCost        Decimal?             @db.Decimal(18, 2)
   proposedSubForwarderPrice Decimal?             @db.Decimal(18, 2)
   paymentProofs             OrderPaymentProof[]
+  /// Запрос на расчёт, из которого выросла эта заявка.
+  quoteRequest              QuoteRequest?        @relation("OrderQuoteRequest")
 
   @@index([status])
   @@index([customerId])
@@ -1259,6 +1267,108 @@ model OrderNumbering {
   prefix     String   @default("") // Префикс перед номером (может быть пустым)
   padding    Int      @default(9) // Длина числовой части (ведущие нули)
   nextNumber Int      @default(1) // Следующий номер, который будет присвоен
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ==================== ЗАПРОСЫ НА РАСЧЁТ ====================
+
+/// Что стало с запросом. Ровно четыре состояния — так их назвал заказчик:
+/// новый, в работе, согласован, не согласован. Пятого не заводим:
+/// «отправили КП» — это не отдельное состояние, а момент, когда появилась
+/// цена, и он виден по заполненным ценам и дате.
+enum QuoteRequestStatus {
+  NEW // Новый — пришёл, ещё не считали
+  IN_PROGRESS // В работе — ищем машину, посчитали, отправили цену
+  APPROVED // Согласован — клиент подтвердил, дальше заявка
+  REJECTED // Не согласован — клиент отказался
+}
+
+/// Запрос клиента на расчёт стоимости перевозки.
+///
+/// Это то, что происходит ДО заявки. Клиент пишет: «завтра отгружаем,
+/// Шымкент — Алматы, 20 тонн, 86 кубов, посчитайте». Мы ищем машину,
+/// называем цену, он соглашается или нет.
+///
+/// Зачем хранить. Отказы нигде не оставались, и через два дня тот же
+/// клиент спрашивал тот же маршрут — а менеджер уже не помнил ни что
+/// предлагал, ни почём нашёл машину. Называли ту же цену, на которую уже
+/// отказали. Здесь этот случай запоминается целиком: обе цены и исход.
+///
+/// Маршрут хранится городами, а не адресами, намеренно: похожий запрос
+/// ищется именно по направлению. Склад у каждого клиента свой, а
+/// «Шымкент — Алматы» общий, и по адресам совпадений не было бы.
+model QuoteRequest {
+  id            String @id @default(cuid())
+  requestNumber String @unique
+
+  /// Наша организация — чей это запрос.
+  companyId String
+  company   Company @relation("CompanyQuoteRequests", fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// Клиент, который просит расчёт. Обязателен: запрос всегда чей-то, и
+  /// вся память строится по паре «клиент + маршрут».
+  customerCompanyId String
+  customerCompany   Company @relation("CustomerQuoteRequests", fields: [customerCompanyId], references: [id])
+
+  originCityId      String
+  originCity        City   @relation("OriginQuoteRequests", fields: [originCityId], references: [id])
+  destinationCityId String
+  destinationCity   City   @relation("DestinationQuoteRequests", fields: [destinationCityId], references: [id])
+
+  /// Когда груз готов к отгрузке.
+  readyDate        DateTime?
+  cargoDescription String?
+  /// Характер груза: напитки, стройматериалы, продукты.
+  natureOfCargo    String?
+  /// Тип кузова: тент, рефрижератор, борт.
+  cargoType        String?
+  /// Вес в килограммах — как в заявке. В интерфейсе показываем тоннами,
+  /// потому что клиенты говорят «20 тонн», но храним в тех же единицах,
+  /// что и заявка: из запроса потом делается заявка, и пересчёт на
+  /// границе — источник ошибок в цене.
+  cargoWeight      Float?
+  cargoVolume      Float?
+
+  /// Почём нашли машину. Именно это менеджер забывает первым делом.
+  carrierCost   Decimal? @db.Decimal(18, 2)
+  /// Что предложили клиенту.
+  customerPrice Decimal? @db.Decimal(18, 2)
+  currency      String   @default("KZT")
+  /// Когда назвали цену.
+  quotedAt      DateTime?
+  quotedById    String?
+
+  status          QuoteRequestStatus @default(NEW)
+  /// Почему клиент отказался — словами менеджера. Без причины отказ
+  /// бесполезен: «дорого» и «нашли раньше» требуют разных решений.
+  rejectionReason String?
+  decidedAt       DateTime?
+  notes           String?
+
+  createdById String?
+
+  /// Заявка, в которую превратился согласованный запрос.
+  orderId String? @unique
+  order   Order?  @relation("OrderQuoteRequest", fields: [orderId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([customerCompanyId, originCityId, destinationCityId])
+  @@index([companyId, originCityId, destinationCityId])
+  @@index([createdAt])
+}
+
+/// Нумерация запросов — по одной настройке на организацию, как у заявок.
+model QuoteRequestNumbering {
+  id         String   @id @default(cuid())
+  companyId  String   @unique
+  company    Company  @relation("CompanyQuoteRequestNumbering", fields: [companyId], references: [id], onDelete: Cascade)
+  prefix     String   @default("ЗПР-")
+  padding    Int      @default(5)
+  nextNumber Int      @default(1)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
