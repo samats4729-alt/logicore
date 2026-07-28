@@ -906,7 +906,7 @@ a.mapboxgl-ctrl-logo,
   margin-left: 10px;
 }
 
-.lc-page .lc-cta.ant-btn {
+.lc-page .lc-cta {
   background: linear-gradient(180deg, #1c202b 0%, #0f1117 100%) !important;
   border: none !important;
   color: #fff !important;
@@ -917,13 +917,13 @@ a.mapboxgl-ctrl-logo,
   box-shadow: 0 4px 14px rgba(15, 17, 23, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
-.lc-page .lc-cta.ant-btn:hover:not(:disabled) {
+.lc-page .lc-cta:hover:not(:disabled) {
   background: #1677ff !important;
   box-shadow: 0 6px 18px rgba(22, 119, 255, 0.35) !important;
   transform: translateY(-1px);
 }
 
-.lc-page .lc-cta.ant-btn:disabled {
+.lc-page .lc-cta:disabled {
   background: #e4e4e7 !important;
   color: #a1a1aa !important;
   box-shadow: none !important;
@@ -951,7 +951,7 @@ a.mapboxgl-ctrl-logo,
   55% { left: 130%; }
   100% { left: 130%; }
 }
-[data-theme='dark'] .lc-page .lc-cta.ant-btn {
+[data-theme='dark'] .lc-page .lc-cta {
   border: 1px solid rgba(255, 255, 255, 0.16) !important;
 }
 
@@ -2698,7 +2698,7 @@ a.mapboxgl-ctrl-logo,
     gap: 8px;
   }
 
-  .lc2-actionbar .lc2-ab-right .ant-btn {
+  .lc2-actionbar .lc2-ab-right button {
     flex: 1 1 auto;
   }
 
@@ -2718,7 +2718,7 @@ a.mapboxgl-ctrl-logo,
     width: 100% !important;
   }
 
-  .lc-page .lc-filterbar .ant-btn {
+  .lc-page .lc-filterbar button {
     grid-column: 1 / -1;
   }
 
