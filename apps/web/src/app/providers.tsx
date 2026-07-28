@@ -7,6 +7,7 @@ import { SWRConfig } from 'swr';
 import ruRU from 'antd/locale/ru_RU';
 import ThemeProvider, { useTheme } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
+import { reportRequestFailure } from '@/lib/load';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com';
 
@@ -102,6 +103,12 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                         revalidateOnFocus: false,
                         revalidateOnReconnect: true,
                         dedupingInterval: 4000,
+                        // Упавшая загрузка не должна выглядеть как «данных нет».
+                        // Экраны на SWR молча показывали пустую таблицу: список
+                        // не пришёл, а человек видел «Нет данных» и верил. Здесь
+                        // одно место на весь кабинет — не придётся вспоминать
+                        // про обработку ошибки на каждом новом экране.
+                        onError: (error) => reportRequestFailure(error),
                     }}
                 >
                     <AntdApp>

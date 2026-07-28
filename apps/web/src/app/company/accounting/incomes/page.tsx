@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, Segmented, Modal, Form, InputNumber, Popconfirm, theme } from 'antd';
 import { SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { loadOrReport } from '@/lib/load';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
@@ -34,9 +35,20 @@ export default function CompanyIncomesPage() {
     const [accounts, setAccounts] = useState<any[]>([]);
     const [categories, setCategories] = useState<{ id: string; name: string; direction: 'IN' | 'OUT'; isActive: boolean }[]>([]);
     useEffect(() => { fetchManual(); fetchAccounts(); fetchCategories(); }, []);
-    const fetchManual = async () => { setLoading(true); try { const res = await api.get('/accounting/incomes'); setManualIncomes(res.data); } catch {} finally { setLoading(false); } };
-    const fetchAccounts = async () => { try { const res = await api.get('/accounting/finance-accounts'); setAccounts((res.data || []).filter((a: any) => a.isActive !== false)); } catch {} };
-    const fetchCategories = async () => { try { const res = await api.get('/accounting/finance-categories'); setCategories((res.data || []).filter((c: any) => c.isActive !== false)); } catch {} };
+    const fetchManual = async () => {
+        setLoading(true);
+        const res = await loadOrReport('поступления', () => api.get('/accounting/incomes'));
+        if (res) setManualIncomes(res.data);
+        setLoading(false);
+    };
+    const fetchAccounts = async () => {
+        const res = await loadOrReport('счета и кассы', () => api.get('/accounting/finance-accounts'));
+        if (res) setAccounts((res.data || []).filter((a: any) => a.isActive !== false));
+    };
+    const fetchCategories = async () => {
+        const res = await loadOrReport('статьи доходов', () => api.get('/accounting/finance-categories'));
+        if (res) setCategories((res.data || []).filter((c: any) => c.isActive !== false));
+    };
 
     const handleSaveManual = async (values: any) => { try { const payload = { category: values.category, description: values.category, amount: values.amount, date: values.date.toISOString(), accountId: values.accountId || undefined, note: values.note }; if (editingIncome) { await api.put(`/accounting/incomes/${editingIncome.id}`, payload); toast.success('Обновлено'); } else { await api.post('/accounting/incomes', payload); toast.success('Добавлено'); } setModalOpen(false); setEditingIncome(null); form.resetFields(); fetchManual(); } catch { toast.error('Ошибка сохранения'); } };
     const handleDeleteManual = async (id: string) => { try { await api.delete(`/accounting/incomes/${id}`); toast.success('Удалено'); fetchManual(); } catch { toast.error('Ошибка удаления'); } };
