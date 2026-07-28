@@ -191,25 +191,34 @@ export class AuthService {
                 companyId: true,
             },
         });
-        if (!user) return null;
+        if (!user) return { reason: 'NO_USER' as const };
 
         // companyId in JWT selects the active organisation, but access and role are
         // resolved from the database on every request. Removing a relation or changing
         // its role therefore takes effect immediately, without waiting for token expiry.
+        //
+        // Причину возвращаем отдельно. Раньше все три случая — нет человека, нет
+        // связи с компанией, компания отключена — сливались в одно `null`, и
+        // человек на каждый запрос получал «Пользователь не найден». Он при этом
+        // спокойно вошёл под своей почтой, так что сообщение выглядело бредом, и
+        // ни он, ни владелец не догадывались, что дело в связи с компанией.
         if (activeCompanyId) {
             const relation = await this.prisma.userCompanyRelation.findUnique({
                 where: { userId_companyId: { userId, companyId: activeCompanyId } },
                 include: { company: { select: { isActive: true } } },
             });
-            if (!relation || !relation.company.isActive) return null;
+            if (!relation) return { reason: 'NO_RELATION' as const };
+            if (!relation.company.isActive) return { reason: 'COMPANY_OFF' as const };
             return {
-                ...user,
-                companyId: activeCompanyId,
-                role: relation.role,
+                user: {
+                    ...user,
+                    companyId: activeCompanyId,
+                    role: relation.role,
+                },
             };
         }
 
-        return user;
+        return { user };
     }
 
     /**

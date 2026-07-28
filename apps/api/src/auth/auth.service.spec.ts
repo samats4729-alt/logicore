@@ -39,15 +39,21 @@ describe('AuthService.findUserById', () => {
         });
 
         await expect(service.findUserById('user-1', 'company-2')).resolves.toMatchObject({
-            companyId: 'company-2',
-            role: UserRole.ACCOUNTANT,
+            user: {
+                companyId: 'company-2',
+                role: UserRole.ACCOUNTANT,
+            },
         });
     });
 
+    // Причина отказа называется отдельно: раньше все случаи сливались в null,
+    // и человек, только что вошедший под своей почтой, получал на каждый
+    // запрос «Пользователь не найден».
     it('revokes a token after the company relation is removed', async () => {
         const { service } = makeService(null);
 
-        await expect(service.findUserById('user-1', 'company-2')).resolves.toBeNull();
+        await expect(service.findUserById('user-1', 'company-2'))
+            .resolves.toEqual({ reason: 'NO_RELATION' });
     });
 
     it('revokes access when the active company is disabled', async () => {
@@ -56,6 +62,7 @@ describe('AuthService.findUserById', () => {
             company: { isActive: false },
         });
 
-        await expect(service.findUserById('user-1', 'company-2')).resolves.toBeNull();
+        await expect(service.findUserById('user-1', 'company-2'))
+            .resolves.toEqual({ reason: 'COMPANY_OFF' });
     });
 });
