@@ -554,6 +554,71 @@ export class ContractsService {
      * Поиск тарифа по маршруту (для заказчика — ищет по всем его договорам)
      * Принимает city name и ищет по нему
      */
+    /**
+     * Тариф, который МЫ дали своему клиенту на этот маршрут.
+     *
+     * Существующие два поиска смотрят в другую сторону — «какой тариф нам
+     * дал наш экспедитор»: в них наша компания стоит заказчиком по
+     * договору. Для запросов на расчёт нужно обратное: мы исполнитель,
+     * клиент — заказчик. Без этого годовые тарифы, которые уже заведены в
+     * договорах, в запросах бы не подтянулись, и менеджер считал бы
+     * вручную то, что давно согласовано на год.
+     *
+     * Тариф с конкретным типом кузова важнее общего: рефрижератор и тент по
+     * одному маршруту стоят по-разному, и общая ставка тут только помешает.
+     */
+    async lookupTariffForOurClient(
+        ourCompanyId: string,
+        customerCompanyId: string,
+        originCityId: string,
+        destinationCityId: string,
+        vehicleType?: string,
+    ) {
+        const now = new Date();
+
+        const where: any = {
+            originCityId,
+            destinationCityId,
+            isActive: true,
+            agreement: {
+                status: 'APPROVED',
+                OR: [{ validTo: null }, { validTo: { gte: now } }],
+                contract: {
+                    customerCompanyId,
+                    forwarderCompanyId: ourCompanyId,
+                    status: 'ACTIVE',
+                },
+            },
+        };
+
+        const include = {
+            ...this.tariffInclude,
+            agreement: {
+                select: {
+                    id: true,
+                    agreementNumber: true,
+                    validTo: true,
+                    contract: { select: { id: true, contractNumber: true } },
+                },
+            },
+        };
+
+        if (vehicleType) {
+            const exact = await this.prisma.routeTariff.findFirst({
+                where: { ...where, vehicleType },
+                include,
+                orderBy: { createdAt: 'desc' },
+            });
+            if (exact) return exact;
+        }
+
+        return this.prisma.routeTariff.findFirst({
+            where: { ...where, vehicleType: null },
+            include,
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+
     async lookupTariffForCustomer(
         customerCompanyId: string,
         originCityName: string,

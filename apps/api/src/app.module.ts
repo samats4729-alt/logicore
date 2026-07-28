@@ -29,6 +29,7 @@ import { PayrollModule } from './payroll/payroll.module';
 import { BillingModule } from './billing/billing.module';
 import { AuditModule } from './audit/audit.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { QuoteRequestsModule } from './quote-requests/quote-requests.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
 import { AdminStatsModule } from './admin-stats/admin-stats.module';
@@ -77,6 +78,7 @@ import { ReportsModule } from './reports/reports.module';
         BillingModule,
         AuditModule,
         TelegramModule,
+        QuoteRequestsModule,
         MonitoringModule,
         GeoModule,
         AdminStatsModule,
