@@ -33,11 +33,26 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             throw new UnauthorizedException('Токен не предоставлен');
         }
 
-        // Проверка активности пользователя
-        const user = await this.authService.findUserById(payload.sub, payload.companyId);
-        if (!user) {
+        // Проверка активности пользователя.
+        //
+        // Причину называем ту, которая есть на самом деле. «Пользователь не
+        // найден» человеку, который только что вошёл под своей почтой, не
+        // объясняет ничего — а происходило это, когда его убрали из компании.
+        const found = await this.authService.findUserById(payload.sub, payload.companyId);
+        if ('reason' in found) {
+            if (found.reason === 'NO_RELATION') {
+                throw new UnauthorizedException(
+                    'Вас больше нет в этой компании. Попросите руководителя вернуть доступ.',
+                );
+            }
+            if (found.reason === 'COMPANY_OFF') {
+                throw new UnauthorizedException(
+                    'Компания отключена. Обратитесь к её руководителю.',
+                );
+            }
             throw new UnauthorizedException('Пользователь не найден');
         }
+        const user = found.user;
         if (!user.isActive) {
             throw new UnauthorizedException('Аккаунт деактивирован');
         }

@@ -107,7 +107,16 @@ export class OrdersController {
     // без него обязательное поле «Заявка» оставалось пустым, и расход
     // с типом «по заявке» нельзя было сохранить вообще. Отдельную заявку
     // (`findOne` ниже) бухгалтер и раньше открывал — не пускал только список.
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    //
+    // Завскладом — та же история. Право «Заявки» ему выдают (склад должен
+    // видеть, что и когда приедет), в меню раздел показывался, страница
+    // открывалась — а список отвечал отказом. Право есть, толку нет.
+    // Класс контроллера требует право `orders`, поэтому сюда попадёт только
+    // тот завскладом, кому его выдал руководитель.
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN,
+        UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER,
+    )
     @ApiOperation({ summary: 'Получить список заявок' })
     @ApiQuery({ name: 'status', required: false, enum: OrderStatus })
     @ApiQuery({ name: 'customerId', required: false })
@@ -301,7 +310,13 @@ export class OrdersController {
     }
 
     @Get(':id')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
+    // Бухгалтер и завскладом открывают карточку по той же причине, по которой
+    // видят список: иначе раздел «Заявки» открывается пустым, а строка не
+    // кликается. Право `orders` требуется на уровне контроллера.
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER,
+        UserRole.DRIVER, UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER,
+    )
     @ApiOperation({ summary: 'Получить заявку по ID' })
     async findOne(@Param('id') id: string, @Request() req: any) {
         return this.ordersService.findById(id, {
