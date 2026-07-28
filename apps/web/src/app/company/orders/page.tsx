@@ -11,7 +11,7 @@ import {
     ExclamationCircleOutlined,
     ClockCircleOutlined, TruckOutlined
 } from '@ant-design/icons';
-import { ChevronRight, Eraser, FileText, Mail, Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Eraser, FileText, Mail, Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 import { api, Location } from '@/lib/api';
@@ -1335,8 +1335,11 @@ export default function CompanyOrdersPage() {
                     onClick={() => setFeaturedOpen(!featuredOpen)}
                     className="lc2-featured-toggle"
                 >
-                    <span>{featuredOpen ? '▾' : '▸'}</span>
-                    <span>Карточка рейса{featured?.orderNumber ? ` · ${featured.orderNumber}` : ''}</span>
+                    {featuredOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    <span>
+                        {featuredOpen ? 'Скрыть карточку рейса' : 'Показать карточку рейса'}
+                        {featured?.orderNumber ? ` · ${featured.orderNumber}` : ''}
+                    </span>
                 </button>
                 {featuredOpen && (
                     <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />

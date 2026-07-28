@@ -3036,16 +3036,25 @@ a.mapboxgl-ctrl-logo,
     align-items: center;
     gap: 6px;
     margin: 0 0 10px;
-    padding: 4px 10px 4px 6px;
+    padding: 6px 12px;
+    /* Рамка и фон здесь обязательны. Сначала переключатель был серой
+       строкой со стрелочкой — владелец смотрел прямо на него и не понял,
+       чем свернулась карточка. Управляющий элемент должен выглядеть
+       управляющим, иначе его нет. */
+    border: 1px solid var(--lc-border, #e4e4e7);
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    color: var(--lc-text-sec);
-    background: transparent;
+    color: var(--lc-text);
+    background: #fff;
     cursor: pointer;
-    transition: background-color .15s, color .15s;
+    transition: background-color .15s, border-color .15s;
 }
 .lc2-featured-toggle:hover {
     background: var(--lc-surface-2, #f4f5f7);
-    color: var(--lc-text);
+    border-color: var(--lc-text-ter, #a1a1aa);
+}
+[data-theme='dark'] .lc2-featured-toggle {
+    background: transparent;
+    border-color: rgba(255, 255, 255, .16);
 }

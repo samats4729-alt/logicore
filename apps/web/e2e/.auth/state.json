@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "logicore_session",
-      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbXMybjFzdGowMDAxc3JncWxoazBremg1IiwiZW1haWwiOiJhZG1pbkBwMy5reiIsInJvbGUiOiJDT01QQU5ZX0FETUlOIiwiY29tcGFueUlkIjoicDMtdXMiLCJpYXQiOjE3ODUyMTAwNDQsImV4cCI6MTc4NTgxNDg0NH0.RTBgd7hnNJdU9XM8JP_NK0OLLIT8FtaRkKu8iCBybQw",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbXMybjFzdGowMDAxc3JncWxoazBremg1IiwiZW1haWwiOiJhZG1pbkBwMy5reiIsInJvbGUiOiJDT01QQU5ZX0FETUlOIiwiY29tcGFueUlkIjoicDMtdXMiLCJpYXQiOjE3ODUyMTE5MzIsImV4cCI6MTc4NTgxNjczMn0.VOM-C2Jn2LueHXPs4jTYdkhEjifq0_XLPQFawh2YIAQ",
       "domain": "localhost",
       "path": "/",
-      "expires": 1785814844.12944,
+      "expires": 1785816732.563876,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
@@ -17,7 +17,7 @@
       "localStorage": [
         {
           "name": "deviceId",
-          "value": "1d3d018e-2bc8-4522-a4d6-4e9cbfc3a679"
+          "value": "610a7402-26da-41ff-8279-4f01bf450c15"
         },
         {
           "name": "logcomp-auth",
