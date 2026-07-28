@@ -192,6 +192,10 @@ jobs:
       PORT: 3001
       NEXT_PUBLIC_API_URL: "http://localhost:3001"
       E2E_BASE_URL: "http://localhost:3000"
+      # Настоящий предел — пять входов в минуту, он защищает продакшен от
+      # подбора пароля. Здесь за пять минут проходит больше десятка
+      # проверок, каждая со своим входом, и предел рубил бы их зря.
+      AUTH_THROTTLE_LIMIT: "1000"
 
     steps:
       - name: Checkout repository

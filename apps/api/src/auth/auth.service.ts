@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -74,7 +75,7 @@ export class AuthService {
 
         // Создаем токен
         const payload = { sub: user.id, email: user.email, role: effectiveRole, companyId: user.companyId };
-        const accessToken = this.jwtService.sign(payload);
+        const accessToken = this.signToken(payload);
 
         // Сохраняем сессию
         const expiresIn = 60 * 60 * 24 * 7;
@@ -146,7 +147,7 @@ export class AuthService {
         }
 
         const payload = { sub: user.id, email: user.email, role: user.role, companyId: user.companyId };
-        const accessToken = this.jwtService.sign(payload);
+        const accessToken = this.signToken(payload);
         const expiresIn = 60 * 60 * 24 * 7;
 
         try {
@@ -403,8 +404,26 @@ export class AuthService {
      * токен («Сессия недействительна»), поэтому любой путь, выдающий
      * токен, обязан пройти здесь.
      */
+    /**
+     * Подписать токен так, чтобы два входа подряд не дали одинаковых.
+     *
+     * В токен входит только состав пользователя и время выдачи, а время
+     * это — целые секунды. Значит два входа одного человека в пределах
+     * одной секунды давали ПОБУКВЕННО одинаковый токен, и запись сессии
+     * падала на требовании уникальности: пользователь получал ошибку
+     * сервера на ровном месте. Ловилось это редко — надо было успеть
+     * войти дважды за секунду (двойное нажатие «Войти», повторный вход
+     * из другой вкладки, автоматические проверки), — но каждый раз
+     * выглядело как «вход сломался».
+     *
+     * `jti` — случайная метка выдачи, она делает каждый токен своим.
+     */
+    private signToken(payload: Record<string, unknown>) {
+        return this.jwtService.sign({ ...payload, jti: randomUUID() });
+    }
+
     async issueSession(userId: string, payload: Record<string, unknown>, deviceId: string) {
-        const accessToken = this.jwtService.sign(payload);
+        const accessToken = this.signToken(payload);
         const expiresIn = 60 * 60 * 24 * 7;
 
         try {

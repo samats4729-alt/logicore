@@ -1,6 +1,16 @@
 import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+
+/**
+ * Сколько попыток входа с одного адреса разрешено в минуту.
+ *
+ * Пять — защита от подбора пароля, и на продакшене она такой и остаётся:
+ * переменная задаётся только в CI. Там за пять минут прогоняется больше
+ * десятка браузерных проверок, каждая со своим входом, и настоящий предел
+ * блокировал бы их — проверка падала бы не из-за поломки в продукте.
+ */
+const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
 import { AuthService } from './auth.service';
 import { LoginEmailDto, RegisterCompanyDto, RegisterUserDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -15,7 +25,7 @@ export class AuthController {
     // ==================== Email Auth (Остальные роли) ====================
 
     @Post('login')
-    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @Throttle({ default: { limit: LOGIN_ATTEMPTS_PER_MINUTE, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Вход по email и паролю' })
     @ApiResponse({ status: 200, description: 'Успешная авторизация' })
@@ -29,7 +39,7 @@ export class AuthController {
     // ==================== Вход водителя (мобильное приложение) ====================
 
     @Post('driver-login')
-    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @Throttle({ default: { limit: LOGIN_ATTEMPTS_PER_MINUTE, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Вход водителя по телефону и паролю' })
     @ApiResponse({ status: 200, description: 'Успешная авторизация' })
@@ -77,7 +87,7 @@ export class AuthController {
     // ==================== Регистрация компании ====================
 
     @Post('register')
-    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @Throttle({ default: { limit: LOGIN_ATTEMPTS_PER_MINUTE, ttl: 60000 } })
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({
         summary: 'Регистрация личного профиля',
@@ -90,7 +100,7 @@ export class AuthController {
     }
 
     @Post('register-company')
-    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @Throttle({ default: { limit: LOGIN_ATTEMPTS_PER_MINUTE, ttl: 60000 } })
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: 'Регистрация новой компании-клиента' })
     @ApiResponse({ status: 201, description: 'Компания зарегистрирована' })
