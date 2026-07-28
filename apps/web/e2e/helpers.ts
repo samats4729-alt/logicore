@@ -25,6 +25,22 @@ export const AUTH_STATE = path.join(__dirname, '.auth', 'state.json');
  */
 export async function login(page: Page) {
     await page.goto('/company');
+
+    // Обычный путь: сессия из `auth.setup.ts` уже восстановлена.
+    // Но она может не дожить до конца прогона — например, соседний тест
+    // входит формой и сервер обновляет сессию устройства. Тогда браузер
+    // оказывается на `/login`, и раньше тест падал по таймауту с
+    // бессмысленным «элемент не найден».
+    //
+    // Поэтому один запасной вход — только когда нас действительно
+    // выкинуло. Лимит `POST /auth/login` (пять в минуту) это не трогает:
+    // в исправном прогоне ветка не выполняется ни разу.
+    if (page.url().includes('/login')) {
+        await page.locator('input').first().fill(E2E_EMAIL);
+        await page.locator('input[type="password"]').first().fill(E2E_PASSWORD);
+        await page.getByRole('button', { name: 'Войти' }).click();
+    }
+
     await page.waitForURL('**/company**', { timeout: 45_000 });
 }
 

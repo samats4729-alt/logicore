@@ -244,9 +244,13 @@ async function main() {
     ];
 
     const orders = [];
+    // Формат номера — как на продакшене: пустой префикс и девять знаков
+    // с ведущими нулями (000000001). Стенд со своим форматом «ЛК-200»
+    // проверял бы то, чего у владельца нет.
+    const orderNo = (n) => String(n).padStart(9, '0');
     await prisma.orderNumbering.upsert({
-        where: { companyId: us.id }, update: {},
-        create: { companyId: us.id, prefix: 'ЛК-', nextNumber: 200 },
+        where: { companyId: us.id }, update: { prefix: '', padding: 9, nextNumber: 200 },
+        create: { companyId: us.id, prefix: '', padding: 9, nextNumber: 200 },
     }).catch(() => {});
 
     for (let i = 0; i < statusPool.length; i++) {
@@ -272,10 +276,10 @@ async function main() {
 
         const palletKind = pick(['EUR', 'FIN', 'STANDARD']);
         const order = await prisma.order.upsert({
-            where: { orderNumber: `ЛК-${200 + i}` },
+            where: { orderNumber: orderNo(200 + i) },
             update: {},
             create: {
-                orderNumber: `ЛК-${200 + i}`,
+                orderNumber: orderNo(200 + i),
                 status,
                 createdAt: created,
                 completedAt: done ? new Date(created.getTime() + 3 * 864e5) : null,
@@ -340,7 +344,7 @@ async function main() {
                     companyId: us.id, orderId: order.id, counterpartyId: client.id,
                     direction: 'IN', amount: D(customerPrice), date: new Date(created.getTime() + 20 * 864e5),
                     method: 'BANK', accountId: accHalyk.id, categoryId: catFreight.id,
-                    note: `Оплата по заявке ЛК-${200 + i}`, createdById: buh.id,
+                    note: `Оплата по заявке №${orderNo(200 + i)}`, createdById: buh.id,
                 },
             });
         }
@@ -350,7 +354,7 @@ async function main() {
                     companyId: us.id, orderId: order.id, counterpartyId: carrier.id,
                     direction: 'OUT', amount: D(driverCost), date: new Date(created.getTime() + 10 * 864e5),
                     method: 'BANK', accountId: accHalyk.id, categoryId: catCarrier.id,
-                    note: `Оплата перевозчику по ЛК-${200 + i}`, createdById: buh.id,
+                    note: `Оплата перевозчику по заявке №${orderNo(200 + i)}`, createdById: buh.id,
                 },
             });
         }
@@ -358,7 +362,7 @@ async function main() {
             await prisma.expense.create({
                 data: {
                     companyId: us.id, orderId: order.id, date: new Date(created.getTime() + 864e5),
-                    category: 'fuel', description: `ГСМ по рейсу ЛК-${200 + i}`,
+                    category: 'fuel', description: `ГСМ по рейсу №${orderNo(200 + i)}`,
                     amount: D(int(30, 90) * 1000), accountId: accCash.id, createdById: logist1.id,
                 },
             });
