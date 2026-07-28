@@ -68,7 +68,16 @@ api.interceptors.response.use(
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('logcomp-auth');
                     localStorage.removeItem('token');
-                    window.location.href = '/login';
+
+                    // На самой странице входа перезагрузка запрещена. Сюда
+                    // прилетает 401 от фонового запроса, который просто
+                    // выяснял, есть ли сессия, — а `window.location`
+                    // перезагружает страницу целиком и стирает уже набранные
+                    // почту с паролем. Человек видит, что форма сама
+                    // очистилась, без единого сообщения, и набирает заново.
+                    if (!window.location.pathname.startsWith('/login')) {
+                        window.location.href = '/login';
+                    }
                 }
             }
         }
