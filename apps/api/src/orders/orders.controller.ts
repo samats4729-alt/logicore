@@ -101,7 +101,12 @@ export class OrdersController {
     }
 
     @Get()
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    // Бухгалтер здесь не «на всякий случай»: экраны расходов, операций и
+    // кассы сами запрашивают этот список, чтобы дать выбрать заявку —
+    // без него обязательное поле «Заявка» оставалось пустым, и расход
+    // с типом «по заявке» нельзя было сохранить вообще. Отдельную заявку
+    // (`findOne` ниже) бухгалтер и раньше открывал — не пускал только список.
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Получить список заявок' })
     @ApiQuery({ name: 'status', required: false, enum: OrderStatus })
     @ApiQuery({ name: 'customerId', required: false })

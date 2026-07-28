@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { Reflector } from '@nestjs/core';
 import { ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
@@ -8,6 +10,7 @@ import { AccountingDocumentsController } from '../accounting-documents/accountin
 import { PaymentProofController } from '../payment-proofs/payment-proof.controller';
 import { DocumentsController } from '../documents/documents.controller';
 import { OrdersController } from '../orders/orders.controller';
+import { WarehouseController } from '../warehouse/warehouse.controller';
 
 /**
  * Матрица доступов: кто до какого действия допущен.
@@ -135,6 +138,45 @@ describe('Матрица доступов', () => {
             // Он их сам и выдаёт — иначе мог бы запереть себя.
             expect(allowed(AccountingDocumentsController, 'create', UserRole.COMPANY_ADMIN, []))
                 .toBe(true);
+        });
+    });
+
+    describe('бухгалтер и заявки', () => {
+        it('бухгалтер видит список заявок — иначе он не разнесёт расходы', () => {
+            // Экраны расходов, операций и кассы запрашивают `/orders`, чтобы
+            // дать выбрать заявку. Пока сюда не пускали, обязательное поле
+            // «Заявка» было пустым и расход «по заявке» не сохранялся.
+            expect(whoCanReach(OrdersController, 'findAll')).toContain(UserRole.ACCOUNTANT);
+        });
+
+        it('но создавать и менять заявки бухгалтер не может', () => {
+            // Доступ расширен только на чтение списка.
+            expect(whoCanReach(OrdersController, 'create')).not.toContain(UserRole.ACCOUNTANT);
+        });
+
+        it('водитель и грузополучатель к списку заявок по-прежнему не допущены', () => {
+            const who = whoCanReach(OrdersController, 'findAll');
+            expect(who).not.toContain(UserRole.DRIVER);
+            expect(who).not.toContain(UserRole.RECIPIENT);
+        });
+    });
+
+    describe('очередь на складе', () => {
+        it('свою очередь смотрят завсклад и администратор компании', () => {
+            const who = whoCanReach(WarehouseController, 'getMyQueue');
+            expect(who).toContain(UserRole.WAREHOUSE_MANAGER);
+            expect(who).toContain(UserRole.COMPANY_ADMIN);
+        });
+
+        it('`queue/my` объявлен раньше `queue/:locationId`', () => {
+            // Порядок здесь — не стиль, а поведение: маршруты разбираются
+            // сверху вниз, и при обратном порядке «my» уезжало в соседний
+            // маршрут как id склада. Завсклад получал вечно пустую очередь,
+            // администратор — 403.
+            const src = readFileSync(
+                join(__dirname, '../warehouse/warehouse.controller.ts'), 'utf8');
+            expect(src.indexOf("@Get('queue/my')"))
+                .toBeLessThan(src.indexOf("@Get('queue/:locationId')"));
         });
     });
 

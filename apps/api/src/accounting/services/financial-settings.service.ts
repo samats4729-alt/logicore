@@ -87,6 +87,16 @@ export class FinancialSettingsService {
             });
         }
 
+        // `skipDuplicates` здесь обязателен, а не «на всякий случай».
+        //
+        // Между чтением существующих записей выше и вставкой ниже проходит
+        // время, и за него ту же вставку успевает начать соседний запрос:
+        // раздел «Бухгалтерия» грузит счета и статьи одним `Promise.all`, а
+        // оба эндпоинта зовут этот же метод. Оба видят «ничего нет», оба
+        // вставляют — и проигравший падает на уникальном индексе с 500.
+        //
+        // Это не редкая гонка, а обычный первый заход новой компании в
+        // раздел: воспроизводится с первой попытки.
         if (accountsToCreate.length > 0) {
             await this.prisma.financeAccount.createMany({
                 data: accountsToCreate.map(a => ({
@@ -95,7 +105,8 @@ export class FinancialSettingsService {
                     kind: a.kind,
                     isDefault: true,
                     isActive: true
-                }))
+                })),
+                skipDuplicates: true
             });
         }
 
@@ -108,7 +119,8 @@ export class FinancialSettingsService {
                     costType: c.costType,
                     isSystem: c.isSystem,
                     isActive: true
-                }))
+                })),
+                skipDuplicates: true
             });
         }
     }

@@ -37,8 +37,19 @@ export class WarehouseService {
     async getCompanyQueue(companyId: string) {
         return this.prisma.warehouseQueueItem.findMany({
             where: {
+                // Компания участвует в рейсе с любой стороны, а не только
+                // как заказчик. Раньше здесь стоял один `customerCompanyId`,
+                // и у экспедитора — то есть у основного пользователя
+                // платформы — своя очередь была пуста всегда: в его рейсах
+                // заказчиком записан клиент, а сам он проходит как
+                // `forwarderId`.
                 order: {
-                    customerCompanyId: companyId,
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                    ],
                 },
                 completedAt: null,
             },

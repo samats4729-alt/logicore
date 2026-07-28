@@ -12,18 +12,27 @@ import { UserRole } from '@prisma/client';
 export class WarehouseController {
     constructor(private warehouseService: WarehouseService) { }
 
-    @Get('queue/:locationId')
-    @Roles(UserRole.ADMIN, UserRole.WAREHOUSE_MANAGER)
-    @ApiOperation({ summary: 'Получить очередь машин на складе' })
-    async getQueue(@Param('locationId') locationId: string) {
-        return this.warehouseService.getQueue(locationId);
-    }
-
+    // ВНИМАНИЕ: `queue/my` обязан быть объявлен ВЫШЕ `queue/:locationId`.
+    //
+    // Маршруты разбираются в порядке объявления, поэтому при обратном
+    // порядке адрес `/warehouse/queue/my` попадал в маршрут с параметром,
+    // и слово «my» уезжало туда как id склада. Последствия были такие:
+    // завсклад получал 200 и ВСЕГДА пустую очередь (склада с id «my» нет),
+    // а администратор компании — 403, потому что у соседнего маршрута
+    // другой список ролей. Метод `getCompanyQueue` при этом не вызывался
+    // ни разу.
     @Get('queue/my')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.WAREHOUSE_MANAGER)
     @ApiOperation({ summary: 'Получить очередь для своей компании' })
     async getMyQueue(@Request() req: any) {
         return this.warehouseService.getCompanyQueue(req.user.companyId);
+    }
+
+    @Get('queue/:locationId')
+    @Roles(UserRole.ADMIN, UserRole.WAREHOUSE_MANAGER)
+    @ApiOperation({ summary: 'Получить очередь машин на складе' })
+    async getQueue(@Param('locationId') locationId: string) {
+        return this.warehouseService.getQueue(locationId);
     }
 
     @Post('arrived/:orderId')
