@@ -315,6 +315,8 @@ export class OrdersService {
         fromDate?: Date;
         toDate?: Date;
         companyId?: string;
+        /** Поиск по номеру, грузу, городам маршрута и названию заказчика. */
+        search?: string;
     }, query: PaginationQueryDto = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
         const where: any = {
@@ -328,12 +330,41 @@ export class OrdersService {
         };
 
         // Изоляция по компании: заказ принадлежит компании через customerCompanyId, forwarderId или subForwarderId
+        // Условия складываем через AND: раньше и принадлежность компании, и
+        // поиск писались в один `OR`, и второй затирал первый — компания
+        // увидела бы чужие заявки.
+        const conditions: any[] = [];
         if (filters?.companyId) {
-            where.OR = [
-                { customerCompanyId: filters.companyId },
-                { forwarderId: filters.companyId },
-                { subForwarderId: filters.companyId },
-            ];
+            conditions.push({
+                OR: [
+                    { customerCompanyId: filters.companyId },
+                    { forwarderId: filters.companyId },
+                    { subForwarderId: filters.companyId },
+                ],
+            });
+        }
+
+        // Поиск идёт по базе, а не по первым трёмстам записям на экране.
+        // Логист ищет рейс не только по номеру: чаще по городу или грузу —
+        // «то, что везли в Атырау», а номер приходится смотреть отдельно.
+        const search = filters?.search?.trim();
+        if (search) {
+            const like = { contains: search, mode: 'insensitive' as const };
+            conditions.push({
+                OR: [
+                    { orderNumber: like },
+                    { cargoDescription: like },
+                    { natureOfCargo: like },
+                    { customerCompany: { name: like } },
+                    { routePoints: { some: { location: { city: like } } } },
+                    { routePoints: { some: { location: { address: like } } } },
+                    { routePoints: { some: { location: { name: like } } } },
+                ],
+            });
+        }
+
+        if (conditions.length) {
+            where.AND = conditions;
         }
 
         const [data, total] = await Promise.all([

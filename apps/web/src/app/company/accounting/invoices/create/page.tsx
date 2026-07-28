@@ -97,7 +97,9 @@ export default function CreateInvoicePage() {
     const [lines, setLines] = useState<DraftLine[]>([]);
     const [submitting, setSubmitting] = useState(false);
 
-    const [counterparties, setCounterparties] = useState<{ id: string; name: string }[]>([]);
+    // БИН держим рядом с названием: у контрагентов бывают почти одинаковые
+    // имена, и бухгалтер различает их именно по БИН.
+    const [counterparties, setCounterparties] = useState<{ id: string; name: string; bin?: string }[]>([]);
     const [bankAccounts, setBankAccounts] = useState<CompanyBankAccount[]>([]);
     const [services, setServices] = useState<{ id: string; name: string; unit: string }[]>([]);
 
@@ -422,7 +424,7 @@ export default function CreateInvoicePage() {
                             optionFilterProp="label"
                             value={counterpartyId}
                             onChange={setCounterpartyId}
-                            options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
+                            options={counterparties.map((c) => ({ value: c.id, label: c.bin ? `${c.name} · БИН ${c.bin}` : c.name }))}
                         />
                     ))}
 

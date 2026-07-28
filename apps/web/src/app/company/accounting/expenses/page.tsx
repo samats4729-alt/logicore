@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { loadOrReport } from '@/lib/load';
+import OrderSelect from '@/components/orders/OrderSelect';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
@@ -57,11 +58,10 @@ export default function CompanyExpensesPage() {
 
     const [accounts, setAccounts] = useState<any[]>([]);
     const [categories, setCategories] = useState<{ id: string; name: string; direction: 'IN' | 'OUT'; costType?: string | null; isActive: boolean }[]>([]);
-    const [orders, setOrders] = useState<{ id: string; orderNumber: string }[]>([]);
     const watchedCategory = Form.useWatch('category', form);
     const selectedCat = categories.find(c => c.direction === 'OUT' && c.name === watchedCategory);
     const needsOrder = selectedCat?.costType === 'PER_ORDER';
-    useEffect(() => { fetchJournal(); fetchManual(); fetchAccounts(); fetchCategories(); fetchOrders(); }, []);
+    useEffect(() => { fetchJournal(); fetchManual(); fetchAccounts(); fetchCategories(); }, []);
     // Загрузки идут через loadOrReport: упавший запрос раньше оставлял экран
     // на вид рабочим, просто с пустым списком. Именно так поломка с полем
     // «Заявка» оставалась невидимой — бухгалтер думал, что заявок нет.
@@ -82,12 +82,6 @@ export default function CompanyExpensesPage() {
     const fetchCategories = async () => {
         const res = await loadOrReport('статьи расходов', () => api.get('/accounting/finance-categories'));
         if (res) setCategories((res.data || []).filter((c: any) => c.isActive !== false));
-    };
-    const fetchOrders = async () => {
-        const res = await loadOrReport('список заявок', () => api.get('/orders', { params: { limit: 300 } }));
-        if (!res) return;
-        const list = res.data?.data || res.data || [];
-        setOrders(list.map((o: any) => ({ id: o.id, orderNumber: o.orderNumber })));
     };
 
     const getCarrierName = (e: JournalEntry): string => { if (e.forwarder) return e.forwarder.name; return '—'; };
@@ -268,7 +262,10 @@ export default function CompanyExpensesPage() {
                     </Form.Item>
                     {needsOrder && (
                         <Form.Item name="orderId" label="Заявка" rules={[{ required: true, message: 'Статья «по заявке» — укажите заявку' }]} extra="Расход отнесётся к заявке и уменьшит её маржу">
-                            <Select placeholder="Выберите заявку" showSearch optionFilterProp="label" options={orders.map(o => ({ value: o.id, label: o.orderNumber }))} />
+                            {/* Поиск по базе, а не по первым 300 записям: у компании
+                                с четырьмя сотнями рейсов нужного в списке просто
+                                не было, и понять это было нельзя. */}
+                            <OrderSelect />
                         </Form.Item>
                     )}
                     <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} /></Form.Item>
