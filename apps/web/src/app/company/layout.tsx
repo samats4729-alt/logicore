@@ -40,6 +40,8 @@ import { LiveEventTicker } from '@/components/ui/LiveTicker';
 import GlobalSearch from '@/components/ui/GlobalSearch';
 import UserAvatar from '@/components/UserAvatar';
 import PaywallScreen from '@/components/PaywallScreen';
+import NoSectionAccess from '@/components/ui/NoSectionAccess';
+import { checkSectionAccess } from '@/lib/section-access';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -232,6 +234,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
         return items;
     };
+
+    // Доступен ли текущий раздел этому человеку. Правило то же, что у меню.
+    const sectionAccess = checkSectionAccess(pathname, user);
 
     const userMenu = {
         items: [
@@ -524,7 +529,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                     {Math.max(0, Math.ceil((new Date(billingStatus.trialEndsAt).getTime() - Date.now()) / 86400000))} дн.
                                 </div>
                             )}
-                            {children}
+                            {/* Прямая ссылка в чужой раздел раньше открывала
+                                страницу: она грузилась, запросы получали отказ,
+                                и человек видел пустой экран без объяснений.
+                                Теперь — понятная причина. Главным остаётся
+                                сервер, здесь только объяснение. */}
+                            {sectionAccess.allowed ? children : (
+                                <NoSectionAccess title={sectionAccess.title} roleLabel={ROLE_LABELS[user.role] || user.role} />
+                            )}
                         </>
                     )}
                 </Content>
