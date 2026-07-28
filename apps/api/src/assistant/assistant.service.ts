@@ -4,6 +4,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { buildSupportTicketMessage } from '../telegram/support-ticket-message';
 
+/**
+ * Сколько накопившихся обращений досылать при запуске за один раз.
+ * Тридцать — это уже длинная лента в телеграме; больше за раз не отправляем,
+ * про остаток сообщаем отдельным сообщением.
+ */
+const STARTUP_BACKLOG_LIMIT = 30;
+
 interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
     content: string;
@@ -155,6 +162,43 @@ export class AssistantService implements OnApplicationBootstrap {
                 this.logger.error(`Error in periodic update generation: ${err.message}`);
             });
         }, 12 * 60 * 60 * 1000);
+
+        this.deliverBacklogOnStartup().catch((err) => {
+            this.logger.error(`Досыл обращений при запуске не удался: ${err.message}`);
+        });
+    }
+
+    /**
+     * Досыл накопившегося сразу после запуска.
+     *
+     * Зачем: отправка появилась позже самих обращений, и всё, что было
+     * создано до неё, в телеграм не уходило. Владелец вписывает ключ бота —
+     * и ждёт, что накопившееся придёт. Требовать ради этого зайти в админку
+     * и найти там кнопку — значит переложить на него нашу же недоделку.
+     *
+     * Пачка ограничена: если обращений накопились сотни, вывалить их разом
+     * в мессенджер — не помощь, а мусор. Про остаток сообщаем прямо в
+     * телеграме, чтобы человек узнал об этом там же, где читает.
+     */
+    private async deliverBacklogOnStartup(): Promise<void> {
+        if (!this.telegram.isEnabled()) return;
+
+        const pendingBefore = await this.countPendingTelegram();
+        if (pendingBefore === 0) return;
+
+        // Пауза, чтобы не соревноваться за сеть с остальным стартом.
+        await new Promise((r) => setTimeout(r, 5000));
+
+        const { sent, left } = await this.resendPendingTickets(STARTUP_BACKLOG_LIMIT);
+        this.logger.log(`Досыл при запуске: отправлено ${sent}, осталось ${left}`);
+
+        if (left > 0) {
+            await this.telegram.send(
+                `Это были не все: осталось ещё ${left} обращений.\n` +
+                'Они придут при следующем перезапуске платформы или по кнопке ' +
+                '«Отправить в телеграм» в админке, раздел «Поддержка».',
+            );
+        }
     }
 
     private async runUpdateGenerationTask() {
