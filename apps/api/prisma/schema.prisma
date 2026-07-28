@@ -378,10 +378,10 @@ model Company {
   sharedReportsAsCounterparty SharedReportLink[]  @relation("CounterpartySharedReports")
   paymentProofs               OrderPaymentProof[] @relation("CompanyPaymentProofs")
   paymentProofsAsCounterparty OrderPaymentProof[] @relation("CounterpartyPaymentProofs")
+  locationEmailLists          LocationEmailList[]
 
   @@index([bin])
   @@index([verificationStatus])
-  locationEmailLists LocationEmailList[]
 }
 
 // ... existing models ...
@@ -540,24 +540,24 @@ model Order {
 
   /// Количество грузовых мест. Не то же, что палеты: на одной палете едет
   /// десяток коробок, и в накладной считают именно места.
-  placesCount    Int?
+  placesCount Int?
   /// Можно ли ставить друг на друга. От этого зависит, влезет ли груз в
   /// машину: нештабелируемое считают по полу, а не по объёму.
-  stackable      Boolean?
+  stackable   Boolean?
   /// Температурный режим, °C. Для рефрижератора это главное условие рейса.
-  tempMin        Float?
-  tempMax        Float?
+  tempMin     Float?
+  tempMax     Float?
   /// Опасный груз и его класс по ДОПОГ. Без этого перевозчик не поймёт,
   /// нужны ли допуск и знаки, а на посту это разворачивает машину.
-  adr            Boolean?
-  adrClass       String?
+  adr         Boolean?
+  adrClass    String?
   /// Объявленная стоимость груза — от неё считают страховку и
   /// ответственность перевозчика.
-  cargoValue     Float?
+  cargoValue  Float?
 
-  cargoType      String? // Тип транспорта (Тент, Реф и т.д.)
-  natureOfCargo  String? // Характер груза (Сыпучие, Твердые и т.д.)
-  requirements   String? // Особые требования
+  cargoType     String? // Тип транспорта (Тент, Реф и т.д.)
+  natureOfCargo String? // Характер груза (Сыпучие, Твердые и т.д.)
+  requirements  String? // Особые требования
 
   // Участники
   customerId String
@@ -1825,9 +1825,15 @@ model SupportTicket {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Когда обращение ушло владельцу в телеграм. Пусто — значит не уходило:
+  // либо оно старше самой отправки, либо телеграм в тот момент не ответил.
+  // По этому полю админка досылает пропущенное и не отправляет одно дважды.
+  telegramSentAt DateTime?
+
   @@index([status])
   @@index([companyId])
   @@index([createdAt])
+  @@index([telegramSentAt])
 }
 
 model PayrollScheme {

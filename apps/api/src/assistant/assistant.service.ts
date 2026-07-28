@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
@@ -379,8 +379,21 @@ export class AssistantService implements OnApplicationBootstrap {
         });
 
         // Уведомление владельцу. Обращение уже сохранено, поэтому отправка
-        // ничего не решает: не дошло — оно всё равно лежит в админке.
-        await this.telegram.send(buildSupportTicketMessage({
+        // ничего не решает: не дошло — оно всё равно лежит в админке и его
+        // можно досаслать оттуда кнопкой.
+        await this.deliverTicketToTelegram(ticket);
+
+        return { id: ticket.id, createdAt: ticket.createdAt };
+    }
+
+    /**
+     * Отправить одно обращение в телеграм и запомнить, что оно ушло.
+     *
+     * Отметку ставим только при успехе: если телеграм промолчал, обращение
+     * должно остаться в очереди на досыл, иначе оно потеряется навсегда.
+     */
+    private async deliverTicketToTelegram(ticket: any, resent = false): Promise<boolean> {
+        const sent = await this.telegram.send(buildSupportTicketMessage({
             id: ticket.id,
             title: ticket.title,
             category: ticket.category,
@@ -388,12 +401,77 @@ export class AssistantService implements OnApplicationBootstrap {
             companyName: ticket.companyName,
             userName: ticket.userName,
             userEmail: ticket.userEmail,
+            createdAt: ticket.createdAt,
             description: ticket.description,
             orders: ticket.orders,
             details: ticket.details as any,
+            resent,
         }));
 
-        return { id: ticket.id, createdAt: ticket.createdAt };
+        if (sent) {
+            await this.prisma.supportTicket
+                .update({ where: { id: ticket.id }, data: { telegramSentAt: new Date() } })
+                .catch((e) => this.logger.warn(`Не удалось отметить отправку обращения ${ticket.id}: ${e.message}`));
+        }
+        return sent;
+    }
+
+    /**
+     * Досыл обращений, которые в телеграм ещё не уходили.
+     *
+     * Зачем: отправка появилась позже самих обращений, и всё, что накопилось
+     * до неё, осталось лежать в админке. Плюс сюда же попадает всё, что не
+     * ушло из-за недоступного мессенджера.
+     *
+     * Идём от старых к новым — так в телеграме они лягут в том порядке, в
+     * котором происходили. Между сообщениями пауза: телеграм ограничивает
+     * частоту, и без неё хвост пачки просто не дойдёт.
+     */
+    async resendPendingTickets(limit = 50): Promise<{ sent: number; failed: number; left: number }> {
+        if (!this.telegram.isEnabled()) {
+            throw new BadRequestException(
+                'Телеграм не настроен: задайте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.',
+            );
+        }
+
+        const safeLimit = Math.min(Math.max(1, limit), 100);
+        const pending = await this.prisma.supportTicket.findMany({
+            where: { telegramSentAt: null },
+            orderBy: { createdAt: 'asc' },
+            take: safeLimit,
+        });
+
+        let sent = 0;
+        let failed = 0;
+        for (let i = 0; i < pending.length; i++) {
+            const ok = await this.deliverTicketToTelegram(pending[i], true);
+            if (ok) sent++;
+            else failed++;
+            // Пауза только между сообщениями — после последнего ждать нечего.
+            if (i < pending.length - 1) {
+                await new Promise((r) => setTimeout(r, 350));
+            }
+        }
+
+        const left = await this.prisma.supportTicket.count({ where: { telegramSentAt: null } });
+        return { sent, failed, left };
+    }
+
+    /** Сколько обращений ещё ни разу не уходило в телеграм. */
+    async countPendingTelegram(): Promise<number> {
+        return this.prisma.supportTicket.count({ where: { telegramSentAt: null } });
+    }
+
+    /** Отправить одно конкретное обращение — даже если оно уже уходило. */
+    async resendTicket(id: string): Promise<{ sent: boolean }> {
+        if (!this.telegram.isEnabled()) {
+            throw new BadRequestException(
+                'Телеграм не настроен: задайте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.',
+            );
+        }
+        const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
+        if (!ticket) throw new NotFoundException('Тикет не найден');
+        return { sent: await this.deliverTicketToTelegram(ticket, true) };
     }
 
     async listTickets(status?: string) {
