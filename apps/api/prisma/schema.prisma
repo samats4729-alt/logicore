@@ -489,6 +489,9 @@ model Location {
   warehouseGates WarehouseGate[]
   emailLists     LocationEmailList[]
 
+  originQuoteRequests      QuoteRequest[] @relation("OriginQuoteLocations")
+  destinationQuoteRequests QuoteRequest[] @relation("DestinationQuoteLocations")
+
   @@index([latitude, longitude])
   @@index([cityId])
 }
@@ -1410,6 +1413,23 @@ model QuoteRequest {
   originCity        City   @relation("OriginQuoteRequests", fields: [originCityId], references: [id])
   destinationCityId String
   destinationCity   City   @relation("DestinationQuoteRequests", fields: [destinationCityId], references: [id])
+
+  /// Точные адреса погрузки и выгрузки, если клиент их уже назвал.
+  ///
+  /// Города и адреса нужны оба и для разного. По городам ищется история:
+  /// склад у каждого клиента свой, и по адресам похожий случай не нашёлся
+  /// бы никогда. Адреса переносятся в заявку, когда клиент согласовал.
+  ///
+  /// Ссылка на справочник — если адрес там уже есть: тогда заявка получает
+  /// точку маршрута без ручного ввода. Текстом — если клиент прислал адрес,
+  /// которого в справочнике ещё нет; терять его до заведения карточки
+  /// нельзя, иначе он останется в переписке.
+  originLocationId      String?
+  originLocation        Location? @relation("OriginQuoteLocations", fields: [originLocationId], references: [id], onDelete: SetNull)
+  destinationLocationId String?
+  destinationLocation   Location? @relation("DestinationQuoteLocations", fields: [destinationLocationId], references: [id], onDelete: SetNull)
+  originAddress         String?
+  destinationAddress    String?
 
   /// Когда груз готов к отгрузке.
   readyDate        DateTime?

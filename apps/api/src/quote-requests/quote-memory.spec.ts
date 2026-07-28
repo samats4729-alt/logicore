@@ -1,18 +1,15 @@
 import { buildQuoteMemory, humanAgo, PastQuote } from './quote-memory';
 
 /**
- * От этих правил зависит цена, которую менеджер назовёт клиенту. Поэтому
- * проверяется не «функция что-то вернула», а каждый случай из жизни,
- * ради которого раздел и заводился.
+ * Проверяется главное требование владельца: система показывает факты и не
+ * назначает цену за менеджера. Поэтому здесь нет ни одной проверки на
+ * «посчитала сумму» — есть проверки на то, что прошлый случай показан
+ * целиком и ничего из него не потерялось.
  */
 describe('Память по запросам клиента', () => {
     const СЕЙЧАС = new Date('2026-07-29T10:00:00Z');
 
-    /**
-     * Суммы в подсказке разделены неразрывным пробелом, а не обычным: цена
-     * не должна разрываться переносом строки. Сравниваем так же, иначе
-     * проверка спорит с форматированием, а не с сутью.
-     */
+    /** Суммы разделены неразрывным пробелом: цена не рвётся переносом. */
     const сумма = (n: number) => n.toLocaleString('ru-RU');
 
     const запрос = (over: Partial<PastQuote> = {}): PastQuote => ({
@@ -29,74 +26,99 @@ describe('Память по запросам клиента', () => {
         ...over,
     });
 
-    it('пустая история ничего не советует', () => {
+    it('пустая история молчит, а не выдумывает', () => {
         const m = buildQuoteMemory([], { cargoWeight: 20_000 }, СЕЙЧАС);
 
         expect(m.last).toBeNull();
-        expect(m.recommendedPrice).toBeNull();
-        expect(m.advice).toBeNull();
+        expect(m.note).toBeNull();
+        expect(m.range).toBeNull();
     });
 
-    it('после отказа советует ниже отказной цены', () => {
+    it('цену не назначает ни при каком исходе', () => {
+        // Главное требование: менеджер видит факты и решает сам. Ни одного
+        // поля с «рекомендуемой суммой» здесь быть не должно.
+        const отказ = buildQuoteMemory([запрос()], { cargoWeight: 20_000 }, СЕЙЧАС);
+        const согласие = buildQuoteMemory(
+            [запрос({ status: 'APPROVED', rejectionReason: null })],
+            { cargoWeight: 20_000 },
+            СЕЙЧАС,
+        );
+
+        expect(отказ).not.toHaveProperty('recommendedPrice');
+        expect(согласие).not.toHaveProperty('recommendedPrice');
+    });
+
+    it('после отказа показывает цену и причину, но ничего не советует', () => {
         const m = buildQuoteMemory(
-            [запрос()],
+            [запрос({ rejectionReason: 'нашли машину дешевле' })],
             { cargoWeight: 20_000, cargoVolume: 86, cargoType: 'тент' },
             СЕЙЧАС,
         );
 
-        // 130 000 − 5% = 123 500, вниз до тысячи = 123 000.
-        expect(m.recommendedPrice).toBe(123_000);
-        expect(m.sameConditions).toBe(true);
-        expect(m.advice).toContain('не принял');
-        expect(m.advice).toContain(сумма(123_000));
+        expect(m.note).toContain(сумма(130_000));
+        expect(m.note).toContain('не была принята');
+        expect(m.note).toContain('нашли машину дешевле');
+        expect(m.note).toContain('Условия те же');
+        // Никаких «предложите столько-то».
+        expect(m.note).not.toMatch(/предлож/i);
     });
 
-    it('если те же условия уже согласовывали — предлагает ту же цену', () => {
+    it('честно говорит, когда причину отказа не записали', () => {
+        const m = buildQuoteMemory(
+            [запрос({ rejectionReason: null })],
+            { cargoWeight: 20_000, cargoVolume: 86, cargoType: 'тент' },
+            СЕЙЧАС,
+        );
+
+        expect(m.note).toContain('Причина не указана');
+    });
+
+    it('пустая строка в причине — это тоже «не указана»', () => {
+        const m = buildQuoteMemory(
+            [запрос({ rejectionReason: '   ' })],
+            { cargoWeight: 20_000, cargoVolume: 86, cargoType: 'тент' },
+            СЕЙЧАС,
+        );
+
+        expect(m.note).toContain('Причина не указана');
+    });
+
+    it('если цену принимали при тех же условиях — так и пишет', () => {
         const m = buildQuoteMemory(
             [запрос({ status: 'APPROVED', rejectionReason: null })],
             { cargoWeight: 20_000, cargoVolume: 86, cargoType: 'тент' },
             СЕЙЧАС,
         );
 
-        expect(m.recommendedPrice).toBe(130_000);
-        expect(m.advice).toContain('принимал');
-        expect(m.advice).toContain('условия те же');
+        expect(m.note).toContain(сумма(130_000));
+        expect(m.note).toContain('уже проходила');
+        expect(m.note).toContain('при тех же условиях');
     });
 
-    it('не опускает цену ниже той, которую клиент уже платил', () => {
-        // Отказали на 130 000, но 128 000 когда-то приняли. Опускаться до
-        // 123 000 незачем: 128 000 доказанно проходит.
+    it('принятая цена при изменившихся условиях не выдаётся за годную', () => {
         const m = buildQuoteMemory(
-            [
-                запрос({ id: 'з1', customerPrice: 130_000, status: 'REJECTED' }),
-                запрос({
-                    id: 'з2',
-                    requestNumber: 'ЗПР-00002',
-                    createdAt: new Date('2026-07-20T10:00:00Z'),
-                    customerPrice: 128_000,
-                    status: 'APPROVED',
-                    rejectionReason: null,
-                }),
-            ],
-            { cargoWeight: 20_000, cargoVolume: 86, cargoType: 'тент' },
-            СЕЙЧАС,
-        );
-
-        expect(m.recommendedPrice).toBe(128_000);
-        expect(m.advice).toContain(сумма(128_000));
-    });
-
-    it('замечает, что условия изменились, и требует пересчёта', () => {
-        const m = buildQuoteMemory(
-            [запрос()],
+            [запрос({ status: 'APPROVED', rejectionReason: null })],
             { cargoWeight: 5_000, cargoVolume: 20, cargoType: 'тент' },
             СЕЙЧАС,
         );
 
+        expect(m.note).toContain('условия изменились');
+        expect(m.note).not.toContain('при тех же условиях');
+    });
+
+    it('называет, что именно изменилось', () => {
+        const m = buildQuoteMemory(
+            [запрос()],
+            { cargoWeight: 5_000, cargoVolume: 20, cargoType: 'рефрижератор' },
+            СЕЙЧАС,
+        );
+
         expect(m.sameConditions).toBe(false);
-        expect(m.differences.join(' ')).toContain('вес: было 20 т, стало 5 т');
-        expect(m.differences.join(' ')).toContain('объём: было 86 м³, стало 20 м³');
-        expect(m.advice).toContain('пересчитайте');
+        expect(m.differences).toEqual([
+            'вес: было 20 т, стало 5 т',
+            'объём: было 86 м³, стало 20 м³',
+            'кузов: было тент, стало рефрижератор',
+        ]);
     });
 
     it('мелкое расхождение веса не считает изменением условий', () => {
@@ -108,6 +130,17 @@ describe('Память по запросам клиента', () => {
         );
 
         expect(m.sameConditions).toBe(true);
+    });
+
+    it('сохраняет закупочную цену прошлого раза — её забывают первой', () => {
+        const m = buildQuoteMemory(
+            [запрос({ carrierCost: 100_000 })],
+            { cargoWeight: 20_000 },
+            СЕЙЧАС,
+        );
+
+        expect(m.last?.carrierCost).toBe(100_000);
+        expect(m.last?.customerPrice).toBe(130_000);
     });
 
     it('берёт последний случай, а не первый попавшийся', () => {
@@ -132,7 +165,7 @@ describe('Память по запросам клиента', () => {
         );
 
         expect(m.last).toBeNull();
-        expect(m.recommendedPrice).toBeNull();
+        expect(m.note).toBeNull();
     });
 
     it('показывает вилку по маршруту: и клиенту, и закупку', () => {
