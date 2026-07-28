@@ -2754,7 +2754,9 @@ a.mapboxgl-ctrl-logo,
     display: none;
   }
 
-  .lc-wizard-nav .ant-btn {
+  /* Кнопки мастера переехали с antd на shadcn — селектор по элементу,
+     а не по классу antd, иначе на телефоне они схлопнутся в узкие. */
+  .lc-wizard-nav button {
     flex: 1 1 auto;
     min-height: 44px;
   }
