@@ -9,7 +9,7 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
-import { CreateOrderDto, UpdateStatusDto, AssignDriverDto } from './dto/order.dto';
+import { CreateOrderDto, UpdateStatusDto, AssignDriverDto, OrdersQueryDto } from './dto/order.dto';
 import { UserRole, OrderStatus, OrderDocumentKind } from '@prisma/client';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { EmailService } from '../email/email.service';
@@ -113,15 +113,11 @@ export class OrdersController {
     @ApiQuery({ name: 'customerId', required: false })
     @ApiQuery({ name: 'driverId', required: false })
     @ApiQuery({ name: 'limit', required: false, type: Number })
-    async findAll(
-        @Query('status') status?: OrderStatus,
-        @Query('customerId') customerId?: string,
-        @Query('driverId') driverId?: string,
-        @Query() pagination?: PaginationQueryDto,
-        @Request() req?: any,
-    ) {
+    @ApiQuery({ name: 'search', required: false, description: 'Номер, груз, город маршрута или заказчик' })
+    async findAll(@Query() query: OrdersQueryDto, @Request() req?: any) {
         const companyId = req?.user?.role === 'ADMIN' ? undefined : req?.user?.companyId;
-        return this.ordersService.findAll({ status, customerId, driverId, companyId }, pagination);
+        const { status, customerId, driverId, search, ...pagination } = query;
+        return this.ordersService.findAll({ status, customerId, driverId, companyId, search }, pagination);
     }
 
     @Get('my')

@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNumber, IsBoolean, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
 import { OrderStatus } from '@prisma/client';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @ValidatorConstraint({ name: 'IsAssignDriverValid', async: false })
 export class IsAssignDriverValidConstraint implements ValidatorConstraintInterface {
@@ -308,4 +309,37 @@ export class AssignDriverDto {
     @IsString()
     @IsOptional()
     assignedDriverTrailer?: string;
+}
+
+/**
+ * Параметры списка заявок.
+ *
+ * Отдельный класс нужен из-за того, как Nest проверяет строку запроса:
+ * `@Query()` разбирает её целиком по одному классу, а лишние поля запрещены.
+ * Пока список опирался на общий `PaginationQueryDto`, всё, кроме `page` и
+ * `limit`, отклонялось — фильтры по статусу, заказчику и водителю были
+ * описаны в контроллере и в документации, но любой запрос с ними отвечал
+ * «property status should not exist». То есть не работали ни разу.
+ */
+export class OrdersQueryDto extends PaginationQueryDto {
+    @ApiProperty({ required: false, enum: OrderStatus })
+    @IsEnum(OrderStatus)
+    @IsOptional()
+    status?: OrderStatus;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    customerId?: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    driverId?: string;
+
+    /** Номер, груз, город маршрута или название заказчика. */
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    search?: string;
 }

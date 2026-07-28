@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Table, Button, Typography, Space, Tag, DatePicker, Input, Segmented, Modal, Form, InputNumber, Select } from 'antd';
 import { SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import OrderSelect from '@/components/orders/OrderSelect';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
@@ -489,12 +490,9 @@ export default function AllOperationsPage() {
                     </Form.Item>
                     {needsOrder && (
                         <Form.Item name="orderId" label="Заявка" rules={[{ required: true, message: 'Статья «по заявке» — укажите заявку' }]} extra="Расход отнесётся к этой заявке и уменьшит её маржу">
-                            <Select
-                                placeholder="Выберите заявку"
-                                showSearch
-                                optionFilterProp="label"
-                                options={orders.map(o => ({ value: o.id, label: o.orderNumber }))}
-                            />
+                            {/* Поиск идёт по базе: список из первых 300 записей
+                                не содержал нужного у компании с большим объёмом. */}
+                            <OrderSelect />
                         </Form.Item>
                     )}
                     <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>

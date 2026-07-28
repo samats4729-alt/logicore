@@ -61,7 +61,9 @@ export default function ActsJournalPage() {
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
 
-    const [counterparties, setCounterparties] = useState<{ id: string; name: string }[]>([]);
+    // БИН держим рядом с названием: у контрагентов бывают почти одинаковые
+    // имена, и бухгалтер различает их именно по БИН.
+    const [counterparties, setCounterparties] = useState<{ id: string; name: string; bin?: string }[]>([]);
 
     // Окно «Создать акт»: контрагент → завершённые рейсы без акта.
     const [createOpen, setCreateOpen] = useState(false);
@@ -353,7 +355,7 @@ export default function ActsJournalPage() {
                         style={{ width: 240 }}
                         value={counterpartyId}
                         onChange={(value) => { setCounterpartyId(value); setPage(1); }}
-                        options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
+                        options={counterparties.map((c) => ({ value: c.id, label: c.bin ? `${c.name} · БИН ${c.bin}` : c.name }))}
                     />
                     <RangePicker
                         value={period}
@@ -430,7 +432,7 @@ export default function ActsJournalPage() {
                     style={{ width: '100%', marginBottom: 12 }}
                     value={createCounterparty}
                     onChange={setCreateCounterparty}
-                    options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
+                    options={counterparties.map((c) => ({ value: c.id, label: c.bin ? `${c.name} · БИН ${c.bin}` : c.name }))}
                 />
 
                 <Alert

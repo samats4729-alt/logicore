@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, InputNumber, Modal, Form, Divider, App, Tooltip } from 'antd';
 import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import OrderSelect from '@/components/orders/OrderSelect';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
@@ -313,11 +314,9 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
                         rules={needsOrder ? [{ required: true, message: 'Статья «по заявке» — укажите заявку' }] : []}
                         extra={needsOrder ? 'Расход отнесётся к этой заявке и уменьшит её маржу' : 'Необязательно — если оплата относится к конкретному рейсу'}
                     >
-                        <Select
-                            placeholder="Выберите заявку (по номеру)"
-                            showSearch optionFilterProp="label" allowClear
-                            options={orders.map(o => ({ value: o.id, label: o.orderNumber }))}
-                        />
+                        {/* Ищет сервер по всей базе. Подпись «по номеру» ушла:
+                            искать можно и по городу, и по грузу, и по заказчику. */}
+                        <OrderSelect />
                     </Form.Item>
                     <Form.Item name="counterpartyId" label="Контрагент">
                         <Select
