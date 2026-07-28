@@ -1219,7 +1219,9 @@ export default function OrderDetailPage() {
         if (!email) return;
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Некорректный email'); return; }
         if (shareEmailsList.some(item => item.email === email)) { toast.warning('Email уже добавлен'); return; }
-        if (shareEmailsList.length >= 15) { toast.warning('Максимум 15 получателей'); return; }
+        // Потолка в получателях нет. У крупного склада приёмка, охрана и
+        // бухгалтерия — это уже три адреса, а таких складов в рейсе бывает
+        // несколько. Прежний предел в 15 обрывал список на полуслове.
         setShareEmailsList([...shareEmailsList, { email, checked: true, label: `Вручную: ${email}` }]);
         setCustomEmailInput('');
     };

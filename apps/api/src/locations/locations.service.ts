@@ -131,7 +131,7 @@ export class LocationsService {
             ? { AND: whereConditions }
             : undefined;
 
-        const data = await this.prisma.location.findMany({
+        const rows = await this.prisma.location.findMany({
             where,
             include: {
                 company: {
@@ -147,10 +147,59 @@ export class LocationsService {
             orderBy: { name: 'asc' },
         });
 
+        // Свой список почт компании перекрывает тот, что записан в самом
+        // адресе: у общего склада контакты у каждого свои, и подставлять
+        // в рассылку доверенности надо именно их.
+        const data = companyId ? await this.withCompanyEmails(rows, companyId) : rows;
+
         if (!search) {
             await this.redis.set(cacheKey, JSON.stringify(data), 3600);
         }
         return data;
+    }
+
+    /** Подменяет `emails` на список этой компании там, где он заведён. */
+    private async withCompanyEmails<T extends { id: string; emails?: string | null }>(
+        rows: T[],
+        companyId: string,
+    ): Promise<T[]> {
+        if (!rows.length) return rows;
+        const lists = await this.prisma.locationEmailList.findMany({
+            where: { companyId, locationId: { in: rows.map(r => r.id) } },
+            select: { locationId: true, emails: true },
+        });
+        if (!lists.length) return rows;
+        const own = new Map(lists.map(l => [l.locationId, l.emails]));
+        return rows.map(r => (own.has(r.id) ? { ...r, emails: own.get(r.id) ?? null } : r));
+    }
+
+    /**
+     * Записать свой список почт для адреса.
+     *
+     * Права владельца адреса здесь не проверяем: компания правит собственный
+     * список, а не чужой справочник. Иначе менеджер не смог бы вписать почту
+     * общему складу — а это ровно тот случай, ради которого список и заведён.
+     */
+    async setEmails(locationId: string, companyId: string, emails: string) {
+        const location = await this.prisma.location.findUnique({
+            where: { id: locationId },
+            select: { id: true },
+        });
+        if (!location) throw new NotFoundException('Адрес не найден');
+
+        const value = emails
+            .split(',')
+            .map(e => e.trim())
+            .filter(Boolean)
+            .join(',');
+
+        const saved = await this.prisma.locationEmailList.upsert({
+            where: { locationId_companyId: { locationId, companyId } },
+            create: { locationId, companyId, emails: value },
+            update: { emails: value },
+        });
+        await this.redis.del(`locations:${companyId}`);
+        return saved;
     }
 
     async findById(id: string, user?: { sub: string; role: string; companyId?: string }) {
