@@ -11,13 +11,21 @@
  * кнопки из девяностых. Сбрасываем это только для элементов, которые
  * стилизуем сами: у Ant Design свои классы `ant-*`, их не трогаем.
  *
- * Строго в @layer base: иначе селектор с :not окажется тяжелее классов
- * Tailwind и перебьёт, например, `border` у нашего же select.
+ * Обёрнуто в :where() — это обнуляет вес селектора.
+ *
+ * Одного @layer base мало: `@layer` у Tailwind — не каскадные слои CSS, а
+ * порядок сборки, и вес всё равно решает. `button:not([class*='ant-'])`
+ * весит (0,1,1) и перебивает утилиту `.bg-primary` весом (0,1,0) — из-за
+ * этого у кнопок shadcn молча пропадали фон и рамка: «Далее» оставалась
+ * белым текстом на белом. Ни типы, ни сборка этого не показывают.
+ * :where() опускает вес до нуля, и любая утилита Tailwind выигрывает,
+ * а голые <button> и <input> сброс по-прежнему получают: стили браузера
+ * лежат в origin ниже авторских, вес там ни при чём.
  */
 @layer base {
-  button:not([class*='ant-']),
-  input:not([class*='ant-']),
-  textarea:not([class*='ant-']) {
+  :where(button:not([class*='ant-'])),
+  :where(input:not([class*='ant-'])),
+  :where(textarea:not([class*='ant-'])) {
     /* Только браузерная «объёмная» рамка и серый фон. Шрифт и цвет НЕ
        трогаем: старые кнопки кабинета рассчитаны на свои размеры, и
        `font: inherit` раздувает верхнюю навигацию. */
@@ -898,7 +906,7 @@ a.mapboxgl-ctrl-logo,
   margin-left: 10px;
 }
 
-.lc-page .lc-cta.ant-btn {
+.lc-page .lc-cta {
   background: linear-gradient(180deg, #1c202b 0%, #0f1117 100%) !important;
   border: none !important;
   color: #fff !important;
@@ -909,13 +917,13 @@ a.mapboxgl-ctrl-logo,
   box-shadow: 0 4px 14px rgba(15, 17, 23, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
-.lc-page .lc-cta.ant-btn:hover:not(:disabled) {
+.lc-page .lc-cta:hover:not(:disabled) {
   background: #1677ff !important;
   box-shadow: 0 6px 18px rgba(22, 119, 255, 0.35) !important;
   transform: translateY(-1px);
 }
 
-.lc-page .lc-cta.ant-btn:disabled {
+.lc-page .lc-cta:disabled {
   background: #e4e4e7 !important;
   color: #a1a1aa !important;
   box-shadow: none !important;
@@ -943,7 +951,7 @@ a.mapboxgl-ctrl-logo,
   55% { left: 130%; }
   100% { left: 130%; }
 }
-[data-theme='dark'] .lc-page .lc-cta.ant-btn {
+[data-theme='dark'] .lc-page .lc-cta {
   border: 1px solid rgba(255, 255, 255, 0.16) !important;
 }
 
@@ -2690,7 +2698,7 @@ a.mapboxgl-ctrl-logo,
     gap: 8px;
   }
 
-  .lc2-actionbar .lc2-ab-right .ant-btn {
+  .lc2-actionbar .lc2-ab-right button {
     flex: 1 1 auto;
   }
 
@@ -2710,7 +2718,7 @@ a.mapboxgl-ctrl-logo,
     width: 100% !important;
   }
 
-  .lc-page .lc-filterbar .ant-btn {
+  .lc-page .lc-filterbar button {
     grid-column: 1 / -1;
   }
 
@@ -2746,7 +2754,9 @@ a.mapboxgl-ctrl-logo,
     display: none;
   }
 
-  .lc-wizard-nav .ant-btn {
+  /* Кнопки мастера переехали с antd на shadcn — селектор по элементу,
+     а не по классу antd, иначе на телефоне они схлопнутся в узкие. */
+  .lc-wizard-nav button {
     flex: 1 1 auto;
     min-height: 44px;
   }

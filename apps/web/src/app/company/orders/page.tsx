@@ -2,15 +2,17 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Table, Button, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col, DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
+import { Table, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col, DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
 import dayjs from 'dayjs';
 import {
-    UserAddOutlined, CheckCircleOutlined, PlusOutlined,
-    EnvironmentOutlined, FlagOutlined, DeleteOutlined, SearchOutlined,
-    FilterOutlined, ClearOutlined, FileTextOutlined, CloseCircleOutlined,
-    MailOutlined, RightOutlined, EditOutlined, ExclamationCircleOutlined,
+    CheckCircleOutlined,
+    EnvironmentOutlined, FlagOutlined, SearchOutlined,
+    FilterOutlined, FileTextOutlined, CloseCircleOutlined,
+    ExclamationCircleOutlined,
     ClockCircleOutlined, TruckOutlined
 } from '@ant-design/icons';
+import { ChevronRight, Eraser, FileText, Mail, Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -1154,7 +1156,7 @@ export default function CompanyOrdersPage() {
             title: '', key: 'actions', width: 50, fixed: 'right' as const,
             render: (_: any, r: Order) => (
                 <Tooltip title="Открыть заявку">
-                    <Button size="small" type="link" icon={<RightOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }} style={{ fontSize: 12, color: '#1890ff' }} />
+                    <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0 text-[#1890ff]" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
                 </Tooltip>
             ),
         },
@@ -1233,7 +1235,7 @@ export default function CompanyOrdersPage() {
         },
         { title: '', key: 'actions', width: 50, render: (_: any, r: Order) => (
             <Tooltip title="Открыть заявку">
-                <Button size="small" type="link" icon={<RightOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }} style={{ fontSize: 12, color: '#1890ff' }} />
+                <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0 text-[#1890ff]" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
             </Tooltip>
         ) },
     ];
@@ -1314,8 +1316,8 @@ export default function CompanyOrdersPage() {
                             <ExclamationCircleOutlined /> {pendingCount} {pendingCount === 1 ? 'заявка ожидает' : 'заявки ожидают'} назначения
                         </span>
                     )}
-                    <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} className="lc-cta lc-cta-shine" onClick={() => router.push('/company/orders/create')}>
-                        Создать заявку
+                    <Button data-guide="orders-create" className="lc-cta lc-cta-shine" onClick={() => router.push('/company/orders/create')}>
+                        <Plus className="h-4 w-4" /> Создать заявку
                     </Button>
                 </div>
             </div>
@@ -1401,8 +1403,8 @@ export default function CompanyOrdersPage() {
                                         min={0} controls={false}
                                     />
                                     {hasActiveFilters && (
-                                        <Button size="small" icon={<ClearOutlined />} onClick={clearFilters} type="link" danger>
-                                            Сбросить
+                                        <Button variant="link" size="sm" className="text-destructive" onClick={clearFilters}>
+                                            <Eraser className="h-3.5 w-3.5" /> Сбросить
                                         </Button>
                                     )}
                                 </div>
@@ -1509,8 +1511,8 @@ export default function CompanyOrdersPage() {
                                         min={0} controls={false}
                                     />
                                     {hasActiveFilters && (
-                                        <Button size="small" icon={<ClearOutlined />} onClick={clearFilters} type="link" danger>
-                                            Сбросить
+                                        <Button variant="link" size="sm" className="text-destructive" onClick={clearFilters}>
+                                            <Eraser className="h-3.5 w-3.5" /> Сбросить
                                         </Button>
                                     )}
                                 </div>
@@ -1709,8 +1711,8 @@ export default function CompanyOrdersPage() {
                             onChange={(e) => setCustomEmailInput(e.target.value)}
                             onPressEnter={handleAddCustomEmail}
                         />
-                        <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddCustomEmail}>
-                            Добавить
+                        <Button variant="outline" className="border-dashed" onClick={handleAddCustomEmail}>
+                            <Plus className="h-4 w-4" /> Добавить
                         </Button>
                     </div>
                 </div>
@@ -1786,14 +1788,14 @@ export default function CompanyOrdersPage() {
                         ) : <Tag color="warning">Не назначен</Tag>}
 
                         <div style={{ marginTop: 24 }}>
-                            <Button type="primary" icon={<UserAddOutlined />} onClick={() => { setDetailDrawerOpen(false); openAssignModal(selectedOrder); }} block>
-                                {selectedOrder.assignedDriverName ? 'Изменить водителя' : 'Назначить водителя'}
+                            <Button className="w-full" onClick={() => { setDetailDrawerOpen(false); openAssignModal(selectedOrder); }}>
+                                <UserPlus className="h-4 w-4" /> {selectedOrder.assignedDriverName ? 'Изменить водителя' : 'Назначить водителя'}
                             </Button>
                             {(selectedOrder.assignedDriverName || selectedOrder.driverId) && (
                                 <>
                                     <Button
-                                        icon={<FileTextOutlined />}
-                                        style={{ marginTop: 8 }}
+                                        variant="outline"
+                                        className="mt-2 w-full"
                                         onClick={async () => {
                                             try {
                                                 const res = await api.get(`/orders/${selectedOrder.id}/power-of-attorney`, { responseType: 'blob' });
@@ -1808,25 +1810,23 @@ export default function CompanyOrdersPage() {
                                                 toast.error('Ошибка скачивания доверенности');
                                             }
                                         }}
-                                        block
                                     >
-                                        Скачать доверенность
+                                        <FileText className="h-4 w-4" /> Скачать доверенность
                                     </Button>
                                     <Button
-                                        icon={<MailOutlined />}
-                                        style={{ marginTop: 8 }}
+                                        variant="outline"
+                                        className="mt-2 w-full"
                                         onClick={() => openSharePoAModal(selectedOrder)}
-                                        block
                                     >
-                                        Отправить по email
+                                        <Mail className="h-4 w-4" /> Отправить по email
                                     </Button>
                                 </>
                             )}
-                            <Button icon={<EditOutlined />} style={{ marginTop: 8 }} onClick={() => openEditModal(selectedOrder)} block>
-                                Редактировать заявку
+                            <Button variant="outline" className="mt-2 w-full" onClick={() => openEditModal(selectedOrder)}>
+                                <Pencil className="h-4 w-4" /> Редактировать заявку
                             </Button>
                             {getNextStatuses(selectedOrder.status).length > 0 && (
-                                <Button type="primary" style={{ marginTop: 8 }} onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }} block>
+                                <Button className="mt-2 w-full" onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
                                     Изменить статус
                                 </Button>
                             )}
@@ -1857,7 +1857,7 @@ export default function CompanyOrdersPage() {
                                     cancelText="Нет"
                                     okButtonProps={{ danger: true }}
                                 >
-                                    <Button danger style={{ marginTop: 8 }} block>
+                                    <Button variant="destructive" className="mt-2 w-full">
                                         Отменить заявку
                                     </Button>
                                 </Popconfirm>
@@ -1923,7 +1923,7 @@ export default function CompanyOrdersPage() {
                                               <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Доп. погрузка</Select.Option>
                                               <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }}/> Выгрузка</Select.Option>
                                          </Select>
-                                         <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => { const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts); }} />
+                                         <Button variant="ghost" size="icon" aria-label="Убрать точку" className="h-7 w-7 text-destructive" onClick={() => { const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                                     </div>
                                     <Select
                                         placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
@@ -1957,8 +1957,8 @@ export default function CompanyOrdersPage() {
                                     </Select>
                                 </div>
                             ))}
-                            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])} style={{ width: '100%', marginBottom: 12 }}>
-                                Добавить точку
+                            <Button variant="outline" size="sm" className="mb-3 w-full border-dashed" onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])}>
+                                <Plus className="h-3.5 w-3.5" /> Добавить точку
                             </Button>
                         </Col>
                         <Col span={12}>
@@ -2079,7 +2079,7 @@ export default function CompanyOrdersPage() {
                                             rules={[{ required: editCreatorRole === 'FORWARDER', message: 'Укажите компанию заказчика' }]}
                                             style={{ marginBottom: 12 }}
                                             help={
-                                                <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
+                                                <Button variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => setQuickPartnerModalOpen(true)}>
                                                     + Создать нового контрагента
                                                 </Button>
                                             }
@@ -2102,7 +2102,7 @@ export default function CompanyOrdersPage() {
                                                 rules={[{ required: true, message: 'Выберите исполнителя' }]}
                                                 style={{ marginBottom: 12 }}
                                                 help={
-                                                    <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} onClick={() => setQuickPartnerModalOpen(true)}>
+                                                    <Button variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => setQuickPartnerModalOpen(true)}>
                                                         + Создать нового контрагента
                                                     </Button>
                                                 }

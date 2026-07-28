@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { Typography, Button, Form, Input, InputNumber, Select, DatePicker, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox } from 'antd';
+import { Typography, Form, Input, InputNumber, Select, DatePicker, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox } from 'antd';
 import {
-    ArrowLeftOutlined, PlusOutlined, EnvironmentOutlined, FlagOutlined,
+    EnvironmentOutlined, FlagOutlined,
     DeleteOutlined, SendOutlined, CheckCircleOutlined, ExclamationCircleOutlined
 } from '@ant-design/icons';
+import { Button } from '@/components/ui/button';
 import { api, Location } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
@@ -28,7 +29,7 @@ import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEma
 import { CargoComposition } from '@/components/orders/CargoComposition';
 import { AddressPicker } from '@/components/orders/AddressPicker';
 import { cn } from '@/lib/utils';
-import { Plus, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, X } from 'lucide-react';
 import { totalPallets, type PalletLine } from '@/lib/cargo';
 import { VAT_RATES, vatRateWhenEnabled } from '@/lib/tax';
 import { toast } from 'sonner';
@@ -1016,16 +1017,14 @@ export default function CreateOrderPage() {
                             dropdownRender={(menu) => (
                                 <>
                                     <Button
-                                        type="text"
-                                        icon={<PlusOutlined />}
-                                        block
+                                        variant="ghost"
+                                        className="h-auto w-full justify-start px-3 py-2 font-medium text-[#1677ff]"
                                         onClick={() => {
                                             setQuickPartnerTarget('CUSTOMER');
                                             setQuickPartnerModalOpen(true);
                                         }}
-                                        style={{ textAlign: 'left', padding: '8px 12px', height: 'auto', color: '#1677ff', fontWeight: 500 }}
                                     >
-                                        Добавить контрагента
+                                        <Plus className="h-3.5 w-3.5" /> Добавить контрагента
                                     </Button>
                                     <Divider style={{ margin: '4px 0' }} />
                                     {menu}
@@ -1064,16 +1063,14 @@ export default function CreateOrderPage() {
                             dropdownRender={(menu) => (
                                 <>
                                     <Button
-                                        type="text"
-                                        icon={<PlusOutlined />}
-                                        block
+                                        variant="ghost"
+                                        className="h-auto w-full justify-start px-3 py-2 font-medium text-[#1677ff]"
                                         onClick={() => {
                                             setQuickPartnerTarget('CARRIER');
                                             setQuickPartnerModalOpen(true);
                                         }}
-                                        style={{ textAlign: 'left', padding: '8px 12px', height: 'auto', color: '#1677ff', fontWeight: 500 }}
                                     >
-                                        Добавить контрагента
+                                        <Plus className="h-3.5 w-3.5" /> Добавить контрагента
                                     </Button>
                                     <Divider style={{ margin: '4px 0' }} />
                                     {menu}
@@ -1476,8 +1473,8 @@ export default function CreateOrderPage() {
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Шаг {currentStep + 1} из {steps.length} · {steps[currentStep].title}
                     </p>
-                    <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>
-                        Назад к заявкам
+                    <Button variant="outline" onClick={() => router.back()}>
+                        <ArrowLeft className="h-4 w-4" /> Назад к заявкам
                     </Button>
                 </div>
             </div>
@@ -1517,26 +1514,25 @@ export default function CreateOrderPage() {
             <div className="lc-wizard-nav" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, marginBottom: 32 }}>
                 <div>
                     {currentStep > 0 && (
-                        <Button onClick={goBack}>
+                        <Button variant="outline" onClick={goBack}>
                             ← Назад
                         </Button>
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
-                    <Button onClick={() => router.back()}>
+                    <Button variant="outline" onClick={() => router.back()}>
                         Отмена
                     </Button>
                     {currentStep < steps.length - 1 ? (
-                        <Button type="primary" onClick={goNext}>
+                        <Button onClick={goNext}>
                             Далее →
                         </Button>
                     ) : (
                         <Button
-                            type="primary"
                             onClick={handleSubmit}
-                            loading={submitting}
-                            disabled={!selectedCustomer || !selectedCarrier}
+                            disabled={submitting || !selectedCustomer || !selectedCarrier}
                         >
+                            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                             Создать заявку
                         </Button>
                     )}
