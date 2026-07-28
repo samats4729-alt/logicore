@@ -10,6 +10,18 @@ import { toNum } from '../common/utils/money';
 const INK = '#000000';
 
 /**
+ * Названия видов паллет для печати. Держим здесь, а не тянем с фронта:
+ * печатная форма собирается на сервере и от экрана зависеть не должна.
+ */
+const PALLET_KIND_NAMES: Record<string, string> = {
+    EUR: 'европаллет',
+    FIN: 'финских',
+    AMERICAN: 'американских',
+    HALF: 'полупаллет',
+    CUSTOM: 'нестандартных',
+};
+
+/**
  * Типовые условия перевозки. Вынесены в константу, потому что это
  * договорной текст: он одинаков для всех перевозок и меняется только
  * осознанно, а не по ходу правки вёрстки.
@@ -120,6 +132,18 @@ export class OrderContractService {
                 cargoWeight: order.cargoWeight,
                 cargoVolume: order.cargoVolume,
                 cargoType: order.cargoType,
+                // Состав и условия перевозки. Их тут не было, и в договоре
+                // стояло только описание с весом: перевозчик подписывал
+                // «18 палет» вместо «12 евро и 6 финских», а про опасный груз
+                // и холод узнавал уже в рейсе — хотя в платформе всё заполнено.
+                pallets: order.pallets,
+                palletCount: order.palletCount,
+                placesCount: order.placesCount,
+                stackable: order.stackable,
+                tempMin: order.tempMin,
+                tempMax: order.tempMax,
+                adr: order.adr,
+                adrClass: order.adrClass,
                 vehicleModel: order.vehicleModel,
                 driverCost: toNum(order.driverCost ?? order.subForwarderPrice ?? 0),
                 executorHasVat: order.executorHasVat,
@@ -422,11 +446,47 @@ export class OrderContractService {
         doc.text(`     ${value}`);
     }
 
+    /**
+     * Описание груза для печатной формы.
+     *
+     * Состав паллет, места и условия перевозки сюда не попадали: в договоре
+     * стояли только описание, вес и объём. Перевозчик подписывал «18 палет»
+     * вместо «12 евро и 6 финских», а про опасный груз и холод узнавал уже в
+     * рейсе — при том что в самой платформе всё это заполнено.
+     */
     private cargo(order: any) {
+        const pallets: any[] = Array.isArray(order.pallets) ? order.pallets : [];
+
+        // Одинаковые виды складываем. В форме их можно завести двумя строками,
+        // и в официальном документе «12 × европаллет … 4 × европаллет»
+        // читается как ошибка, а не как состав.
+        const byKind = new Map<string, number>();
+        for (const line of pallets) {
+            const count = Number(line?.count) || 0;
+            if (count <= 0) continue;
+            const size = line.kind === 'CUSTOM' && line.length && line.width
+                ? ` ${line.length}×${line.width}`
+                : '';
+            const name = `${PALLET_KIND_NAMES[line.kind] || line.kind}${size}`;
+            byKind.set(name, (byKind.get(name) || 0) + count);
+        }
+        const palletText = Array.from(byKind.entries())
+            .map(([name, count]) => `${count} × ${name}`)
+            .join(', ');
+
+        const temperature = order.tempMin != null || order.tempMax != null
+            ? `режим: ${order.tempMin ?? '—'}…${order.tempMax ?? '—'} °C`
+            : null;
+
         return [
             order.cargoDescription,
             order.cargoWeight ? `вес (тонн): ${Math.round(Number(order.cargoWeight) / 1000 * 100) / 100}` : null,
             order.cargoVolume ? `Объем (м3): ${order.cargoVolume}` : null,
+            palletText ? `паллеты: ${palletText}` : (order.palletCount ? `паллет: ${order.palletCount}` : null),
+            order.placesCount ? `мест: ${order.placesCount}` : null,
+            order.stackable === false ? 'не штабелируется' : null,
+            temperature,
+            order.adr ? `ОПАСНЫЙ ГРУЗ (ДОПОГ)${order.adrClass ? `, класс ${order.adrClass}` : ''}` : null,
         ].filter(Boolean).join(' / ') || '—';
     }
 

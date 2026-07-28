@@ -96,6 +96,16 @@ export class DriverService {
             cargoWeight: order.cargoWeight || null,
             cargoVolume: order.cargoVolume || null,
             palletCount: order.palletCount || null,
+            // Условия перевозки водителю нужнее всех остальных: за отсутствие
+            // допуска на опасный груз машину разворачивают на посту, а
+            // нарушенный температурный режим — это испорченный рейс целиком.
+            // Раньше он видел только описание и вес.
+            adr: order.adr ?? null,
+            adrClass: order.adrClass || null,
+            tempMin: order.tempMin ?? null,
+            tempMax: order.tempMax ?? null,
+            stackable: order.stackable ?? null,
+            placesCount: order.placesCount ?? null,
             requirements: order.requirements || null,
             driverName: order.assignedDriverName || null,
             vehiclePlate: order.assignedDriverPlate || null,

@@ -24,6 +24,12 @@ interface DriverOrder {
     cargoWeight: number | null;
     cargoVolume: number | null;
     palletCount: number | null;
+    placesCount: number | null;
+    adr: boolean | null;
+    adrClass: string | null;
+    tempMin: number | null;
+    tempMax: number | null;
+    stackable: boolean | null;
     requirements: string | null;
     driverName: string | null;
     vehiclePlate: string | null;
@@ -254,10 +260,35 @@ export default function DriverPage() {
             <div style={card}>
                 <div style={eyebrow}>Груз</div>
                 <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--lc-text)' }}>{order.cargoDescription || 'Без описания'}</div>
+                {/* Опасный груз — первым и красным. За отсутствие допуска и
+                    знаков машину разворачивают на посту, и узнавать об этом
+                    водитель должен не от инспектора. */}
+                {order.adr && (
+                    <div style={{
+                        marginTop: 10, padding: '8px 12px', borderRadius: 10,
+                        background: '#fee2e2', color: '#b91c1c', fontWeight: 600, fontSize: 14,
+                    }}>
+                        Опасный груз (ДОПОГ){order.adrClass ? ` · класс ${order.adrClass}` : ''}
+                    </div>
+                )}
+                {(order.tempMin != null || order.tempMax != null) && (
+                    <div style={{
+                        marginTop: 8, padding: '8px 12px', borderRadius: 10,
+                        background: '#e0f2fe', color: '#075985', fontWeight: 600, fontSize: 14,
+                    }}>
+                        Температура: {order.tempMin ?? '—'} … {order.tempMax ?? '—'} °C
+                    </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                    {order.cargoWeight ? <span style={chip}>{order.cargoWeight} т</span> : null}
+                    {/* Вес хранится в килограммах, а подпись стояла «т»: водитель
+                        видел «18500 т» вместо 18,5 тонны. */}
+                    {order.cargoWeight ? (
+                        <span style={chip}>{order.cargoWeight.toLocaleString('ru-RU')} кг</span>
+                    ) : null}
                     {order.cargoVolume ? <span style={chip}>{order.cargoVolume} м³</span> : null}
                     {order.palletCount ? <span style={chip}>{order.palletCount} палет</span> : null}
+                    {order.placesCount ? <span style={chip}>{order.placesCount} мест</span> : null}
+                    {order.stackable === false ? <span style={chip}>не штабелировать</span> : null}
                 </div>
                 {order.requirements && <div style={{ fontSize: 14, color: 'var(--lc-text-sec)', marginTop: 10 }}>Требования: {order.requirements}</div>}
             </div>
