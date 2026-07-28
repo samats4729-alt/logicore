@@ -9,6 +9,8 @@
  * ломала бы разбор, и сообщение не дошло бы вовсе.
  */
 
+import { KZ_UTC_OFFSET_MINUTES } from '../common/utils/business-date';
+
 const CATEGORY_LABEL: Record<string, string> = {
     finance: 'Финансы',
     orders: 'Заявки',
@@ -23,6 +25,20 @@ const SEVERITY_LABEL: Record<string, string> = {
     high: 'высокая',
 };
 
+/**
+ * Дата обращения глазами человека в Казахстане.
+ *
+ * Сервер живёт в UTC, и без сдвига вечернее обращение уезжало бы во
+ * вчерашний день. Особенно это заметно на досыле старых обращений: там дата —
+ * единственный способ понять, о чём вообще речь и в каком порядке чинить.
+ */
+function formatKzDateTime(at: Date): string {
+    const shifted = new Date(at.getTime() + KZ_UTC_OFFSET_MINUTES * 60 * 1000);
+    const two = (n: number) => String(n).padStart(2, '0');
+    return `${two(shifted.getUTCDate())}.${two(shifted.getUTCMonth() + 1)}.${shifted.getUTCFullYear()}`
+        + ` ${two(shifted.getUTCHours())}:${two(shifted.getUTCMinutes())}`;
+}
+
 export interface SupportTicketMessageInput {
     id: string;
     title: string;
@@ -31,6 +47,7 @@ export interface SupportTicketMessageInput {
     companyName: string;
     userName: string;
     userEmail?: string | null;
+    createdAt?: Date | string | null;
     description: string;
     orders?: string[];
     details?: {
@@ -39,6 +56,11 @@ export interface SupportTicketMessageInput {
         expected?: string;
         actual?: string;
     } | null;
+    /**
+     * Обращение отправляется не в момент создания, а досылается из админки.
+     * Без этой пометки старое обращение читается как «только что сломалось».
+     */
+    resent?: boolean;
 }
 
 export function buildSupportTicketMessage(t: SupportTicketMessageInput): string {
@@ -48,9 +70,15 @@ export function buildSupportTicketMessage(t: SupportTicketMessageInput): string 
     const severity = SEVERITY_LABEL[t.severity] || t.severity;
     const category = CATEGORY_LABEL[t.category] || t.category;
     lines.push(`Обращение с платформы · ${category} · срочность ${severity}`);
+    if (t.resent) {
+        lines.push('Досыл: обращение уже лежало в админке, смотрите дату.');
+    }
     lines.push('');
     lines.push(t.title);
     lines.push('');
+    if (t.createdAt) {
+        lines.push(`Когда: ${formatKzDateTime(new Date(t.createdAt))}`);
+    }
     lines.push(`Компания: ${t.companyName}`);
     lines.push(`Человек: ${t.userName}${t.userEmail ? ` (${t.userEmail})` : ''}`);
 

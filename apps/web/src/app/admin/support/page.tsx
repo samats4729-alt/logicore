@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Tag, Select, Typography, Space, Segmented } from 'antd';
-import { CustomerServiceOutlined } from '@ant-design/icons';
+import { Table, Tag, Select, Typography, Space, Segmented, Button, Tooltip } from 'antd';
+import { CustomerServiceOutlined, SendOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
@@ -34,6 +34,7 @@ export default function AdminSupportPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [resending, setResending] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -58,6 +59,46 @@ export default function AdminSupportPage() {
             toast.success('Статус обновлён');
         } catch {
             toast.error('Не удалось обновить статус');
+        }
+    };
+
+    // Не уходило в телеграм — значит либо обращение старше самой отправки,
+    // либо мессенджер тогда не ответил. И то и другое чинится досылом.
+    const pending = tickets.filter((t) => !t.telegramSentAt);
+
+    const resendAll = async () => {
+        setResending(true);
+        try {
+            const res = await api.post('/assistant/support/telegram/resend', { limit: 50 });
+            const { sent, failed, left } = res.data || {};
+            if (sent > 0) {
+                toast.success(
+                    `Отправлено в телеграм: ${sent}` +
+                    (left > 0 ? `. Осталось ${left} — нажмите ещё раз.` : ''),
+                );
+            } else {
+                toast.warning('Ничего не отправилось — проверьте настройки бота.');
+            }
+            if (failed > 0) toast.warning(`Не дошло: ${failed}. Их можно отправить повторно.`);
+            await load();
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Не удалось отправить в телеграм');
+        } finally {
+            setResending(false);
+        }
+    };
+
+    const resendOne = async (id: string) => {
+        try {
+            const res = await api.post(`/assistant/support/tickets/${id}/telegram`);
+            if (res.data?.sent) {
+                toast.success('Отправлено в телеграм');
+                setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, telegramSentAt: new Date().toISOString() } : t)));
+            } else {
+                toast.warning('Телеграм не принял сообщение');
+            }
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Не удалось отправить в телеграм');
         }
     };
 
@@ -127,6 +168,26 @@ export default function AdminSupportPage() {
                 />
             ),
         },
+        {
+            title: 'Телеграм',
+            key: 'telegram',
+            width: 110,
+            align: 'center' as const,
+            render: (_: any, r: any) =>
+                r.telegramSentAt ? (
+                    <Tooltip title={`Отправлено ${dayjs(r.telegramSentAt).format('DD.MM.YYYY HH:mm')}. Нажмите, чтобы прислать ещё раз.`}>
+                        <Button size="small" type="text" icon={<SendOutlined />} onClick={() => resendOne(r.id)}>
+                            <span style={{ fontSize: 12, color: '#52c41a' }}>Ушло</span>
+                        </Button>
+                    </Tooltip>
+                ) : (
+                    <Tooltip title="В телеграм не уходило — отправить сейчас">
+                        <Button size="small" icon={<SendOutlined />} onClick={() => resendOne(r.id)}>
+                            Отправить
+                        </Button>
+                    </Tooltip>
+                ),
+        },
     ];
 
     return (
@@ -137,6 +198,13 @@ export default function AdminSupportPage() {
                     Обращения в поддержку
                 </Title>
                 <Space>
+                    {pending.length > 0 && (
+                        <Tooltip title="Отправит в телеграм всё, что туда ещё не уходило — от старых к новым, по 50 за раз">
+                            <Button type="primary" icon={<SendOutlined />} loading={resending} onClick={resendAll}>
+                                Отправить в телеграм ({pending.length})
+                            </Button>
+                        </Tooltip>
+                    )}
                     <Segmented
                         value={statusFilter}
                         onChange={(v) => setStatusFilter(v as string)}

@@ -61,6 +61,35 @@ export class AssistantController {
         return this.assistantService.updateTicketStatus(id, body?.status);
     }
 
+    /** Сколько обращений ещё ни разу не уходило в телеграм. */
+    @Get('support/telegram/pending')
+    @UseGuards(RolesGuard)
+    @Roles(UserRole.ADMIN)
+    async pendingTelegram() {
+        return { pending: await this.assistantService.countPendingTelegram() };
+    }
+
+    /**
+     * Досыл накопившегося. Частота ограничена: одна пачка — это до сотни
+     * сообщений в телеграм. Но не слишком туго: когда обращений накопилось
+     * много, пачки жмут подряд, и упереться в лимит на середине обидно.
+     */
+    @Post('support/telegram/resend')
+    @UseGuards(RolesGuard)
+    @Roles(UserRole.ADMIN)
+    @Throttle({ default: { limit: 6, ttl: 60000 } })
+    async resendPending(@Body() body: { limit?: number }) {
+        return this.assistantService.resendPendingTickets(body?.limit ?? 50);
+    }
+
+    @Post('support/tickets/:id/telegram')
+    @UseGuards(RolesGuard)
+    @Roles(UserRole.ADMIN)
+    @Throttle({ default: { limit: 20, ttl: 60000 } })
+    async resendTicket(@Param('id') id: string) {
+        return this.assistantService.resendTicket(id);
+    }
+
     // ==================== PLATFORM UPDATES ====================
 
     @Post('updates/generate')
