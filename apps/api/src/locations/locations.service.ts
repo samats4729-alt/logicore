@@ -198,7 +198,10 @@ export class LocationsService {
             create: { locationId, companyId, emails: value },
             update: { emails: value },
         });
-        await this.redis.del(`locations:${companyId}`);
+        // Сбрасываем весь кэш адресов, как это делают создание и правка. Точечный
+        // ключ компании пропускал список администратора (`locations:all`), и там
+        // почты оставались прежними ещё час.
+        await this.redis.delByPattern('locations:*');
         return saved;
     }
 

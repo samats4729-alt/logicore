@@ -277,6 +277,18 @@ export class UpdateDriverDto {
     @IsOptional()
     middleName?: string;
 
+    /**
+     * Телефон водителя. Его тут не было, а окно назначения водителя всегда его
+     * присылало — и весь запрос отклонялся целиком со «свойства phone быть не
+     * должно». То есть правка данных водителя при назначении не сохранялась
+     * никогда: ни телефон, ни номер машины, ни прицеп, ни документы. Ошибку
+     * форма проглатывала, человек видел успех.
+     */
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    phone?: string;
+
     @ApiProperty({ required: false })
     @IsString()
     @IsOptional()
