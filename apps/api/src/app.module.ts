@@ -24,7 +24,6 @@ import { ContractsModule } from './contracts/contracts.module';
 import { ExternalCompaniesModule } from './external-companies/external-companies.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { EmailModule } from './email/email.module';
-import { InvoiceModule } from './invoice/invoice.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { BillingModule } from './billing/billing.module';
@@ -72,7 +71,6 @@ import { ReportsModule } from './reports/reports.module';
         PaymentProofsModule,
         ReportsModule,
         EmailModule,
-        InvoiceModule,
         AssistantModule,
         PayrollModule,
         BillingModule,

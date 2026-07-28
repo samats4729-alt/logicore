@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PeriodClosingService } from './period-closing.service';
 import { PaymentAllocationService } from '../../accounting-documents/payment-allocation.service';
 import { FinancialSettingsService } from './financial-settings.service';
-import { PaymentDirection, PaymentMethod, AccountKind, Payment, InvoiceStatus, Prisma } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, AccountKind, Payment, Prisma } from '@prisma/client';
 import { D, roundMoney, sumOf, toNum } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
 
@@ -493,24 +493,6 @@ export class PaymentsService {
             await this.periodClosingService.checkPeriodNotClosed(companyId, data.date);
         }
 
-        // Меняем сумму платежа по заявке, чей счёт уже подтверждён оплаченным (PAID) —
-        // это рассинхронит флаг «оплачено» с реальной суммой платежей (см. M-6).
-        if (data.amount !== undefined && payment.orderId) {
-            const relatedOrder = await this.prisma.order.findUnique({
-                where: { id: payment.orderId },
-                select: {
-                    outgoingInvoice: { select: { status: true } },
-                    incomingInvoice: { select: { status: true } },
-                },
-            });
-            const relevantInvoiceStatus = payment.direction === PaymentDirection.IN
-                ? relatedOrder?.outgoingInvoice?.status
-                : relatedOrder?.incomingInvoice?.status;
-            if (relevantInvoiceStatus === InvoiceStatus.PAID) {
-                throw new BadRequestException('Нельзя изменить сумму платежа: счёт по этой заявке уже отмечен оплаченным. Сначала измените статус счёта.');
-            }
-        }
-
         const amt = data.amount !== undefined ? roundMoney(data.amount) : payment.amount;
         const oldOrderId = payment.orderId;
 
@@ -580,24 +562,6 @@ export class PaymentsService {
 
         await this.periodClosingService.checkPeriodNotClosed(companyId, payment.date);
 
-        // Счёт по заявке уже подтверждён оплаченным (PAID) — удаление платежа
-        // напрямую (в обход смены статуса счёта) рассинхронит флаг «оплачено»
-        // с реальной суммой платежей (см. M-6). Сначала нужно снять PAID со счёта.
-        if (payment.orderId) {
-            const relatedOrder = await this.prisma.order.findUnique({
-                where: { id: payment.orderId },
-                select: {
-                    outgoingInvoice: { select: { status: true } },
-                    incomingInvoice: { select: { status: true } },
-                },
-            });
-            const relevantInvoiceStatus = payment.direction === PaymentDirection.IN
-                ? relatedOrder?.outgoingInvoice?.status
-                : relatedOrder?.incomingInvoice?.status;
-            if (relevantInvoiceStatus === InvoiceStatus.PAID) {
-                throw new BadRequestException('Нельзя удалить платёж: счёт по этой заявке уже отмечен оплаченным. Сначала измените статус счёта.');
-            }
-        }
 
         const { updated, customerPaidBecameTrue } = await this.prisma.$transaction(async (tx) => {
             const row = await tx.payment.update({
@@ -666,8 +630,6 @@ export class PaymentsService {
         const order = await tx.order.findUnique({
             where: { id: orderId },
             include: {
-                outgoingInvoice: true,
-                incomingInvoice: true,
                 responsibleManager: {
                     select: {
                         companyId: true,
@@ -680,7 +642,6 @@ export class PaymentsService {
         const forwarderCompanyId = order.forwarderId || order.partnerId || order.responsibleManager?.companyId || order.customerCompanyId || null;
 
         // Sync Customer Paid Flag
-        const hasPaidOutgoingInvoice = order.outgoingInvoice?.status === InvoiceStatus.PAID;
         const customerPayments = await tx.payment.findMany({
             where: {
                 orderId,
@@ -693,11 +654,10 @@ export class PaymentsService {
         // сравнение точное и «недоплаты в 0.00000000001» не возникает.
         const paidIn = sumOf(customerPayments, (p) => p.amount);
         const revenue = D(order.customerPrice);
-        const isCustomerPaid = hasPaidOutgoingInvoice || (revenue.gt(0) && paidIn.gte(revenue));
+        const isCustomerPaid = revenue.gt(0) && paidIn.gte(revenue);
         const customerPaidBecameTrue = !order.isCustomerPaid && isCustomerPaid;
 
         // Sync Driver / Sub-forwarder Paid Flag
-        const hasPaidIncomingInvoice = order.incomingInvoice?.status === InvoiceStatus.PAID;
         const executorPayments = await tx.payment.findMany({
             where: {
                 orderId,
@@ -715,7 +675,7 @@ export class PaymentsService {
 
         if (order.subForwarderId) {
             const subForwarderPrice = D(order.subForwarderPrice);
-            isSubForwarderPaid = hasPaidIncomingInvoice || (subForwarderPrice.gt(0) && paidOut.gte(subForwarderPrice));
+            isSubForwarderPaid = subForwarderPrice.gt(0) && paidOut.gte(subForwarderPrice);
             // Дата оплаты — снимок реального события платежа. Если платежи всё ещё
             // есть, но их стало недостаточно из-за повышения ставки задним числом,
             // дату не затираем (см. H-4) — обнуляем только когда платежей нет вовсе.
@@ -724,7 +684,7 @@ export class PaymentsService {
                 : (paidOut.gt(0) ? order.subForwarderPaidAt : null);
         } else {
             const driverCost = D(order.driverCost);
-            isDriverPaid = hasPaidIncomingInvoice || (driverCost.gt(0) && paidOut.gte(driverCost));
+            isDriverPaid = driverCost.gt(0) && paidOut.gte(driverCost);
             driverPaidAt = isDriverPaid
                 ? (order.driverPaidAt || new Date())
                 : (paidOut.gt(0) ? order.driverPaidAt : null);

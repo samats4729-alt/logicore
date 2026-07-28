@@ -141,7 +141,6 @@ model User {
   managedExternalCompanies     Company[]                     @relation("ExternalCompanyManager")
   orderChangeLogs              OrderChangeLog[]              @relation("OrderChangeLogs")
   closedPeriods                ClosedPeriod[]
-  createdInvoices              Invoice[]                     @relation("InvoiceCreator")
   accountingDocumentsCreated   AccountingDocument[]          @relation("AccountingDocumentCreatedBy")
   accountingDocumentsPosted    AccountingDocument[]          @relation("AccountingDocumentPostedBy")
   accountingDocumentsCancelled AccountingDocument[]          @relation("AccountingDocumentCancelledBy")
@@ -357,8 +356,6 @@ model Company {
   closedPeriods                   ClosedPeriod[]
   financeAccounts                 FinanceAccount[]              @relation("CompanyFinanceAccounts")
   financeCategories               FinanceCategory[]             @relation("CompanyFinanceCategories")
-  issuedInvoices                  Invoice[]                     @relation("InvoiceIssuer")
-  receivedInvoices                Invoice[]                     @relation("InvoiceRecipient")
   accountingDocuments             AccountingDocument[]          @relation("AccountingDocumentCompany")
   accountingCounterpartyDocuments AccountingDocument[]          @relation("AccountingDocumentCounterparty")
   accountingDocumentNumberings    AccountingDocumentNumbering[]
@@ -687,10 +684,6 @@ model Order {
   assignees                 OrderAssignee[]
   responsibles              OrderResponsible[]
   changeLog                 OrderChangeLog[]
-  incomingInvoiceId         String?
-  incomingInvoice           Invoice?             @relation("IncomingInvoiceOrders", fields: [incomingInvoiceId], references: [id])
-  outgoingInvoiceId         String?
-  outgoingInvoice           Invoice?             @relation("OutgoingInvoiceOrders", fields: [outgoingInvoiceId], references: [id])
   proposedCustomerPrice     Decimal?             @db.Decimal(18, 2)
   proposedDriverCost        Decimal?             @db.Decimal(18, 2)
   proposedSubForwarderPrice Decimal?             @db.Decimal(18, 2)
@@ -1506,68 +1499,11 @@ model Vehicle {
   @@index([driverPersonId])
 }
 
-// ==================== INVOICES ====================
-
-enum InvoiceType {
-  INCOMING // Входящий (расход, от перевозчика нам)
-  OUTGOING // Исходящий (доход, от нас заказчику)
-}
-
-enum InvoiceStatus {
-  DRAFT // Черновик
-  PENDING // Ожидает согласования
-  DISPUTED // Спор (корректировки по ссылке)
-  APPROVED // Согласован
-  PAID // Оплачен
-  CANCELLED // Отменен
-}
-
-model Invoice {
-  id            String        @id @default(cuid())
-  invoiceNumber String // Номер счета
-  type          InvoiceType
-  status        InvoiceStatus @default(DRAFT)
-
-  // Эмитент и получатель
-  issuerId String
-  issuer   Company @relation("InvoiceIssuer", fields: [issuerId], references: [id], onDelete: Cascade)
-
-  recipientId String
-  recipient   Company @relation("InvoiceRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-
-  date    DateTime // Дата выставления счета
-  dueDate DateTime? // Срок оплаты
-
-  // Уникальный токен для публичной ссылки
-  shareToken String @unique @default(uuid())
-
-  // Финансовая сводка
-  amount         Decimal  @db.Decimal(18, 2) // Изначальная сумма
-  adjustedAmount Decimal? @db.Decimal(18, 2) // Скорректированная сумма (если был спор)
-
-  note        String?
-  createdById String
-  createdBy   User    @relation("InvoiceCreator", fields: [createdById], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Связи с заказами
-  incomingOrders Order[] @relation("IncomingInvoiceOrders")
-  outgoingOrders Order[] @relation("OutgoingInvoiceOrders")
-
-  @@unique([issuerId, invoiceNumber, type])
-  @@index([status])
-  @@index([shareToken])
-  @@index([issuerId])
-  @@index([recipientId])
-}
-
 // ==================== БУХГАЛТЕРСКОЕ ДОКУМЕНТНОЕ ЯДРО ====================
 //
-// Полностью добавочный контур: существующая Invoice и текущие Payment/Income/Expense
-// продолжают работать без изменений. Переключение API на эти таблицы выполняется
-// отдельным этапом после бэкфилла и сверки production-данных.
+// Единственный контур счетов и актов. Прежний журнал (модель Invoice) убран:
+// им не пользовались ни из интерфейса, ни из мобильного, а три оставшиеся в нём
+// записи владелец опознал как пробные.
 enum AccountingDocumentType {
   PAYMENT_INVOICE // Счёт на оплату
   SERVICE_ACT // Акт выполненных работ (оказанных услуг), включая Р-1
