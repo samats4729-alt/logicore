@@ -493,27 +493,16 @@ export default function FinancialRegistryPage() {
         <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
+                {/* Кнопка и подпись стояли отдельными строками под заголовком, и
+                    до первой строки реестра уходило 423 пикселя из 1000 — почти
+                    половина экрана на украшения. Кнопка ушла вправо, к плиткам,
+                    подпись сжата в одну строку. */}
                 <div>
                     <div className="lc-eyebrow">Финансы · Реестр</div>
                     <h1 className="lc2-title">Реестр заявок</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Финансы каждой заявки: доход от заказчика, себестоимость перевозчику, маржа и статус оплат. Оплаты по заявкам отмечаются здесь.
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '4px 0 0' }}>
+                        Доход, себестоимость, маржа и статус оплат по каждой заявке.
                     </p>
-                    <Button
-                        type="default"
-                        icon={<FileExcelOutlined />}
-                        onClick={handleExportExcel}
-                        loading={exporting}
-                        className="lc-cta"
-                        style={{
-                            borderColor: token.colorSuccess,
-                            color: token.colorSuccess,
-                            fontWeight: 600,
-                            boxShadow: `0 2px 4px ${token.colorSuccess}20`,
-                        }}
-                    >
-                        Экспорт в Excel
-                    </Button>
                 </div>
                 <div className="lc2-metrics">
                     {metricsData.map((m, i) => (
@@ -531,6 +520,15 @@ export default function FinancialRegistryPage() {
                         </div>
                     ))}
                 </div>
+                <Button
+                    type="default"
+                    icon={<FileExcelOutlined />}
+                    onClick={handleExportExcel}
+                    loading={exporting}
+                    className="lc-cta"
+                >
+                    Экспорт в Excel
+                </Button>
             </div>
 
             {/* ===== TABLE & FILTERS CARD ===== */}
