@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, Location } from '@/lib/api';
+import { reportLoadFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
@@ -369,7 +370,7 @@ export default function OrderDetailPage() {
         try {
             const res = await api.get(`/documents/order/${orderId}`);
             setDocuments(res.data);
-        } catch { }
+        } catch (e: any) { reportLoadFailure('документы рейса', e); }
     };
 
     // Передать заявку другому менеджеру своей компании
@@ -405,7 +406,7 @@ export default function OrderDetailPage() {
         try {
             const response = await api.get('/users/drivers');
             setDrivers(response.data);
-        } catch { } finally { setDriversLoading(false); }
+        } catch (e: any) { reportLoadFailure('список водителей', e); } finally { setDriversLoading(false); }
     };
 
     const fetchVehicles = async () => {
@@ -413,7 +414,7 @@ export default function OrderDetailPage() {
         try {
             const response = await api.get('/company/vehicles');
             setVehicles(response.data || []);
-        } catch { } finally { setVehiclesLoading(false); }
+        } catch (e: any) { reportLoadFailure('список машин', e); } finally { setVehiclesLoading(false); }
     };
 
     const fetchPartners = async () => {
@@ -455,14 +456,14 @@ export default function OrderDetailPage() {
             if (profileRes.data?.name) {
                 setMyCompanyName(profileRes.data.name);
             }
-        } catch { } finally { setPartnersLoading(false); }
+        } catch (e: any) { reportLoadFailure('список контрагентов', e); } finally { setPartnersLoading(false); }
     };
 
     const fetchLocations = async () => {
         try {
             const response = await api.get('/locations');
             setLocations(response.data);
-        } catch { }
+        } catch (e: any) { reportLoadFailure('справочник адресов', e); }
     };
 
     const handleNewLocationSuccess = async (newLoc: Location) => {
@@ -488,7 +489,7 @@ export default function OrderDetailPage() {
         try {
             const response = await api.get('/cargo-types');
             setCargoCategories(response.data);
-        } catch { }
+        } catch (e: any) { reportLoadFailure('виды груза', e); }
     };
 
     useEffect(() => {

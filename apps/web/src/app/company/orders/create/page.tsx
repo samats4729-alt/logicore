@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { Button } from '@/components/ui/button';
 import { api, Location } from '@/lib/api';
+import { reportLoadFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
@@ -366,14 +367,14 @@ export default function CreateOrderPage() {
         try {
             const response = await api.get('/locations');
             setLocations(response.data);
-        } catch { }
+        } catch (e: any) { reportLoadFailure('справочник адресов', e); }
     };
 
     const fetchCargoTypes = async () => {
         try {
             const response = await api.get('/cargo-types');
             setCargoCategories(response.data);
-        } catch { }
+        } catch (e: any) { reportLoadFailure('виды груза', e); }
     };
 
     const fetchPartners = async () => {
@@ -403,7 +404,7 @@ export default function CreateOrderPage() {
             if (profileRes.data?.name) {
                 setMyCompanyName(profileRes.data.name);
             }
-        } catch { }
+        } catch (e: any) { reportLoadFailure('список контрагентов', e); }
     };
 
     // Location options grouped by company

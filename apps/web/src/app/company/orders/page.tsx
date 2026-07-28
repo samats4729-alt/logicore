@@ -15,6 +15,7 @@ import { ChevronDown, ChevronRight, ChevronUp, Eraser, FileText, Mail, Pencil, P
 import { Button } from '@/components/ui/button';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 import { api, Location } from '@/lib/api';
+import { reportLoadFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
 import { shortenCompanyName } from '@/lib/company-helper';
@@ -174,7 +175,7 @@ export default function CompanyOrdersPage() {
     const [archivePageSize, setArchivePageSize] = useState(20);
 
     // Fetch all active orders with SWR (unified — no incoming/outgoing split)
-    const { data: ordersData, isLoading: loading, mutate: mutateOrders } = useSWR(
+    const { data: ordersData, isLoading: loading, error: ordersError, mutate: mutateOrders } = useSWR(
         `/company/orders?page=${ordersPage}&limit=${ordersPageSize}&type=active`,
         fetcher
     );
@@ -518,7 +519,7 @@ export default function CompanyOrdersPage() {
             const combined = [...ownCompany, ...partnersList, ...externalList];
             setPartners(combined);
             setForwarders(combined);
-        } catch { } finally {
+        } catch (e: any) { reportLoadFailure('список контрагентов', e); } finally {
             setPartnersLoading(false);
         }
     };
@@ -529,14 +530,14 @@ export default function CompanyOrdersPage() {
         try {
             const response = await api.get('/locations');
             setLocations(response.data);
-        } catch { }
+        } catch (e: any) { reportLoadFailure('справочник адресов', e); }
     };
 
     const fetchCargoTypes = async () => {
         try {
             const response = await api.get('/cargo-types');
             setCargoCategories(response.data);
-        } catch { }
+        } catch (e: any) { reportLoadFailure('виды груза', e); }
     };
 
     // Check profile completeness and load data on mount
@@ -1275,6 +1276,9 @@ export default function CompanyOrdersPage() {
                     <h1 className="lc2-title">Заявки компании</h1>
                 </div>
                 <div className="lc2-metrics">
+                    {/* Когда список не пришёл, плитки не должны бодро показывать
+                        нули и «всё назначено»: ноль по неудачной загрузке — это
+                        не факт о работе компании, а отсутствие ответа. */}
                     <div className="lc2-metric">
                         <span className="lc2-mic"><FileTextOutlined /></span>
                         <div>
@@ -1282,25 +1286,29 @@ export default function CompanyOrdersPage() {
                             {/* Именно `totalOrders`, а не длина `orders`: в `orders`
                                 лежит одна страница, и плитка «всего» показывала
                                 размер страницы — при 37 заявках писала 20. */}
-                            <div className="lc2-mvalue">{totalOrders}</div>
-                            <div className="lc2-msub" style={{ color: '#16a34a' }}>активная база</div>
+                            <div className="lc2-mvalue">{ordersError ? '—' : totalOrders}</div>
+                            <div className="lc2-msub" style={{ color: ordersError ? undefined : '#16a34a' }}>
+                                {ordersError ? 'нет данных' : 'активная база'}
+                            </div>
                         </div>
                     </div>
                     <div className="lc2-metric">
                         <span className="lc2-mic"><TruckOutlined /></span>
                         <div>
                             <div className="lc2-mlabel">Сейчас в пути</div>
-                            <div className="lc2-mvalue">{inTransitCount}</div>
-                            <div className="lc2-msub" style={{ color: '#16a34a' }}>по графику</div>
+                            <div className="lc2-mvalue">{ordersError ? '—' : inTransitCount}</div>
+                            <div className="lc2-msub" style={{ color: ordersError ? undefined : '#16a34a' }}>
+                                {ordersError ? 'нет данных' : 'по графику'}
+                            </div>
                         </div>
                     </div>
                     <div className="lc2-metric">
                         <span className="lc2-mic"><ClockCircleOutlined /></span>
                         <div>
                             <div className="lc2-mlabel">Ожидают назначения</div>
-                            <div className="lc2-mvalue">{pendingCount}</div>
-                            <div className="lc2-msub" style={{ color: pendingCount > 0 ? '#b45309' : '#16a34a' }}>
-                                {pendingCount > 0 ? 'внимание ⚠' : 'всё назначено'}
+                            <div className="lc2-mvalue">{ordersError ? '—' : pendingCount}</div>
+                            <div className="lc2-msub" style={{ color: ordersError ? undefined : (pendingCount > 0 ? '#b45309' : '#16a34a') }}>
+                                {ordersError ? 'нет данных' : (pendingCount > 0 ? 'внимание ⚠' : 'всё назначено')}
                             </div>
                         </div>
                     </div>
@@ -1451,6 +1459,13 @@ export default function CompanyOrdersPage() {
                                     loading={loading}
                                     size="small"
                                     scroll={{ x: 1600 }}
+                                    /* «Нет данных» при упавшем запросе — это неправда,
+                                       и именно на неё человек и опирается. */
+                                    locale={{
+                                        emptyText: ordersError
+                                            ? 'Список не загрузился. Обновите страницу.'
+                                            : 'Заявок пока нет',
+                                    }}
                                     pagination={{
                                         current: ordersPage,
                                         pageSize: ordersPageSize,

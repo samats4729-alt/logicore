@@ -6,6 +6,7 @@ import {
     SearchOutlined, ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, DollarOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { loadOrReport } from '@/lib/load';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
@@ -61,11 +62,33 @@ export default function CompanyExpensesPage() {
     const selectedCat = categories.find(c => c.direction === 'OUT' && c.name === watchedCategory);
     const needsOrder = selectedCat?.costType === 'PER_ORDER';
     useEffect(() => { fetchJournal(); fetchManual(); fetchAccounts(); fetchCategories(); fetchOrders(); }, []);
-    const fetchJournal = async () => { setLoading(true); try { const res = await api.get('/accounting/customer-expenses-journal'); setEntries(res.data); } catch {} finally { setLoading(false); } };
-    const fetchManual = async () => { try { const res = await api.get('/accounting/expenses'); setManualExpenses(res.data); } catch {} };
-    const fetchAccounts = async () => { try { const res = await api.get('/accounting/finance-accounts'); setAccounts((res.data || []).filter((a: any) => a.isActive !== false)); } catch {} };
-    const fetchCategories = async () => { try { const res = await api.get('/accounting/finance-categories'); setCategories((res.data || []).filter((c: any) => c.isActive !== false)); } catch {} };
-    const fetchOrders = async () => { try { const res = await api.get('/orders', { params: { limit: 300 } }); const list = res.data?.data || res.data || []; setOrders(list.map((o: any) => ({ id: o.id, orderNumber: o.orderNumber }))); } catch {} };
+    // Загрузки идут через loadOrReport: упавший запрос раньше оставлял экран
+    // на вид рабочим, просто с пустым списком. Именно так поломка с полем
+    // «Заявка» оставалась невидимой — бухгалтер думал, что заявок нет.
+    const fetchJournal = async () => {
+        setLoading(true);
+        const res = await loadOrReport('журнал расходов', () => api.get('/accounting/customer-expenses-journal'));
+        if (res) setEntries(res.data);
+        setLoading(false);
+    };
+    const fetchManual = async () => {
+        const res = await loadOrReport('расходы', () => api.get('/accounting/expenses'));
+        if (res) setManualExpenses(res.data);
+    };
+    const fetchAccounts = async () => {
+        const res = await loadOrReport('счета и кассы', () => api.get('/accounting/finance-accounts'));
+        if (res) setAccounts((res.data || []).filter((a: any) => a.isActive !== false));
+    };
+    const fetchCategories = async () => {
+        const res = await loadOrReport('статьи расходов', () => api.get('/accounting/finance-categories'));
+        if (res) setCategories((res.data || []).filter((c: any) => c.isActive !== false));
+    };
+    const fetchOrders = async () => {
+        const res = await loadOrReport('список заявок', () => api.get('/orders', { params: { limit: 300 } }));
+        if (!res) return;
+        const list = res.data?.data || res.data || [];
+        setOrders(list.map((o: any) => ({ id: o.id, orderNumber: o.orderNumber })));
+    };
 
     const getCarrierName = (e: JournalEntry): string => { if (e.forwarder) return e.forwarder.name; return '—'; };
     const openDetail = (entry: JournalEntry) => { setSelectedEntry(entry); setDrawerOpen(true); };
