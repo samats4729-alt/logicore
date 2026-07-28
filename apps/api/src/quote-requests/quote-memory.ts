@@ -5,14 +5,19 @@
  * называет сумму — клиент отказывается. Через два дня тот же клиент
  * спрашивает тот же маршрут. Менеджер уже не помнит ни что предлагал, ни
  * почём нашёл машину, и называет ту же сумму, на которую только что
- * отказали. Второй отказ гарантирован.
+ * отказали.
  *
- * Здесь считается всё, что нужно сказать менеджеру в этот момент: чем
- * закончился прошлый раз, изменились ли условия, и какую цену имеет смысл
- * называть теперь.
+ * ЧЕГО ЗДЕСЬ НЕТ И НЕ ДОЛЖНО БЫТЬ: расчёта новой цены.
  *
- * Правила намеренно арифметические, без «умных» моделей: менеджер должен
- * понимать, откуда взялась цифра, и иметь возможность с ней поспорить.
+ * Сначала здесь было правило «после отказа предлагай на пять процентов
+ * ниже». Владелец его отменил, и по делу. Во-первых, отказ бывает не из-за
+ * цены: клиент мог найти машину раньше, отменить отгрузку, передумать
+ * везти. Во-вторых, скидка от прошлой цены ничего не знает о том, почём
+ * машина найдена сегодня, — а значит может увести сделку в убыток.
+ *
+ * Поэтому здесь только факты: что предлагали, почём нашли машину, чем
+ * кончилось, по какой причине, и что изменилось в новых условиях. Цену
+ * называет менеджер — он один видит и рынок, и сегодняшнюю закупку.
  */
 
 /** Один прошлый запрос — ровно те поля, от которых зависит вывод. */
@@ -45,10 +50,11 @@ export interface QuoteMemory {
     sameConditions: boolean;
     /** Чем именно разошлись — человеческими словами. */
     differences: string[];
-    /** Рекомендуемая цена клиенту, ₸. Пусто — если рекомендовать нечего. */
-    recommendedPrice: number | null;
-    /** Почему именно столько. Показывается менеджеру дословно. */
-    advice: string | null;
+    /**
+     * Одна строка о прошлом исходе. Сообщает факт и, если условия
+     * разошлись, предупреждает об этом. Суммы не назначает.
+     */
+    note: string | null;
     /** Вилка по маршруту у этого клиента: от и до. */
     range: {
         customerFrom: number;
@@ -58,11 +64,6 @@ export interface QuoteMemory {
         count: number;
     } | null;
 }
-
-/** Насколько опускаем цену после отказа. */
-const DISCOUNT_AFTER_REJECT = 0.95;
-/** До какой круглой суммы округляем рекомендацию вниз. */
-const ROUND_TO = 1000;
 
 /**
  * Считается ли условие тем же. Пять процентов — это про то, что «20 тонн»
@@ -76,10 +77,6 @@ function sameNumber(a: number | null | undefined, b: number | null | undefined):
     if (a === 0 && b === 0) return true;
     const base = Math.max(Math.abs(a), Math.abs(b));
     return Math.abs(a - b) / base <= TOLERANCE;
-}
-
-function roundDown(value: number): number {
-    return Math.max(0, Math.floor(value / ROUND_TO) * ROUND_TO);
 }
 
 /** Сколько полных суток прошло. */
@@ -114,7 +111,7 @@ export function buildQuoteMemory(
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     if (decided.length === 0) {
-        return { last: null, sameConditions: false, differences: [], recommendedPrice: null, advice: null, range: null };
+        return { last: null, sameConditions: false, differences: [], note: null, range: null };
     }
 
     const last = decided[0];
@@ -141,38 +138,32 @@ export function buildQuoteMemory(
         count: decided.length,
     };
 
-    const rejected = decided.filter((p) => p.status === 'REJECTED');
-    const approved = decided.filter((p) => p.status === 'APPROVED');
-    const minRejected = rejected.length ? Math.min(...rejected.map((p) => p.customerPrice as number)) : null;
-    const maxApproved = approved.length ? Math.max(...approved.map((p) => p.customerPrice as number)) : null;
+    return { last, sameConditions, differences, note: buildNote(last, sameConditions, differences), range };
+}
 
-    let recommendedPrice: number | null = null;
-    let advice: string | null = null;
+/**
+ * Строка о прошлом исходе.
+ *
+ * Утверждает только то, что произошло. «Не была принята» — факт. Вывод из
+ * него («значит, надо дешевле») человек делает сам: он знает и причину
+ * отказа, и сегодняшнюю закупку, а мы — нет.
+ */
+function buildNote(last: PastQuote, sameConditions: boolean, differences: string[]): string {
+    const price = fmt(last.customerPrice as number);
+    const tail = sameConditions
+        ? ' Условия те же.'
+        : ` Условия изменились: ${differences.join('; ')}.`;
 
-    if (minRejected != null) {
-        // Всё, что было не ниже отказной цены, клиент уже не принял.
-        recommendedPrice = roundDown(minRejected * DISCOUNT_AFTER_REJECT);
-
-        // Но опускаться ниже того, что клиент уже принимал, незачем:
-        // ту цену он платил, значит она проходит.
-        if (maxApproved != null && maxApproved < minRejected && maxApproved > recommendedPrice) {
-            recommendedPrice = maxApproved;
-            advice = `На эту цену уже отказывали (${fmt(minRejected)} ₸), а ${fmt(maxApproved)} ₸ клиент принимал. Предложите ${fmt(recommendedPrice)} ₸.`;
-        } else {
-            advice = `${fmt(minRejected)} ₸ клиент не принял. Предложите ниже — например, ${fmt(recommendedPrice)} ₸.`;
-        }
-
-        if (!sameConditions) {
-            advice += ` Но условия изменились (${differences.join('; ')}) — цену пересчитайте, а не копируйте.`;
-        }
-    } else if (maxApproved != null) {
-        recommendedPrice = maxApproved;
-        advice = sameConditions
-            ? `${fmt(maxApproved)} ₸ клиент принимал, и условия те же. Можно предлагать столько же.`
-            : `${fmt(maxApproved)} ₸ клиент принимал, но условия изменились (${differences.join('; ')}) — пересчитайте.`;
+    if (last.status === 'APPROVED') {
+        return sameConditions
+            ? `Цена ${price} ₸ уже проходила при тех же условиях.`
+            : `Цена ${price} ₸ проходила, но условия изменились: ${differences.join('; ')}.`;
     }
 
-    return { last, sameConditions, differences, recommendedPrice, advice, range };
+    const reason = last.rejectionReason?.trim()
+        ? ` Причина: ${last.rejectionReason.trim()}.`
+        : ' Причина не указана.';
+    return `Цена ${price} ₸ не была принята.${reason}${tail}`;
 }
 
 function formatDiff(
