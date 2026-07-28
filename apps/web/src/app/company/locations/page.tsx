@@ -39,17 +39,59 @@ export default function CompanyLocationsPage() {
         }
     };
 
+    /**
+     * Менялось ли в карточке адреса хоть что-то, кроме почт.
+     *
+     * Нужно, чтобы не дёргать сохранение адреса впустую: справочник общий, и
+     * запись в чужую карточку возвращает отказ. Правка одних только почт —
+     * самый частый случай, и она не должна в этот отказ упираться.
+     */
+    const hasCardChanges = (payload: any, before: any) =>
+        Object.keys(payload).some((key) => {
+            const was = before?.[key] ?? null;
+            const now = payload[key] ?? null;
+            return String(was) !== String(now);
+        });
+
     const handleSubmit = async (values: any) => {
         try {
-            const payload = {
-                ...values,
-                emails: values.emails ? values.emails.join(',') : null
-            };
+            // Почты сохраняем отдельным запросом, а не вместе с карточкой адреса.
+            //
+            // Справочник адресов общий: у складов владельца нет, и запись в саму
+            // карточку возвращала «Нет доступа к этому адресу». А список почт у
+            // каждой компании свой — общая запись затирала бы чужие контакты.
+            // Поэтому список живёт отдельно, у пары «адрес + компания».
+            const emails: string = values.emails ? values.emails.join(',') : '';
+            const { emails: _dropped, ...payload } = values;
+
             if (editingLocation) {
-                await api.put(`/locations/${editingLocation.id}`, payload);
+                // Список почт — наш, его пишем всегда.
+                await api.put(`/locations/${editingLocation.id}/emails`, { emails });
+
+                // Саму карточку трогаем, только если её правда меняли. Общий
+                // склад принадлежит не нам, переименовать его нельзя — придёт
+                // отказ. Раньше этот отказ прилетал даже когда человек правил
+                // одни почты: окно не закрывалось, и было непонятно, что не так.
+                if (hasCardChanges(payload, editingLocation)) {
+                    try {
+                        await api.put(`/locations/${editingLocation.id}`, payload);
+                    } catch (e: any) {
+                        if (e.response?.status !== 403) throw e;
+                        toast.warning('Почты сохранены. Сам адрес общий — его карточку меняет владелец.');
+                        setModalOpen(false);
+                        setEditingLocation(null);
+                        setAddForCompanyId(undefined);
+                        form.resetFields();
+                        fetchLocations();
+                        return;
+                    }
+                }
                 toast.success('Адрес обновлён');
             } else {
-                await api.post('/locations', payload);
+                const created = await api.post('/locations', payload);
+                if (emails && created.data?.id) {
+                    await api.put(`/locations/${created.data.id}/emails`, { emails });
+                }
                 toast.success('Адрес добавлен');
             }
             setModalOpen(false);

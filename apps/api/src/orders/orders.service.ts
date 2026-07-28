@@ -278,6 +278,9 @@ export class OrdersService {
                 statusHistory: {
                     create: {
                         status,
+                        // Автора первой записи не проставляли, и в истории рейса
+                        // создание выглядело как действие «системы».
+                        changedById: data.customerId,
                         comment: data.driverId
                             ? 'Заявка создана с назначенным водителем'
                             : isForwarderExternal

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, GoneException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InvoiceService } from './invoice.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -21,14 +21,28 @@ import {
 export class InvoiceController {
     constructor(private invoiceService: InvoiceService) {}
 
+    /**
+     * Создание счёта здесь закрыто.
+     *
+     * Счета живут в разделе «Бухгалтерия» (AccountingDocument): там нумерация,
+     * НДС, акты и сверки. Этот раздел — предыдущее поколение, из интерфейса к
+     * нему давно никто не обращается, но эндпоинт оставался открытым и мог
+     * положить запись мимо основного учёта. Одна и та же операция в двух
+     * местах — это разошедшиеся отчёты и вопрос «какой цифре верить».
+     *
+     * Чтение и правку оставляем: старые счета должны оставаться видимыми,
+     * пока владелец не решит, что с ними делать.
+     */
     @Post()
     @Roles(UserRole.ACCOUNTANT, UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
-    @ApiOperation({ summary: 'Создать новый счет' })
+    @ApiOperation({ summary: 'Закрыто: счета выставляются в разделе «Бухгалтерия»' })
     async createInvoice(
-        @Body() dto: CreateInvoiceDto,
-        @Request() req: any,
+        @Body() _dto: CreateInvoiceDto,
+        @Request() _req: any,
     ) {
-        return this.invoiceService.createInvoice(req.user.companyId, req.user.id, dto);
+        throw new GoneException(
+            'Счета теперь выставляются в разделе «Бухгалтерия». Прежний журнал остаётся доступным для просмотра.',
+        );
     }
 
     @Get()

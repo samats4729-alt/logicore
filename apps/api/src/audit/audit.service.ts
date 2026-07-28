@@ -13,6 +13,8 @@ export interface AuditEntry {
     entityId?: string | null;
     entityLabel?: string | null;
     details?: Record<string, any> | null;
+    /** Рейс, к которому относится действие — чтобы карточка заявки собрала свою ленту. */
+    orderId?: string | null;
 }
 
 @Injectable()
@@ -56,6 +58,7 @@ export class AuditService {
                     entityId: entry.entityId ?? null,
                     entityLabel: entry.entityLabel ?? null,
                     details: entry.details ?? undefined,
+                    orderId: entry.orderId ?? null,
                 },
             });
         } catch (error: any) {
@@ -77,6 +80,67 @@ export class AuditService {
             this.prisma.auditLog.count({ where: { companyId } }),
         ]);
         return { data, total, page, limit };
+    }
+
+    /**
+     * История одного рейса одной лентой: смены статуса и действия людей.
+     *
+     * Статусы и журнал действий лежат в разных таблицах и заполнялись
+     * независимо — карточка показывала только статусы, и то без автора.
+     * «Кто вложил этот документ» узнать было негде.
+     *
+     * Ленту собираем здесь, а не на экране: сортировка по времени поверх
+     * двух источников и подстановка имён — это работа сервера.
+     */
+    async getOrderHistory(orderId: string) {
+        const [statuses, actions] = await Promise.all([
+            this.prisma.orderStatusHistory.findMany({
+                where: { orderId },
+                orderBy: { changedAt: 'desc' },
+            }),
+            this.prisma.auditLog.findMany({
+                where: { orderId },
+                orderBy: { createdAt: 'desc' },
+                take: 200,
+            }),
+        ]);
+
+        // Имя автора смены статуса хранится только идентификатором — в отличие
+        // от журнала действий, где лежит снимок ФИО. Достаём одним запросом.
+        const userIds = Array.from(new Set(statuses.map(s => s.changedById).filter(Boolean))) as string[];
+        const users = userIds.length
+            ? await this.prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { id: true, firstName: true, lastName: true },
+            })
+            : [];
+        const nameById = new Map(
+            users.map(u => [u.id, `${u.lastName || ''} ${u.firstName || ''}`.trim() || null]),
+        );
+
+        const feed = [
+            ...statuses.map(s => ({
+                kind: 'STATUS' as const,
+                at: s.changedAt,
+                status: s.status,
+                comment: s.comment,
+                userName: s.changedById ? nameById.get(s.changedById) ?? null : null,
+                userRole: null as string | null,
+            })),
+            ...actions.map(a => ({
+                kind: 'ACTION' as const,
+                at: a.createdAt,
+                action: a.action,
+                entity: a.entity,
+                label: a.entityLabel,
+                details: a.details,
+                userName: a.userName,
+                userRole: a.userRole,
+            })),
+        ];
+
+        feed.sort((a, b) => b.at.getTime() - a.at.getTime());
+        return feed;
     }
 
     async getPlatformLog(params: { companyId?: string; page?: number; limit?: number }) {

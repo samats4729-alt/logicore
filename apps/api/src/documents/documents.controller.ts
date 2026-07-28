@@ -10,6 +10,24 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole, DocumentType } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+
+/** Как называть вид документа в журнале действий, чтобы читалось по-человечески. */
+const DOCUMENT_KIND_LABELS: Record<string, string> = {
+    TTN: 'Товарно-транспортная накладная',
+    POWER_OF_ATTORNEY: 'Доверенность',
+    ACT: 'Акт',
+    INVOICE: 'Счёт',
+    OTHER: 'Документ',
+    COMPANY_REGISTRATION: 'Справка о регистрации',
+    DIRECTOR_APPOINTMENT: 'Приказ о назначении руководителя',
+    DIRECTOR_ID: 'Удостоверение руководителя',
+};
+
+const documentLabel = (type?: string, fileName?: string) => {
+    const kind = DOCUMENT_KIND_LABELS[type || ''] || 'Документ';
+    return fileName ? `${kind} — ${fileName}` : kind;
+};
 
 @ApiTags('documents')
 @Controller('documents')
@@ -20,6 +38,7 @@ export class DocumentsController {
     constructor(
         private documentsService: DocumentsService,
         private s3Service: S3Service,
+        private auditService: AuditService,
     ) { }
 
     @Post('upload/:orderId')
@@ -34,7 +53,19 @@ export class DocumentsController {
         @UploadedFile() file: Express.Multer.File,
         @Request() req: any,
     ) {
-        return this.documentsService.uploadFile(orderId, req.user.sub, type, file, req.user);
+        const document = await this.documentsService.uploadFile(orderId, req.user.sub, type, file, req.user);
+        // Кто вложил файл в рейс — вопрос, который всплывает всегда, и раньше
+        // ответа на него не было нигде.
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'document',
+            entityId: (document as any)?.id,
+            entityLabel: documentLabel(type, file?.originalname),
+            orderId,
+        });
+        return document;
     }
 
     @Post()
@@ -50,10 +81,22 @@ export class DocumentsController {
         },
         @Request() req: any,
     ) {
-        return this.documentsService.create({
+        const document = await this.documentsService.create({
             ...dto,
             uploadedById: req.user.sub,
         }, req.user);
+        if (dto.orderId) {
+            await this.auditService.log({
+                companyId: req.user.companyId,
+                user: req.user,
+                action: 'CREATE',
+                entity: 'document',
+                entityId: (document as any)?.id,
+                entityLabel: documentLabel(dto.type, dto.fileName),
+                orderId: dto.orderId,
+            });
+        }
+        return document;
     }
 
     @Get('order/:orderId')
