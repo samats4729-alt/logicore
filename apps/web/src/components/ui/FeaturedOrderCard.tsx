@@ -272,7 +272,7 @@ export default function FeaturedOrderCard({ order, onOpen }: { order: any; onOpe
                 </div>
                 <div className="lc2-f-num">{order.orderNumber}</div>
                 <div className="lc2-f-cargo">
-                    {[order.natureOfCargo, order.cargoWeight ? `${order.cargoWeight} т` : null, order.cargoType]
+                    {[order.natureOfCargo, order.cargoWeight ? `${order.cargoWeight.toLocaleString('ru-RU')} кг` : null, order.cargoType]
                         .filter(Boolean).join(' · ') || order.cargoDescription || 'Груз не указан'}
                 </div>
                 <div className="lc2-f-timeline">
