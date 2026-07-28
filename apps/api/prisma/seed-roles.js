@@ -282,7 +282,13 @@ async function main() {
                 customerId: admin.id,
                 customerCompanyId: client.id,
                 forwarderId: us.id,
+                // Перевозчик пишется в subForwarderId — именно так его
+                // сохраняет мастер создания заявки. Если положить только в
+                // partnerId, колонка «Перевозчик» в журнале покажет нашу же
+                // компанию, и стенд соврёт про поломку, которой нет.
                 partnerId: carrier.id,
+                subForwarderId: carrier.id,
+                subForwarderPrice: D(driverCost),
                 responsibleManagerId: manager.id,
                 driverId: ['DRAFT', 'PENDING'].includes(status) ? null : driver.id,
                 assignedDriverName: ['DRAFT', 'PENDING'].includes(status) ? null : `${driver.lastName} ${driver.firstName}`,

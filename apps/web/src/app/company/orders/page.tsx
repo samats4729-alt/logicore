@@ -146,6 +146,19 @@ export default function CompanyOrdersPage() {
     const isMobile = useIsMobile();
 
     const [activeTab, setActiveTab] = useState('all');
+    /** Свёрнута ли карточка рейса. Выбор запоминается: логист открывает
+     *  этот экран десятки раз в день, и разворачивать её каждый раз заново —
+     *  это работа, которую он делать не просил. */
+    const [featuredOpen, setFeaturedOpen] = useState(false);
+    useEffect(() => {
+        try {
+            if (localStorage.getItem('lc_orders_featured') === 'open') setFeaturedOpen(true);
+        } catch {}
+    }, []);
+    useEffect(() => {
+        try { localStorage.setItem('lc_orders_featured', featuredOpen ? 'open' : 'closed'); } catch {}
+    }, [featuredOpen]);
+
     const [ordersPage, setOrdersPage] = useState(1);
     const [ordersPageSize, setOrdersPageSize] = useState(20);
     
@@ -1264,7 +1277,10 @@ export default function CompanyOrdersPage() {
                         <span className="lc2-mic"><FileTextOutlined /></span>
                         <div>
                             <div className="lc2-mlabel">Всего заявок</div>
-                            <div className="lc2-mvalue">{orders.length}</div>
+                            {/* Именно `totalOrders`, а не длина `orders`: в `orders`
+                                лежит одна страница, и плитка «всего» показывала
+                                размер страницы — при 37 заявках писала 20. */}
+                            <div className="lc2-mvalue">{totalOrders}</div>
                             <div className="lc2-msub" style={{ color: '#16a34a' }}>активная база</div>
                         </div>
                     </div>
@@ -1297,32 +1313,34 @@ export default function CompanyOrdersPage() {
                         </div>
                     )}
                 </div>
+                <Button
+                    data-guide="orders-create"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    className="lc-cta lc-cta-shine"
+                    onClick={() => router.push('/company/orders/create')}
+                >
+                    Создать заявку
+                </Button>
             </div>
 
-            {/* ===== ACTION BAR ===== */}
-            <div className="lc2-actionbar">
-                <div className="lc2-ab-left">
-                    <span className="lc2-ab-ic"><EnvironmentOutlined /></span>
-                    <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--lc-text)' }}>База заявок</div>
-                        <div style={{ fontSize: 11.5, color: 'var(--lc-text-ter)' }}>Сегодня · {dayjs().format('DD.MM.YYYY')}</div>
-                    </div>
-                </div>
-                <div className="lc2-ab-right">
-                    {pendingCount > 0 && (
-                        <span className="lc2-ab-warn">
-                            <ExclamationCircleOutlined /> {pendingCount} {pendingCount === 1 ? 'заявка ожидает' : 'заявки ожидают'} назначения
-                        </span>
-                    )}
-                    <Button data-guide="orders-create" type="primary" icon={<PlusOutlined />} className="lc-cta lc-cta-shine" onClick={() => router.push('/company/orders/create')}>
-                        Создать заявку
-                    </Button>
-                </div>
-            </div>
-
-            {/* ===== FEATURED: выбранная / последняя заявка ===== */}
+            {/* ===== FEATURED: выбранная / последняя заявка =====
+                Карточка занимала треть экрана и показывала один рейс, который
+                и так есть первой строкой в таблице ниже. Свёрнута по умолчанию,
+                выбор запоминается: экран открывается на списке, а не на
+                украшении. */}
             <div ref={featuredCardRef}>
-                <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />
+                <button
+                    type="button"
+                    onClick={() => setFeaturedOpen(!featuredOpen)}
+                    className="lc2-featured-toggle"
+                >
+                    <span>{featuredOpen ? '▾' : '▸'}</span>
+                    <span>Карточка рейса{featured?.orderNumber ? ` · ${featured.orderNumber}` : ''}</span>
+                </button>
+                {featuredOpen && (
+                    <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />
+                )}
             </div>
 
             <Tabs
@@ -1332,7 +1350,7 @@ export default function CompanyOrdersPage() {
                 items={[
                     {
                         key: 'all',
-                        label: <span>Все заявки <Tag style={{ marginLeft: 4, fontSize: 11 }}>{filteredOrders.length}{hasActiveFilters ? `/${orders.length}` : ''}</Tag></span>,
+                        label: <span>Все заявки <Tag style={{ marginLeft: 4, fontSize: 11 }}>{hasActiveFilters ? `${filteredOrders.length}/${totalOrders}` : totalOrders}</Tag></span>,
                         children: (
                             <div>
                                 {/* FILTER BAR */}
@@ -1461,7 +1479,7 @@ export default function CompanyOrdersPage() {
                     },
                     {
                         key: 'archive',
-                        label: <span>Архив <Tag style={{ marginLeft: 4, fontSize: 11 }}>{filteredArchiveOrders.length}{hasActiveFilters ? `/${archiveOrders.length}` : ''}</Tag></span>,
+                        label: <span>Архив <Tag style={{ marginLeft: 4, fontSize: 11 }}>{hasActiveFilters ? `${filteredArchiveOrders.length}/${totalArchiveOrders}` : totalArchiveOrders}</Tag></span>,
                         children: (
                             <div>
                                 {/* FILTER BAR */}
