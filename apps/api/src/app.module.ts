@@ -28,6 +28,7 @@ import { AssistantModule } from './assistant/assistant.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { BillingModule } from './billing/billing.module';
 import { AuditModule } from './audit/audit.module';
+import { TelegramModule } from './telegram/telegram.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
 import { AdminStatsModule } from './admin-stats/admin-stats.module';
@@ -75,6 +76,7 @@ import { ReportsModule } from './reports/reports.module';
         PayrollModule,
         BillingModule,
         AuditModule,
+        TelegramModule,
         MonitoringModule,
         GeoModule,
         AdminStatsModule,
