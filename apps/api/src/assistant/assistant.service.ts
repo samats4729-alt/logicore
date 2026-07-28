@@ -222,7 +222,7 @@ export class AssistantService implements OnApplicationBootstrap {
             { subForwarderId: companyId },
         ];
 
-        const [company, orders, invoices] = await Promise.all([
+        const [company, orders] = await Promise.all([
             this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true, bin: true } }),
             this.prisma.order.findMany({
                 where: { OR: participation },
@@ -232,19 +232,9 @@ export class AssistantService implements OnApplicationBootstrap {
                     orderNumber: true, status: true,
                     customerPrice: true, driverCost: true, subForwarderPrice: true,
                     isCustomerPaid: true, isDriverPaid: true, isSubForwarderPaid: true,
-                    outgoingInvoiceId: true, incomingInvoiceId: true,
                     customerCompany: { select: { name: true } },
                     forwarder: { select: { name: true } },
                     subForwarder: { select: { name: true } },
-                },
-            }),
-            this.prisma.invoice.findMany({
-                where: { OR: [{ issuerId: companyId }, { recipientId: companyId }] },
-                orderBy: { createdAt: 'desc' },
-                take: 10,
-                select: {
-                    invoiceNumber: true, type: true, status: true, amount: true,
-                    issuer: { select: { name: true } }, recipient: { select: { name: true } },
                 },
             }),
         ]);
@@ -255,13 +245,8 @@ export class AssistantService implements OnApplicationBootstrap {
         lines.push('Последние заявки:');
         for (const o of orders) {
             lines.push(
-                `${o.orderNumber} | ${o.status} | заказчик: ${o.customerCompany?.name || '—'} | исполнитель: ${o.subForwarder?.name || o.forwarder?.name || '—'} | цена заказчика: ${o.customerPrice ?? '—'} | ставка исполнителя: ${o.subForwarderPrice ?? o.driverCost ?? '—'} | оплата заказчика: ${o.isCustomerPaid ? 'да' : 'нет'} | оплата исполнителя: ${(o.isSubForwarderPaid || o.isDriverPaid) ? 'да' : 'нет'} | счета: ${o.outgoingInvoiceId ? 'исх✓' : 'исх—'}/${o.incomingInvoiceId ? 'вх✓' : 'вх—'}`,
+                `${o.orderNumber} | ${o.status} | заказчик: ${o.customerCompany?.name || '—'} | исполнитель: ${o.subForwarder?.name || o.forwarder?.name || '—'} | цена заказчика: ${o.customerPrice ?? '—'} | ставка исполнителя: ${o.subForwarderPrice ?? o.driverCost ?? '—'} | оплата заказчика: ${o.isCustomerPaid ? 'да' : 'нет'} | оплата исполнителя: ${(o.isSubForwarderPaid || o.isDriverPaid) ? 'да' : 'нет'}`,
             );
-        }
-        lines.push('');
-        lines.push('Последние счета:');
-        for (const inv of invoices) {
-            lines.push(`${inv.invoiceNumber} | ${inv.type} | ${inv.status} | сумма ${inv.amount} | от ${inv.issuer?.name || '—'} для ${inv.recipient?.name || '—'}`);
         }
 
         // Упомянутые заявки — детально, с платежами

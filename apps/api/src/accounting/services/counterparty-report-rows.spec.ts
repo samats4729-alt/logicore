@@ -40,8 +40,6 @@ const order = (overrides: Record<string, unknown> = {}) => ({
     isDriverPaid: false,
     isSubForwarderPaid: false,
     assignedDriverPlate: null,
-    incomingInvoiceId: null,
-    outgoingInvoiceId: null,
     payments: [],
     incomes: [],
     expenses: [],

@@ -5,7 +5,7 @@ import { RedisService } from '../../redis/redis.service';
 import { FinanceCalculatorService, ORDER_FINANCE_RELATIONS_SELECT, ORDER_FINANCE_SELECT } from './finance-calculator.service';
 import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentDirection, PaymentMethod, Prisma, AccountKind, InvoiceType, InvoiceStatus, StockMoveType, AccountingDocumentStatus, AccountingDocumentType, AccountingDocumentDirection } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, Prisma, AccountKind, StockMoveType, AccountingDocumentStatus, AccountingDocumentType, AccountingDocumentDirection } from '@prisma/client';
 import { D, Money, ZERO, money, positiveRest, roundMoney, sumOf, toNum, toNumOrNull } from '../../common/utils/money';
 import { PaymentsService } from './payments.service';
 import { FinancialSettingsService } from './financial-settings.service';
@@ -996,8 +996,6 @@ export class FinancialReportsService {
                 isCustomerPaid: fin.isCustomerPaid,
                 customerPaidAt: order.customerPaidAt,
                 routePoints: order.routePoints,
-                incomingInvoiceId: order.incomingInvoiceId,
-                outgoingInvoiceId: order.outgoingInvoiceId,
                 // Заказчик не должен видеть себестоимость исполнителя (маржу
                 // экспедитора/партнёра) — скрываем при просмотре со стороны заказчика.
                 subForwarderId: isCustomer ? null : order.subForwarderId,

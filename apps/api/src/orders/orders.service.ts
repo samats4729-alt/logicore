@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRole, OrderStatus, InvoiceStatus, Prisma } from '@prisma/client';
+import { UserRole, OrderStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { RedisService } from '../redis/redis.service';
 import { PaymentsService } from '../accounting/services/payments.service';
@@ -735,10 +735,6 @@ export class OrdersService {
             await this.paymentsService.syncOrderPaymentFlags(orderId);
         }
 
-        if (status === OrderStatus.CANCELLED) {
-            await this.cancelInvoicesForCancelledOrder(orderId);
-        }
-
         // Заявку вернули из «Отменён» в работу: платежи никуда не делись, поэтому
         // пересчитываем флаги оплаты сразу, а не ждём следующего события по платежам.
         if (order.status === OrderStatus.CANCELLED && status !== OrderStatus.CANCELLED) {
@@ -752,33 +748,6 @@ export class OrdersService {
         }
 
         return updated;
-    }
-
-    // Заявка отменена → её неоплаченные счета отменяем тоже,
-    // чтобы контрагенту не висел счёт по несуществующему рейсу.
-    // Счёт, покрывающий несколько заявок, отменяем только когда отменены ВСЕ его заявки.
-    private async cancelInvoicesForCancelledOrder(orderId: string) {
-        const order = await this.prisma.order.findUnique({
-            where: { id: orderId },
-            select: { outgoingInvoiceId: true, incomingInvoiceId: true },
-        });
-        if (!order) return;
-        const invoiceIds = [order.outgoingInvoiceId, order.incomingInvoiceId].filter(Boolean) as string[];
-        for (const invId of invoiceIds) {
-            const inv = await this.prisma.invoice.findUnique({
-                where: { id: invId },
-                include: {
-                    incomingOrders: { select: { status: true } },
-                    outgoingOrders: { select: { status: true } },
-                },
-            });
-            if (!inv || inv.status === InvoiceStatus.PAID || inv.status === InvoiceStatus.CANCELLED) continue;
-            const linked = [...inv.incomingOrders, ...inv.outgoingOrders];
-            const allCancelled = linked.length === 0 || linked.every(o => o.status === OrderStatus.CANCELLED);
-            if (allCancelled) {
-                await this.prisma.invoice.update({ where: { id: invId }, data: { status: InvoiceStatus.CANCELLED } });
-            }
-        }
     }
 
     async confirmCompletion(orderId: string, companyId: string, userId: string) {
