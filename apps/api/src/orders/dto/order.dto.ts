@@ -92,6 +92,41 @@ export class CreateOrderDto {
     @IsString({ each: true })
     packagingTypes?: string[];
 
+    @ApiProperty({ required: false, example: 240, description: 'Количество грузовых мест' })
+    @IsNumber()
+    @IsOptional()
+    placesCount?: number;
+
+    @ApiProperty({ required: false, example: false, description: 'Можно ли штабелировать' })
+    @IsBoolean()
+    @IsOptional()
+    stackable?: boolean;
+
+    @ApiProperty({ required: false, example: 2, description: 'Температурный режим, нижняя граница, °C' })
+    @IsNumber()
+    @IsOptional()
+    tempMin?: number;
+
+    @ApiProperty({ required: false, example: 6, description: 'Температурный режим, верхняя граница, °C' })
+    @IsNumber()
+    @IsOptional()
+    tempMax?: number;
+
+    @ApiProperty({ required: false, example: true, description: 'Опасный груз (ДОПОГ)' })
+    @IsBoolean()
+    @IsOptional()
+    adr?: boolean;
+
+    @ApiProperty({ required: false, example: '3', description: 'Класс опасности по ДОПОГ' })
+    @IsString()
+    @IsOptional()
+    adrClass?: string;
+
+    @ApiProperty({ required: false, example: 4500000, description: 'Объявленная стоимость груза' })
+    @IsNumber()
+    @IsOptional()
+    cargoValue?: number;
+
     @ApiProperty({ required: false, example: 'Строительные материалы' })
     @IsString()
     @IsOptional()

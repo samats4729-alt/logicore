@@ -2,9 +2,11 @@
 
 import { Plus, X } from 'lucide-react';
 import {
+    ADR_CLASSES,
     LOADING_TYPES,
     PACKAGING_TYPES,
     PALLET_KINDS,
+    type CargoState,
     type PalletLine,
     totalPallets,
 } from '@/lib/cargo';
@@ -21,22 +23,18 @@ import { cn } from '@/lib/utils';
  * кабинет водителя и печатные формы.
  */
 export function CargoComposition({
-    pallets,
-    loadingTypes,
-    packagingTypes,
+    value,
     onChange,
 }: {
-    pallets: PalletLine[];
-    loadingTypes: string[];
-    packagingTypes: string[];
-    onChange: (next: {
-        pallets: PalletLine[];
-        loadingTypes: string[];
-        packagingTypes: string[];
-    }) => void;
+    value: CargoState;
+    onChange: (next: CargoState) => void;
 }) {
-    const patch = (part: Partial<{ pallets: PalletLine[]; loadingTypes: string[]; packagingTypes: string[] }>) =>
-        onChange({ pallets, loadingTypes, packagingTypes, ...part });
+    const { pallets, loadingTypes, packagingTypes } = value;
+
+    const patch = (part: Partial<CargoState>) => onChange({ ...value, ...part });
+
+    /** Пустое поле — это «не указано», а не ноль: ноль градусов и «без режима» разное. */
+    const num = (raw: string) => (raw.trim() === '' ? undefined : Number(raw));
 
     const toggle = (list: string[], key: string) =>
         list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
@@ -195,6 +193,124 @@ export function CargoComposition({
                             </button>
                         );
                     })}
+                </div>
+            </section>
+
+            {/* Условия перевозки. Без них перевозчик не может назвать цену:
+                рефрижератор, допуск на опасный груз и страховка — это разные
+                деньги. Раньше всё это писали словами в «дополнительной
+                информации», и на тендере оно терялось. */}
+            <section>
+                <div className="mb-1.5 text-[13px] font-semibold text-foreground">Условия перевозки</div>
+
+                <div className="flex flex-wrap items-end gap-3">
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] text-muted-foreground">Грузовых мест</span>
+                        <Input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            value={value.placesCount ?? ''}
+                            onChange={(e) => patch({ placesCount: num(e.target.value) })}
+                            className="h-9 w-28 text-[13px]"
+                            placeholder="0"
+                        />
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] text-muted-foreground">Температура, °C</span>
+                        <div className="flex items-center gap-1">
+                            <Input
+                                type="number"
+                                inputMode="numeric"
+                                value={value.tempMin ?? ''}
+                                onChange={(e) => patch({ tempMin: num(e.target.value) })}
+                                className="h-9 w-20 text-[13px]"
+                                placeholder="от"
+                            />
+                            <span className="text-muted-foreground">…</span>
+                            <Input
+                                type="number"
+                                inputMode="numeric"
+                                value={value.tempMax ?? ''}
+                                onChange={(e) => patch({ tempMax: num(e.target.value) })}
+                                className="h-9 w-20 text-[13px]"
+                                placeholder="до"
+                            />
+                        </div>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] text-muted-foreground">Объявленная стоимость, ₸</span>
+                        <Input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            value={value.cargoValue ?? ''}
+                            onChange={(e) => patch({ cargoValue: num(e.target.value) })}
+                            className="h-9 w-40 text-[13px]"
+                            placeholder="0"
+                        />
+                    </label>
+                </div>
+
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {/* Две отдельные кнопки, а не одна галка. «Не штабелируется» —
+                        это не отсутствие ответа, а важное условие: такой груз
+                        считают по полу кузова, и влезает его вдвое меньше.
+                        Повторное нажатие снимает ответ вовсе. */}
+                    <button
+                        type="button"
+                        onClick={() => patch({ stackable: value.stackable === true ? undefined : true })}
+                        className={cn(
+                            'rounded-full px-3 py-1.5 text-[13px] font-medium leading-none transition-colors',
+                            value.stackable === true
+                                ? 'bg-foreground text-background'
+                                : 'bg-card text-muted-foreground shadow-soft hover:text-foreground',
+                        )}
+                    >
+                        Штабелируется
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => patch({ stackable: value.stackable === false ? undefined : false })}
+                        className={cn(
+                            'rounded-full px-3 py-1.5 text-[13px] font-medium leading-none transition-colors',
+                            value.stackable === false
+                                ? 'bg-foreground text-background'
+                                : 'bg-card text-muted-foreground shadow-soft hover:text-foreground',
+                        )}
+                    >
+                        Не штабелируется
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => patch(value.adr ? { adr: undefined, adrClass: undefined } : { adr: true })}
+                        className={cn(
+                            'rounded-full px-3 py-1.5 text-[13px] font-medium leading-none transition-colors',
+                            value.adr
+                                ? 'bg-foreground text-background'
+                                : 'bg-card text-muted-foreground shadow-soft hover:text-foreground',
+                        )}
+                    >
+                        Опасный груз (ДОПОГ)
+                    </button>
+
+                    {value.adr && (
+                        <select
+                            value={value.adrClass ?? ''}
+                            onChange={(e) => patch({ adrClass: e.target.value || undefined })}
+                            className={cn(
+                                'h-9 min-w-[260px] rounded-lg border border-border bg-card px-2.5 text-[13px]',
+                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            )}
+                        >
+                            <option value="">Класс не указан</option>
+                            {ADR_CLASSES.map((c) => (
+                                <option key={c.key} value={c.key}>{c.label}</option>
+                            ))}
+                        </select>
+                    )}
                 </div>
             </section>
         </div>

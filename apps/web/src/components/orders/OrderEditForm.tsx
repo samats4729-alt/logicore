@@ -6,6 +6,8 @@ import { CheckCircleOutlined, DeleteOutlined, EnvironmentOutlined, FlagOutlined,
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { prepareCompanyOptions } from '@/lib/company-helper';
 import { DEFAULT_VAT_RATE, VAT_RATES } from '@/lib/tax';
+import { CargoComposition } from '@/components/orders/CargoComposition';
+import type { CargoState } from '@/lib/cargo';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -49,6 +51,14 @@ interface OrderEditFormProps {
     /** Права на правку денежных полей — у логиста их нет. */
     canEditFinance: boolean;
     setIsEditing: (editing: boolean) => void;
+
+    /**
+     * Состав груза правится своим состоянием, а не полями формы: паллеты —
+     * список переменной длины, а способ погрузки и упаковка — наборы
+     * переключателей. Так же он устроен и в мастере создания заявки.
+     */
+    cargo: CargoState;
+    setCargo: (next: CargoState) => void;
 }
 
 /**
@@ -68,6 +78,7 @@ export default function OrderEditForm(props: OrderEditFormProps) {
         cargoCategories, paymentConditions, paymentForms,
         showCustomerPriceField, showDriverCostField, customerPriceLabel, driverCostLabel,
         canEditFinance, setIsEditing,
+        cargo, setCargo,
     } = props;
 
     return (
@@ -210,12 +221,27 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                     <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" size="large" />
                                 </Form.Item>
                             </Col>
-                            <Col span={6}>
-                                <Form.Item name="palletCount" label="Палет">
-                                    <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
-                                </Form.Item>
-                            </Col>
+                            {/* Пока состава нет — палеты вводят одним числом. Как
+                                только состав заполнен, число считается по нему, и
+                                отдельное поле только путало бы: в нём можно было
+                                написать 20 при составе на 18. */}
+                            {cargo.pallets.length === 0 && (
+                                <Col span={6}>
+                                    <Form.Item name="palletCount" label="Палет">
+                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" />
+                                    </Form.Item>
+                                </Col>
+                            )}
                         </Row>
+
+                        {/* Состав груза заполняли при создании заявки, а поправить
+                            потом было негде: в правке стояло только общее число
+                            палет. Заявки же меняются — груз переигрывают чаще, чем
+                            маршрут. */}
+                        <div style={{ marginBottom: 16 }}>
+                            <CargoComposition value={cargo} onChange={setCargo} />
+                        </div>
+
                         <Form.Item name="requirements" label="Доп. требования">
                             <TextArea rows={2} placeholder="Ремни, коники, гидроборт..." />
                         </Form.Item>

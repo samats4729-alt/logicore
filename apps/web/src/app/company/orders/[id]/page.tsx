@@ -29,6 +29,10 @@ import OrderEditForm from '@/components/orders/OrderEditForm';
 import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import {
+    adrLabel, EMPTY_CARGO, loadingLabel, packagingLabel, palletsSummary, totalPallets,
+    type CargoState, type PalletLine,
+} from '@/lib/cargo';
+import {
     accountingDocumentHref,
     applyAllocations,
     findOrCreateOrderDocument,
@@ -233,6 +237,8 @@ export default function OrderDetailPage() {
     // Edit order inline
     const [isEditing, setIsEditing] = useState(false);
     const [editForm] = Form.useForm();
+    // Состав груза правится отдельным состоянием — как в мастере создания.
+    const [cargoState, setCargoState] = useState<CargoState>(EMPTY_CARGO);
     const [selectedCustomer, setSelectedCustomer] = useState<string>('');
     const [selectedCarrier, setSelectedCarrier] = useState<string>('');
     const [myCompanyName, setMyCompanyName] = useState('');
@@ -811,6 +817,18 @@ export default function OrderDetailPage() {
 
         setSelectedCustomer(initCust);
         setSelectedCarrier(initCarr);
+        setCargoState({
+            pallets: Array.isArray(order.pallets) ? order.pallets : [],
+            loadingTypes: order.loadingTypes || [],
+            packagingTypes: order.packagingTypes || [],
+            placesCount: order.placesCount ?? undefined,
+            stackable: order.stackable ?? undefined,
+            tempMin: order.tempMin ?? undefined,
+            tempMax: order.tempMax ?? undefined,
+            adr: order.adr ?? undefined,
+            adrClass: order.adrClass ?? undefined,
+            cargoValue: order.cargoValue ?? undefined,
+        });
 
         editForm.setFieldsValue({
             cargoDescription: order.cargoDescription,
@@ -922,7 +940,22 @@ export default function OrderDetailPage() {
                 cargoLength: values.cargoLength,
                 cargoWidth: values.cargoWidth,
                 cargoHeight: values.cargoHeight,
-                palletCount: values.palletCount,
+                // Есть состав — общее число считается по нему, чтобы карточка,
+                // кабинет водителя и печатные формы не разошлись с составом.
+                palletCount: cargoState.pallets.length ? totalPallets(cargoState.pallets) : values.palletCount,
+                pallets: cargoState.pallets,
+                loadingTypes: cargoState.loadingTypes,
+                packagingTypes: cargoState.packagingTypes,
+                // Здесь именно null, а не undefined: undefined Prisma пропускает,
+                // и снятое условие возвращалось бы обратно при следующем
+                // открытии карточки. Стёрли — значит стёрли.
+                placesCount: cargoState.placesCount ?? null,
+                stackable: cargoState.stackable ?? null,
+                tempMin: cargoState.tempMin ?? null,
+                tempMax: cargoState.tempMax ?? null,
+                adr: cargoState.adr ?? null,
+                adrClass: cargoState.adrClass ?? null,
+                cargoValue: cargoState.cargoValue ?? null,
                 cargoType: values.cargoType,
                 requirements: values.requirements,
                 customerPrice: finalCustomerPrice,
@@ -1213,6 +1246,10 @@ export default function OrderDetailPage() {
 
     const { order, incomes, expenses, payments = [], summary } = data;
     const fmt = (n: number) => n.toLocaleString('ru-RU');
+
+    // Состав паллет приходит из базы как JSON — у старых заявок его нет
+    // вовсе, поэтому нормализуем к списку и не полагаемся на форму записи.
+    const palletLines: PalletLine[] = Array.isArray(order.pallets) ? order.pallets : [];
 
     const paymentColumns = [
         { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, render: (d: string) => dayjs(d).format('DD.MM.YY') },
@@ -1537,6 +1574,8 @@ export default function OrderDetailPage() {
                                     driverCostLabel={driverCostLabel}
                                     canEditFinance={canEditFinance}
                                     setIsEditing={setIsEditing}
+                                    cargo={cargoState}
+                                    setCargo={setCargoState}
                                 />
                             ) : (
                                 <Row gutter={[24, 24]}>
@@ -1602,8 +1641,55 @@ export default function OrderDetailPage() {
                                                         {`${order.cargoLength ?? '—'} × ${order.cargoWidth ?? '—'} × ${order.cargoHeight ?? '—'} м`}
                                                     </Descriptions.Item>
                                                 )}
-                                                {order.palletCount ? (
-                                                    <Descriptions.Item label="Палет">{order.palletCount}</Descriptions.Item>
+                                                {/* Раньше здесь стояло голое число «Палет: 15» — а рейс почти
+                                                    всегда смешанный, и водителю с логистом важно именно чем
+                                                    именно. Состав вводят при создании заявки, и до этого места
+                                                    он не доезжал. */}
+                                                {order.palletCount || palletLines.length ? (
+                                                    <Descriptions.Item label="Палеты">
+                                                        {palletLines.length
+                                                            ? `${order.palletCount ?? totalPallets(palletLines)} — ${palletsSummary(palletLines)}`
+                                                            : order.palletCount}
+                                                    </Descriptions.Item>
+                                                ) : null}
+                                                {order.placesCount ? (
+                                                    <Descriptions.Item label="Мест">{order.placesCount}</Descriptions.Item>
+                                                ) : null}
+                                                {order.loadingTypes?.length ? (
+                                                    <Descriptions.Item label="Способ погрузки">
+                                                        {order.loadingTypes.map(loadingLabel).join(', ')}
+                                                    </Descriptions.Item>
+                                                ) : null}
+                                                {order.packagingTypes?.length ? (
+                                                    <Descriptions.Item label="Упаковка">
+                                                        {order.packagingTypes.map(packagingLabel).join(', ')}
+                                                    </Descriptions.Item>
+                                                ) : null}
+                                                {order.tempMin != null || order.tempMax != null ? (
+                                                    <Descriptions.Item label="Температура">
+                                                        {`${order.tempMin ?? '—'} … ${order.tempMax ?? '—'} °C`}
+                                                    </Descriptions.Item>
+                                                ) : null}
+                                                {order.stackable != null ? (
+                                                    <Descriptions.Item label="Штабелирование">
+                                                        {order.stackable ? 'Допускается' : 'Запрещено'}
+                                                    </Descriptions.Item>
+                                                ) : null}
+                                                {order.adr ? (
+                                                    <Descriptions.Item label="Опасный груз">
+                                                        {/* Полная расшифровка класса длинная и ломает колонку —
+                                                            держим её в подсказке. */}
+                                                        <Tooltip title={order.adrClass ? adrLabel(order.adrClass) : 'Класс не указан'}>
+                                                            <Tag color="red" style={{ marginInlineEnd: 0 }}>
+                                                                ДОПОГ{order.adrClass ? ` · класс ${order.adrClass}` : ''}
+                                                            </Tag>
+                                                        </Tooltip>
+                                                    </Descriptions.Item>
+                                                ) : null}
+                                                {order.cargoValue ? (
+                                                    <Descriptions.Item label="Объявленная стоимость">
+                                                        {`${fmt(order.cargoValue)} ₸`}
+                                                    </Descriptions.Item>
                                                 ) : null}
                                                 <Descriptions.Item label="Тип кузова">{order.cargoType || '—'}</Descriptions.Item>
                                                 <Descriptions.Item label="Доп. требования">{order.requirements || '—'}</Descriptions.Item>

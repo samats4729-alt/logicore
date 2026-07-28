@@ -30,7 +30,7 @@ import { CargoComposition } from '@/components/orders/CargoComposition';
 import { AddressPicker } from '@/components/orders/AddressPicker';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Loader2, Plus, X } from 'lucide-react';
-import { totalPallets, type PalletLine } from '@/lib/cargo';
+import { EMPTY_CARGO, totalPallets, type CargoState } from '@/lib/cargo';
 import { VAT_RATES, vatRateWhenEnabled } from '@/lib/tax';
 import { toast } from 'sonner';
 
@@ -171,9 +171,7 @@ export default function CreateOrderPage() {
 
     // Route points
     // Состав груза: паллеты списком, способ погрузки и упаковка.
-    const [cargo, setCargo] = useState<{ pallets: PalletLine[]; loadingTypes: string[]; packagingTypes: string[] }>({
-        pallets: [], loadingTypes: [], packagingTypes: [],
-    });
+    const [cargo, setCargo] = useState<CargoState>(EMPTY_CARGO);
 
     const [routePointsState, setRoutePointsState] = useState<Array<LocationState & { pointType: string }>>([
         { city: '', address: '', pointType: 'PICKUP' },
@@ -668,6 +666,13 @@ export default function CreateOrderPage() {
                 pallets: cargo.pallets,
                 loadingTypes: cargo.loadingTypes,
                 packagingTypes: cargo.packagingTypes,
+                placesCount: cargo.placesCount,
+                stackable: cargo.stackable,
+                tempMin: cargo.tempMin,
+                tempMax: cargo.tempMax,
+                adr: cargo.adr,
+                adrClass: cargo.adrClass,
+                cargoValue: cargo.cargoValue,
                 cargoType: values.cargoType,
                 requirements: values.requirements,
                 customerPrice: finalCustomerPrice,
@@ -955,12 +960,7 @@ export default function CreateOrderPage() {
             )}
 
             <div className="mb-4 rounded-2xl bg-card p-4 shadow-soft">
-                <CargoComposition
-                    pallets={cargo.pallets}
-                    loadingTypes={cargo.loadingTypes}
-                    packagingTypes={cargo.packagingTypes}
-                    onChange={setCargo}
-                />
+                <CargoComposition value={cargo} onChange={setCargo} />
             </div>
 
             <Form.Item name="requirements" label="Дополнительная информация">

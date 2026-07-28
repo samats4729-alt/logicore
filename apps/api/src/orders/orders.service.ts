@@ -115,6 +115,15 @@ export class OrdersService {
         pallets?: any[];
         loadingTypes?: string[];
         packagingTypes?: string[];
+        // null допустим намеренно: так карточка стирает ранее заданное
+        // условие. undefined Prisma игнорирует, и стереть было бы нечем.
+        placesCount?: number | null;
+        stackable?: boolean | null;
+        tempMin?: number | null;
+        tempMax?: number | null;
+        adr?: boolean | null;
+        adrClass?: string | null;
+        cargoValue?: number | null;
         cargoType?: string;
         requirements?: string;
         customerPrice?: number;
@@ -218,6 +227,13 @@ export class OrdersService {
                 pallets: data.pallets ?? undefined,
                 loadingTypes: data.loadingTypes ?? undefined,
                 packagingTypes: data.packagingTypes ?? undefined,
+                placesCount: data.placesCount,
+                stackable: data.stackable,
+                tempMin: data.tempMin,
+                tempMax: data.tempMax,
+                adr: data.adr,
+                adrClass: data.adrClass,
+                cargoValue: data.cargoValue,
                 cargoType: data.cargoType,
                 requirements: data.requirements,
                 customerPrice: data.customerPrice,
@@ -878,6 +894,15 @@ export class OrdersService {
         pallets?: any[];
         loadingTypes?: string[];
         packagingTypes?: string[];
+        // null допустим намеренно: так карточка стирает ранее заданное
+        // условие. undefined Prisma игнорирует, и стереть было бы нечем.
+        placesCount?: number | null;
+        stackable?: boolean | null;
+        tempMin?: number | null;
+        tempMax?: number | null;
+        adr?: boolean | null;
+        adrClass?: string | null;
+        cargoValue?: number | null;
         cargoType?: string;
         requirements?: string;
         customerPrice?: number;
