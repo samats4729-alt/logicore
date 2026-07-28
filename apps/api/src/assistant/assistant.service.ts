@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { buildSupportTicketMessage } from '../telegram/support-ticket-message';
 
 interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -138,6 +140,7 @@ export class AssistantService implements OnApplicationBootstrap {
     constructor(
         private config: ConfigService,
         private prisma: PrismaService,
+        private telegram: TelegramService,
     ) {}
 
     onApplicationBootstrap() {
@@ -374,6 +377,21 @@ export class AssistantService implements OnApplicationBootstrap {
                 transcript: dto.transcript ? (dto.transcript.slice(-20) as any) : undefined,
             },
         });
+
+        // Уведомление владельцу. Обращение уже сохранено, поэтому отправка
+        // ничего не решает: не дошло — оно всё равно лежит в админке.
+        await this.telegram.send(buildSupportTicketMessage({
+            id: ticket.id,
+            title: ticket.title,
+            category: ticket.category,
+            severity: ticket.severity,
+            companyName: ticket.companyName,
+            userName: ticket.userName,
+            userEmail: ticket.userEmail,
+            description: ticket.description,
+            orders: ticket.orders,
+            details: ticket.details as any,
+        }));
 
         return { id: ticket.id, createdAt: ticket.createdAt };
     }
