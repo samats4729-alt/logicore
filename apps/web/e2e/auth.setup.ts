@@ -1,5 +1,5 @@
 import { expect, test as setup } from '@playwright/test';
-import { AUTH_STATE, E2E_EMAIL, E2E_PASSWORD } from './helpers';
+import { AUTH_STATE, E2E_EMAIL, E2E_PASSWORD, submitLoginForm } from './helpers';
 
 /**
  * Один вход на весь прогон.
@@ -12,12 +12,12 @@ import { AUTH_STATE, E2E_EMAIL, E2E_PASSWORD } from './helpers';
  * пролетают за секунды.
  *
  * Поэтому входим один раз здесь и раздаём сохранённую сессию остальным.
+ * Тесту, которому нужен собственный вход, полагается брать `E2E_ALT_EMAIL`:
+ * живая сессия в платформе одна на человека, и второй вход под этим же
+ * адресом погасит сохранённую здесь.
  */
 setup('вход и сохранение сессии', async ({ page }) => {
-    await page.goto('/login');
-    await page.locator('input').first().fill(E2E_EMAIL);
-    await page.locator('input[type="password"]').first().fill(E2E_PASSWORD);
-    await page.getByRole('button', { name: 'Войти' }).click();
+    await submitLoginForm(page, E2E_EMAIL, E2E_PASSWORD);
     await page.waitForURL('**/company**', { timeout: 45_000 });
 
     // Сессия — httpOnly-кука, профиль — localStorage. storageState забирает
