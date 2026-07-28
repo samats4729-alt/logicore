@@ -3027,3 +3027,25 @@ a.mapboxgl-ctrl-logo,
     border-radius: 18px;
   }
 }
+
+/* Переключатель карточки рейса на «Заявках».
+   Карточка занимала треть первого экрана и показывала рейс, который и так
+   есть первой строкой таблицы. Свёрнута — экран открывается на списке. */
+.lc2-featured-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+    padding: 4px 10px 4px 6px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--lc-text-sec);
+    background: transparent;
+    cursor: pointer;
+    transition: background-color .15s, color .15s;
+}
+.lc2-featured-toggle:hover {
+    background: var(--lc-surface-2, #f4f5f7);
+    color: var(--lc-text);
+}
