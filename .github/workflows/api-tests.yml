@@ -222,11 +222,15 @@ jobs:
         working-directory: apps/web
         run: npx playwright install --with-deps chromium
 
+      # Вывод серверов пишем в файлы, а не в никуда. Без этого падение
+      # браузерного теста выглядит как «элемент не найден»: видно, что
+      # страница не та, и совершенно не видно почему — упал ли запрос,
+      # ответил ли API отказом, жив ли он вообще.
       - name: Build and start API
         working-directory: apps/api
         run: |
           npx nest build
-          node dist/main &
+          node dist/main > /tmp/api.log 2>&1 &
           for i in {1..40}; do
             curl -sf -o /dev/null http://localhost:3001/api/docs && break
             sleep 3
@@ -236,7 +240,7 @@ jobs:
         working-directory: apps/web
         run: |
           pnpm build
-          pnpm start -p 3000 &
+          pnpm start -p 3000 > /tmp/web.log 2>&1 &
           for i in {1..40}; do
             curl -sf -o /dev/null http://localhost:3000/login && break
             sleep 3
@@ -245,6 +249,19 @@ jobs:
       - name: Run web smoke tests
         working-directory: apps/web
         run: pnpm e2e
+
+      # Только при падении: сразу в логе джобы, без скачивания артефактов.
+      - name: Логи серверов при падении
+        if: failure()
+        run: |
+          echo "──────── API: последние 200 строк ────────"
+          tail -n 200 /tmp/api.log || echo "лога нет"
+          echo "──────── API: отказы и ошибки ────────"
+          grep -nE "ERROR|Unauthorized|Forbidden|401|403|500|ECONNREFUSED" /tmp/api.log | tail -n 60 || echo "нет совпадений"
+          echo "──────── Жив ли API сейчас ────────"
+          curl -s -o /dev/null -w "код %{http_code}\n" http://localhost:3001/api/docs || echo "API не отвечает"
+          echo "──────── Веб: последние 60 строк ────────"
+          tail -n 60 /tmp/web.log || echo "лога нет"
 
       - name: Upload traces on failure
         if: failure()
