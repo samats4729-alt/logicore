@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { reportRequestFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { PickerOption, RecordPicker } from './RecordPicker';
+import { CityOption, CityPicker } from './CityPicker';
 import { QuoteMemory, QuoteMemoryPanel } from './QuoteMemoryPanel';
 
 export interface QuoteFormValues {
@@ -63,6 +64,7 @@ export function QuoteFormDialog({
     onOpenChange,
     customers,
     cities,
+    onCityImported,
     initial,
     lockedCustomerId,
     onSaved,
@@ -70,7 +72,9 @@ export function QuoteFormDialog({
     open: boolean;
     onOpenChange: (v: boolean) => void;
     customers: PickerOption[];
-    cities: PickerOption[];
+    cities: CityOption[];
+    /** Город завели из 2ГИС — справочник у родителя должен об этом узнать. */
+    onCityImported?: (city: CityOption) => void;
     initial?: Partial<QuoteFormValues> | null;
     /** В карточке контрагента клиент уже известен и не выбирается. */
     lockedCustomerId?: string;
@@ -203,23 +207,23 @@ export function QuoteFormDialog({
 
                     <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="Город погрузки">
-                            <RecordPicker
+                            <CityPicker
                                 title="Город погрузки"
                                 placeholder="Откуда"
-                                options={cities}
+                                known={cities}
                                 valueId={values.originCityId}
                                 onSelect={(id) => set('originCityId', id || '')}
-                                emptyHint="Города появятся после первой заявки или импорта справочника."
+                                onImported={onCityImported}
                             />
                         </Field>
                         <Field label="Город выгрузки">
-                            <RecordPicker
+                            <CityPicker
                                 title="Город выгрузки"
                                 placeholder="Куда"
-                                options={cities}
+                                known={cities}
                                 valueId={values.destinationCityId}
                                 onSelect={(id) => set('destinationCityId', id || '')}
-                                emptyHint="Города появятся после первой заявки или импорта справочника."
+                                onImported={onCityImported}
                             />
                         </Field>
                     </div>

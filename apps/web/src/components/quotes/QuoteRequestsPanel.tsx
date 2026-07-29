@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { PickerOption } from './RecordPicker';
+import { CityOption } from './CityPicker';
 import { QuoteFormDialog, QuoteFormValues } from './QuoteFormDialog';
 
 const STATUS_STYLE: Record<string, string> = {
@@ -39,7 +40,7 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
     const [status, setStatus] = useState<string>('all');
     const [search, setSearch] = useState('');
     const [customers, setCustomers] = useState<PickerOption[]>([]);
-    const [cities, setCities] = useState<PickerOption[]>([]);
+    const [cities, setCities] = useState<CityOption[]>([]);
 
     const [formOpen, setFormOpen] = useState(false);
     const [formInitial, setFormInitial] = useState<Partial<QuoteFormValues> | null>(null);
@@ -96,8 +97,8 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
             const list = Array.isArray(r.data) ? r.data : r.data?.data || [];
             setCities(list.map((c: any) => ({
                 id: c.id,
-                label: c.name,
-                hint: c.region?.name || c.country?.name || null,
+                name: c.name,
+                hint: [c.region?.name, c.country?.name].filter(Boolean).join(', ') || null,
             })));
         }).catch(() => setCities([]));
     }, []);
@@ -258,6 +259,8 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
                 customers={customers}
                 cities={cities}
                 initial={formInitial}
+                onCityImported={(city) => setCities((prev) =>
+                    prev.some((c) => c.id === city.id) ? prev : [...prev, city])}
                 lockedCustomerId={customerCompanyId}
                 onSaved={load}
             />
