@@ -44,15 +44,38 @@ test.describe('Запросы на расчёт', () => {
         // Маршрут: панель памяти должна появиться сразу после него, ещё до
         // полей с ценой — в этом весь смысл.
         await form.getByRole('button', { name: 'Откуда' }).click();
-        await page.locator('input[placeholder="Начните вводить название"]').last().fill('Шымкент');
-        await page.getByRole('button', { name: /Шымкент/ }).first().click();
+        await page.locator('input[placeholder="Начните вводить название города"]').last().fill('Шымкент');
+        await page.getByRole('dialog').last().locator('ul li button').first().click();
 
         await form.getByRole('button', { name: 'Куда' }).click();
-        await page.locator('input[placeholder="Начните вводить название"]').last().fill('Алматы');
-        await page.getByRole('button', { name: /Алматы/ }).first().click();
+        await page.locator('input[placeholder="Начните вводить название города"]').last().fill('Алматы');
+        await page.getByRole('dialog').last().locator('ul li button').first().click();
 
         await expect(form.getByText(/машину нашли за/)).toBeVisible({ timeout: 10_000 });
         await expect(form.getByText(/проходила|не была принята|запросов ещё не было/)).toBeVisible();
+    });
+
+    test('город ищется в справочнике, а его отсутствие объясняется', async ({ page }) => {
+        // Города руками не пишут: их пишут по-разному, и справочник
+        // расползается. Если города нет и подсказки 2ГИС недоступны — надо
+        // сказать почему, а не показывать пустоту.
+        await login(page);
+        await page.goto('/company/requests');
+        await page.waitForLoadState('networkidle');
+
+        await page.getByRole('button', { name: /Новый запрос/ }).click();
+        await page.getByRole('button', { name: 'Откуда' }).click();
+
+        const search = page.locator('input[placeholder="Начните вводить название города"]').last();
+        await search.fill('Алма');
+        // «Алматы» встречается и как город, и как область в подписи — берём
+        // первый пункт списка, а не любое совпадение по тексту.
+        await expect(page.getByRole('dialog').last().locator('ul li button').first()).toBeVisible();
+
+        await search.fill('Мурманскийгород');
+        await expect(
+            page.getByRole('dialog').last().getByText(/такого города нет|Ничего не нашлось/),
+        ).toBeVisible({ timeout: 10_000 });
     });
 
     test('отказ без причины записать нельзя', async ({ page }) => {
