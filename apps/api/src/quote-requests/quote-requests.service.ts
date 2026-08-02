@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { getPaginationParams, PaginationQueryDto } from '../common/dto/pagination.dto';
 import { buildQuoteMemory, PastQuote, QuoteMemory } from './quote-memory';
 import { ContractsService } from '../contracts/contracts.service';
+import { OrdersService } from '../orders/orders.service';
 
 /** Поля, которые нужны, чтобы показать запрос в списке и в карточке. */
 const QUOTE_INCLUDE = {
@@ -22,6 +23,7 @@ export class QuoteRequestsService {
     constructor(
         private prisma: PrismaService,
         private contracts: ContractsService,
+        private orders: OrdersService,
     ) { }
 
     /**
@@ -171,8 +173,19 @@ export class QuoteRequestsService {
         return this.prisma.quoteRequest.update({ where: { id }, data, include: QUOTE_INCLUDE });
     }
 
-    /** Клиент согласился. Дальше из запроса оформляется заявка. */
-    async approve(companyId: string, id: string) {
+    /**
+     * Клиент согласился — из запроса сразу оформляется заявка.
+     *
+     * Раньше согласование только меняло отметку, а рейс менеджер заводил
+     * заново руками: те же клиент, маршрут, груз и цены он набирал во
+     * второй раз. Это и лишняя работа, и место, где цифры расходятся —
+     * согласовали одну сумму, в заявку попала другая.
+     *
+     * Поэтому заявка создаётся здесь же, из тех данных, которые клиент и
+     * согласовал. Дальше её дорабатывают как обычно: назначают водителя,
+     * уточняют условия.
+     */
+    async approve(companyId: string, id: string, userId?: string) {
         const request = await this.findOne(companyId, id);
 
         if (request.customerPrice == null) {
@@ -181,15 +194,91 @@ export class QuoteRequestsService {
             );
         }
 
-        return this.prisma.quoteRequest.update({
+        // Повторное согласование не плодит второй рейс. Кнопку нажимают
+        // дважды чаще, чем кажется, а лишняя заявка попадает в журнал, в
+        // отчёты и в зарплату менеджера.
+        if (request.orderId) {
+            return this.prisma.quoteRequest.update({
+                where: { id },
+                data: { status: QuoteRequestStatus.APPROVED, decidedAt: new Date(), rejectionReason: null },
+                include: QUOTE_INCLUDE,
+            });
+        }
+
+        // Точки маршрута заявка берёт из справочника адресов — по названию
+        // города рейс не построить.
+        //
+        // Но согласие клиента — это факт, и записать его нужно сразу:
+        // менеджеру говорят «берём» по телефону, и заставлять его сперва
+        // заводить карточку адреса значит терять факт или заводить адрес
+        // наспех. Поэтому согласование проходит всегда, а заявка создаётся,
+        // когда есть из чего построить маршрут. Чего не хватило — сказано
+        // словами, и это видно на экране.
+        if (!request.originLocationId || !request.destinationLocationId) {
+            const missing = [
+                !request.originLocationId ? 'погрузки' : null,
+                !request.destinationLocationId ? 'выгрузки' : null,
+            ].filter(Boolean).join(' и ');
+
+            const updated = await this.prisma.quoteRequest.update({
+                where: { id },
+                data: {
+                    status: QuoteRequestStatus.APPROVED,
+                    decidedAt: new Date(),
+                    rejectionReason: null,
+                },
+                include: QUOTE_INCLUDE,
+            });
+
+            return {
+                ...updated,
+                orderCreated: false,
+                orderNotCreatedReason:
+                    `Согласование записано, но заявка не создана: не указан адрес ${missing} ` +
+                    'из справочника. Укажите его в запросе — и заявка создастся.',
+            };
+        }
+
+        const order = await this.orders.create({
+            // Заказчик как лицо — тот, кто оформляет; компания-заказчик
+            // берётся из запроса, именно она и просила расчёт.
+            customerId: userId || request.createdById || undefined as any,
+            customerCompanyId: request.customerCompanyId,
+            ownerCompanyId: companyId,
+            responsibleManagerId: userId || request.createdById || undefined,
+            routePoints: [
+                {
+                    locationId: request.originLocationId,
+                    pointType: 'PICKUP' as const,
+                    expectedDate: request.readyDate || undefined,
+                },
+                { locationId: request.destinationLocationId, pointType: 'DELIVERY' as const },
+            ],
+            cargoDescription: request.cargoDescription || undefined,
+            natureOfCargo: request.natureOfCargo || undefined,
+            cargoType: request.cargoType || undefined,
+            cargoWeight: request.cargoWeight ?? undefined,
+            cargoVolume: request.cargoVolume ?? undefined,
+            palletCount: request.palletCount ?? undefined,
+            // Согласованная сумма переносится как есть. Пересчёта здесь нет
+            // и быть не должно: клиент подтвердил конкретное число.
+            customerPrice: Number(request.customerPrice),
+            driverCost: request.carrierCost != null ? Number(request.carrierCost) : undefined,
+            requirements: request.notes || undefined,
+        });
+
+        const updated = await this.prisma.quoteRequest.update({
             where: { id },
             data: {
                 status: QuoteRequestStatus.APPROVED,
                 decidedAt: new Date(),
                 rejectionReason: null,
+                orderId: order.id,
             },
             include: QUOTE_INCLUDE,
         });
+
+        return { ...updated, orderCreated: true, orderNotCreatedReason: null };
     }
 
     /**

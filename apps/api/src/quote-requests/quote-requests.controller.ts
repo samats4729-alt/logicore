@@ -69,7 +69,7 @@ export class QuoteRequestsController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Клиент согласовал цену' })
     approve(@Request() req: any, @Param('id') id: string) {
-        return this.service.approve(req.user.companyId, id);
+        return this.service.approve(req.user.companyId, id, req.user.sub);
     }
 
     @Post(':id/reject')

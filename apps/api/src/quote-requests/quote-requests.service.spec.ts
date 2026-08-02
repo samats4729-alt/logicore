@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ContractsService } from '../contracts/contracts.service';
+import { OrdersService } from '../orders/orders.service';
 import { QuoteRequestsService } from './quote-requests.service';
 
 /**
@@ -32,11 +33,16 @@ describe('Запросы на расчёт: сервис', () => {
             lookupTariffForOurClient: jest.fn().mockResolvedValue(null),
             ...over.contracts,
         };
+        const orders: any = {
+            create: jest.fn().mockResolvedValue({ id: 'рейс-1', orderNumber: '000000042' }),
+            ...over.orders,
+        };
         const service = new QuoteRequestsService(
             prisma as unknown as PrismaService,
             contracts as unknown as ContractsService,
+            orders as unknown as OrdersService,
         );
-        return { service, prisma, contracts };
+        return { service, prisma, contracts, orders };
     };
 
     describe('изоляция компаний', () => {
@@ -284,6 +290,104 @@ describe('Запросы на расчёт: сервис', () => {
             });
 
             expect(result.annualTariff).toBeNull();
+        });
+    });
+
+    /**
+     * Согласование клиента должно сразу превращаться в рейс.
+     *
+     * Раньше менеджер набирал те же клиента, маршрут, груз и цены во
+     * второй раз — это лишняя работа и место, где цифры расходятся:
+     * согласовали одну сумму, в заявку попала другая.
+     */
+    describe('согласованный запрос становится заявкой', () => {
+        const готовыйЗапрос = {
+            id: 'з-1',
+            companyId: 'наша',
+            customerCompanyId: 'клиент',
+            customerPrice: 450000,
+            carrierCost: 330000,
+            originLocationId: 'адрес-погрузки',
+            destinationLocationId: 'адрес-выгрузки',
+            cargoDescription: 'Пиво в паллетах',
+            palletCount: 12,
+            cargoWeight: 18000,
+            orderId: null,
+            readyDate: new Date('2026-08-01'),
+            notes: null,
+            natureOfCargo: null,
+            cargoType: null,
+            cargoVolume: null,
+            createdById: 'менеджер',
+        };
+
+        const стенд = (запрос: any = готовыйЗапрос) => создать({
+            prisma: {
+                quoteRequest: {
+                    findFirst: jest.fn().mockResolvedValue(запрос),
+                    update: jest.fn().mockImplementation(({ data }: any) => ({ ...запрос, ...data })),
+                },
+            },
+        });
+
+        it('заявка создаётся с теми же суммами, что согласовал клиент', async () => {
+            const { service, orders } = стенд();
+            await service.approve('наша', 'з-1', 'менеджер');
+
+            expect(orders.create).toHaveBeenCalledTimes(1);
+            const данные = orders.create.mock.calls[0][0];
+            // Пересчёта быть не должно: клиент подтвердил конкретное число.
+            expect(данные.customerPrice).toBe(450000);
+            expect(данные.driverCost).toBe(330000);
+            expect(данные.customerCompanyId).toBe('клиент');
+            expect(данные.palletCount).toBe(12);
+        });
+
+        it('маршрут заявки берётся из адресов запроса', async () => {
+            const { service, orders } = стенд();
+            await service.approve('наша', 'з-1', 'менеджер');
+
+            const точки = orders.create.mock.calls[0][0].routePoints;
+            expect(точки).toHaveLength(2);
+            expect(точки[0]).toMatchObject({ locationId: 'адрес-погрузки', pointType: 'PICKUP' });
+            expect(точки[1]).toMatchObject({ locationId: 'адрес-выгрузки', pointType: 'DELIVERY' });
+        });
+
+        it('созданная заявка привязывается к запросу', async () => {
+            const { service, prisma } = стенд();
+            const итог = await service.approve('наша', 'з-1', 'менеджер');
+
+            expect(prisma.quoteRequest.update).toHaveBeenCalled();
+            expect((итог as any).orderId).toBe('рейс-1');
+            expect((итог as any).status).toBe('APPROVED');
+        });
+
+        it('повторное согласование не плодит вторую заявку', async () => {
+            // Кнопку нажимают дважды чаще, чем кажется, а лишний рейс
+            // попадает и в журнал, и в отчёты, и в зарплату менеджера.
+            const { service, orders } = стенд({ ...готовыйЗапрос, orderId: 'рейс-1' });
+            await service.approve('наша', 'з-1', 'менеджер');
+            expect(orders.create).not.toHaveBeenCalled();
+        });
+
+        it('без адреса из справочника согласование проходит, но заявки нет — и сказано почему', async () => {
+            // Согласие клиента — факт, его записывают сразу: менеджеру
+            // говорят «берём» по телефону. Запрещать это из-за незаведённого
+            // адреса значит терять факт. Заявку строим, когда есть маршрут,
+            // а чего не хватило — говорим словами.
+            const { service, orders } = стенд({ ...готовыйЗапрос, destinationLocationId: null });
+            const итог: any = await service.approve('наша', 'з-1', 'менеджер');
+
+            expect(итог.status).toBe('APPROVED');
+            expect(итог.orderCreated).toBe(false);
+            expect(итог.orderNotCreatedReason).toMatch(/выгрузки/);
+            expect(orders.create).not.toHaveBeenCalled();
+        });
+
+        it('без цены для клиента согласовывать нечего', async () => {
+            const { service, orders } = стенд({ ...готовыйЗапрос, customerPrice: null });
+            await expect(service.approve('наша', 'з-1', 'менеджер')).rejects.toThrow();
+            expect(orders.create).not.toHaveBeenCalled();
         });
     });
 });
