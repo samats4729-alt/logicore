@@ -1150,6 +1150,32 @@ export default function CompanyOrdersPage() {
             },
         },
         {
+            // Просьба бухгалтера: ей нужно видеть, по каким заявкам счёт уже
+            // выставлен, а по каким нет. Раньше это выяснялось перебором
+            // документов, а в одном счёте может сидеть двадцать рейсов.
+            title: 'Счёт', key: 'invoiced', width: 96,
+            render: (_: any, r: any) => {
+                if (r.isInvoiced) {
+                    const numbers = (r.invoiceNumbers || []).join(', ');
+                    return (
+                        <Tooltip title={numbers ? `Счёт ${numbers}` : 'Счёт выставлен'}>
+                            <span style={{ fontSize: 11, color: '#389e0d', fontWeight: 600 }}>
+                                ✓ выставлен
+                            </span>
+                        </Tooltip>
+                    );
+                }
+                if (r.hasDraftInvoice) {
+                    return (
+                        <Tooltip title="Счёт подготовлен, но ещё не выставлен">
+                            <span style={{ fontSize: 11, color: '#b45309' }}>черновик</span>
+                        </Tooltip>
+                    );
+                }
+                return <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>нет</span>;
+            },
+        },
+        {
             title: 'Ставка зак.', key: 'customerPrice', width: 100, align: 'right' as const,
             render: (_: any, r: Order) => {
                 return r.customerPrice
@@ -1234,6 +1260,32 @@ export default function CompanyOrdersPage() {
                     return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
                 }
                 return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+            },
+        },
+        {
+            // Просьба бухгалтера: ей нужно видеть, по каким заявкам счёт уже
+            // выставлен, а по каким нет. Раньше это выяснялось перебором
+            // документов, а в одном счёте может сидеть двадцать рейсов.
+            title: 'Счёт', key: 'invoiced', width: 96,
+            render: (_: any, r: any) => {
+                if (r.isInvoiced) {
+                    const numbers = (r.invoiceNumbers || []).join(', ');
+                    return (
+                        <Tooltip title={numbers ? `Счёт ${numbers}` : 'Счёт выставлен'}>
+                            <span style={{ fontSize: 11, color: '#389e0d', fontWeight: 600 }}>
+                                ✓ выставлен
+                            </span>
+                        </Tooltip>
+                    );
+                }
+                if (r.hasDraftInvoice) {
+                    return (
+                        <Tooltip title="Счёт подготовлен, но ещё не выставлен">
+                            <span style={{ fontSize: 11, color: '#b45309' }}>черновик</span>
+                        </Tooltip>
+                    );
+                }
+                return <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>нет</span>;
             },
         },
         {
