@@ -32,6 +32,7 @@ import {
     CancelAccountingDocumentDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
+    PrepareLinesFromOrdersDto,
     REGISTRY_MAX_ROWS,
     SuggestAllocationQueryDto,
     UpdateAccountingDocumentDto,
@@ -88,6 +89,13 @@ export class AccountingDocumentsController {
             entityLabel: `${document.type} №${document.number}`,
         });
         return document;
+    }
+
+    @Post('lines/from-orders')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Подготовить строки счёта по выбранным рейсам' })
+    async prepareLines(@Request() req: any, @Body() dto: PrepareLinesFromOrdersDto) {
+        return this.documents.prepareLinesFromOrderIds(req.user.companyId, dto);
     }
 
     @Post('reconciliation/from-ledger')

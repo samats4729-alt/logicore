@@ -1,3 +1,4 @@
+import { prepareLinesFromOrders } from './prepare-lines-from-orders';
 import {
     BadRequestException,
     ConflictException,
@@ -1083,4 +1084,53 @@ export class AccountingDocumentsService {
         };
         return createHash('sha256').update(JSON.stringify(immutablePayload)).digest('hex');
     }
+
+    /**
+     * Готовые строки счёта по выбранным рейсам.
+     *
+     * Заявки берутся только свои: `companyId` в условии — не формальность,
+     * иначе по чужому id можно было бы вытащить маршрут, водителя и суммы
+     * соседней компании.
+     */
+    async prepareLinesFromOrderIds(
+        companyId: string,
+        dto: { orderIds: string[]; service?: string },
+    ) {
+        if (!dto.orderIds?.length) return { lines: [] };
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                id: { in: dto.orderIds },
+                OR: [
+                    { forwarderId: companyId },
+                    { customerCompanyId: companyId },
+                    { partnerId: companyId },
+                    { subForwarderId: companyId },
+                ],
+            },
+            include: {
+                routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                vehicle: { select: { model: true } },
+            },
+        });
+
+        const lines = prepareLinesFromOrders(
+            orders.map((o: any) => ({
+                id: o.id,
+                orderNumber: o.orderNumber,
+                assignedDriverName: o.assignedDriverName,
+                assignedDriverPlate: o.assignedDriverPlate,
+                assignedDriverTrailer: o.assignedDriverTrailer,
+                vehicleModel: o.vehicle?.model || null,
+                customerPrice: o.customerPrice,
+                driverCost: o.driverCost,
+                loadingDate: o.routePoints?.[0]?.expectedDate || o.createdAt,
+                routePoints: o.routePoints,
+            })),
+            { service: dto.service },
+        );
+
+        return { lines };
+    }
+
 }

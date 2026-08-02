@@ -490,3 +490,23 @@ export class AccountingDocumentRegistryQueryDto {
     @IsNotEmpty({ each: true })
     ids?: string[];
 }
+
+/**
+ * Подготовить строки счёта по выбранным рейсам.
+ *
+ * Просьба бухгалтера: у одного клиента в счёте пять перевозок, иногда
+ * двадцать. Экран присылает выбранные заявки — в ответ приходят готовые
+ * строки с расшифровкой и суммами, которые она дальше правит как обычно.
+ */
+export class PrepareLinesFromOrdersDto {
+    @IsArray()
+    @ArrayUnique()
+    @ArrayMaxSize(500)
+    @IsString({ each: true })
+    orderIds!: string[];
+
+    /** Название услуги, если оно у компании своё. */
+    @IsString()
+    @IsOptional()
+    service?: string;
+}
