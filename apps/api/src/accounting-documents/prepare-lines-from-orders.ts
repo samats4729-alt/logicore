@@ -43,7 +43,7 @@ function toAmount(value: unknown): number {
 
 export function prepareLinesFromOrders(
     orders: OrderForInvoice[],
-    options: { service?: string; parts?: LinePart[] } = {},
+    options: { service?: string; parts?: LinePart[]; externalLabel?: string } = {},
 ): PreparedLine[] {
     return orders.map((order) => ({
         orderId: order.id,

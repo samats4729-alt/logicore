@@ -88,4 +88,18 @@ describe('Строка счёта по рейсу', () => {
         }, { parts: ['route'] });
         expect(строка).toBe('Транспортные услуги, маршрут: Склад №4 — Балхаш');
     });
+
+    it('номер клиента подписывается так, как его называет клиент', () => {
+        // У одного это ID, у другого СТС, у третьего свой номер заказа.
+        // Жёстко писать «ID» значит подписать чужой номер чужим словом.
+        expect(buildOrderLineDescription(рейс, { parts: ['externalId'], externalLabel: 'СТС' }))
+            .toBe('Транспортные услуги, СТС 36136');
+        expect(buildOrderLineDescription(рейс, { parts: ['externalId'] }))
+            .toBe('Транспортные услуги, ID 36136');
+    });
+
+    it('без номера клиента строка про него молчит', () => {
+        expect(buildOrderLineDescription({ ...рейс, externalNumber: null }, { parts: ['route', 'externalId'] }))
+            .toBe('Транспортные услуги, маршрут: Караганда — Балхаш');
+    });
 });

@@ -1094,7 +1094,7 @@ export class AccountingDocumentsService {
      */
     async prepareLinesFromOrderIds(
         companyId: string,
-        dto: { orderIds: string[]; service?: string },
+        dto: { orderIds: string[]; service?: string; counterpartyId?: string },
     ) {
         if (!dto.orderIds?.length) return { lines: [] };
 
@@ -1114,6 +1114,17 @@ export class AccountingDocumentsService {
             },
         });
 
+        // Подпись внешнего номера — у контрагента. Пусто означает
+        // «в счёт не выводить»: у одного клиента ID обязателен в каждой
+        // строке, у другого его номера в счёте не нужны вовсе.
+        const counterparty = dto.counterpartyId
+            ? await this.prisma.company.findUnique({
+                where: { id: dto.counterpartyId },
+                select: { externalNumberLabel: true },
+            })
+            : null;
+        const externalLabel = counterparty?.externalNumberLabel?.trim() || undefined;
+
         const lines = prepareLinesFromOrders(
             orders.map((o: any) => ({
                 id: o.id,
@@ -1124,10 +1135,19 @@ export class AccountingDocumentsService {
                 vehicleModel: o.vehicle?.model || null,
                 customerPrice: o.customerPrice,
                 driverCost: o.driverCost,
+                externalNumber: o.externalNumber,
                 loadingDate: o.routePoints?.[0]?.expectedDate || o.createdAt,
                 routePoints: o.routePoints,
             })),
-            { service: dto.service },
+            {
+                service: dto.service,
+                externalLabel,
+                // Номер клиента добавляем в строку только если у контрагента
+                // задана подпись — иначе он в счёт не идёт.
+                parts: externalLabel
+                    ? ['route', 'driver', 'date', 'vehicle', 'plate', 'orderNumber', 'externalId']
+                    : undefined,
+            },
         );
 
         return { lines };

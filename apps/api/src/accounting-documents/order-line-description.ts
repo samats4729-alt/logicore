@@ -96,7 +96,7 @@ function routeOf(order: OrderForLine): string | null {
  */
 export function buildOrderLineDescription(
     order: OrderForLine,
-    options: { service?: string; parts?: LinePart[] } = {},
+    options: { service?: string; parts?: LinePart[]; externalLabel?: string } = {},
 ): string {
     const service = options.service || 'Транспортные услуги';
     const parts = options.parts?.length ? options.parts : DEFAULT_LINE_PARTS;
@@ -132,7 +132,13 @@ export function buildOrderLineDescription(
                 if (order.orderNumber?.trim()) chunks.push(`заявка №${order.orderNumber.trim()}`);
                 break;
             case 'externalId':
-                if (order.externalNumber?.trim()) chunks.push(`ID ${order.externalNumber.trim()}`);
+                // Подпись берётся у контрагента: у одного это «ID», у
+                // другого «СТС», у третьего свой номер заказа. Жёстко
+                // писать «ID» значит подписать чужой номер чужим словом.
+                if (order.externalNumber?.trim()) {
+                    const label = options.externalLabel?.trim() || 'ID';
+                    chunks.push(`${label} ${order.externalNumber.trim()}`);
+                }
                 break;
         }
     }
