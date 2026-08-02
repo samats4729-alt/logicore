@@ -38,11 +38,14 @@ export default function PickOrdersDialog({
     open,
     onClose,
     counterpartyId,
+    direction,
     onPicked,
 }: {
     open: boolean;
     onClose: () => void;
     counterpartyId?: string | null;
+    /** Чей счёт: наш клиенту или нам от перевозчика. От этого зависит сумма. */
+    direction?: 'OUTGOING' | 'INCOMING';
     onPicked: (lines: PickedLine[]) => void;
 }) {
     const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -84,6 +87,7 @@ export default function PickOrdersDialog({
             const res = await api.post('/accounting-documents/lines/from-orders', {
                 orderIds: picked,
                 counterpartyId: counterpartyId || undefined,
+                direction,
             });
             onPicked(res.data?.lines || []);
             toast.success(`Перенесено рейсов: ${picked.length}`);

@@ -66,6 +66,20 @@ describe('Строки счёта по нескольким рейсам', () =>
         const [строка] = prepareLinesFromOrders([рейс()]);
         expect(строка.orderId).toBe('р-1');
     });
+
+    it('счёт ОТ перевозчика берёт его тариф, а не наш', () => {
+        // Перепутать значит заплатить перевозчику собственный тариф вместе
+        // с наценкой: 120 000 вместо 100 000.
+        const [строка] = prepareLinesFromOrders(
+            [рейс({ customerPrice: 120000, driverCost: 100000 })], { direction: 'INCOMING' },
+        );
+        expect(строка.unitPrice).toBe(100000);
+    });
+
+    it('по умолчанию счёт наш, и сумма клиентская', () => {
+        const [строка] = prepareLinesFromOrders([рейс({ customerPrice: 120000, driverCost: 100000 })]);
+        expect(строка.unitPrice).toBe(120000);
+    });
 });
 
 describe('Экспедиторское вознаграждение', () => {

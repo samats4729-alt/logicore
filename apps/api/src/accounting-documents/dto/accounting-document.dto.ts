@@ -14,6 +14,7 @@ import {
     IsBoolean,
     IsDateString,
     IsEnum,
+    IsIn,
     IsInt,
     IsNotEmpty,
     IsOptional,
@@ -509,4 +510,17 @@ export class PrepareLinesFromOrdersDto {
     @IsString()
     @IsOptional()
     service?: string;
+
+    /** Контрагент — от него зависит подпись внешнего номера в строке. */
+    @IsString()
+    @IsOptional()
+    counterpartyId?: string;
+
+    /**
+     * Чей счёт. Исходящий — сумма по тарифу клиента, входящий — по тарифу
+     * перевозчика. Перепутать значит заплатить перевозчику свой тариф.
+     */
+    @IsIn(['OUTGOING', 'INCOMING'])
+    @IsOptional()
+    direction?: 'OUTGOING' | 'INCOMING';
 }

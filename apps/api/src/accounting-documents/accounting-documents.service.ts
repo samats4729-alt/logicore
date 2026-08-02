@@ -1094,7 +1094,7 @@ export class AccountingDocumentsService {
      */
     async prepareLinesFromOrderIds(
         companyId: string,
-        dto: { orderIds: string[]; service?: string; counterpartyId?: string },
+        dto: { orderIds: string[]; service?: string; counterpartyId?: string; direction?: 'OUTGOING' | 'INCOMING' },
     ) {
         if (!dto.orderIds?.length) return { lines: [] };
 
@@ -1142,6 +1142,7 @@ export class AccountingDocumentsService {
             {
                 service: dto.service,
                 externalLabel,
+                direction: dto.direction,
                 // Номер клиента добавляем в строку только если у контрагента
                 // задана подпись — иначе он в счёт не идёт.
                 parts: externalLabel

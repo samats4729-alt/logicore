@@ -877,6 +877,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     open={pickOpen}
                     onClose={() => setPickOpen(false)}
                     counterpartyId={document?.counterparty?.id}
+                    direction={document?.direction}
                     onPicked={(picked) => {
                         setLines((prev) => [
                             ...prev,

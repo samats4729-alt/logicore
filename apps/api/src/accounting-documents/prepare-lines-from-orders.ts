@@ -43,7 +43,18 @@ function toAmount(value: unknown): number {
 
 export function prepareLinesFromOrders(
     orders: OrderForInvoice[],
-    options: { service?: string; parts?: LinePart[]; externalLabel?: string } = {},
+    options: {
+        service?: string;
+        parts?: LinePart[];
+        externalLabel?: string;
+        /**
+         * Чей это счёт. `OUTGOING` — мы выставляем клиенту, сумма его
+         * тариф. `INCOMING` — счёт нам от перевозчика, и сумма там его,
+         * а не наша. Перепутать значит заплатить перевозчику собственный
+         * тариф вместе с наценкой.
+         */
+        direction?: 'OUTGOING' | 'INCOMING';
+    } = {},
 ): PreparedLine[] {
     return orders.map((order) => ({
         orderId: order.id,
@@ -53,7 +64,9 @@ export function prepareLinesFromOrders(
         // именно так это выглядит в счетах, которые принимает бухгалтерия.
         quantity: 1,
         unit: 'усл',
-        unitPrice: toAmount(order.customerPrice),
+        unitPrice: options.direction === 'INCOMING'
+            ? toAmount(order.driverCost)
+            : toAmount(order.customerPrice),
         serviceDate: order.loadingDate ? new Date(order.loadingDate as any) : null,
     }));
 }
