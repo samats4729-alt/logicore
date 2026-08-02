@@ -125,8 +125,8 @@ export class OrdersController {
     @ApiQuery({ name: 'search', required: false, description: 'Номер, груз, город маршрута или заказчик' })
     async findAll(@Query() query: OrdersQueryDto, @Request() req?: any) {
         const companyId = req?.user?.role === 'ADMIN' ? undefined : req?.user?.companyId;
-        const { status, customerId, driverId, search, ...pagination } = query;
-        return this.ordersService.findAll({ status, customerId, driverId, companyId, search }, pagination);
+        const { status, customerId, driverId, search, invoiced, ...pagination } = query;
+        return this.ordersService.findAll({ status, customerId, driverId, companyId, search, invoiced }, pagination);
     }
 
     @Get('my')

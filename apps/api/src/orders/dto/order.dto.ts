@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsBoolean, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments , IsIn } from 'class-validator';
 import { OrderStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -342,4 +342,14 @@ export class OrdersQueryDto extends PaginationQueryDto {
     @IsString()
     @IsOptional()
     search?: string;
+
+    /**
+     * Выставлен ли по рейсу счёт клиенту: `yes` — только выставленные,
+     * `no` — только те, по которым счёта ещё нет. Просьба бухгалтера:
+     * ей нужно видеть, что осталось выставить.
+     */
+    @ApiProperty({ required: false, enum: ['yes', 'no'] })
+    @IsIn(['yes', 'no'])
+    @IsOptional()
+    invoiced?: 'yes' | 'no';
 }

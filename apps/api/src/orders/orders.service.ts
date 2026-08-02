@@ -8,6 +8,7 @@ import { PeriodClosingService } from '../accounting/services/period-closing.serv
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
 import { kzStartOfToday, kzTodayString } from '../common/utils/business-date';
+import { invoiceMarks } from './order-invoice-mark';
 
 const STATUS_CHAIN = [
     OrderStatus.ASSIGNED,
@@ -317,6 +318,8 @@ export class OrdersService {
         companyId?: string;
         /** Поиск по номеру, грузу, городам маршрута и названию заказчика. */
         search?: string;
+        /** `yes` — только выставленные счётом, `no` — только без счёта. */
+        invoiced?: 'yes' | 'no';
     }, query: PaginationQueryDto = {}) {
         const { skip, take, page, limit } = getPaginationParams(query);
         const where: any = {
@@ -334,6 +337,24 @@ export class OrdersService {
         // поиск писались в один `OR`, и второй затирал первый — компания
         // увидела бы чужие заявки.
         const conditions: any[] = [];
+
+        // Фильтр «без счёта» — просьба бухгалтера: ей нужно видеть, что
+        // осталось выставить. Считаем по проведённым исходящим счетам:
+        // черновик и входящий счёт от перевозчика выставленным не делают.
+        if (filters?.invoiced === 'yes' || filters?.invoiced === 'no') {
+            const hasPostedInvoice = {
+                accountingDocuments: {
+                    some: {
+                        document: {
+                            type: 'PAYMENT_INVOICE',
+                            direction: 'OUTGOING',
+                            status: 'POSTED',
+                        },
+                    },
+                },
+            };
+            conditions.push(filters.invoiced === 'yes' ? hasPostedInvoice : { NOT: hasPostedInvoice });
+        }
         if (filters?.companyId) {
             conditions.push({
                 OR: [
@@ -376,6 +397,20 @@ export class OrdersService {
                     customer: true,
                     driver: true,
                     routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                    // Выставлен ли по рейсу счёт. Бухгалтеру это первое, что
+                    // нужно знать в журнале: по каким заявкам счёт уже ушёл,
+                    // а по каким нет. Раньше это выяснялось только глазами,
+                    // документ за документом.
+                    accountingDocuments: {
+                        select: {
+                            document: {
+                                select: {
+                                    id: true, number: true, type: true,
+                                    direction: true, status: true, documentDate: true,
+                                },
+                            },
+                        },
+                    },
                 },
                 orderBy: { createdAt: 'desc' },
             }),
@@ -383,7 +418,10 @@ export class OrdersService {
         ]);
 
         return {
-            data,
+            data: data.map((order: any) => ({
+                ...order,
+                ...invoiceMarks(order.accountingDocuments),
+            })),
             total,
             page,
             limit,
