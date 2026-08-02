@@ -112,8 +112,22 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
     const act = async (id: string, path: string, body?: any, okText?: string) => {
         setBusy(true);
         try {
-            await api.post(`/quote-requests/${id}/${path}`, body || {});
-            toast.success(okText || 'Готово');
+            const res = await api.post(`/quote-requests/${id}/${path}`, body || {});
+
+            // Согласование теперь заводит рейс. Человек должен увидеть, что
+            // именно произошло: номер заявки, если она создалась, или почему
+            // не создалась. Молчаливое «Готово» здесь врёт — менеджер решит,
+            // что заявка есть, и не станет её заводить.
+            const data = res?.data || {};
+            if (path === 'approve' && data.orderCreated === false) {
+                toast.warning(data.orderNotCreatedReason || 'Согласовано, но заявка не создана', {
+                    duration: 8000,
+                });
+            } else if (path === 'approve' && data.order?.orderNumber) {
+                toast.success(`Согласовано. Создана заявка №${data.order.orderNumber}`);
+            } else {
+                toast.success(okText || 'Готово');
+            }
             setDetail(null);
             setRejecting(null);
             setReason('');
