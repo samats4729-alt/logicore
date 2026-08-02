@@ -37,6 +37,7 @@ import {
     updateAccountingDocument,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
+import PickOrdersDialog from './PickOrdersDialog';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
@@ -250,6 +251,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
         setLines((prev) => prev.map((line) => (line.key === key ? { ...line, ...patch } : line)));
         touch();
     };
+
+    const [pickOpen, setPickOpen] = useState(false);
 
     const addLine = () => {
         const preset = services.find((s) => s.name);
@@ -844,16 +847,55 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 />
 
                 {editable && (
-                    <Button
-                        type="link"
-                        size="small"
-                        icon={<PlusOutlined />}
-                        onClick={addLine}
-                        style={{ paddingLeft: 0, marginTop: 8 }}
-                    >
-                        Добавить услугу
-                    </Button>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+                        {/* Подбор рейсов — просьба бухгалтера: в открытый счёт
+                            раньше можно было завести только пустую строку и
+                            набить всё руками, а перевозок в счёте бывает
+                            двадцать. */}
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            onClick={() => setPickOpen(true)}
+                            style={{ paddingLeft: 0 }}
+                        >
+                            Подобрать рейсы
+                        </Button>
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            onClick={addLine}
+                            style={{ paddingLeft: 0 }}
+                        >
+                            Добавить услугу
+                        </Button>
+                    </div>
                 )}
+
+                <PickOrdersDialog
+                    open={pickOpen}
+                    onClose={() => setPickOpen(false)}
+                    counterpartyId={document?.counterparty?.id}
+                    onPicked={(picked) => {
+                        setLines((prev) => [
+                            ...prev,
+                            ...picked.map((line, i) => ({
+                                key: `order-${line.orderId}-${Date.now()}-${i}`,
+                                name: line.name,
+                                description: line.description,
+                                quantity: line.quantity,
+                                unit: line.unit,
+                                unitPrice: line.unitPrice,
+                                vat: 'none' as const,
+                                orderId: line.orderId,
+                                orderNumber: null,
+                                orderDetails: null,
+                            })),
+                        ]);
+                        touch();
+                    }}
+                />
 
                 <div
                     style={{
