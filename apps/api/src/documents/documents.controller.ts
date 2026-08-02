@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards, Request, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -97,6 +97,29 @@ export class DocumentsController {
             });
         }
         return document;
+    }
+
+    // Объявлено до `:id`, иначе путь съедается параметром.
+    @Get()
+    @ApiOperation({
+        summary: 'Журнал вложенных документов компании',
+        description: 'Накладные, акты и прочие файлы рейсов — списком за период, с поиском.',
+    })
+    async list(
+        @Request() req: any,
+        @Query('type') type?: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
+        @Query('search') search?: string,
+    ) {
+        return this.documentsService.listForCompany(req.user.companyId, {
+            // Чужое значение в тип не пускаем: неизвестное — это «без фильтра»,
+            // а не ошибка на весь экран.
+            type: type && type in DocumentType ? (type as DocumentType) : undefined,
+            from,
+            to,
+            search: search?.slice(0, 100),
+        });
     }
 
     @Get('order/:orderId')
