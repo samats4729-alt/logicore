@@ -131,6 +131,7 @@ export default function FinanceHubPage() {
                 { label: 'Формы собственности', href: '/company/accounting/ownership-types', show: acc, desc: 'Организационно-правовые формы контрагентов: ТОО, ИП, АО' },
                 { label: 'Банки', href: '/company/accounting/banks', show: acc, desc: 'Справочник банков и БИК для реквизитов' },
                 { label: 'Курсы валют', href: '/company/accounting/currencies', show: acc, desc: 'Официальные курсы Нацбанка РК по дням, курс вручную для валют без официального' },
+                { label: 'Переоценка валют', href: '/company/accounting/revaluation', show: acc, desc: 'Курсовая разница по валютным остаткам и неоплаченным долгам на конец месяца' },
                 { label: 'Нумерация заявок', href: '/company/accounting/order-numbering', show: acc, desc: 'Формат номера как в 1С и стартовый номер' },
                 { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
             ],

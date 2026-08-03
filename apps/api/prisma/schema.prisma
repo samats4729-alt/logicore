@@ -111,6 +111,7 @@ model User {
   /// Компании, которые этот пользователь подтвердил как админ платформы.
   verifiedCompanies     Company[]             @relation("VerifiedCompanies")
   createdOrderDocuments OrderDocument[]       @relation("CreatedOrderDocuments")
+  createdCurrencyRevaluations CurrencyRevaluation[] @relation("CreatedCurrencyRevaluations")
   createdSharedReports  SharedReportLink[]    @relation("CreatedSharedReports")
   reviewedPaymentProofs OrderPaymentProof[]   @relation("ReviewedPaymentProofs")
   email                 String?               @unique
@@ -387,6 +388,7 @@ model Company {
   sharedReports               SharedReportLink[]  @relation("CompanySharedReports")
   sharedReportsAsCounterparty SharedReportLink[]  @relation("CounterpartySharedReports")
   paymentProofs               OrderPaymentProof[] @relation("CompanyPaymentProofs")
+  currencyRevaluations        CurrencyRevaluation[]
   paymentProofsAsCounterparty OrderPaymentProof[] @relation("CounterpartyPaymentProofs")
   locationEmailLists          LocationEmailList[]
 
@@ -1143,6 +1145,7 @@ model FinanceAccount {
   expenses            Expense[]            @relation("AccountExpenses")
   financeOperations   FinanceOperation[]   @relation("AccountFinanceOperations")
   accountingDocuments AccountingDocument[] @relation("AccountingDocumentBankAccount")
+  revaluationLines    CurrencyRevaluationLine[]
 
   @@unique([companyId, name, kind])
   @@index([companyId])
@@ -1685,6 +1688,7 @@ model AccountingDocument {
   reconciliationLines AccountingReconciliationLine[]
   orders              AccountingDocumentOrder[]
   paymentAllocations  AccountingPaymentAllocation[]
+  revaluationLines    CurrencyRevaluationLine[]
   sourceLinks         AccountingDocumentLink[]       @relation("AccountingDocumentSourceLinks")
   targetLinks         AccountingDocumentLink[]       @relation("AccountingDocumentTargetLinks")
 
@@ -2248,4 +2252,63 @@ model CompanyExchangeRate {
 
   @@unique([companyId, currencyCode, rateDate])
   @@index([companyId, rateDate])
+}
+
+/// Переоценка валютных остатков на дату — обычно на конец месяца.
+///
+/// Курсовая разница возникает не только когда деньги пришли. Пока валютный
+/// счёт лежит, а долг клиента не оплачен, курс всё равно движется, и на
+/// конец месяца тот же остаток стоит других тенге. Хранится снимком:
+/// пересчёт при каждом показе означал бы, что прошлый месяц меняется сам
+/// по себе при каждом движении курса.
+model CurrencyRevaluation {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Дата, на которую переоценены остатки.
+  date        DateTime @db.Date
+  createdById String
+  createdBy   User     @relation("CreatedCurrencyRevaluations", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  note        String?
+
+  /// Доход и расход по отдельности: «ноль» вместо «выиграли и потеряли
+  /// поровну» скрыл бы движение денег.
+  gain  Decimal @default(0) @db.Decimal(20, 2)
+  loss  Decimal @default(0) @db.Decimal(20, 2)
+  lines CurrencyRevaluationLine[]
+
+  /// Одна переоценка на компанию на дату: две задвоили бы разницу.
+  @@unique([companyId, date])
+  @@index([companyId, date])
+}
+
+/// Один переоценённый остаток: счёт, долг клиента или наш долг перевозчику.
+model CurrencyRevaluationLine {
+  id            String              @id @default(cuid())
+  revaluationId String
+  revaluation   CurrencyRevaluation @relation(fields: [revaluationId], references: [id], onDelete: Cascade)
+
+  /// ACCOUNT — остаток на счёте, RECEIVABLE — долг клиента,
+  /// PAYABLE — наш долг перевозчику.
+  kind       String
+  accountId  String?
+  account    FinanceAccount?     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  documentId String?
+  document   AccountingDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  currency String
+  /// Остаток в валюте и курс, по которому его переоценили.
+  amount   Decimal @db.Decimal(20, 2)
+  rate     Decimal @db.Decimal(18, 6)
+  /// Было в тенге, стало в тенге и разница между ними.
+  baseBefore Decimal @db.Decimal(20, 2)
+  baseAfter  Decimal @db.Decimal(20, 2)
+  diff       Decimal @db.Decimal(20, 2)
+
+  @@index([revaluationId])
+  /// По этим двум ищется предыдущая переоценка остатка: следующая разница
+  /// считается от неё, а не от курса документа.
+  @@index([documentId])
+  @@index([accountId])
 }

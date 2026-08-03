@@ -107,6 +107,7 @@ describe('Валюта в отчётах', () => {
             const service = new FinancialReportsService(
                 prisma, {} as any, {} as any, new FinanceCalculatorService(),
                 {} as any, {} as any, {} as any, {} as any,
+                { differencesForPeriod: async () => ({ gain: 0, loss: 0, net: 0, rows: [] }) } as any,
             );
             return { service, prisma };
         };

@@ -40,3 +40,22 @@ export class CompanyRateDto {
     @MaxLength(300)
     note?: string;
 }
+
+/**
+ * Переоценка валютных остатков на дату.
+ *
+ * Дата обычно последняя в месяце: переоценка закрывает месяц, а не
+ * произвольный день. Но ограничения на «только конец месяца» нет намеренно —
+ * бывает переоценка на дату сдачи отчётности или на дату сверки.
+ */
+export class RevaluationDto {
+    @ApiProperty({ example: '2026-08-31' })
+    @IsISO8601()
+    date: string;
+
+    @ApiProperty({ required: false, example: 'Переоценка на конец августа' })
+    @IsOptional()
+    @IsString()
+    @MaxLength(300)
+    note?: string;
+}

@@ -14,6 +14,7 @@ import { JournalQueryDto } from '../dto/accounting.dto';
 import { getPaginationParams } from '../../common/dto/pagination.dto';
 import * as XLSX from 'xlsx';
 import { SharedReportLinkService } from './shared-report-link.service';
+import { CurrencyRevaluationService } from './currency-revaluation.service';
 import { kzToday } from '../../common/utils/business-date';
 import { exchangeOutcome, paymentInBase } from './exchange-difference';
 
@@ -31,6 +32,7 @@ export class FinancialReportsService {
         private paymentsService: PaymentsService,
         private settingsService: FinancialSettingsService,
         private shareLinks: SharedReportLinkService,
+        private revaluations: CurrencyRevaluationService,
     ) { }
 
 
@@ -2522,7 +2524,16 @@ export class FinancialReportsService {
         // Курсовые разницы — отдельная строка, не выручка и не затрата.
         // Заработали на курсе или потеряли, видно прямо: если размазать это
         // по выручке, отчёт покажет прибыль, которой не было.
-        const exchange = await this.getExchangeDifferences(companyId, { start, end });
+        //
+        // Их две породы, и обе обязаны быть в отчёте. Первая возникает при
+        // оплате: счёт выставили по одному курсу, деньги пришли по другому.
+        // Вторая — при переоценке на конец месяца: счёт ещё не оплачен, а
+        // курс уже ушёл, и долг стоит других тенге. Без второй месяц
+        // закрывается с остатками по вчерашнему курсу.
+        const [exchange, revaluation] = await Promise.all([
+            this.getExchangeDifferences(companyId, { start, end }),
+            this.revaluations.differencesForPeriod(companyId, { start, end }),
+        ]);
 
         // Валюты, для которых не нашлось курса. Их суммы в расчёт не вошли
         // вовсе — лучше отчёт с честной пометкой, чем доллары, посчитанные
@@ -2530,7 +2541,9 @@ export class FinancialReportsService {
         const unconverted = [...new Set(unconvertedCurrencies)].sort();
 
         const grossProfit = money(totalRevenueNet - totalExecutorCostNet);
-        const netProfit = money(grossProfit + totalOtherIncomes - totalOtherExpenses + exchange.net);
+        const netProfit = money(
+            grossProfit + totalOtherIncomes - totalOtherExpenses + exchange.net + revaluation.net,
+        );
         const marginPercentage = totalRevenueNet > 0 ? money((netProfit / totalRevenueNet) * 100) : 0;
 
         return {
@@ -2541,10 +2554,17 @@ export class FinancialReportsService {
             otherExpenses,
             totalOtherIncomes,
             totalOtherExpenses,
-            exchangeGain: exchange.gain,
-            exchangeLoss: exchange.loss,
-            exchangeNet: exchange.net,
+            // Разницы от оплат и от переоценки складываются в одну строку
+            // отчёта, но расшифровываются по отдельности: бухгалтеру важно
+            // видеть, где движение денег, а где переоценка остатка.
+            exchangeGain: money(exchange.gain + revaluation.gain),
+            exchangeLoss: money(exchange.loss + revaluation.loss),
+            exchangeNet: money(exchange.net + revaluation.net),
             exchangeRows: exchange.rows,
+            revaluationGain: revaluation.gain,
+            revaluationLoss: revaluation.loss,
+            revaluationNet: revaluation.net,
+            revaluationRows: revaluation.rows,
             unconvertedCurrencies: unconverted,
             netProfit,
             marginPercentage,
