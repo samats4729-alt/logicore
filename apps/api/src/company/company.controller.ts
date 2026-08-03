@@ -187,15 +187,20 @@ export class CompanyController {
 
     // ==================== Профиль компании ====================
 
+    // Бухгалтер читает профиль наравне с остальными офисными ролями: из него
+    // берутся реквизиты для счетов, а на экранах заявок — название своей
+    // компании в списке сторон. Без него запрос падал, а вместе с ним и весь
+    // список контрагентов, который грузится одной пачкой. Правка реквизитов
+    // бухгалтеру по-прежнему закрыта — см. `@Put('profile')` ниже.
     @Get('profile')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Получить профиль компании' })
     async getCompanyProfile(@Request() req: any) {
         return this.companyService.getCompanyProfile(req.user.companyId);
     }
 
     @Get('profile-status')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
     @ApiOperation({ summary: 'Проверить заполненность профиля компании' })
     async getProfileStatus(@Request() req: any) {
         const company = await this.companyService.getCompanyProfile(req.user.companyId);

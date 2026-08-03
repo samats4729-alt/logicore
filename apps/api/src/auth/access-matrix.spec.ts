@@ -11,6 +11,7 @@ import { PaymentProofController } from '../payment-proofs/payment-proof.controll
 import { DocumentsController } from '../documents/documents.controller';
 import { OrdersController } from '../orders/orders.controller';
 import { WarehouseController } from '../warehouse/warehouse.controller';
+import { CompanyController } from '../company/company.controller';
 
 /**
  * Матрица доступов: кто до какого действия допущен.
@@ -158,6 +159,31 @@ describe('Матрица доступов', () => {
             const who = whoCanReach(OrdersController, 'findAll');
             expect(who).not.toContain(UserRole.DRIVER);
             expect(who).not.toContain(UserRole.RECIPIENT);
+        });
+    });
+
+    describe('профиль компании', () => {
+        it('бухгалтер читает профиль своей компании', () => {
+            // Экраны заявок грузят контрагентов и профиль одной пачкой, чтобы
+            // подставить в список сторон свою компанию. Пока сюда не пускали,
+            // падала вся пачка: бухгалтер видел «Не удалось загрузить список
+            // контрагентов» и пустое поле контрагента.
+            expect(whoCanReach(CompanyController, 'getCompanyProfile')).toContain(UserRole.ACCOUNTANT);
+            expect(whoCanReach(CompanyController, 'getProfileStatus')).toContain(UserRole.ACCOUNTANT);
+        });
+
+        it('но менять реквизиты компании бухгалтер не может', () => {
+            // Доступ расширен только на чтение: реквизиты меняет директор.
+            expect(whoCanReach(CompanyController, 'updateCompanyProfile')).not.toContain(UserRole.ACCOUNTANT);
+        });
+
+        it('водитель и грузополучатель к профилю компании не допущены', () => {
+            for (const method of ['getCompanyProfile', 'getProfileStatus', 'updateCompanyProfile']) {
+                const who = whoCanReach(CompanyController, method);
+                expect(who).not.toContain(UserRole.DRIVER);
+                expect(who).not.toContain(UserRole.RECIPIENT);
+                expect(who).not.toContain(UserRole.PARTNER);
+            }
         });
     });
 

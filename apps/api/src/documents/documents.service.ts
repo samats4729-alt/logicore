@@ -88,6 +88,123 @@ export class DocumentsService {
     }
 
     /**
+     * Журнал вложенных файлов компании: накладные, акты, счета и прочее,
+     * что прикрепили к рейсам.
+     *
+     * Раньше такой список существовал только внутри карточки рейса, поэтому
+     * бухгалтеру приходилось знать номер заявки и спрашивать логиста —
+     * а накладную ищут не по номеру заявки, а по «Магнум, прошлая неделя».
+     *
+     * Круг документов тот же, что и в `findById`, иначе список показывал бы
+     * то, что потом не открывается: файлы рейсов, где наша компания —
+     * сторона, плюс файлы без рейса, вложенные нашими же сотрудниками.
+     */
+    async listForCompany(
+        companyId: string | undefined,
+        query: { type?: DocumentType; from?: string; to?: string; search?: string } = {},
+    ) {
+        if (!companyId) throw new ForbiddenException('Нет доступа к документам');
+
+        const search = (query.search || '').trim();
+        const like = { contains: search, mode: 'insensitive' as const };
+        // Условия складываются через AND намеренно: доступ и поиск — разные
+        // ограничения, и два ключа `OR` в одном объекте затёрли бы друг друга.
+        // Затёрся бы именно доступ, то есть человек увидел бы чужие файлы.
+        const access = {
+            OR: [
+                {
+                    order: {
+                        OR: [
+                            { customerCompanyId: companyId },
+                            { forwarderId: companyId },
+                            { partnerId: companyId },
+                            { responsibleManager: { companyId } },
+                        ],
+                    },
+                },
+                { orderId: null, uploadedBy: { companyId } },
+            ],
+        };
+        // Ищем по тому, что человек помнит: номер рейса, имя файла, город,
+        // водитель, заказчик.
+        const matches = {
+            OR: [
+                { fileName: like },
+                { order: { orderNumber: like } },
+                { order: { assignedDriverName: like } },
+                { order: { assignedDriverPlate: like } },
+                { order: { customerCompany: { name: like } } },
+                { order: { routePoints: { some: { location: { city: like } } } } },
+            ],
+        };
+
+        const documents = await this.prisma.document.findMany({
+            where: {
+                ...(query.type ? { type: query.type } : {}),
+                ...(query.from || query.to
+                    ? {
+                        createdAt: {
+                            gte: query.from ? new Date(query.from) : undefined,
+                            lte: query.to ? new Date(`${query.to}T23:59:59.999Z`) : undefined,
+                        },
+                    }
+                    : {}),
+                AND: search ? [access, matches] : [access],
+            },
+            orderBy: { createdAt: 'desc' },
+            // Тот же потолок, что и в журнале доверенностей: список читают
+            // глазами, а не выгружают целиком.
+            take: 300,
+            select: {
+                id: true,
+                type: true,
+                fileName: true,
+                fileSize: true,
+                mimeType: true,
+                createdAt: true,
+                orderId: true,
+                uploadedBy: { select: { firstName: true, lastName: true } },
+                order: {
+                    select: {
+                        orderNumber: true,
+                        status: true,
+                        assignedDriverName: true,
+                        assignedDriverPlate: true,
+                        customerCompany: { select: { name: true } },
+                        routePoints: {
+                            select: { pointType: true, location: { select: { city: true, address: true } } },
+                            orderBy: { sequence: 'asc' },
+                        },
+                    },
+                },
+            },
+        });
+
+        return documents.map((document) => {
+            const points = document.order?.routePoints || [];
+            const from = points.find((p) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP')?.location;
+            const to = points.find((p) => p.pointType === 'DELIVERY')?.location;
+            const city = (l?: { city: string | null; address: string | null } | null) => l?.city || l?.address || '';
+            return {
+                id: document.id,
+                type: document.type,
+                fileName: document.fileName,
+                fileSize: document.fileSize,
+                mimeType: document.mimeType,
+                createdAt: document.createdAt,
+                orderId: document.orderId,
+                orderNumber: document.order?.orderNumber ?? null,
+                orderStatus: document.order?.status ?? null,
+                route: city(from) && city(to) ? `${city(from)} → ${city(to)}` : null,
+                driverName: document.order?.assignedDriverName ?? null,
+                driverPlate: document.order?.assignedDriverPlate ?? null,
+                customer: document.order?.customerCompany?.name ?? null,
+                uploadedBy: document.uploadedBy,
+            };
+        });
+    }
+
+    /**
      * Получение документов заявки
      */
     async findByOrder(orderId: string, user?: { sub: string; role: string; companyId?: string }) {
