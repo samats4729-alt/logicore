@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Button, DatePicker, Table, Space, Spin, Tag, theme } from 'antd';
+import { Alert, Typography, Button, DatePicker, Table, Space, Spin, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, FileExcelOutlined, DollarOutlined, LineChartOutlined, WalletOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import { money } from '@/lib/money-format';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -19,6 +20,27 @@ interface PnLReport {
     otherExpenses: Array<{ name: string; amount: number }>;
     totalOtherIncomes: number;
     totalOtherExpenses: number;
+    /**
+     * Курсовые разницы за период. Счёт выставили по одному курсу, деньги
+     * пришли по другому — эта разница не выручка и не затрата, поэтому идёт
+     * своей строкой.
+     */
+    exchangeGain?: number;
+    exchangeLoss?: number;
+    exchangeNet?: number;
+    exchangeRows?: Array<{
+        documentNumber: string;
+        counterpartyName: string;
+        currency: string;
+        paymentDate: string;
+        closed: number;
+        documentRate: number | null;
+        paymentRate: number | null;
+        outcome: 'GAIN' | 'LOSS' | 'NONE';
+        amount: number;
+    }>;
+    /** Валюты, для которых не нашлось курса: их суммы в отчёт не вошли. */
+    unconvertedCurrencies?: string[];
     netProfit: number;
     marginPercentage: number;
 }
@@ -115,6 +137,14 @@ export default function PnLReportPage() {
                 type: 'detail'
             })),
             { key: 'spacer3', label: '', val: null, type: 'spacer' },
+            // Курсовые разницы показываются обеими сторонами: «ноль» вместо
+            // «выиграли 30 000 и потеряли 30 000» скрывает движение денег.
+            ...((report.exchangeGain || report.exchangeLoss) ? [
+                { key: 'fx', label: '5. Курсовые разницы', val: report.exchangeNet ?? 0, type: 'header_sub' },
+                { key: 'fx_gain', label: '   └ доход от курса', val: report.exchangeGain ?? 0, type: 'detail' },
+                { key: 'fx_loss', label: '   └ расход от курса', val: report.exchangeLoss ?? 0, type: 'detail' },
+                { key: 'spacer4', label: '', val: null, type: 'spacer' },
+            ] : []),
             { key: 'net_profit', label: 'Чистая прибыль', val: report.netProfit, type: 'final_accent' },
             { key: 'margin', label: 'Рентабельность чистой прибыли', val: `${report.marginPercentage}%`, type: 'final_info' }
         ];
@@ -176,7 +206,17 @@ export default function PnLReportPage() {
                     <h1 className="lc2-title">Прибыли и убытки (P&L)</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Заработок по начислению: доход по заявкам − себестоимость перевозок − прочие расходы. Считается по заявкам, а не по факту оплаты.
+                        Все суммы — в тенге: валютные пересчитаны по курсу на дату операции и задним числом не меняются.
                     </p>
+                    {!!report?.unconvertedCurrencies?.length && (
+                        <Alert
+                            type="warning"
+                            showIcon
+                            style={{ marginBottom: 12 }}
+                            message={`Нет курса: ${report.unconvertedCurrencies.join(', ')}`}
+                            description="Суммы в этих валютах в отчёт не вошли — иначе они попали бы в него как тенге. Загрузите курс в разделе «Финансы → Курсы валют», и отчёт пересчитается."
+                        />
+                    )}
                     <Space wrap>
                         <RangePicker
                             value={dates}
@@ -281,6 +321,66 @@ export default function PnLReportPage() {
                             return '';
                         }}
                     />
+
+                    {/* Расшифровка курсовых разниц: по какому курсу выставили
+                        счёт и по какому закрыли долг. Именно это бухгалтер
+                        ищет, когда деньги пришли, а суммы не совпали. */}
+                    {!!report.exchangeRows?.length && (
+                        <div style={{ marginTop: 24 }}>
+                            <h2 style={{ fontWeight: 600, fontSize: 15, marginBottom: 12, color: token.colorText }}>
+                                Откуда взялись курсовые разницы
+                            </h2>
+                            <Table
+                                size="small"
+                                pagination={false}
+                                rowKey={(r: any) => `${r.documentNumber}-${r.paymentDate}-${r.amount}`}
+                                dataSource={report.exchangeRows}
+                                columns={[
+                                    {
+                                        title: 'Счёт', dataIndex: 'documentNumber', key: 'doc',
+                                        render: (v: string, r: any) => (
+                                            <span>
+                                                <span style={{ fontWeight: 600, fontSize: 12.5 }}>{v}</span>
+                                                <span style={{ color: token.colorTextSecondary, fontSize: 12 }}> · {r.counterpartyName}</span>
+                                            </span>
+                                        ),
+                                    },
+                                    {
+                                        title: 'Оплата', dataIndex: 'paymentDate', key: 'date', width: 110,
+                                        render: (v: string) => <span style={{ fontSize: 12 }}>{dayjs(v).format('DD.MM.YYYY')}</span>,
+                                    },
+                                    {
+                                        title: 'Закрыто долга', key: 'closed', width: 140, align: 'right' as const,
+                                        render: (_: any, r: any) => (
+                                            <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                                                {money(r.closed, r.currency)}
+                                            </span>
+                                        ),
+                                    },
+                                    {
+                                        title: 'Курс счёта → курс оплаты', key: 'rates', width: 190, align: 'right' as const,
+                                        render: (_: any, r: any) => (
+                                            <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', color: token.colorTextSecondary }}>
+                                                {r.documentRate?.toLocaleString('ru-RU')} → {r.paymentRate?.toLocaleString('ru-RU')}
+                                            </span>
+                                        ),
+                                    },
+                                    {
+                                        title: 'Разница', key: 'amount', width: 150, align: 'right' as const,
+                                        render: (_: any, r: any) => (
+                                            <span style={{
+                                                fontSize: 12.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+                                                color: r.outcome === 'GAIN' ? token.colorSuccess : token.colorError,
+                                            }}>
+                                                {r.amount > 0 ? '+' : '−'}{formatMoney(Math.abs(r.amount))}
+                                                <span style={{ fontWeight: 400 }}> · {r.outcome === 'GAIN' ? 'доход' : 'расход'}</span>
+                                            </span>
+                                        ),
+                                    },
+                                ]}
+                            />
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div style={{ textAlign: 'center', padding: 40 }}>Отчет недоступен</div>

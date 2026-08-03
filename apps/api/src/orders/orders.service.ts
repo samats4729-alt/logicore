@@ -114,8 +114,10 @@ export class OrdersService {
         companyId?: string | null;
         customerPrice?: number | Prisma.Decimal | null;
         driverCost?: number | Prisma.Decimal | null;
+        subForwarderPrice?: number | Prisma.Decimal | null;
         currency?: string | null;
         driverCostCurrency?: string | null;
+        subForwarderPriceCurrency?: string | null;
         loadingDate?: Date | string | null;
     }) {
         const company = input.companyId
@@ -268,8 +270,10 @@ export class OrdersService {
             companyId: creatorCompanyId,
             customerPrice: data.customerPrice,
             driverCost: data.driverCost,
+            subForwarderPrice: (data as any).subForwarderPrice,
             currency: data.currency,
             driverCostCurrency: data.driverCostCurrency,
+            subForwarderPriceCurrency: (data as any).subForwarderPriceCurrency,
             loadingDate: pickupDate,
         });
 
@@ -303,6 +307,12 @@ export class OrdersService {
                 driverCostCurrency: data.driverCostCurrency || undefined,
                 customerPriceBase: money.customerPriceBase,
                 driverCostBase: money.driverCostBase,
+                // Валюта ставки суб-экспедитора: не указана — валюта заявки.
+                // Запоминаем явно, иначе при смене валюты заявки эта ставка
+                // молча стала бы «столько же, но в другой валюте».
+                subForwarderPriceCurrency: (data as any).subForwarderPriceCurrency
+                    || data.currency || undefined,
+                subForwarderPriceBase: money.subForwarderPriceBase,
                 currencyRateDate: money.currencyRateDate,
                 driverId: data.driverId,
                 assignedDriverName: driverName,
@@ -1073,7 +1083,9 @@ export class OrdersService {
         // чего он зависит: иначе при каждой правке статуса заявка бегала бы
         // за курсом без нужды.
         const moneyChanged = data.customerPrice !== undefined || data.driverCost !== undefined
+            || (data as any).subForwarderPrice !== undefined
             || data.currency !== undefined || data.driverCostCurrency !== undefined
+            || (data as any).subForwarderPriceCurrency !== undefined
             || routePoints !== undefined;
         if (moneyChanged) {
             const pickupDate = routePoints
@@ -1085,12 +1097,25 @@ export class OrdersService {
                 companyId: user?.companyId || (order as any).customerCompanyId,
                 customerPrice: data.customerPrice !== undefined ? data.customerPrice : order.customerPrice,
                 driverCost: data.driverCost !== undefined ? data.driverCost : order.driverCost,
+                subForwarderPrice: (data as any).subForwarderPrice !== undefined
+                    ? (data as any).subForwarderPrice
+                    : (order as any).subForwarderPrice,
                 currency: data.currency ?? (order as any).currency,
                 driverCostCurrency: data.driverCostCurrency ?? (order as any).driverCostCurrency,
+                // Валюта ставки суб-экспедитора берётся сохранённая, а не из
+                // валюты заявки: смена валюты заявки не должна переписывать
+                // договорённость с перевозчиком.
+                subForwarderPriceCurrency: (data as any).subForwarderPriceCurrency
+                    ?? (order as any).subForwarderPriceCurrency
+                    ?? (order as any).currency,
                 loadingDate: pickupDate,
             });
             updateData.customerPriceBase = money.customerPriceBase;
             updateData.driverCostBase = money.driverCostBase;
+            updateData.subForwarderPriceBase = money.subForwarderPriceBase;
+            if ((data as any).subForwarderPriceCurrency !== undefined) {
+                updateData.subForwarderPriceCurrency = (data as any).subForwarderPriceCurrency;
+            }
             updateData.currencyRateDate = money.currencyRateDate;
         }
 

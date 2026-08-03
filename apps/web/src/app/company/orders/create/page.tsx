@@ -681,6 +681,11 @@ export default function CreateOrderPage() {
                 cargoType: values.cargoType,
                 requirements: values.requirements,
                 customerPrice: finalCustomerPrice,
+                // Валюты обеих ставок. Раньше поля в форме были, а в запрос
+                // не попадали: логист выбирал доллары, а заявка сохранялась
+                // тенговой — и расхождение всплывало только в отчётах.
+                currency: values.currency || 'KZT',
+                driverCostCurrency: values.driverCostCurrency || 'KZT',
                 customerPriceType: values.customerPriceType || 'FIXED',
                 customerPaymentDate: values.customerPaymentDate ? values.customerPaymentDate.toISOString() : undefined,
                 driverPaymentDate: values.driverPaymentDate ? values.driverPaymentDate.toISOString() : undefined,
@@ -723,10 +728,14 @@ export default function CreateOrderPage() {
                 if (isMarketplace) {
                     orderData.subForwarderId = selectedMyCompanyId;
                     orderData.subForwarderPrice = finalDriverCost || null;
+                    // Ставка перевозчика ушла в поле суб-экспедитора — валюта
+                    // из того же поля формы идёт следом.
+                    orderData.subForwarderPriceCurrency = values.driverCostCurrency || 'KZT';
                 } else {
                     orderData.forwarderId = selectedMyCompanyId;
                     orderData.subForwarderId = selectedCarrier;
                     orderData.subForwarderPrice = finalDriverCost || null;
+                    orderData.subForwarderPriceCurrency = values.driverCostCurrency || 'KZT';
                 }
             }
 

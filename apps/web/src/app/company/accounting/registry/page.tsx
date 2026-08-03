@@ -14,6 +14,7 @@ import { shortenCompanyName } from '@/lib/company-helper';
 import StatusPill from '@/components/ui/StatusPill';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
+import { money } from '@/lib/money-format';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -38,6 +39,17 @@ interface RegistryOrder {
     completedAt?: string;
     customerPrice?: number;
     customerPriceType?: string;
+    /**
+     * Валюта ставок. Оплаты, долги и маржа ниже — всегда в тенге, поэтому
+     * ставку в валюте нельзя показывать под знаком ₸.
+     */
+    currency?: string;
+    driverCostCurrency?: string;
+    subForwarderPriceCurrency?: string;
+    customerPriceBase?: number | null;
+    driverCostBase?: number | null;
+    subForwarderPriceBase?: number | null;
+    unconvertedCurrencies?: string[];
     isCustomerPaid: boolean;
     customerPaidAt?: string;
     driverCost?: number;
@@ -55,6 +67,8 @@ interface RegistryOrder {
     subForwarder?: { id: string; name: string };
     routePoints?: { pointType: string; sequence: number; location?: { city?: string; address?: string } }[];
     margin: number;
+    /** Затраты исполнителя уже в тенге — их считает сервер по курсу рейса. */
+    executorCost?: number | null;
     customerDebt: number;
     executorDebt: number;
     paidIn: number;
@@ -161,6 +175,16 @@ export default function FinancialRegistryPage() {
         return o.subForwarderId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
     };
 
+    /**
+     * Сумма в тенге: сама сумма для тенге, готовый пересчёт для валюты и
+     * ноль, когда курса не нашлось. Ноль здесь означает «неизвестно» — такую
+     * строку отчёт помечает отдельно, а не показывает как обычную.
+     */
+    const baseOf = (raw: number, currency: string, base?: number | null) => {
+        if ((currency || 'KZT') === 'KZT') return raw;
+        return base ?? 0;
+    };
+
     const isOverdue = (completedAt?: string, isPaid?: boolean) => {
         if (isPaid || !completedAt) return false;
         return dayjs(completedAt).add(5, 'day').isBefore(dayjs());
@@ -198,8 +222,13 @@ export default function FinancialRegistryPage() {
 
     // Totals
     const totals = useMemo(() => {
-        const totalIncome = filtered.reduce((s, o) => s + (o.customerPrice || 0), 0);
-        const totalExpense = filtered.reduce((s, o) => s + getExecutorCost(o), 0);
+        // Итоги — в тенге: валютные ставки берутся пересчитанными по курсу
+        // рейса. Сложить доллары с тенге значит показать число, которого нет.
+        const totalIncome = filtered.reduce(
+            (s, o) => s + baseOf(o.customerPrice || 0, o.currency || 'KZT', o.customerPriceBase), 0,
+        );
+        // Затраты сервер уже привёл к тенге по курсу рейса — берём готовое.
+        const totalExpense = filtered.reduce((s, o) => s + (o.executorCost ?? 0), 0);
         const totalMargin = filtered.reduce((s, o) => s + o.margin, 0);
         const debtorSum = filtered.reduce((s, o) => s + o.customerDebt, 0);
         const creditorSum = filtered.reduce((s, o) => s + o.executorDebt, 0);
@@ -328,8 +357,12 @@ export default function FinancialRegistryPage() {
             title: 'Заказчик / Выручка', key: 'customer', width: 220,
             render: (_: any, r: RegistryOrder) => {
                 const total = r.customerPrice || 0;
+                const currency = r.currency || 'KZT';
+                // Прогресс оплаты считается в тенге: оплаты приходят в тенге,
+                // и делить их на долларовую ставку значит получить 0,2 %.
+                const totalBase = baseOf(total, currency, r.customerPriceBase);
                 const paid = r.paidIn || 0;
-                const percent = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
+                const percent = totalBase > 0 ? Math.min(Math.round((paid / totalBase) * 100), 100) : 0;
                 const name = r.customerCompany?.name || '—';
 
                 return (
@@ -343,8 +376,13 @@ export default function FinancialRegistryPage() {
                                     {shortenCompanyName(name)}
                                 </span>
                             </Tooltip>
-                            <span style={{ fontSize: 12, fontWeight: 600 }}>{fmt(total)} ₸</span>
+                            <span style={{ fontSize: 12, fontWeight: 600 }}>{money(total, currency)}</span>
                         </div>
+                        {currency !== 'KZT' && (
+                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textAlign: 'right' }}>
+                                {totalBase > 0 ? `${fmt(totalBase)} ₸ по курсу рейса` : 'курса нет'}
+                            </div>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? token.colorSuccess : token.colorPrimary} style={{ flex: 1, margin: 0 }} />
                             <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
@@ -357,8 +395,14 @@ export default function FinancialRegistryPage() {
             title: 'Исполнитель / Затраты', key: 'executor', width: 220,
             render: (_: any, r: RegistryOrder) => {
                 const total = getExecutorCost(r);
+                // Ставка суб-экспедитора идёт в валюте заявки, ставка водителя —
+                // в своей.
+                const currency = (r.subForwarderId ? r.subForwarderPriceCurrency : r.driverCostCurrency) || 'KZT';
+                // Пересчёт затрат делает сервер: он знает курс рейса и для
+                // ставки суб-экспедитора, у которой своей колонки нет.
+                const totalBase = currency === 'KZT' ? total : (r.executorCost ?? 0);
                 const paid = r.paidOut || 0;
-                const percent = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
+                const percent = totalBase > 0 ? Math.min(Math.round((paid / totalBase) * 100), 100) : 0;
 
                 const name = r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—');
                 const isSub = !!r.subForwarderId;
@@ -375,8 +419,13 @@ export default function FinancialRegistryPage() {
                                     {isSub && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px', flexShrink: 0 }}>Суб</Tag>}
                                 </span>
                             </Tooltip>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{fmt(total)} ₸</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{money(total, currency)}</span>
                         </div>
+                        {currency !== 'KZT' && (
+                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textAlign: 'right' }}>
+                                {totalBase > 0 ? `${fmt(totalBase)} ₸ по курсу рейса` : 'курса нет'}
+                            </div>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? token.colorSuccess : token.colorPrimary} style={{ flex: 1, margin: 0 }} />
                             <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
@@ -455,7 +504,9 @@ export default function FinancialRegistryPage() {
             title: 'Маржа ₸', key: 'margin', width: 100, align: 'right' as const,
             render: (_: any, r: RegistryOrder) => {
                 const m = r.margin || 0;
-                const revenue = r.customerPrice || 0;
+                // Маржа уже в тенге — и процент считается от тенговой выручки,
+                // иначе по долларовому рейсу получилось бы 23 000 %.
+                const revenue = baseOf(r.customerPrice || 0, r.currency || 'KZT', r.customerPriceBase);
                 const percent = revenue > 0 ? Math.round((m / revenue) * 100) : 0;
                 return (
                     <div style={{ textAlign: 'right' }}>

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Button, DatePicker, Table, Tabs, Space, Spin, Tag, theme } from 'antd';
+import { Alert, Typography, Button, DatePicker, Table, Tabs, Space, Spin, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, FileExcelOutlined, ArrowUpOutlined, ArrowDownOutlined, WalletOutlined, SwapOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import { money as formatCurrency } from '@/lib/money-format';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -33,6 +34,12 @@ interface CashflowReport {
     accounts: Array<{ name: string; in: number; out: number; balance: number }>;
     methods: Array<{ name: string; in: number; out: number; balance: number }>;
     categories: Array<{ name: string; direction: 'IN' | 'OUT'; amount: number }>;
+    /**
+     * Движения по валютным счетам за тот же период — каждое в своей валюте.
+     * В тенговые итоги они не входят: остаток на начало взят по тенговым
+     * счетам, и прибавить к нему долларовый приход значит сломать отчёт.
+     */
+    foreignFlows?: Array<{ currency: string; totalIn: number; totalOut: number; count: number }>;
     flows: FlowItem[];
 }
 
@@ -332,6 +339,29 @@ export default function CashflowReportPage() {
                 </div>
             ) : report ? (
                 <div className="lc-card" style={{ padding: 20 }}>
+                    {!!report.foreignFlows?.length && (
+                        <Alert
+                            type="info"
+                            showIcon
+                            style={{ marginBottom: 16 }}
+                            message="За период были движения в валюте"
+                            description={
+                                <div>
+                                    <div style={{ marginBottom: 6 }}>
+                                        {report.foreignFlows.map((row) => (
+                                            <div key={row.currency} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                                <strong>{row.currency}</strong>: приход {formatCurrency(row.totalIn, row.currency)},
+                                                {' '}расход {formatCurrency(row.totalOut, row.currency)} ({row.count} операц.)
+                                            </div>
+                                        ))}
+                                    </div>
+                                    Отчёт ведётся в тенге, поэтому валютные движения в его итоги не входят: доллары
+                                    и тенге — разные деньги, и остаток по ним считается отдельно. Смотрите их в
+                                    разделе «Остатки по кассам».
+                                </div>
+                            }
+                        />
+                    )}
                     <Tabs defaultActiveKey="flows" items={[
                         {
                             key: 'flows',

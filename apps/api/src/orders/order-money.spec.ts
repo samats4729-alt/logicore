@@ -100,4 +100,64 @@ describe('Деньги заявки в учётной валюте', () => {
         const result = await resolveOrderMoney({ customerPrice: 100, currency: 'usd' }, 'KZT', rateOn);
         expect(Number(result.customerPriceBase)).toBeCloseTo(47359, 2);
     });
+
+    describe('ставка суб-экспедитора', () => {
+        it('пересчитывается по своей валюте, а не по валюте заявки', async () => {
+            // Заявка в долларах, а с перевозчиком договорились в рублях.
+            // Обе суммы должны прийти в тенге по своим курсам.
+            const result = await resolveOrderMoney(
+                {
+                    customerPrice: 1000, currency: 'USD',
+                    subForwarderPrice: 50000, subForwarderPriceCurrency: 'RUB',
+                    loadingDate: '2026-08-03',
+                },
+                'KZT',
+                async (code) => (code === 'USD' ? D('500') : D('6')),
+            );
+
+            expect(Number(result.customerPriceBase)).toBe(500000);
+            expect(Number(result.subForwarderPriceBase)).toBe(300000);
+        });
+
+        it('без своей валюты берёт валюту заявки — как было всегда', async () => {
+            const result = await resolveOrderMoney(
+                { customerPrice: 1000, subForwarderPrice: 800, currency: 'USD', loadingDate: '2026-08-03' },
+                'KZT',
+                async () => D('500'),
+            );
+
+            expect(Number(result.subForwarderPriceBase)).toBe(400000);
+        });
+
+        it('смена валюты заявки не переписывает ставку перевозчика', async () => {
+            // Заявку перевели в доллары, а с перевозчиком по-прежнему тенге.
+            // Его ставка обязана остаться той же суммой в тенге.
+            const result = await resolveOrderMoney(
+                {
+                    customerPrice: 1000, currency: 'USD',
+                    subForwarderPrice: 515228, subForwarderPriceCurrency: 'KZT',
+                    loadingDate: '2026-08-03',
+                },
+                'KZT',
+                async () => D('500'),
+            );
+
+            expect(Number(result.subForwarderPriceBase)).toBe(515228);
+        });
+
+        it('без курса своей валюты ставка остаётся без пересчёта', async () => {
+            const result = await resolveOrderMoney(
+                {
+                    customerPrice: 1000, currency: 'KZT',
+                    subForwarderPrice: 5000, subForwarderPriceCurrency: 'TMT',
+                    loadingDate: '2026-08-03',
+                },
+                'KZT',
+                async () => null,
+            );
+
+            expect(result.subForwarderPriceBase).toBeNull();
+            expect(result.missingRates).toContain('TMT');
+        });
+    });
 });

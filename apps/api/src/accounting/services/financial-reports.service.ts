@@ -15,6 +15,10 @@ import { getPaginationParams } from '../../common/dto/pagination.dto';
 import * as XLSX from 'xlsx';
 import { SharedReportLinkService } from './shared-report-link.service';
 import { kzToday } from '../../common/utils/business-date';
+import { exchangeOutcome, paymentInBase } from './exchange-difference';
+
+/** Учётная валюта: в ней ведутся все итоги отчётов. */
+const BASE_CURRENCY = 'KZT';
 
 @Injectable()
 export class FinancialReportsService {
@@ -410,6 +414,18 @@ export class FinancialReportsService {
                 completedAt: order.completedAt,
                 customerPrice: order.customerPrice,
                 customerPriceType: order.customerPriceType,
+                // Ставки — в валюте заявки, а долги, оплаты и маржа ниже —
+                // всегда в тенге по курсу на дату рейса. Разные колонки в
+                // разных валютах: без этих полей веб показал бы доллары под
+                // знаком ₸.
+                currency: order.currency,
+                driverCostCurrency: order.driverCostCurrency,
+                // Валюта ставки суб-экспедитора своя: заявка может быть в
+                // рублях, а с перевозчиком договорились в тенге.
+                subForwarderPriceCurrency: order.subForwarderPriceCurrency || order.currency,
+                customerPriceBase: toNumOrNull(order.customerPriceBase),
+                driverCostBase: toNumOrNull(order.driverCostBase),
+                subForwarderPriceBase: toNumOrNull(order.subForwarderPriceBase),
                 isCustomerPaid: fin.isCustomerPaid,
                 customerPaidAt: order.customerPaidAt,
                 driverCost: isCustomer ? null : order.driverCost,
@@ -433,6 +449,9 @@ export class FinancialReportsService {
                 paidIn: toNum(fin.paidIn),
                 paidOut: toNum(fin.paidOut),
                 executorCost: isCustomer ? null : fin.executorCost,
+                // Валюта, для которой не нашлось курса: суммы по этой заявке
+                // неполные, и строку нужно пометить, а не показать как обычную.
+                unconvertedCurrencies: fin.unconvertedCurrencies,
             };
 
             if (isCustomer) {
@@ -915,9 +934,11 @@ export class FinancialReportsService {
                                 type: true,
                                 direction: true,
                                 status: true,
+                                currency: true,
                                 total: true,
                                 amountPaid: true,
                                 balanceDue: true,
+                                totalBase: true,
                                 dueDate: true,
                             },
                         },
@@ -933,6 +954,9 @@ export class FinancialReportsService {
 
         const now = new Date();
         const isOverdue = (date: Date | null | undefined, paid: boolean) => !!date && !paid && new Date(date) < now;
+
+        // Валюты, для которых не нашлось курса: такие суммы в долги не входят.
+        const unconvertedCurrencies: string[] = [];
 
         const counterpartyMap = new Map<string, {
             counterparty: { id: string; name: string };
@@ -976,6 +1000,7 @@ export class FinancialReportsService {
                 expenses: order.expenses,
                 companyId,
             });
+            unconvertedCurrencies.push(...fin.unconvertedCurrencies);
 
             // Водитель и машина: приоритет — вручную назначенные поля, иначе из карточки водителя
             const driverName = order.assignedDriverName
@@ -997,9 +1022,14 @@ export class FinancialReportsService {
                         id: doc.id,
                         number: doc.number,
                         status: doc.status,
+                        // Валюта счёта: суммы по нему — в ней, а не в тенге.
+                        // Без этого «1 000» долларового счёта уходило в веб
+                        // и показывалось как тысяча тенге.
+                        currency: doc.currency,
                         total: toNum(doc.total),
                         amountPaid: toNum(doc.amountPaid),
                         balanceDue: toNum(doc.balanceDue),
+                        totalBase: toNumOrNull(doc.totalBase),
                         dueDate: doc.dueDate,
                     }
                     : null;
@@ -1192,6 +1222,11 @@ export class FinancialReportsService {
             balance: money(counterparties.reduce((s, c) => s + c.balance, 0)),
             totalCounterparties: counterparties.length,
             totalOrders: counterparties.reduce((s, c) => s + c.totalOrders, 0),
+            // Все долги приведены к тенге по курсу на дату операции.
+            currency: BASE_CURRENCY,
+            // Валюты, для которых курса не нашлось: их суммы в долги не вошли.
+            // Отчёт должен сказать об этом, а не тихо занизить долг.
+            unconvertedCurrencies: [...new Set(unconvertedCurrencies)].sort(),
         };
 
         return { counterparties, totals };
@@ -1386,12 +1421,21 @@ export class FinancialReportsService {
                 invoiceNumber: p.order ? invoiceByOrder.get(p.order.id) ?? null : null,
                 actNumber: p.order ? actByOrder.get(p.order.id) ?? null : null,
             };
+            // Суммы акта — в тенге, как и начисления по заявкам. Валютный
+            // платёж берётся по своему зафиксированному курсу: иначе тысяча
+            // долларов встала бы против начисления в полмиллиона тенге как
+            // тысяча, и акт сверки — самый официальный документ из всех — не
+            // сошёлся бы ни с одной стороной.
+            const amount = toNum(paymentInBase(p));
+            const currencyNote = (p.currency || BASE_CURRENCY) !== BASE_CURRENCY
+                ? ` (${toNum(p.amount).toLocaleString('ru-RU')} ${p.currency}${p.exchangeRate ? ` по курсу ${toNum(p.exchangeRate)}` : ''})`
+                : '';
             if (p.direction === PaymentDirection.IN) {
                 // Контрагент оплатил нам — уменьшает его долг — кредит
-                ops.push({ date: p.date, doc, description: 'Поступление оплаты', debit: 0, credit: toNum(p.amount), ...paymentDetails });
+                ops.push({ date: p.date, doc, description: `Поступление оплаты${currencyNote}`, debit: 0, credit: amount, ...paymentDetails });
             } else {
                 // Мы оплатили контрагенту — уменьшает наш долг — дебет
-                ops.push({ date: p.date, doc, description: 'Оплата контрагенту', debit: toNum(p.amount), credit: 0, ...paymentDetails });
+                ops.push({ date: p.date, doc, description: `Оплата контрагенту${currencyNote}`, debit: amount, credit: 0, ...paymentDetails });
             }
         }
 
@@ -1983,11 +2027,13 @@ export class FinancialReportsService {
                     }
                 })
             },
-            select: { direction: true, amount: true },
+            select: { direction: true, amount: true, currency: true, amountBase: true },
         });
 
-        const cashIn = sumOf(payments.filter(p => p.direction === PaymentDirection.IN), (p) => p.amount);
-        const cashOut = sumOf(payments.filter(p => p.direction === PaymentDirection.OUT), (p) => p.amount);
+        // Дашборд считает в тенге: валютный платёж берётся по своему
+        // зафиксированному курсу, а не как есть.
+        const cashIn = sumOf(payments.filter(p => p.direction === PaymentDirection.IN), paymentInBase);
+        const cashOut = sumOf(payments.filter(p => p.direction === PaymentDirection.OUT), paymentInBase);
 
         const manualIncomes = await this.prisma.income.findMany({
             where: {
@@ -2082,6 +2128,24 @@ export class FinancialReportsService {
             orderBy: { date: 'desc' },
         });
 
+        // Движение денег ведётся в тенге: остаток на начало взят по тенговым
+        // счетам, и прибавить к нему долларовый приход нельзя — отчёт
+        // перестанет сходиться сам с собой. Валютные движения показываются
+        // отдельным списком, каждая валюта сама по себе.
+        const foreignMap = new Map<string, { currency: string; totalIn: number; totalOut: number; count: number }>();
+        for (const payment of payments) {
+            const currency = (payment.currency || BASE_CURRENCY).toUpperCase();
+            if (currency === BASE_CURRENCY) continue;
+            if (!foreignMap.has(currency)) {
+                foreignMap.set(currency, { currency, totalIn: 0, totalOut: 0, count: 0 });
+            }
+            const row = foreignMap.get(currency)!;
+            row.count += 1;
+            if (payment.direction === PaymentDirection.IN) row.totalIn = money(row.totalIn + toNum(payment.amount));
+            else row.totalOut = money(row.totalOut + toNum(payment.amount));
+        }
+        const foreignFlows = Array.from(foreignMap.values());
+
         const incomes = await this.prisma.income.findMany({
             where: { companyId, isDeleted: false, ...dateFilter },
             orderBy: { date: 'desc' },
@@ -2105,7 +2169,7 @@ export class FinancialReportsService {
             source: 'payment' | 'income' | 'expense';
         }> = [];
 
-        payments.forEach(p => {
+        payments.filter(p => (p.currency || BASE_CURRENCY).toUpperCase() === BASE_CURRENCY).forEach(p => {
             flowItems.push({
                 id: p.id,
                 date: p.date,
@@ -2245,10 +2309,99 @@ export class FinancialReportsService {
             accounts,
             methods,
             categories,
+            // Валютные движения за тот же период — каждое в своей валюте.
+            // В тенговые итоги они не входят намеренно.
+            foreignFlows,
             flows: flowItems.map(item => ({
                 ...item,
                 date: item.date.toISOString(),
             })),
+        };
+    }
+
+    /**
+     * Курсовые разницы за период.
+     *
+     * Счёт выставили на 1 000 USD по курсу 470 — записали выручку 470 000 ₸.
+     * Деньги пришли по 500 — на счёт легло 500 000 ₸. Разница в 30 000 ₸ не
+     * выручка и не ошибка: это курсовая разница, и в отчёте она обязана
+     * стоять отдельной строкой. Смешать её с выручкой значит показать
+     * прибыль, которой не было; выбросить — не сойтись с банком.
+     *
+     * Знак зависит от того, чей счёт. По нашему счёту лишние тенге — доход:
+     * получили больше, чем записали. По счёту поставщика те же лишние тенге —
+     * расход: отдали больше, чем записали затратой.
+     *
+     * Период считается по дате платежа: разница возникает в тот день, когда
+     * пришли деньги, а не когда выставили счёт.
+     */
+    async getExchangeDifferences(companyId: string, period: { start: Date | null; end: Date | null }) {
+        const allocations = await this.prisma.accountingPaymentAllocation.findMany({
+            where: {
+                document: { companyId },
+                exchangeDiff: { not: 0 },
+                payment: {
+                    isDeleted: false,
+                    ...(period.start && period.end
+                        ? { date: { gte: period.start, lte: period.end } }
+                        : {}),
+                },
+            },
+            select: {
+                amount: true,
+                amountBase: true,
+                exchangeDiff: true,
+                document: {
+                    select: {
+                        id: true, number: true, direction: true, currency: true,
+                        exchangeRate: true, counterparty: { select: { name: true } },
+                    },
+                },
+                payment: { select: { id: true, date: true, currency: true, exchangeRate: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 500,
+        });
+
+        let gain = ZERO;
+        let loss = ZERO;
+        const rows = allocations.map((row) => {
+            const { outcome, amount } = exchangeOutcome(
+                row.exchangeDiff ?? 0,
+                row.document.direction as 'OUTGOING' | 'INCOMING',
+            );
+            if (outcome === 'GAIN') gain = gain.plus(amount);
+            if (outcome === 'LOSS') loss = loss.plus(amount.abs());
+
+            return {
+                documentId: row.document.id,
+                documentNumber: row.document.number,
+                direction: row.document.direction,
+                counterpartyName: row.document.counterparty?.name ?? '—',
+                currency: row.document.currency,
+                paymentDate: row.payment.date,
+                closed: toNum(row.amount),
+                documentRate: toNumOrNull(row.document.exchangeRate),
+                // Курс, по которому долг закрыли, а не курс самого платежа.
+                // Разница видна, когда долларовый счёт гасят тенге: у платежа
+                // курс 1 (тенге к тенге), и показывать его рядом с курсом
+                // счёта 470 бессмысленно. Считаем от факта: сколько тенге
+                // ушло на сколько валюты долга.
+                paymentRate: row.amountBase !== null && D(row.amount).gt(ZERO)
+                    ? toNum(D(row.amountBase).div(D(row.amount)).toDecimalPlaces(6))
+                    : toNumOrNull(row.payment.exchangeRate),
+                amountBase: toNumOrNull(row.amountBase),
+                outcome,
+                amount: toNum(amount),
+            };
+        });
+
+        return {
+            gain: toNum(roundMoney(gain)),
+            loss: toNum(roundMoney(loss)),
+            // Итог: «+» — заработали на курсе, «−» — потеряли.
+            net: toNum(roundMoney(gain.minus(loss))),
+            rows,
         };
     }
 
@@ -2293,6 +2446,7 @@ export class FinancialReportsService {
 
         let totalRevenueNet = 0;
         let totalExecutorCostNet = 0;
+        const unconvertedCurrencies: string[] = [];
 
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
@@ -2305,6 +2459,7 @@ export class FinancialReportsService {
 
             totalRevenueNet = money(totalRevenueNet + toNum(fin.revenueNet));
             totalExecutorCostNet = money(totalExecutorCostNet + toNum(fin.executorCostNet));
+            unconvertedCurrencies.push(...fin.unconvertedCurrencies);
         }
 
         totalRevenueNet = money(totalRevenueNet);
@@ -2364,8 +2519,18 @@ export class FinancialReportsService {
         const totalOtherIncomes = money(otherIncomes.reduce((s, i) => s + i.amount, 0));
         const totalOtherExpenses = money(otherExpenses.reduce((s, e) => s + e.amount, 0));
 
+        // Курсовые разницы — отдельная строка, не выручка и не затрата.
+        // Заработали на курсе или потеряли, видно прямо: если размазать это
+        // по выручке, отчёт покажет прибыль, которой не было.
+        const exchange = await this.getExchangeDifferences(companyId, { start, end });
+
+        // Валюты, для которых не нашлось курса. Их суммы в расчёт не вошли
+        // вовсе — лучше отчёт с честной пометкой, чем доллары, посчитанные
+        // тенге. Отчёт обязан сказать об этом, а не молчать.
+        const unconverted = [...new Set(unconvertedCurrencies)].sort();
+
         const grossProfit = money(totalRevenueNet - totalExecutorCostNet);
-        const netProfit = money(grossProfit + totalOtherIncomes - totalOtherExpenses);
+        const netProfit = money(grossProfit + totalOtherIncomes - totalOtherExpenses + exchange.net);
         const marginPercentage = totalRevenueNet > 0 ? money((netProfit / totalRevenueNet) * 100) : 0;
 
         return {
@@ -2376,8 +2541,16 @@ export class FinancialReportsService {
             otherExpenses,
             totalOtherIncomes,
             totalOtherExpenses,
+            exchangeGain: exchange.gain,
+            exchangeLoss: exchange.loss,
+            exchangeNet: exchange.net,
+            exchangeRows: exchange.rows,
+            unconvertedCurrencies: unconverted,
             netProfit,
             marginPercentage,
+            // Все суммы отчёта — в тенге. Валютные пересчитаны по курсу,
+            // зафиксированному на дату операции, и задним числом не меняются.
+            currency: BASE_CURRENCY,
         };
     }
 
@@ -2422,7 +2595,14 @@ export class FinancialReportsService {
                 'Груз': item.cargoDescription || '',
                 'Маршрут': route,
                 'Заказчик': item.customerCompany?.name || '',
-                'Стоимость для заказчика (KZT)': item.customerPrice || 0,
+                // Ставка — в валюте заявки, рядом её пересчёт в тенге по курсу
+                // рейса. Одной колонкой «(KZT)» тут не обойтись: подписать
+                // доллары тенге значит отдать бухгалтеру неверную выгрузку.
+                'Валюта заявки': item.currency || 'KZT',
+                'Стоимость для заказчика (валюта заявки)': item.customerPrice || 0,
+                'Стоимость для заказчика (KZT)': (item.currency || 'KZT') === 'KZT'
+                    ? (item.customerPrice || 0)
+                    : (item.customerPriceBase ?? 0),
                 'Оплачено заказчиком (KZT)': item.paidIn || 0,
                 'Долг заказчика (KZT)': item.customerDebt || 0,
                 'Статус оплаты заказчика': item.isCustomerPaid ? 'Оплачено' : 'Не оплачено',
@@ -2504,6 +2684,21 @@ export class FinancialReportsService {
             'Примечание': item.note,
         }));
 
+        // Валютные движения в тенговый лист не попали — но бухгалтер должен
+        // узнать об этом из самой выгрузки, а не заметить нехватку потом.
+        for (const foreign of report.foreignFlows) {
+            rows.push({
+                'Дата': '',
+                'Направление': 'Справочно',
+                'Сумма (₸)': 0,
+                'Способ оплаты': '',
+                'Счет / Касса': `Валютные счета (${foreign.currency})`,
+                'Статья': '',
+                'Контрагент': '',
+                'Примечание': `За период в ${foreign.currency}: приход ${foreign.totalIn}, расход ${foreign.totalOut}. В тенговые итоги не входят.`,
+            });
+        }
+
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(rows);
 
@@ -2534,8 +2729,24 @@ export class FinancialReportsService {
             ...report.otherExpenses.map(e => ({ 'Показатель': `Прочие расходы: ${e.name}`, 'Сумма (₸)': e.amount })),
             { 'Показатель': 'Всего прочих расходов', 'Сумма (₸)': report.totalOtherExpenses },
             { 'Показатель': '—', 'Сумма (₸)': '—' },
+            // Курсовые разницы — отдельными строками, обеими сторонами.
+            // В выгрузке они нужны так же, как на экране: бухгалтер сверяет
+            // именно их, когда деньги пришли, а суммы не совпали.
+            ...(report.exchangeGain || report.exchangeLoss ? [
+                { 'Показатель': 'Курсовые разницы: доход', 'Сумма (₸)': report.exchangeGain },
+                { 'Показатель': 'Курсовые разницы: расход', 'Сумма (₸)': report.exchangeLoss },
+                { 'Показатель': 'Курсовые разницы, итого', 'Сумма (₸)': report.exchangeNet },
+                { 'Показатель': '—', 'Сумма (₸)': '—' },
+            ] : []),
             { 'Показатель': 'Чистая прибыль (Net Profit)', 'Сумма (₸)': report.netProfit },
-            { 'Показатель': 'Рентабельность (%)', 'Сумма (₸)': `${report.marginPercentage}%` }
+            { 'Показатель': 'Рентабельность (%)', 'Сумма (₸)': `${report.marginPercentage}%` },
+            ...(report.unconvertedCurrencies.length ? [
+                { 'Показатель': '—', 'Сумма (₸)': '—' },
+                {
+                    'Показатель': `ВНИМАНИЕ: нет курса ${report.unconvertedCurrencies.join(', ')} — суммы в этих валютах в отчёт не вошли`,
+                    'Сумма (₸)': '—',
+                },
+            ] : []),
         ];
 
         const wb = XLSX.utils.book_new();

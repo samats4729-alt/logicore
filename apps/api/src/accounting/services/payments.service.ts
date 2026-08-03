@@ -7,21 +7,10 @@ import { PaymentDirection, PaymentMethod, AccountKind, Payment, Prisma } from '@
 import { D, Money, ZERO, roundMoney, sumOf, toNum } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
 import { CurrencyService } from '../../currency/currency.service';
+import { paymentInBase } from './exchange-difference';
 
 /** Учётная валюта: в ней ведутся отчёты и итоги по компании. */
 const BASE_CURRENCY = 'KZT';
-
-/**
- * Сумма платежа в тенге.
- *
- * Тенговый платёж — сам себе пересчёт. Валютный считается только если курс
- * на дату платежа был известен: без него платёж в тенговых сравнениях не
- * участвует вовсе, иначе доллары молча сложились бы с тенге.
- */
-function paymentBase(payment: { amount: Prisma.Decimal; currency: string; amountBase: Prisma.Decimal | null }): Money {
-    if (payment.amountBase !== null && payment.amountBase !== undefined) return D(payment.amountBase);
-    return (payment.currency || BASE_CURRENCY) === BASE_CURRENCY ? D(payment.amount) : ZERO;
-}
 
 /**
  * Сумма заявки в тенге: готовый пересчёт, если он есть, сама сумма для
@@ -799,7 +788,7 @@ export class PaymentsService {
         // пришла треть суммы. Всё, что в тенге не пересчитано (нет курса), в
         // сравнении не участвует: лучше «не оплачено» до появления курса, чем
         // ложная галочка «оплачено».
-        const paidIn = sumOf(customerPayments, (p) => paymentBase(p));
+        const paidIn = sumOf(customerPayments, (p) => paymentInBase(p));
         const revenue = orderAmountBase(order.customerPriceBase, order.currency, order.customerPrice);
         const isCustomerPaid = !!revenue && revenue.gt(0) && paidIn.gte(revenue);
         const customerPaidBecameTrue = !order.isCustomerPaid && isCustomerPaid;
@@ -813,7 +802,7 @@ export class PaymentsService {
                 ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
             },
         });
-        const paidOut = sumOf(executorPayments, (p) => paymentBase(p));
+        const paidOut = sumOf(executorPayments, (p) => paymentInBase(p));
 
         let isDriverPaid = false;
         let driverPaidAt = null;
@@ -874,6 +863,43 @@ export class PaymentsService {
         }
     }
 
+
+    /**
+     * Остаток к оплате по заявке — в валюте самой заявки.
+     *
+     * Кнопка «Оплачено» дозакрывает остаток одним платежом. Пока всё было в
+     * тенге, остаток считался вычитанием: ставка минус оплаченное. С валютами
+     * так нельзя — оплаты могут быть и в тенге, и в валюте, и просто вычесть
+     * одно из другого значит сложить доллары с тенге.
+     *
+     * Поэтому вычитание идёт в тенге (там сходится всё), а результат
+     * возвращается в валюту заявки по её же зафиксированному курсу — тому,
+     * по которому долг и был записан. Сегодняшний курс тут не годится: он
+     * менял бы сумму остатка каждый день.
+     */
+    private remainingForOrder(
+        amount: Prisma.Decimal | null,
+        amountBase: Prisma.Decimal | null,
+        currency: string | null,
+        payments: Array<{ amount: Prisma.Decimal; currency: string; amountBase: Prisma.Decimal | null }>,
+    ): { amount: Money; currency: string } | null {
+        const code = (currency || BASE_CURRENCY).toUpperCase();
+        const paidBase = sumOf(payments, (p) => paymentInBase(p));
+
+        if (code === BASE_CURRENCY) {
+            return { amount: roundMoney(D(amount).minus(paidBase)), currency: BASE_CURRENCY };
+        }
+
+        // Валютная ставка без пересчёта — остаток посчитать не из чего.
+        // Молча взять сумму как есть нельзя: это выдало бы доллары за тенге.
+        if (amountBase === null || amountBase === undefined || D(amount).lte(ZERO)) return null;
+
+        const restBase = roundMoney(D(amountBase).minus(paidBase));
+        const rate = D(amountBase).div(D(amount));
+        if (rate.lte(ZERO)) return null;
+        return { amount: roundMoney(restBase.div(rate)), currency: code };
+    }
+
     async markCustomerPaid(companyId: string, orderId: string, paid: boolean, userId: string, date?: string) {
         const order = await this.prisma.order.findFirst({
             where: {
@@ -891,14 +917,21 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.IN, isDeleted: false, companyId }
             });
-            const paidIn = sumOf(payments, (p) => p.amount);
-            const balance = roundMoney(D(order.customerPrice).minus(paidIn));
-            if (balance.gt(0)) {
+            const rest = this.remainingForOrder(
+                order.customerPrice, order.customerPriceBase, order.currency, payments,
+            );
+            if (!rest) {
+                throw new BadRequestException(
+                    `Ставка в ${order.currency}, а курса на дату рейса нет — остаток посчитать не из чего. Загрузите курс в разделе «Финансы → Курсы валют»`,
+                );
+            }
+            if (rest.amount.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     counterpartyId: order.customerCompanyId || undefined,
                     direction: PaymentDirection.IN,
-                    amount: toNum(balance),
+                    amount: toNum(rest.amount),
+                    currency: rest.currency,
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_CUSTOMER,
                 });
@@ -952,13 +985,20 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
             });
-            const paidOut = sumOf(payments, (p) => p.amount);
-            const balance = roundMoney(D(order.driverCost).minus(paidOut));
-            if (balance.gt(0)) {
+            const rest = this.remainingForOrder(
+                order.driverCost, order.driverCostBase, order.driverCostCurrency, payments,
+            );
+            if (!rest) {
+                throw new BadRequestException(
+                    `Ставка водителя в ${order.driverCostCurrency}, а курса на дату рейса нет — остаток посчитать не из чего. Загрузите курс в разделе «Финансы → Курсы валют»`,
+                );
+            }
+            if (rest.amount.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     direction: PaymentDirection.OUT,
-                    amount: toNum(balance),
+                    amount: toNum(rest.amount),
+                    currency: rest.currency,
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_DRIVER,
                 });
@@ -1008,14 +1048,24 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
             });
-            const paidOut = sumOf(payments, (p) => p.amount);
-            const balance = roundMoney(D(order.subForwarderPrice).minus(paidOut));
-            if (balance.gt(0)) {
+            const rest = this.remainingForOrder(
+                order.subForwarderPrice,
+                sameCurrencyBase(order.subForwarderPrice, order.currency, order.customerPrice, order.customerPriceBase),
+                order.currency,
+                payments,
+            );
+            if (!rest) {
+                throw new BadRequestException(
+                    `Ставка суб-экспедитора в ${order.currency}, а курса на дату рейса нет — остаток посчитать не из чего. Загрузите курс в разделе «Финансы → Курсы валют»`,
+                );
+            }
+            if (rest.amount.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     counterpartyId: order.subForwarderId || undefined,
                     direction: PaymentDirection.OUT,
-                    amount: toNum(balance),
+                    amount: toNum(rest.amount),
+                    currency: rest.currency,
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_SUBFORWARDER,
                 });

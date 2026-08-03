@@ -179,6 +179,15 @@ export class CreateOrderDto {
     @Length(3, 3)
     driverCostCurrency?: string;
 
+    @ApiProperty({
+        required: false, example: 'KZT',
+        description: 'Валюта ставки суб-экспедитора. Не указана — берётся валюта заявки.',
+    })
+    @IsString()
+    @IsOptional()
+    @Length(3, 3)
+    subForwarderPriceCurrency?: string;
+
 
     @ApiProperty({ required: false, description: 'ID водителя для назначения' })
     @IsString()

@@ -126,6 +126,25 @@ export function settleAllocation(input: SettlementInput): Settlement {
     };
 }
 
+/**
+ * Сумма платежа в учётной валюте.
+ *
+ * Тенговый платёж — сам себе пересчёт. Валютный берётся по курсу, который
+ * записан в нём самом. Если курса нет, платёж НЕ берётся как есть: тысяча
+ * долларов, посчитанная тысячей тенге, — ошибка, которую в отчёте не видно.
+ * Такой платёж не участвует в тенговых суммах вовсе.
+ */
+export function paymentInBase(payment: {
+    amount: Prisma.Decimal | string | number;
+    currency?: string | null;
+    amountBase?: Prisma.Decimal | string | number | null;
+}): Prisma.Decimal {
+    const currency = (payment.currency || BASE_CURRENCY).toUpperCase();
+    if (currency === BASE_CURRENCY) return D(payment.amount);
+    if (payment.amountBase !== null && payment.amountBase !== undefined) return D(payment.amountBase);
+    return ZERO;
+}
+
 /** Чем обернулась курсовая разница для компании. */
 export type ExchangeOutcome = 'GAIN' | 'LOSS' | 'NONE';
 

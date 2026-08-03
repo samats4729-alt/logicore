@@ -21,10 +21,16 @@ import { Prisma } from '@prisma/client';
 export interface OrderMoneyInput {
     customerPrice?: Prisma.Decimal | number | null;
     driverCost?: Prisma.Decimal | number | null;
+    subForwarderPrice?: Prisma.Decimal | number | null;
     /** Валюта тарифа клиента. */
     currency?: string | null;
     /** Валюта тарифа перевозчика. */
     driverCostCurrency?: string | null;
+    /**
+     * Валюта ставки суб-экспедитора. Не указана — тарифом считается валюта
+     * клиента: так было всегда, пока валюта у заявки была одна.
+     */
+    subForwarderPriceCurrency?: string | null;
     /** Дата погрузки, если известна. */
     loadingDate?: Date | string | null;
 }
@@ -32,6 +38,7 @@ export interface OrderMoneyInput {
 export interface OrderMoneyResult {
     customerPriceBase: Prisma.Decimal | null;
     driverCostBase: Prisma.Decimal | null;
+    subForwarderPriceBase: Prisma.Decimal | null;
     currencyRateDate: Date | null;
     /** Валюты, по которым курса не нашлось: суммы остались без пересчёта. */
     missingRates: string[];
@@ -64,6 +71,10 @@ export async function resolveOrderMoney(
 
     const customerCurrency = (input.currency || baseCurrency).toUpperCase();
     const carrierCurrency = (input.driverCostCurrency || baseCurrency).toUpperCase();
+    // Ставка суб-экспедитора раньше не имела своей валюты и молча следовала
+    // за валютой заявки. Стоило поменять валюту заявки — и ставка перевозчика
+    // становилась «столько же, но в долларах», хотя её никто не трогал.
+    const subForwarderCurrency = (input.subForwarderPriceCurrency || input.currency || baseCurrency).toUpperCase();
 
     const missingRates: string[] = [];
 
@@ -85,11 +96,15 @@ export async function resolveOrderMoney(
 
     const customerPrice = asDecimal(input.customerPrice);
     const driverCost = asDecimal(input.driverCost);
+    const subForwarderPrice = asDecimal(input.subForwarderPrice);
 
     return {
         customerPriceBase: await convert(customerPrice, customerCurrency),
         driverCostBase: await convert(driverCost, carrierCurrency),
-        currencyRateDate: customerPrice !== null || driverCost !== null ? rateDate : null,
+        subForwarderPriceBase: await convert(subForwarderPrice, subForwarderCurrency),
+        currencyRateDate: customerPrice !== null || driverCost !== null || subForwarderPrice !== null
+            ? rateDate
+            : null,
         missingRates,
     };
 }
