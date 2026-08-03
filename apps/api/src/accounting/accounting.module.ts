@@ -11,9 +11,10 @@ import { FinancialReportsService } from './services/financial-reports.service';
 import { SharedReportLinkService } from './services/shared-report-link.service';
 import { EmailModule } from '../email/email.module';
 import { PayrollModule } from '../payroll/payroll.module';
+import { CurrencyModule } from '../currency/currency.module';
 
 @Module({
-    imports: [PaymentAllocationModule, EmailModule, forwardRef(() => PayrollModule)],
+    imports: [PaymentAllocationModule, EmailModule, CurrencyModule, forwardRef(() => PayrollModule)],
     controllers: [AccountingController, PublicAccountingController],
     providers: [
         AccountingService,

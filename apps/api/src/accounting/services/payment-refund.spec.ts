@@ -36,6 +36,8 @@ function buildService(payment: any) {
     };
     const prisma: any = {
         payment: { findFirst: jest.fn().mockResolvedValue(payment) },
+        // Счёт возврата — тенговый: возврат уходит той же валютой, что пришёл.
+        financeAccount: { findFirst: jest.fn().mockResolvedValue({ name: 'Расчетный счет', currency: 'KZT' }) },
         $transaction: jest.fn(async (fn: any) => fn(tx)),
     };
     const periodClosing = { checkPeriodNotClosed: jest.fn().mockResolvedValue(undefined) };
@@ -47,6 +49,7 @@ function buildService(payment: any) {
         { ensureCompanyFinanceSettings: jest.fn() } as any,
         { recalcForPayment: jest.fn() } as any,
         allocations as any,
+        { toBase: jest.fn().mockResolvedValue(null) } as any,
     );
     // Пересчёт флагов заявки проверяется отдельно в payments.service.spec
     (service as any).syncOrderPaymentFlagsWithin = jest.fn().mockResolvedValue(false);
@@ -179,6 +182,7 @@ describe('PaymentsService — возврат платежа', () => {
                 { ensureCompanyFinanceSettings: jest.fn() } as any,
                 { recalcForPayment: jest.fn() } as any,
                 { reduce: jest.fn(), release: jest.fn() } as any,
+                { toBase: jest.fn().mockResolvedValue(null) } as any,
             );
             return { service, prisma };
         };

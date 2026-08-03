@@ -58,7 +58,8 @@ export default function CurrencySelect({
     value?: string;
     onChange?: (value: string) => void;
     disabled?: boolean;
-    width?: number;
+    /** Число — ширина в пикселях, '100%' — во всю ширину поля формы. */
+    width?: number | string;
 }) {
     const currencies = useCurrencies();
 

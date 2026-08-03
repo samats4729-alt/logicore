@@ -357,6 +357,14 @@ export class SuggestAllocationQueryDto {
 
     @Matches(MONEY)
     amount!: string;
+
+    /**
+     * Валюта платежа. Подсказка гасит только счета в этой же валюте:
+     * долларовым платежом нельзя «на глаз» закрыть тенговый счёт.
+     */
+    @IsOptional()
+    @IsString()
+    currency?: string;
 }
 
 export class AllocationItemDto {

@@ -10,6 +10,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { Response } from 'express';
 import {
+    CreateFinanceAccountDto,
     CreateManualEntryDto,
     CreatePaymentDto,
     JournalQueryDto,
@@ -480,6 +481,25 @@ export class AccountingController {
         return this.accountingService.upsertCounterpartyOpening(req.user.companyId, counterpartyId, body);
     }
 
+    @Post('finance-accounts')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Завести счёт или кассу',
+        description: 'В том числе валютную: один счёт — одна валюта.',
+    })
+    async createFinanceAccount(
+        @Request() req: any,
+        @Body() body: CreateFinanceAccountDto,
+    ) {
+        const created = await this.accountingService.createFinanceAccount(req.user.companyId, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'finance_account',
+            entityId: (created as any)?.id, entityLabel: `${body.name} (${body.currency || 'KZT'})`,
+            details: { kind: body.kind, currency: body.currency || 'KZT' },
+        });
+        return created;
+    }
+
     @Put('finance-accounts/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async updateFinanceAccount(
@@ -487,6 +507,7 @@ export class AccountingController {
         @Param('id') id: string,
         @Body() body: {
             name?: string;
+            currency?: string;
             openingBalance?: number;
             openingDate?: string | null;
             iban?: string | null;

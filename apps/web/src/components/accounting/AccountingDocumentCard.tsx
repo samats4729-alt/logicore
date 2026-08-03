@@ -923,6 +923,73 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     </div>
                 </div>
 
+                {/* Чем закрыт счёт. Здесь же курсовая разница: счёт выставили
+                    по одному курсу, деньги пришли по другому, и расхождение в
+                    тенге обязано быть названо. Без этой строки бухгалтер видит
+                    «оплачено полностью», а в банке лежит другая сумма. */}
+                {(document.paymentAllocations?.length ?? 0) > 0 && (
+                    <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary, marginBottom: 8 }}>
+                            Оплаты по счёту
+                        </div>
+                        {document.paymentAllocations!.map((allocation) => {
+                            const diff = allocation.exchangeDiff ?? 0;
+                            // По нашему счёту лишние тенге — доход, по счёту
+                            // поставщика те же лишние тенге — расход.
+                            const gain = document.direction === 'OUTGOING' ? diff > 0 : diff < 0;
+                            return (
+                                <div
+                                    key={allocation.id}
+                                    style={{
+                                        display: 'flex', justifyContent: 'space-between', gap: 16,
+                                        fontSize: 12.5, padding: '5px 0',
+                                        borderBottom: `1px dashed ${token.colorBorderSecondary}`,
+                                    }}
+                                >
+                                    <span>
+                                        {dayjs(allocation.payment.date).format('DD.MM.YYYY')}
+                                        {allocation.payment.currency !== document.currency && (
+                                            <span style={{ color: token.colorTextTertiary }}>
+                                                {' '}· пришло {money(allocation.payment.amount, allocation.payment.currency)}
+                                            </span>
+                                        )}
+                                        {allocation.payment.note && (
+                                            <span style={{ color: token.colorTextTertiary }}> · {allocation.payment.note}</span>
+                                        )}
+                                    </span>
+                                    <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                            {money(allocation.amount, document.currency)}
+                                        </span>
+                                        {allocation.amountBase != null && document.currency !== 'KZT' && (
+                                            <span style={{ color: token.colorTextTertiary }}>
+                                                {' '}({money(allocation.amountBase)})
+                                            </span>
+                                        )}
+                                        {diff !== 0 && (
+                                            <div style={{ fontSize: 11, color: gain ? token.colorSuccess : token.colorError }}>
+                                                Курсовая разница: {diff > 0 ? '+' : '−'}{money(Math.abs(diff))}
+                                                {' '}— {gain ? 'доход' : 'расход'}
+                                            </div>
+                                        )}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        {(() => {
+                            const total = document.paymentAllocations!.reduce((sum, a) => sum + (a.exchangeDiff ?? 0), 0);
+                            if (total === 0) return null;
+                            const gain = document.direction === 'OUTGOING' ? total > 0 : total < 0;
+                            return (
+                                <div style={{ fontSize: 12, marginTop: 8, color: gain ? token.colorSuccess : token.colorError }}>
+                                    Итого курсовая разница: {total > 0 ? '+' : '−'}{money(Math.abs(total))}
+                                    {' '}— {gain ? 'доход' : 'расход'} по этому счёту
+                                </div>
+                            );
+                        })()}
+                    </div>
+                )}
+
                 <div
                     style={{
                         marginTop: 16,

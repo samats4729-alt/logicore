@@ -99,6 +99,25 @@ const DOCUMENT_INCLUDE = {
  */
 const CARD_DOCUMENT_INCLUDE = {
     ...DOCUMENT_INCLUDE,
+    // Чем закрыт счёт. В карточке это единственное место, где видно курсовую
+    // разницу: счёт выставили по одному курсу, деньги пришли по другому, и
+    // расхождение в тенге должно быть названо, а не спрятано.
+    paymentAllocations: {
+        orderBy: { createdAt: 'asc' as const },
+        select: {
+            id: true,
+            amount: true,
+            amountBase: true,
+            exchangeDiff: true,
+            createdAt: true,
+            payment: {
+                select: {
+                    id: true, date: true, amount: true, currency: true,
+                    exchangeRate: true, method: true, note: true,
+                },
+            },
+        },
+    },
     orders: {
         include: {
             order: {

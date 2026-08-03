@@ -131,6 +131,33 @@ export interface AccountingDocumentDetails extends AccountingDocumentListItem {
     createdBy?: { id: string; firstName: string | null; lastName: string | null };
     postedBy?: { id: string; firstName: string | null; lastName: string | null } | null;
     cancelledBy?: { id: string; firstName: string | null; lastName: string | null } | null;
+    /** Чем закрыт счёт: платежи и курсовая разница по каждому из них. */
+    paymentAllocations?: DocumentPaymentAllocation[];
+}
+
+/**
+ * Оплата счёта одним платежом.
+ *
+ * `amount` — сколько долга закрыто, в валюте счёта. `amountBase` — сколько на
+ * это ушло тенге. `exchangeDiff` — разница между этими тенге и теми, что были
+ * записаны в счёте при проведении: счёт выставили по одному курсу, деньги
+ * пришли по другому.
+ */
+export interface DocumentPaymentAllocation {
+    id: string;
+    amount: number;
+    amountBase: number | null;
+    exchangeDiff: number | null;
+    createdAt: string;
+    payment: {
+        id: string;
+        date: string;
+        amount: number;
+        currency: string;
+        exchangeRate: number | null;
+        method: string;
+        note: string | null;
+    };
 }
 
 export interface AccountingDocumentListResult {

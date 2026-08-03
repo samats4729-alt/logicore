@@ -4,6 +4,9 @@ import { PaymentDirection, PaymentMethod, AccountKind, CostType, DictionaryKind 
 import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../constants';
 import { D, Money, ZERO, sumOf, toNum } from '../../common/utils/money';
 
+/** Учётная валюта компании: в ней ведутся отчёты и считаются итоги. */
+const BASE_CURRENCY = 'KZT';
+
 @Injectable()
 export class FinancialSettingsService {
     constructor(private prisma: PrismaService) { }
@@ -133,8 +136,57 @@ export class FinancialSettingsService {
         });
     }
 
+    /**
+     * Завести счёт или кассу — в том числе валютную.
+     *
+     * Раньше счетов было ровно два, оба тенговые, и заводить их было незачем.
+     * С валютами это перестало работать: доллары нельзя держать на тенговом
+     * счёте, иначе остаток по нему станет выдумкой, а сверка с банком —
+     * невозможной.
+     */
+    async createFinanceAccount(companyId: string, data: {
+        name: string;
+        kind: AccountKind;
+        currency?: string;
+        openingBalance?: number;
+        openingDate?: string | null;
+        iban?: string | null;
+        bankName?: string | null;
+        bankBic?: string | null;
+        kbe?: string | null;
+    }) {
+        await this.ensureCompanyFinanceSettings(companyId);
+        const name = (data.name || '').trim();
+        if (!name) throw new BadRequestException('Укажите название счёта или кассы');
+
+        const duplicate = await this.prisma.financeAccount.findFirst({
+            where: { companyId, name, kind: data.kind },
+        });
+        if (duplicate) throw new BadRequestException('Счёт с таким названием уже есть');
+
+        return this.prisma.financeAccount.create({
+            data: {
+                companyId,
+                name,
+                kind: data.kind,
+                currency: (data.currency || 'KZT').toUpperCase(),
+                openingBalance: data.openingBalance || 0,
+                openingDate: data.openingDate ? new Date(data.openingDate) : null,
+                iban: data.iban || null,
+                bankName: data.bankName || null,
+                bankBic: data.bankBic || null,
+                kbe: data.kbe || null,
+                // Счёт по умолчанию остаётся прежним: новый валютный счёт не
+                // должен молча стать тем, куда попадают обычные платежи.
+                isDefault: false,
+                isActive: true,
+            },
+        });
+    }
+
     async updateFinanceAccount(companyId: string, id: string, data: {
         name?: string;
+        currency?: string;
         openingBalance?: number;
         openingDate?: string | null;
         // Печатные реквизиты — имеют смысл для банковского счёта: именно они
@@ -150,10 +202,26 @@ export class FinancialSettingsService {
         });
         if (!account) throw new NotFoundException('Счет/касса не найден');
 
+        const currency = data.currency ? data.currency.toUpperCase() : undefined;
+        if (currency && currency !== account.currency) {
+            // Сменить валюту счёта, по которому уже ходили деньги, значит
+            // объявить прошлые тенге долларами. Остаток и вся история по
+            // счёту после этого — неправда.
+            const used = await this.prisma.payment.count({
+                where: { accountId: id, isDeleted: false },
+            });
+            if (used > 0) {
+                throw new BadRequestException(
+                    'По счёту уже есть платежи — валюту сменить нельзя. Заведите отдельный счёт в нужной валюте',
+                );
+            }
+        }
+
         return this.prisma.financeAccount.update({
             where: { id },
             data: {
                 ...(data.name !== undefined && { name: data.name }),
+                ...(currency !== undefined && { currency }),
                 ...(data.openingBalance !== undefined && { openingBalance: data.openingBalance || 0 }),
                 ...(data.openingDate !== undefined && { openingDate: data.openingDate ? new Date(data.openingDate) : null }),
                 ...(data.iban !== undefined && { iban: data.iban || null }),
@@ -167,7 +235,7 @@ export class FinancialSettingsService {
     /** Остатки по кассам и счетам: начальный остаток + приход − расход = текущий остаток */
     async getAccountBalances(companyId: string) {
         await this.ensureCompanyFinanceSettings(companyId);
-        const { accounts, totals } = await this.buildAccountBalances(companyId, null);
+        const { accounts, totals, byCurrency } = await this.buildAccountBalances(companyId, null);
 
         // Граница наружу: внутри считаем в Decimal, в HTTP-ответ отдаём числа —
         // контракт с вебом остаётся прежним.
@@ -179,12 +247,19 @@ export class FinancialSettingsService {
                 totalOut: toNum(row.totalOut),
                 balance: toNum(row.balance),
             })),
+            // Итог остаётся тенговым — веб показывает его под знаком ₸.
             totals: {
                 openingBalance: toNum(totals.openingBalance),
                 totalIn: toNum(totals.totalIn),
                 totalOut: toNum(totals.totalOut),
                 balance: toNum(totals.balance),
             },
+            byCurrency: byCurrency.map((row) => ({
+                currency: row.currency,
+                totalIn: toNum(row.totalIn),
+                totalOut: toNum(row.totalOut),
+                balance: toNum(row.balance),
+            })),
         };
     }
 
@@ -196,8 +271,11 @@ export class FinancialSettingsService {
      */
     async getCashPosition(companyId: string, before: Date | null): Promise<Money> {
         await this.ensureCompanyFinanceSettings(companyId);
+        // Только тенговые счета: отчёт о движении денег ведётся в тенге, и
+        // прибавить к нему остаток валютного счёта как есть — значит выдать
+        // доллары за тенге.
         const accounts = await this.prisma.financeAccount.findMany({
-            where: { companyId, isActive: true },
+            where: { companyId, isActive: true, currency: BASE_CURRENCY },
             select: { openingBalance: true },
         });
         const openingTotal = sumOf(accounts, (a) => a.openingBalance);
@@ -282,6 +360,7 @@ export class FinancialSettingsService {
                 id: acc.id,
                 name: acc.name,
                 kind: acc.kind,
+                currency: acc.currency,
                 openingBalance: opening,
                 openingDate: acc.openingDate,
                 totalIn: f.in,
@@ -290,14 +369,30 @@ export class FinancialSettingsService {
             };
         });
 
+        // Итог — только по тенговым счетам. Складывать доллары с тенге нельзя:
+        // получилось бы число, которого нет ни в одном банке. Валютные остатки
+        // идут отдельным списком, каждая валюта сама по себе.
+        const baseRows = rows.filter((r) => r.currency === BASE_CURRENCY);
         const totals = {
-            openingBalance: sumOf(rows, (r) => r.openingBalance),
-            totalIn: sumOf(rows, (r) => r.totalIn),
-            totalOut: sumOf(rows, (r) => r.totalOut),
-            balance: sumOf(rows, (r) => r.balance),
+            openingBalance: sumOf(baseRows, (r) => r.openingBalance),
+            totalIn: sumOf(baseRows, (r) => r.totalIn),
+            totalOut: sumOf(baseRows, (r) => r.totalOut),
+            balance: sumOf(baseRows, (r) => r.balance),
         };
 
-        return { accounts: rows, totals };
+        const byCurrency = [...new Set(rows.map((r) => r.currency))]
+            .sort((a, b) => (a === BASE_CURRENCY ? -1 : b === BASE_CURRENCY ? 1 : a.localeCompare(b)))
+            .map((currency) => {
+                const group = rows.filter((r) => r.currency === currency);
+                return {
+                    currency,
+                    totalIn: sumOf(group, (r) => r.totalIn),
+                    totalOut: sumOf(group, (r) => r.totalOut),
+                    balance: sumOf(group, (r) => r.balance),
+                };
+            });
+
+        return { accounts: rows, totals, byCurrency };
     }
 
     async getFinanceCategories(companyId: string) {
