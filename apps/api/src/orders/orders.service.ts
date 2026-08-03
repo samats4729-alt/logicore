@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CurrencyService } from '../currency/currency.service';
+import { resolveOrderMoney } from './order-money';
 import { UserRole, OrderStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { RedisService } from '../redis/redis.service';
@@ -96,7 +98,49 @@ export class OrdersService {
         private periodClosingService: PeriodClosingService,
         private notificationsService: NotificationsService,
         private payrollService: PayrollService,
+        private currencyService: CurrencyService,
     ) { }
+
+    private readonly logger = new Logger('OrdersService');
+
+    /**
+     * Пересчитать суммы заявки в учётную валюту компании.
+     *
+     * Вызывается при каждом сохранении сумм: отчёты складывают тысячи
+     * заявок и не могут ходить за курсом на каждую строку, поэтому
+     * пересчёт хранится рядом с самими суммами.
+     */
+    private async baseAmountsFor(input: {
+        companyId?: string | null;
+        customerPrice?: number | Prisma.Decimal | null;
+        driverCost?: number | Prisma.Decimal | null;
+        currency?: string | null;
+        driverCostCurrency?: string | null;
+        loadingDate?: Date | string | null;
+    }) {
+        const company = input.companyId
+            ? await this.prisma.company.findUnique({
+                where: { id: input.companyId }, select: { baseCurrency: true },
+            })
+            : null;
+        const baseCurrency = company?.baseCurrency || 'KZT';
+
+        const result = await resolveOrderMoney(input, baseCurrency, async (code, date) => {
+            const found = await this.currencyService.rateOn(code, date, {
+                companyId: input.companyId || undefined,
+            });
+            return found ? found.rate : null;
+        });
+
+        if (result.missingRates.length) {
+            // Молчать нельзя: суммы остались без пересчёта, и в отчётах эта
+            // заявка не сложится с остальными.
+            this.logger.warn(
+                `Заявка сохранена без пересчёта: нет курса ${result.missingRates.join(', ')}`,
+            );
+        }
+        return result;
+    }
 
     /**
      * Создание заявки на перевозку
@@ -150,6 +194,9 @@ export class OrdersService {
         natureOfCargo?: string;
         customerPriceType?: 'FIXED' | 'PER_KM' | 'PER_TON';
         ownerCompanyId?: string;
+        /** Валюта тарифа клиента и тарифа перевозчика — могут различаться. */
+        currency?: string;
+        driverCostCurrency?: string;
     }) {
         // Генерация номера заявки (по настройке нумерации компании-создателя)
         const orderNumber = await this.generateOrderNumber(data.ownerCompanyId);
@@ -212,6 +259,20 @@ export class OrdersService {
             }
         }
 
+        // Дата погрузки — дата первой точки маршрута: по ней и берём курс.
+        const pickupDate = data.routePoints?.find(
+            (rp) => rp.pointType === 'PICKUP' || rp.pointType === 'ADDITIONAL_PICKUP',
+        )?.expectedDate ?? data.routePoints?.[0]?.expectedDate ?? null;
+
+        const money = await this.baseAmountsFor({
+            companyId: creatorCompanyId,
+            customerPrice: data.customerPrice,
+            driverCost: data.driverCost,
+            currency: data.currency,
+            driverCostCurrency: data.driverCostCurrency,
+            loadingDate: pickupDate,
+        });
+
         const order = await this.prisma.order.create({
             data: {
                 orderNumber,
@@ -238,6 +299,11 @@ export class OrdersService {
                 requirements: data.requirements,
                 customerPrice: data.customerPrice,
                 driverCost: data.driverCost,
+                currency: data.currency || undefined,
+                driverCostCurrency: data.driverCostCurrency || undefined,
+                customerPriceBase: money.customerPriceBase,
+                driverCostBase: money.driverCostBase,
+                currencyRateDate: money.currencyRateDate,
                 driverId: data.driverId,
                 assignedDriverName: driverName,
                 assignedDriverPhone: driverPhone,
@@ -952,6 +1018,8 @@ export class OrdersService {
         appliedTariffId?: string;
         natureOfCargo?: string;
         customerPriceType?: string;
+        currency?: string;
+        driverCostCurrency?: string;
     }, user?: { id: string; role: string; companyId?: string }) {
         const order = await this.findById(orderId);
 
@@ -998,6 +1066,32 @@ export class OrdersService {
                     notes: rp.notes,
                 })),
             };
+        }
+
+        // Поменялись суммы, валюты или дата погрузки — пересчёт в учётную
+        // валюту устарел. Пересчитываем ровно тогда, когда меняется то, от
+        // чего он зависит: иначе при каждой правке статуса заявка бегала бы
+        // за курсом без нужды.
+        const moneyChanged = data.customerPrice !== undefined || data.driverCost !== undefined
+            || data.currency !== undefined || data.driverCostCurrency !== undefined
+            || routePoints !== undefined;
+        if (moneyChanged) {
+            const pickupDate = routePoints
+                ? (routePoints.find((rp) => rp.pointType === 'PICKUP' || rp.pointType === 'ADDITIONAL_PICKUP')?.expectedDate
+                    ?? routePoints[0]?.expectedDate ?? null)
+                : ((order as any).routePoints?.find((rp: any) => rp.pointType === 'PICKUP')?.expectedDate ?? null);
+
+            const money = await this.baseAmountsFor({
+                companyId: user?.companyId || (order as any).customerCompanyId,
+                customerPrice: data.customerPrice !== undefined ? data.customerPrice : order.customerPrice,
+                driverCost: data.driverCost !== undefined ? data.driverCost : order.driverCost,
+                currency: data.currency ?? (order as any).currency,
+                driverCostCurrency: data.driverCostCurrency ?? (order as any).driverCostCurrency,
+                loadingDate: pickupDate,
+            });
+            updateData.customerPriceBase = money.customerPriceBase;
+            updateData.driverCostBase = money.driverCostBase;
+            updateData.currencyRateDate = money.currencyRateDate;
         }
 
         const updated = await this.prisma.order.update({

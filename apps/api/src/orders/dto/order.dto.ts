@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsBoolean, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
+import { Length, IsString, IsNumber, IsBoolean, IsOptional, IsNotEmpty, IsArray, IsEnum, IsDateString, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
 import { OrderStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -159,6 +159,26 @@ export class CreateOrderDto {
     @IsNumber()
     @IsOptional()
     driverCost?: number;
+
+    /**
+     * Валюта тарифа клиента. Три буквы по ISO: KZT, RUB, USD.
+     *
+     * Валюта перевозчика задаётся отдельно: в одном рейсе они спокойно
+     * различаются — российский заказчик платит рублями, казахстанский
+     * перевозчик хочет тенге.
+     */
+    @ApiProperty({ required: false, example: 'KZT' })
+    @IsString()
+    @IsOptional()
+    @Length(3, 3)
+    currency?: string;
+
+    @ApiProperty({ required: false, example: 'KZT', description: 'Валюта ставки перевозчика' })
+    @IsString()
+    @IsOptional()
+    @Length(3, 3)
+    driverCostCurrency?: string;
+
 
     @ApiProperty({ required: false, description: 'ID водителя для назначения' })
     @IsString()

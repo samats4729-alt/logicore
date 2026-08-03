@@ -17,6 +17,12 @@ type Amount = Money | number | null | undefined;
 export const ORDER_FINANCE_SELECT = {
     customerPrice: true,
     driverCost: true,
+    // Валюты и пересчёт в учётную валюту: расчёт ведётся по пересчитанным
+    // суммам, иначе доллары сложились бы с тенге.
+    currency: true,
+    driverCostCurrency: true,
+    customerPriceBase: true,
+    driverCostBase: true,
     subForwarderPrice: true,
     customerCompanyId: true,
     forwarderId: true,
@@ -62,6 +68,12 @@ export const ORDER_FINANCE_RELATIONS_SELECT = {
 // зависимым от того, кто его вызывает. Сравнение суммы платежей с порогом
 // раньше требовало обходного moneyGte из-за погрешности плавающей точки;
 // теперь суммы — Decimal, и обе стороны сравнивают их точным .gte().
+/**
+ * Учётная валюта платформы. Сейчас у всех компаний тенге; когда появится
+ * компания с другой, она придёт сюда параметром, а не станет догадкой.
+ */
+const BASE_CURRENCY_CODE = 'KZT';
+
 @Injectable()
 export class FinanceCalculatorService {
     computeOrderFinance(params: {
@@ -69,6 +81,10 @@ export class FinanceCalculatorService {
             customerPrice?: Amount;
             driverCost?: Amount;
             subForwarderPrice?: Amount;
+            currency?: string | null;
+            driverCostCurrency?: string | null;
+            customerPriceBase?: Amount | null;
+            driverCostBase?: Amount | null;
             customerCompanyId?: string | null;
             forwarderId?: string | null;
             subForwarderId?: string | null;
@@ -97,9 +113,32 @@ export class FinanceCalculatorService {
         const executorVatRate = D(order.executorVatRate);
         const executorHasVat = order.executorHasVat ?? false;
 
-        const customerPrice = D(order.customerPrice);
+        /**
+         * Считаем в учётной валюте компании.
+         *
+         * Сумма в тенге и её пересчёт — одно и то же число, поэтому для
+         * обычного рейса ничего не меняется. Для валютного берётся пересчёт.
+         *
+         * Если валюта не тенге, а пересчёта нет (курса не нашлось), сумма НЕ
+         * берётся как есть: тысяча долларов, посчитанная тысячей тенге, — это
+         * ошибка, которую в отчёте не увидеть. Такая сумма не участвует в
+         * расчёте вовсе, а факт выносится наружу отдельным признаком, чтобы
+         * отчёт мог честно сказать: здесь не хватает курса.
+         */
+        const unconverted: string[] = [];
+        const inBase = (raw: Amount | undefined, base: Amount | null | undefined, code?: string | null) => {
+            const currency = (code || BASE_CURRENCY_CODE).toUpperCase();
+            if (currency === BASE_CURRENCY_CODE) return D(raw);
+            if (base !== null && base !== undefined) return D(base);
+            if (raw !== null && raw !== undefined && !D(raw).isZero() && !unconverted.includes(currency)) {
+                unconverted.push(currency);
+            }
+            return ZERO;
+        };
+
+        const customerPrice = inBase(order.customerPrice, order.customerPriceBase, order.currency);
         const subForwarderPrice = D(order.subForwarderPrice);
-        const driverCost = D(order.driverCost);
+        const driverCost = inBase(order.driverCost, order.driverCostBase, order.driverCostCurrency);
 
         let revenueGross: Money;
         let executorCostGross: Money;
@@ -247,6 +286,8 @@ export class FinanceCalculatorService {
             paidIn,
             paidOut,
             margin,
+            /** Валюты, по которым не нашлось курса: эти суммы в расчёт не вошли. */
+            unconvertedCurrencies: unconverted,
             customerDebt,
             executorDebt,
             isCustomerPaid,

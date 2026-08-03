@@ -147,6 +147,46 @@ export class CurrencyService {
     }
 
     /**
+     * Перевести сумму в учётную валюту компании.
+     *
+     * Возвращает и результат, и курс с датой: вызывающему почти всегда надо
+     * сохранить их рядом с суммой. Курса нет — возвращаем `null`, а не
+     * исходное число: молча выдать сумму в валюте за сумму в тенге значит
+     * сложить доллары с тенге в отчёте, и заметить это уже нельзя.
+     */
+    async toBase(
+        amount: Prisma.Decimal | number | null | undefined,
+        code: string,
+        date: string | Date,
+        options: { companyId?: string; baseCurrency?: string } = {},
+    ): Promise<{ amount: Prisma.Decimal; rate: Prisma.Decimal; rateDate: Date; source: string } | null> {
+        if (amount === null || amount === undefined) return null;
+        const value = amount instanceof Prisma.Decimal ? amount : new Prisma.Decimal(amount);
+        const base = options.baseCurrency || BASE_CURRENCY;
+
+        if (code === base) {
+            return {
+                amount: value.toDecimalPlaces(2),
+                rate: new Prisma.Decimal(1),
+                rateDate: atMidnightUtc(date),
+                source: 'BASE',
+            };
+        }
+        // Учётная валюта не тенге — понадобится курс валюты к ней, а не к
+        // тенге. Пока такого случая нет: платформа считает в тенге.
+        if (base !== BASE_CURRENCY) return null;
+
+        const found = await this.rateOn(code, date, { companyId: options.companyId });
+        if (!found) return null;
+        return {
+            amount: value.times(found.rate).toDecimalPlaces(2),
+            rate: found.rate,
+            rateDate: found.rateDate,
+            source: found.source,
+        };
+    }
+
+    /**
      * Таблица курсов на дату — то, что видит человек на экране.
      *
      * Для каждой валюты берётся последний курс не позже запрошенного дня, и

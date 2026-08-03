@@ -254,8 +254,8 @@ export default function OrderDetailPage() {
     const showCustomerPriceField = !isMeCust || (isMeCust && isMeCarr);
     const showDriverCostField = (isMeCust && !isMeCarr) || (!isMeCust && !isMeCarr);
 
-    const customerPriceLabel = (isMeCust && isMeCarr) ? "Ставка (₸)" : "Ставка от заказчика (₸)";
-    const driverCostLabel = isMkt ? "Ставка для биржи (₸)" : "Ставка перевозчику (₸)";
+    const customerPriceLabel = (isMeCust && isMeCarr) ? "Ставка" : "Ставка от заказчика";
+    const driverCostLabel = isMkt ? "Ставка для биржи" : "Ставка перевозчику";
 
     const getRoleDescription = () => {
         if (isMeCust && isMeCarr) return { text: 'Вы и заказчик, и перевозчик — перевозка своими силами', color: '#1890ff' };
@@ -845,6 +845,8 @@ export default function OrderDetailPage() {
             natureOfCargo: order.natureOfCargo,
             requirements: order.requirements,
             customerPrice: order.customerPrice,
+            currency: (order as any).currency || 'KZT',
+            driverCostCurrency: (order as any).driverCostCurrency || 'KZT',
             customerPriceType: order.customerPriceType || 'FIXED',
             driverCost: order.driverCost || order.subForwarderPrice,
             pickupDate: order.routePoints?.find((p: any) => p.pointType === 'PICKUP')?.expectedDate
@@ -1996,20 +1998,72 @@ export default function OrderDetailPage() {
                                         </div>
                                     );
 
+                                    /**
+                                     * Всё, что подписано знаком тенге, показывается в тенге.
+                                     *
+                                     * Ставка заказчика может быть в рублях, и «100 000 ₸» рядом с
+                                     * тенговыми долгами читается как сто тысяч тенге — а это шестьсот.
+                                     * Поэтому в плитках и расчётах стоит пересчёт, а исходная сумма с
+                                     * её валютой показана выше отдельной подсказкой.
+                                     */
+                                    const customerGross = summary.currency && summary.currency !== 'KZT'
+                                        ? (summary.customerPriceBase ?? 0)
+                                        : summary.customerPrice;
+                                    const executorGross = summary.driverCostCurrency && summary.driverCostCurrency !== 'KZT'
+                                        ? (summary.driverCostBase ?? 0)
+                                        : summary.executorCost;
+
                                     return (
                                         <div style={{ marginBottom: 16 }}>
+                                            {/* Суммы рейса в валюте: показываем и валюту, и пересчёт.
+                                                Без этого «100 000» рядом с тенговыми цифрами читается
+                                                как тенге, а это рубли. */}
+                                            {(summary.currency && summary.currency !== 'KZT') || (summary.driverCostCurrency && summary.driverCostCurrency !== 'KZT') ? (
+                                                <Alert
+                                                    type="info"
+                                                    showIcon
+                                                    style={{ marginBottom: 12 }}
+                                                    message="Рейс в валюте"
+                                                    description={(
+                                                        <div style={{ fontSize: 12 }}>
+                                                            {summary.currency !== 'KZT' && (
+                                                                <div>Ставка заказчика: {fmt(summary.customerPrice)} {summary.currency}
+                                                                    {summary.customerPriceBase ? ` — это ${fmt(summary.customerPriceBase)} ₸ по курсу на дату погрузки` : ''}</div>
+                                                            )}
+                                                            {summary.driverCostCurrency !== 'KZT' && (
+                                                                <div>Ставка перевозчику: {fmt(summary.driverCost)} {summary.driverCostCurrency}
+                                                                    {summary.driverCostBase ? ` — это ${fmt(summary.driverCostBase)} ₸` : ''}</div>
+                                                            )}
+                                                            <div style={{ color: 'var(--lc-text-ter)', marginTop: 4 }}>
+                                                                Прибыль и долги считаются в тенге: складывать разные валюты нельзя.
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                />
+                                            ) : null}
+
+                                            {summary.unconvertedCurrencies?.length ? (
+                                                <Alert
+                                                    type="warning"
+                                                    showIcon
+                                                    style={{ marginBottom: 12 }}
+                                                    message={`Нет курса: ${summary.unconvertedCurrencies.join(', ')}`}
+                                                    description="Пока курс не загружен, эта сумма в прибыль и долги не входит — цифры ниже неполные. Загрузите курс в разделе «Финансы → Курсы валют» и сохраните заявку заново."
+                                                />
+                                            ) : null}
+
                                             <div className="lc2-metrics" style={{ marginBottom: 14 }}>
                                                 {isClient ? (
                                                     <>
-                                                        <Metric label="Стоимость перевозки" value={summary.customerPrice} color="#0369a1" bg="#e0f2fe" icon={<WalletOutlined />} sub={<Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{order.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}</Tag>} />
+                                                        <Metric label="Стоимость перевозки" value={customerGross} color="#0369a1" bg="#e0f2fe" icon={<WalletOutlined />} sub={<Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{order.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}</Tag>} />
                                                         <Metric label="Поступления" value={summary.totalIncomes} color="#16a34a" bg="#e6ffed" icon={<WalletOutlined />} />
                                                         <Metric label="Расходы" value={summary.totalExpenses} color="#dc2626" bg="#ffeef0" icon={<DollarOutlined />} />
                                                         <Metric label="Долг экспедитору" value={summary.customerDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Metric label="Стоимость от заказчика" value={summary.customerPrice} color="#0369a1" bg="#e0f2fe" icon={<WalletOutlined />} sub={<Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено'}</Tag>} />
-                                                        <Metric label="Ставка исполнителю" value={summary.executorCost} color="#5f6672" bg="#f1f2f5" icon={<CarOutlined />} sub={<Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{isExecutorPaid ? 'Оплачено' : 'Не оплачено'}</Tag>} />
+                                                        <Metric label="Стоимость от заказчика" value={customerGross} color="#0369a1" bg="#e0f2fe" icon={<WalletOutlined />} sub={<Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено'}</Tag>} />
+                                                        <Metric label="Ставка исполнителю" value={executorGross} color="#5f6672" bg="#f1f2f5" icon={<CarOutlined />} sub={<Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{isExecutorPaid ? 'Оплачено' : 'Не оплачено'}</Tag>} />
                                                         <Metric label="Долг заказчика" value={summary.customerDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
                                                         <Metric label="Наш долг исполнителю" value={executorDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
                                                         <Metric label="Ожидаемая маржа" value={summary.margin} color={summary.margin >= 0 ? '#16a34a' : '#dc2626'} bg="#e6ffed" icon={<SwapOutlined />} />
@@ -2019,15 +2073,15 @@ export default function OrderDetailPage() {
                                             <Row gutter={[16, 16]}>
                                                 {isClient ? (
                                                     <Col xs={24} md={12}>
-                                                        <Breakdown title="Расчёты с экспедитором" accent="#16a34a" gross={summary.customerPrice} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
+                                                        <Breakdown title="Расчёты с экспедитором" accent="#16a34a" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
                                                     </Col>
                                                 ) : (
                                                     <>
                                                         <Col xs={24} md={12}>
-                                                            <Breakdown title="Расчёты с заказчиком" accent="#16a34a" gross={summary.customerPrice} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
+                                                            <Breakdown title="Расчёты с заказчиком" accent="#16a34a" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
                                                         </Col>
                                                         <Col xs={24} md={12}>
-                                                            <Breakdown title="Расчёты с исполнителем" accent="#e67e22" gross={summary.executorCost} net={summary.executorCostNet || 0} vat={summary.executorCostVat || 0} vatRate={order.executorVatRate || 0} debt={executorDebt || 0} />
+                                                            <Breakdown title="Расчёты с исполнителем" accent="#e67e22" gross={executorGross} net={summary.executorCostNet || 0} vat={summary.executorCostVat || 0} vatRate={order.executorVatRate || 0} debt={executorDebt || 0} />
                                                         </Col>
                                                     </>
                                                 )}

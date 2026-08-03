@@ -187,6 +187,17 @@ export class FinancialReportsService {
                 incomes,
                 expenses: [],
                 summary: {
+                    /**
+                     * Валюты сумм и их пересчёт — чтобы экран не выдавал
+                     * рубли за тенге. Если курса не нашлось, суммы в расчёт
+                     * не вошли, и об этом сказано прямо: молчаливая цифра
+                     * тут хуже отсутствующей.
+                     */
+                    currency: (order as any).currency || 'KZT',
+                    driverCostCurrency: (order as any).driverCostCurrency || 'KZT',
+                    customerPriceBase: toNum((order as any).customerPriceBase),
+                    driverCostBase: toNum((order as any).driverCostBase),
+                    unconvertedCurrencies: fin.unconvertedCurrencies,
                     customerPrice: order.customerPrice || 0,
                     driverCost: 0,
                     subForwarderPrice: 0,
@@ -216,6 +227,17 @@ export class FinancialReportsService {
             incomes,
             expenses,
             summary: {
+                /**
+                 * Валюты сумм и их пересчёт — чтобы экран не выдавал
+                 * рубли за тенге. Если курса не нашлось, суммы в расчёт
+                 * не вошли, и об этом сказано прямо: молчаливая цифра
+                 * тут хуже отсутствующей.
+                 */
+                currency: (order as any).currency || 'KZT',
+                driverCostCurrency: (order as any).driverCostCurrency || 'KZT',
+                customerPriceBase: toNum((order as any).customerPriceBase),
+                driverCostBase: toNum((order as any).driverCostBase),
+                unconvertedCurrencies: fin.unconvertedCurrencies,
                 customerPrice: toNum(order.customerPrice),
                 driverCost: toNum(order.driverCost),
                 subForwarderPrice: toNum(order.subForwarderPrice),

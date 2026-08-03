@@ -11,8 +11,12 @@ import { EmailModule } from '../email/email.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { PayrollModule } from '../payroll/payroll.module';
 
+import { CurrencyModule } from '../currency/currency.module';
+
 @Module({
-    imports: [EmailModule, AccountingModule, PayrollModule, BillingModule, CompanyVerificationModule],
+    imports: [
+        CurrencyModule, EmailModule, AccountingModule, PayrollModule, BillingModule, CompanyVerificationModule,
+    ],
     controllers: [OrdersController],
     providers: [
         OrdersService,

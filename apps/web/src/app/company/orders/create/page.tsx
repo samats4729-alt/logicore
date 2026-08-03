@@ -35,6 +35,7 @@ import { EMPTY_CARGO, totalPallets, type CargoState } from '@/lib/cargo';
 import { VAT_RATES, vatRateWhenEnabled } from '@/lib/tax';
 import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
+import CurrencySelect from '@/components/orders/CurrencySelect';
 
 interface LocationState {
     city: string;
@@ -189,8 +190,10 @@ export default function CreateOrderPage() {
     const showCustomerPriceField = !isMeCustomer || (isMeCustomer && isMeCarrier);
     const showDriverCostField = (isMeCustomer && !isMeCarrier) || (!isMeCustomer && !isMeCarrier);
 
-    const customerPriceLabel = (isMeCustomer && isMeCarrier) ? "Ставка (₸)" : "Ставка от заказчика (₸)";
-    const driverCostLabel = isMarketplace ? "Ставка для биржи (₸)" : "Ставка перевозчику (₸)";
+    // Знак валюты из подписи убран: валюта теперь выбирается рядом с суммой
+    // и может быть не тенге.
+    const customerPriceLabel = (isMeCustomer && isMeCarrier) ? "Ставка" : "Ставка от заказчика";
+    const driverCostLabel = isMarketplace ? "Ставка для биржи" : "Ставка перевозчику";
 
     // Габариты груза (по галочке)
     const [showDims, setShowDims] = useState(false);
@@ -1133,7 +1136,16 @@ export default function CreateOrderPage() {
                     <>
                         <Col xs={24} md={8}>
                             <Form.Item name="customerPrice" label={customerPriceLabel}>
-                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                                <InputNumber
+                                    min={0}
+                                    style={{ width: '100%' }}
+                                    placeholder="0"
+                                    addonAfter={(
+                                        <Form.Item name="currency" noStyle initialValue="KZT">
+                                            <CurrencySelect />
+                                        </Form.Item>
+                                    )}
+                                />
                             </Form.Item>
                             {appliedTariff && (
                                 <div style={{ marginTop: -12, marginBottom: 8, padding: '4px 8px', background: token.colorSuccessBg, border: `1px solid ${token.colorSuccessBorder}`, borderRadius: 6, fontSize: 11 }}>
@@ -1167,7 +1179,18 @@ export default function CreateOrderPage() {
                     <>
                         <Col xs={24} md={8}>
                             <Form.Item name="driverCost" label={driverCostLabel}>
-                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                                <InputNumber
+                                    min={0}
+                                    style={{ width: '100%' }}
+                                    placeholder="0"
+                                    addonAfter={(
+                                        // Валюта перевозчика своя: рейс, где клиент платит
+                                        // рублями, а перевозчик получает тенге, — обычное дело.
+                                        <Form.Item name="driverCostCurrency" noStyle initialValue="KZT">
+                                            <CurrencySelect />
+                                        </Form.Item>
+                                    )}
+                                />
                             </Form.Item>
                         </Col>
                         <Col xs={12} md={8}>
