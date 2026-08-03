@@ -18,7 +18,7 @@ export class RatesBackfillDto {
     to: string;
 }
 
-export class ManualRateDto {
+export class CompanyRateDto {
     @ApiProperty({ example: 'TMT' })
     @IsString()
     @Length(3, 3)

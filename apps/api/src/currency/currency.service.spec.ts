@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyService } from './currency.service';
+import { CurrencyService, localToday } from './currency.service';
 
 /**
  * Правила работы с курсами, которые нельзя нарушить.
@@ -100,16 +100,18 @@ describe('Курсы валют: правила', () => {
             expect(Number(uzs.create.rate)).toBeCloseTo(0.0396, 6);
             expect(Number(uzs.create.sourceRate)).toBeCloseTo(3.96, 6);
             expect(uzs.create.sourceQuant).toBe(100);
-            expect(uzs.create.source).toBe('NBK');
+            // Отдельного признака «официальный» нет и не нужно: это таблица
+            // официальных курсов, свои курсы компаний лежат в другой.
+            expect(uzs.create.companyId).toBeUndefined();
         });
 
-        it('не затирает курс, поставленный руками', async () => {
-            const { prisma, upsert } = prismaWith({ id: 'r-1', source: 'MANUAL' });
-            const result = await make(prisma).importFromNbk('2026-08-01');
-
-            expect(upsert).not.toHaveBeenCalled();
-            expect(result.saved).toBe(0);
-            expect(result.skippedManual).toBe(2);
+        it('своих курсов компаний не касается вовсе', async () => {
+            // Раньше свой курс лежал в той же таблице и его приходилось
+            // защищать проверкой. Теперь таблицы разные, и загрузка просто
+            // не знает про курсы компаний — ломать нечего.
+            const { prisma } = prismaWith();
+            const service = make({ ...prisma, companyExchangeRate: undefined });
+            await expect(service.importFromNbk('2026-08-01')).resolves.toBeTruthy();
         });
 
         it('валюту, которой нет в справочнике, не выдумывает', async () => {
@@ -137,47 +139,119 @@ describe('Курсы валют: правила', () => {
         });
     });
 
-    describe('ручной курс', () => {
+    describe('свой курс компании', () => {
         const prisma = () => ({
             currency: { findUnique: jest.fn().mockResolvedValue({ code: 'TMT', hasOfficialRate: false }) },
-            exchangeRate: { upsert: jest.fn().mockResolvedValue({ id: 'r-1' }) },
+            companyExchangeRate: { upsert: jest.fn().mockResolvedValue({ id: 'r-1' }) },
         });
 
-        it('сохраняется с пометкой MANUAL и причиной', async () => {
+        it('сохраняется у своей компании и с причиной', async () => {
             const p = prisma();
-            await make(p).setManualRate({
-                code: 'TMT', date: '2026-08-03', rate: 135.5, note: 'Курс по договору',
+            await make(p).setCompanyRate({
+                companyId: 'c-1', code: 'TMT', date: '2026-08-03', rate: 135.5, note: 'Курс по договору',
             });
-            const call = p.exchangeRate.upsert.mock.calls[0][0];
-            expect(call.create.source).toBe('MANUAL');
+            const call = p.companyExchangeRate.upsert.mock.calls[0][0];
+            expect(call.where.companyId_currencyCode_rateDate.companyId).toBe('c-1');
+            expect(call.create.companyId).toBe('c-1');
             expect(call.create.note).toBe('Курс по договору');
             expect(Number(call.create.rate)).toBeCloseTo(135.5, 6);
+        });
+
+        it('без компании курс поставить нельзя', async () => {
+            // Иначе он оказался бы общим для всей платформы — ровно та
+            // ошибка, ради которой курсы и разведены по двум таблицам.
+            await expect(make(prisma()).setCompanyRate({
+                companyId: '', code: 'TMT', date: '2026-08-03', rate: 1,
+            })).rejects.toBeInstanceOf(BadRequestException);
         });
 
         it('курс тенге к тенге поставить нельзя', async () => {
             const p = prisma();
             p.currency.findUnique = jest.fn().mockResolvedValue({ code: 'KZT' });
-            await expect(make(p).setManualRate({ code: 'KZT', date: '2026-08-03', rate: 2 }))
+            await expect(make(p).setCompanyRate({ companyId: 'c-1', code: 'KZT', date: '2026-08-03', rate: 2 }))
                 .rejects.toBeInstanceOf(BadRequestException);
         });
 
         it('ноль и отрицательный курс не принимаются', async () => {
             for (const rate of [0, -5]) {
-                await expect(make(prisma()).setManualRate({ code: 'TMT', date: '2026-08-03', rate }))
+                await expect(make(prisma()).setCompanyRate({ companyId: 'c-1', code: 'TMT', date: '2026-08-03', rate }))
                     .rejects.toBeInstanceOf(BadRequestException);
             }
         });
 
-        it('официальный курс удалить нельзя — только свой', async () => {
+        it('удаляется только свой курс своей компании', async () => {
             const p: any = {
-                exchangeRate: {
-                    findUnique: jest.fn().mockResolvedValue({ id: 'r-1', source: 'NBK' }),
-                    delete: jest.fn(),
+                companyExchangeRate: {
+                    findUnique: jest.fn().mockResolvedValue({ id: 'r-1' }),
+                    delete: jest.fn().mockResolvedValue({}),
                 },
             };
-            await expect(make(p).removeManualRate('USD', '2026-08-01'))
-                .rejects.toBeInstanceOf(BadRequestException);
+            await make(p).removeCompanyRate('c-1', 'TMT', '2026-08-03');
+            expect(p.companyExchangeRate.findUnique.mock.calls[0][0].where
+                .companyId_currencyCode_rateDate.companyId).toBe('c-1');
+        });
+
+        it('официальный курс Нацбанка удалить нельзя вовсе', async () => {
+            // Таблица официальных курсов сюда не приходит: удалять нечего.
+            const p: any = {
+                companyExchangeRate: { findUnique: jest.fn().mockResolvedValue(null), delete: jest.fn() },
+                exchangeRate: { delete: jest.fn() },
+            };
+            await expect(make(p).removeCompanyRate('c-1', 'USD', '2026-08-01')).rejects.toThrow();
             expect(p.exchangeRate.delete).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('курсы не протекают между компаниями', () => {
+        it('свой курс компании главнее официального', async () => {
+            const p: any = {
+                companyExchangeRate: {
+                    findFirst: jest.fn().mockResolvedValue({
+                        rate: new Prisma.Decimal('135.5'), rateDate: new Date('2026-08-03T00:00:00Z'),
+                    }),
+                },
+                exchangeRate: { findFirst: jest.fn() },
+            };
+            const result = await make(p).rateOn('TMT', '2026-08-03', { companyId: 'c-1' });
+
+            expect(Number(result!.rate)).toBeCloseTo(135.5, 6);
+            expect(result!.source).toBe('COMPANY');
+            // До официального дело не дошло — свой курс главнее.
+            expect(p.exchangeRate.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('чужой курс не подставляется: ищем строго по своей компании', async () => {
+            const p: any = {
+                companyExchangeRate: { findFirst: jest.fn().mockResolvedValue(null) },
+                exchangeRate: {
+                    findFirst: jest.fn().mockResolvedValue({
+                        rate: new Prisma.Decimal('473.59'), rateDate: new Date('2026-08-03T00:00:00Z'),
+                    }),
+                },
+            };
+            const result = await make(p).rateOn('USD', '2026-08-03', { companyId: 'c-2' });
+
+            expect(p.companyExchangeRate.findFirst.mock.calls[0][0].where.companyId).toBe('c-2');
+            // Своего нет — берём официальный, он общий и это правильно.
+            expect(result!.source).toBe('NBK');
+        });
+
+        it('без компании свои курсы не читаются вообще', async () => {
+            const p: any = {
+                companyExchangeRate: { findFirst: jest.fn() },
+                exchangeRate: { findFirst: jest.fn().mockResolvedValue(null) },
+            };
+            await make(p).rateOn('USD', '2026-08-03');
+            expect(p.companyExchangeRate.findFirst).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('сегодняшний день считается по местному времени', () => {
+        it('в три часа ночи по Алматы это уже сегодня, а не вчера', () => {
+            // По Гринвичу в этот момент ещё вчерашний день. Считать «сегодня»
+            // по Гринвичу значит показывать бухгалтеру вчерашний курс.
+            const almatyNight = new Date(2026, 7, 4, 3, 0, 0);
+            expect(localToday(almatyNight)).toBe('2026-08-04');
         });
     });
 

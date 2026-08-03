@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
  * которых обычно не делают. Первая: рядом с пересчитанным курсом показано
  * исходное значение Нацбанка вместе с кратностью («3,96 за 100»), чтобы
  * бухгалтер могла сверить глазами с сайтом. Вторая: видно, откуда курс —
- * официальный или поставлен руками, и с какой причиной.
+ * официальный от Нацбанка или свой курс компании, и с какой причиной.
  */
 
 interface RateRow {
@@ -41,7 +41,17 @@ interface RateRow {
     change: number | null;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+/**
+ * Сегодня по местному времени, а не по Гринвичу.
+ *
+ * `toISOString()` переводит в Гринвич: с полуночи до пяти утра по Алматы
+ * это ещё вчера, и экран по умолчанию открывался бы на вчерашней дате.
+ */
+const today = () => {
+    const now = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+};
 
 /**
  * Курс показываем с той точностью, с какой он имеет смысл, и без хвостовых
@@ -102,11 +112,8 @@ export default function CurrenciesPage() {
         setBusy(true);
         try {
             const res = await api.post('/currency/rates/import', { date });
-            const { saved, rateDate, skippedManual } = res.data || {};
-            toast.success(
-                `Загружено курсов: ${saved} на ${showDate(rateDate)}` +
-                (skippedManual ? `. Ручных курсов не тронуто: ${skippedManual}` : ''),
-            );
+            const { saved, rateDate } = res.data || {};
+            toast.success(`Загружено курсов: ${saved} на ${showDate(rateDate)}`);
             await load();
         } catch (e: any) {
             toast.error(e?.response?.data?.message || 'Не удалось загрузить курсы Нацбанка');
@@ -138,8 +145,8 @@ export default function CurrenciesPage() {
 
     const openManual = (row: RateRow) => {
         setEditing(row);
-        setManualRate(row.source === 'MANUAL' && row.rate ? String(row.rate) : '');
-        setManualNote(row.source === 'MANUAL' ? row.note || '' : '');
+        setManualRate(row.source === 'COMPANY' && row.rate ? String(row.rate) : '');
+        setManualNote(row.source === 'COMPANY' ? row.note || '' : '');
     };
 
     const saveManual = async () => {
@@ -168,7 +175,7 @@ export default function CurrenciesPage() {
         setBusy(true);
         try {
             await api.delete('/currency/rates/manual', { params: { code: row.code, date } });
-            toast.success(`Ручной курс ${row.code} убран — вернётся официальный`);
+            toast.success(`Свой курс ${row.code} убран — вернётся официальный`);
             await load();
         } catch (e: any) {
             toast.error(e?.response?.data?.message || 'Не удалось убрать курс');
@@ -312,9 +319,9 @@ export default function CurrenciesPage() {
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-3 align-top">
-                                                    {row.source === 'MANUAL' ? (
+                                                    {row.source === 'COMPANY' ? (
                                                         <>
-                                                            <Badge variant="warning">Поставлен вручную</Badge>
+                                                            <Badge variant="warning">Свой курс компании</Badge>
                                                             {row.note && <div className="mt-1 text-xs text-muted-foreground">{row.note}</div>}
                                                         </>
                                                     ) : row.source === 'NBK' ? (
@@ -332,12 +339,12 @@ export default function CurrenciesPage() {
                                                         <span className="text-xs text-muted-foreground">—</span>
                                                     ) : (
                                                         <div className="flex justify-end gap-1">
-                                                            <Button variant="ghost" size="icon" aria-label="Поставить курс вручную"
+                                                            <Button variant="ghost" size="icon" aria-label="Поставить свой курс"
                                                                 onClick={() => openManual(row)}>
                                                                 <Pencil className="h-4 w-4" />
                                                             </Button>
-                                                            {row.source === 'MANUAL' && (
-                                                                <Button variant="ghost" size="icon" aria-label="Убрать ручной курс"
+                                                            {row.source === 'COMPANY' && (
+                                                                <Button variant="ghost" size="icon" aria-label="Убрать свой курс"
                                                                     onClick={() => removeManual(row)}>
                                                                     <X className="h-4 w-4" />
                                                                 </Button>
@@ -363,10 +370,10 @@ export default function CurrenciesPage() {
             <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
                 <DialogContent className="max-w-[420px]">
                     <DialogHeader>
-                        <DialogTitle>Курс {editing?.code} на {showDate(date)}</DialogTitle>
+                        <DialogTitle>Свой курс {editing?.code} на {showDate(date)}</DialogTitle>
                         <DialogDescription>
-                            Сколько тенге за одну единицу. Такой курс помечается как поставленный вручную,
-                            и загрузка с Нацбанка его не затрёт.
+                            Сколько тенге за одну единицу. Курс принадлежит вашей компании: другие компании
+                            его не видят, а загрузка с Нацбанка его не затрагивает.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3">

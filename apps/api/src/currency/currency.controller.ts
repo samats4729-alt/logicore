@@ -5,8 +5,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { AuditService } from '../audit/audit.service';
-import { CurrencyService } from './currency.service';
-import { ManualRateDto, RatesBackfillDto, RatesImportDto } from './dto/currency.dto';
+import { CurrencyService, localToday } from './currency.service';
+import { CompanyRateDto, RatesBackfillDto, RatesImportDto } from './dto/currency.dto';
 
 /** Кто видит курсы: считать в валюте нужно всем, кто работает с деньгами. */
 const VIEW_ROLES = [
@@ -36,17 +36,23 @@ export class CurrencyController {
         summary: 'Курсы на дату',
         description: 'Если на эту дату курс не объявляли (выходные), отдаётся последний до неё с пометкой.',
     })
-    rates(@Query('date') date?: string, @Query('onlyCommon') onlyCommon?: string) {
-        return this.currency.ratesOn(date || new Date().toISOString().slice(0, 10), {
+    rates(@Request() req: any, @Query('date') date?: string, @Query('onlyCommon') onlyCommon?: string) {
+        return this.currency.ratesOn(date || localToday(), {
             onlyCommon: onlyCommon === 'true',
+            companyId: req.user.companyId,
         });
     }
 
     @Get('rates/history')
     @Roles(...VIEW_ROLES)
     @ApiOperation({ summary: 'История курса одной валюты за период' })
-    history(@Query('code') code: string, @Query('from') from: string, @Query('to') to: string) {
-        return this.currency.history(code, from, to);
+    history(
+        @Request() req: any,
+        @Query('code') code: string,
+        @Query('from') from: string,
+        @Query('to') to: string,
+    ) {
+        return this.currency.history(code, from, to, { companyId: req.user.companyId });
     }
 
     @Post('rates/import')
@@ -54,12 +60,12 @@ export class CurrencyController {
     @RequirePermissions('accounting')
     @ApiOperation({ summary: 'Загрузить курсы Нацбанка на дату' })
     async import(@Request() req: any, @Body() dto: RatesImportDto) {
-        const date = dto.date || new Date().toISOString().slice(0, 10);
+        const date = dto.date || localToday();
         const result = await this.currency.importFromNbk(date, { userId: req.user.sub });
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'exchange_rate',
             entityLabel: `Загружены курсы Нацбанка на ${result.rateDate}`,
-            details: { saved: result.saved, skippedManual: result.skippedManual },
+            details: { saved: result.saved, unknown: result.unknown.length },
         });
         return result;
     }
@@ -82,15 +88,19 @@ export class CurrencyController {
     @Roles(...CHANGE_ROLES)
     @RequirePermissions('accounting')
     @ApiOperation({
-        summary: 'Поставить курс руками',
-        description: 'Для валют без официального курса и для курса по договору. Автозагрузка такой курс не затирает.',
+        summary: 'Поставить свой курс компании',
+        description:
+            'Для валют без официального курса и для курса по договору. Курс принадлежит компании, ' +
+            'другим компаниям не виден и загрузкой Нацбанка не затирается.',
     })
-    async manual(@Request() req: any, @Body() dto: ManualRateDto) {
-        const saved = await this.currency.setManualRate({ ...dto, userId: req.user.sub });
+    async manual(@Request() req: any, @Body() dto: CompanyRateDto) {
+        const saved = await this.currency.setCompanyRate({
+            ...dto, companyId: req.user.companyId, userId: req.user.sub,
+        });
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'exchange_rate',
             entityId: saved.id,
-            entityLabel: `Курс ${dto.code} на ${dto.date} поставлен вручную: ${dto.rate}`,
+            entityLabel: `Свой курс ${dto.code} на ${dto.date}: ${dto.rate}`,
             details: { note: dto.note ?? null },
         });
         return saved;
@@ -99,12 +109,12 @@ export class CurrencyController {
     @Delete('rates/manual')
     @Roles(...CHANGE_ROLES)
     @RequirePermissions('accounting')
-    @ApiOperation({ summary: 'Убрать ручной курс' })
+    @ApiOperation({ summary: 'Убрать свой курс компании' })
     async removeManual(@Request() req: any, @Query('code') code: string, @Query('date') date: string) {
-        const result = await this.currency.removeManualRate(code, date);
+        const result = await this.currency.removeCompanyRate(req.user.companyId, code, date);
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'exchange_rate',
-            entityLabel: `Убран ручной курс ${code} на ${date}`,
+            entityLabel: `Убран свой курс ${code} на ${date}`,
         });
         return result;
     }

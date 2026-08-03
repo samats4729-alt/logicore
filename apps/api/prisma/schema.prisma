@@ -105,15 +105,16 @@ enum AffiliationType {
 // ==================== MODELS ====================
 
 model User {
-  exchangeRates         ExchangeRate[]      @relation("ExchangeRateAuthor")
-  id                    String              @id @default(cuid())
+  exchangeRates         ExchangeRate[]        @relation("ExchangeRateAuthor")
+  companyExchangeRates  CompanyExchangeRate[] @relation("CompanyExchangeRateAuthor")
+  id                    String                @id @default(cuid())
   /// Компании, которые этот пользователь подтвердил как админ платформы.
-  verifiedCompanies     Company[]           @relation("VerifiedCompanies")
-  createdOrderDocuments OrderDocument[]     @relation("CreatedOrderDocuments")
-  createdSharedReports  SharedReportLink[]  @relation("CreatedSharedReports")
-  reviewedPaymentProofs OrderPaymentProof[] @relation("ReviewedPaymentProofs")
-  email                 String?             @unique
-  googleId              String?             @unique // Google OAuth ID
+  verifiedCompanies     Company[]             @relation("VerifiedCompanies")
+  createdOrderDocuments OrderDocument[]       @relation("CreatedOrderDocuments")
+  createdSharedReports  SharedReportLink[]    @relation("CreatedSharedReports")
+  reviewedPaymentProofs OrderPaymentProof[]   @relation("ReviewedPaymentProofs")
+  email                 String?               @unique
+  googleId              String?               @unique // Google OAuth ID
   phone                 String
   passwordHash          String? // null для водителей (SMS auth)
   firstName             String
@@ -122,11 +123,11 @@ model User {
   role                  UserRole
   position              String? // Должность/роль
   avatarPath            String? // Фото профиля (S3-ключ или локальный путь)
-  permissions           String[]            @default([])
-  isActive              Boolean             @default(true)
-  isTrackable           Boolean             @default(false)
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  permissions           String[]              @default([])
+  isActive              Boolean               @default(true)
+  isTrackable           Boolean               @default(false)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   // Relations
   sessions                     Session[]
@@ -270,7 +271,8 @@ model PersonMergeItem {
 }
 
 model Company {
-  id            String  @id @default(cuid())
+  exchangeRates CompanyExchangeRate[]
+  id            String                @id @default(cuid())
   name          String
   bin           String? // БИН/ИИН
   address       String? // Юридический адрес
@@ -2090,12 +2092,19 @@ model Currency {
   /// Порядок показа: сперва тенге, потом СНГ, потом мир.
   sortOrder Int @default(500)
 
-  rates ExchangeRate[]
+  rates        ExchangeRate[]
+  companyRates CompanyExchangeRate[]
 
   @@index([isCommon, sortOrder])
 }
 
-/// Курс валюты к тенге на конкретную дату.
+/// ОФИЦИАЛЬНЫЙ курс валюты к тенге на дату — общий для всей платформы.
+///
+/// Курс Нацбанка один для всех, поэтому таблица не привязана к компании.
+/// Свой курс компании (по договору, или для валюты без официального курса)
+/// живёт отдельно — см. `CompanyExchangeRate`. Разделение не украшение:
+/// пока обе разновидности лежали в одной таблице, курс, поставленный одной
+/// компанией, применялся ко всем остальным.
 ///
 /// Правило, ради которого всё это существует: курс, по которому провели
 /// документ, менять нельзя никогда. Поэтому курсы хранятся историей по
@@ -2122,11 +2131,6 @@ model ExchangeRate {
   sourceRate  Decimal? @db.Decimal(18, 6)
   sourceQuant Int?
 
-  /// NBK — официальный курс Нацбанка, MANUAL — поставлен руками.
-  source String  @default("NBK") @db.VarChar(10)
-  /// Зачем поставили руками: «курс по договору», «Нацбанк не отвечал».
-  note   String?
-
   createdById String?
   createdBy   User?   @relation("ExchangeRateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
 
@@ -2135,4 +2139,36 @@ model ExchangeRate {
 
   @@unique([currencyCode, rateDate])
   @@index([rateDate])
+}
+
+/// Свой курс компании на дату.
+///
+/// Нужен в двух случаях: у валюты нет официального курса Нацбанка (так с
+/// туркменским манатом) или в договоре с клиентом зафиксирован свой курс.
+///
+/// Отдельная таблица, а не признак в общей: курс по договору — коммерческая
+/// договорённость одной компании, и другим компаниям платформы её видеть
+/// нельзя. Официальный курс при этом остаётся нетронутым и общим, поэтому
+/// «затереть курс Нацбанка» здесь невозможно устройством, а не проверкой.
+model CompanyExchangeRate {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  currencyCode String   @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code], onDelete: Cascade)
+
+  rateDate DateTime @db.Date
+  /// Сколько тенге за ОДНУ единицу валюты.
+  rate     Decimal  @db.Decimal(18, 6)
+  /// Зачем поставили: «курс по договору», «Нацбанк не публикует».
+  note     String?
+
+  createdById String?
+  createdBy   User?   @relation("CompanyExchangeRateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, currencyCode, rateDate])
+  @@index([companyId, rateDate])
 }

@@ -2,7 +2,7 @@ import { Logger, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuditModule } from '../audit/audit.module';
 import { CurrencyController } from './currency.controller';
-import { CurrencyService } from './currency.service';
+import { CurrencyService, localToday } from './currency.service';
 
 /** Раз в шесть часов: Нацбанк объявляет курс раз в сутки, но не в одно время. */
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -35,7 +35,7 @@ export class CurrencyModule implements OnApplicationBootstrap {
     }
 
     private refresh() {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localToday();
         this.currency.importFromNbk(today)
             .then((result) => this.logger.log(
                 `Курсы Нацбанка на ${result.rateDate}: сохранено ${result.saved}` +
