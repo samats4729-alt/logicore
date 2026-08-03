@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import CompanyFormFields from '@/components/CompanyFormFields';
 import { toast } from 'sonner';
+import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 
 const { Text } = Typography;
 
@@ -139,23 +140,30 @@ export default function SettingsPage() {
         }
     };
 
+    // Пустой ответ (204) означает «не загружена» — показываем место под
+    // загрузку, а не сообщение об ошибке. Настоящий сбой связи, наоборот,
+    // молчать не должен.
     const loadStamp = async () => {
         try {
             const response = await api.get('/company/stamp', { responseType: 'blob' });
-            const url = URL.createObjectURL(response.data);
-            setStampUrl(url);
+            setStampUrl(response.status === 204 || !response.data?.size
+                ? null
+                : URL.createObjectURL(response.data));
         } catch (error) {
-            // Печать не загружена
+            setStampUrl(null);
+            toast.error('Не удалось загрузить печать компании');
         }
     };
 
     const loadSignature = async () => {
         try {
             const response = await api.get('/company/signature', { responseType: 'blob' });
-            const url = URL.createObjectURL(response.data);
-            setSignatureUrl(url);
+            setSignatureUrl(response.status === 204 || !response.data?.size
+                ? null
+                : URL.createObjectURL(response.data));
         } catch (error) {
-            // Подпись не загружена
+            setSignatureUrl(null);
+            toast.error('Не удалось загрузить подпись руководителя');
         }
     };
 
@@ -228,24 +236,11 @@ export default function SettingsPage() {
                         onFinish={handleCompanyUpdate}
                         onValuesChange={async (changedValues) => {
                             if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
-                                try {
-                                    const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
-                                    if (res.data) {
-                                        const updateObj: any = {};
-                                        if (res.data.name) updateObj.name = res.data.name;
-                                        if (res.data.address) {
-                                            updateObj.address = res.data.address;
-                                            updateObj.actualAddress = res.data.address;
-                                        }
-                                        if (res.data.directorName) updateObj.directorName = res.data.directorName;
-                                        if (res.data.phone) updateObj.phone = res.data.phone;
-                                        if (res.data.email) updateObj.email = res.data.email;
-
-                                        companyForm.setFieldsValue(updateObj);
-                                        toast.success('Реквизиты компании подтянуты');
-                                    }
-                                } catch (e) {
-                                    // Ignore
+                                const found = await lookupCompanyByBin(changedValues.bin);
+                                if (found) {
+                                    companyForm.setFieldsValue(companyFieldsFromLookup(found, {
+                                        withAddress: true, withDirector: true, actualAddressToo: true,
+                                    }));
                                 }
                             }
                         }}
