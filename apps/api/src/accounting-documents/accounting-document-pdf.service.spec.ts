@@ -499,4 +499,84 @@ describe('AccountingDocumentPdfService', () => {
             expect(printed.some((line) => line.includes('Сузьте период'))).toBe(true);
         });
     });
+
+    /**
+     * Валютный счёт на бланке.
+     *
+     * Обязательство остаётся в валюте документа — платить надо её. Но
+     * бухгалтерия принимающей стороны и налоговая считают в тенге, поэтому
+     * курс обязан быть виден на самом бланке: сумма в тенге без курса и даты
+     * ничем не подтверждается.
+     */
+    describe('счёт в валюте', () => {
+        const printedOf = async (document: InvoicePdfDocument) => {
+            const printed: string[] = [];
+            const proto = (PDFDocument as any).prototype;
+            const originalText = proto.text;
+            proto.text = function (this: any, value: unknown, ...rest: unknown[]) {
+                printed.push(String(value));
+                return originalText.call(this, value, ...rest);
+            };
+            try {
+                await service.generateInvoicePdf(document);
+            } finally {
+                proto.text = originalText;
+            }
+            return printed.join('\n');
+        };
+
+        const usdDocument = (): InvoicePdfDocument => ({
+            ...sampleDocument(),
+            currency: 'USD',
+            subtotal: new Prisma.Decimal('1000.00'),
+            vatTotal: new Prisma.Decimal('0.00'),
+            total: new Prisma.Decimal('1000.00'),
+            exchangeRate: new Prisma.Decimal('473.590000'),
+            exchangeRateDate: new Date('2026-08-03'),
+            totalBase: new Prisma.Decimal('473590.00'),
+        });
+
+        it('сумма прописью — в долларах, а не в тенге', async () => {
+            const all = await printedOf(usdDocument());
+            expect(all).toContain('Одна тысяча долларов США 00 центов');
+            expect(all).not.toContain('тиын');
+        });
+
+        it('на бланке видны курс, дата курса и сумма в тенге', async () => {
+            const all = await printedOf(usdDocument());
+            // Слово «Справочно» здесь несущее: без него сумма в тенге
+            // читается как вторая сумма к оплате.
+            expect(all).toContain('Справочно: 473 590,00 тенге по курсу 473.59 ₸ за 1 USD на 03.08.2026');
+        });
+
+        it('сказано, что платить надо в валюте счёта', async () => {
+            // Иначе плательщик решит, что можно перевести тенге, и сумма
+            // разойдётся с обязательством на движение курса.
+            const all = await printedOf(usdDocument());
+            expect(all).toContain('Оплата производится в валюте счёта');
+        });
+
+        it('у тенгового счёта справочной строки нет вовсе', async () => {
+            // Курс и пересчёт у тенговых документов В БАЗЕ ЕСТЬ: миграция
+            // проставила им курс 1 и итог, равный сумме. Поэтому проверять
+            // надо именно такой документ — иначе условие «не тенге» можно
+            // выбросить, и никто этого не заметит.
+            const document: InvoicePdfDocument = {
+                ...sampleDocument(),
+                exchangeRate: new Prisma.Decimal('1.000000'),
+                totalBase: new Prisma.Decimal('100000.00'),
+            };
+            const all = await printedOf(document);
+            expect(all).not.toContain('Справочно:');
+            expect(all).toContain('тиын');
+        });
+
+        it('без курса справочная строка не печатается, а не врёт нулём', async () => {
+            const document = { ...usdDocument(), exchangeRate: null, totalBase: null };
+            const all = await printedOf(document);
+            expect(all).not.toContain('Справочно:');
+            // Сама сумма при этом на месте — счёт остаётся валютным.
+            expect(all).toContain('Одна тысяча долларов США 00 центов');
+        });
+    });
 });

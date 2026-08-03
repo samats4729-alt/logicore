@@ -23,6 +23,7 @@ import {
     routePointsLabel,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
+import CurrencySelect from '@/components/orders/CurrencySelect';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
@@ -91,6 +92,13 @@ export default function CreateInvoicePage() {
     const [direction, setDirection] = useState<AccountingDocumentDirection>('OUTGOING');
     const [counterpartyId, setCounterpartyId] = useState<string | undefined>();
     const [documentDate, setDocumentDate] = useState<Dayjs>(dayjs());
+    /**
+     * Валюта счёта. По умолчанию тенге — так выставляют почти все счета.
+     *
+     * Менять её можно только пока счёт черновик: у проведённого документа
+     * валюта и курс уже стали частью обязательства.
+     */
+    const [currency, setCurrency] = useState('KZT');
     const [dueDate, setDueDate] = useState<Dayjs | null>(null);
     const [bankAccountId, setBankAccountId] = useState<string | undefined>();
     const [note, setNote] = useState('');
@@ -226,6 +234,7 @@ export default function CreateInvoicePage() {
                 direction,
                 counterpartyId,
                 documentDate: documentDate.format('YYYY-MM-DD'),
+                currency,
                 dueDate: dueDate ? dueDate.format('YYYY-MM-DD') : undefined,
                 bankAccountId,
                 note: note.trim() || undefined,
@@ -437,6 +446,10 @@ export default function CreateInvoicePage() {
                             value={documentDate}
                             onChange={(value) => value && setDocumentDate(value)}
                         />
+                    ))}
+
+                    {headerField('Валюта', (
+                        <CurrencySelect value={currency} onChange={setCurrency} width={110} />
                     ))}
 
                     {headerField('Срок оплаты', (

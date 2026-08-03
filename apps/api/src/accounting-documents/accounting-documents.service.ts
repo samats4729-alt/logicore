@@ -17,6 +17,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { CurrencyService } from '../currency/currency.service';
 import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import type { FinancialReportsService } from '../accounting/services/financial-reports.service';
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
@@ -133,7 +134,39 @@ export class AccountingDocumentsService {
         private readonly periodClosing: PeriodClosingService,
         @Inject(RECONCILIATION_REPORTS)
         private readonly financialReports: ReconciliationReports,
+        private readonly currency: CurrencyService,
     ) {}
+
+    /**
+     * Курс валюты документа — тот, что попадёт в сам документ.
+     *
+     * Берётся на дату документа: именно ею датировано обязательство. Курс
+     * записывается внутрь и больше не меняется — завтрашний курс вчерашний
+     * счёт не трогает.
+     *
+     * Валюты нет в справочнике или курса на дату не нашлось — документ всё
+     * равно создаётся, но без пересчёта: лучше счёт без справочной суммы в
+     * тенге, чем счёт с выдуманной.
+     */
+    private async documentRate(
+        companyId: string,
+        currencyCode: string,
+        documentDate: Date,
+        total: Prisma.Decimal,
+    ) {
+        if (!currencyCode || currencyCode === 'KZT') {
+            return { exchangeRate: new Prisma.Decimal(1), exchangeRateDate: null, totalBase: total };
+        }
+        const converted = await this.currency.toBase(total, currencyCode, documentDate, { companyId });
+        if (!converted) {
+            return { exchangeRate: null, exchangeRateDate: null, totalBase: null };
+        }
+        return {
+            exchangeRate: converted.rate,
+            exchangeRateDate: converted.rateDate,
+            totalBase: converted.amount,
+        };
+    }
 
     async createReconciliationDraftFromLedger(
         companyId: string,
@@ -244,6 +277,13 @@ export class AccountingDocumentsService {
             : null;
         const documentDate = new Date(dto.documentDate);
 
+        const documentTotal = (dto.type === AccountingDocumentType.RECONCILIATION_ACT
+            ? reconciliationCalculation?.closingBalance
+            : lineCalculation?.total) ?? new Prisma.Decimal(0);
+        const rate = await this.documentRate(
+            companyId, dto.currency ?? 'KZT', documentDate, documentTotal,
+        );
+
         const created = await this.prisma.$transaction(async (tx) => {
             const number = await this.nextNumber(
                 tx,
@@ -269,6 +309,9 @@ export class AccountingDocumentsService {
                     reportPeriodTo: dto.reportPeriodTo ? new Date(dto.reportPeriodTo) : null,
                     contractId: dto.contractId || null,
                     currency: dto.currency ?? 'KZT',
+                    exchangeRate: rate.exchangeRate,
+                    exchangeRateDate: rate.exchangeRateDate,
+                    totalBase: rate.totalBase,
                     subtotal: lineCalculation?.subtotal ?? new Prisma.Decimal(0),
                     discountTotal: lineCalculation?.discountTotal ?? new Prisma.Decimal(0),
                     vatTotal: lineCalculation?.vatTotal ?? new Prisma.Decimal(0),
@@ -511,6 +554,7 @@ export class AccountingDocumentsService {
                 status: true,
                 documentDate: true,
                 amountPaid: true,
+                currency: true,
                 orders: { select: { orderId: true } },
             },
         });
@@ -583,6 +627,20 @@ export class AccountingDocumentsService {
         }
 
         const lineCalculation = dto.lines ? this.calculator.calculateLines(dto.lines) : null;
+
+        // Валюту черновика не меняем: она задана при создании вместе с
+        // нумерацией и снимками сторон. Меняется дата или суммы — пересчёт
+        // берётся заново на новую дату документа.
+        const nextDocumentDate = dto.documentDate ? new Date(dto.documentDate) : document.documentDate;
+        const draftRate = (lineCalculation || dto.documentDate !== undefined)
+            ? await this.documentRate(
+                companyId,
+                document.currency,
+                nextDocumentDate,
+                lineCalculation?.total ?? new Prisma.Decimal(0),
+            )
+            : null;
+
         const trimmed = (value: string | null | undefined) =>
             value === undefined ? undefined : value?.trim() || null;
 
@@ -600,6 +658,9 @@ export class AccountingDocumentsService {
                     ...(dto.documentDate !== undefined
                         ? { documentDate: new Date(dto.documentDate) }
                         : {}),
+                    // Поменялись строки или дата — устарел и пересчёт в
+                    // учётную валюту: он привязан к дате документа.
+                    ...(draftRate ?? {}),
                     ...(dto.operationDate !== undefined
                         ? { operationDate: dto.operationDate ? new Date(dto.operationDate) : null }
                         : {}),
@@ -710,7 +771,35 @@ export class AccountingDocumentsService {
             document.operationDate ?? document.documentDate,
         );
         this.assertStoredDocumentCanBePosted(document);
-        const checksum = this.checksum(document);
+
+        /**
+         * Курс фиксируется в момент проведения — здесь и навсегда.
+         *
+         * Черновик мог быть заведён в день, на который курса ещё не было, —
+         * тогда пробуем взять его сейчас. Если курса нет и теперь, документ
+         * НЕ проводится: валютный счёт без курса невозможно показать ни в
+         * одном отчёте, а «проведём, потом разберёмся» означает, что цифры
+         * разойдутся молча. Лучше внятный отказ с тем, что делать.
+         */
+        let frozenRate: { exchangeRate: Prisma.Decimal | null; exchangeRateDate: Date | null; totalBase: Prisma.Decimal | null } | null = null;
+        if (document.currency && document.currency !== 'KZT') {
+            frozenRate = document.exchangeRate && document.totalBase
+                ? {
+                    exchangeRate: document.exchangeRate,
+                    exchangeRateDate: document.exchangeRateDate,
+                    totalBase: document.totalBase,
+                }
+                : await this.documentRate(companyId, document.currency, document.documentDate, document.total);
+
+            if (!frozenRate.exchangeRate || !frozenRate.totalBase) {
+                throw new BadRequestException(
+                    `Нет курса ${document.currency} на дату документа. ` +
+                    'Загрузите курс в разделе «Финансы → Курсы валют» и проведите документ снова.',
+                );
+            }
+        }
+
+        const checksum = this.checksum({ ...document, ...(frozenRate ?? {}) } as any);
 
         const result = await this.prisma.accountingDocument.updateMany({
             where: { id, companyId, status: AccountingDocumentStatus.DRAFT },
@@ -719,6 +808,7 @@ export class AccountingDocumentsService {
                 postedById: userId,
                 postedAt: new Date(),
                 checksum,
+                ...(frozenRate ?? {}),
             },
         });
         if (result.count !== 1) {
@@ -1073,6 +1163,10 @@ export class AccountingDocumentsService {
             documentDate: document.documentDate,
             operationDate: document.operationDate,
             currency: document.currency,
+            // Курс — часть документа, а не справка: по нему считаются отчёты
+            // и по нему же он должен остаться неизменным.
+            exchangeRate: document.exchangeRate,
+            exchangeRateDate: document.exchangeRateDate,
             subtotal: document.subtotal,
             vatTotal: document.vatTotal,
             total: document.total,

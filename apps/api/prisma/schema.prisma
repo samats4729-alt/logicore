@@ -1577,40 +1577,52 @@ enum AccountingVatCalculation {
 }
 
 model AccountingDocument {
-  id                         String                      @id @default(cuid())
-  companyId                  String
-  company                    Company                     @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
-  counterpartyId             String
-  counterparty               Company                     @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
-  type                       AccountingDocumentType
-  direction                  AccountingDocumentDirection
-  status                     AccountingDocumentStatus    @default(DRAFT)
-  number                     String
-  externalNumber             String?
-  externalDate               DateTime?                   @db.Date
-  documentDate               DateTime                    @db.Date
-  operationDate              DateTime?                   @db.Date
-  dueDate                    DateTime?                   @db.Date
-  reportPeriodFrom           DateTime?                   @db.Date
-  reportPeriodTo             DateTime?                   @db.Date
-  contractId                 String?
-  contract                   Contract?                   @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  id               String                      @id @default(cuid())
+  companyId        String
+  company          Company                     @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  counterpartyId   String
+  counterparty     Company                     @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
+  type             AccountingDocumentType
+  direction        AccountingDocumentDirection
+  status           AccountingDocumentStatus    @default(DRAFT)
+  number           String
+  externalNumber   String?
+  externalDate     DateTime?                   @db.Date
+  documentDate     DateTime                    @db.Date
+  operationDate    DateTime?                   @db.Date
+  dueDate          DateTime?                   @db.Date
+  reportPeriodFrom DateTime?                   @db.Date
+  reportPeriodTo   DateTime?                   @db.Date
+  contractId       String?
+  contract         Contract?                   @relation(fields: [contractId], references: [id], onDelete: SetNull)
   // Расчётный счёт организации, с которого выставлен документ. Его реквизиты
   // попадают в issuerSnapshot и печатаются; сама ссылка нужна для отбора и
   // для подстановки счёта по умолчанию в следующих документах.
-  bankAccountId              String?
-  bankAccount                FinanceAccount?             @relation("AccountingDocumentBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
-  currency                   String                      @default("KZT") @db.VarChar(3)
-  subtotal                   Decimal                     @default(0) @db.Decimal(20, 2)
-  discountTotal              Decimal                     @default(0) @db.Decimal(20, 2)
-  vatTotal                   Decimal                     @default(0) @db.Decimal(20, 2)
-  total                      Decimal                     @default(0) @db.Decimal(20, 2)
-  amountPaid                 Decimal                     @default(0) @db.Decimal(20, 2)
-  balanceDue                 Decimal                     @default(0) @db.Decimal(20, 2)
-  openingBalance             Decimal?                    @db.Decimal(20, 2)
-  debitTurnover              Decimal?                    @db.Decimal(20, 2)
-  creditTurnover             Decimal?                    @db.Decimal(20, 2)
-  closingBalance             Decimal?                    @db.Decimal(20, 2)
+  bankAccountId    String?
+  bankAccount      FinanceAccount?             @relation("AccountingDocumentBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
+  currency         String                      @default("KZT") @db.VarChar(3)
+
+  /// Курс валюты документа к учётной валюте — ЗАФИКСИРОВАННЫЙ.
+  ///
+  /// Главное правило валютного учёта: курс, по которому провели документ,
+  /// не меняется никогда. Завтра доллар другой — вчерашний счёт обязан
+  /// остаться вчерашним, иначе отчёт за прошлый месяц завтра покажет другие
+  /// цифры сам по себе. Поэтому курс не вычисляется при показе, а лежит
+  /// внутри документа вместе с датой, на которую он взят.
+  exchangeRate               Decimal?  @db.Decimal(18, 6)
+  exchangeRateDate           DateTime? @db.Date
+  /// Итог документа в учётной валюте по этому курсу — для отчётов.
+  totalBase                  Decimal?  @db.Decimal(20, 2)
+  subtotal                   Decimal   @default(0) @db.Decimal(20, 2)
+  discountTotal              Decimal   @default(0) @db.Decimal(20, 2)
+  vatTotal                   Decimal   @default(0) @db.Decimal(20, 2)
+  total                      Decimal   @default(0) @db.Decimal(20, 2)
+  amountPaid                 Decimal   @default(0) @db.Decimal(20, 2)
+  balanceDue                 Decimal   @default(0) @db.Decimal(20, 2)
+  openingBalance             Decimal?  @db.Decimal(20, 2)
+  debitTurnover              Decimal?  @db.Decimal(20, 2)
+  creditTurnover             Decimal?  @db.Decimal(20, 2)
+  closingBalance             Decimal?  @db.Decimal(20, 2)
   issuerSnapshot             Json
   recipientSnapshot          Json
   issuerSignatorySnapshot    Json?
@@ -1621,8 +1633,8 @@ model AccountingDocument {
   customerMaterialsInfo      String?
   appendixInfo               String?
   note                       String?
-  version                    Int                         @default(1)
-  checksum                   String?                     @db.VarChar(64)
+  version                    Int       @default(1)
+  checksum                   String?   @db.VarChar(64)
 
   // Публичная ссылка на документ для контрагента.
   // Токен можно перевыпустить — тогда все ранее разосланные ссылки

@@ -4,6 +4,7 @@ import {
     AccountingDocumentType,
     Prisma,
 } from '@prisma/client';
+import { pluralForm, wordsFor } from './currency-words';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
 
@@ -57,6 +58,10 @@ export interface InvoicePdfDocument {
     customerMaterialsInfo?: string | null;
     appendixInfo?: string | null;
     currency: string;
+    /** Курс к учётной валюте, зафиксированный в документе. */
+    exchangeRate?: Prisma.Decimal | null;
+    exchangeRateDate?: Date | string | null;
+    totalBase?: Prisma.Decimal | null;
     subtotal: Prisma.Decimal;
     vatTotal: Prisma.Decimal;
     total: Prisma.Decimal;
@@ -1320,13 +1325,37 @@ export class AccountingDocumentPdfService {
         this.totalLine(doc, 'В том числе НДС:', this.formatMoney(document.vatTotal), labelX, valueX);
         doc.moveDown(0.5);
         doc.font('Roboto').fontSize(8.5);
-        const currencyLabel = document.currency === 'KZT' ? 'тенге' : document.currency;
+        // Подпись валюты словом там, где она известна: «на сумму … долларов
+        // США» читается, а «на сумму … USD» — нет.
+        const words = wordsFor(document.currency);
+        const currencyLabel = words.minor[0] ? words.major[2] : document.currency;
         doc.text(`Всего наименований ${document.lines.length}, на сумму ${this.formatMoney(document.total)} ${currencyLabel}`, left, doc.y, {
             width,
         });
         doc.moveDown(0.3);
         doc.font('Roboto-Bold').fontSize(9.5);
-        doc.text(`Всего к оплате: ${this.amountInWords(document.total)}`, left, doc.y, { width });
+        doc.text(`Всего к оплате: ${this.amountInWords(document.total, document.currency)}`, left, doc.y, { width });
+
+        // Справочная строка для валютного счёта.
+        //
+        // Обязательство остаётся в валюте документа — платить надо её. Но
+        // бухгалтерия принимающей стороны и налоговая считают в тенге, и
+        // курс должен быть виден на самом бланке, а не «где-то в системе».
+        // Без курса и даты сумма в тенге ничем не подтверждается.
+        if (document.currency !== 'KZT' && document.exchangeRate && document.totalBase) {
+            const rateDate = document.exchangeRateDate ? new Date(document.exchangeRateDate) : null;
+            const asOf = rateDate && !Number.isNaN(rateDate.getTime())
+                ? ` на ${String(rateDate.getUTCDate()).padStart(2, '0')}.${String(rateDate.getUTCMonth() + 1).padStart(2, '0')}.${rateDate.getUTCFullYear()}`
+                : '';
+            doc.moveDown(0.3);
+            doc.font('Roboto').fontSize(8);
+            doc.text(
+                `Справочно: ${this.formatMoney(document.totalBase)} тенге по курсу ` +
+                `${document.exchangeRate.toFixed(2)} ₸ за 1 ${document.currency}${asOf}. ` +
+                'Оплата производится в валюте счёта.',
+                left, doc.y, { width },
+            );
+        }
         doc.moveDown(0.55);
         doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1).strokeColor(INK).stroke();
         doc.moveDown(0.7);
@@ -1538,13 +1567,32 @@ export class AccountingDocumentPdfService {
         return value.toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
     }
 
-    private amountInWords(value: Prisma.Decimal) {
+    /**
+     * Сумма прописью в валюте документа.
+     *
+     * Слова валюты берутся из справочника: «Пятьсот долларов США 00 центов»,
+     * а не «Пятьсот тенге 00 тиын». Раньше слова стояли прямо здесь, и в
+     * валютном счёте документ получался неверным — а сумма прописью это
+     * первое, на что смотрит принимающая бухгалтерия.
+     */
+    private amountInWords(value: Prisma.Decimal, currencyCode = 'KZT') {
+        const currency = wordsFor(currencyCode);
         const [integerPart, fractionPart] = value.toFixed(2).split('.');
+        // У валюты без разменной единицы (или неизвестной) копейки пишутся
+        // числом без слова: выдумывать название наугад хуже.
+        const minorText = currency.minor[0]
+            ? ` ${fractionPart} ${pluralForm(Number(fractionPart), currency.minor)}`
+            : ` ${fractionPart}`;
+
         let remaining = BigInt(integerPart);
-        if (remaining === 0n) return `Ноль тенге ${fractionPart} тиын`;
+        if (remaining === 0n) {
+            return `Ноль ${pluralForm(0, currency.major)}${minorText}`;
+        }
 
         const groups = [
-            { forms: ['', '', ''], feminine: false },
+            // Род единиц целой части — как у самой валюты: «одна гривна», но
+            // «один доллар».
+            { forms: ['', '', ''], feminine: !!currency.majorFeminine },
             { forms: ['тысяча', 'тысячи', 'тысяч'], feminine: true },
             { forms: ['миллион', 'миллиона', 'миллионов'], feminine: false },
             { forms: ['миллиард', 'миллиарда', 'миллиардов'], feminine: false },
@@ -1557,15 +1605,18 @@ export class AccountingDocumentPdfService {
             const group = Number(remaining % 1000n);
             if (group) {
                 const config = groups[groupIndex];
-                const words = this.threeDigits(group, config?.feminine ?? false);
-                if (groupIndex > 0 && config) words.push(this.plural(group, config.forms));
-                parts.unshift(words.join(' '));
+                const chunk = this.threeDigits(group, config?.feminine ?? false);
+                if (groupIndex > 0 && config) chunk.push(this.plural(group, config.forms));
+                parts.unshift(chunk.join(' '));
             }
             remaining /= 1000n;
             groupIndex += 1;
         }
         const words = parts.join(' ');
-        return `${words.charAt(0).toUpperCase()}${words.slice(1)} тенге ${fractionPart} тиын`;
+        // Форму слова задают последние две цифры: «двадцать один доллар», но
+        // «одиннадцать долларов».
+        const majorWord = pluralForm(Number(BigInt(integerPart) % 100n), currency.major);
+        return `${words.charAt(0).toUpperCase()}${words.slice(1)} ${majorWord}${minorText}`;
     }
 
     private threeDigits(value: number, feminine: boolean) {

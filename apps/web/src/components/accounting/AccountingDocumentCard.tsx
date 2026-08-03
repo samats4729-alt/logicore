@@ -38,8 +38,22 @@ import {
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
 
-const money = (value: number) =>
-    `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
+/**
+ * Сумма со знаком валюты документа.
+ *
+ * Знак тенге больше не зашит: счёт может быть в рублях или долларах, и
+ * «100 000 ₸» на долларовом счёте — не опечатка, а другая сумма в четыреста
+ * раз. Для валют без общеизвестного знака показываем код.
+ */
+const CURRENCY_SIGNS: Record<string, string> = {
+    KZT: '₸', RUB: '₽', USD: '$', EUR: '€', GBP: '£', UAH: '₴', TRY: '₺', CNY: '¥', JPY: '¥',
+};
+
+const money = (value: number, currency = 'KZT') => {
+    const amount = (value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const sign = CURRENCY_SIGNS[currency];
+    return sign ? `${amount} ${sign}` : `${amount} ${currency}`;
+};
 
 /** Ставки, которые бухгалтер выбирает в 1С в графе «% НДС». */
 const VAT_OPTIONS = [
@@ -548,7 +562,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
                         parser={(value) => Number((value || '').replace(/\s/g, '')) as any}
                     />
-                ) : money(record.unitPrice)
+                ) : money(record.unitPrice, document.currency)
             ),
         },
         {
@@ -578,7 +592,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             align: 'right' as const,
             render: (_: unknown, record: EditableLine) => (
                 <span style={{ fontWeight: 600 }}>
-                    {money((record.quantity || 0) * (record.unitPrice || 0))}
+                    {money((record.quantity || 0) * (record.unitPrice || 0), document.currency)}
                 </span>
             ),
         },
@@ -803,10 +817,10 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
 
                     {kind.showPayment && headerField('Оплачено', (
                         <span>
-                            {money(document.amountPaid)}
+                            {money(document.amountPaid, document.currency)}
                             {document.balanceDue > 0 && (
                                 <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>
-                                    {' '}· остаток {money(document.balanceDue)}
+                                    {' '}· остаток {money(document.balanceDue, document.currency)}
                                 </span>
                             )}
                         </span>
@@ -886,11 +900,21 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
 
                     <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
-                            В том числе НДС: {money(dirty ? totals.vat : document.vatTotal)}
+                            В том числе НДС: {money(dirty ? totals.vat : document.vatTotal, document.currency)}
                         </div>
                         <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>
-                            Всего: {money(dirty ? totals.total : document.total)}
+                            Всего: {money(dirty ? totals.total : document.total, document.currency)}
                         </div>
+                        {/* Валютный счёт: курс виден прямо здесь. Он
+                            зафиксирован в документе и больше не изменится —
+                            завтрашний курс этот счёт не трогает. */}
+                        {document.currency !== 'KZT' && document.exchangeRate ? (
+                            <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
+                                {document.totalBase
+                                    ? `${money(document.totalBase)} по курсу ${Number(document.exchangeRate).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₸ за 1 ${document.currency}`
+                                    : `Курс ${document.currency} не найден — счёт нельзя провести`}
+                            </div>
+                        ) : null}
                         {dirty && (
                             <div style={{ fontSize: 11, color: token.colorWarning, marginTop: 2 }}>
                                 Предварительный расчёт — нажмите «Записать»

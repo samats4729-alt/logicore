@@ -102,6 +102,16 @@ export interface AccountingDocumentLine {
 }
 
 export interface AccountingDocumentDetails extends AccountingDocumentListItem {
+    /**
+     * Курс, зафиксированный в документе, и итог в учётной валюте.
+     *
+     * Пусто у тенговых документов: тенге к тенге всегда один, и курс там не
+     * нужен. У валютного пусто означает, что курса на дату документа нет —
+     * такой счёт не проводится.
+     */
+    exchangeRate?: number | null;
+    exchangeRateDate?: string | null;
+    totalBase?: number | null;
     subtotal: number;
     vatTotal: number;
     discountTotal: number;
@@ -182,6 +192,8 @@ export interface CreateAccountingDocumentInput {
     direction: AccountingDocumentDirection;
     counterpartyId: string;
     documentDate: string;
+    /** Валюта документа, три буквы по ISO. По умолчанию тенге. */
+    currency?: string;
     dueDate?: string;
     bankAccountId?: string;
     contractId?: string;
