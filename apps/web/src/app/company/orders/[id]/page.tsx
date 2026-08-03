@@ -41,6 +41,7 @@ import {
     type OrderChainDocumentType,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
+import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -2218,17 +2219,8 @@ export default function OrderDetailPage() {
                     onFinish={handleCreateQuickPartner}
                     onValuesChange={async (changedValues) => {
                         if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
-                            try {
-                                const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
-                                if (res.data) {
-                                    const updateObj: any = {};
-                                    if (res.data.name) updateObj.name = res.data.name;
-                                    if (res.data.phone) updateObj.phone = res.data.phone;
-                                    if (res.data.email) updateObj.email = res.data.email;
-                                    quickPartnerForm.setFieldsValue(updateObj);
-                                    toast.success('Реквизиты подтянуты');
-                                }
-                            } catch { }
+                            const found = await lookupCompanyByBin(changedValues.bin);
+                            if (found) quickPartnerForm.setFieldsValue(companyFieldsFromLookup(found));
                         }
                     }}
                 >

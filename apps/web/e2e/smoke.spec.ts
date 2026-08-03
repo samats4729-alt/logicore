@@ -36,7 +36,11 @@ test('мастер заявки доходит до груза и показыв
         await page.getByRole('button', { name: /Выберите адрес или склад/ }).first().click();
         // Адрес выбирается в отдельном окне с поиском и фильтрами.
         await expect(page.getByRole('dialog')).toBeVisible();
-        const option = page.getByRole('dialog').locator('button').filter({ hasText: /Склад|ул\.|г\./ }).first();
+        // Целимся в строку адреса, а не «в кнопку с подходящим словом»: в окне
+        // есть фильтры по группе и городу, и их подписи содержат те же слова.
+        // На стенде с наполненными складами заказчика тест кликал в фильтр,
+        // окно оставалось открытым, и падение выглядело как поломка окна.
+        const option = page.getByRole('dialog').locator('[data-address-option]').first();
         await expect(option).toBeVisible();
         await option.click();
         await expect(page.getByRole('dialog')).toBeHidden();

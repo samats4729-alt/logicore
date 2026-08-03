@@ -11,6 +11,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
+import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 
 const { Title, Text } = Typography;
 
@@ -605,21 +606,11 @@ export default function PartnersPage() {
                     onFinish={handleSave}
                     onValuesChange={async (changedValues) => {
                         if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
-                            try {
-                                const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
-                                if (res.data) {
-                                    const updateObj: any = {};
-                                    if (res.data.name) updateObj.name = res.data.name;
-                                    if (res.data.address) updateObj.address = res.data.address;
-                                    if (res.data.directorName) updateObj.directorName = res.data.directorName;
-                                    if (res.data.phone) updateObj.phone = res.data.phone;
-                                    if (res.data.email) updateObj.email = res.data.email;
-                                    
-                                    form.setFieldsValue(updateObj);
-                                    toast.success('Реквизиты компании подтянуты');
-                                }
-                            } catch (e) {
-                                // Ignore
+                            const found = await lookupCompanyByBin(changedValues.bin);
+                            if (found) {
+                                form.setFieldsValue(companyFieldsFromLookup(found, {
+                                    withAddress: true, withDirector: true,
+                                }));
                             }
                         }
                     }}

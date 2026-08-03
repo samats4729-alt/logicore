@@ -26,6 +26,7 @@ import OrdersMobileList from '@/components/OrdersMobileList';
 import StatusPill, { STATUS_PILL, STATUS_LABELS } from '@/components/ui/StatusPill';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { toast } from 'sonner';
+import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -198,8 +199,6 @@ export default function CompanyOrdersPage() {
     // Common
     const [drivers, setDrivers] = useState<Driver[]>([]);
     const [driversLoading, setDriversLoading] = useState(false);
-    const [vehicles, setVehicles] = useState<any[]>([]);
-    const [vehiclesLoading, setVehiclesLoading] = useState(false);
     const [partners, setPartners] = useState<Partner[]>([]);
     const [partnersLoading, setPartnersLoading] = useState(false);
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
@@ -480,18 +479,6 @@ export default function CompanyOrdersPage() {
             toast.error('Ошибка загрузки водителей');
         } finally {
             setDriversLoading(false);
-        }
-    };
-
-    const fetchVehicles = async () => {
-        setVehiclesLoading(true);
-        try {
-            const response = await api.get('/company/vehicles');
-            setVehicles(response.data || []);
-        } catch {
-            // silent fail
-        } finally {
-            setVehiclesLoading(false);
         }
     };
 
@@ -2179,20 +2166,8 @@ export default function CompanyOrdersPage() {
                     onFinish={handleCreateQuickPartner}
                     onValuesChange={async (changedValues) => {
                         if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
-                            try {
-                                const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
-                                if (res.data) {
-                                    const updateObj: any = {};
-                                    if (res.data.name) updateObj.name = res.data.name;
-                                    if (res.data.phone) updateObj.phone = res.data.phone;
-                                    if (res.data.email) updateObj.email = res.data.email;
-                                    
-                                    quickPartnerForm.setFieldsValue(updateObj);
-                                    toast.success('Реквизиты компании подтянуты');
-                                }
-                            } catch (e) {
-                                // Ignore
-                            }
+                            const found = await lookupCompanyByBin(changedValues.bin);
+                            if (found) quickPartnerForm.setFieldsValue(companyFieldsFromLookup(found));
                         }
                     }}
                 >

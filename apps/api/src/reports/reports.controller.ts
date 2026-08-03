@@ -12,7 +12,12 @@ import { ReportExportService } from './report-export.service';
 @ApiBearerAuth()
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-@RequirePermissions('reports')
+// Право раздела здесь — «Бухгалтерия», под которой отчёты и живут.
+// Стояло несуществующее право `reports`: такого нет ни в списке, который
+// руководитель выдаёт в «Сотрудниках», ни где-либо ещё. Выдать его было
+// невозможно, поэтому бухгалтер — тот, кто отчёты и собирает — на выгрузку
+// в Excel всегда получал отказ, а кнопка при этом была на экране.
+@RequirePermissions('accounting')
 export class ReportsController {
     constructor(private readonly exportService: ReportExportService) {}
 

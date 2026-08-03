@@ -12,6 +12,7 @@ import { DocumentsController } from '../documents/documents.controller';
 import { OrdersController } from '../orders/orders.controller';
 import { WarehouseController } from '../warehouse/warehouse.controller';
 import { CompanyController } from '../company/company.controller';
+import { ReportsController } from '../reports/reports.controller';
 
 /**
  * Матрица доступов: кто до какого действия допущен.
@@ -184,6 +185,49 @@ describe('Матрица доступов', () => {
                 expect(who).not.toContain(UserRole.RECIPIENT);
                 expect(who).not.toContain(UserRole.PARTNER);
             }
+        });
+    });
+
+    describe('выгрузка отчётов', () => {
+        it('бухгалтер выгружает отчёт — это его работа', () => {
+            // Требовалось право `reports`, которого нет ни в списке, что
+            // руководитель выдаёт в «Сотрудниках», ни где-либо ещё. Выдать
+            // его было нельзя, поэтому кнопка выгрузки на экране была, а
+            // ответом всегда был отказ.
+            expect(whoCanReach(ReportsController, 'exportReport')).toContain(UserRole.ACCOUNTANT);
+        });
+
+        it('право раздела при этом спрашивается — «Бухгалтерия»', () => {
+            // Не «пустили всех»: бухгалтер без права раздела по-прежнему не
+            // проходит.
+            expect(allowed(ReportsController, 'exportReport', UserRole.ACCOUNTANT, ['accounting'])).toBe(true);
+            expect(allowed(ReportsController, 'exportReport', UserRole.ACCOUNTANT, ['orders'])).toBe(false);
+        });
+
+        it('водитель и завсклад к выгрузке не допущены', () => {
+            const who = whoCanReach(ReportsController, 'exportReport');
+            expect(who).not.toContain(UserRole.DRIVER);
+            expect(who).not.toContain(UserRole.WAREHOUSE_MANAGER);
+        });
+
+        it('ни один эндпоинт не требует прав, которых нельзя выдать', () => {
+            // Права выдаются галочками в «Сотрудниках»; список там ровно этот.
+            // Требование права вне списка означает вечный отказ у трёх
+            // офисных ролей — и заметить это по коду невозможно.
+            const controllers = [
+                AccountingDocumentsController, PaymentProofController, DocumentsController,
+                OrdersController, WarehouseController, CompanyController, ReportsController,
+            ];
+            const unknown = new Set<string>();
+            for (const controller of controllers) {
+                for (const name of Object.getOwnPropertyNames(controller.prototype)) {
+                    const handler = (controller.prototype as any)[name];
+                    if (typeof handler !== 'function') continue;
+                    const required: string[] = reflector.getAllAndOverride('module_permissions', [handler, controller]) || [];
+                    required.filter((p) => !ALL_PERMISSIONS.includes(p)).forEach((p) => unknown.add(`${controller.name}.${name}: ${p}`));
+                }
+            }
+            expect([...unknown]).toEqual([]);
         });
     });
 

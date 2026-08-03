@@ -248,7 +248,11 @@ export class CompanyController {
     async getStamp(@Request() req: any, @Res() res: Response) {
         const stampPath = await this.companyService.getStampPath(req.user.companyId);
         if (!stampPath) {
-            return res.status(404).json({ message: 'Печать не загружена' });
+            // Печать просто не загружали — это не ошибка, а обычное состояние
+            // компании. Отвечали 404, и настройки шумели «не удалось» в
+            // журнале браузера при каждом открытии: настоящие поломки в этом
+            // шуме теряются. Пустой ответ говорит то же самое, но честно.
+            return res.status(204).send();
         }
 
         if (this.s3Service.isS3Enabled()) {
@@ -302,7 +306,8 @@ export class CompanyController {
     async getSignature(@Request() req: any, @Res() res: Response) {
         const signaturePath = await this.companyService.getSignaturePath(req.user.companyId);
         if (!signaturePath) {
-            return res.status(404).json({ message: 'Подпись не загружена' });
+            // Как и с печатью: не загружена — не поломка.
+            return res.status(204).send();
         }
 
         if (this.s3Service.isS3Enabled()) {
