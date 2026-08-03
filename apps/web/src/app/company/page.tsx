@@ -112,6 +112,10 @@ export default function CompanyDashboard() {
     const isManager = user?.role === 'LOGISTICIAN';
     // Полный дашборд (активность, задолженность) — только администратору компании
     const isOwner = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
+    // Очередь чеков от контрагентов — работа бухгалтера, и решение по чеку
+    // сервер разрешает принимать именно ему. Пока карточка висела только на
+    // дашборде владельца, тот, чья это работа, очереди не видел вовсе.
+    const seesPaymentProofs = isOwner || user?.role === 'ACCOUNTANT';
 
     const [activity, setActivity] = useState<DashboardActivity | null>(null);
     const [activityLoading, setActivityLoading] = useState(true);
@@ -384,7 +388,7 @@ export default function CompanyDashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
                 {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ (только администратор компании) ===== */}
                 {isOwner && show('pendingWork') && <PendingWorkCard />}
-                {isOwner && <PaymentProofsCard />}
+                {seesPaymentProofs && <PaymentProofsCard />}
 
                 {/* ===== ЗАДОЛЖЕННОСТЬ (только администратор компании) ===== */}
                 {isOwner && show('debts') && debtsAvailable && (
