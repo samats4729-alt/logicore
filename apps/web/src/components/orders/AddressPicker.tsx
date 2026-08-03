@@ -173,6 +173,12 @@ export function AddressPicker({
                                         <button
                                             key={option.id}
                                             type="button"
+                                            // Метка для браузерного теста: в окне есть ещё
+                                            // кнопки-фильтры, и их подписи («Склады заказчика
+                                            // […]», названия городов) совпадают с текстом
+                                            // адресов. Тест, ищущий адрес по слову, попадал в
+                                            // фильтр — на пустом стенде это не проявлялось.
+                                            data-address-option={option.id}
                                             onClick={() => { onSelect(option.id); close(); }}
                                             className={cn(
                                                 'flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent',
