@@ -270,12 +270,16 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Профиль',
                 onClick: () => router.push('/company/profile'),
             },
-            {
+            // «Настройки» — реквизиты, печать и организации компании: их
+            // меняет руководитель. Пункт показывали всем, и бухгалтер с
+            // завскладом попадали на экран, где каждая кнопка отвечает
+            // отказом. Свои данные и пароль — в «Профиле», он остаётся.
+            ...(checkSectionAccess('/company/settings', user).allowed ? [{
                 key: '/company/settings',
                 icon: <SettingOutlined />,
                 label: 'Настройки',
                 onClick: () => router.push('/company/settings'),
-            },
+            }] : []),
             {
                 type: 'divider' as const,
             },
