@@ -563,7 +563,7 @@ export default function FinanceSettingsPage() {
                             <Select
                                 size="large"
                                 options={[
-                                    { value: 'BANK', label: 'Расчетный счет в банке' },
+                                    { value: 'BANK', label: 'Расчётный счёт в банке' },
                                     { value: 'CASH', label: 'Касса (наличные)' },
                                 ]}
                             />

@@ -112,6 +112,8 @@ model User {
   verifiedCompanies     Company[]             @relation("VerifiedCompanies")
   createdOrderDocuments OrderDocument[]       @relation("CreatedOrderDocuments")
   createdCurrencyRevaluations CurrencyRevaluation[] @relation("CreatedCurrencyRevaluations")
+  sentAccountingDocuments     AccountingDocument[]  @relation("SentAccountingDocuments")
+  reviewedAccountingDocuments AccountingDocument[]  @relation("ReviewedAccountingDocuments")
   createdSharedReports  SharedReportLink[]    @relation("CreatedSharedReports")
   reviewedPaymentProofs OrderPaymentProof[]   @relation("ReviewedPaymentProofs")
   email                 String?               @unique
@@ -389,6 +391,7 @@ model Company {
   sharedReportsAsCounterparty SharedReportLink[]  @relation("CounterpartySharedReports")
   paymentProofs               OrderPaymentProof[] @relation("CompanyPaymentProofs")
   currencyRevaluations        CurrencyRevaluation[]
+  receivedAccountingDocuments AccountingDocument[] @relation("ReceivedAccountingDocuments")
   paymentProofsAsCounterparty OrderPaymentProof[] @relation("CounterpartyPaymentProofs")
   locationEmailLists          LocationEmailList[]
 
@@ -1711,6 +1714,30 @@ model AccountingDocument {
   @@index([counterpartyId, documentDate])
   @@index([companyId, counterpartyId, externalNumber])
   @@index([contractId])
+  /// Доставка документа контрагенту на платформе.
+  ///
+  /// Документ остаётся один: у него уже есть companyId (кто выпустил) и
+  /// counterpartyId (кому). Здесь — реальная компания-арендатор, которой
+  /// открыт доступ на чтение. Копий не появляется, и не приходится решать,
+  /// чей номер правильный. Пусто означает «не отправляли» или «у контрагента
+  /// нет учётной записи» — тогда остаётся публичная ссылка.
+  recipientCompanyId String?
+  recipientCompany   Company? @relation("ReceivedAccountingDocuments", fields: [recipientCompanyId], references: [id], onDelete: SetNull)
+  sentAt             DateTime?
+  sentById           String?
+  sentBy             User?    @relation("SentAccountingDocuments", fields: [sentById], references: [id], onDelete: SetNull)
+
+  /// Что получатель сделал с документом: ACCEPTED или REJECTED с причиной.
+  /// Пусто — ещё не смотрел. Править чужой документ он не может, только
+  /// принять или отклонить.
+  receiptStatus String?
+  receiptReason String?
+  receiptAt     DateTime?
+  receiptById   String?
+  receiptBy     User?     @relation("ReviewedAccountingDocuments", fields: [receiptById], references: [id], onDelete: SetNull)
+
+  @@index([recipientCompanyId])
+
 }
 
 model AccountingDocumentLine {

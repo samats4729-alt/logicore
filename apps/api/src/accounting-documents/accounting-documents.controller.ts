@@ -217,6 +217,67 @@ export class AccountingDocumentsController {
     }
 
 
+
+    // ==================== ДОСТАВКА КОНТРАГЕНТУ ====================
+
+    // До `:id`, иначе путь съедается параметром.
+    @Get('incoming-delivered')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({
+        summary: 'Документы, присланные нам контрагентами с платформы',
+        description: 'Это тот же документ, что у отправителя, — не копия. Править его нельзя.',
+    })
+    incomingDelivered(@Request() req: any, @Query('status') status?: string) {
+        return this.documents.listIncomingDelivered(req.user.companyId, { status });
+    }
+
+    @Get(':id/delivery')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({ summary: 'Можно ли отправить документ контрагенту и кому' })
+    delivery(@Request() req: any, @Param('id') id: string) {
+        return this.documents.deliveryTarget(req.user.companyId, id);
+    }
+
+    @Post(':id/send')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Отправить документ контрагенту на платформе',
+        description: 'Копия не создаётся: получателю открывается доступ на чтение к тому же документу.',
+    })
+    async send(@Request() req: any, @Param('id') id: string) {
+        const sent = await this.documents.sendToCounterparty(req.user.companyId, req.user.id, id);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'accounting_document', entityId: id,
+            entityLabel: `Документ ${sent.number} отправлен: ${sent.recipientCompany?.name ?? ''}`,
+        });
+        return sent;
+    }
+
+    @Post(':id/receipt')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Принять или отклонить входящий документ',
+        description: 'Решение получателя. Править чужой документ нельзя — только принять или отклонить с причиной.',
+    })
+    async receipt(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { decision: 'ACCEPTED' | 'REJECTED'; reason?: string },
+    ) {
+        const reviewed = await this.documents.reviewIncoming(
+            req.user.companyId, req.user.id, id, body.decision, body.reason,
+        );
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'accounting_document', entityId: id,
+            entityLabel: body.decision === 'ACCEPTED'
+                ? `Входящий документ ${reviewed.number} принят`
+                : `Входящий документ ${reviewed.number} отклонён: ${body.reason ?? ''}`,
+        });
+        return reviewed;
+    }
+
     // Оба до `:id`, иначе путь съедается параметром.
     @Get('numbering')
     @Roles(...VIEW_ROLES)

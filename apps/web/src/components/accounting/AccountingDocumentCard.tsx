@@ -10,6 +10,7 @@ import {
     DeleteOutlined,
     FileTextOutlined,
     LinkOutlined,
+    SendOutlined,
     MoreOutlined,
     PlusOutlined,
     PrinterOutlined,
@@ -24,11 +25,14 @@ import {
     AccountingDocumentLine,
     CompanyBankAccount,
     CreateAccountingDocumentLineInput,
+    DocumentDelivery,
     accountingDocumentHref,
     cancelAccountingDocument,
     createServiceActFromInvoice,
     deleteAccountingDocumentDraft,
     fetchAccountingDocument,
+    fetchDocumentDelivery,
+    sendAccountingDocument,
     fetchCompanyBankAccounts,
     openAccountingDocumentPdf,
     orderRouteLabel,
@@ -188,6 +192,9 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const [externalDate, setExternalDate] = useState<Dayjs | null>(null);
     const [lines, setLines] = useState<EditableLine[]>([]);
     const [dirty, setDirty] = useState(false);
+    // Кому можно отправить документ прямо на платформе. Определяется по БИН
+    // контрагента: справочная копия — это не арендатор, доставлять ей некуда.
+    const [delivery, setDelivery] = useState<DocumentDelivery | null>(null);
 
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
@@ -225,12 +232,26 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
         try {
             setLoading(true);
             applyDocument(await fetchAccountingDocument(id));
+            // Молчим при ошибке намеренно: доставка — дополнительная
+            // возможность, и её недоступность не должна мешать открыть
+            // карточку документа.
+            fetchDocumentDelivery(id).then(setDelivery).catch(() => setDelivery(null));
         } catch {
             setNotFound(true);
         } finally {
             setLoading(false);
         }
     }, [id, applyDocument]);
+
+    const sendToCounterparty = async () => {
+        try {
+            await sendAccountingDocument(document!.id);
+            toast.success('Документ отправлен контрагенту');
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось отправить');
+        }
+    };
 
     useEffect(() => {
         if (id) load();
@@ -717,6 +738,15 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                                     { type: 'divider' as const },
                                 ] : []),
                                 {
+                                    key: 'send',
+                                    icon: <SendOutlined />,
+                                    label: delivery?.recipient
+                                        ? `Отправить: ${delivery.recipient.name}`
+                                        : 'Отправить контрагенту на платформе',
+                                    disabled: !canChange || !delivery?.available,
+                                    onClick: sendToCounterparty,
+                                },
+                                {
                                     key: 'link',
                                     icon: <LinkOutlined />,
                                     label: 'Скопировать ссылку для контрагента',
@@ -763,6 +793,33 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     style={{ marginBottom: 16 }}
                     message={kind.cancelledTitle}
                     description={document.cancellationReason || undefined}
+                />
+            )}
+
+            {/* Судьба отправленного документа. Без неё «Отправить» было
+                действием в пустоту: контрагент отклонял счёт с причиной, а
+                тот, кто его выставил, узнавал об этом по телефону. */}
+            {delivery?.sent && (
+                <Alert
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    type={delivery.sent.status === 'REJECTED'
+                        ? 'error'
+                        : delivery.sent.status === 'ACCEPTED' ? 'success' : 'info'}
+                    message={
+                        delivery.sent.status === 'REJECTED'
+                            ? `Контрагент отклонил документ${delivery.sent.to ? `: ${delivery.sent.to.name}` : ''}`
+                            : delivery.sent.status === 'ACCEPTED'
+                                ? `Контрагент принял документ${delivery.sent.to ? `: ${delivery.sent.to.name}` : ''}`
+                                : `Отправлен контрагенту${delivery.sent.to ? `: ${delivery.sent.to.name}` : ''} — ждём решения`
+                    }
+                    description={[
+                        delivery.sent.reason,
+                        `Отправлен ${dayjs(delivery.sent.at).format('DD.MM.YYYY HH:mm')}`,
+                        delivery.sent.reviewedAt
+                            ? `решение ${dayjs(delivery.sent.reviewedAt).format('DD.MM.YYYY HH:mm')}`
+                            : null,
+                    ].filter(Boolean).join(' · ')}
                 />
             )}
 

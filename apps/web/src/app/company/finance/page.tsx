@@ -90,6 +90,9 @@ export default function FinanceHubPage() {
                 { label: 'Счета', href: '/company/accounting/invoices', show: acc, desc: 'Счета покупателям и от поставщиков — создание и журнал' },
                 { label: 'Акты выполненных работ', href: '/company/accounting/acts', show: acc, desc: 'Журнал актов по заявкам: открыть, проверить, распечатать' },
                 { label: 'Доверенности и договоры-заявки', href: '/company/accounting/transport-documents', show: acc, desc: 'Документы по рейсам за период: найти и распечатать, не открывая заявку' },
+                // Не справочник, а очередь работы: контрагент прислал счёт, и
+                // по нему нужно решение. В справочниках это никто не найдёт.
+                { label: 'Входящие документы', href: '/company/accounting/incoming', show: acc, desc: 'Счета и акты, присланные контрагентами прямо на платформе: принять или отклонить' },
             ],
         },
         {

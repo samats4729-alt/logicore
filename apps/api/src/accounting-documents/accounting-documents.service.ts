@@ -524,9 +524,25 @@ export class AccountingDocumentsService {
         };
     }
 
+    /**
+     * Карточка документа.
+     *
+     * Видит её и тот, кто документ выпустил, и тот, кому его отправили: это
+     * один и тот же документ, а не две копии. Получателю доступ только на
+     * чтение — все правки (`updateDraft`, `post`, `cancel`, удаление) как
+     * были, так и остались завязаны на `companyId` владельца.
+     */
     async getById(companyId: string, id: string) {
         const document = await this.prisma.accountingDocument.findFirst({
-            where: { id, companyId },
+            where: {
+                id,
+                OR: [
+                    { companyId },
+                    // Доставленный документ — не черновик и не «сам себе»:
+                    // отправка возможна только у проведённого.
+                    { recipientCompanyId: companyId, sentAt: { not: null } },
+                ],
+            },
             include: CARD_DOCUMENT_INCLUDE,
         });
         if (!document) throw new NotFoundException('Бухгалтерский документ не найден');
@@ -816,7 +832,7 @@ export class AccountingDocumentsService {
     }
 
     async post(companyId: string, userId: string, id: string) {
-        const document = await this.getById(companyId, id);
+        const document = await this.getOwnById(companyId, id);
         if (document.status !== AccountingDocumentStatus.DRAFT) {
             throw new ConflictException('Провести можно только документ в статусе «Черновик»');
         }
@@ -873,7 +889,7 @@ export class AccountingDocumentsService {
     }
 
     async cancel(companyId: string, userId: string, id: string, reason: string) {
-        const document = await this.getById(companyId, id);
+        const document = await this.getOwnById(companyId, id);
         if (document.status !== AccountingDocumentStatus.POSTED) {
             throw new ConflictException('Отменить можно только проведённый документ');
         }
@@ -898,6 +914,26 @@ export class AccountingDocumentsService {
         if (result.count !== 1) {
             throw new ConflictException('Документ уже был изменён другим пользователем');
         }
+        return this.getById(companyId, id);
+    }
+
+
+    /**
+     * Документ, которым мы вправе распоряжаться.
+     *
+     * `getById` намеренно шире: доставленный документ видит и получатель.
+     * Но менять его — проводить, отменять, удалять — может только тот, кто
+     * его выпустил. Без этой проверки получатель добирался бы до защищённого
+     * обновления и получал «документ уже изменён другим пользователем»
+     * вместо честного «не найден»: сообщение про чужую правку там, где на
+     * самом деле нет прав, отправляет искать несуществующую проблему.
+     */
+    private async getOwnById(companyId: string, id: string) {
+        const owned = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: { id: true },
+        });
+        if (!owned) throw new NotFoundException('Бухгалтерский документ не найден');
         return this.getById(companyId, id);
     }
 
@@ -1180,6 +1216,206 @@ export class AccountingDocumentsService {
         });
     }
 
+
+
+    // ==================== ДОСТАВКА КОНТРАГЕНТУ ====================
+
+    /**
+     * Отправить документ контрагенту на платформе.
+     *
+     * До сих пор счёт от компании А компании Б у Б не появлялся — она
+     * заводила его руками. Один документ существовал дважды, с разными
+     * номерами и суммами, набранными на слух, и сверка превращалась в спор,
+     * чей вариант правильный.
+     *
+     * Здесь документ остаётся ОДИН: получателю открывается доступ на чтение
+     * к той же строке. Копий не создаётся.
+     *
+     * Компании сопоставляются по БИН: в справочнике контрагент — это наша
+     * копия чужой организации, с настоящим арендатором платформы она никак
+     * не связана. Не нашли арендатора с таким БИН — отправлять некуда, и об
+     * этом надо сказать прямо, а не молчать: остаётся публичная ссылка.
+     */
+    async sendToCounterparty(companyId: string, userId: string, id: string) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: {
+                id: true, number: true, status: true, sentAt: true,
+                counterparty: { select: { id: true, name: true, bin: true } },
+            },
+        });
+        if (!document) throw new NotFoundException('Документ не найден');
+
+        // Черновик не отправляется: он ещё меняется, и у контрагента
+        // светились бы наши недоделанные суммы.
+        if (document.status !== AccountingDocumentStatus.POSTED) {
+            throw new BadRequestException(
+                'Отправить можно только проведённый документ — черновик ещё меняется',
+            );
+        }
+        if (document.sentAt) {
+            throw new BadRequestException('Документ уже отправлен контрагенту');
+        }
+        if (!document.counterparty?.bin) {
+            throw new BadRequestException(
+                'У контрагента не заполнен БИН — по нему ищется его организация на платформе',
+            );
+        }
+
+        const recipient = await this.findPlatformCompanyByBin(document.counterparty.bin, companyId);
+        if (!recipient) {
+            throw new BadRequestException(
+                `Организация с БИН ${document.counterparty.bin} на платформе не зарегистрирована. ` +
+                'Отправьте документ ссылкой — она работает без учётной записи',
+            );
+        }
+
+        return this.prisma.accountingDocument.update({
+            where: { id },
+            data: {
+                recipientCompanyId: recipient.id,
+                sentAt: new Date(),
+                sentById: userId,
+                // Прошлое решение получателя не переносится: документ он ещё
+                // не видел.
+                receiptStatus: null,
+                receiptReason: null,
+                receiptAt: null,
+                receiptById: null,
+            },
+            include: { recipientCompany: { select: { id: true, name: true, bin: true } } },
+        });
+    }
+
+    /**
+     * Есть ли на платформе организация с таким БИН.
+     *
+     * Ищется настоящий арендатор, а не справочная копия: у копии (isExternal)
+     * нет ни сотрудников, ни входа, доставлять ей некуда. Своя же компания
+     * исключается — документ самому себе не отправляют.
+     */
+    private async findPlatformCompanyByBin(bin: string, exceptCompanyId: string) {
+        return this.prisma.company.findFirst({
+            where: {
+                bin,
+                isExternal: false,
+                id: { not: exceptCompanyId },
+            },
+            select: { id: true, name: true, bin: true },
+        });
+    }
+
+    /**
+     * Можно ли отправить документ и кому — для кнопки в карточке.
+     *
+     * Заодно отдаёт, что с отправленным документом уже стало: без этого
+     * отправитель нажимал «Отправить» и больше ничего не узнавал — ни что
+     * документ дошёл, ни что его отклонили и по какой причине.
+     */
+    async deliveryTarget(companyId: string, id: string) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: {
+                status: true, sentAt: true,
+                receiptStatus: true, receiptReason: true, receiptAt: true,
+                counterparty: { select: { name: true, bin: true } },
+                recipientCompany: { select: { id: true, name: true, bin: true } },
+            },
+        });
+        if (!document) throw new NotFoundException('Документ не найден');
+
+        const sent = document.sentAt
+            ? {
+                at: document.sentAt,
+                to: document.recipientCompany,
+                status: document.receiptStatus,
+                reason: document.receiptReason,
+                reviewedAt: document.receiptAt,
+            }
+            : null;
+
+        if (!document.counterparty?.bin) {
+            return {
+                available: false, reason: 'У контрагента не заполнен БИН', recipient: null, sent,
+            };
+        }
+        const recipient = await this.findPlatformCompanyByBin(document.counterparty.bin, companyId);
+        if (!recipient) {
+            return {
+                available: false,
+                reason: 'Контрагент не зарегистрирован на платформе — отправьте ссылкой',
+                recipient: null,
+                sent,
+            };
+        }
+        return {
+            available: document.status === AccountingDocumentStatus.POSTED && !document.sentAt,
+            reason: document.sentAt
+                ? 'Уже отправлен'
+                : document.status !== AccountingDocumentStatus.POSTED
+                    ? 'Сначала проведите документ'
+                    : null,
+            recipient,
+            sent,
+        };
+    }
+
+    /**
+     * Решение получателя по входящему документу: принять или отклонить.
+     *
+     * Править чужой документ нельзя — он принадлежит выпустившей стороне.
+     * Отклонение с причиной, потому что «отклонено» без объяснения означает
+     * телефонный звонок, а он и так был до платформы.
+     */
+    async reviewIncoming(
+        companyId: string,
+        userId: string,
+        id: string,
+        decision: 'ACCEPTED' | 'REJECTED',
+        reason?: string,
+    ) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, recipientCompanyId: companyId },
+            select: { id: true, receiptStatus: true },
+        });
+        if (!document) throw new NotFoundException('Входящий документ не найден');
+
+        if (decision === 'REJECTED' && !reason?.trim()) {
+            throw new BadRequestException('Укажите причину отклонения — контрагенту нужно знать, что исправить');
+        }
+
+        return this.prisma.accountingDocument.update({
+            where: { id },
+            data: {
+                receiptStatus: decision,
+                receiptReason: decision === 'REJECTED' ? reason!.trim() : null,
+                receiptAt: new Date(),
+                receiptById: userId,
+            },
+        });
+    }
+
+    /** Документы, доставленные нам контрагентами с платформы. */
+    async listIncomingDelivered(companyId: string, query: { status?: string } = {}) {
+        return this.prisma.accountingDocument.findMany({
+            where: {
+                recipientCompanyId: companyId,
+                sentAt: { not: null },
+                ...(query.status === 'PENDING' ? { receiptStatus: null } : {}),
+                ...(query.status === 'ACCEPTED' || query.status === 'REJECTED'
+                    ? { receiptStatus: query.status }
+                    : {}),
+            },
+            orderBy: [{ sentAt: 'desc' }],
+            take: 200,
+            select: {
+                id: true, number: true, type: true, documentDate: true, dueDate: true,
+                currency: true, total: true, receiptStatus: true, receiptReason: true,
+                sentAt: true,
+                company: { select: { id: true, name: true, bin: true } },
+            },
+        });
+    }
 
     // ==================== НУМЕРАЦИЯ ДОКУМЕНТОВ ====================
 

@@ -572,3 +572,61 @@ export async function applyAllocations(
     });
     return res.data;
 }
+
+/**
+ * Доставка документа контрагенту на платформе.
+ *
+ * Копия не создаётся: получателю открывается доступ на чтение к тому же
+ * документу. Поэтому и номер, и суммы у обеих сторон одни и те же — спорить
+ * не о чем.
+ */
+export interface DocumentDelivery {
+    available: boolean;
+    reason: string | null;
+    recipient: { id: string; name: string; bin: string | null } | null;
+    /** Что стало с отправленным документом: дошёл, принят или отклонён и почему. */
+    sent: {
+        at: string;
+        to: { id: string; name: string; bin: string | null } | null;
+        status: 'ACCEPTED' | 'REJECTED' | null;
+        reason: string | null;
+        reviewedAt: string | null;
+    } | null;
+}
+
+export async function fetchDocumentDelivery(id: string): Promise<DocumentDelivery> {
+    const res = await api.get(`/accounting-documents/${id}/delivery`);
+    return res.data;
+}
+
+export async function sendAccountingDocument(id: string): Promise<void> {
+    await api.post(`/accounting-documents/${id}/send`, {});
+}
+
+/** Документы, присланные нам контрагентами с платформы. */
+export interface IncomingDeliveredDocument {
+    id: string;
+    number: string;
+    type: string;
+    documentDate: string;
+    dueDate: string | null;
+    currency: string;
+    total: number;
+    receiptStatus: 'ACCEPTED' | 'REJECTED' | null;
+    receiptReason: string | null;
+    sentAt: string;
+    company: { id: string; name: string; bin: string | null };
+}
+
+export async function fetchIncomingDelivered(status?: string): Promise<IncomingDeliveredDocument[]> {
+    const res = await api.get('/accounting-documents/incoming-delivered', { params: { status } });
+    return res.data;
+}
+
+export async function reviewIncomingDocument(
+    id: string,
+    decision: 'ACCEPTED' | 'REJECTED',
+    reason?: string,
+): Promise<void> {
+    await api.post(`/accounting-documents/${id}/receipt`, { decision, reason });
+}
