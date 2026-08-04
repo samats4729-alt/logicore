@@ -10,6 +10,7 @@ import { PeriodClosingService } from '../accounting/services/period-closing.serv
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
 import { kzStartOfToday, kzTodayString } from '../common/utils/business-date';
+import { hideCustomerPrice, maskForCustomer } from './order-visibility';
 
 const STATUS_CHAIN = [
     OrderStatus.ASSIGNED,
@@ -459,7 +460,11 @@ export class OrdersService {
         ]);
 
         return {
-            data,
+            // То же правило, что и в карточке рейса: компания-заказчик не
+            // видит, сколько экспедитор платит перевозчику. Пока правило
+            // стояло только в карточке, заказчик открывал список заявок и
+            // читал обе цены строкой — вместе с заработком экспедитора.
+            data: data.map((order) => maskForCustomer(order as any, filters?.companyId)),
             total,
             page,
             limit,
@@ -514,23 +519,9 @@ export class OrdersService {
             }
 
             // Заказчик не должен видеть себестоимость исполнителя (маржу
-            // экспедитора/партнёра) — только свою цену. Не скрываем, если
-            // компания одновременно исполнитель по этой же заявке.
-            const isCustomerOnly = !!companyId
-                && order.customerCompanyId === companyId
-                && order.forwarderId !== companyId
-                && order.partnerId !== companyId
-                && order.subForwarderId !== companyId;
-            if (isCustomerOnly) {
-                (order as any).driverCost = null;
-                (order as any).subForwarderPrice = null;
-                (order as any).subForwarderId = null;
-                (order as any).isDriverPaid = false;
-                (order as any).driverPaidAt = null;
-                (order as any).isSubForwarderPaid = false;
-                (order as any).subForwarderPaidAt = null;
-                (order as any).partner = null;
-            }
+            // экспедитора/партнёра) — только свою цену. Правило одно на всю
+            // выдачу заявок и лежит в order-visibility.
+            maskForCustomer(order as any, companyId);
         }
 
         // Почты у точек маршрута подменяем на список этой компании. Справочник
@@ -1378,7 +1369,10 @@ export class OrdersService {
             orderBy: { createdAt: 'desc' },
             take: includeHistory ? 50 : undefined,
         });
-        return orders;
+        // Водителю платит перевозчик или экспедитор. Сколько за тот же рейс
+        // платит грузовладелец — не его сведения, а в списке рейсов эта
+        // сумма приезжала вместе со всем остальным.
+        return orders.map((order) => hideCustomerPrice(order as any));
     }
 
     /**
