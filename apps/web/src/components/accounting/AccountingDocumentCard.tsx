@@ -181,6 +181,11 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const [dueDate, setDueDate] = useState<Dayjs | null>(null);
     const [bankAccountId, setBankAccountId] = useState<string | null>(null);
     const [note, setNote] = useState('');
+    // Номер и дата документа у контрагента. У входящего счёта это номер,
+    // под которым перевозчик выставил его нам, — по нему он ищет платёж у
+    // себя, и в платёжном поручении должен стоять именно он.
+    const [externalNumber, setExternalNumber] = useState('');
+    const [externalDate, setExternalDate] = useState<Dayjs | null>(null);
     const [lines, setLines] = useState<EditableLine[]>([]);
     const [dirty, setDirty] = useState(false);
 
@@ -211,6 +216,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
         setDueDate(data.dueDate ? dayjs(data.dueDate) : null);
         setBankAccountId(data.bankAccountId);
         setNote(data.note || '');
+        setExternalNumber(data.externalNumber || '');
+        setExternalDate(data.externalDate ? dayjs(data.externalDate) : null);
         setDirty(false);
     }, []);
 
@@ -304,6 +311,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             const saved = await updateAccountingDocument(document.id, {
                 documentDate: documentDate?.format('YYYY-MM-DD'),
                 note: note.trim() || null,
+                externalNumber: externalNumber.trim() || null,
+                externalDate: externalDate ? externalDate.format('YYYY-MM-DD') : null,
                 lines: lines.map(toPayload),
                 // Срок оплаты и расчётный счёт есть только у счёта: у акта
                 // этих полей нет в шапке, и слать их — значит переписывать
@@ -787,6 +796,37 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                             onChange={(value) => { setDueDate(value); touch(); }}
                         />
                     ) : (document.dueDate ? dayjs(document.dueDate).format('DD.MM.YYYY') : '—'))}
+
+                    {/* Номер контрагента. Показывается у входящего документа:
+                        свой номер мы присваиваем сами, а этот — чужой, и без
+                        него бухгалтер не сведёт наш счёт со счётом перевозчика. */}
+                    {document.direction === 'INCOMING' && headerField(
+                        'Номер у контрагента',
+                        editable ? (
+                            <Input
+                                size="small"
+                                style={{ width: 200 }}
+                                maxLength={100}
+                                placeholder="Как в его счёте"
+                                value={externalNumber}
+                                onChange={(e) => { setExternalNumber(e.target.value); touch(); }}
+                            />
+                        ) : (document.externalNumber || '—'),
+                    )}
+
+                    {document.direction === 'INCOMING' && headerField(
+                        'Дата у контрагента',
+                        editable ? (
+                            <DatePicker
+                                size="small"
+                                format="DD.MM.YYYY"
+                                placeholder="Не указана"
+                                style={{ width: 150 }}
+                                value={externalDate}
+                                onChange={(value) => { setExternalDate(value); touch(); }}
+                            />
+                        ) : (document.externalDate ? dayjs(document.externalDate).format('DD.MM.YYYY') : '—'),
+                    )}
 
                     {headerField('Организация', partyLine(own))}
                     {headerField('Контрагент', partyLine(other))}

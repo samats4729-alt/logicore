@@ -634,4 +634,67 @@ describe('AccountingDocumentPdfService', () => {
         });
     });
 
+    /**
+     * Номер счёта у перевозчика.
+     *
+     * У нас свой номер, у перевозчика свой, и совпадать они не обязаны.
+     * Без чужого номера в печатной форме бухгалтер не сведёт наш входящий
+     * счёт с тем, что прислал перевозчик, и не поставит правильный номер в
+     * платёжном поручении.
+     */
+    describe('номер документа у контрагента', () => {
+        const printedOf = async (document: InvoicePdfDocument) => {
+            const printed: string[] = [];
+            const proto = (PDFDocument as any).prototype;
+            const originalText = proto.text;
+            proto.text = function (this: any, value: unknown, ...rest: unknown[]) {
+                printed.push(String(value));
+                return originalText.call(this, value, ...rest);
+            };
+            try {
+                await service.generateInvoicePdf(document);
+            } finally {
+                proto.text = originalText;
+            }
+            return printed;
+        };
+
+        it('печатается вместе с датой контрагента', async () => {
+            const document = sampleDocument();
+            document.externalNumber = 'ТК-455';
+            document.externalDate = new Date('2026-07-28T00:00:00Z');
+
+            const printed = await printedOf(document);
+
+            expect(printed).toContain('Номер у контрагента: № ТК-455 от 28.07.2026');
+        });
+
+        it('без даты печатается один номер', async () => {
+            const document = sampleDocument();
+            document.externalNumber = 'ТК-455';
+            document.externalDate = null;
+
+            const printed = await printedOf(document);
+
+            expect(printed).toContain('Номер у контрагента: № ТК-455');
+        });
+
+        it('без чужого номера лишней строки в счёте нет', async () => {
+            // У нашего исходящего счёта чужого номера не бывает, и пустая
+            // строка «Номер у контрагента: №» на бланке — мусор.
+            const printed = await printedOf(sampleDocument());
+
+            expect(printed.some((line) => line.startsWith('Номер у контрагента'))).toBe(false);
+        });
+
+        it('наш собственный номер печатается по-прежнему', async () => {
+            const document = sampleDocument();
+            document.externalNumber = 'ТК-455';
+
+            const printed = await printedOf(document);
+
+            expect(printed.some((line) => line.includes(`Счёт на оплату № ${document.number}`))).toBe(true);
+        });
+    });
+
 });

@@ -49,6 +49,13 @@ export interface InvoicePdfDocument {
     status: AccountingDocumentStatus;
     number: string;
     documentDate: Date;
+    /**
+     * Номер и дата документа у контрагента. У входящего счёта это номер, под
+     * которым перевозчик выставил его нам: по нему он ищет платёж у себя, и
+     * его же ставят в платёжном поручении.
+     */
+    externalNumber?: string | null;
+    externalDate?: Date | string | null;
     operationDate?: Date | null;
     reportPeriodFrom?: Date | null;
     reportPeriodTo?: Date | null;
@@ -1232,6 +1239,20 @@ export class AccountingDocumentPdfService {
         doc.text(`Счёт на оплату № ${document.number} от ${this.formatDate(document.documentDate)}`, left, doc.y, {
             width,
         });
+        // Номер перевозчика — второй строкой под нашим. Без него бухгалтер не
+        // сведёт наш счёт с тем, что пришло от перевозчика: у нас свой номер,
+        // у него свой, и совпадать они не обязаны.
+        const external = this.stringValue(document.externalNumber);
+        if (external) {
+            doc.moveDown(0.15);
+            doc.font('Roboto').fontSize(9).fillColor(INK);
+            // Дата ссылкой — короткой записью: длинная «от 28 июля 2026 г.»
+            // спорит с заголовком счёта и читается как вторая дата документа.
+            const externalDate = document.externalDate
+                ? ` от ${this.formatDateNumeric(new Date(document.externalDate))}`
+                : '';
+            doc.text(`Номер у контрагента: № ${external}${externalDate}`, left, doc.y, { width });
+        }
         doc.moveDown(0.35);
         doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1.2).strokeColor(INK).stroke();
         doc.moveDown(0.8);
