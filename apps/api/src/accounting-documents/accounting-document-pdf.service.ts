@@ -1247,8 +1247,12 @@ export class AccountingDocumentPdfService {
 
     private drawInvoiceLines(doc: PDFKit.PDFDocument, lines: InvoicePdfLine[], documentNumber: string) {
         const left = doc.page.margins.left;
-        const widths = [24, 52, 225, 42, 36, 76, 76];
-        const headers = ['№', 'Код', 'Наименование', 'Кол-во', 'Ед.', 'Цена', 'Сумма'];
+        // Колонка «Код» убрана по просьбе бухгалтерии: код услуги нужен нам
+        // внутри, а в счёте для контрагента он только занимает место —
+        // освободившиеся 52 пункта отданы наименованию, где длинные маршруты
+        // раньше переносились лишний раз.
+        const widths = [24, 277, 42, 36, 76, 76];
+        const headers = ['№', 'Наименование', 'Кол-во', 'Ед.', 'Цена', 'Сумма'];
         const tableWidth = widths.reduce((sum, value) => sum + value, 0);
 
         const drawHeader = () => {
@@ -1257,7 +1261,7 @@ export class AccountingDocumentPdfService {
             let x = left;
             doc.font('Roboto-Bold').fontSize(7.5).fillColor(INK);
             headers.forEach((header, index) => {
-                this.tableCell(doc, header, x, y, widths[index], height, index >= 3 ? 'center' : 'center');
+                this.tableCell(doc, header, x, y, widths[index], height, 'center');
                 x += widths[index];
             });
             doc.y = y + height;
@@ -1277,7 +1281,7 @@ export class AccountingDocumentPdfService {
         lines.forEach((line, index) => {
             const name = line.description ? `${line.name}\n${line.description}` : line.name;
             doc.font('Roboto').fontSize(7.5);
-            const nameHeight = doc.heightOfString(name, { width: widths[2] - 8, lineGap: 1 });
+            const nameHeight = doc.heightOfString(name, { width: widths[1] - 8, lineGap: 1 });
             const rowHeight = Math.max(24, nameHeight + 8);
             if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 125) {
                 doc.addPage();
@@ -1293,7 +1297,6 @@ export class AccountingDocumentPdfService {
             const y = doc.y;
             const values = [
                 String(index + 1),
-                line.serviceCode || '',
                 name,
                 this.formatQuantity(line.quantity),
                 line.unit,
@@ -1303,9 +1306,11 @@ export class AccountingDocumentPdfService {
             let x = left;
             doc.font('Roboto').fontSize(7.5);
             values.forEach((value, column) => {
-                const align = column === 0 || column === 3 || column === 4
+                // № по центру, наименование по левому краю, количество и
+                // единица по центру, деньги по правому — как в 1С.
+                const align = column === 0 || column === 2 || column === 3
                     ? 'center'
-                    : column >= 5 ? 'right' : 'left';
+                    : column >= 4 ? 'right' : 'left';
                 this.tableCell(doc, value, x, y, widths[column], rowHeight, align);
                 x += widths[column];
             });

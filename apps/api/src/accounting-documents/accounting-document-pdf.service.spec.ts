@@ -579,4 +579,59 @@ describe('AccountingDocumentPdfService', () => {
             expect(all).toContain('Одна тысяча долларов США 00 центов');
         });
     });
+    /**
+     * Колонка «Код» в счёте.
+     *
+     * Бухгалтерия попросила её убрать: код услуги нужен нам внутри, а
+     * контрагенту в счёте он ничего не говорит и занимает место, из-за
+     * которого длинные маршруты переносились лишний раз.
+     */
+    describe('таблица строк счёта', () => {
+        const printedOf = async (document: InvoicePdfDocument) => {
+            const printed: string[] = [];
+            const proto = (PDFDocument as any).prototype;
+            const originalText = proto.text;
+            proto.text = function (this: any, value: unknown, ...rest: unknown[]) {
+                printed.push(String(value));
+                return originalText.call(this, value, ...rest);
+            };
+            try {
+                await service.generateInvoicePdf(document);
+            } finally {
+                proto.text = originalText;
+            }
+            return printed;
+        };
+
+        it('колонки «Код» в шапке нет', async () => {
+            const printed = await printedOf(sampleDocument());
+
+            expect(printed).toContain('Наименование');
+            expect(printed).not.toContain('Код');
+        });
+
+        it('код услуги не печатается и в самой строке', async () => {
+            // Заголовок можно убрать, а значение оставить — тогда код уедет
+            // в соседнюю колонку и встанет вместо наименования.
+            const document = sampleDocument();
+            document.lines[0].serviceCode = 'УСЛ-77';
+
+            const printed = await printedOf(document);
+
+            expect(printed).not.toContain('УСЛ-77');
+        });
+
+        it('наименование и суммы на месте', async () => {
+            const document = sampleDocument();
+            const printed = await printedOf(document);
+
+            // Наименование печатается вместе с расшифровкой одной ячейкой:
+            // маршрут и водитель идут второй строкой под названием услуги.
+            const line = document.lines[0];
+            expect(printed).toContain(`${line.name}\n${line.description}`);
+            expect(printed).toContain('Кол-во');
+            expect(printed).toContain('Сумма');
+        });
+    });
+
 });

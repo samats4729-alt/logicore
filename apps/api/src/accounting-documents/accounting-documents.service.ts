@@ -30,6 +30,7 @@ import {
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
     UpdateAccountingDocumentDto,
+    UpdateNumberingDto,
 } from './dto/accounting-document.dto';
 
 const COMPANY_SNAPSHOT_SELECT = {
@@ -141,6 +142,41 @@ const CARD_DOCUMENT_INCLUDE = {
         },
     },
 } satisfies Prisma.AccountingDocumentInclude;
+
+
+/** Виды документов, которые нумеруются нами. */
+const NUMBERED_TYPES = [
+    AccountingDocumentType.PAYMENT_INVOICE,
+    AccountingDocumentType.SERVICE_ACT,
+    AccountingDocumentType.RECONCILIATION_ACT,
+    AccountingDocumentType.CORRECTION,
+] as const;
+
+const NUMBERED_DIRECTIONS = [
+    AccountingDocumentDirection.OUTGOING,
+    AccountingDocumentDirection.INCOMING,
+] as const;
+
+/** Префикс по умолчанию — до того, как бухгалтер настроит свой. */
+function defaultNumberPrefix(type: AccountingDocumentType, year: number) {
+    const short = {
+        [AccountingDocumentType.PAYMENT_INVOICE]: 'СЧ',
+        [AccountingDocumentType.SERVICE_ACT]: 'АКТ',
+        [AccountingDocumentType.RECONCILIATION_ACT]: 'СВ',
+        [AccountingDocumentType.CORRECTION]: 'КОР',
+    }[type];
+    return `${short}-${year}-`;
+}
+
+/**
+ * Номер документа из настроек: префикс и число, дополненное нулями слева.
+ *
+ * Одна функция на выдачу номера и на предпросмотр в настройках — иначе
+ * пример на экране однажды разойдётся с тем, что реально уйдёт в документ.
+ */
+function formatDocumentNumber(prefix: string, value: number, padLength: number) {
+    return `${prefix}${String(value).padStart(padLength, '0')}`;
+}
 
 export const RECONCILIATION_REPORTS = Symbol('RECONCILIATION_REPORTS');
 type ReconciliationReports = Pick<FinancialReportsService, 'getReconciliationAct'>;
@@ -1128,6 +1164,137 @@ export class AccountingDocumentsService {
         });
     }
 
+
+    // ==================== НУМЕРАЦИЯ ДОКУМЕНТОВ ====================
+
+    /**
+     * Настройки нумерации на год: префикс, следующий номер, длина числа.
+     *
+     * Отдаются все виды документов сразу, даже те, по которым ещё ничего не
+     * заводили: настроить нумерацию нужно ДО первого документа, иначе первый
+     * счёт уедет со старым номером и переименовать его будет уже нельзя.
+     * Поэтому несуществующие строки показываются значениями по умолчанию, а
+     * не прячутся.
+     */
+    async getNumberingSettings(companyId: string, year?: number) {
+        const targetYear = year || new Date().getUTCFullYear();
+
+        const [saved, counts] = await Promise.all([
+            this.prisma.accountingDocumentNumbering.findMany({
+                where: { companyId, year: targetYear },
+            }),
+            this.prisma.accountingDocument.groupBy({
+                by: ['type', 'direction'],
+                where: { companyId },
+                _count: { _all: true },
+            }),
+        ]);
+
+        const savedByKey = new Map(saved.map((row) => [`${row.type}__${row.direction}`, row]));
+        const countByKey = new Map(counts.map((row) => [`${row.type}__${row.direction}`, row._count._all]));
+
+        const rows: Array<{
+            type: AccountingDocumentType;
+            direction: AccountingDocumentDirection;
+            year: number;
+            prefix: string;
+            nextNumber: number;
+            padLength: number;
+            /** Как будет выглядеть следующий номер. */
+            example: string;
+            /** Сколько документов этого вида уже заведено. */
+            documents: number;
+        }> = [];
+
+        for (const type of NUMBERED_TYPES) {
+            for (const direction of NUMBERED_DIRECTIONS) {
+                const key = `${type}__${direction}`;
+                const row = savedByKey.get(key);
+                const prefix = row?.prefix ?? defaultNumberPrefix(type, targetYear);
+                const nextNumber = row?.nextNumber ?? 1;
+                const padLength = row?.padLength ?? 6;
+                rows.push({
+                    type, direction, year: targetYear,
+                    prefix, nextNumber, padLength,
+                    example: formatDocumentNumber(prefix, nextNumber, padLength),
+                    documents: countByKey.get(key) ?? 0,
+                });
+            }
+        }
+
+        return { year: targetYear, rows };
+    }
+
+    /**
+     * Сохранить нумерацию.
+     *
+     * Главная защита — от повтора номера. Номер документа уникален в пределах
+     * компании и вида, и если бухгалтер отмотает счётчик назад, следующий счёт
+     * не создастся вовсе: пользователь увидит ошибку базы на ровном месте.
+     * Поэтому занятость проверяется здесь, до сохранения, и в отказе сразу
+     * назван свободный номер.
+     */
+    async updateNumberingSettings(companyId: string, dto: UpdateNumberingDto) {
+        const year = dto.year || new Date().getUTCFullYear();
+        const prefix = (dto.prefix ?? '').trim();
+        const padLength = dto.padLength ?? 6;
+        const nextNumber = dto.nextNumber ?? 1;
+
+        if (padLength < 1 || padLength > 12) {
+            throw new BadRequestException('Количество цифр — от 1 до 12');
+        }
+        if (nextNumber < 1) {
+            throw new BadRequestException('Следующий номер не может быть меньше единицы');
+        }
+
+        const candidate = formatDocumentNumber(prefix, nextNumber, padLength);
+        const taken = await this.prisma.accountingDocument.findFirst({
+            where: { companyId, type: dto.type, direction: dto.direction, number: candidate },
+            select: { id: true },
+        });
+        if (taken) {
+            const free = await this.firstFreeNumber(companyId, dto.type, dto.direction, prefix, padLength, nextNumber);
+            throw new BadRequestException(
+                `Номер ${candidate} уже занят другим документом. Свободный с этого места — ${free}`,
+            );
+        }
+
+        return this.prisma.accountingDocumentNumbering.upsert({
+            where: {
+                companyId_type_direction_year: {
+                    companyId, type: dto.type, direction: dto.direction, year,
+                },
+            },
+            create: { companyId, type: dto.type, direction: dto.direction, year, prefix, nextNumber, padLength },
+            update: { prefix, nextNumber, padLength },
+        });
+    }
+
+    /** Первый свободный номер начиная с указанного — чтобы отказ был с подсказкой. */
+    private async firstFreeNumber(
+        companyId: string,
+        type: AccountingDocumentType,
+        direction: AccountingDocumentDirection,
+        prefix: string,
+        padLength: number,
+        from: number,
+    ) {
+        const used = await this.prisma.accountingDocument.findMany({
+            where: { companyId, type, direction, number: { startsWith: prefix } },
+            select: { number: true },
+        });
+        const taken = new Set(used.map((row) => row.number));
+        let candidate = from;
+        // Потолок намеренный: перебирать миллион номеров ради подсказки не
+        // стоит, а до него дело не дойдёт ни в одной живой базе.
+        for (let i = 0; i < 10000; i++) {
+            const value = formatDocumentNumber(prefix, candidate, padLength);
+            if (!taken.has(value)) return value;
+            candidate += 1;
+        }
+        return formatDocumentNumber(prefix, candidate, padLength);
+    }
+
     private async nextNumber(
         tx: Prisma.TransactionClient,
         companyId: string,
@@ -1135,12 +1302,6 @@ export class AccountingDocumentsService {
         direction: AccountingDocumentDirection,
         year: number,
     ) {
-        const defaultPrefix = {
-            [AccountingDocumentType.PAYMENT_INVOICE]: 'СЧ',
-            [AccountingDocumentType.SERVICE_ACT]: 'АКТ',
-            [AccountingDocumentType.RECONCILIATION_ACT]: 'СВ',
-            [AccountingDocumentType.CORRECTION]: 'КОР',
-        }[type];
         const numbering = await tx.accountingDocumentNumbering.upsert({
             where: { companyId_type_direction_year: { companyId, type, direction, year } },
             create: {
@@ -1148,13 +1309,13 @@ export class AccountingDocumentsService {
                 type,
                 direction,
                 year,
-                prefix: `${defaultPrefix}-${year}-`,
+                prefix: defaultNumberPrefix(type, year),
                 nextNumber: 2,
             },
             update: { nextNumber: { increment: 1 } },
         });
         const allocated = numbering.nextNumber - 1;
-        return `${numbering.prefix}${String(allocated).padStart(numbering.padLength, '0')}`;
+        return formatDocumentNumber(numbering.prefix, allocated, numbering.padLength);
     }
 
     private assertStoredDocumentCanBePosted(document: Awaited<ReturnType<AccountingDocumentsService['getById']>>) {

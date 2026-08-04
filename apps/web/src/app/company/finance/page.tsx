@@ -132,6 +132,7 @@ export default function FinanceHubPage() {
                 { label: 'Банки', href: '/company/accounting/banks', show: acc, desc: 'Справочник банков и БИК для реквизитов' },
                 { label: 'Курсы валют', href: '/company/accounting/currencies', show: acc, desc: 'Официальные курсы Нацбанка РК по дням, курс вручную для валют без официального' },
                 { label: 'Переоценка валют', href: '/company/accounting/revaluation', show: acc, desc: 'Курсовая разница по валютным остаткам и неоплаченным долгам на конец месяца' },
+                { label: 'Нумерация счетов', href: '/company/accounting/document-numbering', show: acc, desc: 'Свой префикс, следующий номер и количество цифр — формата «АВ-00010002»' },
                 { label: 'Нумерация заявок', href: '/company/accounting/order-numbering', show: acc, desc: 'Формат номера как в 1С и стартовый номер' },
                 { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
             ],

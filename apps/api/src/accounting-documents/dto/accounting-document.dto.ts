@@ -498,3 +498,39 @@ export class AccountingDocumentRegistryQueryDto {
     @IsNotEmpty({ each: true })
     ids?: string[];
 }
+
+/**
+ * Настройка нумерации документов.
+ *
+ * Пример формата: префикс «АВ-», следующий номер 10002 и восемь цифр дают
+ * «АВ-00010002». Год отдельным полем: у нумерации свой счётчик на каждый
+ * год, и настройка на будущий год не должна трогать текущий.
+ */
+export class UpdateNumberingDto {
+    @IsEnum(AccountingDocumentType)
+    type!: AccountingDocumentType;
+
+    @IsEnum(AccountingDocumentDirection)
+    direction!: AccountingDocumentDirection;
+
+    @IsOptional()
+    @IsInt()
+    @Min(2000)
+    @Max(2100)
+    year?: number;
+
+    /** Может быть пустым: тогда номер — просто число с нулями. */
+    @IsString()
+    @MaxLength(20)
+    prefix!: string;
+
+    @IsInt()
+    @Min(1)
+    @Max(99999999)
+    nextNumber!: number;
+
+    @IsInt()
+    @Min(1)
+    @Max(12)
+    padLength!: number;
+}
