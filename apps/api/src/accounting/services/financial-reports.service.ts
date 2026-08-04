@@ -391,6 +391,17 @@ export class FinancialReportsService {
                 subForwarder: { select: { id: true, name: true } },
                 routePoints: { select: { pointType: true, sequence: true, location: { select: { address: true, city: true } } }, orderBy: { sequence: 'asc' } },
                 ...ORDER_FINANCE_RELATIONS_SELECT,
+                // Выставлен ли по рейсу счёт — в обе стороны. Отменённые не в
+                // счёт: по ним расчётов нет, и рейс снова «без счёта».
+                accountingDocuments: {
+                    where: {
+                        document: {
+                            type: AccountingDocumentType.PAYMENT_INVOICE,
+                            status: { not: AccountingDocumentStatus.CANCELLED },
+                        },
+                    },
+                    select: { document: { select: { direction: true } } },
+                },
             },
             orderBy: { createdAt: 'desc' },
             skip: scope.skip,
@@ -454,6 +465,15 @@ export class FinancialReportsService {
                 // Валюта, для которой не нашлось курса: суммы по этой заявке
                 // неполные, и строку нужно пометить, а не показать как обычную.
                 unconvertedCurrencies: fin.unconvertedCurrencies,
+                // Рейс без счёта — это деньги, которых мы ещё не попросили.
+                // Их не видно ни в дебиторке (долга нет, пока нет счёта), ни
+                // в списке неоплаченных счетов — только здесь.
+                hasCustomerInvoice: (order as any).accountingDocuments?.some(
+                    (link: any) => link.document.direction === AccountingDocumentDirection.OUTGOING,
+                ) ?? false,
+                hasCarrierInvoice: isCustomer ? false : ((order as any).accountingDocuments?.some(
+                    (link: any) => link.document.direction === AccountingDocumentDirection.INCOMING,
+                ) ?? false),
             };
 
             if (isCustomer) {

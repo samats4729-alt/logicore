@@ -50,6 +50,9 @@ interface RegistryOrder {
     driverCostBase?: number | null;
     subForwarderPriceBase?: number | null;
     unconvertedCurrencies?: string[];
+    /** Выставлен ли счёт по рейсу — заказчику и от перевозчика. */
+    hasCustomerInvoice?: boolean;
+    hasCarrierInvoice?: boolean;
     isCustomerPaid: boolean;
     customerPaidAt?: string;
     driverCost?: number;
@@ -216,6 +219,10 @@ export default function FinancialRegistryPage() {
         if (paymentFilter === 'debtor') result = result.filter(o => o.customerDebt > 0);
         if (paymentFilter === 'creditor') result = result.filter(o => o.executorDebt > 0);
         if (paymentFilter === 'all_paid') result = result.filter(o => o.customerDebt === 0 && o.executorDebt === 0);
+        // Рейс без счёта — деньги, которых мы ещё не попросили. В дебиторку
+        // они не попадают: пока счёт не выставлен, долга формально нет.
+        if (paymentFilter === 'no_customer_invoice') result = result.filter(o => !o.hasCustomerInvoice);
+        if (paymentFilter === 'no_carrier_invoice') result = result.filter(o => !o.hasCarrierInvoice);
 
         return result;
     }, [orders, search, dateRange, paymentFilter]);
@@ -454,6 +461,23 @@ export default function FinancialRegistryPage() {
                             {isLate && (
                                 <div style={{ fontSize: 9, color: token.colorError, fontWeight: 600 }}>Просрочка 5д+</div>
                             )}
+                            {/* Долга формально нет, пока нет счёта. Без этой
+                                пометки строка выглядит как «всё в порядке»,
+                                хотя денег мы ещё даже не попросили.
+                                Цветом выделяется только неоплаченное: на
+                                оплаченном рейсе отсутствие счёта — вопрос
+                                бумаг для учёта, а не потерянных денег, и
+                                тревожный цвет рядом со словом «Оплачено»
+                                читался бы как противоречие. */}
+                            {!r.hasCustomerInvoice && (
+                                <div style={{
+                                    fontSize: 9,
+                                    fontWeight: 600,
+                                    color: debt > 0 ? '#b45309' : token.colorTextTertiary,
+                                }}>
+                                    Счёт не выставлен
+                                </div>
+                            )}
                         </div>
                         {debt > 0 && canEditFinance && (
                             <Tooltip title="Зарегистрировать платёж">
@@ -605,13 +629,15 @@ export default function FinancialRegistryPage() {
                         size="middle"
                         value={paymentFilter}
                         onChange={setPaymentFilter}
-                        style={{ width: 210 }}
                         options={[
                             { value: 'all', label: 'Все заявки' },
+                            { value: 'no_customer_invoice', label: 'Без счёта заказчику' },
+                            { value: 'no_carrier_invoice', label: 'Без счёта от перевозчика' },
                             { value: 'debtor', label: 'Долг заказчика' },
                             { value: 'creditor', label: 'Наш долг перед ТК' },
                             { value: 'all_paid', label: 'Все расчеты завершены' },
                         ]}
+                        style={{ width: 230 }}
                     />
                     <span style={{ fontSize: 12, color: token.colorTextSecondary, marginLeft: 'auto' }}>
                         Показано: <strong>{filtered.length}</strong> заявок
