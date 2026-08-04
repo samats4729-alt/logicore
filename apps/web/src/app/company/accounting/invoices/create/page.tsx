@@ -48,21 +48,60 @@ interface DraftLine {
     orderDetails: string | null;
 }
 
-const lineFromOrder = (order: BillableOrder): DraftLine => ({
-    key: `order-${order.id}`,
-    name: 'Транспортные услуги',
-    quantity: 1,
-    unit: 'усл',
-    unitPrice: order.amount ?? 0,
-    vat: order.hasVat && order.vatRate > 0 ? String(order.vatRate) : 'none',
-    orderId: order.id,
-    orderNumber: order.orderNumber,
-    orderDetails: [
-        routePointsLabel(order.routePoints),
-        order.assignedDriverName,
-        order.assignedDriverPlate,
-    ].filter(Boolean).join(' · ') || null,
-});
+const orderDetailsOf = (order: BillableOrder) => [
+    routePointsLabel(order.routePoints),
+    order.assignedDriverName,
+    order.assignedDriverPlate,
+].filter(Boolean).join(' · ') || null;
+
+/**
+ * Рейс превращается в строки счёта.
+ *
+ * Обычно строка одна. При экспедиторской схеме НДС их две: возмещение
+ * расходов на перевозку (без НДС) и вознаграждение экспедитора (с НДС).
+ * Итог счёта при этом тот же — меняется только то, какая часть облагается
+ * налогом. Если вознаграждения нет (перевозчик стоит столько же или дороже
+ * клиента), делить нечего: строка остаётся одна, а бухгалтер видит
+ * предупреждение — это либо ошибка в ставках, либо рейс в убыток.
+ */
+const linesFromOrder = (order: BillableOrder): DraftLine[] => {
+    const amount = order.amount ?? 0;
+    const vat = order.hasVat && order.vatRate > 0 ? String(order.vatRate) : 'none';
+    const details = orderDetailsOf(order);
+    const base = {
+        quantity: 1,
+        unit: 'усл',
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        orderDetails: details,
+    };
+
+    const carrierCost = order.carrierCost ?? 0;
+    const splittable = order.forwardingVat && carrierCost > 0 && carrierCost < amount;
+
+    if (!splittable) {
+        return [{ ...base, key: `order-${order.id}`, name: 'Транспортные услуги', unitPrice: amount, vat }];
+    }
+
+    return [
+        {
+            ...base,
+            key: `order-${order.id}-pass`,
+            name: 'Возмещение расходов на перевозку',
+            unitPrice: carrierCost,
+            // Проходная часть нашим оборотом не является — НДС на неё не
+            // начисляется.
+            vat: 'none',
+        },
+        {
+            ...base,
+            key: `order-${order.id}-fee`,
+            name: 'Вознаграждение экспедитора',
+            unitPrice: Number((amount - carrierCost).toFixed(2)),
+            vat,
+        },
+    ];
+};
 
 const toPayload = (line: DraftLine): CreateAccountingDocumentLineInput => ({
     name: line.name.trim(),
@@ -190,15 +229,31 @@ export default function CreateInvoicePage() {
             return;
         }
         // Уже добавленные рейсы отмечены — окно показывает текущий выбор.
-        setPickedIds(lines.map((l) => l.orderId).filter((id): id is string => Boolean(id)));
+        // Один рейс может дать две строки счёта — в отмеченных он всё равно
+        // один, иначе галочка ставилась бы дважды.
+        setPickedIds(Array.from(new Set(lines.map((l) => l.orderId).filter((id): id is string => Boolean(id)))));
         setPickerOpen(true);
     };
 
     const applyPicked = () => {
         const manual = lines.filter((line) => !line.orderId);
-        const picked = orders
-            .filter((order) => pickedIds.includes(order.id))
-            .map(lineFromOrder);
+        const chosen = orders.filter((order) => pickedIds.includes(order.id));
+
+        // Экспедиторская схема включена, но по рейсу вознаграждения нет:
+        // перевозчик стоит столько же или дороже клиента. Такой рейс идёт
+        // одной строкой, и об этом надо сказать — это либо ошибка в ставках,
+        // либо рейс в убыток, и молчать о нём нельзя.
+        const notSplit = chosen.filter(
+            (order) => order.forwardingVat && (order.carrierCost ?? 0) >= (order.amount ?? 0),
+        );
+        if (notSplit.length) {
+            toast.warning(
+                `Не разделены на вознаграждение: ${notSplit.map((o) => o.orderNumber).join(', ')}. ` +
+                'Ставка перевозчика не меньше суммы клиента — проверьте ставки по этим рейсам',
+            );
+        }
+
+        const picked = chosen.flatMap(linesFromOrder);
         // Ручные строки сохраняются: подбор управляет только строками заявок.
         setLines([...picked, ...manual]);
         setPickerOpen(false);

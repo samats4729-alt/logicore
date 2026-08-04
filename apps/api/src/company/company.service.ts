@@ -824,6 +824,7 @@ export class CompanyService {
         vatCertificateSeries?: string;
         vatCertificateNumber?: string;
         vatCertificateDate?: string;
+        vatScheme?: 'STANDARD' | 'FORWARDING';
         managersSeeOwnOrdersOnly?: boolean;
         managersSeeOwnPartnersOnly?: boolean;
     }) {

@@ -1144,6 +1144,15 @@ export class AccountingDocumentsService {
             take: 200,
         });
 
+        // Схема НДС компании. При экспедиторской счёт клиенту делится на
+        // возмещение расходов и вознаграждение, и НДС берётся только со
+        // второго — значит подбору нужна ещё и стоимость перевозчика.
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { vatScheme: true },
+        });
+        const forwarding = company?.vatScheme === 'FORWARDING';
+
         // Сумма и НДС зависят от того, кому выставляем: заказчику идёт его
         // цена и его ставка, поставщику — стоимость исполнителя.
         return orders.map((order) => {
@@ -1155,11 +1164,18 @@ export class AccountingDocumentsService {
                     : order.driverCost;
             const hasVat = outgoing ? order.hasVat : order.executorHasVat;
             const vatRate = outgoing ? order.vatRate : order.executorVatRate;
+            // Сколько по этому рейсу уходит перевозчику. Нужно только своему
+            // счёту клиенту: во входящем счёте делить нечего.
+            const carrierCost = order.subForwarderId
+                ? order.subForwarderPrice
+                : order.driverCost;
             return {
                 ...order,
                 amount: amount ?? new Prisma.Decimal(0),
                 hasVat,
                 vatRate: hasVat ? vatRate : new Prisma.Decimal(0),
+                carrierCost: outgoing ? (carrierCost ?? new Prisma.Decimal(0)) : new Prisma.Decimal(0),
+                forwardingVat: forwarding && outgoing,
             };
         });
     }

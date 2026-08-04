@@ -412,6 +412,13 @@ export interface BillableOrder {
     amount: number;
     hasVat: boolean;
     vatRate: number;
+    /**
+     * Сколько по рейсу уходит перевозчику и включена ли у компании
+     * экспедиторская схема НДС. Нужны, чтобы разделить счёт клиенту на
+     * возмещение расходов и вознаграждение.
+     */
+    carrierCost?: number;
+    forwardingVat?: boolean;
     assignedDriverName: string | null;
     assignedDriverPlate: string | null;
     routePoints: AccountingDocumentRoutePoint[];
