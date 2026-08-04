@@ -42,16 +42,11 @@ import {
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
+import { ORDER_STATUS_COLORS as statusColors, getNextStatuses } from '@/lib/order-status';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'default', PENDING: 'orange', ASSIGNED: 'blue',
-    EN_ROUTE_PICKUP: 'gold', AT_PICKUP: 'lime', LOADING: 'purple',
-    IN_TRANSIT: 'cyan', AT_DELIVERY: 'lime', UNLOADING: 'purple',
-    COMPLETED: 'green', PROBLEM: 'red', CANCELLED: '#f5222d',
-};
 
 // Подписи статусов — из общего словаря `lib/vocabulary`,
 // чтобы один и тот же статус везде назывался одинаково.
@@ -109,38 +104,6 @@ interface LocationState {
     longitude?: number;
 }
 
-const getNextStatuses = (s: string) => {
-    const chain = [
-        { value: 'ASSIGNED', label: 'Назначен' },
-        { value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' },
-        { value: 'AT_PICKUP', label: 'На погрузке' },
-        { value: 'LOADING', label: 'Загружается' },
-        { value: 'IN_TRANSIT', label: 'В пути' },
-        { value: 'AT_DELIVERY', label: 'На выгрузке' },
-        { value: 'UNLOADING', label: 'Разгружается' },
-        { value: 'COMPLETED', label: 'Завершён' },
-    ];
-    
-    if (s === 'PROBLEM') {
-        return chain;
-    }
-
-    // Завершённую заявку можно «вернуть» на любой активный этап (переоткрыть).
-    // Бэкенд разрешит это, если контрагентов нет на платформе; иначе — через согласование.
-    if (s === 'COMPLETED') {
-        return chain.slice(0, chain.length - 1);
-    }
-
-    // Отменённую заявку можно вернуть в работу (кроме сразу «Завершён»)
-    if (s === 'CANCELLED') {
-        return chain.slice(0, chain.length - 1);
-    }
-
-    const idx = chain.findIndex(item => item.value === s);
-    if (idx === -1) return [];
-    // На любом активном этапе (погрузка/выгрузка и т.д.) можно отметить «Проблема»
-    return [...chain.slice(idx + 1), { value: 'PROBLEM', label: '⚠ Проблема' }];
-};
 
 export default function OrderDetailPage() {
     const { token } = theme.useToken();

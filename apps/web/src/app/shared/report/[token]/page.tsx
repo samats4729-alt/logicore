@@ -18,6 +18,7 @@ const { Title, Text } = Typography;
 
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
+import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -25,20 +26,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 // видеть ровно те же слова, что и мы внутри платформы.
 const statusLabels = ORDER_STATUS_LABELS;
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'default',
-    PENDING: 'orange',
-    ASSIGNED: 'blue',
-    EN_ROUTE_PICKUP: 'gold',
-    AT_PICKUP: 'lime',
-    LOADING: 'purple',
-    IN_TRANSIT: 'cyan',
-    AT_DELIVERY: 'lime',
-    UNLOADING: 'purple',
-    COMPLETED: 'green',
-    PROBLEM: 'red',
-    CANCELLED: 'red',
-};
 
 const C = {
     bg: '#f4f5f7',

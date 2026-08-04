@@ -10,21 +10,12 @@ import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
 import { useTheme } from '@/components/ThemeProvider';
 import { toast } from 'sonner';
 
-// Грубый прогресс рейса по позиции статуса (точный % по GPS — этап 5 REDESIGN_PLAN.md)
-export const ORDER_STATUS_PROGRESS: Record<string, number> = {
-    DRAFT: 4, PENDING: 8, ASSIGNED: 18, EN_ROUTE_PICKUP: 30, AT_PICKUP: 42,
-    LOADING: 52, IN_TRANSIT: 68, AT_DELIVERY: 82, UNLOADING: 92,
-    COMPLETED: 100, PROBLEM: 50, CANCELLED: 100,
-};
+// Прогресс, цвет полосы и инициалы переехали в lib/order-status: те же
+// значения были скопированы ещё в страницу списка заявок, и копии начали
+// расходиться. Здесь оставлен ре-экспорт, чтобы не переписывать соседей.
+import { ORDER_STATUS_PROGRESS, nameInitials, progressColor as orderProgressColor } from '@/lib/order-status';
 
-export const orderProgressColor = (s: string) =>
-    s === 'PROBLEM' ? '#dc2626' : s === 'COMPLETED' ? '#16a34a' : s === 'CANCELLED' ? '#9ca3af' : '#1677ff';
-
-export const nameInitials = (name?: string) => {
-    if (!name) return '—';
-    const parts = name.trim().split(/\s+/);
-    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '—';
-};
+export { ORDER_STATUS_PROGRESS, nameInitials, orderProgressColor };
 
 function cityOf(order: any, type: 'pickup' | 'delivery'): string {
     const pts = order?.routePoints || [];

@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
+import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 
 const { Title, Text } = Typography;
 
@@ -32,20 +33,6 @@ interface Overview {
 // чтобы один и тот же статус везде назывался одинаково.
 const statusLabels = ORDER_STATUS_LABELS;
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'default',
-    PENDING: 'orange',
-    ASSIGNED: 'blue',
-    EN_ROUTE_PICKUP: 'gold',
-    AT_PICKUP: 'lime',
-    LOADING: 'purple',
-    IN_TRANSIT: 'cyan',
-    AT_DELIVERY: 'lime',
-    UNLOADING: 'purple',
-    COMPLETED: 'green',
-    CANCELLED: 'default',
-    PROBLEM: 'red',
-};
 
 const fmt = (n: number) => n.toLocaleString('ru-RU');
 

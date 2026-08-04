@@ -14,6 +14,7 @@ import StatusPill from '@/components/ui/StatusPill';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
+import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 
 const { Title, Text } = Typography;
 
@@ -21,11 +22,6 @@ const { Title, Text } = Typography;
 // чтобы один и тот же статус везде назывался одинаково.
 const statusLabels = ORDER_STATUS_LABELS;
 
-const statusColors: Record<string, string> = {
-    PENDING: 'orange', ASSIGNED: 'blue', EN_ROUTE_PICKUP: 'cyan',
-    AT_PICKUP: 'geekblue', LOADING: 'purple', IN_TRANSIT: 'processing',
-    AT_DELIVERY: 'lime', UNLOADING: 'gold', COMPLETED: 'green', PROBLEM: 'red',
-};
 
 // Role definitions mapped dynamically inside the component using theme tokens
 
