@@ -6,7 +6,7 @@ import { UsersService } from './users.service';
 import { S3Service } from '../s3/s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { CreateUserDto, UpdateProfileDto, UpdateUserDto } from './dto/user.dto';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
@@ -111,12 +111,14 @@ export class UsersController {
         return this.usersService.findById(id);
     }
 
-    // No @Roles decorator here since any logged-in user (including DRIVER, RECIPIENT, etc.)
-    // is allowed to modify their own personal profile information.
+    // Без @Roles: свой профиль правит любой вошедший, включая водителя и
+    // грузополучателя. Форма отдельная — UpdateProfileDto, только личные
+    // поля: через общую форму правки сюда проходили роль и компания, и
+    // водитель одним запросом делал себя администратором платформы.
     @Put('profile')
     @ApiOperation({ summary: 'Обновить профиль авторизованного пользователя' })
-    async updateProfile(@Request() req: any, @Body() dto: Partial<UpdateUserDto>) {
-        return this.usersService.update(req.user.sub, dto);
+    async updateProfile(@Request() req: any, @Body() dto: UpdateProfileDto) {
+        return this.usersService.updateProfile(req.user.sub, dto);
     }
 
     // No @Roles decorator here since any logged-in user (including DRIVER, RECIPIENT, etc.)
@@ -131,7 +133,7 @@ export class UsersController {
             throw new BadRequestException('Новый пароль обязателен');
         }
         
-        const user = await this.usersService.findById(req.user.sub);
+        const user = await this.usersService.findForPasswordCheck(req.user.sub);
         if (!user) {
             throw new BadRequestException('Пользователь не найден');
         }

@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionStatus } from '@prisma/client';
-import { kzStartOfMonth } from '../common/utils/business-date';
+import { addMonths, kzStartOfMonth } from '../common/utils/business-date';
 
 const SETTING_ENABLED = 'billing_enabled';
 const SETTING_TRIAL_DAYS = 'billing_trial_days';
@@ -353,8 +353,7 @@ export class BillingService {
         if (data.months && data.months > 0) {
             const now = new Date();
             const base = existing?.periodEnd && existing.periodEnd > now ? new Date(existing.periodEnd) : now;
-            base.setMonth(base.getMonth() + data.months);
-            update.periodEnd = base;
+            update.periodEnd = addMonths(base, data.months);
             update.periodStart = existing?.periodStart && existing?.periodEnd && existing.periodEnd > now
                 ? existing.periodStart
                 : now;
