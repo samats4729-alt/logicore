@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { buildSupportTicketMessage } from '../telegram/support-ticket-message';
+import { PLATFORM_KNOWLEDGE, describeUser } from './platform-knowledge';
 
 /**
  * Сколько накопившихся обращений досылать при запуске за один раз.
@@ -119,7 +120,11 @@ ${SELECTORS}
 - «Финансы» и «Кабинет» — не меню, а страницы-хабы: шаг с кликом по ним открывает страницу, дальше пользователь переходит по ссылке на ней. Отдельных селекторов у этих ссылок нет, поэтому просто назови нужный раздел словами.
 - Заявки открываются одним кликом по пилюле, без промежуточного меню.
 - Учитывай текущую страницу пользователя: если он уже там, где нужно, не добавляй лишние шаги навигации.
-- Если задача не требует навигации — steps можно не добавлять.`;
+- Если задача не требует навигации — steps можно не добавлять.
+
+Ты знаешь платформу не только как набор экранов, но и по существу — из блока ниже.
+Отвечай на вопросы «что это такое», «зачем это нужно», «чем отличается» по нему, а не общими словами.
+${PLATFORM_KNOWLEDGE}`;
 
 const SUPPORT_PROMPT = `Ты — ИИ-агент поддержки платформы LogiCore (SaaS для логистики: заявки, трекинг, финансы, счета, документы). Пользователь обращается, когда что-то работает неправильно: неверные цифры, статусы, счета, отображение. Твой отчёт читает разработчик, у которого НЕТ доступа к пользователю — отчёт должен быть самодостаточным.
 
@@ -207,7 +212,19 @@ export class AssistantService implements OnApplicationBootstrap {
         this.logger.log(`Automatic platform updates generation completed: ${res.message}`);
     }
 
-    async chat(messages: ChatMessage[], context?: string): Promise<{ reply: string }> {
+    /**
+     * Ответ ИИ-гида.
+     *
+     * `user` — кто спрашивает. Роль берётся из токена, а не из тела запроса:
+     * до этого гид не знал собеседника вовсе и одинаково уверенно вёл и
+     * владельца, и завсклада в разделы, куда второго не пускают. Человек
+     * доходил до отказа и решал, что сломалась платформа.
+     */
+    async chat(
+        messages: ChatMessage[],
+        context?: string,
+        user?: { role?: string; permissions?: string[] },
+    ): Promise<{ reply: string }> {
         const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
         if (!apiKey) {
             return {
@@ -225,7 +242,9 @@ export class AssistantService implements OnApplicationBootstrap {
         }
 
         const updatesBlock = await this.getPublishedUpdatesBlock();
-        const systemContent = `${SYSTEM_PROMPT}${updatesBlock}\n\nТекущая страница пользователя: ${context || 'неизвестно'}`;
+        const systemContent = `${SYSTEM_PROMPT}${updatesBlock}`
+            + `\n\n=== Кто спрашивает ===\n${describeUser(user)}`
+            + `\n\nТекущая страница пользователя: ${context || 'неизвестно'}`;
 
         try {
             const res = await fetch('https://api.deepseek.com/chat/completions', {
