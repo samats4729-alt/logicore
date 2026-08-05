@@ -5,7 +5,7 @@ import { FinancialSettingsService } from './services/financial-settings.service'
 import { PaymentsService } from './services/payments.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentDirection, PaymentMethod, CostType, DictionaryKind } from '@prisma/client';
+import { AccountKind, PaymentDirection, PaymentMethod, CostType, DictionaryKind } from '@prisma/client';
 import { JournalQueryDto } from './dto/accounting.dto';
 
 @Injectable()
@@ -291,6 +291,20 @@ export class AccountingService {
 
     async getFinanceAccounts(companyId: string) {
         return this.settingsService.getFinanceAccounts(companyId);
+    }
+
+    async createFinanceAccount(companyId: string, data: {
+        name: string;
+        kind: AccountKind;
+        currency?: string;
+        openingBalance?: number;
+        openingDate?: string | null;
+        iban?: string | null;
+        bankName?: string | null;
+        bankBic?: string | null;
+        kbe?: string | null;
+    }) {
+        return this.settingsService.createFinanceAccount(companyId, data);
     }
 
     async updateFinanceAccount(companyId: string, id: string, data: {

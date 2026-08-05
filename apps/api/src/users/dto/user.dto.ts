@@ -57,3 +57,49 @@ export class CreateUserDto {
 }
 
 export class UpdateUserDto extends PartialType(CreateUserDto) { }
+
+/**
+ * Что человек меняет у себя сам.
+ *
+ * Раньше «свой профиль» принимал ту же форму, что и правка пользователя
+ * администратором, — со всеми полями, включая роль и компанию. Водитель
+ * одним запросом делал себя администратором платформы или переезжал в
+ * чужую компанию. Здесь перечислено только личное: имя, связь и машина.
+ */
+export class UpdateProfileDto {
+    @ApiProperty({ required: false, example: 'Иван' })
+    @IsString()
+    @IsOptional()
+    firstName?: string;
+
+    @ApiProperty({ required: false, example: 'Иванов' })
+    @IsString()
+    @IsOptional()
+    lastName?: string;
+
+    @ApiProperty({ required: false, example: 'Петрович' })
+    @IsString()
+    @IsOptional()
+    middleName?: string;
+
+    @ApiProperty({ required: false, example: 'user@logcomp.kz' })
+    @IsEmail()
+    @IsOptional()
+    email?: string;
+
+    @ApiProperty({ required: false, example: '+77001234567' })
+    @IsString()
+    @IsOptional()
+    @Matches(/^\+?[0-9]{10,15}$/)
+    phone?: string;
+
+    @ApiProperty({ required: false, example: '123ABC01' })
+    @IsString()
+    @IsOptional()
+    vehiclePlate?: string;
+
+    @ApiProperty({ required: false, example: 'MAN TGX' })
+    @IsString()
+    @IsOptional()
+    vehicleModel?: string;
+}

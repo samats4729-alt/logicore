@@ -28,6 +28,7 @@ import { AssistantModule } from './assistant/assistant.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { BillingModule } from './billing/billing.module';
 import { AuditModule } from './audit/audit.module';
+import { CurrencyModule } from './currency/currency.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
@@ -61,6 +62,7 @@ import { ReportsModule } from './reports/reports.module';
         S3Module,
 
         CitiesModule,
+        CurrencyModule,
         PartnersModule,
         InventoryModule,
         DriverModule,

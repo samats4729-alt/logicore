@@ -9,11 +9,13 @@ import { FinancialSettingsService } from './services/financial-settings.service'
 import { PaymentsService } from './services/payments.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { SharedReportLinkService } from './services/shared-report-link.service';
+import { CurrencyRevaluationService } from './services/currency-revaluation.service';
 import { EmailModule } from '../email/email.module';
 import { PayrollModule } from '../payroll/payroll.module';
+import { CurrencyModule } from '../currency/currency.module';
 
 @Module({
-    imports: [PaymentAllocationModule, EmailModule, forwardRef(() => PayrollModule)],
+    imports: [PaymentAllocationModule, EmailModule, CurrencyModule, forwardRef(() => PayrollModule)],
     controllers: [AccountingController, PublicAccountingController],
     providers: [
         AccountingService,
@@ -23,6 +25,7 @@ import { PayrollModule } from '../payroll/payroll.module';
         PaymentsService,
         FinancialReportsService,
         SharedReportLinkService,
+        CurrencyRevaluationService,
     ],
     exports: [
         AccountingService,
@@ -32,6 +35,7 @@ import { PayrollModule } from '../payroll/payroll.module';
         PaymentsService,
         FinancialReportsService,
         SharedReportLinkService,
+        CurrencyRevaluationService,
     ],
 })
 export class AccountingModule { }

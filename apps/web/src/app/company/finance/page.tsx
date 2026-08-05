@@ -90,6 +90,9 @@ export default function FinanceHubPage() {
                 { label: 'Счета', href: '/company/accounting/invoices', show: acc, desc: 'Счета покупателям и от поставщиков — создание и журнал' },
                 { label: 'Акты выполненных работ', href: '/company/accounting/acts', show: acc, desc: 'Журнал актов по заявкам: открыть, проверить, распечатать' },
                 { label: 'Доверенности и договоры-заявки', href: '/company/accounting/transport-documents', show: acc, desc: 'Документы по рейсам за период: найти и распечатать, не открывая заявку' },
+                // Не справочник, а очередь работы: контрагент прислал счёт, и
+                // по нему нужно решение. В справочниках это никто не найдёт.
+                { label: 'Входящие документы', href: '/company/accounting/incoming', show: acc, desc: 'Счета и акты, присланные контрагентами прямо на платформе: принять или отклонить' },
             ],
         },
         {
@@ -130,6 +133,9 @@ export default function FinanceHubPage() {
                 { label: 'Формы оплаты', href: '/company/accounting/payment-forms', show: acc, desc: 'Формы оплаты для заявок: безнал, наличные, карта' },
                 { label: 'Формы собственности', href: '/company/accounting/ownership-types', show: acc, desc: 'Организационно-правовые формы контрагентов: ТОО, ИП, АО' },
                 { label: 'Банки', href: '/company/accounting/banks', show: acc, desc: 'Справочник банков и БИК для реквизитов' },
+                { label: 'Курсы валют', href: '/company/accounting/currencies', show: acc, desc: 'Официальные курсы Нацбанка РК по дням, курс вручную для валют без официального' },
+                { label: 'Переоценка валют', href: '/company/accounting/revaluation', show: acc, desc: 'Курсовая разница по валютным остаткам и неоплаченным долгам на конец месяца' },
+                { label: 'Нумерация счетов', href: '/company/accounting/document-numbering', show: acc, desc: 'Свой префикс, следующий номер и количество цифр — формата «АВ-00010002»' },
                 { label: 'Нумерация заявок', href: '/company/accounting/order-numbering', show: acc, desc: 'Формат номера как в 1С и стартовый номер' },
                 { label: 'Счета и кассы', href: '/company/accounting/settings?tab=accounts', show: acc, desc: 'Ваши расчётные счета и кассы' },
             ],

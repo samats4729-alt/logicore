@@ -6,6 +6,21 @@ import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
 
+/**
+ * Убрать из записи то, что не должно уезжать клиенту.
+ *
+ * Хеш пароля уходил в ответ на правку профиля и на список пользователей.
+ * Сам по себе он не пароль, но это материал для подбора в открытом виде —
+ * в ответе API ему делать нечего.
+ */
+function withoutSecrets<T extends { passwordHash?: string | null }>(user: T): Omit<T, 'passwordHash'>;
+function withoutSecrets(user: null): null;
+function withoutSecrets(user: any): any {
+    if (!user) return user;
+    const { passwordHash, ...rest } = user;
+    return rest;
+}
+
 @Injectable()
 export class UsersService {
     constructor(private prisma: PrismaService, private s3Service: S3Service) { }
@@ -133,12 +148,12 @@ export class UsersService {
                 });
             }
 
-            return user;
+            return withoutSecrets(user);
         });
     }
 
     async findAll(filters?: { role?: UserRole; isActive?: boolean }) {
-        return this.prisma.user.findMany({
+        const users = await this.prisma.user.findMany({
             where: {
                 role: filters?.role,
                 isActive: filters?.isActive,
@@ -146,12 +161,24 @@ export class UsersService {
             include: { company: true },
             orderBy: { createdAt: 'desc' },
         });
+        return users.map((user) => withoutSecrets(user));
     }
 
     async findById(id: string) {
-        return this.prisma.user.findUnique({
+        return withoutSecrets(await this.prisma.user.findUnique({
             where: { id },
             include: { company: true },
+        }) as any);
+    }
+
+    /**
+     * Запись вместе с хешем пароля — только для сверки текущего пароля при
+     * его смене. Наружу такая запись не отдаётся: для ответов есть findById.
+     */
+    async findForPasswordCheck(id: string) {
+        return this.prisma.user.findUnique({
+            where: { id },
+            select: { id: true, passwordHash: true },
         });
     }
 
@@ -166,12 +193,20 @@ export class UsersService {
         if (companyId) {
             where.companyId = companyId;
         }
-        return this.prisma.user.findMany({
+        const drivers = await this.prisma.user.findMany({
             where,
             orderBy: { lastName: 'asc' },
         });
+        return drivers.map((driver) => withoutSecrets(driver));
     }
 
+    /**
+     * Правка пользователя администратором.
+     *
+     * Поля перечислены руками: раньше сюда уходил объект запроса целиком, и
+     * присланный клиентом `password` доходил до базы как несуществующая
+     * колонка — правка падала пятисоткой вместо того, чтобы сменить пароль.
+     */
     async update(id: string, data: Partial<{
         firstName: string;
         lastName: string;
@@ -181,26 +216,68 @@ export class UsersService {
         vehiclePlate: string;
         vehicleModel: string;
         isActive: boolean;
+        role: UserRole;
+        password: string;
     }>) {
-        return this.prisma.user.update({
+        return withoutSecrets(await this.prisma.user.update({
             where: { id },
-            data,
+            data: {
+                firstName: data.firstName,
+                lastName: data.lastName,
+                middleName: data.middleName,
+                email: data.email,
+                phone: data.phone,
+                vehiclePlate: data.vehiclePlate,
+                vehicleModel: data.vehicleModel,
+                isActive: data.isActive,
+                role: data.role,
+                passwordHash: data.password ? await bcrypt.hash(data.password, 12) : undefined,
+            },
+        }));
+    }
+
+    /**
+     * Правка своего профиля.
+     *
+     * Поля перечислены руками, а не берутся из запроса целиком: раньше сюда
+     * уходило всё, что прислал клиент, и водитель одним запросом делал себя
+     * администратором платформы или переезжал в чужую компанию. Роль,
+     * компания, пароль и признак активности сюда не попадают никогда — их
+     * меняет только администратор через свои эндпоинты.
+     */
+    async updateProfile(userId: string, data: {
+        firstName?: string;
+        lastName?: string;
+        middleName?: string;
+        email?: string;
+        phone?: string;
+        vehiclePlate?: string;
+        vehicleModel?: string;
+    }) {
+        return this.update(userId, {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            middleName: data.middleName,
+            email: data.email,
+            phone: data.phone,
+            vehiclePlate: data.vehiclePlate,
+            vehicleModel: data.vehicleModel,
         });
     }
 
     async updatePassword(id: string, newPassword: string) {
         const passwordHash = await bcrypt.hash(newPassword, 12);
-        return this.prisma.user.update({
+        return withoutSecrets(await this.prisma.user.update({
             where: { id },
             data: { passwordHash },
-        });
+        }));
     }
 
     async deactivate(id: string) {
-        return this.prisma.user.update({
+        return withoutSecrets(await this.prisma.user.update({
             where: { id },
             data: { isActive: false },
-        });
+        }));
     }
 
     async resetDeviceBinding(userId: string) {

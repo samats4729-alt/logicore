@@ -15,6 +15,9 @@ const invoice = (id: string, total: string, paid = '0', overrides: Record<string
     amountPaid: new Prisma.Decimal(paid),
     counterpartyId: COUNTERPARTY,
     direction: 'OUTGOING',
+    // Как в базе после миграции: тенговый счёт с курсом 1.
+    currency: 'KZT',
+    exchangeRate: new Prisma.Decimal(1),
     ...overrides,
 });
 
@@ -61,6 +64,9 @@ function makeService(documents: any[] = [], paymentOverrides: Record<string, unk
                 amount: new Prisma.Decimal('100000'),
                 direction: PaymentDirection.IN,
                 counterpartyId: COUNTERPARTY,
+                currency: 'KZT',
+                exchangeRate: new Prisma.Decimal(1),
+                date: new Date('2026-07-05'),
                 ...paymentOverrides,
             }),
         },
@@ -70,7 +76,11 @@ function makeService(documents: any[] = [], paymentOverrides: Record<string, unk
         $transaction: jest.fn(async (fn: any) => fn(tx)),
     };
 
-    return { service: new PaymentAllocationService(prisma), prisma, tx, updates, allocations };
+    // Курсы валют разнесению нужны только для платежа в чужой валюте —
+    // здесь все суммы тенговые, и заглушка не вызывается.
+    const currency = { rateOn: jest.fn().mockResolvedValue(null) };
+
+    return { service: new PaymentAllocationService(prisma, currency as any), prisma, tx, updates, allocations };
 }
 
 describe('PaymentAllocationService', () => {

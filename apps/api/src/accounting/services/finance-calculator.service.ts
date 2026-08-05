@@ -17,7 +17,15 @@ type Amount = Money | number | null | undefined;
 export const ORDER_FINANCE_SELECT = {
     customerPrice: true,
     driverCost: true,
+    // Валюты и пересчёт в учётную валюту: расчёт ведётся по пересчитанным
+    // суммам, иначе доллары сложились бы с тенге.
+    currency: true,
+    driverCostCurrency: true,
+    customerPriceBase: true,
+    driverCostBase: true,
     subForwarderPrice: true,
+    subForwarderPriceCurrency: true,
+    subForwarderPriceBase: true,
     customerCompanyId: true,
     forwarderId: true,
     subForwarderId: true,
@@ -36,7 +44,10 @@ export const ORDER_FINANCE_SELECT = {
  * платежа, категория и сумма дохода/расхода. Остальные колонки не читаются.
  */
 export const ORDER_FINANCE_RELATIONS_SELECT = {
-    payments: { where: { isDeleted: false }, select: { direction: true, amount: true, companyId: true } },
+    payments: {
+        where: { isDeleted: false },
+        select: { direction: true, amount: true, companyId: true, currency: true, amountBase: true },
+    },
     incomes: { where: { isDeleted: false }, select: { category: true, amount: true, isDeleted: true } },
     expenses: { where: { isDeleted: false }, select: { category: true, amount: true, isDeleted: true } },
 } satisfies Prisma.OrderSelect;
@@ -62,6 +73,32 @@ export const ORDER_FINANCE_RELATIONS_SELECT = {
 // зависимым от того, кто его вызывает. Сравнение суммы платежей с порогом
 // раньше требовало обходного moneyGte из-за погрешности плавающей точки;
 // теперь суммы — Decimal, и обе стороны сравнивают их точным .gte().
+/**
+ * Учётная валюта платформы. Сейчас у всех компаний тенге; когда появится
+ * компания с другой, она придёт сюда параметром, а не станет догадкой.
+ */
+const BASE_CURRENCY_CODE = 'KZT';
+
+/**
+ * Пересчёт суммы, у которой своей учётной колонки нет, по курсу соседней
+ * суммы в той же валюте того же документа.
+ *
+ * Ставка суб-экспедитора хранится в валюте заявки, но отдельной колонки с
+ * пересчётом у неё не появилось: она всегда идёт рядом со ставкой заказчика
+ * и относится к тому же дню. Пересчитывать её сегодняшним курсом нельзя —
+ * прибыль по прошлому рейсу менялась бы каждый день.
+ */
+function peerBase(
+    raw: Amount | undefined,
+    peerRaw: Amount | undefined,
+    peerBaseValue: Amount | null | undefined,
+): Amount | null {
+    if (peerBaseValue === null || peerBaseValue === undefined) return null;
+    if (raw === null || raw === undefined) return null;
+    if (D(peerRaw).lte(ZERO)) return null;
+    return roundMoney(D(raw).times(D(peerBaseValue)).div(D(peerRaw)));
+}
+
 @Injectable()
 export class FinanceCalculatorService {
     computeOrderFinance(params: {
@@ -69,6 +106,12 @@ export class FinanceCalculatorService {
             customerPrice?: Amount;
             driverCost?: Amount;
             subForwarderPrice?: Amount;
+            currency?: string | null;
+            driverCostCurrency?: string | null;
+            subForwarderPriceCurrency?: string | null;
+            customerPriceBase?: Amount | null;
+            driverCostBase?: Amount | null;
+            subForwarderPriceBase?: Amount | null;
             customerCompanyId?: string | null;
             forwarderId?: string | null;
             subForwarderId?: string | null;
@@ -81,7 +124,14 @@ export class FinanceCalculatorService {
             isDriverPaid?: boolean | null;
             isSubForwarderPaid?: boolean | null;
         };
-        payments: Array<{ direction: PaymentDirection; amount: Amount; companyId: string }>;
+        payments: Array<{
+            direction: PaymentDirection;
+            amount: Amount;
+            companyId: string;
+            /** Валюта платежа и его сумма в тенге по курсу дня оплаты. */
+            currency?: string | null;
+            amountBase?: Amount | null;
+        }>;
         incomes: Array<{ category: string; amount: Amount; isDeleted?: boolean }>;
         expenses: Array<{ category: string; amount: Amount; isDeleted?: boolean }>;
         companyId: string;
@@ -97,9 +147,41 @@ export class FinanceCalculatorService {
         const executorVatRate = D(order.executorVatRate);
         const executorHasVat = order.executorHasVat ?? false;
 
-        const customerPrice = D(order.customerPrice);
-        const subForwarderPrice = D(order.subForwarderPrice);
-        const driverCost = D(order.driverCost);
+        /**
+         * Считаем в учётной валюте компании.
+         *
+         * Сумма в тенге и её пересчёт — одно и то же число, поэтому для
+         * обычного рейса ничего не меняется. Для валютного берётся пересчёт.
+         *
+         * Если валюта не тенге, а пересчёта нет (курса не нашлось), сумма НЕ
+         * берётся как есть: тысяча долларов, посчитанная тысячей тенге, — это
+         * ошибка, которую в отчёте не увидеть. Такая сумма не участвует в
+         * расчёте вовсе, а факт выносится наружу отдельным признаком, чтобы
+         * отчёт мог честно сказать: здесь не хватает курса.
+         */
+        const unconverted: string[] = [];
+        const inBase = (raw: Amount | undefined, base: Amount | null | undefined, code?: string | null) => {
+            const currency = (code || BASE_CURRENCY_CODE).toUpperCase();
+            if (currency === BASE_CURRENCY_CODE) return D(raw);
+            if (base !== null && base !== undefined) return D(base);
+            if (raw !== null && raw !== undefined && !D(raw).isZero() && !unconverted.includes(currency)) {
+                unconverted.push(currency);
+            }
+            return ZERO;
+        };
+
+        const customerPrice = inBase(order.customerPrice, order.customerPriceBase, order.currency);
+        // Валюта ставки суб-экспедитора: своя, если её указали, иначе валюта
+        // заявки — так понимались все заявки до появления этой колонки.
+        // Заявкам, заведённым раньше, пересчёта нет, и он выводится по курсу
+        // соседней суммы того же дня.
+        const subForwarderPrice = inBase(
+            order.subForwarderPrice,
+            order.subForwarderPriceBase
+                ?? peerBase(order.subForwarderPrice, order.customerPrice, order.customerPriceBase),
+            order.subForwarderPriceCurrency || order.currency,
+        );
+        const driverCost = inBase(order.driverCost, order.driverCostBase, order.driverCostCurrency);
 
         let revenueGross: Money;
         let executorCostGross: Money;
@@ -159,8 +241,21 @@ export class FinanceCalculatorService {
             }
         }
 
+        // Платёж в отчёте — всегда в тенге. Валютный берётся по своему
+        // зафиксированному курсу; без курса он в сумму не попадает вовсе, как
+        // и валютная ставка без пересчёта, и по той же причине: тысяча
+        // долларов, посчитанная тысячей тенге, — ошибка, которую в отчёте не
+        // видно.
+        const paymentInBase = (p: { amount: Amount; currency?: string | null; amountBase?: Amount | null }) => {
+            const currency = (p.currency || BASE_CURRENCY_CODE).toUpperCase();
+            if (currency === BASE_CURRENCY_CODE) return D(p.amount);
+            if (p.amountBase !== null && p.amountBase !== undefined) return D(p.amountBase);
+            if (!D(p.amount).isZero() && !unconverted.includes(currency)) unconverted.push(currency);
+            return ZERO;
+        };
+
         const sumPayments = (predicate: (p: { direction: PaymentDirection; companyId: string }) => boolean) =>
-            sumOf(payments.filter(predicate), (p) => p.amount);
+            sumOf(payments.filter(predicate), paymentInBase);
 
         let paidIn: Money;
         let paidOut: Money;
@@ -247,6 +342,8 @@ export class FinanceCalculatorService {
             paidIn,
             paidOut,
             margin,
+            /** Валюты, по которым не нашлось курса: эти суммы в расчёт не вошли. */
+            unconvertedCurrencies: unconverted,
             customerDebt,
             executorDebt,
             isCustomerPaid,

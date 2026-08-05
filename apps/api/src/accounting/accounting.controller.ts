@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Qu
 import { ApiOperation } from '@nestjs/swagger';
 import { AccountingService } from './accounting.service';
 import { SharedReportLinkService } from './services/shared-report-link.service';
+import { CurrencyRevaluationService } from './services/currency-revaluation.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
@@ -10,6 +11,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { Response } from 'express';
 import {
+    CreateFinanceAccountDto,
     CreateManualEntryDto,
     CreatePaymentDto,
     JournalQueryDto,
@@ -31,6 +33,7 @@ export class AccountingController {
         private readonly emailService: EmailService,
         private readonly auditService: AuditService,
         private readonly shareLinks: SharedReportLinkService,
+        private readonly revaluations: CurrencyRevaluationService,
     ) { }
 
     // ==================== ORDER FINANCIALS ====================
@@ -480,6 +483,25 @@ export class AccountingController {
         return this.accountingService.upsertCounterpartyOpening(req.user.companyId, counterpartyId, body);
     }
 
+    @Post('finance-accounts')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Завести счёт или кассу',
+        description: 'В том числе валютную: один счёт — одна валюта.',
+    })
+    async createFinanceAccount(
+        @Request() req: any,
+        @Body() body: CreateFinanceAccountDto,
+    ) {
+        const created = await this.accountingService.createFinanceAccount(req.user.companyId, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'finance_account',
+            entityId: (created as any)?.id, entityLabel: `${body.name} (${body.currency || 'KZT'})`,
+            details: { kind: body.kind, currency: body.currency || 'KZT' },
+        });
+        return created;
+    }
+
     @Put('finance-accounts/:id')
     @Roles(...FINANCE_CHANGE_ROLES)
     async updateFinanceAccount(
@@ -487,6 +509,7 @@ export class AccountingController {
         @Param('id') id: string,
         @Body() body: {
             name?: string;
+            currency?: string;
             openingBalance?: number;
             openingDate?: string | null;
             iban?: string | null;
@@ -707,5 +730,66 @@ export class AccountingController {
             'Content-Length': buffer.length,
         });
         res.end(buffer);
+    }
+
+    // ==================== ПЕРЕОЦЕНКА ВАЛЮТНЫХ ОСТАТКОВ ====================
+
+    @Get('revaluations')
+    @Roles(...FINANCE_VIEW_ROLES)
+    @ApiOperation({ summary: 'Проведённые переоценки валютных остатков' })
+    listRevaluations(@Request() req: any) {
+        return this.revaluations.list(req.user.companyId);
+    }
+
+    // До `:id`, иначе путь съедается параметром.
+    @Get('revaluations/preview')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Что переоценится на эту дату',
+        description: 'Ничего не сохраняет: показывает, какие остатки и на сколько изменятся.',
+    })
+    previewRevaluation(@Request() req: any, @Query('date') date?: string) {
+        return this.revaluations.preview(req.user.companyId, date ? new Date(date) : new Date());
+    }
+
+    @Get('revaluations/:id')
+    @Roles(...FINANCE_VIEW_ROLES)
+    @ApiOperation({ summary: 'Переоценка со всеми строками' })
+    getRevaluation(@Request() req: any, @Param('id') id: string) {
+        return this.revaluations.getById(req.user.companyId, id);
+    }
+
+    @Post('revaluations')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Провести переоценку валютных остатков',
+        description: 'Сохраняет снимок: курс, суммы до и после, разница по каждому остатку.',
+    })
+    async postRevaluation(@Request() req: any, @Body() body: { date: string; note?: string }) {
+        const saved = await this.revaluations.post(
+            req.user.companyId, req.user.id, new Date(body.date), body.note,
+        );
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'currency_revaluation',
+            entityId: saved.id,
+            entityLabel: `Переоценка валютных остатков на ${body.date}`,
+            details: { gain: Number(saved.gain), loss: Number(saved.loss), lines: saved.lines.length },
+        });
+        return saved;
+    }
+
+    @Delete('revaluations/:id')
+    @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Отменить переоценку',
+        description: 'Нужна, когда после проведения поправили курс или добавили платёж задним числом.',
+    })
+    async removeRevaluation(@Request() req: any, @Param('id') id: string) {
+        const result = await this.revaluations.remove(req.user.companyId, id);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'DELETE', entity: 'currency_revaluation',
+            entityId: id, entityLabel: 'Переоценка валютных остатков отменена',
+        });
+        return result;
     }
 }

@@ -7,6 +7,12 @@ import {
     Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CurrencyService } from '../currency/currency.service';
+import {
+    MissingRateError,
+    Settlement,
+    settleAllocation,
+} from '../accounting/services/exchange-difference';
 import { D, ZERO, roundMoney } from '../common/utils/money';
 
 /**
@@ -15,6 +21,26 @@ import { D, ZERO, roundMoney } from '../common/utils/money';
  * получит два разных ответа на один вопрос.
  */
 export type DocumentPaymentState = 'UNPAID' | 'PARTIAL' | 'PAID';
+
+/**
+ * Возврат в валюте платежа → сколько это в валюте счёта.
+ *
+ * Курс берётся из самого разнесения: в нём записано, сколько тенге ушло на
+ * сколько валюты счёта. Это единственный курс, по которому долг закрывали, —
+ * по нему же его и открываем обратно. Сегодняшний курс тут не годится: он
+ * изменил бы уже посчитанную курсовую разницу задним числом.
+ */
+function convertByAllocationRate(
+    refund: Prisma.Decimal,
+    paymentRate: Prisma.Decimal | null,
+    allocation: { amount: Prisma.Decimal; amountBase: Prisma.Decimal | null },
+): Prisma.Decimal {
+    const base = allocation.amountBase;
+    if (!paymentRate || base === null || D(allocation.amount).lte(ZERO)) return refund;
+    const perUnit = D(base).div(D(allocation.amount));
+    if (perUnit.lte(ZERO)) return refund;
+    return roundMoney(refund.times(D(paymentRate)).div(perUnit));
+}
 
 export function paymentStateOf(total: Prisma.Decimal, amountPaid: Prisma.Decimal): DocumentPaymentState {
     if (D(amountPaid).lte(0)) return 'UNPAID';
@@ -36,7 +62,10 @@ export interface AllocationInput {
  */
 @Injectable()
 export class PaymentAllocationService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly currency: CurrencyService,
+    ) {}
 
     /**
      * Предложение разнесения по FIFO: сначала гасятся счета с самым ранним
@@ -47,9 +76,10 @@ export class PaymentAllocationService {
      */
     async suggest(
         companyId: string,
-        params: { counterpartyId: string; direction: PaymentDirection; amount: string },
+        params: { counterpartyId: string; direction: PaymentDirection; amount: string; currency?: string },
     ) {
-        const documents = await this.openDocuments(companyId, params.counterpartyId, params.direction);
+        const currency = (params.currency || 'KZT').toUpperCase();
+        const documents = await this.openDocuments(companyId, params.counterpartyId, params.direction, currency);
 
         let rest = roundMoney(D(params.amount));
         if (rest.lte(0)) throw new BadRequestException('Сумма платежа должна быть больше нуля');
@@ -63,6 +93,9 @@ export class PaymentAllocationService {
                 number: document.number,
                 documentDate: document.documentDate,
                 dueDate: document.dueDate,
+                // Валюта счёта: долг по нему остаётся в своей валюте, и в
+                // подсказке нельзя показывать долларовый остаток под знаком ₸.
+                currency: document.currency,
                 total: document.total,
                 amountPaid: document.amountPaid,
                 balanceDue: due,
@@ -86,7 +119,10 @@ export class PaymentAllocationService {
     async apply(companyId: string, userId: string, paymentId: string, allocations: AllocationInput[]) {
         const payment = await this.prisma.payment.findFirst({
             where: { id: paymentId, companyId, isDeleted: false },
-            select: { id: true, amount: true, direction: true, counterpartyId: true },
+            select: {
+                id: true, amount: true, direction: true, counterpartyId: true,
+                currency: true, exchangeRate: true, date: true,
+            },
         });
         if (!payment) throw new NotFoundException('Платёж не найден');
 
@@ -108,7 +144,10 @@ export class PaymentAllocationService {
                     companyId,
                     status: AccountingDocumentStatus.POSTED,
                 },
-                select: { id: true, total: true, amountPaid: true, counterpartyId: true, direction: true },
+                select: {
+                    id: true, total: true, amountPaid: true, counterpartyId: true, direction: true,
+                    currency: true, exchangeRate: true,
+                },
             })
             : [];
         if (documents.length !== uniqueIds.size) {
@@ -131,6 +170,35 @@ export class PaymentAllocationService {
             }
         }
 
+        // Курс валюты счёта на дату платежа нужен только когда платёж пришёл
+        // в другой валюте: тенге, которыми гасят долларовый счёт, становятся
+        // долларами по курсу дня оплаты, а не по курсу самого счёта.
+        const byId = new Map(documents.map((document) => [document.id, document]));
+        const settlements = new Map<string, Settlement>();
+        for (const item of positive) {
+            const document = byId.get(item.documentId)!;
+            const onPaymentDate = document.currency === payment.currency
+                ? null
+                : await this.currency.rateOn(document.currency, payment.date, { companyId });
+            try {
+                settlements.set(item.documentId, settleAllocation({
+                    part: item.amount,
+                    paymentCurrency: payment.currency,
+                    paymentRate: payment.exchangeRate,
+                    documentCurrency: document.currency,
+                    documentRate: document.exchangeRate,
+                    documentCurrencyRateOnPaymentDate: onPaymentDate?.rate ?? null,
+                }));
+            } catch (error) {
+                if (error instanceof MissingRateError) {
+                    throw new BadRequestException(
+                        `${error.message}. Загрузите курс в разделе «Финансы → Курсы валют»`,
+                    );
+                }
+                throw error;
+            }
+        }
+
         return this.prisma.$transaction(async (tx) => {
             // Прежнее разнесение снимаем и пересчитываем затронутые счета,
             // иначе повторный вызов удвоил бы оплату.
@@ -141,11 +209,16 @@ export class PaymentAllocationService {
             await tx.accountingPaymentAllocation.deleteMany({ where: { paymentId } });
 
             for (const item of positive) {
+                const settlement = settlements.get(item.documentId)!;
                 await tx.accountingPaymentAllocation.create({
                     data: {
                         documentId: item.documentId,
                         paymentId,
-                        amount: roundMoney(D(item.amount)),
+                        // В счёте гасится долг в его валюте, а не сумма
+                        // платежа: 480 000 ₸ закрывают 1 000 USD долга.
+                        amount: settlement.closed,
+                        amountBase: settlement.amountBase,
+                        exchangeDiff: settlement.exchangeDiff,
                         createdById: userId,
                     },
                 });
@@ -193,30 +266,62 @@ export class PaymentAllocationService {
         let rest = roundMoney(D(amount));
         if (rest.lte(ZERO)) return { documents: 0 };
 
+        const payment = await this.prisma.payment.findUnique({
+            where: { id: paymentId },
+            select: { currency: true, exchangeRate: true },
+        });
+        const paymentCurrency = payment?.currency ?? 'KZT';
+
         return this.prisma.$transaction(async (tx) => {
             const allocations = await tx.accountingPaymentAllocation.findMany({
                 where: { paymentId },
                 orderBy: { createdAt: 'desc' },
-                select: { id: true, documentId: true, amount: true },
+                select: {
+                    id: true, documentId: true, amount: true,
+                    amountBase: true, exchangeDiff: true,
+                    document: { select: { currency: true } },
+                },
             });
 
             const touched = new Set<string>();
             for (const allocation of allocations) {
                 if (rest.lte(ZERO)) break;
                 const current = roundMoney(D(allocation.amount));
-                const cut = Prisma.Decimal.min(current, rest);
+                // Возврат приходит в валюте платежа, а разнесение записано в
+                // валюте счёта. Когда они разные, переводим возврат курсом
+                // самого разнесения: другого честного курса для этой пары нет,
+                // а брать сегодняшний значило бы менять прошлое.
+                const inDocumentCurrency = allocation.document.currency === paymentCurrency
+                    ? rest
+                    : convertByAllocationRate(rest, payment?.exchangeRate ?? null, allocation);
+                const cut = Prisma.Decimal.min(current, inDocumentCurrency);
                 const left = roundMoney(current.minus(cut));
 
                 if (left.lte(ZERO)) {
                     await tx.accountingPaymentAllocation.delete({ where: { id: allocation.id } });
                 } else {
+                    // Пересчёт и курсовая разница уменьшаются в той же доле:
+                    // вернули половину — половина разницы тоже отменяется.
+                    const share = left.div(current);
                     await tx.accountingPaymentAllocation.update({
                         where: { id: allocation.id },
-                        data: { amount: left },
+                        data: {
+                            amount: left,
+                            amountBase: allocation.amountBase === null
+                                ? null
+                                : roundMoney(D(allocation.amountBase).times(share)),
+                            exchangeDiff: allocation.exchangeDiff === null
+                                ? null
+                                : roundMoney(D(allocation.exchangeDiff).times(share)),
+                        },
                     });
                 }
                 touched.add(allocation.documentId);
-                rest = roundMoney(rest.minus(cut));
+                // Списываем ровно ту часть возврата, которая ушла на это
+                // разнесение, — в валюте платежа.
+                rest = roundMoney(rest.minus(
+                    cut.equals(inDocumentCurrency) ? rest : rest.times(cut.div(inDocumentCurrency)),
+                ));
             }
 
             for (const documentId of touched) {
@@ -255,16 +360,25 @@ export class PaymentAllocationService {
         });
     }
 
-    /** Проведённые неоплаченные счета контрагента, FIFO по сроку оплаты. */
+    /**
+     * Проведённые неоплаченные счета контрагента, FIFO по сроку оплаты.
+     *
+     * Только счета в валюте платежа: подсказка распределяет сумму платежа
+     * по остаткам долга напрямую, а вычесть доллары из тенге нельзя.
+     * Погасить счёт в другой валюте по-прежнему можно — вручную, там курс
+     * дня оплаты учитывается явно.
+     */
     private async openDocuments(
         companyId: string,
         counterpartyId: string,
         direction: PaymentDirection,
+        currency: string,
     ) {
         return this.prisma.accountingDocument.findMany({
             where: {
                 companyId,
                 counterpartyId,
+                currency,
                 type: AccountingDocumentType.PAYMENT_INVOICE,
                 status: AccountingDocumentStatus.POSTED,
                 direction: direction === PaymentDirection.IN
@@ -277,6 +391,7 @@ export class PaymentAllocationService {
                 number: true,
                 documentDate: true,
                 dueDate: true,
+                currency: true,
                 total: true,
                 amountPaid: true,
             },

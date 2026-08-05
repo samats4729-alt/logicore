@@ -58,6 +58,27 @@ const STATUS_KEYS = [
 ];
 const OWN_DICTIONARY_THRESHOLD = 3;
 
+/**
+ * Цвета статусов рейса — та же история, что и с подписями.
+ *
+ * Словарь цветов был скопирован в шесть файлов и разошёлся: «В пути» на
+ * четырёх экранах бирюзовый, на двух синий; «Отменён» то красный, то
+ * серый. Отличаем копию от чужой сущности так же — по числу совпавших
+ * ключей рейса, у которых значением стоит имя цвета.
+ */
+const ORDER_STATUS_KEYS = [
+    'PENDING', 'ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING',
+    'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING', 'COMPLETED', 'PROBLEM',
+];
+const COLORS = 'default|orange|blue|gold|lime|purple|cyan|green|red|magenta|volcano|geekblue|processing|success|warning|error|#[0-9a-fA-F]{3,8}';
+const ORDER_STATUS_COLORS_FILE = path.join('lib', 'order-status.ts');
+
+/** Сколько ключей статуса рейса файл раскрашивает сам. */
+function ownStatusColors(source) {
+    return ORDER_STATUS_KEYS.filter((key) =>
+        new RegExp(`\\b${key}\\s*:\\s*['"](${COLORS})['"]`).test(source));
+}
+
 /** Термины, у которых в 1С есть одно принятое название. */
 const FORBIDDEN_SYNONYMS = [
     [/['"]Наша компания['"]/, 'Организация'],
@@ -106,6 +127,17 @@ for (const file of walk(ROOT)) {
             file: relative,
             line,
             message: `свой словарь подписей статусов (${own.length} шт.) — импортируйте из lib/vocabulary`,
+        });
+    }
+
+    const ownColors = ownStatusColors(source);
+    if (relative !== ORDER_STATUS_COLORS_FILE && ownColors.length >= OWN_DICTIONARY_THRESHOLD) {
+        const marker = new RegExp(`\\b${ownColors[0]}\\s*:\\s*['"](${COLORS})['"]`);
+        const line = source.split('\n').findIndex((row) => marker.test(row)) + 1;
+        problems.push({
+            file: relative,
+            line,
+            message: `свой словарь цветов статусов (${ownColors.length} шт.) — импортируйте из lib/order-status`,
         });
     }
 

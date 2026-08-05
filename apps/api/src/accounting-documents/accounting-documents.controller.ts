@@ -6,6 +6,7 @@ import {
     Param,
     Patch,
     Post,
+    Put,
     Query,
     Request,
     Res,
@@ -35,6 +36,7 @@ import {
     REGISTRY_MAX_ROWS,
     SuggestAllocationQueryDto,
     UpdateAccountingDocumentDto,
+    UpdateNumberingDto,
 } from './dto/accounting-document.dto';
 import type { RegistryKind } from './accounting-document-pdf.service';
 
@@ -212,6 +214,97 @@ export class AccountingDocumentsController {
             'Cache-Control': 'private, no-store',
         });
         res.end(pdfBuffer);
+    }
+
+
+
+    // ==================== ДОСТАВКА КОНТРАГЕНТУ ====================
+
+    // До `:id`, иначе путь съедается параметром.
+    @Get('incoming-delivered')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({
+        summary: 'Документы, присланные нам контрагентами с платформы',
+        description: 'Это тот же документ, что у отправителя, — не копия. Править его нельзя.',
+    })
+    incomingDelivered(@Request() req: any, @Query('status') status?: string) {
+        return this.documents.listIncomingDelivered(req.user.companyId, { status });
+    }
+
+    @Get(':id/delivery')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({ summary: 'Можно ли отправить документ контрагенту и кому' })
+    delivery(@Request() req: any, @Param('id') id: string) {
+        return this.documents.deliveryTarget(req.user.companyId, id);
+    }
+
+    @Post(':id/send')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Отправить документ контрагенту на платформе',
+        description: 'Копия не создаётся: получателю открывается доступ на чтение к тому же документу.',
+    })
+    async send(@Request() req: any, @Param('id') id: string) {
+        const sent = await this.documents.sendToCounterparty(req.user.companyId, req.user.id, id);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'accounting_document', entityId: id,
+            entityLabel: `Документ ${sent.number} отправлен: ${sent.recipientCompany?.name ?? ''}`,
+        });
+        return sent;
+    }
+
+    @Post(':id/receipt')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Принять или отклонить входящий документ',
+        description: 'Решение получателя. Править чужой документ нельзя — только принять или отклонить с причиной.',
+    })
+    async receipt(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { decision: 'ACCEPTED' | 'REJECTED'; reason?: string },
+    ) {
+        const reviewed = await this.documents.reviewIncoming(
+            req.user.companyId, req.user.id, id, body.decision, body.reason,
+        );
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'accounting_document', entityId: id,
+            entityLabel: body.decision === 'ACCEPTED'
+                ? `Входящий документ ${reviewed.number} принят`
+                : `Входящий документ ${reviewed.number} отклонён: ${body.reason ?? ''}`,
+        });
+        return reviewed;
+    }
+
+    // Оба до `:id`, иначе путь съедается параметром.
+    @Get('numbering')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({
+        summary: 'Настройки нумерации документов',
+        description: 'Префикс, следующий номер и количество цифр по каждому виду документа.',
+    })
+    numbering(@Request() req: any, @Query('year') year?: string) {
+        return this.documents.getNumberingSettings(
+            req.user.companyId, year ? Number(year) : undefined,
+        );
+    }
+
+    @Put('numbering')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Сохранить нумерацию',
+        description: 'Пример: префикс «АВ-», номер 10002, восемь цифр → «АВ-00010002».',
+    })
+    async saveNumbering(@Request() req: any, @Body() dto: UpdateNumberingDto) {
+        const saved = await this.documents.updateNumberingSettings(req.user.companyId, dto);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'accounting_document_numbering', entityId: saved.id,
+            entityLabel: `Нумерация ${dto.type}: ${dto.prefix}${String(dto.nextNumber).padStart(dto.padLength, '0')}`,
+        });
+        return saved;
     }
 
     // Тоже до `:id`, иначе путь съедается параметром.

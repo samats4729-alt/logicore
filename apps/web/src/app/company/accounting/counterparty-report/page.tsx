@@ -13,6 +13,8 @@ import dayjs from 'dayjs';
 import StatusPill from '@/components/ui/StatusPill';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
+import { money } from '@/lib/money-format';
+import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 
 const { Title, Text } = Typography;
 
@@ -20,11 +22,6 @@ const { Title, Text } = Typography;
 // чтобы один и тот же статус везде назывался одинаково.
 const statusLabels = ORDER_STATUS_LABELS;
 
-const statusColors: Record<string, string> = {
-    PENDING: 'orange', ASSIGNED: 'blue', EN_ROUTE_PICKUP: 'cyan',
-    AT_PICKUP: 'geekblue', LOADING: 'purple', IN_TRANSIT: 'processing',
-    AT_DELIVERY: 'lime', UNLOADING: 'gold', COMPLETED: 'green', PROBLEM: 'red',
-};
 
 // Role definitions mapped dynamically inside the component using theme tokens
 
@@ -48,9 +45,12 @@ interface OrderItem {
         id: string;
         number: string;
         status: string;
+        /** Валюта счёта: суммы по нему — в ней, а не в тенге. */
+        currency?: string;
         total: number;
         amountPaid: number;
         balanceDue: number;
+        totalBase?: number | null;
     } | null;
     paidAt?: string;
     direction: 'theyOwe' | 'weOwe';
@@ -89,6 +89,8 @@ interface Totals {
     balance: number;
     totalCounterparties: number;
     totalOrders: number;
+    /** Валюты, для которых не нашлось курса: их суммы в долги не вошли. */
+    unconvertedCurrencies?: string[];
 }
 
 const fmt = (n: number) => n.toLocaleString('ru-RU');
@@ -322,6 +324,13 @@ export default function CounterpartyReportPage() {
                     <div style={{ fontSize: 10, color: token.colorTextSecondary }}>
                         {r.invoice.status === 'POSTED' ? 'проведён' : 'черновик'}
                     </div>
+                    {/* Долларовый счёт нельзя показывать без валюты: рядом
+                        стоит колонка «Сумма ₸», и «1 000» прочтётся как тенге. */}
+                    {r.invoice.currency && r.invoice.currency !== 'KZT' && (
+                        <div style={{ fontSize: 10, color: token.colorWarning, fontWeight: 600 }}>
+                            {money(r.invoice.total, r.invoice.currency)}
+                        </div>
+                    )}
                 </div>
             ) : (
                 <Tag style={{ fontSize: 11, margin: 0 }}>не выставлен</Tag>
@@ -376,7 +385,18 @@ export default function CounterpartyReportPage() {
                     <h1 className="lc2-title">Взаиморасчёты</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Кто кому должен: начальный долг + начислено − оплачено = текущий долг. Просроченные платежи выделены красным.
+                        Долги показаны в тенге: валютные рейсы пересчитаны по курсу на дату операции.
                     </p>
+                    {!!data?.totals?.unconvertedCurrencies?.length && (
+                        <div style={{
+                            background: token.colorWarningBg, border: `1px solid ${token.colorWarningBorder}`,
+                            borderRadius: 8, padding: '8px 12px', fontSize: 12.5, margin: '0 0 12px', maxWidth: 720,
+                        }}>
+                            <strong>Нет курса: {data.totals.unconvertedCurrencies.join(', ')}.</strong>{' '}
+                            Долги по рейсам в этих валютах сюда не вошли — иначе они попали бы в отчёт как тенге и
+                            занизили долг. Загрузите курс в разделе «Финансы → Курсы валют».
+                        </div>
+                    )}
                     <Button
                         type="default"
                         icon={<FileExcelOutlined />}

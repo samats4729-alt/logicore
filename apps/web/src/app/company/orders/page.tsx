@@ -27,55 +27,21 @@ import StatusPill, { STATUS_PILL, STATUS_LABELS } from '@/components/ui/StatusPi
 import { useIsMobile } from '@/lib/useIsMobile';
 import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
+import {
+    DEBT_RED,
+    getNextStatuses,
+    ORDER_STATUS_COLORS as statusColors,
+    ORDER_STATUS_PROGRESS as STATUS_PROGRESS,
+    isCustomerSettled,
+    isExecutorSettled,
+    isOrderSettled,
+    nameInitials,
+    progressColor,
+} from '@/lib/order-status';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'default',
-    PENDING: 'orange',
-    ASSIGNED: 'blue',
-    EN_ROUTE_PICKUP: 'gold',
-    AT_PICKUP: 'lime',
-    LOADING: 'purple',
-    IN_TRANSIT: 'cyan',
-    AT_DELIVERY: 'lime',
-    UNLOADING: 'purple',
-    COMPLETED: 'green',
-    PROBLEM: 'red',
-    CANCELLED: '#f5222d',
-};
-
-// Грубый прогресс рейса по позиции статуса в цепочке (точный % по GPS — этап 5 плана редизайна)
-const STATUS_PROGRESS: Record<string, number> = {
-    DRAFT: 4, PENDING: 8, ASSIGNED: 18, EN_ROUTE_PICKUP: 30, AT_PICKUP: 42,
-    LOADING: 52, IN_TRANSIT: 68, AT_DELIVERY: 82, UNLOADING: 92,
-    COMPLETED: 100, PROBLEM: 50, CANCELLED: 100,
-};
-
-const progressColor = (s: string) =>
-    s === 'PROBLEM' ? '#dc2626' : s === 'COMPLETED' ? '#16a34a' : s === 'CANCELLED' ? '#9ca3af' : '#1677ff';
-
-// Заказчик рассчитался с нами (либо ставки заказчика ещё нет — тогда долга нет).
-const isCustomerSettled = (r: any): boolean => !r.customerPrice || r.isCustomerPaid;
-// Мы рассчитались с исполнителем (перевозчиком/суб-экспедитором).
-const isExecutorSettled = (r: any): boolean => {
-    const executorCost = r.subForwarderId ? r.subForwarderPrice : r.driverCost;
-    return !executorCost || (r.subForwarderId ? r.isSubForwarderPaid : r.isDriverPaid);
-};
-
-// Заявка «финансово закрыта»: заказчик заплатил И исполнителю (перевозчику/суб-экспедитору) оплачено.
-// Завершённая, но не оплаченная заявка не должна гореть зелёным.
-const isOrderSettled = (r: any): boolean => isCustomerSettled(r) && isExecutorSettled(r);
-
-// Цвет «горящей» задолженности для названий контрагентов в таблице
-const DEBT_RED = '#dc2626';
-
-const nameInitials = (name?: string) => {
-    if (!name) return '—';
-    const parts = name.trim().split(/\s+/);
-    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '—';
-};
 
 interface Driver {
     id: string;
@@ -877,38 +843,6 @@ export default function CompanyOrdersPage() {
         setAssignModalOpen(true);
     };
 
-    const getNextStatuses = (s: string) => {
-        const chain = [
-            { value: 'ASSIGNED', label: 'Назначен' },
-            { value: 'EN_ROUTE_PICKUP', label: 'Едет на погрузку' },
-            { value: 'AT_PICKUP', label: 'На погрузке' },
-            { value: 'LOADING', label: 'Загружается' },
-            { value: 'IN_TRANSIT', label: 'В пути' },
-            { value: 'AT_DELIVERY', label: 'На выгрузке' },
-            { value: 'UNLOADING', label: 'Разгружается' },
-            { value: 'COMPLETED', label: 'Завершён' },
-        ];
-        
-        if (s === 'PROBLEM') {
-            return chain;
-        }
-
-        // Завершённую заявку можно «вернуть» на любой активный этап (переоткрыть).
-        // Бэкенд разрешит это, если контрагентов нет на платформе; иначе — через согласование.
-        if (s === 'COMPLETED') {
-            return chain.slice(0, chain.length - 1);
-        }
-
-        // Отменённую заявку можно вернуть в работу (кроме сразу «Завершён»)
-        if (s === 'CANCELLED') {
-            return chain.slice(0, chain.length - 1);
-        }
-
-        const idx = chain.findIndex(item => item.value === s);
-        if (idx === -1) return [];
-        // На любом активном этапе (погрузка/выгрузка и т.д.) можно отметить «Проблема»
-        return [...chain.slice(idx + 1), { value: 'PROBLEM', label: '⚠ Проблема' }];
-    };
 
     const handleStatusChange = async (values: { status: string; comment?: string }) => {
         if (!selectedOrder) return;

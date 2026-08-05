@@ -18,6 +18,7 @@ const makeService = (prisma: any) => new FinancialReportsService(
     {} as any, // settings
 
         {} as any, // shareLinks
+        { differencesForPeriod: async () => ({ gain: 0, loss: 0, net: 0, rows: [] }) } as any,
     );
 
 describe('FinancialReportsService — акт сверки', () => {

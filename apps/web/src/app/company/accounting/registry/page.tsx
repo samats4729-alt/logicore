@@ -14,6 +14,8 @@ import { shortenCompanyName } from '@/lib/company-helper';
 import StatusPill from '@/components/ui/StatusPill';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
+import { money } from '@/lib/money-format';
+import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -22,11 +24,6 @@ const { RangePicker } = DatePicker;
 // чтобы один и тот же статус везде назывался одинаково.
 const statusLabels = ORDER_STATUS_LABELS;
 
-const statusColors: Record<string, string> = {
-    PENDING: 'orange', ASSIGNED: 'blue', EN_ROUTE_PICKUP: 'cyan',
-    AT_PICKUP: 'geekblue', LOADING: 'purple', IN_TRANSIT: 'processing',
-    AT_DELIVERY: 'lime', UNLOADING: 'gold', COMPLETED: 'green', PROBLEM: 'red',
-};
 
 interface RegistryOrder {
     id: string;
@@ -38,6 +35,20 @@ interface RegistryOrder {
     completedAt?: string;
     customerPrice?: number;
     customerPriceType?: string;
+    /**
+     * Валюта ставок. Оплаты, долги и маржа ниже — всегда в тенге, поэтому
+     * ставку в валюте нельзя показывать под знаком ₸.
+     */
+    currency?: string;
+    driverCostCurrency?: string;
+    subForwarderPriceCurrency?: string;
+    customerPriceBase?: number | null;
+    driverCostBase?: number | null;
+    subForwarderPriceBase?: number | null;
+    unconvertedCurrencies?: string[];
+    /** Выставлен ли счёт по рейсу — заказчику и от перевозчика. */
+    hasCustomerInvoice?: boolean;
+    hasCarrierInvoice?: boolean;
     isCustomerPaid: boolean;
     customerPaidAt?: string;
     driverCost?: number;
@@ -55,6 +66,8 @@ interface RegistryOrder {
     subForwarder?: { id: string; name: string };
     routePoints?: { pointType: string; sequence: number; location?: { city?: string; address?: string } }[];
     margin: number;
+    /** Затраты исполнителя уже в тенге — их считает сервер по курсу рейса. */
+    executorCost?: number | null;
     customerDebt: number;
     executorDebt: number;
     paidIn: number;
@@ -161,6 +174,16 @@ export default function FinancialRegistryPage() {
         return o.subForwarderId ? (o.subForwarderPrice || 0) : (o.driverCost || 0);
     };
 
+    /**
+     * Сумма в тенге: сама сумма для тенге, готовый пересчёт для валюты и
+     * ноль, когда курса не нашлось. Ноль здесь означает «неизвестно» — такую
+     * строку отчёт помечает отдельно, а не показывает как обычную.
+     */
+    const baseOf = (raw: number, currency: string, base?: number | null) => {
+        if ((currency || 'KZT') === 'KZT') return raw;
+        return base ?? 0;
+    };
+
     const isOverdue = (completedAt?: string, isPaid?: boolean) => {
         if (isPaid || !completedAt) return false;
         return dayjs(completedAt).add(5, 'day').isBefore(dayjs());
@@ -192,14 +215,23 @@ export default function FinancialRegistryPage() {
         if (paymentFilter === 'debtor') result = result.filter(o => o.customerDebt > 0);
         if (paymentFilter === 'creditor') result = result.filter(o => o.executorDebt > 0);
         if (paymentFilter === 'all_paid') result = result.filter(o => o.customerDebt === 0 && o.executorDebt === 0);
+        // Рейс без счёта — деньги, которых мы ещё не попросили. В дебиторку
+        // они не попадают: пока счёт не выставлен, долга формально нет.
+        if (paymentFilter === 'no_customer_invoice') result = result.filter(o => !o.hasCustomerInvoice);
+        if (paymentFilter === 'no_carrier_invoice') result = result.filter(o => !o.hasCarrierInvoice);
 
         return result;
     }, [orders, search, dateRange, paymentFilter]);
 
     // Totals
     const totals = useMemo(() => {
-        const totalIncome = filtered.reduce((s, o) => s + (o.customerPrice || 0), 0);
-        const totalExpense = filtered.reduce((s, o) => s + getExecutorCost(o), 0);
+        // Итоги — в тенге: валютные ставки берутся пересчитанными по курсу
+        // рейса. Сложить доллары с тенге значит показать число, которого нет.
+        const totalIncome = filtered.reduce(
+            (s, o) => s + baseOf(o.customerPrice || 0, o.currency || 'KZT', o.customerPriceBase), 0,
+        );
+        // Затраты сервер уже привёл к тенге по курсу рейса — берём готовое.
+        const totalExpense = filtered.reduce((s, o) => s + (o.executorCost ?? 0), 0);
         const totalMargin = filtered.reduce((s, o) => s + o.margin, 0);
         const debtorSum = filtered.reduce((s, o) => s + o.customerDebt, 0);
         const creditorSum = filtered.reduce((s, o) => s + o.executorDebt, 0);
@@ -328,8 +360,12 @@ export default function FinancialRegistryPage() {
             title: 'Заказчик / Выручка', key: 'customer', width: 220,
             render: (_: any, r: RegistryOrder) => {
                 const total = r.customerPrice || 0;
+                const currency = r.currency || 'KZT';
+                // Прогресс оплаты считается в тенге: оплаты приходят в тенге,
+                // и делить их на долларовую ставку значит получить 0,2 %.
+                const totalBase = baseOf(total, currency, r.customerPriceBase);
                 const paid = r.paidIn || 0;
-                const percent = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
+                const percent = totalBase > 0 ? Math.min(Math.round((paid / totalBase) * 100), 100) : 0;
                 const name = r.customerCompany?.name || '—';
 
                 return (
@@ -343,8 +379,13 @@ export default function FinancialRegistryPage() {
                                     {shortenCompanyName(name)}
                                 </span>
                             </Tooltip>
-                            <span style={{ fontSize: 12, fontWeight: 600 }}>{fmt(total)} ₸</span>
+                            <span style={{ fontSize: 12, fontWeight: 600 }}>{money(total, currency)}</span>
                         </div>
+                        {currency !== 'KZT' && (
+                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textAlign: 'right' }}>
+                                {totalBase > 0 ? `${fmt(totalBase)} ₸ по курсу рейса` : 'курса нет'}
+                            </div>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? token.colorSuccess : token.colorPrimary} style={{ flex: 1, margin: 0 }} />
                             <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
@@ -357,8 +398,14 @@ export default function FinancialRegistryPage() {
             title: 'Исполнитель / Затраты', key: 'executor', width: 220,
             render: (_: any, r: RegistryOrder) => {
                 const total = getExecutorCost(r);
+                // Ставка суб-экспедитора идёт в валюте заявки, ставка водителя —
+                // в своей.
+                const currency = (r.subForwarderId ? r.subForwarderPriceCurrency : r.driverCostCurrency) || 'KZT';
+                // Пересчёт затрат делает сервер: он знает курс рейса и для
+                // ставки суб-экспедитора, у которой своей колонки нет.
+                const totalBase = currency === 'KZT' ? total : (r.executorCost ?? 0);
                 const paid = r.paidOut || 0;
-                const percent = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
+                const percent = totalBase > 0 ? Math.min(Math.round((paid / totalBase) * 100), 100) : 0;
 
                 const name = r.subForwarder?.name || r.partner?.name || r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName}` : '—');
                 const isSub = !!r.subForwarderId;
@@ -375,8 +422,13 @@ export default function FinancialRegistryPage() {
                                     {isSub && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px', flexShrink: 0 }}>Суб</Tag>}
                                 </span>
                             </Tooltip>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{fmt(total)} ₸</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{money(total, currency)}</span>
                         </div>
+                        {currency !== 'KZT' && (
+                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textAlign: 'right' }}>
+                                {totalBase > 0 ? `${fmt(totalBase)} ₸ по курсу рейса` : 'курса нет'}
+                            </div>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? token.colorSuccess : token.colorPrimary} style={{ flex: 1, margin: 0 }} />
                             <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
@@ -404,6 +456,23 @@ export default function FinancialRegistryPage() {
                             </span>
                             {isLate && (
                                 <div style={{ fontSize: 9, color: token.colorError, fontWeight: 600 }}>Просрочка 5д+</div>
+                            )}
+                            {/* Долга формально нет, пока нет счёта. Без этой
+                                пометки строка выглядит как «всё в порядке»,
+                                хотя денег мы ещё даже не попросили.
+                                Цветом выделяется только неоплаченное: на
+                                оплаченном рейсе отсутствие счёта — вопрос
+                                бумаг для учёта, а не потерянных денег, и
+                                тревожный цвет рядом со словом «Оплачено»
+                                читался бы как противоречие. */}
+                            {!r.hasCustomerInvoice && (
+                                <div style={{
+                                    fontSize: 9,
+                                    fontWeight: 600,
+                                    color: debt > 0 ? '#b45309' : token.colorTextTertiary,
+                                }}>
+                                    Счёт не выставлен
+                                </div>
                             )}
                         </div>
                         {debt > 0 && canEditFinance && (
@@ -455,7 +524,9 @@ export default function FinancialRegistryPage() {
             title: 'Маржа ₸', key: 'margin', width: 100, align: 'right' as const,
             render: (_: any, r: RegistryOrder) => {
                 const m = r.margin || 0;
-                const revenue = r.customerPrice || 0;
+                // Маржа уже в тенге — и процент считается от тенговой выручки,
+                // иначе по долларовому рейсу получилось бы 23 000 %.
+                const revenue = baseOf(r.customerPrice || 0, r.currency || 'KZT', r.customerPriceBase);
                 const percent = revenue > 0 ? Math.round((m / revenue) * 100) : 0;
                 return (
                     <div style={{ textAlign: 'right' }}>
@@ -554,13 +625,15 @@ export default function FinancialRegistryPage() {
                         size="middle"
                         value={paymentFilter}
                         onChange={setPaymentFilter}
-                        style={{ width: 210 }}
                         options={[
                             { value: 'all', label: 'Все заявки' },
+                            { value: 'no_customer_invoice', label: 'Без счёта заказчику' },
+                            { value: 'no_carrier_invoice', label: 'Без счёта от перевозчика' },
                             { value: 'debtor', label: 'Долг заказчика' },
                             { value: 'creditor', label: 'Наш долг перед ТК' },
                             { value: 'all_paid', label: 'Все расчеты завершены' },
                         ]}
+                        style={{ width: 230 }}
                     />
                     <span style={{ fontSize: 12, color: token.colorTextSecondary, marginLeft: 'auto' }}>
                         Показано: <strong>{filtered.length}</strong> заявок

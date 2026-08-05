@@ -103,13 +103,17 @@ function makeService() {
             generatedAt: '2026-07-31T20:00:00.000Z',
         }),
     };
+    // Курс: в тенговых проверках он не запрашивается вовсе, поэтому подделка
+    // отвечает «курса нет» — если бы её вдруг вызвали, это было бы заметно.
+    const currency = { toBase: jest.fn().mockResolvedValue(null) };
     const service = new AccountingDocumentsService(
         prisma,
         new AccountingDocumentCalculatorService(),
         periodClosing as any,
         financialReports as any,
+        currency as any,
     );
-    return { service, prisma, tx, periodClosing, financialReports };
+    return { service, prisma, tx, periodClosing, financialReports, currency };
 }
 
 const storedDocument = (overrides: Record<string, unknown> = {}) => ({
@@ -446,6 +450,9 @@ describe('AccountingDocumentsService', () => {
 
     it('проводит только черновик, проверяет период и записывает SHA-256', async () => {
         const { service, prisma, periodClosing } = makeService();
+        // Проведение сначала убеждается, что документ наш: доставленный
+        // контрагентом виден, но проводит его только выпустившая сторона.
+        prisma.accountingDocument.findFirst.mockResolvedValue({ id: 'doc-1' });
         jest.spyOn(service, 'getById')
             .mockResolvedValueOnce(storedDocument() as any)
             .mockResolvedValueOnce(storedDocument({
@@ -467,6 +474,7 @@ describe('AccountingDocumentsService', () => {
 
     it('не отменяет проведённый документ, пока к нему распределён платёж', async () => {
         const { service, prisma } = makeService();
+        prisma.accountingDocument.findFirst.mockResolvedValue({ id: 'doc-1' });
         jest.spyOn(service, 'getById').mockResolvedValue(storedDocument({
             status: AccountingDocumentStatus.POSTED,
             paymentAllocations: [{ id: 'allocation-1' }],
@@ -480,6 +488,7 @@ describe('AccountingDocumentsService', () => {
 
     it('защищается от одновременного повторного проведения', async () => {
         const { service, prisma } = makeService();
+        prisma.accountingDocument.findFirst.mockResolvedValue({ id: 'doc-1' });
         jest.spyOn(service, 'getById').mockResolvedValue(storedDocument() as any);
         prisma.accountingDocument.updateMany.mockResolvedValue({ count: 0 });
 

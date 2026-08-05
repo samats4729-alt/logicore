@@ -67,7 +67,7 @@ describe('PaymentsService atomicity', () => {
                 return result;
             }),
             order: { findUnique: jest.fn().mockResolvedValue(null) },
-            financeAccount: { findFirst: jest.fn().mockResolvedValue({ id: 'acc-1' }) },
+            financeAccount: { findFirst: jest.fn().mockResolvedValue({ id: 'acc-1', name: 'Расчетный счет', currency: 'KZT' }) },
             financeCategory: { findFirst: jest.fn().mockResolvedValue({ id: 'cat-1' }) },
             // Ловушка: если сервис случайно запишет мимо транзакции — тест упадёт.
             payment: {
@@ -97,6 +97,9 @@ describe('PaymentsService atomicity', () => {
             { ensureCompanyFinanceSettings: jest.fn().mockResolvedValue(undefined) } as any,
             payrollService as any,
             { release: jest.fn().mockResolvedValue({ documents: 0 }) } as any,
+            // Тенговый платёж курса не спрашивает — заглушка на случай, если
+            // однажды спросит.
+            { toBase: jest.fn().mockResolvedValue(null) } as any,
         );
 
         return { service, prisma, tx, payrollService, calls };

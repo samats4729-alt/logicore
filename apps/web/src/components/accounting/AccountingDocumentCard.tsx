@@ -10,6 +10,7 @@ import {
     DeleteOutlined,
     FileTextOutlined,
     LinkOutlined,
+    SendOutlined,
     MoreOutlined,
     PlusOutlined,
     PrinterOutlined,
@@ -24,11 +25,14 @@ import {
     AccountingDocumentLine,
     CompanyBankAccount,
     CreateAccountingDocumentLineInput,
+    DocumentDelivery,
     accountingDocumentHref,
     cancelAccountingDocument,
     createServiceActFromInvoice,
     deleteAccountingDocumentDraft,
     fetchAccountingDocument,
+    fetchDocumentDelivery,
+    sendAccountingDocument,
     fetchCompanyBankAccounts,
     openAccountingDocumentPdf,
     orderRouteLabel,
@@ -38,8 +42,22 @@ import {
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
 
-const money = (value: number) =>
-    `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
+/**
+ * Сумма со знаком валюты документа.
+ *
+ * Знак тенге больше не зашит: счёт может быть в рублях или долларах, и
+ * «100 000 ₸» на долларовом счёте — не опечатка, а другая сумма в четыреста
+ * раз. Для валют без общеизвестного знака показываем код.
+ */
+const CURRENCY_SIGNS: Record<string, string> = {
+    KZT: '₸', RUB: '₽', USD: '$', EUR: '€', GBP: '£', UAH: '₴', TRY: '₺', CNY: '¥', JPY: '¥',
+};
+
+const money = (value: number, currency = 'KZT') => {
+    const amount = (value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const sign = CURRENCY_SIGNS[currency];
+    return sign ? `${amount} ${sign}` : `${amount} ${currency}`;
+};
 
 /** Ставки, которые бухгалтер выбирает в 1С в графе «% НДС». */
 const VAT_OPTIONS = [
@@ -167,8 +185,16 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const [dueDate, setDueDate] = useState<Dayjs | null>(null);
     const [bankAccountId, setBankAccountId] = useState<string | null>(null);
     const [note, setNote] = useState('');
+    // Номер и дата документа у контрагента. У входящего счёта это номер,
+    // под которым перевозчик выставил его нам, — по нему он ищет платёж у
+    // себя, и в платёжном поручении должен стоять именно он.
+    const [externalNumber, setExternalNumber] = useState('');
+    const [externalDate, setExternalDate] = useState<Dayjs | null>(null);
     const [lines, setLines] = useState<EditableLine[]>([]);
     const [dirty, setDirty] = useState(false);
+    // Кому можно отправить документ прямо на платформе. Определяется по БИН
+    // контрагента: справочная копия — это не арендатор, доставлять ей некуда.
+    const [delivery, setDelivery] = useState<DocumentDelivery | null>(null);
 
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
@@ -197,6 +223,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
         setDueDate(data.dueDate ? dayjs(data.dueDate) : null);
         setBankAccountId(data.bankAccountId);
         setNote(data.note || '');
+        setExternalNumber(data.externalNumber || '');
+        setExternalDate(data.externalDate ? dayjs(data.externalDate) : null);
         setDirty(false);
     }, []);
 
@@ -204,12 +232,26 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
         try {
             setLoading(true);
             applyDocument(await fetchAccountingDocument(id));
+            // Молчим при ошибке намеренно: доставка — дополнительная
+            // возможность, и её недоступность не должна мешать открыть
+            // карточку документа.
+            fetchDocumentDelivery(id).then(setDelivery).catch(() => setDelivery(null));
         } catch {
             setNotFound(true);
         } finally {
             setLoading(false);
         }
     }, [id, applyDocument]);
+
+    const sendToCounterparty = async () => {
+        try {
+            await sendAccountingDocument(document!.id);
+            toast.success('Документ отправлен контрагенту');
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось отправить');
+        }
+    };
 
     useEffect(() => {
         if (id) load();
@@ -290,6 +332,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             const saved = await updateAccountingDocument(document.id, {
                 documentDate: documentDate?.format('YYYY-MM-DD'),
                 note: note.trim() || null,
+                externalNumber: externalNumber.trim() || null,
+                externalDate: externalDate ? externalDate.format('YYYY-MM-DD') : null,
                 lines: lines.map(toPayload),
                 // Срок оплаты и расчётный счёт есть только у счёта: у акта
                 // этих полей нет в шапке, и слать их — значит переписывать
@@ -548,7 +592,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
                         parser={(value) => Number((value || '').replace(/\s/g, '')) as any}
                     />
-                ) : money(record.unitPrice)
+                ) : money(record.unitPrice, document.currency)
             ),
         },
         {
@@ -578,7 +622,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             align: 'right' as const,
             render: (_: unknown, record: EditableLine) => (
                 <span style={{ fontWeight: 600 }}>
-                    {money((record.quantity || 0) * (record.unitPrice || 0))}
+                    {money((record.quantity || 0) * (record.unitPrice || 0), document.currency)}
                 </span>
             ),
         },
@@ -694,6 +738,15 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                                     { type: 'divider' as const },
                                 ] : []),
                                 {
+                                    key: 'send',
+                                    icon: <SendOutlined />,
+                                    label: delivery?.recipient
+                                        ? `Отправить: ${delivery.recipient.name}`
+                                        : 'Отправить контрагенту на платформе',
+                                    disabled: !canChange || !delivery?.available,
+                                    onClick: sendToCounterparty,
+                                },
+                                {
                                     key: 'link',
                                     icon: <LinkOutlined />,
                                     label: 'Скопировать ссылку для контрагента',
@@ -743,6 +796,33 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 />
             )}
 
+            {/* Судьба отправленного документа. Без неё «Отправить» было
+                действием в пустоту: контрагент отклонял счёт с причиной, а
+                тот, кто его выставил, узнавал об этом по телефону. */}
+            {delivery?.sent && (
+                <Alert
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    type={delivery.sent.status === 'REJECTED'
+                        ? 'error'
+                        : delivery.sent.status === 'ACCEPTED' ? 'success' : 'info'}
+                    message={
+                        delivery.sent.status === 'REJECTED'
+                            ? `Контрагент отклонил документ${delivery.sent.to ? `: ${delivery.sent.to.name}` : ''}`
+                            : delivery.sent.status === 'ACCEPTED'
+                                ? `Контрагент принял документ${delivery.sent.to ? `: ${delivery.sent.to.name}` : ''}`
+                                : `Отправлен контрагенту${delivery.sent.to ? `: ${delivery.sent.to.name}` : ''} — ждём решения`
+                    }
+                    description={[
+                        delivery.sent.reason,
+                        `Отправлен ${dayjs(delivery.sent.at).format('DD.MM.YYYY HH:mm')}`,
+                        delivery.sent.reviewedAt
+                            ? `решение ${dayjs(delivery.sent.reviewedAt).format('DD.MM.YYYY HH:mm')}`
+                            : null,
+                    ].filter(Boolean).join(' · ')}
+                />
+            )}
+
             {/* ===== Шапка документа ===== */}
             <div className="lc-card" style={{ padding: 20, marginBottom: 14 }}>
                 <div
@@ -774,6 +854,37 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         />
                     ) : (document.dueDate ? dayjs(document.dueDate).format('DD.MM.YYYY') : '—'))}
 
+                    {/* Номер контрагента. Показывается у входящего документа:
+                        свой номер мы присваиваем сами, а этот — чужой, и без
+                        него бухгалтер не сведёт наш счёт со счётом перевозчика. */}
+                    {document.direction === 'INCOMING' && headerField(
+                        'Номер у контрагента',
+                        editable ? (
+                            <Input
+                                size="small"
+                                style={{ width: 200 }}
+                                maxLength={100}
+                                placeholder="Как в его счёте"
+                                value={externalNumber}
+                                onChange={(e) => { setExternalNumber(e.target.value); touch(); }}
+                            />
+                        ) : (document.externalNumber || '—'),
+                    )}
+
+                    {document.direction === 'INCOMING' && headerField(
+                        'Дата у контрагента',
+                        editable ? (
+                            <DatePicker
+                                size="small"
+                                format="DD.MM.YYYY"
+                                placeholder="Не указана"
+                                style={{ width: 150 }}
+                                value={externalDate}
+                                onChange={(value) => { setExternalDate(value); touch(); }}
+                            />
+                        ) : (document.externalDate ? dayjs(document.externalDate).format('DD.MM.YYYY') : '—'),
+                    )}
+
                     {headerField('Организация', partyLine(own))}
                     {headerField('Контрагент', partyLine(other))}
 
@@ -803,10 +914,10 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
 
                     {kind.showPayment && headerField('Оплачено', (
                         <span>
-                            {money(document.amountPaid)}
+                            {money(document.amountPaid, document.currency)}
                             {document.balanceDue > 0 && (
                                 <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>
-                                    {' '}· остаток {money(document.balanceDue)}
+                                    {' '}· остаток {money(document.balanceDue, document.currency)}
                                 </span>
                             )}
                         </span>
@@ -886,11 +997,21 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
 
                     <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
-                            В том числе НДС: {money(dirty ? totals.vat : document.vatTotal)}
+                            В том числе НДС: {money(dirty ? totals.vat : document.vatTotal, document.currency)}
                         </div>
                         <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>
-                            Всего: {money(dirty ? totals.total : document.total)}
+                            Всего: {money(dirty ? totals.total : document.total, document.currency)}
                         </div>
+                        {/* Валютный счёт: курс виден прямо здесь. Он
+                            зафиксирован в документе и больше не изменится —
+                            завтрашний курс этот счёт не трогает. */}
+                        {document.currency !== 'KZT' && document.exchangeRate ? (
+                            <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
+                                {document.totalBase
+                                    ? `${money(document.totalBase)} по курсу ${Number(document.exchangeRate).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₸ за 1 ${document.currency}`
+                                    : `Курс ${document.currency} не найден — счёт нельзя провести`}
+                            </div>
+                        ) : null}
                         {dirty && (
                             <div style={{ fontSize: 11, color: token.colorWarning, marginTop: 2 }}>
                                 Предварительный расчёт — нажмите «Записать»
@@ -898,6 +1019,73 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         )}
                     </div>
                 </div>
+
+                {/* Чем закрыт счёт. Здесь же курсовая разница: счёт выставили
+                    по одному курсу, деньги пришли по другому, и расхождение в
+                    тенге обязано быть названо. Без этой строки бухгалтер видит
+                    «оплачено полностью», а в банке лежит другая сумма. */}
+                {(document.paymentAllocations?.length ?? 0) > 0 && (
+                    <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary, marginBottom: 8 }}>
+                            Оплаты по счёту
+                        </div>
+                        {document.paymentAllocations!.map((allocation) => {
+                            const diff = allocation.exchangeDiff ?? 0;
+                            // По нашему счёту лишние тенге — доход, по счёту
+                            // поставщика те же лишние тенге — расход.
+                            const gain = document.direction === 'OUTGOING' ? diff > 0 : diff < 0;
+                            return (
+                                <div
+                                    key={allocation.id}
+                                    style={{
+                                        display: 'flex', justifyContent: 'space-between', gap: 16,
+                                        fontSize: 12.5, padding: '5px 0',
+                                        borderBottom: `1px dashed ${token.colorBorderSecondary}`,
+                                    }}
+                                >
+                                    <span>
+                                        {dayjs(allocation.payment.date).format('DD.MM.YYYY')}
+                                        {allocation.payment.currency !== document.currency && (
+                                            <span style={{ color: token.colorTextTertiary }}>
+                                                {' '}· пришло {money(allocation.payment.amount, allocation.payment.currency)}
+                                            </span>
+                                        )}
+                                        {allocation.payment.note && (
+                                            <span style={{ color: token.colorTextTertiary }}> · {allocation.payment.note}</span>
+                                        )}
+                                    </span>
+                                    <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                            {money(allocation.amount, document.currency)}
+                                        </span>
+                                        {allocation.amountBase != null && document.currency !== 'KZT' && (
+                                            <span style={{ color: token.colorTextTertiary }}>
+                                                {' '}({money(allocation.amountBase)})
+                                            </span>
+                                        )}
+                                        {diff !== 0 && (
+                                            <div style={{ fontSize: 11, color: gain ? token.colorSuccess : token.colorError }}>
+                                                Курсовая разница: {diff > 0 ? '+' : '−'}{money(Math.abs(diff))}
+                                                {' '}— {gain ? 'доход' : 'расход'}
+                                            </div>
+                                        )}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        {(() => {
+                            const total = document.paymentAllocations!.reduce((sum, a) => sum + (a.exchangeDiff ?? 0), 0);
+                            if (total === 0) return null;
+                            const gain = document.direction === 'OUTGOING' ? total > 0 : total < 0;
+                            return (
+                                <div style={{ fontSize: 12, marginTop: 8, color: gain ? token.colorSuccess : token.colorError }}>
+                                    Итого курсовая разница: {total > 0 ? '+' : '−'}{money(Math.abs(total))}
+                                    {' '}— {gain ? 'доход' : 'расход'} по этому счёту
+                                </div>
+                            );
+                        })()}
+                    </div>
+                )}
 
                 <div
                     style={{

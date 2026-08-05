@@ -105,14 +105,19 @@ enum AffiliationType {
 // ==================== MODELS ====================
 
 model User {
-  id                    String              @id @default(cuid())
+  exchangeRates         ExchangeRate[]        @relation("ExchangeRateAuthor")
+  companyExchangeRates  CompanyExchangeRate[] @relation("CompanyExchangeRateAuthor")
+  id                    String                @id @default(cuid())
   /// Компании, которые этот пользователь подтвердил как админ платформы.
-  verifiedCompanies     Company[]           @relation("VerifiedCompanies")
-  createdOrderDocuments OrderDocument[]     @relation("CreatedOrderDocuments")
-  createdSharedReports  SharedReportLink[]  @relation("CreatedSharedReports")
-  reviewedPaymentProofs OrderPaymentProof[] @relation("ReviewedPaymentProofs")
-  email                 String?             @unique
-  googleId              String?             @unique // Google OAuth ID
+  verifiedCompanies     Company[]             @relation("VerifiedCompanies")
+  createdOrderDocuments OrderDocument[]       @relation("CreatedOrderDocuments")
+  createdCurrencyRevaluations CurrencyRevaluation[] @relation("CreatedCurrencyRevaluations")
+  sentAccountingDocuments     AccountingDocument[]  @relation("SentAccountingDocuments")
+  reviewedAccountingDocuments AccountingDocument[]  @relation("ReviewedAccountingDocuments")
+  createdSharedReports  SharedReportLink[]    @relation("CreatedSharedReports")
+  reviewedPaymentProofs OrderPaymentProof[]   @relation("ReviewedPaymentProofs")
+  email                 String?               @unique
+  googleId              String?               @unique // Google OAuth ID
   phone                 String
   passwordHash          String? // null для водителей (SMS auth)
   firstName             String
@@ -121,11 +126,11 @@ model User {
   role                  UserRole
   position              String? // Должность/роль
   avatarPath            String? // Фото профиля (S3-ключ или локальный путь)
-  permissions           String[]            @default([])
-  isActive              Boolean             @default(true)
-  isTrackable           Boolean             @default(false)
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  permissions           String[]              @default([])
+  isActive              Boolean               @default(true)
+  isTrackable           Boolean               @default(false)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   // Relations
   sessions                     Session[]
@@ -269,6 +274,14 @@ model PersonMergeItem {
 }
 
 model Company {
+  exchangeRates CompanyExchangeRate[]
+
+  /// Учётная валюта компании: в ней считаются отчёты, прибыль и долги.
+  ///
+  /// У казахстанской компании это тенге, у российской был бы рубль. Валюта
+  /// документа может быть любой, но сравнивать и складывать суммы можно
+  /// только приведёнными к одной — вот к этой.
+  baseCurrency  String  @default("KZT") @db.VarChar(3)
   id            String  @id @default(cuid())
   name          String
   bin           String? // БИН/ИИН
@@ -377,11 +390,22 @@ model Company {
   sharedReports               SharedReportLink[]  @relation("CompanySharedReports")
   sharedReportsAsCounterparty SharedReportLink[]  @relation("CounterpartySharedReports")
   paymentProofs               OrderPaymentProof[] @relation("CompanyPaymentProofs")
+  currencyRevaluations        CurrencyRevaluation[]
+  receivedAccountingDocuments AccountingDocument[] @relation("ReceivedAccountingDocuments")
   paymentProofsAsCounterparty OrderPaymentProof[] @relation("CounterpartyPaymentProofs")
   locationEmailLists          LocationEmailList[]
 
   @@index([bin])
   @@index([verificationStatus])
+  /// Как считается НДС в счетах компании.
+  ///
+  /// STANDARD — со всей суммы счёта, как было всегда.
+  /// FORWARDING — только с вознаграждения экспедитора: стоимость
+  /// привлечённого перевозчика проходит через нас и нашим оборотом не
+  /// является. Это налоговая позиция компании, а не оформление счёта,
+  /// поэтому решение принимает бухгалтер и оно хранится у организации.
+  vatScheme String @default("STANDARD")
+
 }
 
 // ... existing models ...
@@ -625,7 +649,43 @@ model Order {
   // Тариф по доп. соглашению (автоподстановка)
   appliedTariffId String?
   appliedTariff   RouteTariff? @relation(fields: [appliedTariffId], references: [id])
-  currency        String       @default("KZT")
+
+  /// Валюта тарифа КЛИЕНТА (сколько он платит нам).
+  ///
+  /// Тип колонки оставлен прежним (TEXT): сужать его до трёх символов
+  /// значило бы менять существующую колонку, а миграции в этом проекте
+  /// только добавляют. Длину держит проверка на входе.
+  currency String @default("KZT")
+
+  /// Валюта тарифа ПЕРЕВОЗЧИКА (сколько платим мы).
+  ///
+  /// Отдельная от клиентской намеренно: российский заказчик платит рублями,
+  /// а казахстанский перевозчик хочет тенге — это обычный рейс, а не
+  /// исключение. Пока валюты общие, «120 минус 100» ещё что-то значит; как
+  /// только они разошлись, маржу можно считать только в учётной валюте.
+  driverCostCurrency String @default("KZT") @db.VarChar(3)
+
+  /// Те же суммы в учётной валюте компании — по курсам на `currencyRateDate`.
+  ///
+  /// Хранятся, а не считаются на лету: отчёты складывают тысячи заявок, и
+  /// поход за курсом на каждую строку сделал бы их неподъёмными. Пересчёт
+  /// происходит при сохранении заявки — то есть тогда же, когда меняются
+  /// сами суммы.
+  customerPriceBase Decimal?  @db.Decimal(18, 2)
+  driverCostBase    Decimal?  @db.Decimal(18, 2)
+
+  /// Валюта ставки суб-экспедитора и её пересчёт.
+  ///
+  /// Раньше эта ставка была единственной суммой заявки без своей валюты: она
+  /// молча следовала за валютой заявки. Стоило перевести заявку в доллары —
+  /// и ставка перевозчика, которую никто не трогал, становилась «столько же,
+  /// но в долларах». Пусто означает «валюта заявки» — так понимались все
+  /// заявки, заведённые до появления этой колонки.
+  subForwarderPriceCurrency String?  @db.VarChar(3)
+  subForwarderPriceBase     Decimal? @db.Decimal(20, 2)
+
+  /// По курсам какого дня пересчитано. Обычно дата погрузки.
+  currencyRateDate  DateTime? @db.Date
 
   // Подтверждение нами
   isConfirmed   Boolean   @default(false)
@@ -1021,6 +1081,17 @@ model Payment {
   counterparty        Company?                      @relation("CounterpartyPayments", fields: [counterpartyId], references: [id], onDelete: SetNull)
   direction           PaymentDirection
   amount              Decimal                       @db.Decimal(18, 2)
+
+  /// Валюта платежа — та, в которой деньги реально пришли или ушли.
+  /// Курс на дату платежа хранится здесь же: завтра он другой, но этот
+  /// платёж обязан остаться вчерашним, иначе отчёт за прошлый месяц
+  /// начнёт меняться сам по себе.
+  currency         String    @default("KZT")
+  exchangeRate     Decimal?  @db.Decimal(18, 6)
+  exchangeRateDate DateTime? @db.Date
+  /// Сумма платежа в учётной валюте по этому курсу.
+  amountBase       Decimal?  @db.Decimal(20, 2)
+
   date                DateTime
   method              PaymentMethod                 @default(BANK)
   note                String?
@@ -1043,6 +1114,7 @@ model Payment {
   refunds    Payment[] @relation("PaymentRefunds")
 
   @@index([companyId, date])
+  @@index([companyId, currency])
   @@index([orderId])
   @@index([direction])
   @@index([accountId])
@@ -1063,6 +1135,10 @@ model FinanceAccount {
   kind      AccountKind
   isDefault Boolean     @default(false)
   isActive  Boolean     @default(true)
+  /// Валюта счёта или кассы. Один счёт — одна валюта: валютный счёт в банке
+  /// физически хранит доллары, и общий остаток с тенговым счётом у него не
+  /// складывается — это разные деньги.
+  currency  String      @default("KZT")
 
   // Печатные реквизиты счёта (заполняются для kind = BANK).
   // Нужны, чтобы в счёте на оплату печатался тот банк, с которого его
@@ -1081,6 +1157,7 @@ model FinanceAccount {
   expenses            Expense[]            @relation("AccountExpenses")
   financeOperations   FinanceOperation[]   @relation("AccountFinanceOperations")
   accountingDocuments AccountingDocument[] @relation("AccountingDocumentBankAccount")
+  revaluationLines    CurrencyRevaluationLine[]
 
   @@unique([companyId, name, kind])
   @@index([companyId])
@@ -1542,40 +1619,52 @@ enum AccountingVatCalculation {
 }
 
 model AccountingDocument {
-  id                         String                      @id @default(cuid())
-  companyId                  String
-  company                    Company                     @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
-  counterpartyId             String
-  counterparty               Company                     @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
-  type                       AccountingDocumentType
-  direction                  AccountingDocumentDirection
-  status                     AccountingDocumentStatus    @default(DRAFT)
-  number                     String
-  externalNumber             String?
-  externalDate               DateTime?                   @db.Date
-  documentDate               DateTime                    @db.Date
-  operationDate              DateTime?                   @db.Date
-  dueDate                    DateTime?                   @db.Date
-  reportPeriodFrom           DateTime?                   @db.Date
-  reportPeriodTo             DateTime?                   @db.Date
-  contractId                 String?
-  contract                   Contract?                   @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  id               String                      @id @default(cuid())
+  companyId        String
+  company          Company                     @relation("AccountingDocumentCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  counterpartyId   String
+  counterparty     Company                     @relation("AccountingDocumentCounterparty", fields: [counterpartyId], references: [id], onDelete: Restrict)
+  type             AccountingDocumentType
+  direction        AccountingDocumentDirection
+  status           AccountingDocumentStatus    @default(DRAFT)
+  number           String
+  externalNumber   String?
+  externalDate     DateTime?                   @db.Date
+  documentDate     DateTime                    @db.Date
+  operationDate    DateTime?                   @db.Date
+  dueDate          DateTime?                   @db.Date
+  reportPeriodFrom DateTime?                   @db.Date
+  reportPeriodTo   DateTime?                   @db.Date
+  contractId       String?
+  contract         Contract?                   @relation(fields: [contractId], references: [id], onDelete: SetNull)
   // Расчётный счёт организации, с которого выставлен документ. Его реквизиты
   // попадают в issuerSnapshot и печатаются; сама ссылка нужна для отбора и
   // для подстановки счёта по умолчанию в следующих документах.
-  bankAccountId              String?
-  bankAccount                FinanceAccount?             @relation("AccountingDocumentBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
-  currency                   String                      @default("KZT") @db.VarChar(3)
-  subtotal                   Decimal                     @default(0) @db.Decimal(20, 2)
-  discountTotal              Decimal                     @default(0) @db.Decimal(20, 2)
-  vatTotal                   Decimal                     @default(0) @db.Decimal(20, 2)
-  total                      Decimal                     @default(0) @db.Decimal(20, 2)
-  amountPaid                 Decimal                     @default(0) @db.Decimal(20, 2)
-  balanceDue                 Decimal                     @default(0) @db.Decimal(20, 2)
-  openingBalance             Decimal?                    @db.Decimal(20, 2)
-  debitTurnover              Decimal?                    @db.Decimal(20, 2)
-  creditTurnover             Decimal?                    @db.Decimal(20, 2)
-  closingBalance             Decimal?                    @db.Decimal(20, 2)
+  bankAccountId    String?
+  bankAccount      FinanceAccount?             @relation("AccountingDocumentBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
+  currency         String                      @default("KZT") @db.VarChar(3)
+
+  /// Курс валюты документа к учётной валюте — ЗАФИКСИРОВАННЫЙ.
+  ///
+  /// Главное правило валютного учёта: курс, по которому провели документ,
+  /// не меняется никогда. Завтра доллар другой — вчерашний счёт обязан
+  /// остаться вчерашним, иначе отчёт за прошлый месяц завтра покажет другие
+  /// цифры сам по себе. Поэтому курс не вычисляется при показе, а лежит
+  /// внутри документа вместе с датой, на которую он взят.
+  exchangeRate               Decimal?  @db.Decimal(18, 6)
+  exchangeRateDate           DateTime? @db.Date
+  /// Итог документа в учётной валюте по этому курсу — для отчётов.
+  totalBase                  Decimal?  @db.Decimal(20, 2)
+  subtotal                   Decimal   @default(0) @db.Decimal(20, 2)
+  discountTotal              Decimal   @default(0) @db.Decimal(20, 2)
+  vatTotal                   Decimal   @default(0) @db.Decimal(20, 2)
+  total                      Decimal   @default(0) @db.Decimal(20, 2)
+  amountPaid                 Decimal   @default(0) @db.Decimal(20, 2)
+  balanceDue                 Decimal   @default(0) @db.Decimal(20, 2)
+  openingBalance             Decimal?  @db.Decimal(20, 2)
+  debitTurnover              Decimal?  @db.Decimal(20, 2)
+  creditTurnover             Decimal?  @db.Decimal(20, 2)
+  closingBalance             Decimal?  @db.Decimal(20, 2)
   issuerSnapshot             Json
   recipientSnapshot          Json
   issuerSignatorySnapshot    Json?
@@ -1586,8 +1675,8 @@ model AccountingDocument {
   customerMaterialsInfo      String?
   appendixInfo               String?
   note                       String?
-  version                    Int                         @default(1)
-  checksum                   String?                     @db.VarChar(64)
+  version                    Int       @default(1)
+  checksum                   String?   @db.VarChar(64)
 
   // Публичная ссылка на документ для контрагента.
   // Токен можно перевыпустить — тогда все ранее разосланные ссылки
@@ -1611,6 +1700,7 @@ model AccountingDocument {
   reconciliationLines AccountingReconciliationLine[]
   orders              AccountingDocumentOrder[]
   paymentAllocations  AccountingPaymentAllocation[]
+  revaluationLines    CurrencyRevaluationLine[]
   sourceLinks         AccountingDocumentLink[]       @relation("AccountingDocumentSourceLinks")
   targetLinks         AccountingDocumentLink[]       @relation("AccountingDocumentTargetLinks")
 
@@ -1624,6 +1714,30 @@ model AccountingDocument {
   @@index([counterpartyId, documentDate])
   @@index([companyId, counterpartyId, externalNumber])
   @@index([contractId])
+  /// Доставка документа контрагенту на платформе.
+  ///
+  /// Документ остаётся один: у него уже есть companyId (кто выпустил) и
+  /// counterpartyId (кому). Здесь — реальная компания-арендатор, которой
+  /// открыт доступ на чтение. Копий не появляется, и не приходится решать,
+  /// чей номер правильный. Пусто означает «не отправляли» или «у контрагента
+  /// нет учётной записи» — тогда остаётся публичная ссылка.
+  recipientCompanyId String?
+  recipientCompany   Company? @relation("ReceivedAccountingDocuments", fields: [recipientCompanyId], references: [id], onDelete: SetNull)
+  sentAt             DateTime?
+  sentById           String?
+  sentBy             User?    @relation("SentAccountingDocuments", fields: [sentById], references: [id], onDelete: SetNull)
+
+  /// Что получатель сделал с документом: ACCEPTED или REJECTED с причиной.
+  /// Пусто — ещё не смотрел. Править чужой документ он не может, только
+  /// принять или отклонить.
+  receiptStatus String?
+  receiptReason String?
+  receiptAt     DateTime?
+  receiptById   String?
+  receiptBy     User?     @relation("ReviewedAccountingDocuments", fields: [receiptById], references: [id], onDelete: SetNull)
+
+  @@index([recipientCompanyId])
+
 }
 
 model AccountingDocumentLine {
@@ -1691,7 +1805,13 @@ model AccountingPaymentAllocation {
   document    AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
   paymentId   String
   payment     Payment            @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  /// Сколько долга закрыто — в валюте счёта.
   amount      Decimal            @db.Decimal(20, 2)
+  /// Сколько на это ушло в учётной валюте и какая курсовая разница при этом
+  /// возникла. Считается один раз, в момент погашения: пересчёт задним
+  /// числом менял бы прошлые месяцы при каждом движении курса.
+  amountBase   Decimal? @db.Decimal(20, 2)
+  exchangeDiff Decimal? @db.Decimal(20, 2)
   createdById String
   createdBy   User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime           @default(now())
@@ -2053,4 +2173,178 @@ model LocationEmailList {
 
   @@unique([locationId, companyId])
   @@index([companyId])
+}
+
+// ==================== ВАЛЮТЫ И КУРСЫ ====================
+
+/// Справочник валют.
+///
+/// Заполняется из курсов Нацбанка РК плюс сам тенге и те валюты, которых
+/// Нацбанк не публикует (туркменский манат). Код — ISO 4217: он же в
+/// платёжках, в 1С и в банке, поэтому свой идентификатор заводить незачем.
+model Currency {
+  /// KZT, USD, RUB — три буквы по ISO 4217.
+  code   String  @id @db.VarChar(3)
+  nameRu String
+  /// Знак валюты, если он есть и общеупотребим: ₸, $, ₽. Иначе показываем код.
+  symbol String?
+
+  /// За сколько единиц Нацбанк публикует курс: 1, 10, 100, 1000, 10000.
+  ///
+  /// Это не украшение: узбекский сум идёт за 100, армянский драм за 10,
+  /// иранский риал за 10 000. Взять курс как есть — ошибиться в сто раз, и
+  /// заметить это можно уже после того, как счёт ушёл клиенту. Поэтому при
+  /// загрузке курс разворачивается в «тенге за одну единицу», а исходные
+  /// число и кратность сохраняются рядом для сверки.
+  quant Int @default(1)
+
+  /// Показывать в коротком списке. Здесь СНГ, соседи и мировые валюты —
+  /// то, в чём реально ездят перевозки. Остальные доступны через поиск.
+  isCommon Boolean @default(false)
+
+  /// Публикует ли Нацбанк официальный курс. У туркменского маната — нет,
+  /// его курс придётся ставить руками, и человек должен понимать почему.
+  hasOfficialRate Boolean @default(true)
+
+  /// Порядок показа: сперва тенге, потом СНГ, потом мир.
+  sortOrder Int @default(500)
+
+  rates        ExchangeRate[]
+  companyRates CompanyExchangeRate[]
+
+  @@index([isCommon, sortOrder])
+}
+
+/// ОФИЦИАЛЬНЫЙ курс валюты к тенге на дату — общий для всей платформы.
+///
+/// Курс Нацбанка один для всех, поэтому таблица не привязана к компании.
+/// Свой курс компании (по договору, или для валюты без официального курса)
+/// живёт отдельно — см. `CompanyExchangeRate`. Разделение не украшение:
+/// пока обе разновидности лежали в одной таблице, курс, поставленный одной
+/// компанией, применялся ко всем остальным.
+///
+/// Правило, ради которого всё это существует: курс, по которому провели
+/// документ, менять нельзя никогда. Поэтому курсы хранятся историей по
+/// датам, а не одним «текущим значением», и старые записи не переписываются
+/// при загрузке новых.
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  currencyCode String   @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code], onDelete: Cascade)
+
+  /// Дата, НА КОТОРУЮ курс действует.
+  ///
+  /// По субботам и воскресеньям Нацбанк повторяет числа последнего рабочего
+  /// дня — то есть в выходные действует пятничный курс. Кроме того, дней
+  /// может не быть в базе вовсе: сервис был недоступен, компания начала
+  /// работать позже, документ проводят задним числом. Поэтому курс на дату
+  /// всегда берётся с откатом к последней записи не позже неё.
+  rateDate DateTime @db.Date
+
+  /// Сколько тенге за ОДНУ единицу валюты. Кратность уже развёрнута.
+  rate Decimal @db.Decimal(18, 6)
+
+  /// Как это отдал Нацбанк — для сверки глазами с сайтом.
+  sourceRate  Decimal? @db.Decimal(18, 6)
+  sourceQuant Int?
+
+  createdById String?
+  createdBy   User?   @relation("ExchangeRateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([currencyCode, rateDate])
+  @@index([rateDate])
+}
+
+/// Свой курс компании на дату.
+///
+/// Нужен в двух случаях: у валюты нет официального курса Нацбанка (так с
+/// туркменским манатом) или в договоре с клиентом зафиксирован свой курс.
+///
+/// Отдельная таблица, а не признак в общей: курс по договору — коммерческая
+/// договорённость одной компании, и другим компаниям платформы её видеть
+/// нельзя. Официальный курс при этом остаётся нетронутым и общим, поэтому
+/// «затереть курс Нацбанка» здесь невозможно устройством, а не проверкой.
+model CompanyExchangeRate {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  currencyCode String   @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code], onDelete: Cascade)
+
+  rateDate DateTime @db.Date
+  /// Сколько тенге за ОДНУ единицу валюты.
+  rate     Decimal  @db.Decimal(18, 6)
+  /// Зачем поставили: «курс по договору», «Нацбанк не публикует».
+  note     String?
+
+  createdById String?
+  createdBy   User?   @relation("CompanyExchangeRateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, currencyCode, rateDate])
+  @@index([companyId, rateDate])
+}
+
+/// Переоценка валютных остатков на дату — обычно на конец месяца.
+///
+/// Курсовая разница возникает не только когда деньги пришли. Пока валютный
+/// счёт лежит, а долг клиента не оплачен, курс всё равно движется, и на
+/// конец месяца тот же остаток стоит других тенге. Хранится снимком:
+/// пересчёт при каждом показе означал бы, что прошлый месяц меняется сам
+/// по себе при каждом движении курса.
+model CurrencyRevaluation {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Дата, на которую переоценены остатки.
+  date        DateTime @db.Date
+  createdById String
+  createdBy   User     @relation("CreatedCurrencyRevaluations", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  note        String?
+
+  /// Доход и расход по отдельности: «ноль» вместо «выиграли и потеряли
+  /// поровну» скрыл бы движение денег.
+  gain  Decimal @default(0) @db.Decimal(20, 2)
+  loss  Decimal @default(0) @db.Decimal(20, 2)
+  lines CurrencyRevaluationLine[]
+
+  /// Одна переоценка на компанию на дату: две задвоили бы разницу.
+  @@unique([companyId, date])
+  @@index([companyId, date])
+}
+
+/// Один переоценённый остаток: счёт, долг клиента или наш долг перевозчику.
+model CurrencyRevaluationLine {
+  id            String              @id @default(cuid())
+  revaluationId String
+  revaluation   CurrencyRevaluation @relation(fields: [revaluationId], references: [id], onDelete: Cascade)
+
+  /// ACCOUNT — остаток на счёте, RECEIVABLE — долг клиента,
+  /// PAYABLE — наш долг перевозчику.
+  kind       String
+  accountId  String?
+  account    FinanceAccount?     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  documentId String?
+  document   AccountingDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  currency String
+  /// Остаток в валюте и курс, по которому его переоценили.
+  amount   Decimal @db.Decimal(20, 2)
+  rate     Decimal @db.Decimal(18, 6)
+  /// Было в тенге, стало в тенге и разница между ними.
+  baseBefore Decimal @db.Decimal(20, 2)
+  baseAfter  Decimal @db.Decimal(20, 2)
+  diff       Decimal @db.Decimal(20, 2)
+
+  @@index([revaluationId])
+  /// По этим двум ищется предыдущая переоценка остатка: следующая разница
+  /// считается от неё, а не от курса документа.
+  @@index([documentId])
+  @@index([accountId])
 }

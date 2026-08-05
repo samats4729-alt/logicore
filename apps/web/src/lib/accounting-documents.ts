@@ -102,6 +102,16 @@ export interface AccountingDocumentLine {
 }
 
 export interface AccountingDocumentDetails extends AccountingDocumentListItem {
+    /**
+     * Курс, зафиксированный в документе, и итог в учётной валюте.
+     *
+     * Пусто у тенговых документов: тенге к тенге всегда один, и курс там не
+     * нужен. У валютного пусто означает, что курса на дату документа нет —
+     * такой счёт не проводится.
+     */
+    exchangeRate?: number | null;
+    exchangeRateDate?: string | null;
+    totalBase?: number | null;
     subtotal: number;
     vatTotal: number;
     discountTotal: number;
@@ -121,6 +131,33 @@ export interface AccountingDocumentDetails extends AccountingDocumentListItem {
     createdBy?: { id: string; firstName: string | null; lastName: string | null };
     postedBy?: { id: string; firstName: string | null; lastName: string | null } | null;
     cancelledBy?: { id: string; firstName: string | null; lastName: string | null } | null;
+    /** Чем закрыт счёт: платежи и курсовая разница по каждому из них. */
+    paymentAllocations?: DocumentPaymentAllocation[];
+}
+
+/**
+ * Оплата счёта одним платежом.
+ *
+ * `amount` — сколько долга закрыто, в валюте счёта. `amountBase` — сколько на
+ * это ушло тенге. `exchangeDiff` — разница между этими тенге и теми, что были
+ * записаны в счёте при проведении: счёт выставили по одному курсу, деньги
+ * пришли по другому.
+ */
+export interface DocumentPaymentAllocation {
+    id: string;
+    amount: number;
+    amountBase: number | null;
+    exchangeDiff: number | null;
+    createdAt: string;
+    payment: {
+        id: string;
+        date: string;
+        amount: number;
+        currency: string;
+        exchangeRate: number | null;
+        method: string;
+        note: string | null;
+    };
 }
 
 export interface AccountingDocumentListResult {
@@ -182,6 +219,8 @@ export interface CreateAccountingDocumentInput {
     direction: AccountingDocumentDirection;
     counterpartyId: string;
     documentDate: string;
+    /** Валюта документа, три буквы по ISO. По умолчанию тенге. */
+    currency?: string;
     dueDate?: string;
     bankAccountId?: string;
     contractId?: string;
@@ -373,6 +412,13 @@ export interface BillableOrder {
     amount: number;
     hasVat: boolean;
     vatRate: number;
+    /**
+     * Сколько по рейсу уходит перевозчику и включена ли у компании
+     * экспедиторская схема НДС. Нужны, чтобы разделить счёт клиенту на
+     * возмещение расходов и вознаграждение.
+     */
+    carrierCost?: number;
+    forwardingVat?: boolean;
     assignedDriverName: string | null;
     assignedDriverPlate: string | null;
     routePoints: AccountingDocumentRoutePoint[];
@@ -525,4 +571,62 @@ export async function applyAllocations(
         allocations,
     });
     return res.data;
+}
+
+/**
+ * Доставка документа контрагенту на платформе.
+ *
+ * Копия не создаётся: получателю открывается доступ на чтение к тому же
+ * документу. Поэтому и номер, и суммы у обеих сторон одни и те же — спорить
+ * не о чем.
+ */
+export interface DocumentDelivery {
+    available: boolean;
+    reason: string | null;
+    recipient: { id: string; name: string; bin: string | null } | null;
+    /** Что стало с отправленным документом: дошёл, принят или отклонён и почему. */
+    sent: {
+        at: string;
+        to: { id: string; name: string; bin: string | null } | null;
+        status: 'ACCEPTED' | 'REJECTED' | null;
+        reason: string | null;
+        reviewedAt: string | null;
+    } | null;
+}
+
+export async function fetchDocumentDelivery(id: string): Promise<DocumentDelivery> {
+    const res = await api.get(`/accounting-documents/${id}/delivery`);
+    return res.data;
+}
+
+export async function sendAccountingDocument(id: string): Promise<void> {
+    await api.post(`/accounting-documents/${id}/send`, {});
+}
+
+/** Документы, присланные нам контрагентами с платформы. */
+export interface IncomingDeliveredDocument {
+    id: string;
+    number: string;
+    type: string;
+    documentDate: string;
+    dueDate: string | null;
+    currency: string;
+    total: number;
+    receiptStatus: 'ACCEPTED' | 'REJECTED' | null;
+    receiptReason: string | null;
+    sentAt: string;
+    company: { id: string; name: string; bin: string | null };
+}
+
+export async function fetchIncomingDelivered(status?: string): Promise<IncomingDeliveredDocument[]> {
+    const res = await api.get('/accounting-documents/incoming-delivered', { params: { status } });
+    return res.data;
+}
+
+export async function reviewIncomingDocument(
+    id: string,
+    decision: 'ACCEPTED' | 'REJECTED',
+    reason?: string,
+): Promise<void> {
+    await api.post(`/accounting-documents/${id}/receipt`, { decision, reason });
 }

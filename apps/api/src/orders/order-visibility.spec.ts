@@ -1,0 +1,132 @@
+import { hideCustomerPrice, hideExecutorCost, isCustomerOnly, maskForCustomer } from './order-visibility';
+
+/**
+ * Кто какие деньги по рейсу видит.
+ *
+ * Проверяется одно правило, но оно дороже большинства остальных: разница
+ * между ценой заказчика и оплатой перевозчика — заработок экспедитора.
+ * Заказчик, увидевший его, приходит на следующие переговоры с готовым
+ * требованием скидки.
+ *
+ * Живьём на стенде так и было: в карточке рейса себестоимость скрывалась,
+ * а список заявок отдавал заказчику обе цены строкой — «клиент платит
+ * 480 000, перевозчику 380 000».
+ */
+describe('Видимость денег по рейсу', () => {
+    const CUSTOMER = 'заказчик';
+    const FORWARDER = 'экспедитор';
+
+    const order = (overrides: any = {}) => ({
+        customerCompanyId: CUSTOMER,
+        forwarderId: FORWARDER,
+        subForwarderId: null,
+        partnerId: null,
+        customerPrice: 480000,
+        driverCost: 380000,
+        subForwarderPrice: 400000,
+        isDriverPaid: true,
+        driverPaidAt: new Date('2026-08-01'),
+        isSubForwarderPaid: true,
+        subForwarderPaidAt: new Date('2026-08-01'),
+        partner: { id: 'p-1', name: 'ТОО «Перевозчик»' },
+        ...overrides,
+    });
+
+    describe('кто здесь только заказчик', () => {
+        it('заказчик, который сам не везёт', () => {
+            expect(isCustomerOnly(order(), CUSTOMER)).toBe(true);
+        });
+
+        it('экспедитор — не заказчик', () => {
+            expect(isCustomerOnly(order(), FORWARDER)).toBe(false);
+        });
+
+        it('компания и заказчик, и экспедитор по одному рейсу — не прячем', () => {
+            // Так бывает: своя же компания оформила рейс и сама его везёт.
+            // Спрятать от неё её себестоимость — спрятать рейс от того, кто
+            // его и выполняет.
+            expect(isCustomerOnly(order({ forwarderId: CUSTOMER }), CUSTOMER)).toBe(false);
+        });
+
+        it('заказчик, который заодно партнёр-перевозчик — не прячем', () => {
+            expect(isCustomerOnly(order({ partnerId: CUSTOMER }), CUSTOMER)).toBe(false);
+        });
+
+        it('заказчик, который заодно суб-экспедитор — не прячем', () => {
+            expect(isCustomerOnly(order({ subForwarderId: CUSTOMER }), CUSTOMER)).toBe(false);
+        });
+
+        it('без компании правило не срабатывает', () => {
+            // Внутренние вызовы идут без компании — им скрывать нечего.
+            expect(isCustomerOnly(order(), undefined)).toBe(false);
+            expect(isCustomerOnly(order(), null)).toBe(false);
+        });
+
+        it('посторонняя компания заказчиком не считается', () => {
+            expect(isCustomerOnly(order(), 'посторонняя')).toBe(false);
+        });
+    });
+
+    describe('что именно прячется от заказчика', () => {
+        it('оплата перевозчику', () => {
+            expect(hideExecutorCost(order()).driverCost).toBeNull();
+        });
+
+        it('ставка суб-экспедитора', () => {
+            const hidden = hideExecutorCost(order());
+            expect(hidden.subForwarderPrice).toBeNull();
+            expect(hidden.subForwarderId).toBeNull();
+        });
+
+        it('сам перевозчик — по нему видно, у кого узнавать цену', () => {
+            expect(hideExecutorCost(order()).partner).toBeNull();
+        });
+
+        it('отметки об оплате перевозчику', () => {
+            // «Перевозчику оплачено 1 августа» — это тоже сведения о том,
+            // что между экспедитором и перевозчиком есть свои деньги.
+            const hidden = hideExecutorCost(order());
+            expect(hidden.isDriverPaid).toBe(false);
+            expect(hidden.driverPaidAt).toBeNull();
+            expect(hidden.isSubForwarderPaid).toBe(false);
+            expect(hidden.subForwarderPaidAt).toBeNull();
+        });
+
+        it('своя цена остаётся — иначе заказчик не увидит, за что платит', () => {
+            expect(hideExecutorCost(order()).customerPrice).toBe(480000);
+        });
+    });
+
+    describe('правило целиком', () => {
+        it('заказчику себестоимость не видна', () => {
+            const masked = maskForCustomer(order(), CUSTOMER);
+
+            expect(masked.driverCost).toBeNull();
+            expect(masked.subForwarderPrice).toBeNull();
+            expect(masked.customerPrice).toBe(480000);
+        });
+
+        it('экспедитор видит обе суммы — это его рейс', () => {
+            const visible = maskForCustomer(order(), FORWARDER);
+
+            expect(visible.driverCost).toBe(380000);
+            expect(visible.customerPrice).toBe(480000);
+        });
+
+        it('без компании ничего не прячется', () => {
+            expect(maskForCustomer(order(), undefined).driverCost).toBe(380000);
+        });
+    });
+
+    describe('что видит водитель', () => {
+        it('цена заказчика скрыта', () => {
+            // Водителю платит перевозчик или экспедитор. Сколько за тот же
+            // рейс платит грузовладелец — не его сведения.
+            expect(hideCustomerPrice(order()).customerPrice).toBeNull();
+        });
+
+        it('своя оплата остаётся', () => {
+            expect(hideCustomerPrice(order()).driverCost).toBe(380000);
+        });
+    });
+});

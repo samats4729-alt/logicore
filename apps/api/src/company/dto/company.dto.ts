@@ -163,6 +163,19 @@ export class UpdateCompanyProfileDto {
     @IsOptional()
     vatCertificateDate?: string;
 
+    /**
+     * Как считается НДС в счетах: со всей суммы или только с вознаграждения
+     * экспедитора. Это налоговая позиция компании, а не оформление счёта.
+     */
+    @ApiProperty({
+        description: 'Схема НДС: STANDARD — со всей суммы, FORWARDING — с вознаграждения экспедитора',
+        required: false,
+        enum: ['STANDARD', 'FORWARDING'],
+    })
+    @IsIn(['STANDARD', 'FORWARDING'])
+    @IsOptional()
+    vatScheme?: 'STANDARD' | 'FORWARDING';
+
     @ApiProperty({ description: 'Менеджеры видят только свои заявки', required: false })
     @IsBoolean()
     @IsOptional()

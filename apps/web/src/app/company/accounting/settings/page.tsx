@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Tag, theme, Spin } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import CurrencySelect from '@/components/orders/CurrencySelect';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
@@ -15,6 +16,8 @@ interface FinanceAccount {
     id: string;
     name: string;
     kind: 'CASH' | 'BANK';
+    /** Валюта счёта. Один счёт — одна валюта. */
+    currency: string;
     isDefault: boolean;
     isActive: boolean;
     openingBalance?: number;
@@ -110,11 +113,21 @@ export default function FinanceSettingsPage() {
         }
     };
 
+    const handleCreateAccount = () => {
+        if (!canEditFinance) return;
+        setEditingAccount(null);
+        accountForm.resetFields();
+        accountForm.setFieldsValue({ kind: 'BANK', currency: 'KZT', openingBalance: 0 });
+        setAccountModalOpen(true);
+    };
+
     const handleEditAccount = (record: FinanceAccount) => {
         if (!canEditFinance) return;
         setEditingAccount(record);
         accountForm.setFieldsValue({
             name: record.name,
+            kind: record.kind,
+            currency: record.currency || 'KZT',
             openingBalance: record.openingBalance || 0,
             openingDate: record.openingDate ? dayjs(record.openingDate) : null,
             iban: record.iban || '',
@@ -127,6 +140,8 @@ export default function FinanceSettingsPage() {
 
     const handleSaveAccount = async (values: {
         name: string;
+        kind?: 'CASH' | 'BANK';
+        currency?: string;
         openingBalance?: number;
         openingDate?: dayjs.Dayjs | null;
         iban?: string;
@@ -134,23 +149,31 @@ export default function FinanceSettingsPage() {
         bankBic?: string;
         kbe?: string;
     }) => {
-        if (!editingAccount) return;
         setSaving(true);
         try {
-            const isBank = editingAccount.kind === 'BANK';
-            await api.put(`/accounting/finance-accounts/${editingAccount.id}`, {
+            const kind = editingAccount ? editingAccount.kind : (values.kind || 'BANK');
+            const isBank = kind === 'BANK';
+            // У кассы печатных реквизитов нет — счёт с неё не выставляют.
+            const requisites = isBank ? {
+                iban: values.iban?.trim() || null,
+                bankName: values.bankName?.trim() || null,
+                bankBic: values.bankBic?.trim() || null,
+                kbe: values.kbe?.trim() || null,
+            } : {};
+            const payload = {
                 name: values.name,
+                currency: values.currency || 'KZT',
                 openingBalance: values.openingBalance ?? 0,
                 openingDate: values.openingDate ? values.openingDate.toISOString() : null,
-                // У кассы печатных реквизитов нет — счёт с неё не выставляют.
-                ...(isBank ? {
-                    iban: values.iban?.trim() || null,
-                    bankName: values.bankName?.trim() || null,
-                    bankBic: values.bankBic?.trim() || null,
-                    kbe: values.kbe?.trim() || null,
-                } : {}),
-            });
-            toast.success('Счёт сохранён');
+                ...requisites,
+            };
+
+            if (editingAccount) {
+                await api.put(`/accounting/finance-accounts/${editingAccount.id}`, payload);
+            } else {
+                await api.post('/accounting/finance-accounts', { ...payload, kind });
+            }
+            toast.success(editingAccount ? 'Счёт сохранён' : 'Счёт создан');
             setAccountModalOpen(false);
             fetchSettings();
         } catch (err: any) {
@@ -297,6 +320,17 @@ export default function FinanceSettingsPage() {
             )
         },
         {
+            title: 'Валюта',
+            dataIndex: 'currency',
+            key: 'currency',
+            width: 100,
+            render: (val: string) => (
+                val && val !== 'KZT'
+                    ? <Tag color="gold">{val}</Tag>
+                    : <Text type="secondary">₸ тенге</Text>
+            ),
+        },
+        {
             // Незаполненные реквизиты видно сразу: без них в счёт уйдут
             // данные из карточки организации, а не этого счёта.
             title: 'Реквизиты для счетов',
@@ -422,6 +456,15 @@ export default function FinanceSettingsPage() {
                         label: 'Счета и кассы',
                         children: (
                             <div style={{ marginTop: 8 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 }}>
+                                    <Text type="secondary" style={{ fontSize: 12.5 }}>
+                                        Один счёт — одна валюта. Для долларов заведите отдельный счёт: на тенговый
+                                        их положить нельзя, иначе остаток перестанет сходиться с банком.
+                                    </Text>
+                                    {canEditFinance && (
+                                        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateAccount}>Добавить счёт</Button>
+                                    )}
+                                </div>
                                 <Table
                                     columns={accountColumns}
                                     dataSource={accounts}
@@ -502,20 +545,41 @@ export default function FinanceSettingsPage() {
 
             {/* Account Modal */}
             <Modal
-                title="Редактировать счёт / кассу"
+                title={editingAccount ? 'Редактировать счёт / кассу' : 'Новый счёт или касса'}
                 open={accountModalOpen}
                 onCancel={() => setAccountModalOpen(false)}
                 onOk={() => accountForm.submit()}
                 confirmLoading={saving}
-                okText="Сохранить"
+                okText={editingAccount ? 'Сохранить' : 'Создать'}
                 cancelText="Отмена"
                 destroyOnClose
             >
                 <Form form={accountForm} layout="vertical" onFinish={handleSaveAccount}>
                     <Form.Item name="name" label="Название" rules={[{ required: true, message: 'Укажите название' }]}>
-                        <Input size="large" maxLength={60} />
+                        <Input size="large" maxLength={60} placeholder="Например: Валютный счёт в Halyk" />
                     </Form.Item>
-                    {editingAccount?.kind === 'BANK' && (
+                    {!editingAccount && (
+                        <Form.Item name="kind" label="Тип" rules={[{ required: true }]}>
+                            <Select
+                                size="large"
+                                options={[
+                                    { value: 'BANK', label: 'Расчётный счёт в банке' },
+                                    { value: 'CASH', label: 'Касса (наличные)' },
+                                ]}
+                            />
+                        </Form.Item>
+                    )}
+                    <Form.Item
+                        name="currency"
+                        label="Валюта счёта"
+                        rules={[{ required: true, message: 'Выберите валюту' }]}
+                        extra={editingAccount
+                            ? 'Пока по счёту не было платежей, валюту можно поменять. После первого платежа — только новый счёт.'
+                            : 'Все деньги на этом счёте будут в этой валюте. Платёж в другой валюте на него не примут.'}
+                    >
+                        <CurrencySelect width="100%" />
+                    </Form.Item>
+                    {(editingAccount ? editingAccount.kind === 'BANK' : true) && (
                         <>
                             <div style={{ fontWeight: 600, fontSize: 13, margin: '4px 0 4px', color: 'var(--lc-text-sec)' }}>
                                 Реквизиты для счетов
@@ -541,7 +605,11 @@ export default function FinanceSettingsPage() {
                         </>
                     )}
                     <div style={{ fontWeight: 600, fontSize: 13, margin: '4px 0 10px', color: 'var(--lc-text-sec)' }}>Ввод остатка</div>
-                    <Form.Item name="openingBalance" label="Начальный остаток (₸)" extra="Сколько денег уже есть на этом счёте/в кассе на старте">
+                    <Form.Item
+                        name="openingBalance"
+                        label="Начальный остаток"
+                        extra="Сколько денег уже есть на этом счёте/в кассе на старте — в валюте счёта"
+                    >
                         <InputNumber size="large" style={{ width: '100%' }} min={0} placeholder="0" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
                     </Form.Item>
                     <Form.Item name="openingDate" label="На дату" extra="Движения с этой даты прибавляются к остатку">

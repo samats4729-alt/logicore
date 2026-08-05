@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Form, Input, Button, Checkbox, DatePicker, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
+import { Form, Input,
+    Select, Button, Checkbox, DatePicker, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
 import { UploadOutlined, BankOutlined, FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -134,6 +135,7 @@ export default function SettingsPage() {
                 vatCertificateSeries: company.vatCertificateSeries,
                 vatCertificateNumber: company.vatCertificateNumber,
                 vatCertificateDate: company.vatCertificateDate ? dayjs(company.vatCertificateDate) : null,
+                vatScheme: company.vatScheme || 'STANDARD',
             });
         } catch (error) {
             console.error('Ошибка загрузки профиля компании:', error);
@@ -474,6 +476,33 @@ export default function SettingsPage() {
                                                     tooltip="Заполняйте, только если документы подписывает не директор. Иначе берётся ФИО директора"
                                                 >
                                                     <Input size="large" placeholder="как в ФИО директора" />
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
+
+                                        <div className="lc-sec-title" style={{ marginTop: 8 }}>Как считается НДС</div>
+                                        <div className="lc-sec-hint" style={{ marginBottom: 18 }}>
+                                            Экспедиторская схема облагает налогом только вознаграждение: стоимость привлечённого
+                                            перевозчика проходит через вас и вашим оборотом не считается. Итог счёта не меняется —
+                                            меняется только то, какая его часть облагается. Разница в деньгах большая, поэтому
+                                            переключайте это решением бухгалтера, а не на пробу.
+                                        </div>
+                                        <Row gutter={24}>
+                                            <Col xs={24} md={16}>
+                                                <Form.Item name="vatScheme" label="Схема НДС">
+                                                    <Select
+                                                        size="large"
+                                                        options={[
+                                                            {
+                                                                value: 'STANDARD',
+                                                                label: 'Обычная — НДС со всей суммы счёта',
+                                                            },
+                                                            {
+                                                                value: 'FORWARDING',
+                                                                label: 'Экспедиторская — НДС только с вознаграждения',
+                                                            },
+                                                        ]}
+                                                    />
                                                 </Form.Item>
                                             </Col>
                                         </Row>

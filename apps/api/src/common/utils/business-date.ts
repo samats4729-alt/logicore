@@ -77,3 +77,21 @@ export function kzDaysSince(date: Date | string, at: Date = new Date()): number 
     const diff = kzToday(at).getTime() - from.getTime();
     return Math.max(0, Math.floor(diff / (24 * 60 * MINUTE)));
 }
+
+/**
+ * Прибавить месяцы, не перескакивая через конец короткого месяца.
+ *
+ * Обычное `setMonth(getMonth() + 1)` от 31 января даёт 3 марта: в феврале
+ * нет тридцать первого, и дата «переливается» в следующий месяц. Для
+ * подписки это лишние дни бесплатной работы, для срока оплаты — сдвинутая
+ * дата в счёте. Здесь такой день прижимается к последнему числу месяца.
+ */
+export function addMonths(date: Date, months: number): Date {
+    const result = new Date(date);
+    const day = result.getDate();
+    result.setDate(1);
+    result.setMonth(result.getMonth() + months);
+    const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+    result.setDate(Math.min(day, lastDay));
+    return result;
+}

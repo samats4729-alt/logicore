@@ -23,6 +23,7 @@ import {
     routePointsLabel,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
+import CurrencySelect from '@/components/orders/CurrencySelect';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
@@ -47,21 +48,60 @@ interface DraftLine {
     orderDetails: string | null;
 }
 
-const lineFromOrder = (order: BillableOrder): DraftLine => ({
-    key: `order-${order.id}`,
-    name: 'Транспортные услуги',
-    quantity: 1,
-    unit: 'усл',
-    unitPrice: order.amount ?? 0,
-    vat: order.hasVat && order.vatRate > 0 ? String(order.vatRate) : 'none',
-    orderId: order.id,
-    orderNumber: order.orderNumber,
-    orderDetails: [
-        routePointsLabel(order.routePoints),
-        order.assignedDriverName,
-        order.assignedDriverPlate,
-    ].filter(Boolean).join(' · ') || null,
-});
+const orderDetailsOf = (order: BillableOrder) => [
+    routePointsLabel(order.routePoints),
+    order.assignedDriverName,
+    order.assignedDriverPlate,
+].filter(Boolean).join(' · ') || null;
+
+/**
+ * Рейс превращается в строки счёта.
+ *
+ * Обычно строка одна. При экспедиторской схеме НДС их две: возмещение
+ * расходов на перевозку (без НДС) и вознаграждение экспедитора (с НДС).
+ * Итог счёта при этом тот же — меняется только то, какая часть облагается
+ * налогом. Если вознаграждения нет (перевозчик стоит столько же или дороже
+ * клиента), делить нечего: строка остаётся одна, а бухгалтер видит
+ * предупреждение — это либо ошибка в ставках, либо рейс в убыток.
+ */
+const linesFromOrder = (order: BillableOrder): DraftLine[] => {
+    const amount = order.amount ?? 0;
+    const vat = order.hasVat && order.vatRate > 0 ? String(order.vatRate) : 'none';
+    const details = orderDetailsOf(order);
+    const base = {
+        quantity: 1,
+        unit: 'усл',
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        orderDetails: details,
+    };
+
+    const carrierCost = order.carrierCost ?? 0;
+    const splittable = order.forwardingVat && carrierCost > 0 && carrierCost < amount;
+
+    if (!splittable) {
+        return [{ ...base, key: `order-${order.id}`, name: 'Транспортные услуги', unitPrice: amount, vat }];
+    }
+
+    return [
+        {
+            ...base,
+            key: `order-${order.id}-pass`,
+            name: 'Возмещение расходов на перевозку',
+            unitPrice: carrierCost,
+            // Проходная часть нашим оборотом не является — НДС на неё не
+            // начисляется.
+            vat: 'none',
+        },
+        {
+            ...base,
+            key: `order-${order.id}-fee`,
+            name: 'Вознаграждение экспедитора',
+            unitPrice: Number((amount - carrierCost).toFixed(2)),
+            vat,
+        },
+    ];
+};
 
 const toPayload = (line: DraftLine): CreateAccountingDocumentLineInput => ({
     name: line.name.trim(),
@@ -91,6 +131,18 @@ export default function CreateInvoicePage() {
     const [direction, setDirection] = useState<AccountingDocumentDirection>('OUTGOING');
     const [counterpartyId, setCounterpartyId] = useState<string | undefined>();
     const [documentDate, setDocumentDate] = useState<Dayjs>(dayjs());
+    // Номер и дата счёта у перевозчика. Свой номер мы присваиваем сами, а
+    // этот стоит в его счёте: по нему он ищет платёж у себя, и его же
+    // указывают в платёжном поручении.
+    const [externalNumber, setExternalNumber] = useState('');
+    const [externalDate, setExternalDate] = useState<Dayjs | null>(null);
+    /**
+     * Валюта счёта. По умолчанию тенге — так выставляют почти все счета.
+     *
+     * Менять её можно только пока счёт черновик: у проведённого документа
+     * валюта и курс уже стали частью обязательства.
+     */
+    const [currency, setCurrency] = useState('KZT');
     const [dueDate, setDueDate] = useState<Dayjs | null>(null);
     const [bankAccountId, setBankAccountId] = useState<string | undefined>();
     const [note, setNote] = useState('');
@@ -177,15 +229,31 @@ export default function CreateInvoicePage() {
             return;
         }
         // Уже добавленные рейсы отмечены — окно показывает текущий выбор.
-        setPickedIds(lines.map((l) => l.orderId).filter((id): id is string => Boolean(id)));
+        // Один рейс может дать две строки счёта — в отмеченных он всё равно
+        // один, иначе галочка ставилась бы дважды.
+        setPickedIds(Array.from(new Set(lines.map((l) => l.orderId).filter((id): id is string => Boolean(id)))));
         setPickerOpen(true);
     };
 
     const applyPicked = () => {
         const manual = lines.filter((line) => !line.orderId);
-        const picked = orders
-            .filter((order) => pickedIds.includes(order.id))
-            .map(lineFromOrder);
+        const chosen = orders.filter((order) => pickedIds.includes(order.id));
+
+        // Экспедиторская схема включена, но по рейсу вознаграждения нет:
+        // перевозчик стоит столько же или дороже клиента. Такой рейс идёт
+        // одной строкой, и об этом надо сказать — это либо ошибка в ставках,
+        // либо рейс в убыток, и молчать о нём нельзя.
+        const notSplit = chosen.filter(
+            (order) => order.forwardingVat && (order.carrierCost ?? 0) >= (order.amount ?? 0),
+        );
+        if (notSplit.length) {
+            toast.warning(
+                `Не разделены на вознаграждение: ${notSplit.map((o) => o.orderNumber).join(', ')}. ` +
+                'Ставка перевозчика не меньше суммы клиента — проверьте ставки по этим рейсам',
+            );
+        }
+
+        const picked = chosen.flatMap(linesFromOrder);
         // Ручные строки сохраняются: подбор управляет только строками заявок.
         setLines([...picked, ...manual]);
         setPickerOpen(false);
@@ -226,9 +294,14 @@ export default function CreateInvoicePage() {
                 direction,
                 counterpartyId,
                 documentDate: documentDate.format('YYYY-MM-DD'),
+                currency,
                 dueDate: dueDate ? dueDate.format('YYYY-MM-DD') : undefined,
                 bankAccountId,
                 note: note.trim() || undefined,
+                ...(direction === 'INCOMING' ? {
+                    externalNumber: externalNumber.trim() || undefined,
+                    externalDate: externalDate ? externalDate.format('YYYY-MM-DD') : undefined,
+                } : {}),
                 lines: lines.map(toPayload),
             });
             toast.success(`Черновик счёта № ${created.number} создан`);
@@ -436,6 +509,33 @@ export default function CreateInvoicePage() {
                             style={{ width: 150 }}
                             value={documentDate}
                             onChange={(value) => value && setDocumentDate(value)}
+                        />
+                    ))}
+
+                    {headerField('Валюта', (
+                        <CurrencySelect value={currency} onChange={setCurrency} width={110} />
+                    ))}
+
+                    {/* Только у входящего: у своего счёта чужого номера нет. */}
+                    {direction === 'INCOMING' && headerField('Номер у перевозчика', (
+                        <Input
+                            size="small"
+                            style={{ width: 200 }}
+                            maxLength={100}
+                            placeholder="Как в его счёте"
+                            value={externalNumber}
+                            onChange={(e) => setExternalNumber(e.target.value)}
+                        />
+                    ))}
+
+                    {direction === 'INCOMING' && headerField('Дата у перевозчика', (
+                        <DatePicker
+                            size="small"
+                            format="DD.MM.YYYY"
+                            placeholder="Не указана"
+                            style={{ width: 150 }}
+                            value={externalDate}
+                            onChange={setExternalDate}
                         />
                     ))}
 

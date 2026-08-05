@@ -9,11 +9,12 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import { money as formatMoney, currencySign } from '@/lib/money-format';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
-interface Account { id: string; name: string; kind: string; isDefault: boolean; isActive?: boolean }
+interface Account { id: string; name: string; kind: string; isDefault: boolean; isActive?: boolean; currency?: string }
 interface Category { id: string; name: string; direction: 'IN' | 'OUT'; costType?: string | null; isActive: boolean }
 interface Partner { id: string; name: string; isCustomer?: boolean; isCarrier?: boolean }
 interface OrderLite { id: string; orderNumber: string }
@@ -27,8 +28,11 @@ interface PaymentRow {
     orderId?: string | null;
     counterparty?: { name?: string } | null;
     counterpartyId?: string | null;
-    account?: { id?: string; name?: string } | null;
+    account?: { id?: string; name?: string; currency?: string } | null;
     accountId?: string | null;
+    /** Валюта платежа и его сумма в тенге по курсу дня оплаты. */
+    currency?: string | null;
+    amountBase?: number | null;
     category?: { id?: string; name?: string } | null;
     categoryId?: string | null;
 }
@@ -42,7 +46,7 @@ const METHOD_OPTIONS = [
 const METHOD_LABELS: Record<string, string> = { BANK: 'Банк', CASH: 'Касса', CARD: 'Карта', OTHER: 'Прочее' };
 const moneyFmt = (v: any) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const moneyParse = (v: any) => (v || '').replace(/\s/g, '');
-const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
+const money = (v: number, currency = 'KZT') => formatMoney(v, currency);
 
 export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) {
     const router = useRouter();
@@ -100,6 +104,12 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
         }
     };
 
+    // Валюта платежа — это валюта выбранного счёта. Отдельного поля нет
+    // намеренно: доллары всё равно можно положить только на долларовый счёт,
+    // и лишний выбор здесь означал бы только лишнюю ошибку.
+    const selectedAccountId = Form.useWatch('accountId', form);
+    const paymentCurrency = accounts.find((a) => a.id === selectedAccountId)?.currency || 'KZT';
+
     const filtered = useMemo(() => {
         return rows.filter(r => {
             if (categoryFilter && r.category?.id !== categoryFilter && r.categoryId !== categoryFilter) return false;
@@ -116,7 +126,10 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
         });
     }, [rows, categoryFilter, dateRange, search]);
 
-    const total = filtered.reduce((s, r) => s + r.amount, 0);
+    // Итог считается только по тенговым платежам: сложить доллары с тенге
+    // значит показать сумму, которой нет ни на одном счёте.
+    const total = filtered.reduce((s, r) => ((r.currency || 'KZT') === 'KZT' ? s + r.amount : s), 0);
+    const hasForeign = filtered.some((r) => (r.currency || 'KZT') !== 'KZT');
 
     const openCreate = () => {
         setEditing(null);
@@ -154,6 +167,7 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
                 counterpartyId: values.counterpartyId || undefined,
                 amount: values.amount,
                 accountId: values.accountId || undefined,
+                currency: paymentCurrency,
                 method: values.method || 'BANK',
                 note: values.note || undefined,
                 orderId: values.orderId || null,
@@ -177,7 +191,7 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
     const handleDelete = (r: PaymentRow) => {
         modal.confirm({
             title: 'Удалить документ?',
-            content: `${dayjs(r.date).format('DD.MM.YYYY')} · ${r.category?.name || ''} · ${money(r.amount)}`,
+            content: `${dayjs(r.date).format('DD.MM.YYYY')} · ${r.category?.name || ''} · ${money(r.amount, r.currency || 'KZT')}`,
             okText: 'Удалить', okButtonProps: { danger: true }, cancelText: 'Отмена',
             onOk: async () => {
                 try {
@@ -204,7 +218,20 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
         { title: 'Счёт / касса', key: 'acc', width: 140, render: (_: any, r: PaymentRow) => <span style={{ fontSize: 13, color: 'var(--lc-text-ter)' }}>{r.account?.name || METHOD_LABELS[r.method] || '—'}</span> },
         {
             title: 'Сумма', key: 'amount', width: 140, align: 'right' as const,
-            render: (_: any, r: PaymentRow) => <strong style={{ fontSize: 13, color: cfg.color, fontVariantNumeric: 'tabular-nums' }}>{isIn ? '+' : '−'}{money(r.amount)}</strong>,
+            render: (_: any, r: PaymentRow) => (
+                <div style={{ textAlign: 'right' }}>
+                    <strong style={{ fontSize: 13, color: cfg.color, fontVariantNumeric: 'tabular-nums' }}>
+                        {isIn ? '+' : '−'}{money(r.amount, r.currency || 'KZT')}
+                    </strong>
+                    {r.currency && r.currency !== 'KZT' && r.amountBase != null && (
+                        // Валютный платёж без тенговой суммы читается неверно:
+                        // «1 000» — это тысяча долларов, а не тысяча тенге.
+                        <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', fontVariantNumeric: 'tabular-nums' }}>
+                            {money(r.amountBase)} по курсу дня
+                        </div>
+                    )}
+                </div>
+            ),
         },
         { title: 'Примечание', dataIndex: 'note', key: 'note', width: 160, ellipsis: true, render: (v?: string) => <span style={{ fontSize: 13 }}>{v || '—'}</span> },
         ...(canEdit ? [{
@@ -237,7 +264,9 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
                         <div>
                             <div className="lc2-mlabel">{cfg.metric}</div>
                             <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: cfg.color }}>{money(total)}</div>
-                            <div className="lc2-msub">{filtered.length} докум.</div>
+                            <div className="lc2-msub">
+                                {filtered.length} докум.{hasForeign ? ' · только тенговые' : ''}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -325,13 +354,23 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
                             options={partners.map(p => ({ value: p.id, label: p.name }))}
                         />
                     </Form.Item>
-                    <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>
+                    <Form.Item
+                        name="amount"
+                        label={`Сумма (${currencySign(paymentCurrency)})`}
+                        rules={[{ required: true, message: 'Укажите сумму' }]}
+                        extra={paymentCurrency !== 'KZT'
+                            ? `Счёт валютный — сумма в ${paymentCurrency}. В тенге она пересчитается по официальному курсу на дату платежа.`
+                            : undefined}
+                    >
                         <InputNumber style={{ width: '100%' }} min={0} placeholder="0" formatter={moneyFmt} parser={moneyParse} />
                     </Form.Item>
                     <div style={{ display: 'flex', gap: 12 }}>
                         <Form.Item name="accountId" label="Счёт / касса" style={{ flex: 1 }}>
                             <Select placeholder="Счёт или касса" allowClear
-                                options={accounts.map(a => ({ value: a.id, label: `${a.name} · ${a.kind === 'CASH' ? 'касса' : 'счёт'}` }))} />
+                                options={accounts.map(a => ({
+                                    value: a.id,
+                                    label: `${a.name} · ${a.kind === 'CASH' ? 'касса' : 'счёт'}${a.currency && a.currency !== 'KZT' ? ` · ${a.currency}` : ''}`,
+                                }))} />
                         </Form.Item>
                         <Form.Item name="method" label="Форма оплаты" style={{ flex: 1 }}>
                             <Select options={METHOD_OPTIONS} />

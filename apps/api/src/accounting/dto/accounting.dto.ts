@@ -1,4 +1,4 @@
-import { PaymentDirection, PaymentMethod } from '@prisma/client';
+import { AccountKind, PaymentDirection, PaymentMethod } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import {
     IsBoolean,
@@ -8,6 +8,7 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    Matches,
     Max,
     MaxLength,
     Min,
@@ -181,6 +182,15 @@ export class CreatePaymentDto {
     @IsOptional()
     @IsString()
     categoryId?: string;
+
+    /**
+     * Валюта платежа. Не указана — берётся валюта счёта, а без счёта тенге:
+     * так обычные платежи работают ровно как раньше.
+     */
+    @IsOptional()
+    @IsString()
+    @Matches(/^[A-Za-z]{3}$/, { message: 'Валюта указывается кодом из трёх букв, например USD' })
+    currency?: string;
 }
 
 export class UpdatePaymentDto {
@@ -268,4 +278,55 @@ export class RefundPaymentDto {
     @IsString()
     @IsNotEmpty()
     accountId?: string;
+}
+
+/**
+ * Новый счёт или касса.
+ *
+ * Валюта задаётся при создании и потом не меняется, пока по счёту не было
+ * движений: объявить прошлые тенге долларами — значит выдумать остаток.
+ */
+export class CreateFinanceAccountDto {
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(120)
+    name!: string;
+
+    @IsEnum(AccountKind)
+    kind!: AccountKind;
+
+    @IsOptional()
+    @IsString()
+    @Matches(/^[A-Za-z]{3}$/, { message: 'Валюта указывается кодом из трёх букв, например USD' })
+    currency?: string;
+
+    @IsOptional()
+    @IsNumber({ allowInfinity: false, allowNaN: false })
+    @Min(0)
+    @Max(MAX_MONEY_AMOUNT)
+    openingBalance?: number;
+
+    @IsOptional()
+    @IsDateString()
+    openingDate?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(50)
+    iban?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    bankName?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(20)
+    bankBic?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(10)
+    kbe?: string;
 }

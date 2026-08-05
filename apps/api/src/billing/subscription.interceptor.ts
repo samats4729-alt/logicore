@@ -23,6 +23,17 @@ const ALLOWED_PREFIXES = [
     '/company/switch-company',
 ];
 
+/**
+ * Совпадение по целым кускам адреса, а не по буквам.
+ *
+ * Простое «начинается с» открывало лишнее: разрешено «/users/me», а под
+ * это правило подходил любой адрес вроде «/users/messages». Пока такого
+ * маршрута нет, но появиться он может в любой день — и открылся бы молча.
+ */
+function isAllowedPath(path: string): boolean {
+    return ALLOWED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
 @Injectable()
 export class SubscriptionInterceptor implements NestInterceptor {
     constructor(private billingService: BillingService) { }
@@ -37,9 +48,7 @@ export class SubscriptionInterceptor implements NestInterceptor {
 
         if (user?.companyId && ENFORCED_ROLES.has(user.role)) {
             const path: string = req.path || req.url || '';
-            const isAllowedPath = ALLOWED_PREFIXES.some(p => path.startsWith(p));
-
-            if (!isAllowedPath) {
+            if (!isAllowedPath(path)) {
                 const allowed = await this.billingService.isCompanyAllowed(user.companyId);
                 if (!allowed) {
                     throw new HttpException(

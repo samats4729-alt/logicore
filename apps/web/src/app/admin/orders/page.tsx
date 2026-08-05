@@ -6,6 +6,7 @@ import { PlusOutlined, EyeOutlined, EditOutlined, UserAddOutlined } from '@ant-d
 import { api, Order, Location, User } from '@/lib/api';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
+import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -14,20 +15,6 @@ const { Option } = Select;
 // чтобы один и тот же статус везде назывался одинаково.
 const statusLabels = ORDER_STATUS_LABELS;
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'default',
-    PENDING: 'orange',
-    ASSIGNED: 'blue',
-    EN_ROUTE_PICKUP: 'processing',
-    AT_PICKUP: 'processing',
-    LOADING: 'processing',
-    IN_TRANSIT: 'cyan',
-    AT_DELIVERY: 'processing',
-    UNLOADING: 'processing',
-    COMPLETED: 'green',
-    CANCELLED: 'default',
-    PROBLEM: 'red',
-};
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<Order[]>([]);

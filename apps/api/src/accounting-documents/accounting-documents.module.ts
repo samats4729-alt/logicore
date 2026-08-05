@@ -15,8 +15,10 @@ import { PendingWorkService } from './pending-work.service';
 import { SharedReportInvoiceService } from './shared-report-invoice.service';
 import { CompanyVerificationModule } from '../company/company-verification.module';
 
+import { CurrencyModule } from '../currency/currency.module';
+
 @Module({
-    imports: [AccountingModule, CompanyVerificationModule, PaymentAllocationModule],
+    imports: [CurrencyModule, AccountingModule, CompanyVerificationModule, PaymentAllocationModule],
     controllers: [AccountingDocumentsController, PublicAccountingDocumentController],
     providers: [
         AccountingDocumentsService,

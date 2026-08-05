@@ -8,6 +8,7 @@ import { prepareCompanyOptions } from '@/lib/company-helper';
 import { DEFAULT_VAT_RATE, VAT_RATES } from '@/lib/tax';
 import { CargoComposition } from '@/components/orders/CargoComposition';
 import type { CargoState } from '@/lib/cargo';
+import CurrencySelect from '@/components/orders/CurrencySelect';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -347,7 +348,15 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                             <Row gutter={12}>
                                 <Col span={12}>
                                     <Form.Item name="customerPrice" label={customerPriceLabel}>
-                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" disabled={!canEditFinance} />
+                                        <InputNumber
+                                            min={0} style={{ width: '100%' }} placeholder="0" size="large"
+                                            disabled={!canEditFinance}
+                                            addonAfter={(
+                                                <Form.Item name="currency" noStyle initialValue="KZT">
+                                                    <CurrencySelect disabled={!canEditFinance} />
+                                                </Form.Item>
+                                            )}
+                                        />
                                     </Form.Item>
                                 </Col>
                                 <Col span={6}>
@@ -374,7 +383,15 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                             <Row gutter={12}>
                                 <Col span={12}>
                                     <Form.Item name="driverCost" label={driverCostLabel}>
-                                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" size="large" disabled={!canEditFinance} />
+                                        <InputNumber
+                                            min={0} style={{ width: '100%' }} placeholder="0" size="large"
+                                            disabled={!canEditFinance}
+                                            addonAfter={(
+                                                <Form.Item name="driverCostCurrency" noStyle initialValue="KZT">
+                                                    <CurrencySelect disabled={!canEditFinance} />
+                                                </Form.Item>
+                                            )}
+                                        />
                                     </Form.Item>
                                 </Col>
                                 <Col span={6}>

@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CurrencyService } from '../currency/currency.service';
+import { resolveOrderMoney } from './order-money';
 import { UserRole, OrderStatus, Prisma } from '@prisma/client';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { RedisService } from '../redis/redis.service';
@@ -8,6 +10,7 @@ import { PeriodClosingService } from '../accounting/services/period-closing.serv
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
 import { kzStartOfToday, kzTodayString } from '../common/utils/business-date';
+import { hideCustomerPrice, maskForCustomer } from './order-visibility';
 
 const STATUS_CHAIN = [
     OrderStatus.ASSIGNED,
@@ -96,7 +99,51 @@ export class OrdersService {
         private periodClosingService: PeriodClosingService,
         private notificationsService: NotificationsService,
         private payrollService: PayrollService,
+        private currencyService: CurrencyService,
     ) { }
+
+    private readonly logger = new Logger('OrdersService');
+
+    /**
+     * Пересчитать суммы заявки в учётную валюту компании.
+     *
+     * Вызывается при каждом сохранении сумм: отчёты складывают тысячи
+     * заявок и не могут ходить за курсом на каждую строку, поэтому
+     * пересчёт хранится рядом с самими суммами.
+     */
+    private async baseAmountsFor(input: {
+        companyId?: string | null;
+        customerPrice?: number | Prisma.Decimal | null;
+        driverCost?: number | Prisma.Decimal | null;
+        subForwarderPrice?: number | Prisma.Decimal | null;
+        currency?: string | null;
+        driverCostCurrency?: string | null;
+        subForwarderPriceCurrency?: string | null;
+        loadingDate?: Date | string | null;
+    }) {
+        const company = input.companyId
+            ? await this.prisma.company.findUnique({
+                where: { id: input.companyId }, select: { baseCurrency: true },
+            })
+            : null;
+        const baseCurrency = company?.baseCurrency || 'KZT';
+
+        const result = await resolveOrderMoney(input, baseCurrency, async (code, date) => {
+            const found = await this.currencyService.rateOn(code, date, {
+                companyId: input.companyId || undefined,
+            });
+            return found ? found.rate : null;
+        });
+
+        if (result.missingRates.length) {
+            // Молчать нельзя: суммы остались без пересчёта, и в отчётах эта
+            // заявка не сложится с остальными.
+            this.logger.warn(
+                `Заявка сохранена без пересчёта: нет курса ${result.missingRates.join(', ')}`,
+            );
+        }
+        return result;
+    }
 
     /**
      * Создание заявки на перевозку
@@ -150,6 +197,9 @@ export class OrdersService {
         natureOfCargo?: string;
         customerPriceType?: 'FIXED' | 'PER_KM' | 'PER_TON';
         ownerCompanyId?: string;
+        /** Валюта тарифа клиента и тарифа перевозчика — могут различаться. */
+        currency?: string;
+        driverCostCurrency?: string;
     }) {
         // Генерация номера заявки (по настройке нумерации компании-создателя)
         const orderNumber = await this.generateOrderNumber(data.ownerCompanyId);
@@ -212,6 +262,22 @@ export class OrdersService {
             }
         }
 
+        // Дата погрузки — дата первой точки маршрута: по ней и берём курс.
+        const pickupDate = data.routePoints?.find(
+            (rp) => rp.pointType === 'PICKUP' || rp.pointType === 'ADDITIONAL_PICKUP',
+        )?.expectedDate ?? data.routePoints?.[0]?.expectedDate ?? null;
+
+        const money = await this.baseAmountsFor({
+            companyId: creatorCompanyId,
+            customerPrice: data.customerPrice,
+            driverCost: data.driverCost,
+            subForwarderPrice: (data as any).subForwarderPrice,
+            currency: data.currency,
+            driverCostCurrency: data.driverCostCurrency,
+            subForwarderPriceCurrency: (data as any).subForwarderPriceCurrency,
+            loadingDate: pickupDate,
+        });
+
         const order = await this.prisma.order.create({
             data: {
                 orderNumber,
@@ -238,6 +304,17 @@ export class OrdersService {
                 requirements: data.requirements,
                 customerPrice: data.customerPrice,
                 driverCost: data.driverCost,
+                currency: data.currency || undefined,
+                driverCostCurrency: data.driverCostCurrency || undefined,
+                customerPriceBase: money.customerPriceBase,
+                driverCostBase: money.driverCostBase,
+                // Валюта ставки суб-экспедитора: не указана — валюта заявки.
+                // Запоминаем явно, иначе при смене валюты заявки эта ставка
+                // молча стала бы «столько же, но в другой валюте».
+                subForwarderPriceCurrency: (data as any).subForwarderPriceCurrency
+                    || data.currency || undefined,
+                subForwarderPriceBase: money.subForwarderPriceBase,
+                currencyRateDate: money.currencyRateDate,
                 driverId: data.driverId,
                 assignedDriverName: driverName,
                 assignedDriverPhone: driverPhone,
@@ -383,7 +460,11 @@ export class OrdersService {
         ]);
 
         return {
-            data,
+            // То же правило, что и в карточке рейса: компания-заказчик не
+            // видит, сколько экспедитор платит перевозчику. Пока правило
+            // стояло только в карточке, заказчик открывал список заявок и
+            // читал обе цены строкой — вместе с заработком экспедитора.
+            data: data.map((order) => maskForCustomer(order as any, filters?.companyId)),
             total,
             page,
             limit,
@@ -438,23 +519,9 @@ export class OrdersService {
             }
 
             // Заказчик не должен видеть себестоимость исполнителя (маржу
-            // экспедитора/партнёра) — только свою цену. Не скрываем, если
-            // компания одновременно исполнитель по этой же заявке.
-            const isCustomerOnly = !!companyId
-                && order.customerCompanyId === companyId
-                && order.forwarderId !== companyId
-                && order.partnerId !== companyId
-                && order.subForwarderId !== companyId;
-            if (isCustomerOnly) {
-                (order as any).driverCost = null;
-                (order as any).subForwarderPrice = null;
-                (order as any).subForwarderId = null;
-                (order as any).isDriverPaid = false;
-                (order as any).driverPaidAt = null;
-                (order as any).isSubForwarderPaid = false;
-                (order as any).subForwarderPaidAt = null;
-                (order as any).partner = null;
-            }
+            // экспедитора/партнёра) — только свою цену. Правило одно на всю
+            // выдачу заявок и лежит в order-visibility.
+            maskForCustomer(order as any, companyId);
         }
 
         // Почты у точек маршрута подменяем на список этой компании. Справочник
@@ -952,6 +1019,8 @@ export class OrdersService {
         appliedTariffId?: string;
         natureOfCargo?: string;
         customerPriceType?: string;
+        currency?: string;
+        driverCostCurrency?: string;
     }, user?: { id: string; role: string; companyId?: string }) {
         const order = await this.findById(orderId);
 
@@ -998,6 +1067,47 @@ export class OrdersService {
                     notes: rp.notes,
                 })),
             };
+        }
+
+        // Поменялись суммы, валюты или дата погрузки — пересчёт в учётную
+        // валюту устарел. Пересчитываем ровно тогда, когда меняется то, от
+        // чего он зависит: иначе при каждой правке статуса заявка бегала бы
+        // за курсом без нужды.
+        const moneyChanged = data.customerPrice !== undefined || data.driverCost !== undefined
+            || (data as any).subForwarderPrice !== undefined
+            || data.currency !== undefined || data.driverCostCurrency !== undefined
+            || (data as any).subForwarderPriceCurrency !== undefined
+            || routePoints !== undefined;
+        if (moneyChanged) {
+            const pickupDate = routePoints
+                ? (routePoints.find((rp) => rp.pointType === 'PICKUP' || rp.pointType === 'ADDITIONAL_PICKUP')?.expectedDate
+                    ?? routePoints[0]?.expectedDate ?? null)
+                : ((order as any).routePoints?.find((rp: any) => rp.pointType === 'PICKUP')?.expectedDate ?? null);
+
+            const money = await this.baseAmountsFor({
+                companyId: user?.companyId || (order as any).customerCompanyId,
+                customerPrice: data.customerPrice !== undefined ? data.customerPrice : order.customerPrice,
+                driverCost: data.driverCost !== undefined ? data.driverCost : order.driverCost,
+                subForwarderPrice: (data as any).subForwarderPrice !== undefined
+                    ? (data as any).subForwarderPrice
+                    : (order as any).subForwarderPrice,
+                currency: data.currency ?? (order as any).currency,
+                driverCostCurrency: data.driverCostCurrency ?? (order as any).driverCostCurrency,
+                // Валюта ставки суб-экспедитора берётся сохранённая, а не из
+                // валюты заявки: смена валюты заявки не должна переписывать
+                // договорённость с перевозчиком.
+                subForwarderPriceCurrency: (data as any).subForwarderPriceCurrency
+                    ?? (order as any).subForwarderPriceCurrency
+                    ?? (order as any).currency,
+                loadingDate: pickupDate,
+            });
+            updateData.customerPriceBase = money.customerPriceBase;
+            updateData.driverCostBase = money.driverCostBase;
+            updateData.subForwarderPriceBase = money.subForwarderPriceBase;
+            if ((data as any).subForwarderPriceCurrency !== undefined) {
+                updateData.subForwarderPriceCurrency = (data as any).subForwarderPriceCurrency;
+            }
+            updateData.currencyRateDate = money.currencyRateDate;
         }
 
         const updated = await this.prisma.order.update({
@@ -1259,7 +1369,10 @@ export class OrdersService {
             orderBy: { createdAt: 'desc' },
             take: includeHistory ? 50 : undefined,
         });
-        return orders;
+        // Водителю платит перевозчик или экспедитор. Сколько за тот же рейс
+        // платит грузовладелец — не его сведения, а в списке рейсов эта
+        // сумма приезжала вместе со всем остальным.
+        return orders.map((order) => hideCustomerPrice(order as any));
     }
 
     /**

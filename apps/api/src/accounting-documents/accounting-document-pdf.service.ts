@@ -4,6 +4,7 @@ import {
     AccountingDocumentType,
     Prisma,
 } from '@prisma/client';
+import { pluralForm, wordsFor } from './currency-words';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
 
@@ -48,6 +49,13 @@ export interface InvoicePdfDocument {
     status: AccountingDocumentStatus;
     number: string;
     documentDate: Date;
+    /**
+     * Номер и дата документа у контрагента. У входящего счёта это номер, под
+     * которым перевозчик выставил его нам: по нему он ищет платёж у себя, и
+     * его же ставят в платёжном поручении.
+     */
+    externalNumber?: string | null;
+    externalDate?: Date | string | null;
     operationDate?: Date | null;
     reportPeriodFrom?: Date | null;
     reportPeriodTo?: Date | null;
@@ -57,6 +65,10 @@ export interface InvoicePdfDocument {
     customerMaterialsInfo?: string | null;
     appendixInfo?: string | null;
     currency: string;
+    /** Курс к учётной валюте, зафиксированный в документе. */
+    exchangeRate?: Prisma.Decimal | null;
+    exchangeRateDate?: Date | string | null;
+    totalBase?: Prisma.Decimal | null;
     subtotal: Prisma.Decimal;
     vatTotal: Prisma.Decimal;
     total: Prisma.Decimal;
@@ -1227,6 +1239,20 @@ export class AccountingDocumentPdfService {
         doc.text(`Счёт на оплату № ${document.number} от ${this.formatDate(document.documentDate)}`, left, doc.y, {
             width,
         });
+        // Номер перевозчика — второй строкой под нашим. Без него бухгалтер не
+        // сведёт наш счёт с тем, что пришло от перевозчика: у нас свой номер,
+        // у него свой, и совпадать они не обязаны.
+        const external = this.stringValue(document.externalNumber);
+        if (external) {
+            doc.moveDown(0.15);
+            doc.font('Roboto').fontSize(9).fillColor(INK);
+            // Дата ссылкой — короткой записью: длинная «от 28 июля 2026 г.»
+            // спорит с заголовком счёта и читается как вторая дата документа.
+            const externalDate = document.externalDate
+                ? ` от ${this.formatDateNumeric(new Date(document.externalDate))}`
+                : '';
+            doc.text(`Номер у контрагента: № ${external}${externalDate}`, left, doc.y, { width });
+        }
         doc.moveDown(0.35);
         doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1.2).strokeColor(INK).stroke();
         doc.moveDown(0.8);
@@ -1242,8 +1268,12 @@ export class AccountingDocumentPdfService {
 
     private drawInvoiceLines(doc: PDFKit.PDFDocument, lines: InvoicePdfLine[], documentNumber: string) {
         const left = doc.page.margins.left;
-        const widths = [24, 52, 225, 42, 36, 76, 76];
-        const headers = ['№', 'Код', 'Наименование', 'Кол-во', 'Ед.', 'Цена', 'Сумма'];
+        // Колонка «Код» убрана по просьбе бухгалтерии: код услуги нужен нам
+        // внутри, а в счёте для контрагента он только занимает место —
+        // освободившиеся 52 пункта отданы наименованию, где длинные маршруты
+        // раньше переносились лишний раз.
+        const widths = [24, 277, 42, 36, 76, 76];
+        const headers = ['№', 'Наименование', 'Кол-во', 'Ед.', 'Цена', 'Сумма'];
         const tableWidth = widths.reduce((sum, value) => sum + value, 0);
 
         const drawHeader = () => {
@@ -1252,7 +1282,7 @@ export class AccountingDocumentPdfService {
             let x = left;
             doc.font('Roboto-Bold').fontSize(7.5).fillColor(INK);
             headers.forEach((header, index) => {
-                this.tableCell(doc, header, x, y, widths[index], height, index >= 3 ? 'center' : 'center');
+                this.tableCell(doc, header, x, y, widths[index], height, 'center');
                 x += widths[index];
             });
             doc.y = y + height;
@@ -1272,7 +1302,7 @@ export class AccountingDocumentPdfService {
         lines.forEach((line, index) => {
             const name = line.description ? `${line.name}\n${line.description}` : line.name;
             doc.font('Roboto').fontSize(7.5);
-            const nameHeight = doc.heightOfString(name, { width: widths[2] - 8, lineGap: 1 });
+            const nameHeight = doc.heightOfString(name, { width: widths[1] - 8, lineGap: 1 });
             const rowHeight = Math.max(24, nameHeight + 8);
             if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 125) {
                 doc.addPage();
@@ -1288,7 +1318,6 @@ export class AccountingDocumentPdfService {
             const y = doc.y;
             const values = [
                 String(index + 1),
-                line.serviceCode || '',
                 name,
                 this.formatQuantity(line.quantity),
                 line.unit,
@@ -1298,9 +1327,11 @@ export class AccountingDocumentPdfService {
             let x = left;
             doc.font('Roboto').fontSize(7.5);
             values.forEach((value, column) => {
-                const align = column === 0 || column === 3 || column === 4
+                // № по центру, наименование по левому краю, количество и
+                // единица по центру, деньги по правому — как в 1С.
+                const align = column === 0 || column === 2 || column === 3
                     ? 'center'
-                    : column >= 5 ? 'right' : 'left';
+                    : column >= 4 ? 'right' : 'left';
                 this.tableCell(doc, value, x, y, widths[column], rowHeight, align);
                 x += widths[column];
             });
@@ -1320,13 +1351,37 @@ export class AccountingDocumentPdfService {
         this.totalLine(doc, 'В том числе НДС:', this.formatMoney(document.vatTotal), labelX, valueX);
         doc.moveDown(0.5);
         doc.font('Roboto').fontSize(8.5);
-        const currencyLabel = document.currency === 'KZT' ? 'тенге' : document.currency;
+        // Подпись валюты словом там, где она известна: «на сумму … долларов
+        // США» читается, а «на сумму … USD» — нет.
+        const words = wordsFor(document.currency);
+        const currencyLabel = words.minor[0] ? words.major[2] : document.currency;
         doc.text(`Всего наименований ${document.lines.length}, на сумму ${this.formatMoney(document.total)} ${currencyLabel}`, left, doc.y, {
             width,
         });
         doc.moveDown(0.3);
         doc.font('Roboto-Bold').fontSize(9.5);
-        doc.text(`Всего к оплате: ${this.amountInWords(document.total)}`, left, doc.y, { width });
+        doc.text(`Всего к оплате: ${this.amountInWords(document.total, document.currency)}`, left, doc.y, { width });
+
+        // Справочная строка для валютного счёта.
+        //
+        // Обязательство остаётся в валюте документа — платить надо её. Но
+        // бухгалтерия принимающей стороны и налоговая считают в тенге, и
+        // курс должен быть виден на самом бланке, а не «где-то в системе».
+        // Без курса и даты сумма в тенге ничем не подтверждается.
+        if (document.currency !== 'KZT' && document.exchangeRate && document.totalBase) {
+            const rateDate = document.exchangeRateDate ? new Date(document.exchangeRateDate) : null;
+            const asOf = rateDate && !Number.isNaN(rateDate.getTime())
+                ? ` на ${String(rateDate.getUTCDate()).padStart(2, '0')}.${String(rateDate.getUTCMonth() + 1).padStart(2, '0')}.${rateDate.getUTCFullYear()}`
+                : '';
+            doc.moveDown(0.3);
+            doc.font('Roboto').fontSize(8);
+            doc.text(
+                `Справочно: ${this.formatMoney(document.totalBase)} тенге по курсу ` +
+                `${document.exchangeRate.toFixed(2)} ₸ за 1 ${document.currency}${asOf}. ` +
+                'Оплата производится в валюте счёта.',
+                left, doc.y, { width },
+            );
+        }
         doc.moveDown(0.55);
         doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1).strokeColor(INK).stroke();
         doc.moveDown(0.7);
@@ -1538,13 +1593,32 @@ export class AccountingDocumentPdfService {
         return value.toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
     }
 
-    private amountInWords(value: Prisma.Decimal) {
+    /**
+     * Сумма прописью в валюте документа.
+     *
+     * Слова валюты берутся из справочника: «Пятьсот долларов США 00 центов»,
+     * а не «Пятьсот тенге 00 тиын». Раньше слова стояли прямо здесь, и в
+     * валютном счёте документ получался неверным — а сумма прописью это
+     * первое, на что смотрит принимающая бухгалтерия.
+     */
+    private amountInWords(value: Prisma.Decimal, currencyCode = 'KZT') {
+        const currency = wordsFor(currencyCode);
         const [integerPart, fractionPart] = value.toFixed(2).split('.');
+        // У валюты без разменной единицы (или неизвестной) копейки пишутся
+        // числом без слова: выдумывать название наугад хуже.
+        const minorText = currency.minor[0]
+            ? ` ${fractionPart} ${pluralForm(Number(fractionPart), currency.minor)}`
+            : ` ${fractionPart}`;
+
         let remaining = BigInt(integerPart);
-        if (remaining === 0n) return `Ноль тенге ${fractionPart} тиын`;
+        if (remaining === 0n) {
+            return `Ноль ${pluralForm(0, currency.major)}${minorText}`;
+        }
 
         const groups = [
-            { forms: ['', '', ''], feminine: false },
+            // Род единиц целой части — как у самой валюты: «одна гривна», но
+            // «один доллар».
+            { forms: ['', '', ''], feminine: !!currency.majorFeminine },
             { forms: ['тысяча', 'тысячи', 'тысяч'], feminine: true },
             { forms: ['миллион', 'миллиона', 'миллионов'], feminine: false },
             { forms: ['миллиард', 'миллиарда', 'миллиардов'], feminine: false },
@@ -1557,15 +1631,18 @@ export class AccountingDocumentPdfService {
             const group = Number(remaining % 1000n);
             if (group) {
                 const config = groups[groupIndex];
-                const words = this.threeDigits(group, config?.feminine ?? false);
-                if (groupIndex > 0 && config) words.push(this.plural(group, config.forms));
-                parts.unshift(words.join(' '));
+                const chunk = this.threeDigits(group, config?.feminine ?? false);
+                if (groupIndex > 0 && config) chunk.push(this.plural(group, config.forms));
+                parts.unshift(chunk.join(' '));
             }
             remaining /= 1000n;
             groupIndex += 1;
         }
         const words = parts.join(' ');
-        return `${words.charAt(0).toUpperCase()}${words.slice(1)} тенге ${fractionPart} тиын`;
+        // Форму слова задают последние две цифры: «двадцать один доллар», но
+        // «одиннадцать долларов».
+        const majorWord = pluralForm(Number(BigInt(integerPart) % 100n), currency.major);
+        return `${words.charAt(0).toUpperCase()}${words.slice(1)} ${majorWord}${minorText}`;
     }
 
     private threeDigits(value: number, feminine: boolean) {

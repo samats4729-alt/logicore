@@ -1,4 +1,5 @@
 import {
+    addMonths,
     kzCurrentMonth,
     kzDaysSince,
     kzStartOfMonth,
@@ -92,6 +93,55 @@ describe('Календарные границы по времени Казахс
         it('будущая дата даёт ноль, а не отрицательное число', () => {
             const future = new Date('2026-08-10T09:00:00.000Z');
             expect(kzDaysSince(future, MIDDAY_UTC)).toBe(0);
+        });
+    });
+
+    describe('прибавление месяцев', () => {
+        /**
+         * Обычное `setMonth` от 31 января даёт 3 марта: в феврале нет
+         * тридцать первого. Для подписки это лишние дни бесплатной работы,
+         * для срока оплаты — не та дата в счёте.
+         */
+        it('31 января плюс месяц — конец февраля, а не март', () => {
+            expect(addMonths(new Date(2027, 0, 31), 1).toDateString())
+                .toBe(new Date(2027, 1, 28).toDateString());
+        });
+
+        it('в високосный год прижимается к 29 февраля', () => {
+            expect(addMonths(new Date(2028, 0, 31), 1).getDate()).toBe(29);
+        });
+
+        it('31 мая плюс месяц — 30 июня', () => {
+            expect(addMonths(new Date(2027, 4, 31), 1).toDateString())
+                .toBe(new Date(2027, 5, 30).toDateString());
+        });
+
+        it('обычная дата не двигается лишнего', () => {
+            expect(addMonths(new Date(2027, 0, 15), 1).toDateString())
+                .toBe(new Date(2027, 1, 15).toDateString());
+        });
+
+        it('несколько месяцев считаются от исходного дня, а не по цепочке', () => {
+            // По цепочке 31 января → 28 февраля → 28 марта: день теряется
+            // навсегда. Правильно — 31 марта.
+            expect(addMonths(new Date(2027, 0, 31), 2).getDate()).toBe(31);
+        });
+
+        it('переход через год работает', () => {
+            const result = addMonths(new Date(2027, 10, 30), 3);
+            expect(result.getFullYear()).toBe(2028);
+            expect(result.getMonth()).toBe(1);
+        });
+
+        it('исходная дата не портится', () => {
+            const start = new Date(2027, 0, 31);
+            addMonths(start, 1);
+            expect(start.getDate()).toBe(31);
+        });
+
+        it('время суток сохраняется', () => {
+            const start = new Date(2027, 0, 31, 14, 30);
+            expect(addMonths(start, 1).getHours()).toBe(14);
         });
     });
 });

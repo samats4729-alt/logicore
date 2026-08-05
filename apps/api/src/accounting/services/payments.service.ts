@@ -4,8 +4,42 @@ import { PeriodClosingService } from './period-closing.service';
 import { PaymentAllocationService } from '../../accounting-documents/payment-allocation.service';
 import { FinancialSettingsService } from './financial-settings.service';
 import { PaymentDirection, PaymentMethod, AccountKind, Payment, Prisma } from '@prisma/client';
-import { D, roundMoney, sumOf, toNum } from '../../common/utils/money';
+import { D, Money, ZERO, roundMoney, sumOf, toNum } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
+import { CurrencyService } from '../../currency/currency.service';
+import { paymentInBase } from './exchange-difference';
+
+/** Учётная валюта: в ней ведутся отчёты и итоги по компании. */
+const BASE_CURRENCY = 'KZT';
+
+/**
+ * Сумма заявки в тенге: готовый пересчёт, если он есть, сама сумма для
+ * тенге и «неизвестно» в остальных случаях. Неизвестное не сравнивается —
+ * лучше не поставить галочку «оплачено», чем поставить её ошибочно.
+ */
+function orderAmountBase(
+    base: Prisma.Decimal | null,
+    currency: string | null,
+    raw: Prisma.Decimal | null,
+): Money | null {
+    if (base !== null && base !== undefined) return D(base);
+    return (currency || BASE_CURRENCY) === BASE_CURRENCY ? D(raw) : null;
+}
+
+/**
+ * Пересчёт суммы, у которой своей учётной колонки нет, по курсу соседней
+ * суммы в той же валюте того же документа.
+ */
+function sameCurrencyBase(
+    raw: Prisma.Decimal | null,
+    currency: string | null,
+    peerRaw: Prisma.Decimal | null,
+    peerBase: Prisma.Decimal | null,
+): Money | null {
+    if ((currency || BASE_CURRENCY) === BASE_CURRENCY) return D(raw);
+    if (peerBase === null || peerBase === undefined || D(peerRaw).lte(ZERO)) return null;
+    return roundMoney(D(raw).times(D(peerBase)).div(D(peerRaw)));
+}
 
 /**
  * Период операций для журнала «Операции».
@@ -43,6 +77,7 @@ export class PaymentsService {
         @Inject(forwardRef(() => PayrollService))
         private payrollService: PayrollService,
         private allocations: PaymentAllocationService,
+        private currency: CurrencyService,
     ) { }
 
     // ==================== EXPENSES (manual) ====================
@@ -263,6 +298,64 @@ export class PaymentsService {
         });
     }
 
+    /**
+     * Валюта платежа, курс на его дату и сумма в тенге.
+     *
+     * Три правила, каждое из которых иначе рано или поздно ломает сверку:
+     *   — валюта платежа совпадает с валютой счёта: доллары на тенговом
+     *     счёте делают его остаток выдумкой;
+     *   — валютный платёж без счёта не принимается: деньги должны куда-то
+     *     лечь, иначе они попадут на тенговый счёт по умолчанию;
+     *   — валютный платёж без курса не принимается: без курса он молча
+     *     выпадет из всех отчётов в тенге.
+     */
+    private async resolvePaymentMoney(
+        companyId: string,
+        input: { amount: Prisma.Decimal; currency: string | null; date: string; accountId: string | null },
+    ) {
+        const account = input.accountId
+            ? await this.prisma.financeAccount.findFirst({
+                where: { id: input.accountId, companyId },
+                select: { name: true, currency: true },
+            })
+            : null;
+
+        // Валюта счёта по умолчанию — тенге: в базе колонка NOT NULL с этим
+        // значением, и старые счета, заведённые до валют, именно тенговые.
+        const accountCurrency = account ? (account.currency || BASE_CURRENCY) : null;
+        const currency = input.currency || accountCurrency || BASE_CURRENCY;
+
+        if (account && accountCurrency !== currency) {
+            throw new BadRequestException(
+                `Счёт «${account.name}» ведётся в ${accountCurrency} — платёж в ${currency} на него не принять. Заведите счёт в ${currency} в разделе «Счета и кассы»`,
+            );
+        }
+
+        if (currency === BASE_CURRENCY) {
+            return { currency, rate: D(1), rateDate: null as Date | null, amountBase: input.amount };
+        }
+
+        if (!account) {
+            throw new BadRequestException(
+                `Для платежа в ${currency} нужен счёт в этой валюте — заведите его в разделе «Счета и кассы»`,
+            );
+        }
+
+        const converted = await this.currency.toBase(input.amount, currency, new Date(input.date), { companyId });
+        if (!converted) {
+            throw new BadRequestException(
+                `Нет курса ${currency} на ${new Date(input.date).toLocaleDateString('ru-RU')} — загрузите его в разделе «Финансы → Курсы валют»`,
+            );
+        }
+
+        return {
+            currency,
+            rate: converted.rate,
+            rateDate: converted.rateDate,
+            amountBase: converted.amount,
+        };
+    }
+
     async createPayment(companyId: string, userId: string, data: {
         orderId?: string;
         counterpartyId?: string;
@@ -273,6 +366,7 @@ export class PaymentsService {
         note?: string;
         accountId?: string;
         categoryId?: string;
+        currency?: string;
     }) {
         await this.financialSettingsService.ensureCompanyFinanceSettings(companyId);
         const amt = roundMoney(data.amount);
@@ -307,13 +401,25 @@ export class PaymentsService {
             }
         }
 
+        const currency = (data.currency || '').toUpperCase() || null;
+
         if (!accountId) {
             const kind = data.method === PaymentMethod.CASH ? AccountKind.CASH : AccountKind.BANK;
             const defaultAcc = await this.prisma.financeAccount.findFirst({
-                where: { companyId, kind, isDefault: true, isActive: true },
+                // Валютному платежу нужен счёт в его валюте: тенговый счёт по
+                // умолчанию для долларов не подходит.
+                where: {
+                    companyId, kind, isActive: true,
+                    ...(currency && currency !== BASE_CURRENCY ? { currency } : { isDefault: true }),
+                },
+                orderBy: { isDefault: 'desc' },
             });
             accountId = defaultAcc?.id;
         }
+
+        const money = await this.resolvePaymentMoney(companyId, {
+            amount: amt, currency, date: data.date, accountId: accountId || null,
+        });
 
         if (!categoryId) {
             const defaultCatName = data.direction === PaymentDirection.IN ? 'Оплата за рейс' : 'Оплата исполнителю';
@@ -334,6 +440,10 @@ export class PaymentsService {
                     counterpartyId,
                     direction: data.direction,
                     amount: amt,
+                    currency: money.currency,
+                    exchangeRate: money.rate,
+                    exchangeRateDate: money.rateDate,
+                    amountBase: money.amountBase,
                     date: new Date(data.date),
                     method: data.method || PaymentMethod.BANK,
                     note: data.note || null,
@@ -407,7 +517,7 @@ export class PaymentsService {
         }
         if (amount.gt(refundable)) {
             throw new BadRequestException(
-                `Возврат больше остатка платежа: вернуть можно не более ${refundable.toFixed(2)} ₸`,
+                `Возврат больше остатка платежа: вернуть можно не более ${refundable.toFixed(2)} ${source.currency === BASE_CURRENCY ? '₸' : source.currency}`,
             );
         }
 
@@ -415,6 +525,15 @@ export class PaymentsService {
         // а не задним числом исходного платежа.
         const date = data.date ? new Date(data.date) : new Date();
         await this.periodClosingService.checkPeriodNotClosed(companyId, date);
+
+        // Возврат уходит той же валютой, но по курсу дня возврата: деньги
+        // физически уходят сегодня, и в тенге это сегодняшняя сумма.
+        const money = await this.resolvePaymentMoney(companyId, {
+            amount,
+            currency: source.currency,
+            date: date.toISOString(),
+            accountId: data.accountId ?? source.accountId,
+        });
 
         const direction = source.direction === PaymentDirection.IN
             ? PaymentDirection.OUT
@@ -428,6 +547,10 @@ export class PaymentsService {
                     counterpartyId: source.counterpartyId,
                     direction,
                     amount,
+                    currency: money.currency,
+                    exchangeRate: money.rate,
+                    exchangeRateDate: money.rateDate,
+                    amountBase: money.amountBase,
                     date,
                     method: source.method,
                     // Статью не наследуем: у неё жёсткое направление, и статья
@@ -457,7 +580,14 @@ export class PaymentsService {
             return { refund: created, customerPaidBecameTrue: becameTrue };
         }, { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS });
 
-        await this.allocations.reduce(source.id, amount);
+        // Возврат всей суммы снимает разнесения целиком. Иначе на валютном
+        // платеже осталась бы копейка разнесения: возврат уходит по своему
+        // курсу, и в тенге он не совпадает с приходом до копейки.
+        if (amount.gte(refundable) && already.isZero()) {
+            await this.allocations.release(source.id);
+        } else {
+            await this.allocations.reduce(source.id, amount);
+        }
 
         if (refund.orderId) {
             await this.runCustomerPaidTrigger(refund.orderId, customerPaidBecameTrue);
@@ -652,9 +782,15 @@ export class PaymentsService {
         });
         // Суммы складываются в Decimal: обходной moneyGte здесь больше не нужен,
         // сравнение точное и «недоплаты в 0.00000000001» не возникает.
-        const paidIn = sumOf(customerPayments, (p) => p.amount);
-        const revenue = D(order.customerPrice);
-        const isCustomerPaid = revenue.gt(0) && paidIn.gte(revenue);
+        //
+        // Сравнение идёт в тенге. Долларовый платёж и тенговая ставка — разные
+        // деньги, и сложить их значило бы объявить заявку оплаченной, когда
+        // пришла треть суммы. Всё, что в тенге не пересчитано (нет курса), в
+        // сравнении не участвует: лучше «не оплачено» до появления курса, чем
+        // ложная галочка «оплачено».
+        const paidIn = sumOf(customerPayments, (p) => paymentInBase(p));
+        const revenue = orderAmountBase(order.customerPriceBase, order.currency, order.customerPrice);
+        const isCustomerPaid = !!revenue && revenue.gt(0) && paidIn.gte(revenue);
         const customerPaidBecameTrue = !order.isCustomerPaid && isCustomerPaid;
 
         // Sync Driver / Sub-forwarder Paid Flag
@@ -666,7 +802,7 @@ export class PaymentsService {
                 ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
             },
         });
-        const paidOut = sumOf(executorPayments, (p) => p.amount);
+        const paidOut = sumOf(executorPayments, (p) => paymentInBase(p));
 
         let isDriverPaid = false;
         let driverPaidAt = null;
@@ -674,8 +810,13 @@ export class PaymentsService {
         let subForwarderPaidAt = null;
 
         if (order.subForwarderId) {
-            const subForwarderPrice = D(order.subForwarderPrice);
-            isSubForwarderPaid = subForwarderPrice.gt(0) && paidOut.gte(subForwarderPrice);
+            // У ставки суб-экспедитора своей пересчитанной суммы нет — она в
+            // валюте заявки, и курс берём тот же, по которому пересчитана
+            // ставка заказчика: обе суммы из одной заявки и одного дня.
+            const subForwarderPrice = sameCurrencyBase(
+                order.subForwarderPrice, order.currency, order.customerPrice, order.customerPriceBase,
+            );
+            isSubForwarderPaid = !!subForwarderPrice && subForwarderPrice.gt(0) && paidOut.gte(subForwarderPrice);
             // Дата оплаты — снимок реального события платежа. Если платежи всё ещё
             // есть, но их стало недостаточно из-за повышения ставки задним числом,
             // дату не затираем (см. H-4) — обнуляем только когда платежей нет вовсе.
@@ -683,8 +824,8 @@ export class PaymentsService {
                 ? (order.subForwarderPaidAt || new Date())
                 : (paidOut.gt(0) ? order.subForwarderPaidAt : null);
         } else {
-            const driverCost = D(order.driverCost);
-            isDriverPaid = driverCost.gt(0) && paidOut.gte(driverCost);
+            const driverCost = orderAmountBase(order.driverCostBase, order.driverCostCurrency, order.driverCost);
+            isDriverPaid = !!driverCost && driverCost.gt(0) && paidOut.gte(driverCost);
             driverPaidAt = isDriverPaid
                 ? (order.driverPaidAt || new Date())
                 : (paidOut.gt(0) ? order.driverPaidAt : null);
@@ -722,6 +863,43 @@ export class PaymentsService {
         }
     }
 
+
+    /**
+     * Остаток к оплате по заявке — в валюте самой заявки.
+     *
+     * Кнопка «Оплачено» дозакрывает остаток одним платежом. Пока всё было в
+     * тенге, остаток считался вычитанием: ставка минус оплаченное. С валютами
+     * так нельзя — оплаты могут быть и в тенге, и в валюте, и просто вычесть
+     * одно из другого значит сложить доллары с тенге.
+     *
+     * Поэтому вычитание идёт в тенге (там сходится всё), а результат
+     * возвращается в валюту заявки по её же зафиксированному курсу — тому,
+     * по которому долг и был записан. Сегодняшний курс тут не годится: он
+     * менял бы сумму остатка каждый день.
+     */
+    private remainingForOrder(
+        amount: Prisma.Decimal | null,
+        amountBase: Prisma.Decimal | null,
+        currency: string | null,
+        payments: Array<{ amount: Prisma.Decimal; currency: string; amountBase: Prisma.Decimal | null }>,
+    ): { amount: Money; currency: string } | null {
+        const code = (currency || BASE_CURRENCY).toUpperCase();
+        const paidBase = sumOf(payments, (p) => paymentInBase(p));
+
+        if (code === BASE_CURRENCY) {
+            return { amount: roundMoney(D(amount).minus(paidBase)), currency: BASE_CURRENCY };
+        }
+
+        // Валютная ставка без пересчёта — остаток посчитать не из чего.
+        // Молча взять сумму как есть нельзя: это выдало бы доллары за тенге.
+        if (amountBase === null || amountBase === undefined || D(amount).lte(ZERO)) return null;
+
+        const restBase = roundMoney(D(amountBase).minus(paidBase));
+        const rate = D(amountBase).div(D(amount));
+        if (rate.lte(ZERO)) return null;
+        return { amount: roundMoney(restBase.div(rate)), currency: code };
+    }
+
     async markCustomerPaid(companyId: string, orderId: string, paid: boolean, userId: string, date?: string) {
         const order = await this.prisma.order.findFirst({
             where: {
@@ -739,14 +917,21 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.IN, isDeleted: false, companyId }
             });
-            const paidIn = sumOf(payments, (p) => p.amount);
-            const balance = roundMoney(D(order.customerPrice).minus(paidIn));
-            if (balance.gt(0)) {
+            const rest = this.remainingForOrder(
+                order.customerPrice, order.customerPriceBase, order.currency, payments,
+            );
+            if (!rest) {
+                throw new BadRequestException(
+                    `Ставка в ${order.currency}, а курса на дату рейса нет — остаток посчитать не из чего. Загрузите курс в разделе «Финансы → Курсы валют»`,
+                );
+            }
+            if (rest.amount.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     counterpartyId: order.customerCompanyId || undefined,
                     direction: PaymentDirection.IN,
-                    amount: toNum(balance),
+                    amount: toNum(rest.amount),
+                    currency: rest.currency,
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_CUSTOMER,
                 });
@@ -800,13 +985,20 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
             });
-            const paidOut = sumOf(payments, (p) => p.amount);
-            const balance = roundMoney(D(order.driverCost).minus(paidOut));
-            if (balance.gt(0)) {
+            const rest = this.remainingForOrder(
+                order.driverCost, order.driverCostBase, order.driverCostCurrency, payments,
+            );
+            if (!rest) {
+                throw new BadRequestException(
+                    `Ставка водителя в ${order.driverCostCurrency}, а курса на дату рейса нет — остаток посчитать не из чего. Загрузите курс в разделе «Финансы → Курсы валют»`,
+                );
+            }
+            if (rest.amount.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     direction: PaymentDirection.OUT,
-                    amount: toNum(balance),
+                    amount: toNum(rest.amount),
+                    currency: rest.currency,
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_DRIVER,
                 });
@@ -856,14 +1048,24 @@ export class PaymentsService {
             const payments = await this.prisma.payment.findMany({
                 where: { orderId, direction: PaymentDirection.OUT, isDeleted: false, companyId }
             });
-            const paidOut = sumOf(payments, (p) => p.amount);
-            const balance = roundMoney(D(order.subForwarderPrice).minus(paidOut));
-            if (balance.gt(0)) {
+            const rest = this.remainingForOrder(
+                order.subForwarderPrice,
+                sameCurrencyBase(order.subForwarderPrice, order.currency, order.customerPrice, order.customerPriceBase),
+                order.currency,
+                payments,
+            );
+            if (!rest) {
+                throw new BadRequestException(
+                    `Ставка суб-экспедитора в ${order.currency}, а курса на дату рейса нет — остаток посчитать не из чего. Загрузите курс в разделе «Финансы → Курсы валют»`,
+                );
+            }
+            if (rest.amount.gt(0)) {
                 await this.createPayment(companyId, userId, {
                     orderId,
                     counterpartyId: order.subForwarderId || undefined,
                     direction: PaymentDirection.OUT,
-                    amount: toNum(balance),
+                    amount: toNum(rest.amount),
+                    currency: rest.currency,
                     date: date || new Date().toISOString(),
                     note: PaymentsService.AUTO_NOTE_SUBFORWARDER,
                 });
