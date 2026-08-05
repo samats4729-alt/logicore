@@ -12,8 +12,17 @@ export class AssistantController {
 
     @Post('chat')
     @Throttle({ default: { limit: 20, ttl: 60000 } })
-    async chat(@Body() body: { messages: { role: 'system' | 'user' | 'assistant'; content: string }[]; context?: string }) {
-        return this.assistantService.chat(body?.messages || [], body?.context);
+    async chat(
+        @Request() req: any,
+        @Body() body: { messages: { role: 'system' | 'user' | 'assistant'; content: string }[]; context?: string },
+    ) {
+        // Роль и права берём из токена, а не из тела запроса: иначе достаточно
+        // подменить их в запросе, чтобы гид рассказал про разделы, к которым
+        // человека не пускают.
+        return this.assistantService.chat(body?.messages || [], body?.context, {
+            role: req.user?.role,
+            permissions: req.user?.permissions,
+        });
     }
 
     // ==================== SUPPORT ====================
