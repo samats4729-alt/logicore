@@ -73,8 +73,18 @@ export class TrackingController {
         return this.trackingService.purgeGpsPointsOlderThan(dto.olderThanDays);
     }
 
+    // Экспедитор и завскладом были пропущены во всех трёх маршрутах карты.
+    // Экспедитор — роль по умолчанию при регистрации организации, поэтому
+    // мониторинга не видел никто из вновь пришедших: пустая карта и «нет
+    // активных рейсов» всегда. Завскладу право «Карта/Трекинг» выдавали в
+    // «Сотрудниках», пункт в меню появлялся, страница открывалась — а данные
+    // не приходили. Отбор по компании делает сервис, право завсклада
+    // по-прежнему проверяет @RequirePermissions.
     @Get('drivers')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.RECIPIENT,
+    )
     @RequirePermissions('tracking')
     @ApiOperation({ summary: 'Получить позиции всех активных водителей' })
     async getAllDriversPositions(@Request() req: any) {
@@ -83,7 +93,10 @@ export class TrackingController {
     }
 
     @Get('active-trips')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.RECIPIENT,
+    )
     @RequirePermissions('tracking')
     @ApiOperation({ summary: 'Активные рейсы с маршрутами и позициями водителей' })
     async getActiveTrips(@Request() req: any) {
@@ -91,7 +104,10 @@ export class TrackingController {
     }
 
     @Get('driver/:id')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.RECIPIENT)
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.RECIPIENT,
+    )
     @RequirePermissions('tracking')
     @ApiOperation({ summary: 'Получить последнюю позицию водителя' })
     async getDriverPosition(@Param('id') id: string, @Request() req: any) {

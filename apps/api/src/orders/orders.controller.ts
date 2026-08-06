@@ -113,9 +113,13 @@ export class OrdersController {
     // открывалась — а список отвечал отказом. Право есть, толку нет.
     // Класс контроллера требует право `orders`, поэтому сюда попадёт только
     // тот завскладом, кому его выдал руководитель.
+    //
+    // Экспедитор в этом перечне отсутствовал. Роль выдаётся в «Сотрудниках»
+    // тому, кто ведёт рейсы, — а список заявок отвечал ему отказом. Пункт в
+    // меню при этом был, страница открывалась, и человек видел пустоту.
     @Roles(
-        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN,
-        UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER,
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.LOGISTICIAN, UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER,
     )
     @ApiOperation({ summary: 'Получить список заявок' })
     @ApiQuery({ name: 'status', required: false, enum: OrderStatus })
