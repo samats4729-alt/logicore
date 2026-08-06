@@ -29,12 +29,15 @@ function RegisterContent() {
             if (token && dataStr) {
                 setGoogleToken(token);
                 const data = JSON.parse(dataStr);
+                // Поле почты называется `email`. Пока сюда писали `adminEmail`,
+                // почта из Google не подставлялась никуда: человек видел пустое
+                // поле и вводил её заново — с опечаткой это уже другой аккаунт.
                 form.setFieldsValue({
-                    adminEmail: data.email,
+                    email: data.email,
                     firstName: data.firstName,
                     lastName: data.lastName,
                 });
-                toast.info('Заполните данные компании и телефон для завершения регистрации через Google');
+                toast.info('Почта взята из Google. Добавьте телефон и пароль');
             }
         }
     }, [searchParams]);
@@ -162,15 +165,33 @@ function RegisterContent() {
                                 name="email"
                                 label="Email"
                                 rules={[{ required: true, type: 'email' }]}
+                                // Почта из Google менять нельзя: аккаунт заводится
+                                // именно на неё, и правка развела бы вход через
+                                // Google и профиль в платформе на разные адреса.
+                                extra={googleToken ? 'Почта из вашего аккаунта Google, изменить нельзя' : undefined}
                             >
-                                <Input size="large" />
+                                <Input size="large" disabled={!!googleToken} />
                             </Form.Item>
                             <Form.Item
                                 name="phone"
                                 label="Телефон"
-                                rules={[{ required: true }]}
+                                rules={[
+                                    { required: true },
+                                    {
+                                        // Длина не ограничивалась ничем: в поле
+                                        // помещался номер любой длины, и такой
+                                        // «телефон» уходил в базу как есть.
+                                        validator: (_, value) => {
+                                            if (!value) return Promise.resolve();
+                                            const digits = String(value).replace(/\D/g, '');
+                                            return digits.length === 11
+                                                ? Promise.resolve()
+                                                : Promise.reject(new Error('Номер из 11 цифр: +7 и десять цифр'));
+                                        },
+                                    },
+                                ]}
                             >
-                                <Input placeholder="+77001234567" size="large" />
+                                <Input placeholder="+77001234567" size="large" maxLength={12} />
                             </Form.Item>
                             <Form.Item
                                 name="password"
