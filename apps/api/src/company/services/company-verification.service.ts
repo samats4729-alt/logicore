@@ -197,13 +197,20 @@ export class CompanyVerificationService {
         };
     }
 
-    /** Очередь проверки в админке платформы. */
+    /**
+     * Очередь проверки в админке платформы.
+     *
+     * К каждой заявке добавляется, что ещё известно про её БИН: подтверждена
+     * ли уже организация с таким номером и не заведён ли он у кого-то как
+     * контрагент. Без этого решение принималось вслепую — совпадение
+     * всплывало только отказом в момент нажатия «Подтвердить».
+     */
     async listForReview(status?: CompanyVerificationStatus) {
         const where: Prisma.CompanyWhereInput = {
             isExternal: false,
             verificationStatus: status ?? CompanyVerificationStatus.PENDING,
         };
-        return this.prisma.company.findMany({
+        const companies = await this.prisma.company.findMany({
             where,
             select: {
                 id: true,
@@ -226,17 +233,79 @@ export class CompanyVerificationService {
             orderBy: [{ verificationSubmittedAt: 'asc' }, { createdAt: 'asc' }],
             take: 200,
         });
+
+        const bins = companies.map((company) => company.bin).filter((bin): bin is string => !!bin);
+        if (bins.length === 0) {
+            return companies.map((company) => ({ ...company, binVerifiedBy: null, binKnownAsPartner: [] }));
+        }
+
+        const sameBin = await this.prisma.company.findMany({
+            where: {
+                bin: { in: bins },
+                id: { notIn: companies.map((company) => company.id) },
+            },
+            select: {
+                id: true,
+                name: true,
+                bin: true,
+                isExternal: true,
+                verificationStatus: true,
+                createdByCompany: { select: { id: true, name: true } },
+            },
+        });
+
+        return companies.map((company) => ({
+            ...company,
+            // Организация с этим БИН уже работает — подтвердить вторую нельзя.
+            binVerifiedBy: sameBin.find((other) => other.bin === company.bin
+                && !other.isExternal
+                && other.verificationStatus === CompanyVerificationStatus.VERIFIED) ?? null,
+            // Этот БИН уже заведён у кого-то как контрагент.
+            binKnownAsPartner: sameBin
+                .filter((other) => other.bin === company.bin && other.isExternal)
+                .map((other) => ({
+                    id: other.id,
+                    name: other.name,
+                    ownerCompanyName: other.createdByCompany?.name ?? null,
+                })),
+        }));
     }
 
     /** Решение владельца платформы: подтвердить компанию. */
     async approve(companyId: string, reviewerId: string) {
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },
-            select: { id: true, verificationStatus: true },
+            select: { id: true, bin: true, verificationStatus: true },
         });
         if (!company) throw new NotFoundException('Организация не найдена');
         if (company.verificationStatus === CompanyVerificationStatus.VERIFIED) {
             throw new ConflictException('Организация уже подтверждена');
+        }
+
+        // Одна работающая организация на один БИН.
+        //
+        // Проверка стоит на подтверждении, а не на подаче заявки, и это
+        // намеренно. БИН — публичный номер: запрет подать заявку означал бы,
+        // что любой, набрав чужой БИН, навсегда закрывает настоящему
+        // владельцу вход на платформу. Подать может кто угодно, а решение
+        // принимает человек, посмотрев документы.
+        if (company.bin) {
+            const taken = await this.prisma.company.findFirst({
+                where: {
+                    bin: company.bin,
+                    isExternal: false,
+                    verificationStatus: CompanyVerificationStatus.VERIFIED,
+                    id: { not: companyId },
+                },
+                select: { name: true },
+            });
+            if (taken) {
+                throw new ConflictException(
+                    `БИН ${company.bin} уже подтверждён у организации «${taken.name}». `
+                    + 'Одна организация — один БИН: если это та же фирма, работайте в её кабинете, '
+                    + 'а эту заявку отклоните с причиной.',
+                );
+            }
         }
 
         return this.prisma.company.update({

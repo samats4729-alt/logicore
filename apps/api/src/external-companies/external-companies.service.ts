@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { CompanyVerificationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -68,18 +69,51 @@ export class ExternalCompaniesService {
     }, creatorUserId?: string) {
         const isCustomer = data.isCustomer !== undefined ? data.isCustomer : (data.type === 'CUSTOMER');
         const isCarrier = data.isCarrier !== undefined ? data.isCarrier : (data.type === 'FORWARDER');
+        const bin = data.bin?.trim() || undefined;
+
+        // Один БИН — один контрагент в справочнике.
+        //
+        // Ту же фирму можно было завести сколько угодно раз: в списке строки
+        // выглядят одинаково, различить нельзя, а дальше долг одного клиента
+        // расходится по нескольким карточкам, и сверка не сходится.
+        if (bin) {
+            const existing = await this.prisma.company.findFirst({
+                where: { bin, isExternal: true, createdByCompanyId: companyId },
+                select: { id: true, name: true },
+            });
+            if (existing) {
+                throw new ConflictException(
+                    `Контрагент с БИН ${bin} уже заведён: «${existing.name}». `
+                    + 'Откройте его карточку — вторую заводить не нужно.',
+                );
+            }
+        }
+
+        // Контрагент уже работает на платформе — берём его реквизиты в поля,
+        // которые не заполнили руками. Так одна и та же фирма выглядит
+        // одинаково у всех, кто с ней работает.
+        const onPlatform = bin
+            ? await this.prisma.company.findFirst({
+                where: {
+                    bin,
+                    isExternal: false,
+                    verificationStatus: CompanyVerificationStatus.VERIFIED,
+                },
+                select: { name: true, address: true, directorName: true, phone: true, email: true },
+            })
+            : null;
 
         return this.prisma.company.create({
             data: {
-                name: data.name,
-                bin: data.bin,
-                phone: data.phone,
-                email: data.email,
+                name: data.name?.trim() || onPlatform?.name || data.name,
+                bin,
+                phone: data.phone || onPlatform?.phone || null,
+                email: data.email || onPlatform?.email || null,
                 type: data.type,
                 isCustomer,
                 isCarrier,
-                address: data.address,
-                directorName: data.directorName,
+                address: data.address || onPlatform?.address || null,
+                directorName: data.directorName || onPlatform?.directorName || null,
                 isExternal: true,
                 isOurCompany: false,
                 createdByCompanyId: companyId,
@@ -109,6 +143,26 @@ export class ExternalCompaniesService {
         if (!company) throw new NotFoundException('Компания не найдена');
         if (!company.isExternal || company.createdByCompanyId !== companyId) {
             throw new ForbiddenException('Нет доступа');
+        }
+
+        // Тот же запрет, что и при заведении: правкой БИН нельзя получить
+        // вторую карточку той же фирмы.
+        const bin = data.bin?.trim();
+        if (bin && bin !== company.bin) {
+            const existing = await this.prisma.company.findFirst({
+                where: {
+                    bin,
+                    isExternal: true,
+                    createdByCompanyId: companyId,
+                    id: { not: externalId },
+                },
+                select: { name: true },
+            });
+            if (existing) {
+                throw new ConflictException(
+                    `Контрагент с БИН ${bin} уже заведён: «${existing.name}».`,
+                );
+            }
         }
 
         // Ответственным можно назначить только офисного сотрудника своей компании

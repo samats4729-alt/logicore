@@ -32,6 +32,10 @@ interface ReviewCompany {
     rejectionReason: string | null;
     createdAt: string;
     documents: { id: string; type: string; fileName: string; fileUrl: string }[];
+    /** Организация с этим же БИН уже подтверждена — эту подтвердить нельзя. */
+    binVerifiedBy: { id: string; name: string } | null;
+    /** У кого этот БИН уже заведён как контрагент. */
+    binKnownAsPartner: { id: string; name: string; ownerCompanyName: string | null }[];
 }
 
 /**
@@ -176,6 +180,29 @@ export default function AdminCompaniesPage() {
                                         </Descriptions.Item>
                                     </Descriptions>
                                     <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                                        {/*
+                                          * Что ещё известно про этот БИН. Раньше совпадение
+                                          * всплывало только отказом в момент нажатия
+                                          * «Подтвердить» — решение принималось вслепую.
+                                          */}
+                                        {record.binVerifiedBy && (
+                                            <Alert
+                                                type="error"
+                                                showIcon
+                                                message={`БИН ${record.bin} уже подтверждён у «${record.binVerifiedBy.name}»`}
+                                                description="Одна организация — один БИН. Если это та же фирма, работа идёт в её кабинете; эту заявку отклоните с причиной."
+                                            />
+                                        )}
+                                        {record.binKnownAsPartner.length > 0 && (
+                                            <Alert
+                                                type="info"
+                                                showIcon
+                                                message={`Этот БИН уже заведён как контрагент у ${record.binKnownAsPartner.length} ${record.binKnownAsPartner.length === 1 ? 'компании' : 'компаний'}`}
+                                                description={record.binKnownAsPartner
+                                                    .map((partner) => partner.ownerCompanyName || partner.name)
+                                                    .join(', ')}
+                                            />
+                                        )}
                                         {record.documents.length === 0 && (
                                             <Alert type="warning" showIcon message="Документы не приложены" />
                                         )}
