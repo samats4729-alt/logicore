@@ -84,6 +84,51 @@ export default function AdminCompaniesPage() {
         });
     };
 
+    /**
+     * Отдать организации её рейсы, которые сейчас в работе.
+     *
+     * Отдельным действием, а не вместе с подтверждением: решение принимается
+     * по документам, и владелец должен видеть, у кого именно этот БИН уже
+     * заведён, прежде чем передавать рейсы.
+     */
+    const linkActiveOrders = (company: ReviewCompany) => {
+        const owners = company.binKnownAsPartner
+            .map((partner) => partner.ownerCompanyName || partner.name)
+            .join(', ');
+        Modal.confirm({
+            title: `Отдать «${company.name}» её рейсы в работе?`,
+            content: (
+                <div style={{ fontSize: 13 }}>
+                    <p>
+                        Этот БИН заведён как контрагент у: {owners || '—'}. Незавершённые рейсы
+                        с этой карточкой станут видны организации в её кабинете.
+                    </p>
+                    <p style={{ color: token.colorTextSecondary }}>
+                        Завершённые и отменённые рейсы остаются как были. Счета и платежи не
+                        трогаются — они остаются у того, кто завёл карточку.
+                    </p>
+                </div>
+            ),
+            okText: 'Отдать рейсы',
+            cancelText: 'Отмена',
+            onOk: async () => {
+                setActing(company.id);
+                try {
+                    const res = await api.post(`/admin/company-verification/${company.id}/link-active-orders`);
+                    const moved = res.data?.movedOrders ?? 0;
+                    toast.success(moved > 0
+                        ? `Передано рейсов: ${moved}`
+                        : 'Незавершённых рейсов по этому БИН не нашлось');
+                    await load();
+                } catch (e: any) {
+                    toast.error(e.response?.data?.message || 'Не удалось передать рейсы');
+                } finally {
+                    setActing(null);
+                }
+            },
+        });
+    };
+
     const reject = (company: ReviewCompany) => {
         let reason = '';
         Modal.confirm({
@@ -198,9 +243,23 @@ export default function AdminCompaniesPage() {
                                                 type="info"
                                                 showIcon
                                                 message={`Этот БИН уже заведён как контрагент у ${record.binKnownAsPartner.length} ${record.binKnownAsPartner.length === 1 ? 'компании' : 'компаний'}`}
-                                                description={record.binKnownAsPartner
-                                                    .map((partner) => partner.ownerCompanyName || partner.name)
-                                                    .join(', ')}
+                                                description={
+                                                    <div>
+                                                        <div>{record.binKnownAsPartner
+                                                            .map((partner) => partner.ownerCompanyName || partner.name)
+                                                            .join(', ')}</div>
+                                                        {record.verificationStatus === 'VERIFIED' && (
+                                                            <Button
+                                                                size="small"
+                                                                style={{ marginTop: 8 }}
+                                                                loading={acting === record.id}
+                                                                onClick={() => linkActiveOrders(record)}
+                                                            >
+                                                                Отдать рейсы в работе
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                }
                                             />
                                         )}
                                         {record.documents.length === 0 && (

@@ -73,6 +73,25 @@ export class CompanyVerificationController {
         return company;
     }
 
+    @Post(':id/link-active-orders')
+    @ApiOperation({
+        summary: 'Отдать организации её рейсы, которые сейчас в работе',
+        description: 'Только незавершённые. Счета и платежи остаются у того, кто завёл карточку контрагента.',
+    })
+    async linkActiveOrders(@Request() req: any, @Param('id') id: string) {
+        const result = await this.verification.linkActiveOrders(id);
+        await this.audit.log({
+            companyId: id,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'company',
+            entityId: id,
+            entityLabel: `Рейсы в работе переданы организации «${result.companyName}» (БИН ${result.bin})`,
+            details: { movedOrders: result.movedOrders, partnerCards: result.partnerCards },
+        });
+        return result;
+    }
+
     @Post(':id/reject')
     @ApiOperation({ summary: 'Отклонить организацию с причиной' })
     async reject(@Request() req: any, @Param('id') id: string, @Body() dto: RejectCompanyDto) {
