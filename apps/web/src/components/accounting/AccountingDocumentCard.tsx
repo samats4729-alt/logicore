@@ -41,6 +41,7 @@ import {
     updateAccountingDocument,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
+import { VAT_RATES } from '@/lib/tax';
 
 /**
  * Сумма со знаком валюты документа.
@@ -59,11 +60,16 @@ const money = (value: number, currency = 'KZT') => {
     return sign ? `${amount} ${sign}` : `${amount} ${currency}`;
 };
 
-/** Ставки, которые бухгалтер выбирает в 1С в графе «% НДС». */
+/**
+ * Ставки, которые бухгалтер выбирает в 1С в графе «% НДС».
+ *
+ * Берём из общего списка ставок, а не вписываем числом: с 2026 года в РК
+ * действует 16%, заявка её уже подставляет, а здесь оставалось только 12% —
+ * строка счёта по такой заявке приходила со ставкой, которой нет в списке.
+ */
 const VAT_OPTIONS = [
     { value: 'none', label: 'Без НДС' },
-    { value: '12', label: '12 %' },
-    { value: '0', label: '0 %' },
+    ...VAT_RATES.map((rate) => ({ value: String(rate.value), label: `${rate.value} %` })),
 ];
 
 /** Строка таблицы в карточке: то же, что строка документа, но редактируемая. */

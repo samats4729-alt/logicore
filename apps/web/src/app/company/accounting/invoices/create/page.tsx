@@ -24,14 +24,16 @@ import {
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
 import CurrencySelect from '@/components/orders/CurrencySelect';
+import { VAT_RATES } from '@/lib/tax';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
 
+// Ставки берём из общего списка, а не вписываем числом: в заявке уже 16%,
+// а здесь оставалось 12% — счёт по такой заявке собрать было нечем.
 const VAT_OPTIONS = [
     { value: 'none', label: 'Без НДС' },
-    { value: '12', label: '12 %' },
-    { value: '0', label: '0 %' },
+    ...VAT_RATES.map((rate) => ({ value: String(rate.value), label: `${rate.value} %` })),
 ];
 
 /** Строка будущего документа — до создания живёт только на клиенте. */
