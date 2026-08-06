@@ -510,8 +510,25 @@ export default function CompanyUsersPage() {
     const handleUnifiedSubmit = async (values: any) => {
         if (selectedRole === 'DRIVER') {
             try {
+                // Поля перечислены поимённо, а не пересылаются формой целиком.
+                // В форме, кроме данных водителя, живёт выбор роли и поля
+                // офисного сотрудника; сервер лишние поля не принимает и
+                // отвечал «property role should not exist». Окно оставалось
+                // открытым, водитель не появлялся, и объяснения не было.
                 const payload = {
-                    ...values,
+                    firstName: values.firstName,
+                    lastName: values.lastName,
+                    middleName: values.middleName,
+                    phone: values.phone,
+                    password: values.password,
+                    iin: values.iin,
+                    vehicleType: values.vehicleType,
+                    vehiclePlate: values.vehiclePlate,
+                    vehicleModel: values.vehicleModel,
+                    trailerNumber: values.trailerNumber,
+                    docType: values.docType,
+                    docNumber: values.docNumber,
+                    docIssuedBy: values.docIssuedBy,
                     docIssuedAt: values.docIssuedAt ? values.docIssuedAt.toISOString() : undefined,
                     docExpiresAt: values.docExpiresAt ? values.docExpiresAt.toISOString() : undefined,
                 };
@@ -520,8 +537,14 @@ export default function CompanyUsersPage() {
                     await api.put(`/company/drivers/${editingRecord.id}`, payload);
                     toast.success('Данные водителя обновлены');
                 } else {
-                    await api.post('/company/drivers', payload);
-                    toast.success('Водитель добавлен');
+                    const res = await api.post('/company/drivers', payload);
+                    // Водителя с уже занятым телефоном или ИИН система не
+                    // заводит заново, а переписывает существующего. Сообщать
+                    // об этом «Водитель добавлен» нельзя: в списке при этом
+                    // становится не больше, а прежняя запись меняет фамилию.
+                    toast.success(res.data?.alreadyExists
+                        ? 'Водитель с таким телефоном или ИИН уже был — его данные обновлены'
+                        : 'Водитель добавлен');
                 }
                 setUnifiedModalOpen(false);
                 setEditingRecord(null);
