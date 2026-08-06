@@ -4,7 +4,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { UsersService } from './users.service';
 import { S3Service } from '../s3/s3.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AllowWithoutCompany, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { CreateUserDto, UpdateProfileDto, UpdateUserDto } from './dto/user.dto';
 import { UserRole } from '@prisma/client';
@@ -23,6 +23,7 @@ export class UsersController {
     // Без @Roles: каждый авторизованный пользователь управляет только своим фото.
 
     @Post('me/avatar')
+    @AllowWithoutCompany()
     @UseInterceptors(FileInterceptor('avatar', {
         limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
         fileFilter: (req, file, cb) => {
@@ -43,6 +44,7 @@ export class UsersController {
     }
 
     @Get('me/avatar')
+    @AllowWithoutCompany()
     @ApiOperation({ summary: 'Получить фото своего профиля' })
     async getMyAvatar(@Request() req: any, @Res() res: Response) {
         return this.streamAvatar(req.user.sub, req.user, res);
@@ -116,6 +118,7 @@ export class UsersController {
     // поля: через общую форму правки сюда проходили роль и компания, и
     // водитель одним запросом делал себя администратором платформы.
     @Put('profile')
+    @AllowWithoutCompany()
     @ApiOperation({ summary: 'Обновить профиль авторизованного пользователя' })
     async updateProfile(@Request() req: any, @Body() dto: UpdateProfileDto) {
         return this.usersService.updateProfile(req.user.sub, dto);
@@ -124,6 +127,7 @@ export class UsersController {
     // No @Roles decorator here since any logged-in user (including DRIVER, RECIPIENT, etc.)
     // is allowed to change their own password, provided they supply the correct current password.
     @Put('password')
+    @AllowWithoutCompany()
     @ApiOperation({ summary: 'Изменить пароль авторизованного пользователя' })
     async updatePassword(@Request() req: any, @Body() dto: any) {
         if (!dto.currentPassword) {

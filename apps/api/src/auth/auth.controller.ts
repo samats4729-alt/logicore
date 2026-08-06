@@ -13,7 +13,7 @@ import { Throttle } from '@nestjs/throttler';
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
 import { AuthService } from './auth.service';
 import { LoginEmailDto, RegisterCompanyDto, RegisterUserDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AllowWithoutCompany, JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Response } from 'express';
 import { clearAuthCookie, setAuthCookie } from './auth-cookie';
 
@@ -54,6 +54,7 @@ export class AuthController {
 
     @Post('logout')
     @UseGuards(JwtAuthGuard)
+    @AllowWithoutCompany()
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Выход из системы' })
@@ -144,6 +145,7 @@ export class AuthController {
 
     @Post('me')
     @UseGuards(JwtAuthGuard)
+    @AllowWithoutCompany()
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Получить данные текущего пользователя' })

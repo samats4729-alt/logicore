@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AllowWithoutCompany, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { AssistantService } from './assistant.service';
@@ -10,7 +10,10 @@ import { AssistantService } from './assistant.service';
 export class AssistantController {
     constructor(private readonly assistantService: AssistantService) {}
 
+    // Помощник и поддержка нужны в первую очередь тому, кто ещё не смог
+    // подключить организацию, — им отказывать нельзя.
     @Post('chat')
+    @AllowWithoutCompany()
     @Throttle({ default: { limit: 20, ttl: 60000 } })
     async chat(
         @Request() req: any,
@@ -28,6 +31,7 @@ export class AssistantController {
     // ==================== SUPPORT ====================
 
     @Post('support')
+    @AllowWithoutCompany()
     @Throttle({ default: { limit: 15, ttl: 60000 } })
     async supportChat(
         @Request() req: any,
@@ -37,6 +41,7 @@ export class AssistantController {
     }
 
     @Post('support/ticket')
+    @AllowWithoutCompany()
     @Throttle({ default: { limit: 10, ttl: 60000 } })
     async createTicket(
         @Request() req: any,
@@ -126,7 +131,10 @@ export class AssistantController {
         return this.assistantService.updatePlatformUpdate(id, body || {});
     }
 
+    // Запрашивается общей обёрткой кабинета, в том числе на экране
+    // подключения организации.
     @Get('updates/published')
+    @AllowWithoutCompany()
     async publishedUpdates() {
         return this.assistantService.getPublishedPlatformUpdates();
     }
