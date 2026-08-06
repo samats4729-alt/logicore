@@ -23,6 +23,17 @@ api.interceptors.request.use((config) => {
     if (config.data === null) {
         config.data = undefined;
     }
+    // Файл уезжает формой, а не JSON.
+    //
+    // Заголовок `Content-Type: application/json` стоит на всех запросах, а
+    // axios на нём пересобирает форму с файлом в JSON-объект — файл при этом
+    // теряется, до сервера доезжает пустышка. Так молча ломалась загрузка
+    // документов на подключении организации: сообщения об ошибке не было,
+    // кнопка «Отправить на проверку» оставалась серой. Заголовок убираем —
+    // браузер проставит `multipart/form-data` вместе с разделителем сам.
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+        config.headers.delete('Content-Type');
+    }
     return config;
 });
 
