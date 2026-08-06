@@ -122,6 +122,31 @@ export class DocumentsController {
         });
     }
 
+    // Объявлено до `:id`, иначе путь съедается параметром.
+    @Get('all')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({
+        summary: 'Журнал документов по всем компаниям',
+        description: 'Раздел «Документы» в админке платформы: у администратора своей компании нет.',
+    })
+    async listAll(
+        @Query('type') type?: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
+        @Query('search') search?: string,
+    ) {
+        return this.documentsService.listForCompany(
+            undefined,
+            {
+                type: type && type in DocumentType ? (type as DocumentType) : undefined,
+                from,
+                to,
+                search: search?.slice(0, 100),
+            },
+            { allCompanies: true },
+        );
+    }
+
     @Get('order/:orderId')
     @ApiOperation({ summary: 'Получить документы заявки' })
     async findByOrder(@Param('orderId') orderId: string, @Request() req: any) {

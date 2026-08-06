@@ -102,8 +102,13 @@ export class DocumentsService {
     async listForCompany(
         companyId: string | undefined,
         query: { type?: DocumentType; from?: string; to?: string; search?: string } = {},
+        // Платформенный администратор смотрит журнал по всем компаниям: своей
+        // у него нет, и отбор по компании оборачивался для него отказом —
+        // раздел «Документы» в админке всегда показывал «Нет документов».
+        // Флаг ставится только из маршрута под `@Roles(ADMIN)`.
+        options: { allCompanies?: boolean } = {},
     ) {
-        if (!companyId) throw new ForbiddenException('Нет доступа к документам');
+        if (!companyId && !options.allCompanies) throw new ForbiddenException('Нет доступа к документам');
 
         const search = (query.search || '').trim();
         const like = { contains: search, mode: 'insensitive' as const };
@@ -125,6 +130,8 @@ export class DocumentsService {
                 { orderId: null, uploadedBy: { companyId } },
             ],
         };
+        // Для администратора платформы ограничения по компании нет.
+        const scope = options.allCompanies ? [] : [access];
         // Ищем по тому, что человек помнит: номер рейса, имя файла, город,
         // водитель, заказчик.
         const matches = {
@@ -149,7 +156,7 @@ export class DocumentsService {
                         },
                     }
                     : {}),
-                AND: search ? [access, matches] : [access],
+                AND: search ? [...scope, matches] : scope,
             },
             orderBy: { createdAt: 'desc' },
             // Тот же потолок, что и в журнале доверенностей: список читают
