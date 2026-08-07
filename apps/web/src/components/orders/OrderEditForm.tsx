@@ -37,6 +37,8 @@ interface OrderEditFormProps {
     roleInfo: { text: string; color: string };
     setQuickPartnerModalOpen: (open: boolean) => void;
     setQuickPartnerTarget: (target: 'CUSTOMER' | 'CARRIER' | null) => void;
+    /** Как выбранный заказчик называет свой номер перевозки. Пусто — графы нет. */
+    customerRefLabel?: string | null;
 
     /** Справочники формы — грузятся при входе в режим правки */
     cargoCategories: any[];
@@ -75,7 +77,7 @@ export default function OrderEditForm(props: OrderEditFormProps) {
         routePointsState, setRoutePointsState, getLocationOptions, locations,
         selectedCustomer, setSelectedCustomer, selectedCarrier, setSelectedCarrier,
         getPartyOptions, myCompanyName, roleInfo,
-        setQuickPartnerModalOpen, setQuickPartnerTarget,
+        setQuickPartnerModalOpen, setQuickPartnerTarget, customerRefLabel,
         cargoCategories, paymentConditions, paymentForms,
         showCustomerPriceField, showDriverCostField, customerPriceLabel, driverCostLabel,
         canEditFinance, setIsEditing,
@@ -304,6 +306,19 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                     </>
                                 )}
                             />
+                            {/*
+                              * Номер этой перевозки в системе заказчика. Графа
+                              * была только в мастере создания: узнали номер
+                              * позже или ошиблись — исправить нечем, а счёт без
+                              * него заказчик возвращает.
+                              */}
+                            {customerRefLabel && (
+                                <div style={{ marginTop: 12 }}>
+                                    <Form.Item name="customerRefNumber" label={customerRefLabel} style={{ marginBottom: 0 }}>
+                                        <Input size="large" placeholder={`${customerRefLabel} у заказчика`} />
+                                    </Form.Item>
+                                </div>
+                            )}
                         </div>
 
                         <div style={{ marginBottom: 20 }}>
