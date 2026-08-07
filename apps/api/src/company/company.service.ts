@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { IdentityService } from '../identity/identity.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRole } from '@prisma/client';
+import {
+    AccountingDocumentDirection,
+    AccountingDocumentStatus,
+    AccountingDocumentType,
+    UserRole,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -550,6 +555,20 @@ export class CompanyService {
                 take,
                 include: {
                     routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                    // Выставлен ли по рейсу счёт заказчику. Логист этого не
+                    // видел: понять, что счёт забыли, можно было только сверяя
+                    // список заявок с журналом счетов вручную.
+                    accountingDocuments: {
+                        where: {
+                            document: {
+                                companyId,
+                                type: AccountingDocumentType.PAYMENT_INVOICE,
+                                direction: AccountingDocumentDirection.OUTGOING,
+                                status: { not: AccountingDocumentStatus.CANCELLED },
+                            },
+                        },
+                        select: { document: { select: { id: true, number: true, status: true } } },
+                    },
                     driver: {
                         select: {
                             id: true,

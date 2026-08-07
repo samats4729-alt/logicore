@@ -97,6 +97,8 @@ interface Order {
     partner?: { name: string; email?: string };
     forwarderId?: string;
     subForwarderId?: string;
+    /** Счета, выставленные заказчику по этому рейсу. Пусто — счёта ещё нет. */
+    accountingDocuments?: { document: { id: string; number: string; status: string } }[];
     subForwarderPrice?: number;
     partnerId?: string;
     isConfirmed?: boolean;
@@ -1085,6 +1087,27 @@ export default function CompanyOrdersPage() {
                 return cost
                     ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span>
                     : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+            },
+        },
+        {
+            // Выставлен ли счёт. Раньше понять это можно было, только сверяя
+            // список заявок с журналом счетов вручную — и рейсы забывались.
+            title: 'Счёт', key: 'invoice', width: 92,
+            render: (_: any, r: Order) => {
+                const invoice = r.accountingDocuments?.[0]?.document;
+                if (!invoice) {
+                    return <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>не выставлен</span>;
+                }
+                return (
+                    <Tooltip title={`Счёт № ${invoice.number}`}>
+                        <span
+                            style={{ fontSize: 11, fontWeight: 600, color: '#158a5a', cursor: 'pointer' }}
+                            onClick={(e) => { e.stopPropagation(); router.push(`/company/accounting/invoices/${invoice.id}`); }}
+                        >
+                            № {invoice.number}
+                        </span>
+                    </Tooltip>
+                );
             },
         },
         {
