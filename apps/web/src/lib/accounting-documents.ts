@@ -684,15 +684,20 @@ export interface OrderLineDraft {
  * Порядок и подписи — как в счёте из 1С, к которому привыкла бухгалтерия.
  */
 export function orderInvoiceDetails(order: BillableOrder): string | null {
-    const loadingDate = order.routePoints
+    const asDate = (value?: string | null) => (value
+        ? new Date(value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : null);
+    const date = asDate(order.routePoints
         ?.find((point) => point.pointType === 'PICKUP' || point.pointType === 'ADDITIONAL_PICKUP')
-        ?.expectedDate;
+        ?.expectedDate);
+    // Дата разгрузки — по ней заказчик закрывает перевозку у себя. В счетах
+    // 1С она стоит последней в расшифровке.
+    const unloadingDate = asDate(order.routePoints
+        ?.find((point) => point.pointType === 'DELIVERY')
+        ?.expectedDate);
     // Дефис, а не стрелка: строка уходит в печатную форму, а в её шрифте
     // знака «→» нет — вместо него печатался пустой квадрат.
     const route = routePointsLabel(order.routePoints, '-');
-    const date = loadingDate
-        ? new Date(loadingDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        : null;
 
     return [
         route ? `маршрут: ${route}` : null,
@@ -705,6 +710,7 @@ export function orderInvoiceDetails(order: BillableOrder): string | null {
         order.customerRefLabel && order.customerRefNumber
             ? `${order.customerRefLabel}: ${order.customerRefNumber}`
             : null,
+        unloadingDate ? `дата разгрузки: ${unloadingDate}` : null,
     ].filter(Boolean).join(', ') || null;
 }
 
