@@ -94,6 +94,8 @@ interface Partner {
     isExternal?: boolean;
     isCustomer?: boolean;
     isCarrier?: boolean;
+    /** Как этот заказчик называет свой номер перевозки. */
+    customerRefLabel?: string | null;
 }
 
 interface LocationState {
@@ -232,6 +234,9 @@ export default function OrderDetailPage() {
     };
 
     const roleInfo = getRoleDescription();
+
+    /** Как выбранный заказчик называет свой номер перевозки. Пусто — графы нет. */
+    const customerRefLabel = partners.find((p) => p.id === selectedCustomer)?.customerRefLabel || null;
 
     const getPartyOptions = (role: 'customer' | 'carrier') => {
         const list = partners.filter((p: any) => role === 'customer' ? p.isCustomer !== false : p.isCarrier !== false);
@@ -396,7 +401,14 @@ export default function OrderDetailPage() {
                 isCarrier: p.isCarrier ?? true,
             }));
             const externalList = externalRes.data
-                .map((e: any) => ({ id: e.id, name: e.name, isExternal: true, isCustomer: !!e.isCustomer, isCarrier: !!e.isCarrier }));
+                .map((e: any) => ({
+                    id: e.id,
+                    name: e.name,
+                    isExternal: true,
+                    isCustomer: !!e.isCustomer,
+                    isCarrier: !!e.isCarrier,
+                    customerRefLabel: e.customerRefLabel ?? null,
+                }));
 
             const ownCompanies = (myCompaniesRes.data || []).map((c: any) => ({
                 id: c.id,
@@ -825,6 +837,7 @@ export default function OrderDetailPage() {
             customerPaymentForm: order.customerPaymentForm || undefined,
             driverPaymentCondition: order.driverPaymentCondition || undefined,
             driverPaymentForm: order.driverPaymentForm || undefined,
+            customerRefNumber: (order as any).customerRefNumber || undefined,
         });
 
         if (order.routePoints && order.routePoints.length > 0) {
@@ -901,6 +914,9 @@ export default function OrderDetailPage() {
             const finalDriverCost = showDriverCostField ? values.driverCost : null;
 
             const updateData: any = {
+                // Номер перевозки у заказчика: пустая строка стирает прежний,
+                // поэтому шлём null, а не undefined — иначе стереть было бы нечем.
+                customerRefNumber: customerRefLabel ? (values.customerRefNumber || null) : undefined,
                 cargoDescription: values.cargoDescription,
                 natureOfCargo: values.natureOfCargo,
                 cargoWeight: values.cargoWeight,
@@ -1535,6 +1551,7 @@ export default function OrderDetailPage() {
                                     roleInfo={roleInfo}
                                     setQuickPartnerModalOpen={setQuickPartnerModalOpen}
                                     setQuickPartnerTarget={setQuickPartnerTarget}
+                                    customerRefLabel={customerRefLabel}
                                     cargoCategories={cargoCategories}
                                     paymentConditions={paymentConditions}
                                     paymentForms={paymentForms}
