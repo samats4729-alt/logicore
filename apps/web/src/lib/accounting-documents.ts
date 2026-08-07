@@ -27,6 +27,8 @@ export interface AccountingDocumentParty {
 export interface AccountingDocumentRoutePoint {
     pointType: string;
     sequence: number;
+    /** Плановая дата. У первой точки погрузки это дата, которую печатают в счёте. */
+    expectedDate?: string | null;
     location: { city: string | null; address: string } | null;
 }
 
@@ -48,8 +50,17 @@ export interface AccountingDocumentOrderRef {
     };
 }
 
-/** «Алматы → Астана» по точкам маршрута заявки. */
-export function orderRouteLabel(order: AccountingDocumentOrderRef['order']): string | null {
+/**
+ * «Алматы → Астана» по точкам маршрута заявки.
+ *
+ * `separator` меняется для печати: в шрифте печатных форм нет знака «→», и
+ * в готовом PDF на его месте выходил пустой квадрат. Там маршрут пишется
+ * через дефис — как в счёте из 1С.
+ */
+export function orderRouteLabel(
+    order: AccountingDocumentOrderRef['order'],
+    separator = '→',
+): string | null {
     const points = order.routePoints || [];
     if (!points.length) return null;
     const place = (point: AccountingDocumentRoutePoint) =>
@@ -57,7 +68,7 @@ export function orderRouteLabel(order: AccountingDocumentOrderRef['order']): str
     const from = place(points[0]);
     const to = place(points[points.length - 1]);
     if (!from && !to) return null;
-    return points.length === 1 ? from : `${from || '—'} → ${to || '—'}`;
+    return points.length === 1 ? from : `${from || '—'} ${separator} ${to || '—'}`;
 }
 
 export interface AccountingDocumentListItem {
@@ -421,6 +432,15 @@ export interface BillableOrder {
     forwardingVat?: boolean;
     assignedDriverName: string | null;
     assignedDriverPlate: string | null;
+    assignedDriverTrailer: string | null;
+    vehicle: { model: string | null } | null;
+    /**
+     * Номер этой перевозки в системе заказчика и то, как он у него
+     * называется. Подпись приходит только если заказчик просил печатать
+     * номер в счёте — иначе в строку он не попадает.
+     */
+    customerRefNumber: string | null;
+    customerRefLabel: string | null;
     routePoints: AccountingDocumentRoutePoint[];
 }
 
@@ -436,8 +456,11 @@ export async function fetchBillableOrders(params: {
 }
 
 /** «Алматы → Астана» по точкам маршрута заявки подбора. */
-export function routePointsLabel(points: AccountingDocumentRoutePoint[] | undefined): string | null {
-    return orderRouteLabel({ id: '', orderNumber: '', routePoints: points });
+export function routePointsLabel(
+    points: AccountingDocumentRoutePoint[] | undefined,
+    separator = '→',
+): string | null {
+    return orderRouteLabel({ id: '', orderNumber: '', routePoints: points }, separator);
 }
 
 export interface CompanyBankAccount {
@@ -629,4 +652,111 @@ export async function reviewIncomingDocument(
     reason?: string,
 ): Promise<void> {
     await api.post(`/accounting-documents/${id}/receipt`, { decision, reason });
+}
+
+/**
+ * Строка счёта, собранная из рейса, — одинаково при создании документа и при
+ * добавлении рейсов в уже открытый.
+ *
+ * Раньше сборка жила только на экране создания. Строки, добавленные в
+ * существующий счёт, пришлось бы набивать руками, и один и тот же рейс
+ * выглядел бы в двух счетах по-разному.
+ */
+export interface OrderLineDraft {
+    key: string;
+    name: string;
+    description: string | null;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    /** 'none' — без НДС, иначе ставка в процентах. */
+    vat: string;
+    orderId: string;
+    orderNumber: string;
+    orderDetails: string | null;
+}
+
+/**
+ * Подробности рейса для строки счёта.
+ *
+ * Заказчик сверяет строку со своей заявкой, а нашего номера рейса у него
+ * нет — он узнаёт перевозку по маршруту, машине, водителю и дате погрузки.
+ * Порядок и подписи — как в счёте из 1С, к которому привыкла бухгалтерия.
+ */
+export function orderInvoiceDetails(order: BillableOrder): string | null {
+    const asDate = (value?: string | null) => (value
+        ? new Date(value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : null);
+    const date = asDate(order.routePoints
+        ?.find((point) => point.pointType === 'PICKUP' || point.pointType === 'ADDITIONAL_PICKUP')
+        ?.expectedDate);
+    // Дата разгрузки — по ней заказчик закрывает перевозку у себя. В счетах
+    // 1С она стоит последней в расшифровке.
+    const unloadingDate = asDate(order.routePoints
+        ?.find((point) => point.pointType === 'DELIVERY')
+        ?.expectedDate);
+    // Дефис, а не стрелка: строка уходит в печатную форму, а в её шрифте
+    // знака «→» нет — вместо него печатался пустой квадрат.
+    const route = routePointsLabel(order.routePoints, '-');
+
+    return [
+        route ? `маршрут: ${route}` : null,
+        order.assignedDriverName ? `водитель: ${order.assignedDriverName}` : null,
+        date ? `дата: ${date}` : null,
+        order.vehicle?.model ? `авт.: ${order.vehicle.model}` : null,
+        order.assignedDriverPlate ? `г/н: ${order.assignedDriverPlate}` : null,
+        order.assignedDriverTrailer ? `п/п: ${order.assignedDriverTrailer}` : null,
+        order.orderNumber ? `заявка: ${order.orderNumber}` : null,
+        order.customerRefLabel && order.customerRefNumber
+            ? `${order.customerRefLabel}: ${order.customerRefNumber}`
+            : null,
+        unloadingDate ? `дата разгрузки: ${unloadingDate}` : null,
+    ].filter(Boolean).join(', ') || null;
+}
+
+/**
+ * Рейс превращается в строки счёта.
+ *
+ * Обычно строка одна. При экспедиторской схеме НДС их две: возмещение
+ * расходов на перевозку (без НДС) и вознаграждение экспедитора (с НДС).
+ * Итог тот же — меняется только облагаемая часть. Если вознаграждения нет
+ * (перевозчик стоит столько же или дороже клиента), делить нечего.
+ */
+export function orderToInvoiceLines(order: BillableOrder): OrderLineDraft[] {
+    const amount = order.amount ?? 0;
+    const vat = order.hasVat && order.vatRate > 0 ? String(order.vatRate) : 'none';
+    const details = orderInvoiceDetails(order);
+    const base = {
+        description: details,
+        quantity: 1,
+        unit: 'усл',
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        orderDetails: details,
+    };
+
+    const carrierCost = order.carrierCost ?? 0;
+    const splittable = order.forwardingVat && carrierCost > 0 && carrierCost < amount;
+
+    if (!splittable) {
+        return [{ ...base, key: `order-${order.id}`, name: 'Транспортные услуги', unitPrice: amount, vat }];
+    }
+
+    return [
+        {
+            ...base,
+            key: `order-${order.id}-pass`,
+            name: 'Возмещение расходов на перевозку',
+            unitPrice: carrierCost,
+            // Проходная часть нашим оборотом не является — НДС на неё не начисляется.
+            vat: 'none',
+        },
+        {
+            ...base,
+            key: `order-${order.id}-fee`,
+            name: 'Вознаграждение экспедитора',
+            unitPrice: Number((amount - carrierCost).toFixed(2)),
+            vat,
+        },
+    ];
 }

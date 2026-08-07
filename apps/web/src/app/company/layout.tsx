@@ -147,9 +147,15 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     logout();
                     router.replace('/login');
                 }
+            } else if (!currentUser.companyId && pathname !== '/company/onboarding') {
+                // Пока организации нет, разделы кабинета всё равно отвечают
+                // отказом — экраны показывали бы пустоту и ошибки. Раньше сюда
+                // приводила только регистрация: вышел, зашёл снова — и попасть
+                // на подключение организации было уже нечем.
+                router.replace('/company/onboarding');
             }
         });
-    }, [hydrated, checkAuth, router, logout]);
+    }, [hydrated, checkAuth, router, logout, pathname]);
 
     if (!hydrated || isLoading || !user) {
         return (

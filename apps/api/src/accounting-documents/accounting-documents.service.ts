@@ -1167,11 +1167,23 @@ export class AccountingDocumentsService {
                 executorHasVat: true,
                 assignedDriverName: true,
                 assignedDriverPlate: true,
+                // Прицеп и марка машины идут в наименование услуги: заказчик
+                // сверяет строку счёта со своей заявкой по машине и дате, а не
+                // по нашему номеру рейса.
+                assignedDriverTrailer: true,
+                vehicle: { select: { model: true } },
+                // Номер этой перевозки в системе заказчика и то, как он у
+                // него называется. Печатается в строке счёта, если заказчик
+                // этого просит: свой счёт он сверяет именно по нему.
+                customerRefNumber: true,
+                customerCompany: { select: { customerRefLabel: true, customerRefPrintInvoice: true } },
                 routePoints: {
                     orderBy: { sequence: 'asc' },
                     select: {
                         pointType: true,
                         sequence: true,
+                        // Дата погрузки — из первой точки маршрута.
+                        expectedDate: true,
                         location: { select: { city: true, address: true } },
                     },
                 },
@@ -1212,6 +1224,11 @@ export class AccountingDocumentsService {
                 vatRate: hasVat ? vatRate : new Prisma.Decimal(0),
                 carrierCost: outgoing ? (carrierCost ?? new Prisma.Decimal(0)) : new Prisma.Decimal(0),
                 forwardingVat: forwarding && outgoing,
+                // Номер перевозки у заказчика — только если он просил
+                // печатать его в счёте.
+                customerRefLabel: order.customerCompany?.customerRefPrintInvoice
+                    ? order.customerCompany.customerRefLabel
+                    : null,
             };
         });
     }

@@ -16,7 +16,7 @@ import { CompanyType, DocumentType, UserRole } from '@prisma/client';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, MaxLength } from 'class-validator';
 import { Response } from 'express';
 import { Res } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AllowWithoutCompany, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { setAuthCookie } from '../auth/auth-cookie';
 import { AuthService } from '../auth/auth.service';
 import { AuditService } from '../audit/audit.service';
@@ -60,6 +60,8 @@ class CreateMyCompanyDto {
 @ApiBearerAuth()
 @Controller('my-company')
 @UseGuards(JwtAuthGuard)
+// Единственный раздел, ради которого человек без организации сюда и заходит.
+@AllowWithoutCompany()
 export class MyCompanyController {
     constructor(
         private readonly prisma: PrismaService,

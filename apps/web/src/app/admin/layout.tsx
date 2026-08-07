@@ -21,6 +21,8 @@ import {
     NotificationOutlined,
     DollarOutlined,
     HistoryOutlined,
+    CheckCircleOutlined,
+    FolderOpenOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -39,36 +41,53 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [draftCount, setDraftCount] = useState(0);
+    const [pendingCompanies, setPendingCompanies] = useState(0);
 
+    /** Значок с числом у пункта меню — им же помечены черновики нововведений. */
+    const menuBadge = (text: string, count: number) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <span>{text}</span>
+            {count > 0 && (
+                <span style={{
+                    background: '#ff4d4f',
+                    color: '#fff',
+                    borderRadius: 10,
+                    padding: '0 6px',
+                    fontSize: 11,
+                    lineHeight: '18px',
+                    height: 18,
+                    minWidth: 18,
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    display: 'inline-block'
+                }}>
+                    {count}
+                </span>
+            )}
+        </div>
+    );
+
+    // Разделы платформы: страницы были на месте и работали, но ссылок на них
+    // в меню не было — попасть можно было только по прямому адресу, который
+    // надо знать наизусть. Так пряталось и подтверждение новых организаций:
+    // клиент отправлял документы и ждал, а владелец об этом не узнавал.
     const menuItems = [
         { key: '/admin', icon: <DashboardOutlined />, label: 'Дашборд' },
+        {
+            key: '/admin/companies',
+            icon: <CheckCircleOutlined />,
+            label: menuBadge('Проверка организаций', pendingCompanies),
+        },
         { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
+        { key: '/admin/orders', icon: <FileTextOutlined />, label: 'Заявки' },
+        { key: '/admin/tracking', icon: <AimOutlined />, label: 'Мониторинг' },
+        { key: '/admin/documents', icon: <FolderOpenOutlined />, label: 'Документы' },
+        { key: '/admin/cargo-types', icon: <CarOutlined />, label: 'Виды груза' },
         { key: '/admin/support', icon: <CustomerServiceOutlined />, label: 'Поддержка' },
         {
             key: '/admin/updates',
             icon: <NotificationOutlined />,
-            label: (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span>Нововведения</span>
-                    {draftCount > 0 && (
-                        <span style={{
-                            background: '#ff4d4f',
-                            color: '#fff',
-                            borderRadius: 10,
-                            padding: '0 6px',
-                            fontSize: 11,
-                            lineHeight: '18px',
-                            height: 18,
-                            minWidth: 18,
-                            textAlign: 'center',
-                            fontWeight: 'bold',
-                            display: 'inline-block'
-                        }}>
-                            {draftCount}
-                        </span>
-                    )}
-                </div>
-            )
+            label: menuBadge('Нововведения', draftCount),
         },
         { key: '/admin/billing', icon: <DollarOutlined />, label: 'Биллинг' },
         { key: '/admin/audit', icon: <HistoryOutlined />, label: 'Журнал' },
@@ -119,6 +138,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         };
         fetchDrafts();
         const interval = setInterval(fetchDrafts, 60 * 1000);
+        return () => clearInterval(interval);
+    }, [hydrated, loading, isAuthenticated, user]);
+
+    // Сколько организаций ждут проверки. Без этого числа заявка нового
+    // клиента лежит незамеченной: он документы отправил, а увидеть это
+    // можно было, только зайдя на страницу по прямому адресу.
+    useEffect(() => {
+        if (!hydrated || loading || !isAuthenticated || user?.role !== 'ADMIN') return;
+        const fetchPending = async () => {
+            try {
+                const res = await api.get('/admin/company-verification', { params: { status: 'PENDING' } });
+                setPendingCompanies(res.data?.length || 0);
+            } catch (err) {
+                console.error('Failed to fetch pending companies count', err);
+            }
+        };
+        fetchPending();
+        const interval = setInterval(fetchPending, 60 * 1000);
         return () => clearInterval(interval);
     }, [hydrated, loading, isAuthenticated, user]);
 

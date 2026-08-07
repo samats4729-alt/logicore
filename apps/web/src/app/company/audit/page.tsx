@@ -33,6 +33,13 @@ export default function CompanyAuditPage() {
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [forbidden, setForbidden] = useState(false);
+    /**
+     * Почему закрыто. Раньше на любой отказ писали «недоступен на вашем
+     * тарифе» — а денег с компаний не берут вовсе: журнал выключается
+     * рубильником в админке платформы. Руководитель читал это как «заплати»
+     * и звонил владельцу. Причин на самом деле две, и они разные.
+     */
+    const [reason, setReason] = useState<'off' | 'role'>('off');
 
     const load = async (p = 1) => {
         setLoading(true);
@@ -42,7 +49,15 @@ export default function CompanyAuditPage() {
             setTotal(res.data.total || 0);
             setForbidden(false);
         } catch (e: any) {
-            if (e.response?.status === 403) setForbidden(true);
+            if (e.response?.status === 403) {
+                setForbidden(true);
+                try {
+                    const status = await api.get('/audit/status');
+                    setReason(status.data?.companiesEnabled ? 'role' : 'off');
+                } catch {
+                    setReason('off');
+                }
+            }
         } finally {
             setLoading(false);
         }
@@ -102,7 +117,9 @@ export default function CompanyAuditPage() {
                 {forbidden ? (
                     <Empty
                         image={<HistoryOutlined style={{ fontSize: 44, color: 'var(--lc-text-ter)' }} />}
-                        description="Журнал действий недоступен на вашем тарифе"
+                        description={reason === 'role'
+                            ? 'Журнал действий открыт руководителю организации. Доступ выдаёт он же — в разделе «Сотрудники».'
+                            : 'Журнал действий пока выключен на платформе. Он ничего не стоит — включается по обращению в поддержку.'}
                         style={{ padding: '40px 0' }}
                     />
                 ) : (

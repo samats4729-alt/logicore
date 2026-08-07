@@ -32,12 +32,18 @@ interface Document {
     };
 }
 
+// Виды документов — те же, что в системе (enum DocumentType). Раньше здесь
+// стояли «Накладная» и «Договор», которых в системе нет, а настоящих видов
+// не было: каждый документ подписывался «Другое», и фильтр предлагал выбрать
+// то, чего не бывает.
 const documentTypes: Record<string, { label: string; color: string }> = {
-    WAYBILL: { label: 'Накладная', color: 'blue' },
-    INVOICE: { label: 'Счёт', color: 'green' },
-    ACT: { label: 'Акт', color: 'purple' },
-    CONTRACT: { label: 'Договор', color: 'orange' },
     TTN: { label: 'ТТН', color: 'cyan' },
+    POWER_OF_ATTORNEY: { label: 'Доверенность', color: 'orange' },
+    ACT: { label: 'Акт', color: 'purple' },
+    INVOICE: { label: 'Счёт', color: 'green' },
+    COMPANY_REGISTRATION: { label: 'Справка о регистрации', color: 'blue' },
+    DIRECTOR_APPOINTMENT: { label: 'Приказ о руководителе', color: 'blue' },
+    DIRECTOR_ID: { label: 'Удостоверение руководителя', color: 'blue' },
     OTHER: { label: 'Другое', color: 'default' },
 };
 
@@ -50,11 +56,14 @@ export default function DocumentsPage() {
     const fetchDocuments = async () => {
         setLoading(true);
         try {
-            const response = await api.get('/documents');
+            // Журнал по всем компаниям. Обычный `/documents` отбирает по
+            // компании запросившего, а у администратора платформы её нет —
+            // экран отвечал отказом и всегда показывал «Нет документов».
+            const response = await api.get('/documents/all');
             setDocuments(response.data);
         } catch (error) {
             console.error(error);
-            // toast.error('Не удалось загрузить документы');
+            toast.error('Не удалось загрузить документы');
         } finally {
             setLoading(false);
         }

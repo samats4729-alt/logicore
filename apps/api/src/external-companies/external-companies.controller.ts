@@ -35,6 +35,10 @@ export class ExternalCompaniesController {
         isCarrier?: boolean;
         address?: string;
         directorName?: string;
+        // Как называется у этого заказчика его собственный номер перевозки и
+        // печатать ли его в счёте.
+        customerRefLabel?: string | null;
+        customerRefPrintInvoice?: boolean;
     }) {
         const result = await this.service.createExternalCompany(req.user.companyId, dto, req.user.sub || req.user.id);
         await this.auditService.log({
@@ -58,6 +62,8 @@ export class ExternalCompaniesController {
         isCustomer?: boolean;
         isCarrier?: boolean;
         responsibleManagerId?: string | null;
+        customerRefLabel?: string | null;
+        customerRefPrintInvoice?: boolean;
     }) {
         // Переназначать ответственного менеджера может только администратор компании
         if (dto.responsibleManagerId !== undefined && !['COMPANY_ADMIN', 'FORWARDER', 'ADMIN'].includes(req.user.role)) {

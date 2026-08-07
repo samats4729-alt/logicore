@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 
 type Theme = 'light' | 'dark';
 
@@ -14,17 +15,28 @@ export function useTheme() {
 }
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {
+    const pathname = usePathname();
+    /**
+     * Тёмная тема — свойство кабинета: переключатель живёт только там, и
+     * рисовались под неё только его экраны. Выбор сохранялся на всё
+     * приложение, поэтому после выхода страницы входа и регистрации
+     * доставались наполовину тёмными: поля ввода чёрные, фон карточки
+     * белый, а подписи «Имя» и «Фамилия» — белым по белому, не видно.
+     * Вне кабинета всегда светлая.
+     */
+    const isCabinet = !!pathname && (pathname.startsWith('/company') || pathname.startsWith('/admin'));
     const [theme, setTheme] = useState<Theme>('light');
 
     useEffect(() => {
-        try {
-            const stored = localStorage.getItem('lc_theme') as Theme | null;
-            if (stored === 'dark') {
-                setTheme('dark');
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
-        } catch {}
-    }, []);
+        let next: Theme = 'light';
+        if (isCabinet) {
+            try {
+                next = localStorage.getItem('lc_theme') === 'dark' ? 'dark' : 'light';
+            } catch {}
+        }
+        setTheme(next);
+        document.documentElement.setAttribute('data-theme', next);
+    }, [isCabinet]);
 
     const handleSetTheme = (t: Theme) => {
         const el = document.documentElement;

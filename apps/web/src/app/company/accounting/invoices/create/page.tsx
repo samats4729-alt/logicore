@@ -20,91 +20,41 @@ import {
     createAccountingDocument,
     fetchBillableOrders,
     fetchCompanyBankAccounts,
+    OrderLineDraft,
+    orderToInvoiceLines,
     routePointsLabel,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
 import CurrencySelect from '@/components/orders/CurrencySelect';
+import { VAT_RATES } from '@/lib/tax';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
 
+// Ставки берём из общего списка, а не вписываем числом: в заявке уже 16%,
+// а здесь оставалось 12% — счёт по такой заявке собрать было нечем.
 const VAT_OPTIONS = [
     { value: 'none', label: 'Без НДС' },
-    { value: '12', label: '12 %' },
-    { value: '0', label: '0 %' },
+    ...VAT_RATES.map((rate) => ({ value: String(rate.value), label: `${rate.value} %` })),
 ];
 
-/** Строка будущего документа — до создания живёт только на клиенте. */
-interface DraftLine {
-    key: string;
-    name: string;
-    quantity: number;
-    unit: string;
-    unitPrice: number;
-    /** 'none' — без НДС, иначе ставка в процентах. */
-    vat: string;
+/**
+ * Строка будущего документа — до создания живёт только на клиенте.
+ * Сборка строки из рейса общая с карточкой документа: см. `orderToInvoiceLines`.
+ */
+interface DraftLine extends Omit<OrderLineDraft, 'orderId' | 'orderNumber'> {
+    /** У строки, добавленной руками, заявки нет. */
     orderId: string | null;
     orderNumber: string | null;
-    orderDetails: string | null;
 }
-
-const orderDetailsOf = (order: BillableOrder) => [
-    routePointsLabel(order.routePoints),
-    order.assignedDriverName,
-    order.assignedDriverPlate,
-].filter(Boolean).join(' · ') || null;
-
-/**
- * Рейс превращается в строки счёта.
- *
- * Обычно строка одна. При экспедиторской схеме НДС их две: возмещение
- * расходов на перевозку (без НДС) и вознаграждение экспедитора (с НДС).
- * Итог счёта при этом тот же — меняется только то, какая часть облагается
- * налогом. Если вознаграждения нет (перевозчик стоит столько же или дороже
- * клиента), делить нечего: строка остаётся одна, а бухгалтер видит
- * предупреждение — это либо ошибка в ставках, либо рейс в убыток.
- */
-const linesFromOrder = (order: BillableOrder): DraftLine[] => {
-    const amount = order.amount ?? 0;
-    const vat = order.hasVat && order.vatRate > 0 ? String(order.vatRate) : 'none';
-    const details = orderDetailsOf(order);
-    const base = {
-        quantity: 1,
-        unit: 'усл',
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        orderDetails: details,
-    };
-
-    const carrierCost = order.carrierCost ?? 0;
-    const splittable = order.forwardingVat && carrierCost > 0 && carrierCost < amount;
-
-    if (!splittable) {
-        return [{ ...base, key: `order-${order.id}`, name: 'Транспортные услуги', unitPrice: amount, vat }];
-    }
-
-    return [
-        {
-            ...base,
-            key: `order-${order.id}-pass`,
-            name: 'Возмещение расходов на перевозку',
-            unitPrice: carrierCost,
-            // Проходная часть нашим оборотом не является — НДС на неё не
-            // начисляется.
-            vat: 'none',
-        },
-        {
-            ...base,
-            key: `order-${order.id}-fee`,
-            name: 'Вознаграждение экспедитора',
-            unitPrice: Number((amount - carrierCost).toFixed(2)),
-            vat,
-        },
-    ];
-};
 
 const toPayload = (line: DraftLine): CreateAccountingDocumentLineInput => ({
     name: line.name.trim(),
+    // Подробности рейса печатаются в счёте второй строкой под названием
+    // услуги. Раньше они собирались только для показа на экране и на сервер
+    // не уезжали — в готовом счёте не было ни маршрута, ни водителя, и
+    // бухгалтер дописывала их руками уже в 1С.
+    description: line.orderDetails || undefined,
     quantity: String(line.quantity ?? 1),
     unit: line.unit?.trim() || 'усл',
     unitPrice: (line.unitPrice ?? 0).toFixed(2),
@@ -253,7 +203,7 @@ export default function CreateInvoicePage() {
             );
         }
 
-        const picked = chosen.flatMap(linesFromOrder);
+        const picked = chosen.flatMap(orderToInvoiceLines);
         // Ручные строки сохраняются: подбор управляет только строками заявок.
         setLines([...picked, ...manual]);
         setPickerOpen(false);
@@ -264,6 +214,7 @@ export default function CreateInvoicePage() {
         setLines((prev) => [...prev, {
             key: `manual-${Date.now()}-${prev.length}`,
             name: preset?.name || 'Транспортные услуги',
+            description: null,
             quantity: 1,
             unit: preset?.unit || 'усл',
             unitPrice: 0,

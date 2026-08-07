@@ -5,7 +5,7 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
-import { CompanyVerificationStatus, DocumentType, Prisma } from '@prisma/client';
+import { CompanyVerificationStatus, DocumentType, OrderStatus, Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -197,13 +197,20 @@ export class CompanyVerificationService {
         };
     }
 
-    /** Очередь проверки в админке платформы. */
+    /**
+     * Очередь проверки в админке платформы.
+     *
+     * К каждой заявке добавляется, что ещё известно про её БИН: подтверждена
+     * ли уже организация с таким номером и не заведён ли он у кого-то как
+     * контрагент. Без этого решение принималось вслепую — совпадение
+     * всплывало только отказом в момент нажатия «Подтвердить».
+     */
     async listForReview(status?: CompanyVerificationStatus) {
         const where: Prisma.CompanyWhereInput = {
             isExternal: false,
             verificationStatus: status ?? CompanyVerificationStatus.PENDING,
         };
-        return this.prisma.company.findMany({
+        const companies = await this.prisma.company.findMany({
             where,
             select: {
                 id: true,
@@ -226,17 +233,79 @@ export class CompanyVerificationService {
             orderBy: [{ verificationSubmittedAt: 'asc' }, { createdAt: 'asc' }],
             take: 200,
         });
+
+        const bins = companies.map((company) => company.bin).filter((bin): bin is string => !!bin);
+        if (bins.length === 0) {
+            return companies.map((company) => ({ ...company, binVerifiedBy: null, binKnownAsPartner: [] }));
+        }
+
+        const sameBin = await this.prisma.company.findMany({
+            where: {
+                bin: { in: bins },
+                id: { notIn: companies.map((company) => company.id) },
+            },
+            select: {
+                id: true,
+                name: true,
+                bin: true,
+                isExternal: true,
+                verificationStatus: true,
+                createdByCompany: { select: { id: true, name: true } },
+            },
+        });
+
+        return companies.map((company) => ({
+            ...company,
+            // Организация с этим БИН уже работает — подтвердить вторую нельзя.
+            binVerifiedBy: sameBin.find((other) => other.bin === company.bin
+                && !other.isExternal
+                && other.verificationStatus === CompanyVerificationStatus.VERIFIED) ?? null,
+            // Этот БИН уже заведён у кого-то как контрагент.
+            binKnownAsPartner: sameBin
+                .filter((other) => other.bin === company.bin && other.isExternal)
+                .map((other) => ({
+                    id: other.id,
+                    name: other.name,
+                    ownerCompanyName: other.createdByCompany?.name ?? null,
+                })),
+        }));
     }
 
     /** Решение владельца платформы: подтвердить компанию. */
     async approve(companyId: string, reviewerId: string) {
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },
-            select: { id: true, verificationStatus: true },
+            select: { id: true, bin: true, verificationStatus: true },
         });
         if (!company) throw new NotFoundException('Организация не найдена');
         if (company.verificationStatus === CompanyVerificationStatus.VERIFIED) {
             throw new ConflictException('Организация уже подтверждена');
+        }
+
+        // Одна работающая организация на один БИН.
+        //
+        // Проверка стоит на подтверждении, а не на подаче заявки, и это
+        // намеренно. БИН — публичный номер: запрет подать заявку означал бы,
+        // что любой, набрав чужой БИН, навсегда закрывает настоящему
+        // владельцу вход на платформу. Подать может кто угодно, а решение
+        // принимает человек, посмотрев документы.
+        if (company.bin) {
+            const taken = await this.prisma.company.findFirst({
+                where: {
+                    bin: company.bin,
+                    isExternal: false,
+                    verificationStatus: CompanyVerificationStatus.VERIFIED,
+                    id: { not: companyId },
+                },
+                select: { name: true },
+            });
+            if (taken) {
+                throw new ConflictException(
+                    `БИН ${company.bin} уже подтверждён у организации «${taken.name}». `
+                    + 'Одна организация — один БИН: если это та же фирма, работайте в её кабинете, '
+                    + 'а эту заявку отклоните с причиной.',
+                );
+            }
         }
 
         return this.prisma.company.update({
@@ -249,6 +318,72 @@ export class CompanyVerificationService {
             },
             select: { id: true, name: true, verificationStatus: true, verifiedAt: true },
         });
+    }
+
+    /**
+     * Отдать подтверждённой организации её рейсы, которые сейчас в работе.
+     *
+     * До регистрации фирму заводили как контрагента вручную — карточкой в
+     * чужом справочнике. Когда фирма пришла на платформу сама, её рейсы
+     * остаются привязанными к этой карточке, и в своём кабинете она не видит
+     * ничего, хотя груз едет прямо сейчас.
+     *
+     * Переносятся только незавершённые рейсы. Закрытая история — чужая
+     * бухгалтерия, и по совпадению номера её не отдают: БИН публичен.
+     * Счета и платежи не трогаются вовсе, они остаются на карточке у того,
+     * кто её завёл, — иначе порвались бы взаиморасчёты.
+     *
+     * Вызывается только вручную, после того как документы проверены.
+     */
+    async linkActiveOrders(companyId: string) {
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { id: true, name: true, bin: true, isExternal: true, verificationStatus: true },
+        });
+        if (!company) throw new NotFoundException('Организация не найдена');
+        if (company.isExternal) {
+            throw new BadRequestException('Это карточка контрагента, а не организация платформы');
+        }
+        if (company.verificationStatus !== CompanyVerificationStatus.VERIFIED) {
+            throw new BadRequestException(
+                'Сначала подтвердите организацию: рейсы отдаются только по проверенным документам',
+            );
+        }
+        if (!company.bin) {
+            throw new BadRequestException('У организации не указан БИН');
+        }
+
+        const cards = await this.prisma.company.findMany({
+            where: { bin: company.bin, isExternal: true },
+            select: { id: true },
+        });
+        if (cards.length === 0) {
+            return { movedOrders: 0, partnerCards: 0 };
+        }
+        const cardIds = cards.map((card) => card.id);
+        const active = { notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED] };
+
+        const [asCustomer, asSubForwarder, asPartner] = await this.prisma.$transaction([
+            this.prisma.order.updateMany({
+                where: { customerCompanyId: { in: cardIds }, status: active },
+                data: { customerCompanyId: companyId },
+            }),
+            this.prisma.order.updateMany({
+                where: { subForwarderId: { in: cardIds }, status: active },
+                data: { subForwarderId: companyId },
+            }),
+            this.prisma.order.updateMany({
+                where: { partnerId: { in: cardIds }, status: active },
+                data: { partnerId: companyId },
+            }),
+        ]);
+
+        return {
+            movedOrders: asCustomer.count + asSubForwarder.count + asPartner.count,
+            partnerCards: cardIds.length,
+            companyName: company.name,
+            bin: company.bin,
+        };
     }
 
     /** Решение владельца платформы: отклонить с причиной. */

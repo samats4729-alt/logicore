@@ -23,6 +23,17 @@ api.interceptors.request.use((config) => {
     if (config.data === null) {
         config.data = undefined;
     }
+    // Файл уезжает формой, а не JSON.
+    //
+    // Заголовок `Content-Type: application/json` стоит на всех запросах, а
+    // axios на нём пересобирает форму с файлом в JSON-объект — файл при этом
+    // теряется, до сервера доезжает пустышка. Так молча ломалась загрузка
+    // документов на подключении организации: сообщения об ошибке не было,
+    // кнопка «Отправить на проверку» оставалась серой. Заголовок убираем —
+    // браузер проставит `multipart/form-data` вместе с разделителем сам.
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+        config.headers.delete('Content-Type');
+    }
     return config;
 });
 
@@ -46,6 +57,16 @@ if (typeof window !== 'undefined') {
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        // Отказ проверки полей приходит списком причин, а экраны показывают
+        // `data.message` как одну строку. Список туда не помещался, и человек
+        // видел пустое место вместо объяснения: окно не закрывалось, ошибки
+        // не было, действие молча не выполнялось. Склеиваем список в строку
+        // один раз здесь — иначе это пришлось бы помнить на каждом экране.
+        const reasons = error.response?.data?.message;
+        if (Array.isArray(reasons)) {
+            error.response.data.message = reasons.join('. ');
+        }
+
         if (error.response?.status === 401) {
             // Исключаем публичные запросы авторизации/регистрации, чтобы некорректные данные или ошибки не вызывали логаут
             const url = error.config?.url || '';
