@@ -653,6 +653,27 @@ export default function PartnersPage() {
                     <Form.Item name="directorName" label="ФИО директора">
                         <Input placeholder="Иванов Иван Иванович" />
                     </Form.Item>
+                    {/*
+                      * Номер перевозки у самого заказчика. У крупных клиентов
+                      * заявка живёт и в их системе под своим номером — у одного
+                      * это «ID», у другого «Номер ТТН», — и счёт они сверяют по
+                      * нему. Название задаёт заказчик, поэтому это настройка, а
+                      * не поле с готовым именем.
+                      */}
+                    <Form.Item
+                        name="customerRefLabel"
+                        label="Как заказчик называет свой номер перевозки"
+                        help="Появится отдельной графой в заявке. Пусто — графы не будет"
+                    >
+                        <Input placeholder="Например: ID, Номер ТТН, Номер заказа" />
+                    </Form.Item>
+                    <Form.Item
+                        name="customerRefPrintInvoice"
+                        valuePropName="checked"
+                        help="Заказчик сверяет счёт по своему номеру — без него счёт возвращают на переделку"
+                    >
+                        <Checkbox>Печатать этот номер в счёте</Checkbox>
+                    </Form.Item>
                     {isCompanyAdmin && (
                         <Form.Item
                             name="responsibleManagerId"

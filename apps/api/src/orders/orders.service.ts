@@ -187,6 +187,7 @@ export class OrdersService {
         driverPaymentForm?: string;
         driverPaymentDate?: Date;
         ttnNumber?: string;
+        customerRefNumber?: string;
         atiCodeCustomer?: string;
         atiCodeCarrier?: string;
         trailerNumber?: string;
@@ -334,6 +335,7 @@ export class OrdersService {
                 driverPaymentForm: data.driverPaymentForm,
                 driverPaymentDate: data.driverPaymentDate,
                 ttnNumber: data.ttnNumber,
+                customerRefNumber: data.customerRefNumber,
                 atiCodeCustomer: data.atiCodeCustomer,
                 atiCodeCarrier: data.atiCodeCarrier,
                 trailerNumber: data.trailerNumber,
@@ -1011,6 +1013,7 @@ export class OrdersService {
         driverPaymentForm?: string;
         driverPaymentDate?: Date;
         ttnNumber?: string;
+        customerRefNumber?: string;
         atiCodeCustomer?: string;
         atiCodeCarrier?: string;
         trailerNumber?: string;

@@ -425,6 +425,13 @@ export interface BillableOrder {
     assignedDriverPlate: string | null;
     assignedDriverTrailer: string | null;
     vehicle: { model: string | null } | null;
+    /**
+     * Номер этой перевозки в системе заказчика и то, как он у него
+     * называется. Подпись приходит только если заказчик просил печатать
+     * номер в счёте — иначе в строку он не попадает.
+     */
+    customerRefNumber: string | null;
+    customerRefLabel: string | null;
     routePoints: AccountingDocumentRoutePoint[];
 }
 
@@ -681,6 +688,9 @@ export function orderInvoiceDetails(order: BillableOrder): string | null {
         order.assignedDriverPlate ? `г/н: ${order.assignedDriverPlate}` : null,
         order.assignedDriverTrailer ? `п/п: ${order.assignedDriverTrailer}` : null,
         order.orderNumber ? `заявка: ${order.orderNumber}` : null,
+        order.customerRefLabel && order.customerRefNumber
+            ? `${order.customerRefLabel}: ${order.customerRefNumber}`
+            : null,
     ].filter(Boolean).join(', ') || null;
 }
 

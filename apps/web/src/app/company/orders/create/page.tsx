@@ -184,6 +184,10 @@ export default function CreateOrderPage() {
 
 
     const isMeCustomer = selectedCustomer === MY_COMPANY_VALUE;
+    /** Как выбранный заказчик называет свой номер перевозки. Пусто — графы нет. */
+    const customerRefLabel = isMeCustomer
+        ? null
+        : (partners.find(p => p.id === selectedCustomer) as any)?.customerRefLabel || null;
     const isMeCarrier = selectedCarrier === MY_COMPANY_VALUE;
     const isMarketplace = selectedCarrier === MARKETPLACE_VALUE;
 
@@ -658,6 +662,7 @@ export default function CreateOrderPage() {
             const finalDriverCost = showDriverCostField ? values.driverCost : null;
 
             const orderData: any = {
+                customerRefNumber: customerRefLabel ? values.customerRefNumber || undefined : undefined,
                 cargoDescription: values.cargoDescription,
                 natureOfCargo: values.natureOfCargo,
                 cargoWeight: values.cargoWeight,
@@ -1052,6 +1057,22 @@ export default function CreateOrderPage() {
                                 {partners.filter(p => p.isCustomer).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                             </Select.OptGroup>
                         </Select>
+                        {/*
+                          * Номер этой перевозки в системе заказчика. Графа
+                          * появляется только у тех заказчиков, кто такой номер
+                          * ведёт, и называется так, как называет её он сам —
+                          * см. карточку контрагента. Раньше его вписывали в
+                          * «Номер ТТН», и в одной графе оказывались настоящая
+                          * накладная и чужой идентификатор.
+                          */}
+                        {customerRefLabel && (
+                            <div style={{ marginTop: 10 }}>
+                                <div className="lc-wiz-lbl">{customerRefLabel}</div>
+                                <Form.Item name="customerRefNumber" noStyle>
+                                    <Input placeholder={`${customerRefLabel} у заказчика`} />
+                                </Form.Item>
+                            </div>
+                        )}
                     </div>
                 </Col>
                 <Col xs={24} md={12}>

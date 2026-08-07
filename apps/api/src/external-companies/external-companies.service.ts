@@ -45,6 +45,10 @@ export class ExternalCompaniesService {
                 isCarrier: true,
                 address: true,
                 directorName: true,
+                // Как называется у этого заказчика его номер перевозки и
+                // печатать ли его в счёте.
+                customerRefLabel: true,
+                customerRefPrintInvoice: true,
                 isActive: true,
                 createdAt: true,
                 responsibleManagerId: true,
@@ -66,6 +70,8 @@ export class ExternalCompaniesService {
         isCarrier?: boolean;
         address?: string;
         directorName?: string;
+        customerRefLabel?: string | null;
+        customerRefPrintInvoice?: boolean;
     }, creatorUserId?: string) {
         const isCustomer = data.isCustomer !== undefined ? data.isCustomer : (data.type === 'CUSTOMER');
         const isCarrier = data.isCarrier !== undefined ? data.isCarrier : (data.type === 'FORWARDER');
@@ -114,6 +120,8 @@ export class ExternalCompaniesService {
                 isCarrier,
                 address: data.address || onPlatform?.address || null,
                 directorName: data.directorName || onPlatform?.directorName || null,
+                customerRefLabel: data.customerRefLabel?.trim() || null,
+                customerRefPrintInvoice: data.customerRefPrintInvoice ?? false,
                 isExternal: true,
                 isOurCompany: false,
                 createdByCompanyId: companyId,
@@ -136,6 +144,8 @@ export class ExternalCompaniesService {
         isCustomer?: boolean;
         isCarrier?: boolean;
         responsibleManagerId?: string | null;
+        customerRefLabel?: string | null;
+        customerRefPrintInvoice?: boolean;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: externalId },

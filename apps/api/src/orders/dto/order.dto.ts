@@ -245,6 +245,12 @@ export class CreateOrderDto {
     @IsOptional()
     ttnNumber?: string;
 
+    /** Номер этой перевозки в системе заказчика — см. Company.customerRefLabel. */
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    customerRefNumber?: string;
+
     @ApiProperty({ required: false })
     @IsString()
     @IsOptional()
