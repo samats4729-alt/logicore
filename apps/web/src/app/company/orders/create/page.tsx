@@ -406,6 +406,11 @@ export default function CreateOrderPage() {
                 isExternal: true,
                 isCustomer: !!e.isCustomer,
                 isCarrier: !!e.isCarrier,
+                // Как заказчик называет свой номер перевозки. Без этого поля
+                // графа в заявке не появлялась вовсе: список контрагентов
+                // пересобирался по нескольким полям, и настройка терялась
+                // по дороге.
+                customerRefLabel: e.customerRefLabel ?? null,
             }));
             const combined = [...partnersList, ...externalList];
             setPartners(combined);
