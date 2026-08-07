@@ -27,6 +27,8 @@ export interface AccountingDocumentParty {
 export interface AccountingDocumentRoutePoint {
     pointType: string;
     sequence: number;
+    /** Плановая дата. У первой точки погрузки это дата, которую печатают в счёте. */
+    expectedDate?: string | null;
     location: { city: string | null; address: string } | null;
 }
 
@@ -421,6 +423,8 @@ export interface BillableOrder {
     forwardingVat?: boolean;
     assignedDriverName: string | null;
     assignedDriverPlate: string | null;
+    assignedDriverTrailer: string | null;
+    vehicle: { model: string | null } | null;
     routePoints: AccountingDocumentRoutePoint[];
 }
 

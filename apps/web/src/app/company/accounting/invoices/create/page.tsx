@@ -50,11 +50,34 @@ interface DraftLine {
     orderDetails: string | null;
 }
 
-const orderDetailsOf = (order: BillableOrder) => [
-    routePointsLabel(order.routePoints),
-    order.assignedDriverName,
-    order.assignedDriverPlate,
-].filter(Boolean).join(' · ') || null;
+/**
+ * Подробности рейса, которые печатаются в строке счёта.
+ *
+ * Заказчик сверяет каждую строку со своей заявкой, а нашего номера рейса у
+ * него нет — он узнаёт перевозку по маршруту, машине, водителю и дате
+ * погрузки. Пока в строке были только маршрут, водитель и госномер,
+ * бухгалтерия заказчика возвращала счёт на переделку, а наш бухгалтер
+ * дописывала остальное руками.
+ *
+ * Порядок и подписи — как в счёте из 1С, к которому все привыкли.
+ */
+const orderDetailsOf = (order: BillableOrder) => {
+    const loadingDate = order.routePoints
+        ?.find((point) => point.pointType === 'PICKUP' || point.pointType === 'ADDITIONAL_PICKUP')
+        ?.expectedDate;
+
+    const route = routePointsLabel(order.routePoints);
+
+    return [
+        route ? `маршрут: ${route}` : null,
+        order.assignedDriverName ? `водитель: ${order.assignedDriverName}` : null,
+        loadingDate ? `дата: ${dayjs(loadingDate).format('DD.MM.YYYY')}` : null,
+        order.vehicle?.model ? `авт.: ${order.vehicle.model}` : null,
+        order.assignedDriverPlate ? `г/н: ${order.assignedDriverPlate}` : null,
+        order.assignedDriverTrailer ? `п/п: ${order.assignedDriverTrailer}` : null,
+        order.orderNumber ? `заявка: ${order.orderNumber}` : null,
+    ].filter(Boolean).join(', ') || null;
+};
 
 /**
  * Рейс превращается в строки счёта.
@@ -107,6 +130,11 @@ const linesFromOrder = (order: BillableOrder): DraftLine[] => {
 
 const toPayload = (line: DraftLine): CreateAccountingDocumentLineInput => ({
     name: line.name.trim(),
+    // Подробности рейса печатаются в счёте второй строкой под названием
+    // услуги. Раньше они собирались только для показа на экране и на сервер
+    // не уезжали — в готовом счёте не было ни маршрута, ни водителя, и
+    // бухгалтер дописывала их руками уже в 1С.
+    description: line.orderDetails || undefined,
     quantity: String(line.quantity ?? 1),
     unit: line.unit?.trim() || 'усл',
     unitPrice: (line.unitPrice ?? 0).toFixed(2),

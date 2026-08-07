@@ -1167,11 +1167,18 @@ export class AccountingDocumentsService {
                 executorHasVat: true,
                 assignedDriverName: true,
                 assignedDriverPlate: true,
+                // Прицеп и марка машины идут в наименование услуги: заказчик
+                // сверяет строку счёта со своей заявкой по машине и дате, а не
+                // по нашему номеру рейса.
+                assignedDriverTrailer: true,
+                vehicle: { select: { model: true } },
                 routePoints: {
                     orderBy: { sequence: 'asc' },
                     select: {
                         pointType: true,
                         sequence: true,
+                        // Дата погрузки — из первой точки маршрута.
+                        expectedDate: true,
                         location: { select: { city: true, address: true } },
                     },
                 },
