@@ -20,6 +20,8 @@ import {
     createAccountingDocument,
     fetchBillableOrders,
     fetchCompanyBankAccounts,
+    OrderLineDraft,
+    orderToInvoiceLines,
     routePointsLabel,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
@@ -36,97 +38,15 @@ const VAT_OPTIONS = [
     ...VAT_RATES.map((rate) => ({ value: String(rate.value), label: `${rate.value} %` })),
 ];
 
-/** Строка будущего документа — до создания живёт только на клиенте. */
-interface DraftLine {
-    key: string;
-    name: string;
-    quantity: number;
-    unit: string;
-    unitPrice: number;
-    /** 'none' — без НДС, иначе ставка в процентах. */
-    vat: string;
+/**
+ * Строка будущего документа — до создания живёт только на клиенте.
+ * Сборка строки из рейса общая с карточкой документа: см. `orderToInvoiceLines`.
+ */
+interface DraftLine extends Omit<OrderLineDraft, 'orderId' | 'orderNumber'> {
+    /** У строки, добавленной руками, заявки нет. */
     orderId: string | null;
     orderNumber: string | null;
-    orderDetails: string | null;
 }
-
-/**
- * Подробности рейса, которые печатаются в строке счёта.
- *
- * Заказчик сверяет каждую строку со своей заявкой, а нашего номера рейса у
- * него нет — он узнаёт перевозку по маршруту, машине, водителю и дате
- * погрузки. Пока в строке были только маршрут, водитель и госномер,
- * бухгалтерия заказчика возвращала счёт на переделку, а наш бухгалтер
- * дописывала остальное руками.
- *
- * Порядок и подписи — как в счёте из 1С, к которому все привыкли.
- */
-const orderDetailsOf = (order: BillableOrder) => {
-    const loadingDate = order.routePoints
-        ?.find((point) => point.pointType === 'PICKUP' || point.pointType === 'ADDITIONAL_PICKUP')
-        ?.expectedDate;
-
-    const route = routePointsLabel(order.routePoints);
-
-    return [
-        route ? `маршрут: ${route}` : null,
-        order.assignedDriverName ? `водитель: ${order.assignedDriverName}` : null,
-        loadingDate ? `дата: ${dayjs(loadingDate).format('DD.MM.YYYY')}` : null,
-        order.vehicle?.model ? `авт.: ${order.vehicle.model}` : null,
-        order.assignedDriverPlate ? `г/н: ${order.assignedDriverPlate}` : null,
-        order.assignedDriverTrailer ? `п/п: ${order.assignedDriverTrailer}` : null,
-        order.orderNumber ? `заявка: ${order.orderNumber}` : null,
-    ].filter(Boolean).join(', ') || null;
-};
-
-/**
- * Рейс превращается в строки счёта.
- *
- * Обычно строка одна. При экспедиторской схеме НДС их две: возмещение
- * расходов на перевозку (без НДС) и вознаграждение экспедитора (с НДС).
- * Итог счёта при этом тот же — меняется только то, какая часть облагается
- * налогом. Если вознаграждения нет (перевозчик стоит столько же или дороже
- * клиента), делить нечего: строка остаётся одна, а бухгалтер видит
- * предупреждение — это либо ошибка в ставках, либо рейс в убыток.
- */
-const linesFromOrder = (order: BillableOrder): DraftLine[] => {
-    const amount = order.amount ?? 0;
-    const vat = order.hasVat && order.vatRate > 0 ? String(order.vatRate) : 'none';
-    const details = orderDetailsOf(order);
-    const base = {
-        quantity: 1,
-        unit: 'усл',
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        orderDetails: details,
-    };
-
-    const carrierCost = order.carrierCost ?? 0;
-    const splittable = order.forwardingVat && carrierCost > 0 && carrierCost < amount;
-
-    if (!splittable) {
-        return [{ ...base, key: `order-${order.id}`, name: 'Транспортные услуги', unitPrice: amount, vat }];
-    }
-
-    return [
-        {
-            ...base,
-            key: `order-${order.id}-pass`,
-            name: 'Возмещение расходов на перевозку',
-            unitPrice: carrierCost,
-            // Проходная часть нашим оборотом не является — НДС на неё не
-            // начисляется.
-            vat: 'none',
-        },
-        {
-            ...base,
-            key: `order-${order.id}-fee`,
-            name: 'Вознаграждение экспедитора',
-            unitPrice: Number((amount - carrierCost).toFixed(2)),
-            vat,
-        },
-    ];
-};
 
 const toPayload = (line: DraftLine): CreateAccountingDocumentLineInput => ({
     name: line.name.trim(),
@@ -283,7 +203,7 @@ export default function CreateInvoicePage() {
             );
         }
 
-        const picked = chosen.flatMap(linesFromOrder);
+        const picked = chosen.flatMap(orderToInvoiceLines);
         // Ручные строки сохраняются: подбор управляет только строками заявок.
         setLines([...picked, ...manual]);
         setPickerOpen(false);
@@ -294,6 +214,7 @@ export default function CreateInvoicePage() {
         setLines((prev) => [...prev, {
             key: `manual-${Date.now()}-${prev.length}`,
             name: preset?.name || 'Транспортные услуги',
+            description: null,
             quantity: 1,
             unit: preset?.unit || 'усл',
             unitPrice: 0,

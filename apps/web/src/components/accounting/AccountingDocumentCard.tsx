@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, DatePicker, Dropdown, Input, InputNumber, Modal, Select, Space, Spin, Table, Tooltip, theme } from 'antd';
+import { Alert, Button, DatePicker, Dropdown, Input, InputNumber, Modal, Select, Space, Spin, Switch, Table, Tooltip, theme } from 'antd';
 import {
     ArrowLeftOutlined,
     CheckOutlined,
@@ -23,6 +23,7 @@ import {
     ACCOUNTING_DOCUMENT_STATUS_LABELS,
     AccountingDocumentDetails,
     AccountingDocumentLine,
+    BillableOrder,
     CompanyBankAccount,
     CreateAccountingDocumentLineInput,
     DocumentDelivery,
@@ -31,11 +32,14 @@ import {
     createServiceActFromInvoice,
     deleteAccountingDocumentDraft,
     fetchAccountingDocument,
+    fetchBillableOrders,
     fetchDocumentDelivery,
     sendAccountingDocument,
     fetchCompanyBankAccounts,
     openAccountingDocumentPdf,
     orderRouteLabel,
+    orderToInvoiceLines,
+    routePointsLabel,
     postAccountingDocument,
     revokeAccountingDocumentShare,
     updateAccountingDocument,
@@ -198,6 +202,14 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const [externalDate, setExternalDate] = useState<Dayjs | null>(null);
     const [lines, setLines] = useState<EditableLine[]>([]);
     const [dirty, setDirty] = useState(false);
+    // Подбор рейсов в уже открытый документ. Раньше рейсы выбирались только
+    // при создании: если счёт уже завели, а заказчик попросил добавить в него
+    // ещё перевозки, оставалось набивать строки руками.
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [pickerOrders, setPickerOrders] = useState<BillableOrder[]>([]);
+    const [pickerLoading, setPickerLoading] = useState(false);
+    const [pickedIds, setPickedIds] = useState<string[]>([]);
+    const [includeInProgress, setIncludeInProgress] = useState(false);
     // Кому можно отправить документ прямо на платформе. Определяется по БИН
     // контрагента: справочная копия — это не арендатор, доставлять ей некуда.
     const [delivery, setDelivery] = useState<DocumentDelivery | null>(null);
@@ -319,6 +331,66 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const removeLine = (key: string) => {
         setLines((prev) => prev.filter((line) => line.key !== key));
         touch();
+    };
+
+    /**
+     * Подбор рейсов в открытый документ.
+     *
+     * Список тот же, что при создании: сервер отдаёт только те рейсы этого
+     * контрагента, на которые счёт ещё не выставлен, — уже попавшие в этот
+     * документ в нём не появятся.
+     */
+    const openPicker = async () => {
+        if (!document?.counterparty?.id) {
+            toast.warning('У документа не указан контрагент');
+            return;
+        }
+        setPickerOpen(true);
+        setPickedIds([]);
+        setPickerLoading(true);
+        try {
+            setPickerOrders(await fetchBillableOrders({
+                type,
+                direction: document.direction,
+                counterpartyId: document.counterparty.id,
+                includeInProgress,
+            }));
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось загрузить рейсы');
+            setPickerOrders([]);
+        } finally {
+            setPickerLoading(false);
+        }
+    };
+
+    // Переключатель «рейсы в работе» перезапрашивает список, пока окно открыто.
+    useEffect(() => {
+        if (!pickerOpen || !document?.counterparty?.id) return;
+        let cancelled = false;
+        setPickerLoading(true);
+        fetchBillableOrders({
+            type,
+            direction: document.direction,
+            counterpartyId: document.counterparty.id,
+            includeInProgress,
+        })
+            .then((data) => { if (!cancelled) setPickerOrders(data); })
+            .catch(() => { if (!cancelled) setPickerOrders([]); })
+            .finally(() => { if (!cancelled) setPickerLoading(false); });
+        return () => { cancelled = true; };
+    }, [includeInProgress, pickerOpen, document?.counterparty?.id, document?.direction, type]);
+
+    const applyPicked = () => {
+        const chosen = pickerOrders.filter((order) => pickedIds.includes(order.id));
+        if (!chosen.length) {
+            setPickerOpen(false);
+            return;
+        }
+        setLines((prev) => [...prev, ...chosen.flatMap(orderToInvoiceLines)]);
+        setPickerOpen(false);
+        setPickedIds([]);
+        touch();
+        toast.success(`Добавлено рейсов: ${chosen.length}. Не забудьте «Записать»`);
     };
 
     /** «Записать» — сохранить черновик, не проводя его. */
@@ -961,15 +1033,25 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 />
 
                 {editable && (
-                    <Button
-                        type="link"
-                        size="small"
-                        icon={<PlusOutlined />}
-                        onClick={addLine}
-                        style={{ paddingLeft: 0, marginTop: 8 }}
-                    >
-                        Добавить услугу
-                    </Button>
+                    <Space size={4} style={{ marginTop: 8 }}>
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            onClick={openPicker}
+                            style={{ paddingLeft: 0 }}
+                        >
+                            Добавить заявки
+                        </Button>
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            onClick={addLine}
+                        >
+                            Добавить услугу
+                        </Button>
+                    </Space>
                 )}
 
                 <div
@@ -1122,6 +1204,98 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     )}
                 </div>
             </div>
+
+            <Modal
+                title="Добавить заявки"
+                open={pickerOpen}
+                onCancel={() => setPickerOpen(false)}
+                onOk={applyPicked}
+                okText={`Добавить в документ (${pickedIds.length})`}
+                cancelText="Отмена"
+                width={980}
+                destroyOnClose
+            >
+                {kind.showDueDate && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 12px' }}>
+                        <Switch size="small" checked={includeInProgress} onChange={setIncludeInProgress} />
+                        <span style={{ fontSize: 13 }}>Показать рейсы в работе — счёт на аванс</span>
+                    </div>
+                )}
+
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message="Показаны рейсы этого контрагента, на которые счёт ещё не выставлен."
+                    description="Строки соберутся так же, как при создании документа. После добавления нажмите «Записать»."
+                />
+
+                {pickerLoading ? (
+                    <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+                ) : (
+                    <Table
+                        rowKey="id"
+                        size="small"
+                        pagination={false}
+                        scroll={{ y: 420 }}
+                        dataSource={pickerOrders}
+                        rowSelection={{
+                            selectedRowKeys: pickedIds,
+                            onChange: (keys) => setPickedIds(keys as string[]),
+                        }}
+                        locale={{ emptyText: 'Нет рейсов без документа у этого контрагента' }}
+                        columns={[
+                            {
+                                title: 'Заявка',
+                                dataIndex: 'orderNumber',
+                                width: 140,
+                                render: (value: string) => <span style={{ fontWeight: 600 }}>{value}</span>,
+                            },
+                            {
+                                title: 'Рейс',
+                                key: 'route',
+                                render: (_: unknown, record: BillableOrder) => (
+                                    <div>
+                                        <div style={{ fontSize: 12 }}>
+                                            {routePointsLabel(record.routePoints) || '—'}
+                                        </div>
+                                        {record.assignedDriverName && (
+                                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                                {[record.assignedDriverName, record.assignedDriverPlate]
+                                                    .filter(Boolean).join(' · ')}
+                                            </div>
+                                        )}
+                                    </div>
+                                ),
+                            },
+                            {
+                                title: 'Груз',
+                                dataIndex: 'cargoDescription',
+                                ellipsis: true,
+                                render: (value: string | null) => (
+                                    <span style={{ fontSize: 12 }}>{value || '—'}</span>
+                                ),
+                            },
+                            {
+                                title: 'Сумма',
+                                key: 'amount',
+                                width: 150,
+                                align: 'right' as const,
+                                render: (_: unknown, record: BillableOrder) => (
+                                    <div>
+                                        <div style={{ fontWeight: 600 }}>{money(record.amount)}</div>
+                                        <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                            {record.hasVat && record.vatRate > 0
+                                                ? `НДС ${record.vatRate} %`
+                                                : 'без НДС'}
+                                        </div>
+                                    </div>
+                                ),
+                            },
+                        ]}
+                    />
+                )}
+            </Modal>
         </div>
     );
 }
