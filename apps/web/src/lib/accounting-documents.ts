@@ -50,8 +50,17 @@ export interface AccountingDocumentOrderRef {
     };
 }
 
-/** «Алматы → Астана» по точкам маршрута заявки. */
-export function orderRouteLabel(order: AccountingDocumentOrderRef['order']): string | null {
+/**
+ * «Алматы → Астана» по точкам маршрута заявки.
+ *
+ * `separator` меняется для печати: в шрифте печатных форм нет знака «→», и
+ * в готовом PDF на его месте выходил пустой квадрат. Там маршрут пишется
+ * через дефис — как в счёте из 1С.
+ */
+export function orderRouteLabel(
+    order: AccountingDocumentOrderRef['order'],
+    separator = '→',
+): string | null {
     const points = order.routePoints || [];
     if (!points.length) return null;
     const place = (point: AccountingDocumentRoutePoint) =>
@@ -59,7 +68,7 @@ export function orderRouteLabel(order: AccountingDocumentOrderRef['order']): str
     const from = place(points[0]);
     const to = place(points[points.length - 1]);
     if (!from && !to) return null;
-    return points.length === 1 ? from : `${from || '—'} → ${to || '—'}`;
+    return points.length === 1 ? from : `${from || '—'} ${separator} ${to || '—'}`;
 }
 
 export interface AccountingDocumentListItem {
@@ -447,8 +456,11 @@ export async function fetchBillableOrders(params: {
 }
 
 /** «Алматы → Астана» по точкам маршрута заявки подбора. */
-export function routePointsLabel(points: AccountingDocumentRoutePoint[] | undefined): string | null {
-    return orderRouteLabel({ id: '', orderNumber: '', routePoints: points });
+export function routePointsLabel(
+    points: AccountingDocumentRoutePoint[] | undefined,
+    separator = '→',
+): string | null {
+    return orderRouteLabel({ id: '', orderNumber: '', routePoints: points }, separator);
 }
 
 export interface CompanyBankAccount {
@@ -675,7 +687,9 @@ export function orderInvoiceDetails(order: BillableOrder): string | null {
     const loadingDate = order.routePoints
         ?.find((point) => point.pointType === 'PICKUP' || point.pointType === 'ADDITIONAL_PICKUP')
         ?.expectedDate;
-    const route = routePointsLabel(order.routePoints);
+    // Дефис, а не стрелка: строка уходит в печатную форму, а в её шрифте
+    // знака «→» нет — вместо него печатался пустой квадрат.
+    const route = routePointsLabel(order.routePoints, '-');
     const date = loadingDate
         ? new Date(loadingDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
         : null;

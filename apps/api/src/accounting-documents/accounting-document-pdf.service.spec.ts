@@ -337,6 +337,53 @@ describe('AccountingDocumentPdfService', () => {
         expect(rowHeight - padY * 2).toBeGreaterThanOrEqual(rendered);
     });
 
+    // Та же болезнь, но в счёте на оплату: там высота строки считалась
+    // отдельной арифметикой с запасом 8 пунктов, а ячейка обрезает по
+    // height − padY * 2 = height − 10. Двух пунктов не хватало, и последняя
+    // строка расшифровки пропадала целиком. Пока в счёте печатался один
+    // маршрут, текст умещался в строку и это не всплывало; с полной
+    // расшифровкой — маршрут, водитель, дата, машина, заявка — обрезалось
+    // у всех.
+    it('в счёте высота строки вмещает полную расшифровку рейса', () => {
+        const doc = new PDFDocument({ size: 'A4' });
+        const fontsDir = path.join(__dirname, '..', 'contracts', 'fonts');
+        doc.registerFont('Roboto', path.join(fontsDir, 'Roboto-Regular.ttf'));
+        doc.font('Roboto').fontSize(7.5);
+
+        const padX = (AccountingDocumentPdfService as any).CELL_PAD_X as number;
+        const padY = (AccountingDocumentPdfService as any).CELL_PAD_Y as number;
+        const lineGap = (AccountingDocumentPdfService as any).CELL_LINE_GAP as number;
+
+        // Ширина графы «Наименование» в счёте и настоящая строка из подбора.
+        const width = 250;
+        const text = 'Транспортные услуги\nмаршрут: Алматы - Астана, водитель: Иванов Иван, '
+            + 'дата: 20.07.2026, авт.: Volvo FH16, г/н: 123 ABC 01, п/п: AB1234, '
+            + 'заявка: ЗК-2601, ID: 36136';
+
+        const rowHeight = (service as any).tableRowHeight(doc, [text], [width], 24) as number;
+        const rendered = doc.heightOfString(text, { width: width - padX * 2, lineGap });
+
+        expect(rowHeight - padY * 2).toBeGreaterThanOrEqual(rendered);
+    });
+
+    // В шрифте печатных форм нет знака «→»: вместо стрелки в готовом счёте
+    // выходил пустой квадрат. Маршрут в печать уходит через дефис.
+    it('в шрифте печатных форм нет стрелки — маршрут печатается дефисом', () => {
+        const fontsDir = path.join(__dirname, '..', 'contracts', 'fonts');
+        const doc = new PDFDocument({ size: 'A4' });
+        doc.registerFont('Roboto', path.join(fontsDir, 'Roboto-Regular.ttf'));
+        doc.font('Roboto');
+        const font = (doc as any)._font;
+        const hasGlyph = (ch: string) => {
+            const id = font.font.characterToGlyph
+                ? font.font.characterToGlyph(ch.codePointAt(0)!)
+                : font.font.glyphForCodePoint(ch.codePointAt(0)!).id;
+            return id !== 0;
+        };
+        expect(hasGlyph('-')).toBe(true);
+        expect(hasGlyph('→')).toBe(false);
+    });
+
     it('создаёт PDF акта сверки с оборотами и конечным сальдо', async () => {
         const buffer = await service.generateReconciliationActPdf({
             ...sampleDocument(),

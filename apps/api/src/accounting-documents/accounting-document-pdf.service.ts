@@ -1302,8 +1302,12 @@ export class AccountingDocumentPdfService {
         lines.forEach((line, index) => {
             const name = line.description ? `${line.name}\n${line.description}` : line.name;
             doc.font('Roboto').fontSize(7.5);
-            const nameHeight = doc.heightOfString(name, { width: widths[1] - 8, lineGap: 1 });
-            const rowHeight = Math.max(24, nameHeight + 8);
+            // Высота строки считается тем же способом, что и отрисовка ячейки.
+            // Раньше здесь было своё вычисление с запасом 8 пунктов, а ячейка
+            // обрезает текст по height − 10: строке не хватало двух пунктов, и
+            // последняя строка расшифровки пропадала целиком. Пока в счёте был
+            // только маршрут, текст умещался в одну строку и это не всплывало.
+            const rowHeight = this.tableRowHeight(doc, [name], [widths[1]], 24);
             if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 125) {
                 doc.addPage();
                 doc.y = doc.page.margins.top + 10;
