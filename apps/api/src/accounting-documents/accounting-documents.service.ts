@@ -1172,6 +1172,11 @@ export class AccountingDocumentsService {
                 // по нашему номеру рейса.
                 assignedDriverTrailer: true,
                 vehicle: { select: { model: true } },
+                // Марка машины. В заявке хранится снимок водителя — имя,
+                // телефон, госномер, прицеп, — а марки среди них нет, и в
+                // счёте графа «авт.» оставалась пустой. Берём из карточки
+                // водителя: в документ она попадёт текстом и там застынет.
+                driver: { select: { vehicleModel: true } },
                 // Номер этой перевозки в системе заказчика и то, как он у
                 // него называется. Печатается в строке счёта, если заказчик
                 // этого просит: свой счёт он сверяет именно по нему.
@@ -1229,6 +1234,7 @@ export class AccountingDocumentsService {
                 customerRefLabel: order.customerCompany?.customerRefPrintInvoice
                     ? order.customerCompany.customerRefLabel
                     : null,
+                driverVehicleModel: order.driver?.vehicleModel ?? null,
             };
         });
     }

@@ -435,6 +435,11 @@ export interface BillableOrder {
     assignedDriverTrailer: string | null;
     vehicle: { model: string | null } | null;
     /**
+     * Марка машины из карточки водителя. В самой заявке её нет: там снимок
+     * водителя без марки, и графа «авт.» в счёте оставалась пустой.
+     */
+    driverVehicleModel: string | null;
+    /**
      * Номер этой перевозки в системе заказчика и то, как он у него
      * называется. Подпись приходит только если заказчик просил печатать
      * номер в счёте — иначе в строку он не попадает.
@@ -703,7 +708,9 @@ export function orderInvoiceDetails(order: BillableOrder): string | null {
         route ? `маршрут: ${route}` : null,
         order.assignedDriverName ? `водитель: ${order.assignedDriverName}` : null,
         date ? `дата: ${date}` : null,
-        order.vehicle?.model ? `авт.: ${order.vehicle.model}` : null,
+        (order.vehicle?.model || order.driverVehicleModel)
+            ? `авт.: ${order.vehicle?.model || order.driverVehicleModel}`
+            : null,
         order.assignedDriverPlate ? `г/н: ${order.assignedDriverPlate}` : null,
         order.assignedDriverTrailer ? `п/п: ${order.assignedDriverTrailer}` : null,
         order.orderNumber ? `заявка: ${order.orderNumber}` : null,
