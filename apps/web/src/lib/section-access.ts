@@ -31,6 +31,7 @@ const FULL_ACCESS_ROLES = ['COMPANY_ADMIN', 'FORWARDER', 'ADMIN'];
 const SECTIONS: { prefix: string; permission?: string; roles?: string[]; title: string }[] = [
     { prefix: '/company/accounting', permission: 'accounting', title: 'Бухгалтерия' },
     { prefix: '/company/orders', permission: 'orders', title: 'Заявки' },
+    { prefix: '/company/requests', permission: 'orders', title: 'Запросы' },
     { prefix: '/company/tracking', permission: 'tracking', title: 'GPS-мониторинг' },
     { prefix: '/company/partners', permission: 'partners', title: 'Контрагенты' },
     { prefix: '/company/carriers', permission: 'partners', title: 'Перевозчики' },

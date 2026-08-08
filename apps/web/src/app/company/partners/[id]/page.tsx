@@ -11,6 +11,7 @@ import {
 import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import LocationForm from '@/components/ui/LocationForm';
+import { QuoteRequestsPanel } from '@/components/quotes/QuoteRequestsPanel';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 
@@ -600,8 +601,12 @@ export default function PartnerDetailPage() {
     );
 
     // ===== Tab items =====
+    // «Запросы» стоят сразу после профиля намеренно: менеджер приходит в
+    // карточку клиента именно тогда, когда тот прислал запрос на расчёт,
+    // и лезть за этим в отдельный раздел ему незачем.
     const tabItems: any[] = [
         { key: 'profile', label: 'Профиль', children: profileContent },
+        { key: 'quotes', label: 'Запросы', children: <QuoteRequestsPanel customerCompanyId={partnerId} /> },
         { key: 'contracts', label: 'Договоры', children: contractsContent },
         { key: 'addresses', label: `Адреса${addressesLoaded ? ` (${addresses.length})` : ''}`, children: addressesContent },
     ];
