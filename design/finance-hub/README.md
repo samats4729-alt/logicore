@@ -16,9 +16,11 @@
 4. Пройди чек-лист в конце файла. Он существует потому, что мелочи из него
    уже отвергались владельцем — их легко пропустить и получить не тот экран.
 
-Пересобрать эталон: `cd build && python3 build.py` (пишет `reference-*.html`
-в эту папку). Снимок: `cd build && sh shot.sh ../reference-light.html
-../screens/light.png 1440 1600`. Проверка на больших суммах:
+Пересобрать эталон: `cd ../_kit && python3 build.py` (пишет
+`reference-*.html` сюда). Снимок: `cd ../_kit && sh shot.sh
+../finance-hub/reference-light.html ../finance-hub/screens/light.png 1440
+1600`. Общий дизайн-язык и сборщик лежат в `design/_kit` — им же собирается
+`design/orders-list`. Проверка на больших суммах:
 `LC_SCALE=big|huge|mega|ultra python3 build.py` — множители 115 / 1 150 /
 11 500 / 115 000 к демо-данным.
 
@@ -62,7 +64,7 @@
 
 ## Шрифты
 
-Оба с кириллицей, оба уже лежат в `build/` как woff2 (Inter — переменный,
+Оба с кириллицей, оба лежат в `../_kit/` как woff2 (Inter — переменный,
 Unbounded — переменный).
 
 - **Inter** — весь интерфейс. `body`: `letter-spacing:-0.011em`,
