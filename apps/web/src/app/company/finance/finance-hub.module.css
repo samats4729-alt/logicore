@@ -7,8 +7,8 @@
  */
 
 .page {
-    background: var(--bg);
-    color: var(--fg);
+    background: var(--nova-bg);
+    color: var(--nova-fg);
     font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     letter-spacing: -0.011em;
     font-feature-settings: 'cv05' 1, 'ss03' 1;
@@ -35,7 +35,7 @@
     font-weight: 500;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
 }
 
 .title {
@@ -45,12 +45,12 @@
     letter-spacing: -0.045em;
     line-height: 1.2;
     margin: 6px 0 0;
-    color: var(--fg);
+    color: var(--nova-fg);
 }
 
 .subtitle {
     font-size: 13px;
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     margin: 6px 0 0;
 }
 
@@ -65,14 +65,14 @@
     display: inline-flex;
     gap: 2px;
     padding: 3px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--nova-border);
     border-radius: 999px;
 }
 
 .pill {
     border: 0;
     background: transparent;
-    color: var(--fg-2);
+    color: var(--nova-fg-2);
     font: 500 12.5px/1 Inter, sans-serif;
     padding: 7px 14px;
     border-radius: 999px;
@@ -80,17 +80,17 @@
 }
 
 .pill:hover {
-    background: var(--hover);
+    background: var(--nova-hover);
 }
 
 .pillActive {
-    background: var(--primary);
-    color: var(--primary-fg);
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
     font-weight: 600;
 }
 
 .pillActive:hover {
-    background: var(--primary);
+    background: var(--nova-primary);
 }
 
 /* ===== Показатели ===== */
@@ -103,8 +103,8 @@
 }
 
 .kpi {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
     border-radius: var(--nova-radius);
     box-shadow: var(--nova-shadow);
     padding: 13px 14px 12px;
@@ -123,7 +123,7 @@
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -135,19 +135,19 @@
     border-radius: 999px;
     padding: 2px 7px;
     white-space: nowrap;
-    border: 1px solid var(--border);
-    color: var(--fg-2);
+    border: 1px solid var(--nova-border);
+    color: var(--nova-fg-2);
 }
 
 .chipNeg {
-    background: var(--neg-soft);
-    color: var(--neg);
+    background: var(--nova-neg-soft);
+    color: var(--nova-neg);
     border-color: transparent;
 }
 
 .chipWarn {
-    background: var(--warn-soft);
-    color: var(--warn);
+    background: var(--nova-warn-soft);
+    color: var(--nova-warn);
     border-color: transparent;
 }
 
@@ -157,19 +157,19 @@
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
     margin-top: 6px;
-    color: var(--fg);
+    color: var(--nova-fg);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .kpiValueNeg {
-    color: var(--neg);
+    color: var(--nova-neg);
 }
 
 .kpiSub {
     font-size: 11.5px;
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
@@ -200,36 +200,36 @@
     height: 34px;
     padding: 0 13px;
     border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--fg);
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface);
+    color: var(--nova-fg);
     font: 500 12.5px/1 Inter, sans-serif;
     cursor: pointer;
     white-space: nowrap;
 }
 
 .action:hover {
-    background: var(--hover);
+    background: var(--nova-hover);
 }
 
 .action svg {
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
 }
 
 .actionPrimary {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: var(--primary-fg);
+    background: var(--nova-primary);
+    border-color: var(--nova-primary);
+    color: var(--nova-primary-fg);
     font-weight: 550;
 }
 
 .actionPrimary:hover {
-    background: var(--primary);
+    background: var(--nova-primary);
     opacity: .9;
 }
 
 .actionPrimary svg {
-    color: var(--primary-fg);
+    color: var(--nova-primary-fg);
 }
 
 .search {
@@ -242,21 +242,21 @@
     width: 100%;
     height: 34px;
     border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--fg);
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface);
+    color: var(--nova-fg);
     font: 500 12.5px/1 Inter, sans-serif;
     padding: 0 44px 0 34px;
     outline: none;
 }
 
 .searchInput::placeholder {
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     font-weight: 400;
 }
 
 .searchInput:focus {
-    border-color: var(--accent);
+    border-color: var(--nova-accent);
 }
 
 .searchIcon {
@@ -264,7 +264,7 @@
     left: 11px;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     pointer-events: none;
 }
 
@@ -274,8 +274,8 @@
     top: 50%;
     transform: translateY(-50%);
     font-size: 10.5px;
-    color: var(--fg-3);
-    border: 1px solid var(--border);
+    color: var(--nova-fg-3);
+    border: 1px solid var(--nova-border);
     border-radius: 6px;
     padding: 2px 5px;
     pointer-events: none;
@@ -289,8 +289,8 @@
 }
 
 .group {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
     border-radius: var(--nova-radius);
     box-shadow: var(--nova-shadow);
     margin-bottom: 14px;
@@ -302,13 +302,13 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    background: var(--surface-2);
-    border-bottom: 1px solid var(--border-2);
+    background: var(--nova-surface-2);
+    border-bottom: 1px solid var(--nova-border-2);
     padding: 12px 14px 10px;
 }
 
 .groupHead svg {
-    color: var(--fg-2);
+    color: var(--nova-fg-2);
 }
 
 .groupTitle {
@@ -316,7 +316,7 @@
     font-size: 11.5px;
     font-weight: 500;
     letter-spacing: -0.03em;
-    color: var(--fg);
+    color: var(--nova-fg);
     margin: 0;
     flex: 1;
     min-width: 0;
@@ -325,7 +325,7 @@
 .groupCount {
     font-size: 11px;
     font-weight: 600;
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
 }
 
 .groupBody {
@@ -349,7 +349,7 @@
 }
 
 .item:hover {
-    background: var(--hover);
+    background: var(--nova-hover);
 }
 
 .itemIcon {
@@ -357,7 +357,7 @@
     height: 26px;
     display: grid;
     place-items: center;
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     flex-shrink: 0;
 }
 
@@ -369,7 +369,7 @@
 .itemLabel {
     font-size: 12.8px;
     font-weight: 550;
-    color: var(--fg);
+    color: var(--nova-fg);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -377,7 +377,7 @@
 
 .itemDesc {
     font-size: 11px;
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -386,15 +386,15 @@
 .itemBadge {
     font-size: 10.5px;
     font-weight: 600;
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--nova-accent-soft);
+    color: var(--nova-accent);
     border-radius: 999px;
     padding: 1px 7px;
     flex-shrink: 0;
 }
 
 .chevron {
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     opacity: .45;
     flex-shrink: 0;
 }
@@ -402,7 +402,7 @@
 .empty {
     padding: 40px 0;
     text-align: center;
-    color: var(--fg-3);
+    color: var(--nova-fg-3);
     font-size: 13px;
 }
 

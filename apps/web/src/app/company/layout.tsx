@@ -341,7 +341,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     );
 
     return (
-        <Layout className="lc-nova" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+        <Layout className="lc-nova" style={{ minHeight: '100vh', background: 'var(--nova-bg)' }}>
             {/* Mobile Drawer */}
             {isMobile && <MobileMenu />}
 
@@ -529,7 +529,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             <LiveEventTicker />
 
             {/* Content */}
-            <Layout style={{ background: 'var(--bg)', padding: 0 }}>
+            <Layout style={{ background: 'var(--nova-bg)', padding: 0 }}>
                 <Content
                     data-guide="content"
                     className="page-content-anim"
