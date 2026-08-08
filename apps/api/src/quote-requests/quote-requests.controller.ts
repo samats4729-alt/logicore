@@ -29,7 +29,12 @@ import {
 export class QuoteRequestsController {
     constructor(private readonly service: QuoteRequestsService) { }
 
+    // Те же роли, что и на запись. Без явного перечня сюда доходил бы
+    // любой вошедший, кого не ограничивает PermissionsGuard, — водитель и
+    // грузополучатель в том числе, а в запросах лежат предложенные клиенту
+    // цены.
     @Get()
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Список запросов на расчёт' })
     findAll(@Request() req: any, @Query() query: QuoteRequestsQueryDto) {
         return this.service.findAll(req.user.companyId, query);
@@ -40,12 +45,14 @@ export class QuoteRequestsController {
      * менеджеру она нужна в момент заполнения формы, когда запроса ещё нет.
      */
     @Post('memory')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Что уже предлагали этому клиенту на этом маршруте' })
     memory(@Request() req: any, @Body() query: QuoteMemoryQueryDto) {
         return this.service.memory(req.user.companyId, query);
     }
 
     @Get(':id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Карточка запроса' })
     findOne(@Request() req: any, @Param('id') id: string) {
         return this.service.findOne(req.user.companyId, id);
