@@ -101,3 +101,29 @@ describe('CitiesService.importFromProvider', () => {
         expect(result.city).toEqual(cityWithProvider);
     });
 });
+
+describe('CitiesService.findAll', () => {
+    const создать = () => {
+        const prisma: any = { city: { findMany: jest.fn().mockResolvedValue([]) } };
+        return { service: new CitiesService(prisma as unknown as PrismaService), prisma };
+    };
+
+    it('без поиска отдаёт справочник целиком, а не первые двадцать', async () => {
+        // Так справочник запрашивают, когда он нужен весь: список городов в
+        // админке показывал двадцать записей из сорока девяти, и остальные
+        // выглядели как несуществующие.
+        const { service, prisma } = создать();
+
+        await service.findAll();
+
+        expect(prisma.city.findMany.mock.calls[0][0].take).toBeGreaterThan(100);
+    });
+
+    it('с поиском хватает двадцати подсказок', async () => {
+        const { service, prisma } = создать();
+
+        await service.findAll('Алма');
+
+        expect(prisma.city.findMany.mock.calls[0][0].take).toBe(20);
+    });
+});

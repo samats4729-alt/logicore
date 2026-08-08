@@ -46,6 +46,20 @@ export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
     CANCELLED: ORDER_STATUS_LABELS.CANCELLED,
 };
 
+/**
+ * Статусы запроса на расчёт — этапа до заявки.
+ *
+ * Слова заказчика, а не программиста: он говорит «подтвердил» и «не
+ * подтвердил», и в списке это должно читаться так же, как он произносит
+ * это вслух.
+ */
+export const QUOTE_REQUEST_STATUS_LABELS: Record<string, string> = {
+    NEW: 'Новый',
+    IN_PROGRESS: 'В работе',
+    APPROVED: 'Согласован',
+    REJECTED: 'Не согласован',
+};
+
 /** Статусы старой модели счёта (`Invoice`), она ещё жива в публичной ссылке. */
 export const LEGACY_INVOICE_STATUS_LABELS: Record<string, string> = {
     DRAFT: ORDER_STATUS_LABELS.DRAFT,
