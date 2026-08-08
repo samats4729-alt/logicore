@@ -600,7 +600,8 @@ def html(theme):
 
 
 SUFFIX = ("-" + SCALE) if SCALE else ""
-OUT = os.path.dirname(HERE)          # design/finance-hub
+# Общий дизайн-язык живёт здесь, а страница-образец «Финансы» — рядом.
+OUT = os.environ.get("LC_OUT", os.path.join(os.path.dirname(HERE), "finance-hub"))
 
 for th in ("light", "dark"):
     name = "reference%s-%s.html" % (SUFFIX, th)
