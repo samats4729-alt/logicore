@@ -3058,3 +3058,238 @@ a.mapboxgl-ctrl-logo,
     background: transparent;
     border-color: rgba(255, 255, 255, .16);
 }
+
+/* ==========================================================================
+   Дизайн-язык «nova» — обвязка кабинета по эталону design/finance-hub.
+   ==========================================================================
+
+   Токены объявлены на классе, а не в :root: лендинг живёт по своим правилам,
+   и глобальное объявление перекрасило бы его тоже. Класс вешает обёртка
+   кабинета, поэтому шапка, тикер и страницы внутри берут одни и те же
+   значения — иначе они разойдутся, как уже расходились раньше.
+
+   Кабинет переезжает на этот язык постранично. Обвязка (шапка, тикер, фон)
+   переехала целиком: она одна на все экраны, и держать две шапки нельзя.  */
+
+.lc-nova {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f6f7f8;
+    --fg: #0b0d12;
+    --fg-2: #4c5460;
+    --fg-3: #868e9c;
+    --border: #e6e8ec;
+    --border-2: #eff0f3;
+    --hover: #f5f6f8;
+    --primary: #0b0d12;
+    --primary-fg: #ffffff;
+    --accent: #1677ff;
+    --accent-soft: #eef4ff;
+    --neg: #d92d20;
+    --neg-soft: #fef2f1;
+    --warn: #b25e09;
+    --warn-soft: #fff5e8;
+    --pos: #12855b;
+    --nova-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 8px 20px -12px rgba(16, 24, 40, .16);
+    --nova-radius: 14px;
+    /* Одна ширина и один отступ на шапку, тикер и страницу: вертикали
+       обязаны совпадать по всей высоте экрана. */
+    --nova-max: 1360px;
+    --nova-pad: 28px;
+}
+
+/* Тёплый серый, выбранный владельцем. Холодные синевато-чёрные отвергнуты. */
+[data-theme='dark'] .lc-nova {
+    --bg: #20201f;
+    --surface: #20201f;
+    --surface-2: #1a1a19;
+    --fg: #f1f0ec;
+    --fg-2: #b2b1aa;
+    --fg-3: #8b8a83;
+    --border: #343430;
+    --border-2: #2c2c29;
+    --hover: #292927;
+    --primary: #f1f0ec;
+    --primary-fg: #20201f;
+    --accent: #5aa2ff;
+    --accent-soft: #25313f;
+    --neg: #ff8478;
+    --neg-soft: #3a2723;
+    --warn: #e8ac66;
+    --warn-soft: #3a2e1e;
+    --pos: #5bcf95;
+    --nova-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+}
+
+.lc-nova {
+    background: var(--bg);
+}
+
+/* Поля страницы раньше задавала обвязка — одни на все экраны. Переехавшие
+   страницы задают их сами (у них своя сетка и своя ширина), а не переехавшие
+   остались бы прижатыми к краю экрана. Поэтому отступ висит на `.lc-page` —
+   обёртке старых страниц, и снимается вместе с ней при переезде. */
+.lc-nova .lc-page {
+    padding: 16px 24px 24px;
+}
+
+/* ── шапка ───────────────────────────────────────────────────────────── */
+
+.lc-nova .app-header-2026 {
+    height: 58px !important;
+    line-height: normal;
+    padding: 0 !important;
+    background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid var(--border) !important;
+}
+
+/* Внутренняя дорожка шапки: та же ширина, что у страницы. */
+.lc-nova .nova-bar {
+    max-width: var(--nova-max);
+    margin: 0 auto;
+    padding: 0 var(--nova-pad);
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    width: 100%;
+}
+
+.lc-nova .nova-brand {
+    font-family: 'Unbounded', Inter, sans-serif;
+    font-size: 14.5px;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    color: var(--fg);
+    white-space: nowrap;
+}
+
+.lc-nova .nova-brand span {
+    color: var(--accent);
+}
+
+/* Дорожка пилюль. Активный пункт — заливка, а не светлая подсветка:
+   на белом фоне подсветку не было видно, «Финансы» ничем не отличались
+   от «Заявок». */
+.lc-nova .lc2-nav {
+    margin-left: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    box-shadow: none;
+    padding: 3px;
+    gap: 2px;
+}
+
+.lc-nova .lc2-nav-item {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg-2);
+}
+
+.lc-nova .lc2-nav-item:hover:not(.active) {
+    background: var(--hover);
+    color: var(--fg);
+}
+
+.lc-nova .lc2-nav-item.active {
+    background: var(--primary);
+    color: var(--primary-fg);
+    font-weight: 600;
+    box-shadow: none;
+}
+
+/* Правый угол: всё круглое, 34px. Аватар круглый обязательно — там будет
+   фотография. */
+.lc-nova .nova-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lc-nova .nova-iconbtn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: var(--fg-2);
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+}
+
+.lc-nova .nova-iconbtn:hover {
+    background: var(--hover);
+    color: var(--fg);
+}
+
+.lc-nova .nova-user {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-left: 10px;
+    margin-left: 2px;
+    border-left: 1px solid var(--border);
+    cursor: pointer;
+}
+
+.lc-nova .nova-user-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--fg);
+}
+
+.lc-nova .nova-user-role {
+    font-size: 11px;
+    color: var(--fg-3);
+    line-height: 1.25;
+}
+
+/* Всё круглое в правом углу — ровно 34px, как в эталоне. Кнопки приходят из
+   разных компонентов и были 38 и 32: в ряд они вставали ступенькой. */
+.lc-nova .lc2-header-right > button,
+.lc-nova .lc2-header-right > div > button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 999px;
+}
+
+.lc-nova .lc2-theme-toggle {
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+}
+
+/* Активная половина переключателя — заливка, как у активной пилюли. */
+.lc-nova .lc2-theme-active-bg {
+    background: var(--primary);
+}
+
+.lc-nova .lc2-theme-btn.active {
+    color: var(--primary-fg);
+}
+
+.lc-nova .lc2-header-divider {
+    background: var(--border);
+}
+
+/* ── тикер ───────────────────────────────────────────────────────────── */
+
+/* Тикер начинается по той же вертикали, что шапка и страница. Отступ
+   считается от края, а не задаётся контейнером: внутри бегущая строка, и
+   ограничивать её ширину нельзя — перестанет бежать. */
+.lc-nova .lc2-ticker {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: 7px max(var(--nova-pad), calc((100% - var(--nova-max)) / 2 + var(--nova-pad)));
+    font-size: 11.5px;
+    color: var(--fg-3);
+}

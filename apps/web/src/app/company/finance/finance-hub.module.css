@@ -1,35 +1,12 @@
+/* Финансы · обзор — вёрстка по эталону `design/finance-hub`. */
+
 /*
- * Финансы · обзор — оформление по эталону `design/finance-hub`.
- *
- * Токены объявлены НА СТРАНИЦЕ, а не глобально. Эталон описан как образец
- * языка для остальных хаб-страниц, но кабинет переезжает на него по одному
- * экрану: глобальная смена палитры разом перекрасила бы сотню старых
- * страниц, проверить которые за один заход нельзя (AGENTS.md). Когда
- * переедут остальные — токены поднимутся в globals.css.
+ * Токены палитры объявлены на обёртке кабинета (`.lc-nova` в globals.css) —
+ * одни и те же для шапки, тикера и страниц. Здесь только вёрстка самой
+ * страницы, значения цвета не дублируются: разойдутся.
  */
 
 .page {
-    --bg: #ffffff;
-    --surface: #ffffff;
-    --surface-2: #f6f7f8;
-    --fg: #0b0d12;
-    --fg-2: #4c5460;
-    --fg-3: #868e9c;
-    --border: #e6e8ec;
-    --border-2: #eff0f3;
-    --hover: #f5f6f8;
-    --primary: #0b0d12;
-    --primary-fg: #ffffff;
-    --accent: #1677ff;
-    --accent-soft: #eef4ff;
-    --neg: #d92d20;
-    --neg-soft: #fef2f1;
-    --warn: #b25e09;
-    --warn-soft: #fff5e8;
-    --pos: #12855b;
-    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 8px 20px -12px rgba(16, 24, 40, .16);
-    --radius: 14px;
-
     background: var(--bg);
     color: var(--fg);
     font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -39,32 +16,6 @@
     max-width: 1360px;
     margin: 0 auto;
     padding: 26px 28px 44px;
-}
-
-/*
- * Тёмная тема — не выворот светлой: свой тёплый серый, цвет выбран
- * владельцем. Холодные синевато-чёрные фоны отвергнуты.
- */
-:global([data-theme='dark']) .page {
-    --bg: #20201f;
-    --surface: #20201f;
-    --surface-2: #1a1a19;
-    --fg: #f1f0ec;
-    --fg-2: #b2b1aa;
-    --fg-3: #8b8a83;
-    --border: #343430;
-    --border-2: #2c2c29;
-    --hover: #292927;
-    --primary: #f1f0ec;
-    --primary-fg: #20201f;
-    --accent: #5aa2ff;
-    --accent-soft: #25313f;
-    --neg: #ff8478;
-    --neg-soft: #3a2723;
-    --warn: #e8ac66;
-    --warn-soft: #3a2e1e;
-    --pos: #5bcf95;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3);
 }
 
 /* ===== Шапка страницы ===== */
@@ -154,8 +105,8 @@
 .kpi {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
     padding: 13px 14px 12px;
     min-width: 0;
 }
@@ -340,8 +291,8 @@
 .group {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
     margin-bottom: 14px;
     break-inside: avoid;
     overflow: hidden;

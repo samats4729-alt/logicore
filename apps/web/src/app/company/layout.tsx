@@ -341,7 +341,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     );
 
     return (
-        <Layout style={{ minHeight: '100vh', background: 'var(--lc-bg)' }}>
+        <Layout className="lc-nova" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
             {/* Mobile Drawer */}
             {isMobile && <MobileMenu />}
 
@@ -367,6 +367,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     zIndex: 100,
                 }}
             >
+                {/* Дорожка шапки: та же ширина и те же поля, что у страницы —
+                    вертикали обязаны совпадать по всей высоте экрана. */}
+                <div className="nova-bar">
                 {/* Mobile: burger button */}
                 {isMobile && (
                     <Button
@@ -519,13 +522,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         </div>
                     </Dropdown>
                 </div>
+                </div>
             </Header>
 
             {/* Тикер живых событий (глобальный) */}
             <LiveEventTicker />
 
             {/* Content */}
-            <Layout style={{ background: 'var(--lc-bg)', padding: isMobile ? 0 : '16px 24px 24px' }}>
+            <Layout style={{ background: 'var(--bg)', padding: 0 }}>
                 <Content
                     data-guide="content"
                     className="page-content-anim"
