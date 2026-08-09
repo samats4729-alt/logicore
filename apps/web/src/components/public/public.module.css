@@ -1,0 +1,467 @@
+/* Публичные страницы — вход, регистрация, восстановление пароля, оферта,
+   конфиденциальность.
+ *
+ * Тот же язык, что на главной и в кабинете: токены из `.lc-nova`, шапка
+ * высотой 58, карточки с рамкой и тенью. Раньше эти страницы стояли на
+ * чёрном фоне лендинга и выглядели как чужой сайт между главной и
+ * кабинетом.
+ */
+
+.root {
+    min-height: 100vh;
+    background: var(--nova-bg);
+    color: var(--nova-fg);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== Шапка ===== */
+
+.head {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    background: color-mix(in srgb, var(--nova-surface) 82%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid var(--nova-border);
+}
+
+.headBand {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 24px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.brand {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    color: var(--nova-fg);
+    white-space: nowrap;
+    text-decoration: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+.headRight {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.themeBtn {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface);
+    color: var(--nova-fg-2);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.themeBtn:hover {
+    background: var(--nova-hover);
+    color: var(--nova-fg);
+}
+
+.headLink {
+    height: 34px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 10px;
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface);
+    color: var(--nova-fg);
+    font: 500 13px/1 Inter, sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.headLink:hover {
+    background: var(--nova-hover);
+}
+
+/* ===== Вход и регистрация ===== */
+
+.authBody {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
+    gap: 48px;
+    align-items: center;
+    max-width: 1160px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 44px 24px 56px;
+}
+
+.side {
+    min-width: 0;
+}
+
+.eyebrow {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+}
+
+.sideTitle {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: clamp(24px, 3.2vw, 36px);
+    font-weight: 600;
+    letter-spacing: -0.05em;
+    line-height: 1.1;
+    margin: 12px 0 0;
+    color: var(--nova-fg);
+}
+
+.sideTitle em {
+    font-style: normal;
+    color: var(--nova-fg);
+}
+
+.sideText {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--nova-fg-3);
+    margin: 12px 0 0;
+    max-width: 46ch;
+}
+
+.points {
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.points li {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--nova-fg-2);
+}
+
+.tick {
+    color: var(--nova-pos);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* Карточка формы. */
+
+.card {
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
+    padding: 22px;
+    width: 100%;
+}
+
+.cardTitle {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    color: var(--nova-fg);
+}
+
+.cardSub {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    margin-top: 5px;
+    margin-bottom: 18px;
+}
+
+.legalNote {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--nova-fg-3);
+}
+
+.legalNote a {
+    color: var(--nova-fg-2);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.legalNote a:hover {
+    color: var(--nova-fg);
+}
+
+/* ===== Поля и кнопки внутри карточки =====
+   Формы собраны на Ant Design, и его вид приходится приводить к общему
+   языку здесь: свои поля ради двух экранов заводить незачем. */
+
+/* Заголовок карточки приходит из старой разметки страниц входа и
+   регистрации, где цвет был вбит наглухо тёмным. В тёмной теме он оставался
+   чёрным на чёрном. */
+.card :global(.lc-auth-card-title) {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    color: var(--nova-fg);
+}
+
+.card :global(.lc-auth-card-sub) {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    margin-top: 5px;
+}
+
+.card :global(.lc-auth-card-head) {
+    margin-bottom: 18px;
+}
+
+.card :global(h1),
+.card :global(h2),
+.card :global(h3),
+.card :global(h4),
+.card :global(.ant-typography h1),
+.card :global(.ant-typography h2),
+.card :global(.ant-typography h3),
+.card :global(h3.ant-typography),
+.card :global(h4.ant-typography) {
+    color: var(--nova-fg) !important;
+}
+
+.card :global(.ant-input),
+.card :global(.ant-input-affix-wrapper),
+.card :global(.ant-input-number),
+.card :global(.ant-select-selector),
+.card :global(.ant-picker) {
+    border-radius: 10px !important;
+    border-color: var(--nova-border) !important;
+    background: var(--nova-surface) !important;
+    color: var(--nova-fg) !important;
+}
+
+.card :global(.ant-input-affix-wrapper:focus-within),
+.card :global(.ant-input:focus),
+.card :global(.ant-select-focused .ant-select-selector) {
+    border-color: var(--nova-accent) !important;
+    box-shadow: none !important;
+}
+
+.card :global(.ant-input::placeholder),
+.card :global(.ant-input-affix-wrapper input::placeholder) {
+    color: var(--nova-fg-3) !important;
+}
+
+.card :global(.ant-input-prefix) {
+    color: var(--nova-fg-3);
+    margin-inline-end: 8px;
+}
+
+.card :global(.ant-form-item-label > label) {
+    font-size: 12.5px;
+    font-weight: 550;
+    color: var(--nova-fg-2);
+}
+
+.card :global(.ant-btn-primary) {
+    height: 38px;
+    border-radius: 10px;
+    background: var(--nova-primary);
+    border-color: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.card :global(.ant-btn-primary:hover:not(:disabled)) {
+    background: var(--nova-primary) !important;
+    border-color: var(--nova-primary) !important;
+    color: var(--nova-primary-fg) !important;
+    opacity: .9;
+}
+
+.card :global(.ant-divider) {
+    border-color: var(--nova-border-2);
+    color: var(--nova-fg-3) !important;
+    font-size: 12.5px;
+}
+
+.card :global(.ant-typography) {
+    color: var(--nova-fg-3);
+}
+
+.card :global(a) {
+    color: var(--nova-accent);
+}
+
+/* ===== Юридические страницы ===== */
+
+.legalBody {
+    flex: 1;
+    max-width: 820px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 40px 24px 64px;
+}
+
+.legalTitle {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: clamp(24px, 3.2vw, 34px);
+    font-weight: 600;
+    letter-spacing: -0.05em;
+    line-height: 1.12;
+    margin: 10px 0 0;
+    color: var(--nova-fg);
+}
+
+.legalUpdated {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    margin: 8px 0 22px;
+}
+
+.doc {
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
+    padding: 26px 28px 30px;
+    font-size: 14.5px;
+    line-height: 1.62;
+    color: var(--nova-fg-2);
+}
+
+.doc h2 {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    color: var(--nova-fg);
+    margin: 26px 0 10px;
+}
+
+.doc h2:first-child {
+    margin-top: 0;
+}
+
+.doc p {
+    margin: 0 0 12px;
+}
+
+.doc ul {
+    margin: 0 0 12px;
+    padding-left: 18px;
+}
+
+.doc li {
+    margin-bottom: 7px;
+}
+
+.doc strong {
+    color: var(--nova-fg);
+    font-weight: 600;
+}
+
+.doc a {
+    color: var(--nova-accent);
+}
+
+/* ===== Подвал ===== */
+
+.foot {
+    border-top: 1px solid var(--nova-border);
+    padding: 18px 0 26px;
+}
+
+.footBand {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    color: var(--nova-fg-3);
+}
+
+.footBand a {
+    color: var(--nova-fg-3);
+    text-decoration: none;
+    margin-left: 16px;
+}
+
+.footBand a:hover {
+    color: var(--nova-fg);
+}
+
+/* ===== Узкие экраны ===== */
+
+@media (max-width: 900px) {
+    .authBody {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 26px;
+        padding: 28px 16px 40px;
+    }
+
+    .side {
+        text-align: center;
+    }
+
+    .sideText {
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* Список преимуществ на телефоне только отодвигает форму вниз. */
+    .points {
+        display: none;
+    }
+
+    .card {
+        justify-self: center;
+        max-width: 460px;
+    }
+}
+
+@media (max-width: 640px) {
+    .headBand,
+    .footBand,
+    .legalBody {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .doc {
+        padding: 18px 16px 22px;
+    }
+}
