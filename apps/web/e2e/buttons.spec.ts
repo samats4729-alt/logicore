@@ -50,17 +50,28 @@ test('главная кнопка списка заявок сохранила �
     await page.goto('/company/orders');
 
     // `.lc-cta` раньше висел на `.ant-btn`; после переезда на shadcn
-    // селектор в globals.css опирается на сам класс — если это отменить,
-    // кнопка потеряет тёмную заливку и скруглённую форму.
+    // селектор опирается на сам класс — если это отменить, кнопка потеряет
+    // фирменную заливку и станет обычной синей кнопкой shadcn.
     const cta = page.getByRole('button', { name: /Создать заявку/ }).first();
     await expect(cta).toBeVisible();
 
-    // Проверяем именно градиент: обычная заливка есть и у shadcn по
-    // умолчанию, так что «фон не прозрачный» тут ничего не доказывает —
-    // такой тест остался бы зелёным и без `.lc-cta`. Тёмный градиент
-    // даёт только фирменное правило.
-    const image = await cta.evaluate((el) => getComputedStyle(el).backgroundImage);
-    expect(image, 'кнопка «Создать заявку» потеряла фирменный градиент').toContain('linear-gradient');
+    // Раньше здесь проверялся тёмный градиент. По согласованному эталону
+    // `design/orders-list` главная кнопка залита ровным `--primary` —
+    // градиента больше нет, и проверять его нельзя.
+    //
+    // Сравниваем с самим токеном, а не с «фон не прозрачный»: у shadcn
+    // заливка есть и по умолчанию, такой тест остался бы зелёным и без
+    // фирменного правила.
+    const actual = await cta.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const expected = await page.evaluate(() => {
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--nova-primary)';
+        document.querySelector('.lc-nova')!.appendChild(probe);
+        const value = getComputedStyle(probe).color;
+        probe.remove();
+        return value;
+    });
+    expect(actual, 'кнопка «Создать заявку» залита не фирменным цветом').toBe(expected);
 });
 
 test('antd Upload по-прежнему получает клик от кнопки shadcn', async ({ page }) => {
