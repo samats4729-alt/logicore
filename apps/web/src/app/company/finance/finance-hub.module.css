@@ -366,7 +366,11 @@
     min-width: 0;
 }
 
+/* `display: block` обязателен: в разметке это `span`, а строчный элемент
+   встаёт в одну строку с описанием — «СчетаПокупателям и от поставщиков».
+   Обрезка по краю на строчном элементе тоже не работает. */
 .itemLabel {
+    display: block;
     font-size: 12.8px;
     font-weight: 550;
     color: var(--nova-fg);
@@ -376,6 +380,7 @@
 }
 
 .itemDesc {
+    display: block;
     font-size: 11px;
     color: var(--nova-fg-3);
     white-space: nowrap;
