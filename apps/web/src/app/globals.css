@@ -3185,8 +3185,10 @@ a.mapboxgl-ctrl-logo,
     white-space: nowrap;
 }
 
+/* Марка одним цветом: в светлой теме тёмная, в тёмной светлая. Синий в
+   «Core» спорил с синим у ссылок и акцентов. Так же на главной. */
 .lc-nova .nova-brand span {
-    color: var(--nova-accent);
+    color: var(--nova-fg);
 }
 
 /* Дорожка пилюль. Активный пункт — заливка, а не светлая подсветка:
@@ -3284,29 +3286,38 @@ a.mapboxgl-ctrl-logo,
     line-height: 1.25;
 }
 
-/* Всё круглое в правом углу — ровно 34px, как в эталоне. Кнопки приходят из
-   разных компонентов и были 38 и 32: в ряд они вставали ступенькой. */
-.lc-nova .lc2-header-right > button,
-.lc-nova .lc2-header-right > div > button {
-    width: 34px;
-    height: 34px;
+/* Всё круглое в правом углу — один вид: 34 точки, рамка, прозрачная
+   заливка, значок цветом второстепенного текста.
+ *
+ * Кнопки приходят из четырёх разных компонентов, и каждая тянула свой
+ * размер и свой цвет: в ряд они вставали ступенькой разных оттенков —
+ * 38 и 32 точки, синяя заливка у поиска, янтарная у уведомлений. */
+.lc-nova .lc2-header-right button,
+.lc-nova .lc2-header-right .ai-btn {
+    width: 34px !important;
+    height: 34px !important;
     min-width: 34px;
-    border-radius: 999px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 999px !important;
+    border: 1px solid var(--nova-border) !important;
+    background: var(--nova-surface) !important;
+    color: var(--nova-fg-2) !important;
+    box-shadow: none !important;
 }
 
-.lc-nova .lc2-theme-toggle {
-    height: 34px;
-    border-radius: 999px;
-    border: 1px solid var(--nova-border);
+.lc-nova .lc2-header-right button:hover,
+.lc-nova .lc2-header-right .ai-btn:hover {
+    background: var(--nova-hover) !important;
+    color: var(--nova-fg) !important;
 }
 
-/* Активная половина переключателя — заливка, как у активной пилюли. */
-.lc-nova .lc2-theme-active-bg {
-    background: var(--nova-primary);
-}
-
-.lc-nova .lc2-theme-btn.active {
-    color: var(--nova-primary-fg);
+/* Значок берёт цвет кнопки: у поиска и уведомлений он был вбит своим. */
+.lc-nova .lc2-header-right button svg,
+.lc-nova .lc2-header-right button .anticon,
+.lc-nova .lc2-header-right .ai-btn svg {
+    color: currentColor !important;
 }
 
 .lc-nova .lc2-header-divider {

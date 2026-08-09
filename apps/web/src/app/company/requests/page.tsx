@@ -1,6 +1,7 @@
 'use client';
 
 import { QuoteRequestsPanel } from '@/components/quotes/QuoteRequestsPanel';
+import styles from '@/components/nova/nova.module.css';
 
 /**
  * Общий список запросов по всем клиентам.
@@ -12,12 +13,12 @@ import { QuoteRequestsPanel } from '@/components/quotes/QuoteRequestsPanel';
  */
 export default function RequestsPage() {
     return (
-        <div className="lc-page mx-auto max-w-[1600px]">
-            <div className="lc2-hero" style={{ marginBottom: 12 }}>
+        <div className={`${styles.page} ${styles.pageWide}`}>
+            <div className={styles.hero}>
                 <div>
-                    <div className="lc-eyebrow">Продажи · Запросы</div>
-                    <h1 className="lc2-title" style={{ maxWidth: 'none', margin: 0 }}>Запросы на расчёт</h1>
-                    <p className="mt-1.5 text-[13px] text-muted-foreground">
+                    <div className={styles.eyebrow}>Продажи · Запросы</div>
+                    <h1 className={styles.title}>Запросы на расчёт</h1>
+                    <p className={styles.subtitle}>
                         Клиент спрашивает цену до заявки. Здесь видно, что предлагали раньше,
                         почём тогда нашли машину и чем всё кончилось.
                     </p>

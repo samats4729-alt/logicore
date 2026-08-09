@@ -6,6 +6,7 @@ import { Button, Empty, Modal, Input, Skeleton, Tag } from 'antd';
 import { PaperClipOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
+import nova from '@/components/nova/nova.module.css';
 import { toast } from 'sonner';
 
 interface PaymentProof {
@@ -92,7 +93,7 @@ export default function PaymentProofsCard() {
     if (!loading && proofs.length === 0) return null;
 
     return (
-        <div className="premium-card" style={{ padding: 24, marginTop: 24 }}>
+        <div className={nova.card} style={{ padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                 <PaperClipOutlined style={{ color: '#d97706' }} />
                 <span style={{ fontSize: 16, fontWeight: 700 }}>Чеки от контрагентов</span>
@@ -100,7 +101,7 @@ export default function PaymentProofsCard() {
                     <Tag color="gold" style={{ borderRadius: 999, margin: 0 }}>{proofs.length}</Tag>
                 )}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--lc-text-sec)', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--nova-fg-2)', marginBottom: 16 }}>
                 Подтверждение не проводит платёж — сверьте с банковской выпиской.
             </div>
 
@@ -114,7 +115,7 @@ export default function PaymentProofsCard() {
                         key={proof.id}
                         style={{
                             display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
-                            padding: '12px 0', borderTop: '1px solid var(--lc-border)',
+                            padding: '12px 0', borderTop: '1px solid var(--nova-border)',
                         }}
                     >
                         <div style={{ flex: 1, minWidth: 200 }}>
@@ -128,13 +129,13 @@ export default function PaymentProofsCard() {
                                 {' · '}
                                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(proof.claimedAmount)}</span>
                             </div>
-                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
+                            <div style={{ fontSize: 12, color: 'var(--nova-fg-3)' }}>
                                 {proof.counterparty.name}
                                 {proof.claimedDate && ` · платёж от ${dayjs(proof.claimedDate).format('DD.MM.YYYY')}`}
                                 {` · прислан ${dayjs(proof.createdAt).format('DD.MM.YYYY')}`}
                             </div>
                             {proof.note && (
-                                <div style={{ fontSize: 12, color: 'var(--lc-text-sec)', marginTop: 2 }}>
+                                <div style={{ fontSize: 12, color: 'var(--nova-fg-2)', marginTop: 2 }}>
                                     {proof.note}
                                 </div>
                             )}
@@ -176,7 +177,7 @@ export default function PaymentProofsCard() {
                 okButtonProps={{ danger: true, style: { borderRadius: 8 } }}
                 cancelButtonProps={{ style: { borderRadius: 8 } }}
             >
-                <div style={{ fontSize: 13, color: 'var(--lc-text-sec)', margin: '12px 0 8px' }}>
+                <div style={{ fontSize: 13, color: 'var(--nova-fg-2)', margin: '12px 0 8px' }}>
                     Причину увидит контрагент на своей странице — так он поймёт, что прислать взамен.
                 </div>
                 <Input.TextArea

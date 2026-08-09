@@ -10,6 +10,7 @@ import {
     FileExclamationOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import nova from '@/components/nova/nova.module.css';
 
 interface PendingWorkItem {
     id: string;
@@ -119,13 +120,13 @@ export default function PendingWorkCard() {
         : 0;
 
     return (
-        <div className="lc-card" style={{ padding: '18px 20px' }}>
+        <div className={nova.card} style={{ padding: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
                 <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--lc-text)', letterSpacing: '-0.01em' }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--nova-fg)', letterSpacing: '-0.01em' }}>
                         Требует оформления
                     </div>
-                    <div style={{ color: 'var(--lc-text-ter)', fontSize: 12, marginTop: 2 }}>
+                    <div style={{ color: 'var(--nova-fg-3)', fontSize: 12, marginTop: 2 }}>
                         незакрытые хвосты между рейсами и бухгалтерией
                     </div>
                 </div>
@@ -156,18 +157,18 @@ export default function PendingWorkCard() {
                                         {group.icon}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--lc-text)' }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--nova-fg)' }}>
                                             {group.title}
                                             <Tag color={group.color} style={{ marginLeft: 8 }}>
                                                 {value.truncated ? `${value.count}+` : value.count}
                                             </Tag>
                                         </div>
-                                        <div style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{group.hint}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{group.hint}</div>
                                     </div>
                                     <div style={{
                                         fontSize: 14,
                                         fontWeight: 800,
-                                        color: 'var(--lc-text)',
+                                        color: 'var(--nova-fg)',
                                         fontVariantNumeric: 'tabular-nums',
                                         whiteSpace: 'nowrap',
                                     }}>
@@ -187,28 +188,28 @@ export default function PendingWorkCard() {
                                                 padding: '5px 0',
                                                 cursor: 'pointer',
                                                 fontSize: 12,
-                                                borderBottom: '1px solid var(--lc-border-soft, var(--lc-border))',
+                                                borderBottom: '1px solid var(--nova-border-2)',
                                             }}
                                         >
-                                            <span style={{ fontWeight: 600, color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
+                                            <span style={{ fontWeight: 600, color: 'var(--nova-fg)', whiteSpace: 'nowrap' }}>
                                                 {item.label}
                                             </span>
                                             <span style={{
                                                 flex: 1,
                                                 minWidth: 0,
-                                                color: 'var(--lc-text-sec)',
+                                                color: 'var(--nova-fg-2)',
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
                                                 whiteSpace: 'nowrap',
                                             }}>
                                                 {item.counterparty || '—'}
                                             </span>
-                                            <span style={{ color: 'var(--lc-text-ter)', whiteSpace: 'nowrap' }}>
+                                            <span style={{ color: 'var(--nova-fg-3)', whiteSpace: 'nowrap' }}>
                                                 {daysLabel(item.daysWaiting)}
                                             </span>
                                             <span style={{
                                                 fontWeight: 600,
-                                                color: 'var(--lc-text)',
+                                                color: 'var(--nova-fg)',
                                                 fontVariantNumeric: 'tabular-nums',
                                                 whiteSpace: 'nowrap',
                                             }}>
@@ -217,7 +218,7 @@ export default function PendingWorkCard() {
                                         </div>
                                     ))}
                                     {value.count > value.items.length && (
-                                        <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', paddingTop: 5 }}>
+                                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)', paddingTop: 5 }}>
                                             и ещё {value.count - value.items.length}
                                         </div>
                                     )}

@@ -2,18 +2,41 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+    Building2,
+    ChevronRight,
+    ClipboardList,
+    Contact,
+    FileText,
+    History,
+    KeyRound,
+    MapPin,
+    ShieldCheck,
+    Truck,
+    UserCircle,
+    Users,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import styles from '@/components/nova/nova.module.css';
 
-interface Link {
+/**
+ * Кабинет — оглавление всего, что настраивают редко: организации,
+ * сотрудники, справочники, профиль.
+ *
+ * Собран так же, как «Финансы»: разделы карточками, у каждого пункта
+ * подпись, зачем он. Раньше это был список голых ссылок, и по названиям
+ * вроде «Адреса» и «Договоры» приходилось угадывать, что внутри.
+ */
+
+type Link = {
     label: string;
+    desc: string;
     href: string;
+    icon: LucideIcon;
     show: boolean;
-}
-interface Group {
-    title: string;
-    links: Link[];
-}
+};
 
 export default function CabinetPage() {
     const router = useRouter();
@@ -29,42 +52,47 @@ export default function CabinetPage() {
             .catch(() => setAuditEnabled(false));
     }, []);
 
-    const groups: Group[] = [
+    const groups: { title: string; icon: LucideIcon; links: Link[] }[] = [
         {
-            title: 'Мои организации',
+            title: 'Организация',
+            icon: Building2,
             links: [
-                { label: 'Организации', href: '/company/settings', show: isAdmin },
+                { label: 'Организации', desc: 'Реквизиты, подписи, печать', href: '/company/settings', icon: Building2, show: isAdmin },
             ],
         },
         {
             title: 'Сотрудники',
+            icon: Users,
             links: [
-                { label: 'Список сотрудников', href: '/company/users', show: isAdmin },
-                { label: 'Права доступа', href: '/company/users?rights=1', show: isAdmin },
-                { label: 'Водители', href: '/company/users?segment=drivers', show: isAdmin },
+                { label: 'Список сотрудников', desc: 'Кто работает в компании', href: '/company/users', icon: Users, show: isAdmin },
+                { label: 'Права доступа', desc: 'Кому какие разделы видны', href: '/company/users?rights=1', icon: ShieldCheck, show: isAdmin },
+                { label: 'Водители', desc: 'Люди за рулём и их документы', href: '/company/users?segment=drivers', icon: Contact, show: isAdmin },
             ],
         },
         {
             title: 'Справочники',
+            icon: ClipboardList,
             links: [
-                { label: 'Контрагенты', href: '/company/partners', show: hasPerm('partners') },
-                { label: 'Договоры', href: '/company/contracts', show: hasPerm('partners') },
-                { label: 'Адреса', href: '/company/locations', show: true },
-                { label: 'Автопарк', href: '/company/vehicles', show: isAdmin },
-                { label: 'Документы', href: '/company/documents', show: hasPerm('documents') },
+                { label: 'Контрагенты', desc: 'Заказчики и перевозчики', href: '/company/partners', icon: Building2, show: hasPerm('partners') },
+                { label: 'Договоры', desc: 'Условия работы с контрагентами', href: '/company/contracts', icon: FileText, show: hasPerm('partners') },
+                { label: 'Адреса', desc: 'Точки погрузки и выгрузки', href: '/company/locations', icon: MapPin, show: true },
+                { label: 'Автопарк', desc: 'Машины и прицепы компании', href: '/company/vehicles', icon: Truck, show: isAdmin },
+                { label: 'Документы', desc: 'Файлы по рейсам и контрагентам', href: '/company/documents', icon: FileText, show: hasPerm('documents') },
             ],
         },
         {
             title: 'Аккаунт',
+            icon: UserCircle,
             links: [
-                { label: 'Мой профиль', href: '/company/profile', show: true },
-                { label: 'Изменить пароль', href: '/company/profile', show: true },
+                { label: 'Мой профиль', desc: 'Имя, телефон, фотография', href: '/company/profile', icon: UserCircle, show: true },
+                { label: 'Изменить пароль', desc: 'Смена пароля от входа', href: '/company/profile', icon: KeyRound, show: true },
             ],
         },
         {
             title: 'Журнал и контроль',
+            icon: History,
             links: [
-                { label: 'Журнал действий', href: '/company/audit', show: isAdmin && auditEnabled },
+                { label: 'Журнал действий', desc: 'Кто и что менял в системе', href: '/company/audit', icon: History, show: isAdmin && auditEnabled },
             ],
         },
     ]
@@ -72,73 +100,50 @@ export default function CabinetPage() {
         .filter(g => g.links.length > 0);
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <div className="lc2-hero" style={{ marginBottom: 10 }}>
+        <div className={styles.page}>
+            <div className={styles.hero}>
                 <div>
-                    <div className="lc-eyebrow">Кабинет</div>
-                    <h1 className="lc2-title" style={{ maxWidth: 'none', margin: 0 }}>Управление компанией</h1>
+                    <div className={styles.eyebrow}>Кабинет</div>
+                    <h1 className={styles.title}>Управление компанией</h1>
+                    <p className={styles.subtitle}>
+                        Организации, сотрудники и справочники — всё, что настраивают один раз
+                        и потом редко трогают.
+                    </p>
                 </div>
             </div>
 
-            <div className="lc-cabinet-grid">
-                {groups.map(g => (
-                    <div key={g.title} className="lc-cabinet-group">
-                        <div className="lc-cabinet-group-title">{g.title}</div>
-                        <ul className="lc-cabinet-links">
-                            {g.links.map(l => (
-                                <li key={l.label}>
-                                    <button type="button" onClick={() => router.push(l.href)}>
-                                        {l.label}
+            {groups.length === 0 ? (
+                <div className={styles.empty}>Здесь пока нечего настраивать — у вашей роли нет доступа к этим разделам.</div>
+            ) : (
+                <div className={styles.columns}>
+                    {groups.map(group => (
+                        <section className={styles.card} key={group.title}>
+                            <div className={styles.cardHead}>
+                                <group.icon size={14} />
+                                <h2 className={styles.cardTitle}>{group.title}</h2>
+                                <span className={styles.cardCount}>{group.links.length}</span>
+                            </div>
+                            <div className={styles.list}>
+                                {group.links.map(link => (
+                                    <button
+                                        type="button"
+                                        key={link.label}
+                                        className={styles.item}
+                                        onClick={() => router.push(link.href)}
+                                    >
+                                        <span className={styles.itemIcon}><link.icon size={16} /></span>
+                                        <span className={styles.itemText}>
+                                            <span className={styles.itemLabel}>{link.label}</span>
+                                            <span className={styles.itemDesc}>{link.desc}</span>
+                                        </span>
+                                        <ChevronRight size={14} className={styles.chevron} />
                                     </button>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ))}
-            </div>
-
-            <style jsx>{`
-                .lc-cabinet-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-                    gap: 28px 40px;
-                }
-                .lc-cabinet-group-title {
-                    font-size: 11px;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    color: var(--lc-text-ter);
-                    padding-bottom: 8px;
-                    margin-bottom: 8px;
-                    border-bottom: 1px solid var(--lc-border);
-                }
-                .lc-cabinet-links {
-                    list-style: none;
-                    margin: 0;
-                    padding: 0;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 2px;
-                }
-                .lc-cabinet-links button {
-                    background: none;
-                    border: none;
-                    padding: 6px 8px;
-                    margin: 0 -8px;
-                    width: calc(100% + 16px);
-                    text-align: left;
-                    font-size: 13.5px;
-                    color: var(--lc-text-sec);
-                    border-radius: 8px;
-                    cursor: pointer;
-                    transition: background .12s ease, color .12s ease;
-                }
-                .lc-cabinet-links button:hover {
-                    background: var(--lc-hover);
-                    color: var(--lc-primary, #1677ff);
-                }
-            `}</style>
+                                ))}
+                            </div>
+                        </section>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

@@ -31,6 +31,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
+import { Moon, Sun } from 'lucide-react';
 import { api } from '@/lib/api';
 import { shortenCompanyName } from '@/lib/company-helper';
 import NotificationBell from '@/components/ui/NotificationBell';
@@ -385,9 +386,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: 18, flexShrink: 0 }}
                     onClick={() => router.push('/company')}
                 >
-                    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
-                        Logi<span style={{ color: '#1677ff' }}>Core</span>
-                    </span>
+                    <span className="nova-brand">Logi<span>Core</span></span>
                 </div>
 
                 {/* Desktop: пилюльная навигация */}
@@ -464,28 +463,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     {/* Центр уведомлений (Этап 7) */}
                     <NotificationBell hasNewUpdates={hasNewUpdates} />
 
-                    {/* Тема (Этап 8) — капсульный переключатель */}
-                    <div className="lc2-theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'} aria-label="Переключить тему">
-                        <div className="lc2-theme-active-bg" style={{ transform: theme === 'dark' ? 'translateX(32px)' : 'translateX(0px)' }} />
-                        <span className={`lc2-theme-btn sun${theme === 'light' ? ' active' : ''}`}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="5" />
-                                <line x1="12" y1="1" x2="12" y2="3" />
-                                <line x1="12" y1="21" x2="12" y2="23" />
-                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                                <line x1="1" y1="12" x2="3" y2="12" />
-                                <line x1="21" y1="12" x2="23" y2="12" />
-                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                            </svg>
-                        </span>
-                        <span className={`lc2-theme-btn moon${theme === 'dark' ? ' active' : ''}`}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                            </svg>
-                        </span>
-                    </div>
+                    {/* Тема — один круглый значок, как на главной. Капсула из
+                        двух половин занимала вдвое больше места и выбивалась
+                        из ряда одинаковых круглых кнопок рядом. */}
+                    <button
+                        type="button"
+                        className="nova-iconbtn"
+                        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                        title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+                        aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+                    >
+                        {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+                    </button>
 
                     <div className="lc2-header-divider" />
 

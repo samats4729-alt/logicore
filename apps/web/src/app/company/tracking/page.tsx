@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import nova from '@/components/nova/nova.module.css';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
 
@@ -257,46 +258,33 @@ export default function CompanyTrackingPage() {
     };
 
     return (
-        <div className="lc-page" style={{ maxWidth: '100%', margin: '0 auto', padding: '0 8px' }}>
-            {/* ===== HERO 2026 ===== */}
-            <div className="lc2-hero" style={{ marginBottom: 0 }}>
+        <div className={`${nova.page} ${nova.pageWide}`}>
+            <div className={nova.hero}>
                 <div>
-                    <div className="lc-eyebrow">Логистика · Мониторинг</div>
-                    <h1 className="lc2-title">GPS-мониторинг</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Отслеживание водителей в реальном времени
+                    <div className={nova.eyebrow}>Логистика · Мониторинг</div>
+                    <h1 className={nova.title}>GPS-мониторинг</h1>
+                    <p className={nova.subtitle}>
+                        Где сейчас машины и кто из водителей передаёт координаты.
                     </p>
                 </div>
-                <div className="lc2-metrics">
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: tripsCount > 0 ? '#e0f2fe' : '#f1f2f5', color: tripsCount > 0 ? '#0369a1' : '#5f6672' }}>
-                            <EnvironmentOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Активных рейсов</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {tripsCount}
-                            </div>
-                            <div className="lc2-msub">{tripsCount > 0 ? 'с маршрутами' : 'нет активных'}</div>
-                        </div>
+                {/* Два счётчика вместо плиток во всю ширину: на этом экране
+                    главное — карта, а не показатели над ней. */}
+                <div className={nova.heroActions}>
+                    <div className={nova.tile} style={{ minWidth: 150 }}>
+                        <span className={nova.tileLabel}>Активных рейсов</span>
+                        <div className={nova.tileValue}>{tripsCount}</div>
+                        <div className={nova.tileSub}>{tripsCount > 0 ? 'с маршрутами' : 'нет активных'}</div>
                     </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: onlineCount > 0 ? '#dcfce7' : '#f1f2f5', color: onlineCount > 0 ? '#16a34a' : '#5f6672' }}>
-                            <CarOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Водителей онлайн</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {onlineCount}
-                            </div>
-                            <div className="lc2-msub">{onlineCount > 0 ? 'передают GPS' : 'нет сигнала'}</div>
-                        </div>
+                    <div className={nova.tile} style={{ minWidth: 150 }}>
+                        <span className={nova.tileLabel}>Водителей онлайн</span>
+                        <div className={`${nova.tileValue} ${onlineCount > 0 ? nova.valuePos : ''}`}>{onlineCount}</div>
+                        <div className={nova.tileSub}>{onlineCount > 0 ? 'передают GPS' : 'нет сигнала'}</div>
                     </div>
                 </div>
             </div>
 
-            {/* ===== MAP CARD ===== */}
-            <div className="lc-card" style={{ padding: 0, overflow: 'hidden' }}>
+            {/* ===== КАРТА ===== */}
+            <div className={nova.card} style={{ padding: 0 }}>
         <div style={{
             position: 'relative',
             height: isMobile ? 'calc(100vh - 240px)' : 'calc(100vh - 200px)',
@@ -430,7 +418,7 @@ export default function CompanyTrackingPage() {
                             <div style={{
                                 fontSize: 14,
                                 fontWeight: 600,
-                                color: isDark ? 'rgba(255,255,255,0.85)' : 'var(--lc-text)',
+                                color: isDark ? 'rgba(255,255,255,0.85)' : 'var(--nova-fg)',
                                 marginBottom: 6,
                             }}>
                                 Нет активных рейсов
@@ -633,17 +621,17 @@ export default function CompanyTrackingPage() {
                 {popupInfo && (
                     <div style={{
                         position: 'absolute', right: 84, bottom: 24, zIndex: 5,
-                        background: 'var(--lc-card)', borderRadius: 12, border: '1px solid var(--lc-border)',
+                        background: 'var(--nova-surface)', borderRadius: 12, border: '1px solid var(--nova-border)',
                         boxShadow: '0 12px 32px -8px rgba(16,24,40,0.25)', padding: '12px 14px', minWidth: 220,
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                             <span style={{ fontWeight: 700, fontSize: 13 }}>{popupInfo.driverName}</span>
-                            <span style={{ cursor: 'pointer', color: 'var(--lc-text-ter)' }} onClick={() => setPopupInfo(null)}>✕</span>
+                            <span style={{ cursor: 'pointer', color: 'var(--nova-fg-3)' }} onClick={() => setPopupInfo(null)}>✕</span>
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--lc-text-sec)', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <span>Госномер: <b style={{ color: 'var(--lc-text)' }}>{popupInfo.vehiclePlate || '—'}</b></span>
+                        <div style={{ fontSize: 12, color: 'var(--nova-fg-2)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <span>Госномер: <b style={{ color: 'var(--nova-fg)' }}>{popupInfo.vehiclePlate || '—'}</b></span>
                             {popupInfo.orderNumber && <span>Рейс: <b style={{ color: '#1677ff' }}>{popupInfo.orderNumber}</b></span>}
-                            <span>Скорость: <b style={{ color: 'var(--lc-text)' }}>{Math.round(popupInfo.speed || 0)} км/ч</b></span>
+                            <span>Скорость: <b style={{ color: 'var(--nova-fg)' }}>{Math.round(popupInfo.speed || 0)} км/ч</b></span>
                             <span>Обновлено: {new Date(popupInfo.updatedAt).toLocaleTimeString('ru-RU')}</span>
                         </div>
                     </div>
