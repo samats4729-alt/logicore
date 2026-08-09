@@ -509,8 +509,12 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                     </span>
                                 }
                             />
+                            {/* Имя с должностью — самая широкая часть правого
+                                угла. На узком экране её убирает CSS
+                                (`lc2-profile-who`), а не второй порог в коде:
+                                два порога в разных местах разъезжаются. */}
                             {!isMobile && (
-                                <div style={{ lineHeight: 1.25 }}>
+                                <div className="lc2-profile-who" style={{ lineHeight: 1.25 }}>
                                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
                                         {user.firstName} {user.lastName}
                                     </div>

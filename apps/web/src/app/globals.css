@@ -3162,6 +3162,18 @@ a.mapboxgl-ctrl-logo,
     align-items: center;
     gap: 22px;
     width: 100%;
+    min-width: 0;
+}
+
+/* Всё в шапке обязано уметь сжиматься.
+ *
+ * По умолчанию элемент во flex не сжимается уже своего содержимого, а
+ * содержимое здесь — сплошь `white-space: nowrap`. На ширине меньше 1200
+ * навигация с именем пользователя переставали помещаться и выталкивали
+ * правый угол за край экрана: вся страница начинала ездить вбок, на каждом
+ * экране кабинета. */
+.lc-nova .nova-bar > * {
+    min-width: 0;
 }
 
 .lc-nova .nova-brand {
@@ -3187,6 +3199,19 @@ a.mapboxgl-ctrl-logo,
     box-shadow: none;
     padding: 3px;
     gap: 2px;
+    /* Когда пунктов больше, чем помещается, дорожка прокручивается сама, а
+       не растягивает шапку. Полосу прокрутки прячем: она перечёркивала бы
+       пилюли по нижнему краю. */
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.lc-nova .lc2-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.lc-nova .lc2-nav-item {
+    flex-shrink: 0;
 }
 
 .lc-nova .lc2-nav-item {
@@ -3299,4 +3324,89 @@ a.mapboxgl-ctrl-logo,
     padding: 7px max(var(--nova-pad), calc((100% - var(--nova-max)) / 2 + var(--nova-pad)));
     font-size: 11.5px;
     color: var(--nova-fg-3);
+}
+
+/* ── узкие экраны ────────────────────────────────────────────────────────
+ *
+ * Шапка одна на весь кабинет, поэтому её неумещение видно на каждой
+ * странице: вся страница начинала ездить вбок. Пороги идут сверху вниз и
+ * снимают ровно то, без чего можно обойтись на такой ширине.
+ */
+
+/* Ноутбук 13″ и узкое окно: имя с должностью убираем, остаётся аватар.
+   Это самая широкая часть правого угла, а кто вошёл — видно по аватару и
+   по меню под ним. */
+@media (max-width: 1200px) {
+    .lc-nova {
+        --nova-pad: 18px;
+    }
+
+    .lc-nova .nova-bar {
+        gap: 14px;
+    }
+
+    .lc-nova .lc2-profile-who {
+        display: none;
+    }
+}
+
+/* Планшет и телефон: навигации здесь уже нет (её место занимает бургер),
+   но правый угол из пяти органов управления всё ещё шире экрана. Сжимаем
+   сами органы и промежутки — ничего не пряча. */
+@media (max-width: 900px) {
+    .lc-nova {
+        --nova-pad: 14px;
+    }
+
+    .lc-nova .nova-bar {
+        gap: 8px;
+    }
+
+    .lc-nova .lc2-header-right {
+        gap: 4px;
+    }
+
+    .lc-nova .lc2-header-right > button,
+    .lc-nova .lc2-header-right > div > button,
+    .lc-nova .nova-iconbtn {
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+    }
+
+    .lc-nova .lc2-theme-toggle {
+        height: 30px;
+        transform: scale(.86);
+        transform-origin: center;
+        margin: 0 -4px;
+    }
+
+    /* Разделитель — украшение, а на телефоне это лишние семь точек. */
+    .lc-nova .lc2-header-divider {
+        display: none;
+    }
+}
+
+/* Узкий телефон (360 — самый ходовой Android). Здесь не хватало полутора
+   десятков точек, и за край уезжал аватар: правый угол обрезался ровно на
+   том органе, который открывает меню. */
+@media (max-width: 420px) {
+    .lc-nova {
+        --nova-pad: 10px;
+    }
+
+    .lc-nova .nova-bar {
+        gap: 6px;
+    }
+
+    .lc-nova .lc2-profile {
+        padding: 2px;
+        gap: 0;
+    }
+
+    .lc-nova .lc2-profile-av,
+    .lc-nova .lc2-profile img {
+        width: 28px;
+        height: 28px;
+    }
 }
