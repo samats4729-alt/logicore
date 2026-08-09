@@ -184,14 +184,21 @@ export function QuoteFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
-                <DialogHeader>
+            {/*
+              * Прокручивается только середина. Раньше прокручивалось окно
+              * целиком: на ноутбуке форма выше экрана, и, докрутив до
+              * «Сохранить», человек терял из виду заголовок, а сами кнопки
+              * упирались в нижний край. Заголовок и кнопки закреплены,
+              * поля ездят между ними.
+              */}
+            <DialogContent className="flex max-h-[90dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+                <DialogHeader className="shrink-0 border-b px-6 py-4">
                     <DialogTitle className="text-[15px]">
                         {values.id ? 'Запрос на расчёт' : 'Новый запрос на расчёт'}
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="flex flex-col gap-3">
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 py-4">
                     {!lockedCustomerId && (
                         <Field label="Клиент">
                             <RecordPicker
@@ -351,7 +358,7 @@ export function QuoteFormDialog({
                     </Field>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-1">
+                <div className="flex shrink-0 justify-end gap-2 border-t bg-background px-6 py-3">
                     <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
                         Отмена
                     </Button>
