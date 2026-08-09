@@ -1,10 +1,14 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import PublicHeader from '@/components/public/PublicHeader';
+import styles from '@/components/public/public.module.css';
 
 /**
- * Обёртка юридических страниц (политика, оферта): тёмная editorial-шапка
- * в стиле лендинга + светлая читабельная карточка с текстом документа.
+ * Обёртка юридических страниц — оферты и политики конфиденциальности.
+ *
+ * Тот же язык, что на главной и в кабинете. Документ лежит в карточке с
+ * рамкой, набран по ширине строки, за которой глаз не теряет начало
+ * следующей: читать оферту приходится подряд, а не по диагонали.
  */
 export default function LegalPage({ eyebrow, title, updated, children }: {
     eyebrow: string;
@@ -12,39 +16,30 @@ export default function LegalPage({ eyebrow, title, updated, children }: {
     updated: string;
     children: React.ReactNode;
 }) {
-    const router = useRouter();
-
     return (
-        <div style={{ minHeight: '100vh', background: '#030712' }}>
-            <div style={{ maxWidth: 860, margin: '0 auto', padding: '28px 20px 64px' }}>
-                <div
-                    onClick={() => router.push('/')}
-                    style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-0.03em', color: '#fff', cursor: 'pointer', marginBottom: 40 }}
-                >
-                    Logi<span style={{ color: '#1677ff' }}>Core</span>
-                </div>
+        <div className={`lc-nova ${styles.root}`}>
+            <PublicHeader action={{ label: 'На главную', href: '/' }} />
 
-                <div style={{
-                    fontSize: 10.5, fontWeight: 700, letterSpacing: '0.3em', textTransform: 'uppercase',
-                    color: 'rgba(255,255,255,0.42)', marginBottom: 16,
-                }}>
-                    {eyebrow}
-                </div>
-                <h1 style={{
-                    fontFamily: "'Unbounded', 'Inter', sans-serif", fontWeight: 700,
-                    fontSize: 'clamp(24px, 3.4vw, 38px)', lineHeight: 1.1, letterSpacing: '-0.02em',
-                    color: '#fff', margin: '0 0 10px',
-                }}>
-                    {title}
-                </h1>
-                <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, marginBottom: 28 }}>
-                    Редакция от {updated}
-                </div>
+            <div className={styles.legalBody}>
+                <div className={styles.eyebrow}>{eyebrow}</div>
+                <h1 className={styles.legalTitle}>{title}</h1>
+                <div className={styles.legalUpdated}>Редакция от {updated}</div>
 
-                <div className="lc-legal-doc">
+                <div className={styles.doc}>
                     {children}
                 </div>
             </div>
+
+            <footer className={styles.foot}>
+                <div className={styles.footBand}>
+                    <div>© {new Date().getFullYear()} LogiCore · Казахстан</div>
+                    <div>
+                        <a href="/terms">Условия</a>
+                        <a href="/privacy">Конфиденциальность</a>
+                        <a href="/login">Войти</a>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 }

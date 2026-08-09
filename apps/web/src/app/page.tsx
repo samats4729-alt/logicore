@@ -1,421 +1,280 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Spin, Button } from 'antd';
-import { useAuthStore } from '@/store/auth';
+import { Spin } from 'antd';
 import {
-    GlobalOutlined,
-    TeamOutlined,
-    ArrowRightOutlined,
-    CarOutlined,
-    ShopOutlined,
-} from '@ant-design/icons';
+    ArrowRight,
+    Banknote,
+    Building2,
+    Check,
+    FileText,
+    MapPin,
+    Moon,
+    Sparkles,
+    Sun,
+    Truck,
+    Users,
+} from 'lucide-react';
+import { useAuthStore } from '@/store/auth';
+import { useTheme } from '@/components/ThemeProvider';
+import AssemblyStage from '@/components/landing/AssemblyStage';
+import styles from './landing.module.css';
 
-// CSS Module
-import styles from './page.module.css';
+/**
+ * Главная страница.
+ *
+ * Собрана на том же языке, что кабинет (`design/finance-hub`): те же
+ * токены, та же шапка высотой 58, те же карточки. Вход в систему не должен
+ * ощущаться как переход на другой сайт.
+ *
+ * Первый экран показывает продукт, а не рассказывает о нём: детали журнала
+ * заявок лежат врассыпную и собираются в рабочий экран по мере прокрутки.
+ */
 
-// Dynamic Import of animated network background (Client-only, no SSR)
-const HeroNetwork = dynamic(() => import('@/components/ui/HeroNetwork'), { ssr: false });
+// Карта весит больше всей остальной страницы, поэтому не входит в первую
+// загрузку — подтягивается, когда до раздела долистали.
+const RouteMap = dynamic(() => import('@/components/landing/RouteMap'), {
+    ssr: false,
+    loading: () => <div style={{ aspectRatio: '16 / 7', minHeight: 240 }} />,
+});
 
-// Direct imports of lightweight client components
-import Reveal from '@/components/ui/Reveal';
-import CustomCursor from '@/components/ui/CustomCursor';
-import InteractiveCard from '@/components/ui/InteractiveCard';
+const STEPS = [
+    { num: '01', title: 'Оформление заявки', text: 'Груз, маршрут и ставки заполняются в одной форме. Реквизиты контрагента подтягиваются по БИН.' },
+    { num: '02', title: 'Назначение перевозчика', text: 'Штатный водитель, партнёр-перевозчик или публикация рейса на бирже грузов.' },
+    { num: '03', title: 'Контроль рейса', text: 'Статусы и координаты транспорта обновляются в реальном времени и видны обеим сторонам.' },
+    { num: '04', title: 'Закрытие расчётов', text: 'Счета, акты и доверенности формируются автоматически, маржа считается по каждому рейсу.' },
+];
 
-// Magnetic wrapper — element drifts toward the cursor on hover
-function Magnetic({ children }: { children: React.ReactNode }) {
-    const ref = useRef<HTMLSpanElement>(null);
-    const onMove = (e: React.MouseEvent) => {
-        const el = ref.current;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        const x = e.clientX - r.left - r.width / 2;
-        const y = e.clientY - r.top - r.height / 2;
-        el.style.transform = `translate(${x * 0.25}px, ${y * 0.35}px)`;
-    };
-    const reset = () => {
-        if (ref.current) ref.current.style.transform = 'translate(0, 0)';
-    };
-    return (
-        <span
-            ref={ref}
-            onMouseMove={onMove}
-            onMouseLeave={reset}
-            style={{ display: 'inline-block', transition: 'transform 0.2s ease' }}
-        >
-            {children}
-        </span>
-    );
-}
+const FEATURES = [
+    { icon: Truck, title: 'Заявки и биржа грузов', text: 'Оформление заявки, назначение перевозчика и публикация рейса на бирже.' },
+    { icon: MapPin, title: 'GPS-мониторинг', text: 'Положение транспорта на карте и статусы рейса от погрузки до выгрузки.' },
+    { icon: Banknote, title: 'Финансы и взаиморасчёты', text: 'Реестр рейсов, движение денежных средств, прибыль и задолженность по каждому контрагенту.' },
+    { icon: FileText, title: 'Документооборот', text: 'Счета, акты выполненных работ и доверенности формируются автоматически.' },
+    { icon: Building2, title: 'Несколько юридических лиц', text: 'Все организации в одном аккаунте, общий список дел с фильтром по организации.' },
+    { icon: Sparkles, title: 'Встроенный помощник', text: 'Отвечает на вопросы по работе с системой и подсказывает следующий шаг.' },
+];
+
+const AUDIENCES = [
+    {
+        icon: Users, title: 'Экспедиторским компаниям', items: [
+            'Заявки, перевозчики и биржа в одном рабочем окне',
+            'Маржа рассчитывается по каждому рейсу',
+            'Взаиморасчёты и счета без внешних таблиц',
+            'Несколько юридических лиц в одном аккаунте',
+        ],
+    },
+    {
+        icon: Building2, title: 'Грузовладельцам', items: [
+            'Актуальный статус каждой перевозки',
+            'Подтверждение факта выполнения рейса',
+            'История перевозок и документы по каждому заказу',
+            'Отдельный кабинет с необходимым минимумом функций',
+        ],
+    },
+    {
+        icon: Truck, title: 'Перевозчикам', items: [
+            'Заявки от экспедиторов или заказчиков',
+            'Назначение своих водителей и транспорта',
+            'Подтверждение выполнения рейса',
+            'Акты и взаиморасчёты по каждому рейсу',
+        ],
+    },
+];
 
 export default function HomePage() {
     const router = useRouter();
     const { isAuthenticated, user } = useAuthStore();
-    const [isHydrated, setIsHydrated] = useState(false);
-    const [scrolled, setScrolled] = useState(false);
+    const { theme, setTheme } = useTheme();
+    const [hydrated, setHydrated] = useState(false);
 
-    // Hydration check
     useEffect(() => {
-        setIsHydrated(true);
+        setHydrated(true);
     }, []);
 
-    // Scroll listener for sticky navbar blur background
     useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 20);
-        };
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
-
-    // Role-based auth redirect
-    useEffect(() => {
-        if (isHydrated && isAuthenticated && user) {
-            switch (user.role) {
-                case 'ADMIN':
-                    router.push('/admin');
-                    break;
-                case 'COMPANY_ADMIN':
-                case 'LOGISTICIAN':
-                case 'FORWARDER':
-                case 'ACCOUNTANT':
-                case 'PARTNER':
-                    router.push('/company');
-                    break;
-                case 'WAREHOUSE_MANAGER':
-                    router.push('/company/warehouse');
-                    break;
-                case 'DRIVER':
-                    router.push('/driver');
-                    break;
-                case 'RECIPIENT':
-                    router.push('/recipient');
-                    break;
-                default:
-                    router.push('/company');
-            }
+        if (!hydrated || !isAuthenticated || !user) return;
+        switch (user.role) {
+            case 'ADMIN': router.push('/admin'); break;
+            case 'WAREHOUSE_MANAGER': router.push('/company/warehouse'); break;
+            case 'DRIVER': router.push('/driver'); break;
+            case 'RECIPIENT': router.push('/recipient'); break;
+            default: router.push('/company');
         }
-    }, [isHydrated, isAuthenticated, user, router]);
+    }, [hydrated, isAuthenticated, user, router]);
 
-    // Show loading spinner during hydration or routing redirect
-    if (!isHydrated || isAuthenticated) {
+    if (!hydrated || isAuthenticated) {
         return (
-            <div style={{
-                height: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#030712'
-            }}>
+            <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: 'var(--nova-bg, #fff)' }}>
                 <Spin size="large" />
             </div>
         );
     }
 
-    const features = [
-        {
-            title: 'Заявки и биржа',
-            desc: 'Создавайте заявки за минуту, назначайте перевозчиков или публикуйте рейс на бирже грузов.'
-        },
-        {
-            title: 'GPS-мониторинг',
-            desc: 'Живое положение транспорта на карте и статусы рейса — от погрузки до выгрузки.'
-        },
-        {
-            title: 'Финансы и взаиморасчёты',
-            desc: 'Реестр рейсов, ДДС, P&L и прозрачные взаиморасчёты с каждым контрагентом.'
-        },
-        {
-            title: 'Документы в один клик',
-            desc: 'Договоры, счета и доверенности генерируются автоматически — счётом можно поделиться ссылкой.'
-        },
-        {
-            title: 'Мультикомпании',
-            desc: 'Несколько организаций в одном аккаунте с переключением в один клик.'
-        },
-        {
-            title: 'ИИ-гид внутри',
-            desc: 'Встроенный ассистент отвечает на вопросы и ведёт по интерфейсу по шагам.'
-        },
-    ];
-
-    const steps = [
-        {
-            num: '01',
-            title: 'Создайте заявку',
-            desc: 'Груз, маршрут, ставки — всё в одной форме. Контрагент подтягивается по БИН.'
-        },
-        {
-            num: '02',
-            title: 'Назначьте перевозчика',
-            desc: 'Свой водитель, партнёр или биржа грузов — выбирайте, как удобнее.'
-        },
-        {
-            num: '03',
-            title: 'Отслеживайте рейс',
-            desc: 'Статусы и GPS в реальном времени. Обе стороны видят одно и то же.'
-        },
-        {
-            num: '04',
-            title: 'Закройте финансы',
-            desc: 'Оплаты, счета и маржа считаются сами. Документы — в один клик.'
-        }
-    ];
-
-    const roles = [
-        {
-            icon: <TeamOutlined className={styles.roleIcon} />,
-            title: 'Экспедиторы',
-            list: [
-                'Заявки, перевозчики и биржа в одном окне',
-                'Маржа по каждому рейсу автоматически',
-                'Взаиморасчёты и счета без Excel',
-                'Мультикомпании в одном аккаунте'
-            ]
-        },
-        {
-            icon: <ShopOutlined className={styles.roleIcon} />,
-            title: 'Заказчики',
-            list: [
-                'Прозрачный статус каждой перевозки',
-                'Подтверждение завершения рейса',
-                'История и документы по всем заказам',
-                'Свой кабинет без лишних функций'
-            ]
-        },
-        {
-            icon: <CarOutlined className={styles.roleIcon} />,
-            title: 'Водители',
-            list: [
-                'Мобильное приложение с маршрутом',
-                'Статусы рейса в пару касаний',
-                'Детали погрузки и выгрузки под рукой',
-                'Связь с диспетчером 24/7'
-            ]
-        }
-    ];
-
-    const splitChars = (text: string, lineIndex: number, accent = false) =>
-        Array.from(text).map((ch, i) => (
-            <span
-                key={i}
-                className={`${styles.kineticChar}${accent ? ' ' + styles.kineticAccent : ''}`}
-                style={{ animationDelay: `${0.15 + lineIndex * 0.32 + i * 0.04}s` }}
-            >
-                {ch === ' ' ? ' ' : ch}
-            </span>
-        ));
-
     return (
-        <div className={styles.container}>
-            <CustomCursor />
-            {/* Header / Navbar */}
-            <nav className={`${styles.navbar} ${scrolled ? styles.navbarScrolled : ''}`}>
-                <div className={styles.logo} onClick={() => router.push('/')}>
-                    <GlobalOutlined style={{ color: '#1677ff' }} />
-                    Logi<span>Core</span>
-                </div>
-                <div className={styles.navActions}>
-                    <Button
-                        type="text"
-                        className={styles.navLogin}
-                        onClick={() => router.push('/login')}
-                    >
-                        Войти
-                    </Button>
-                    <Button
-                        type="primary"
-                        shape="round"
-                        size="large"
-                        className={styles.primaryBtn}
-                        onClick={() => router.push('/register')}
-                    >
-                        Регистрация
-                    </Button>
-                </div>
-            </nav>
+        <div className={`lc-nova ${styles.root}`}>
+            <header className={styles.head}>
+                <div className={styles.headBand}>
+                    <a href="/" className={styles.brand}>Logi<span>Core</span></a>
 
-            {/* Hero Section */}
-            <section className={styles.hero}>
-                <HeroNetwork />
-                <div className={styles.heroGlow} />
-                <div className={styles.gridOverlay} />
+                    <nav className={styles.links}>
+                        <a className={styles.link} href="#как">Как это работает</a>
+                        <a className={styles.link} href="#возможности">Возможности</a>
+                        <a className={styles.link} href="#рейс">Мониторинг</a>
+                        <a className={styles.link} href="#кому">Кому подходит</a>
+                    </nav>
 
-                <div className={styles.heroInner}>
-                    <div className={styles.heroIndex}>(01 — Цифровая логистика)</div>
-
-                    <h1 className={styles.kineticTitle}>
-                        <span className={styles.kineticLine}>{splitChars('Логистика', 0)}</span>
-                        <span className={styles.kineticLine}>{splitChars('в движении', 1, true)}</span>
-                    </h1>
-
-                    <p className={styles.heroLead}>
-                        Единая цифровая платформа для грузовладельцев, экспедиторов и водителей. Заявки, трекинг в реальном времени и финансы — в одном движении, без трения.
-                    </p>
-
-                    <div className={styles.heroActions}>
-                        <Magnetic>
-                            <Button
-                                type="primary"
-                                size="large"
-                                className={styles.primaryBtn}
-                                onClick={() => router.push('/register')}
-                            >
-                                Начать работу <ArrowRightOutlined />
-                            </Button>
-                        </Magnetic>
-                        <Button
-                            size="large"
-                            className={styles.secondaryBtn}
-                            onClick={() => router.push('/login')}
+                    <div className={styles.headRight}>
+                        <button
+                            type="button"
+                            className={styles.themeBtn}
+                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                            aria-label={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+                            title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
                         >
-                            Вход в систему
-                        </Button>
-                    </div>
-
-                    <div className={styles.heroBottom}>
-                        <span className={styles.heroScrollLabel}>Прокрутите ↓</span>
+                            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+                        </button>
+                        <button type="button" className={styles.ghost} onClick={() => router.push('/login')}>
+                            Войти
+                        </button>
+                        <button type="button" className={styles.primary} onClick={() => router.push('/register')}>
+                            Зарегистрироваться <ArrowRight size={14} />
+                        </button>
                     </div>
                 </div>
-            </section>
+            </header>
 
-            {/* Marquee */}
-            <div className={styles.marquee} aria-hidden="true">
-                <div className={styles.marqueeTrack}>
-                    <span>Заявки</span><b>·</b><span>Трекинг</span><b>·</b><span>Финансы</span><b>·</b><span>Документы</span><b>·</b><span>Автопарк</span><b>·</b><span>Взаиморасчёты</span><b>·</b>
-                    <span>Заявки</span><b>·</b><span>Трекинг</span><b>·</b><span>Финансы</span><b>·</b><span>Документы</span><b>·</b><span>Автопарк</span><b>·</b><span>Взаиморасчёты</span><b>·</b>
+
+            {/* ===== Первый экран =====
+                Заголовок живёт внутри сцены, а не отдельным блоком над ней:
+                иначе разлетевшиеся детали начинаются под ним, за краем
+                экрана, и сборку просто не видно. */}
+            <AssemblyStage>
+                <div className={styles.hero}>
+                    <h1 className={styles.title}>
+                        Заявки, транспорт и расчёты — <em>в одной системе</em>
+                    </h1>
+                    <p className={styles.lead}>
+                        LogiCore объединяет оформление заявок, назначение перевозчиков, контроль
+                        рейсов и взаиморасчёты. Данные вводятся один раз и доступны всем
+                        участникам перевозки.
+                    </p>
+                    <div className={styles.heroBtns}>
+                        <button type="button" className={styles.primary} onClick={() => router.push('/register')}>
+                            Зарегистрироваться <ArrowRight size={14} />
+                        </button>
+                        <button type="button" className={styles.ghost} onClick={() => router.push('/login')}>
+                            Войти
+                        </button>
+                    </div>
+                    <div className={styles.trust}>Развёртывание за один рабочий день · Данные хранятся в вашем аккаунте</div>
                 </div>
-            </div>
+            </AssemblyStage>
 
-            {/* (02) Features — editorial rows */}
-            <section className={styles.sectionShell}>
-                <Reveal delay={50}>
-                    <div className={styles.sectionIndex}>(02 — Возможности)</div>
-                </Reveal>
-                <Reveal delay={150}>
-                    <h2 className={styles.sectionHeading}>
-                        Всё для перевозок.<br /><span>В одном окне.</span>
-                    </h2>
-                </Reveal>
-                <div className={styles.featureRows}>
-                    {features.map((f, i) => (
-                        <Reveal key={i} delay={i * 60}>
-                            <div className={styles.featureRow} onClick={() => router.push('/register')}>
-                                <span className={styles.frNum}>{String(i + 1).padStart(2, '0')}</span>
-                                <div className={styles.frMain}>
-                                    <h3 className={styles.frTitle}>{f.title}</h3>
-                                    <p className={styles.frDesc}>{f.desc}</p>
-                                </div>
-                                <ArrowRightOutlined className={styles.frArrow} />
+            {/* ===== Как работает ===== */}
+            <section className={styles.section} id="как">
+                <div className={styles.band}>
+                    <div className={styles.sectionHead}>
+                        <div className={styles.eyebrow}>Как это работает</div>
+                        <h2 className={styles.sectionTitle}>От оформления заявки до закрытия расчётов — четыре шага</h2>
+                        <p className={styles.sectionLead}>
+                            Переносить данные вручную не требуется: каждый следующий шаг использует сведения предыдущего.
+                        </p>
+                    </div>
+                    <div className={styles.steps}>
+                        {STEPS.map((s) => (
+                            <div key={s.num} className={styles.step}>
+                                <div className={styles.stepNum}>{s.num}</div>
+                                <div className={styles.stepTitle}>{s.title}</div>
+                                <div className={styles.stepText}>{s.text}</div>
                             </div>
-                        </Reveal>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             </section>
 
-            {/* (03) Process */}
-            <section className={styles.sectionShellAlt}>
-                <Reveal delay={50}>
-                    <div className={styles.sectionIndex}>(03 — Процесс)</div>
-                </Reveal>
-                <Reveal delay={150}>
-                    <h2 className={styles.sectionHeading}>
-                        От заявки<br /><span>до оплаты.</span>
-                    </h2>
-                </Reveal>
-                <div className={styles.stepsFlow}>
-                    {steps.map((step, i) => (
-                        <Reveal key={i} delay={i * 100}>
-                            <InteractiveCard className={styles.stepItem}>
-                                <span className={styles.stepGhost}>{step.num}</span>
-                                <h3 className={styles.stepName}>{step.title}</h3>
-                                <p className={styles.stepText}>{step.desc}</p>
-                            </InteractiveCard>
-                        </Reveal>
-                    ))}
+            {/* ===== Живой рейс ===== */}
+            <section className={`${styles.section} ${styles.sectionMuted}`} id="рейс">
+                <div className={styles.band}>
+                    <div className={styles.mapRow}>
+                        <div className={styles.mapText}>
+                            <div className={styles.eyebrow}>Мониторинг</div>
+                            <h2 className={styles.sectionTitle}>Положение транспорта видно без звонка водителю</h2>
+                            <ul>
+                                <li><Check size={14} className={styles.tick} /> Координаты транспорта и пройденная часть маршрута</li>
+                                <li><Check size={14} className={styles.tick} /> Статусы от погрузки до выгрузки — синхронно у всех участников</li>
+                                <li><Check size={14} className={styles.tick} /> Заказчик видит те же данные, что и логист</li>
+                            </ul>
+                        </div>
+                        <RouteMap theme={theme} />
+                    </div>
                 </div>
             </section>
 
-            {/* (04) Roles */}
-            <section className={styles.sectionShell}>
-                <Reveal delay={50}>
-                    <div className={styles.sectionIndex}>(04 — Для кого)</div>
-                </Reveal>
-                <Reveal delay={150}>
-                    <h2 className={styles.sectionHeading}>
-                        Каждому —<br /><span>своё рабочее место.</span>
-                    </h2>
-                </Reveal>
-                <div className={styles.rolesGrid}>
-                    {roles.map((role, i) => (
-                        <Reveal key={i} delay={i * 100}>
-                            <InteractiveCard className={styles.roleCard}>
-                                <h3 className={styles.roleTitle}>
-                                    {role.icon} {role.title}
-                                </h3>
+            {/* ===== Возможности ===== */}
+            <section className={styles.section} id="возможности">
+                <div className={styles.band}>
+                    <div className={styles.sectionHead}>
+                        <div className={styles.eyebrow}>Возможности</div>
+                        <h2 className={styles.sectionTitle}>Полный цикл работы экспедитора</h2>
+                    </div>
+                    <div className={styles.features}>
+                        {FEATURES.map((f) => (
+                            <div key={f.title} className={styles.card}>
+                                <div className={styles.cardIcon}><f.icon size={16} /></div>
+                                <div className={styles.cardTitle}>{f.title}</div>
+                                <div className={styles.cardText}>{f.text}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+
+            {/* ===== Кому подходит ===== */}
+            <section className={`${styles.section} ${styles.sectionMuted}`} id="кому">
+                <div className={styles.band}>
+                    <div className={styles.sectionHead}>
+                        <div className={styles.eyebrow}>Кому подходит</div>
+                        <h2 className={styles.sectionTitle}>Один рейс — три роли и три набора задач</h2>
+                    </div>
+                    <div className={styles.roles}>
+                        {AUDIENCES.map((a) => (
+                            <div key={a.title} className={styles.role}>
+                                <div className={styles.roleHead}><a.icon size={15} /><b>{a.title}</b></div>
                                 <ul className={styles.roleList}>
-                                    {role.list.map((item, j) => (
-                                        <li key={j}>{item}</li>
+                                    {a.items.map((item) => (
+                                        <li key={item}><Check size={13} className={styles.tick} />{item}</li>
                                     ))}
                                 </ul>
-                            </InteractiveCard>
-                        </Reveal>
-                    ))}
-                </div>
-            </section>
-
-            {/* (05) CTA */}
-            <section className={styles.ctaBig}>
-                <div className={styles.ctaGlow} />
-                <Reveal delay={50}>
-                    <div className={styles.sectionIndex}>(05 — Старт)</div>
-                </Reveal>
-                <Reveal delay={150}>
-                    <h2 className={styles.ctaHuge}>
-                        Готовы<br /><span>двигаться?</span>
-                    </h2>
-                </Reveal>
-                <Reveal delay={250}>
-                    <p className={styles.ctaLead}>
-                        Регистрация занимает две минуты. Создайте первую заявку сегодня — и почувствуйте разницу.
-                    </p>
-                </Reveal>
-                <Reveal delay={350}>
-                    <div>
-                        <Magnetic>
-                            <Button
-                                type="primary"
-                                size="large"
-                                className={styles.primaryBtn}
-                                onClick={() => router.push('/register')}
-                            >
-                                Создать аккаунт <ArrowRightOutlined />
-                            </Button>
-                        </Magnetic>
+                            </div>
+                        ))}
                     </div>
-                </Reveal>
+                </div>
             </section>
 
-            {/* Footer */}
-            <footer className={styles.footerBig}>
-                <div className={styles.footerWordmark} aria-hidden="true">LOGICORE</div>
-                <div className={styles.footerRow}>
-                    <span>© {new Date().getFullYear()} LogiCore Platform — интеллектуальная логистика</span>
-                    <span className={styles.footerLinks}>
-                        <span onClick={() => router.push('/login')}>Войти</span>
-                        <span className={styles.footerDot}>/</span>
-                        <span onClick={() => router.push('/register')}>Регистрация</span>
-                        <span className={styles.footerDot}>/</span>
-                        <span onClick={() => router.push('/privacy')}>Конфиденциальность</span>
-                        <span className={styles.footerDot}>/</span>
-                        <span onClick={() => router.push('/terms')}>Оферта</span>
-                        <span className={styles.footerDot}>/</span>
-                        <a href="mailto:support@logicore.kz" style={{ color: 'inherit', textDecoration: 'none' }}>support@logicore.kz</a>
-                    </span>
+            {/* ===== Призыв ===== */}
+            <section className={styles.section}>
+                <div className={styles.band}>
+                    <div className={styles.cta}>
+                        <h2>Начните работу в LogiCore</h2>
+                        <p>Зарегистрируйте компанию, оформите первую заявку и оцените расчёт маржи. На настройку уходит один рабочий день.</p>
+                        <button type="button" className={styles.ctaBtn} onClick={() => router.push('/register')}>
+                            Зарегистрироваться <ArrowRight size={15} />
+                        </button>
+                    </div>
+
+                    <div className={styles.foot}>
+                        <div>© {new Date().getFullYear()} LogiCore · Казахстан</div>
+                        <div className={styles.footLinks}>
+                            <a href="/terms">Условия</a>
+                            <a href="/privacy">Конфиденциальность</a>
+                            <a href="/login">Войти</a>
+                        </div>
+                    </div>
                 </div>
-            </footer>
+            </section>
         </div>
     );
 }

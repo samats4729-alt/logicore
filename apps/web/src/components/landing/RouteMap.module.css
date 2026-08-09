@@ -1,0 +1,81 @@
+/* Карта рейса на главной. */
+
+.wrap {
+    position: relative;
+    border: 1px solid var(--nova-border);
+    border-radius: var(--nova-radius);
+    overflow: hidden;
+    background: var(--nova-surface-2);
+    box-shadow: var(--nova-shadow);
+    aspect-ratio: 16 / 7;
+    min-height: 240px;
+}
+
+/* Высота задана явно, а не только через `inset`.
+ *
+ * MapLibre вешает на контейнер свой класс и ставит ему `position: relative`
+ * — его таблица стилей приходит отдельным куском и оказывается позже моей.
+ * `inset: 0` при `relative` ничего не держит, контейнер схлопывался в нулевую
+ * высоту, и карта была невидима при полностью загруженных тайлах. */
+.map {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Заглушка ровно того же размера: пока карта грузится, страница не прыгает. */
+.skeleton {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--nova-hover) 70%, transparent) 50%, transparent 100%),
+        var(--nova-surface-2);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+    from { background-position: 120% 0; }
+    to { background-position: -20% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton {
+        animation: none;
+    }
+}
+
+.cityLeft,
+.cityRight,
+.distance {
+    position: absolute;
+    z-index: 2;
+    padding: 3px 9px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    background: color-mix(in srgb, var(--nova-surface) 88%, transparent);
+    border: 1px solid var(--nova-border);
+    backdrop-filter: blur(6px);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.cityLeft {
+    left: 12px;
+    bottom: 12px;
+}
+
+.cityRight {
+    right: 12px;
+    top: 12px;
+}
+
+.distance {
+    left: 12px;
+    top: 12px;
+    font-weight: 500;
+    color: var(--nova-fg-2);
+}

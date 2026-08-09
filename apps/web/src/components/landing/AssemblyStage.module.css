@@ -1,0 +1,646 @@
+/* Первый экран: россыпь деталей собирается в журнал заявок целой страницей. */
+
+.section {
+    /* Высота раздела и есть длина прокрутки, за которую всё собирается.
+       Меньше — сборка мелькает; больше — человек решает, что страница
+       залипла. */
+    height: 230vh;
+    position: relative;
+}
+
+.sticky {
+    background: var(--nova-surface-2);
+    position: sticky;
+    top: 58px;
+    height: calc(100vh - 58px);
+    min-height: 620px;
+    overflow: hidden;
+}
+
+.stage {
+    --p: 0;
+    /* Насколько широко детали разлетаются. На узком экране разлёт меньше:
+       иначе они улетают за край целиком и разбросано становится нечего. */
+    --sf: 1;
+    position: relative;
+    height: 100%;
+}
+
+/* ===== Бегущая лента возможностей ===== */
+
+/* Живёт в полосе между шапкой сайта и окном, которая иначе просто пустует.
+   Гаснет, как только пошла сборка: дальше говорит сам экран, а две бегущие
+   вещи разом спорят друг с другом. */
+.ticker {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: clamp(12px, 2.4vh, 24px);
+    z-index: 2;
+    overflow: hidden;
+    opacity: clamp(0, calc(1 - var(--p) * 3.4), 1);
+    /* Края растворяются, иначе строка обрубается посреди слова. */
+    mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+.tickerTrack {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    width: max-content;
+    animation: run 42s linear infinite;
+}
+
+.tickerTrack span {
+    display: inline-flex;
+    align-items: center;
+    gap: 30px;
+    font-size: 12px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+}
+
+/* Разделитель — точка, а не запятая: на бегущей строке знак препинания
+   читается как опечатка. */
+.tickerTrack span::after {
+    content: '';
+    width: 3px;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--nova-border);
+}
+
+/* Список продублирован в разметке, поэтому сдвиг ровно на половину дорожки
+   склеивает конец с началом без рывка. */
+@keyframes run {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tickerTrack {
+        animation: none;
+    }
+}
+
+/* ===== Заголовок ===== */
+
+/* Заголовок вынут из потока: иначе он держал бы под себя место и собранное
+   окно не могло бы подняться на весь экран. */
+.copy {
+    position: absolute;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    text-align: center;
+    padding: 0 16px;
+    pointer-events: none;
+    /* Не растворяется, а медленно уезжает вверх: пропадающий текст
+       читается как сбой, а не как переход. */
+    transform: translateY(calc(-620px * var(--p)));
+}
+
+.copy > * {
+    pointer-events: auto;
+}
+
+/* ===== Окно приложения ===== */
+
+/* Пустое окно стоит на экране с самого начала и держит внутри себя
+   заголовок: страница будто ещё не заполнена, и человек смотрит в неё, как
+   в пустой кабинет. При прокрутке окно съезжает вниз, освобождая место
+   уходящему вверх заголовку, и заполняется собранной страницей.
+
+   Двигаем только `transform`: `top` пересчитывал бы вёрстку на каждом
+   кадре. */
+.windowWrap {
+    position: absolute;
+    left: 50%;
+    width: min(1180px, 94vw);
+    top: clamp(72px, 11vh, 112px);
+    bottom: 0;
+    transform:
+        translateX(-50%)
+        translateY(calc(92px * var(--p)));
+    transform-origin: top center;
+    will-change: transform;
+}
+
+/* Подсветка внизу первого экрана.
+ *
+ * Первый экран стоит на своём фоне, следующий блок — на основном. Между
+ * ними не должно быть ступеньки: низ экрана светится цветом следующего
+ * блока и переливается в него, поэтому переход читается как продолжение, а
+ * не как стык двух кусков.
+ *
+ * Свечение того же цвета, что следующий блок, — белое в светлой теме и
+ * тёмное в тёмной. Цветное свечение здесь читалось как посторонняя подсветка
+ * снизу, а не как продолжение страницы. */
+.glow {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 36%;
+    z-index: 5;
+    pointer-events: none;
+    background:
+        radial-gradient(
+            80% 170px at 50% 100%,
+            var(--nova-bg),
+            color-mix(in srgb, var(--nova-bg) 45%, transparent) 45%,
+            transparent 75%
+        ),
+        linear-gradient(to bottom, transparent 0%, var(--nova-bg) 86%);
+}
+
+/* Рамка окна — отдельный слой под частями: части летают поверх и не
+   обрезаются её краями. Проявляется во второй половине сборки, раньше
+   выглядела бы пустым окном, в которое ещё ничего не положили. */
+.frame {
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--nova-border);
+    border-radius: 16px 16px 0 0;
+    background: var(--nova-surface);
+    box-shadow: 0 2px 6px rgba(16, 24, 40, .06), 0 24px 60px -28px rgba(16, 24, 40, .35);
+    overflow: hidden;
+}
+
+/* Сетка точек в пустом окне.
+ *
+ * Два слоя одной и той же сетки: нижний ровный и еле заметный, верхний
+ * ярче и виден только пятном вокруг курсора. Пустое окно так отзывается на
+ * движение мыши и читается как живое место, а не как заглушка. Оба слоя
+ * гаснут по мере того, как окно заполняется страницей. */
+.dots,
+.dotsLit {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle, currentColor 1.1px, transparent 1.1px);
+    background-size: 22px 22px;
+    opacity: calc(1 - var(--p));
+}
+
+.dots {
+    color: var(--nova-border);
+}
+
+/* Верхний слой виден только там, где курсор. Пятно — маска, а не заливка:
+   так подсвечиваются сами точки, а не прямоугольник поверх них. */
+.dotsLit {
+    color: var(--nova-fg-3);
+    opacity: calc((1 - var(--p)) * var(--lit, 0));
+    transition: opacity .25s ease;
+    mask-image: radial-gradient(150px 150px at var(--mx, -999px) var(--my, -999px), #000 0%, rgba(0, 0, 0, .45) 45%, transparent 72%);
+    -webkit-mask-image: radial-gradient(150px 150px at var(--mx, -999px) var(--my, -999px), #000 0%, rgba(0, 0, 0, .45) 45%, transparent 72%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dotsLit {
+        display: none;
+    }
+}
+
+[data-theme='dark'] .frame {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .4), 0 24px 60px -28px rgba(0, 0, 0, .7);
+}
+
+/* Часть страницы, которая выезжает на своё место.
+ *
+ * Только по горизонтали, из левого и правого края по очереди. Поворотов и
+ * вертикальных смещений нет: экран должен собираться из ровных полос, а не
+ * слетаться веером — «веер» читался как беспорядок. */
+.piece {
+    position: relative;
+    --own: clamp(0, calc((var(--p) - var(--d)) * var(--k)), 1);
+    --off: calc(1 - var(--own));
+    transform: translate3d(calc(var(--tx) * var(--off) * var(--sf)), 0, 0);
+    /* Сперва частей не видно: они проявляются по мере того, как выезжают. */
+    opacity: var(--own);
+    will-change: transform, opacity;
+}
+
+.window {
+    position: relative;
+    height: 100%;
+}
+
+/* Шапка кабинета внутри окна. */
+
+/* Скругление то же, что у рамки окна, минус её рамка в одну точку: иначе
+   заливка шапки торчит острыми углами поверх круглых углов окна. */
+.appBar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 40px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--nova-border);
+    background: var(--nova-surface);
+    border-radius: 15px 15px 0 0;
+}
+
+.appBrand {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    color: var(--nova-fg);
+}
+
+.appBrand span {
+    color: var(--nova-fg);
+}
+
+.navPills {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--nova-border);
+    border-radius: 999px;
+}
+
+.navPills > span {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--nova-fg-2);
+    white-space: nowrap;
+}
+
+.navActive {
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg) !important;
+    font-weight: 600;
+}
+
+.appRight {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--nova-fg-3);
+}
+
+.appRight i {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid var(--nova-border);
+}
+
+/* Страница внутри окна. */
+
+.page {
+    padding: 16px 16px 0;
+}
+
+.pageHead {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.eyebrow {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+}
+
+.pageTitle {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: clamp(15px, 1.5vw, 19px);
+    font-weight: 600;
+    letter-spacing: -0.045em;
+    color: var(--nova-fg);
+    margin-top: 3px;
+}
+
+.createBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 11px;
+    border-radius: 9px;
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font-size: 11px;
+    font-weight: 550;
+    white-space: nowrap;
+}
+
+.card {
+    opacity: clamp(0, calc((var(--p) - .06) * 3.4), 1);
+    border: 1px solid var(--nova-border);
+    border-radius: 14px;
+    background: var(--nova-surface);
+    box-shadow: var(--nova-shadow);
+    overflow: hidden;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--nova-border-2);
+}
+
+.tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 23px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font-size: 10.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tab b { opacity: .65; }
+
+.tabMuted {
+    font-size: 10.5px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+}
+
+.search {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 23px;
+    width: 230px;
+    padding: 0 10px;
+    border: 1px solid var(--nova-border);
+    border-radius: 8px;
+    color: var(--nova-fg-3);
+    font-size: 10.5px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 23px;
+    padding: 0 10px;
+    border: 1px solid var(--nova-border);
+    border-radius: 8px;
+    color: var(--nova-fg);
+    font-size: 10.5px;
+    white-space: nowrap;
+}
+
+.selected {
+    margin-left: auto;
+    font-size: 10.5px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+}
+
+/* Таблица журнала. */
+
+.table {
+    display: block;
+}
+
+.tr {
+    display: grid;
+    grid-template-columns:
+        92px 62px minmax(0, 1.25fr) minmax(0, 1.1fr) 74px 74px minmax(0, 1.1fr) 72px 78px 66px 20px;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--nova-border-2);
+    font-size: 10.5px;
+    color: var(--nova-fg);
+}
+
+.tr > span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.th {
+    background: var(--nova-surface-2);
+    color: var(--nova-fg-3);
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.right { text-align: right; }
+.ell { color: var(--nova-fg-2); }
+.muted { color: var(--nova-fg-3); }
+.accent { color: var(--nova-accent); font-weight: 600; }
+.neg { color: var(--nova-neg); font-weight: 600; }
+.num { font-weight: 650; font-variant-numeric: tabular-nums; }
+.chev { color: var(--nova-fg-3); }
+
+.route {
+    position: relative;
+    padding-bottom: 5px;
+}
+
+.route i {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    width: 62%;
+    border-radius: 999px;
+    opacity: .75;
+}
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 19px;
+    padding: 0 7px 0 3px;
+    border: 1px solid var(--nova-border);
+    border-radius: 999px;
+    font-size: 9.5px;
+    font-weight: 550;
+    white-space: nowrap;
+}
+
+.pill i {
+    width: 13px;
+    height: 13px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 1px 2px rgba(16, 24, 40, .22);
+}
+
+[data-theme='dark'] .pill i {
+    color: var(--nova-bg);
+}
+
+/* Профиль в правом углу шапки кабинета. */
+
+.profile {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 8px;
+    margin-left: 2px;
+    border-left: 1px solid var(--nova-border);
+}
+
+.avatar {
+    border-radius: 999px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.profileText b {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 650;
+    color: var(--nova-fg);
+    white-space: nowrap;
+}
+
+.profileText u {
+    display: block;
+    font-size: 9px;
+    color: var(--nova-fg-3);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+/* ===== Узкие экраны ===== */
+
+@media (max-width: 1100px) {
+    /* Столбцов больше, чем помещается: показываем главные, как это делает
+       сам кабинет на узком экране. */
+    .tr {
+        grid-template-columns: 88px 58px minmax(0, 1.2fr) minmax(0, 1fr) 68px 66px 60px 18px;
+    }
+
+    .tr > span:nth-child(5),
+    .tr > span:nth-child(6),
+    .tr > span:nth-child(9) {
+        display: none;
+    }
+}
+
+/* ===== Телефон =====
+ *
+ * Сборки здесь нет: экран шириной 1180 точек не собрать на экране в 375 —
+ * деталей не разглядеть, а прокрутка залипает на два экрана впустую.
+ * Страница сразу собрана и выглядывает углом справа: видно, что это
+ * настоящий рабочий экран, и он не отнимает высоту у текста.
+ *
+ * Раздел перестаёт быть липким и становится обычным блоком, а заголовок,
+ * лента и окно встают друг под другом в порядке разметки. */
+@media (max-width: 760px) {
+    .section {
+        height: auto;
+    }
+
+    .sticky {
+        position: static;
+        height: auto;
+        min-height: 0;
+        padding-bottom: 26px;
+    }
+
+    .stage {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+    }
+
+    .ticker {
+        position: relative;
+        top: auto;
+        order: 1;
+        padding: 16px 0 0;
+    }
+
+    .copy {
+        position: relative;
+        top: auto;
+        height: auto;
+        order: 2;
+        padding: 26px 16px 24px;
+        transform: none;
+    }
+
+    .windowWrap {
+        position: relative;
+        order: 3;
+        left: auto;
+        top: auto;
+        bottom: auto;
+        /* Шире экрана: левый край на месте, правый уходит за границу —
+           наружу смотрит угол рабочего экрана. Прижимать его к правому
+           краю нельзя: под текстом остаётся пустая половина, и разворот
+           выглядит перекошенным. */
+        width: 540px;
+        margin-left: 16%;
+        height: 286px;
+        transform: none;
+    }
+
+    /* Подсветка низа нужна там, где первый экран во всю высоту переливается
+       в следующий блок. На телефоне это обычный блок, и подсветка читается
+       просто тёмной полосой поперёк экрана. */
+    .glow {
+        display: none;
+    }
+
+    .navPills,
+    .appRight {
+        display: none;
+    }
+
+
+    .tr {
+        grid-template-columns: 80px minmax(0, 1fr) 62px 18px;
+    }
+
+    .tr > span:nth-child(3),
+    .tr > span:nth-child(4),
+    .tr > span:nth-child(5),
+    .tr > span:nth-child(6),
+    .tr > span:nth-child(9),
+    .tr > span:nth-child(10) {
+        display: none;
+    }
+
+    /* Имя с должностью — самое широкое в шапке окна; на телефоне остаётся
+       только фотография. */
+    .profileText {
+        display: none;
+    }
+}
