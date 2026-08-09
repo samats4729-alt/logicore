@@ -2,18 +2,18 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Table, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, Tabs, InputNumber, Row, Col, DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
+import { Table, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, InputNumber, Row, Col, DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
 import dayjs from 'dayjs';
 import {
     CheckCircleOutlined,
     EnvironmentOutlined, FlagOutlined, SearchOutlined,
-    FilterOutlined, FileTextOutlined, CloseCircleOutlined,
+    CloseCircleOutlined,
     ExclamationCircleOutlined,
-    ClockCircleOutlined, TruckOutlined
 } from '@ant-design/icons';
-import { ChevronDown, ChevronRight, ChevronUp, Eraser, FileText, Mail, Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
+import { ArrowUpDown, ChevronRight, Eraser, FileText, Mail, Pencil, Plus, Search, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
+import journal from './orders-journal.module.css';
 import { api, Location } from '@/lib/api';
 import { reportLoadFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -23,7 +23,8 @@ import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import AssignDriverModal from '@/components/AssignDriverModal';
 import OrdersMobileList from '@/components/OrdersMobileList';
-import StatusPill, { STATUS_PILL, STATUS_LABELS } from '@/components/ui/StatusPill';
+import { STATUS_PILL, STATUS_LABELS } from '@/components/ui/StatusPill';
+import OrderStatusPill from '@/components/ui/OrderStatusPill';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
@@ -515,6 +516,10 @@ export default function CompanyOrdersPage() {
     const [filterTo, setFilterTo] = useState<string | undefined>(undefined);
     const [filterSumMin, setFilterSumMin] = useState<number | undefined>(undefined);
     const [filterSumMax, setFilterSumMax] = useState<number | undefined>(undefined);
+    const [query, setQuery] = useState('');
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [sortDesc, setSortDesc] = useState(true);
+    const searchRef = useRef<HTMLInputElement>(null);
 
     // Reset location state when modal closes
     useEffect(() => {
@@ -678,6 +683,71 @@ export default function CompanyOrdersPage() {
     useEffect(() => {
         clearFilters();
     }, [activeTab]);
+
+    // =================== ПОИСК И ПОРЯДОК ===================
+    // Поиск и порядок наложены поверх готовых списков, а не встроены в
+    // фильтры: условия фильтров задаёт панель, а это — два отдельных органа
+    // управления в полосе, и смешивать их состояние незачем.
+
+    const searchable = (o: Order) => [
+        o.orderNumber,
+        o.customerCompany?.name,
+        o.forwarder?.name,
+        o.subForwarder?.name,
+        o.partner?.name,
+        o.assignedDriverName,
+        o.assignedDriverPlate,
+        extractCity(o, 'pickup'),
+        extractCity(o, 'delivery'),
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    const applyQueryAndSort = (list: Order[]) => {
+        const q = query.trim().toLowerCase();
+        const found = q ? list.filter(o => searchable(o).includes(q)) : list;
+        return [...found].sort((a, b) => {
+            const d = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            return sortDesc ? d : -d;
+        });
+    };
+
+    const visibleOrders = useMemo(
+        () => applyQueryAndSort(filteredOrders),
+        [filteredOrders, query, sortDesc],
+    );
+    const visibleArchiveOrders = useMemo(
+        () => applyQueryAndSort(filteredArchiveOrders),
+        [filteredArchiveOrders, query, sortDesc],
+    );
+
+    const activeFilterCount = [
+        filterCompany, filterForwarder, filterExpeditor, filterDriver, filterStatus,
+        filterFrom, filterTo,
+        filterSumMin !== undefined ? 'min' : undefined,
+        filterSumMax !== undefined ? 'max' : undefined,
+    ].filter(Boolean).length;
+
+    const isArchive = activeTab === 'archive';
+    const totalCount = isArchive ? totalArchiveOrders : totalOrders;
+    const shownCount = isArchive ? visibleArchiveOrders.length : visibleOrders.length;
+    const isNarrowed = activeFilterCount > 0 || query.trim().length > 0;
+
+    const clearAllFilters = () => {
+        clearFilters();
+        setQuery('');
+    };
+
+    // Подсказка «⌘K» в поле поиска обязана работать: нарисованная клавиша,
+    // которая ничего не делает, — обман.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+            e.preventDefault();
+            searchRef.current?.focus();
+            searchRef.current?.select();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
 
     // =================== HELPER ===================
     function extractCity(order: Order, type: 'pickup' | 'delivery'): string {
@@ -973,7 +1043,7 @@ export default function CompanyOrdersPage() {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
             render: (s: string, r: Order) => (
                 <div>
-                    <StatusPill status={s} />
+                    <OrderStatusPill status={s} />
                     {r.pendingStatus === 'COMPLETED' && r.pendingStatusById !== user?.companyId && (
                         <Tooltip title="Ожидает вашего подтверждения завершения">
                             <ExclamationCircleOutlined style={{ color: '#faad14', marginLeft: 4, fontSize: 13 }} />
@@ -988,13 +1058,15 @@ export default function CompanyOrdersPage() {
             ),
         },
         {
-            title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124,
-            render: (t: string) => <span className="lc-ordernum">{t}</span>,
+            // `ellipsis` обязателен: без него длинный номер выезжал в соседний
+            // столбец. Подсказка возвращает то, что обрезано.
+            title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, ellipsis: true,
+            render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip>,
         },
         ...orgColumn,
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
-            render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
+            render: (d: string) => <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
         },
         {
             title: 'Дата погр.', key: 'pickupDate', width: 90,
@@ -1002,8 +1074,8 @@ export default function CompanyOrdersPage() {
                 const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
                 const date = (pickupPt as any)?.expectedDate;
                 return date
-                    ? <span style={{ fontSize: 11, color: 'var(--lc-text-sec)' }}>{dayjs(date).format('DD.MM.YY')}</span>
-                    : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                    ? <span style={{ fontSize: 11, color: 'var(--nova-fg-2)' }}>{dayjs(date).format('DD.MM.YY')}</span>
+                    : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1034,7 +1106,7 @@ export default function CompanyOrdersPage() {
             title: 'Водитель', key: 'drv', width: 140, ellipsis: true,
             render: (_: any, r: Order) => {
                 const name = r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '');
-                if (!name) return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                if (!name) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
                 return (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%' }}>
                         <span className="lc2-avatar lc2-avatar-sm">{nameInitials(name)}</span>
@@ -1052,7 +1124,7 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => {
                 const from = extractCity(r, 'pickup');
                 const to = extractCity(r, 'delivery');
-                if (!from && !to) return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                if (!from && !to) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
                 return (
                     <div style={{ minWidth: 120 }}>
                         <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{from || '?'} → {to || '?'}</span>
@@ -1069,15 +1141,15 @@ export default function CompanyOrdersPage() {
                 if (r.responsibleManager) {
                     return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
                 }
-                return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
             },
         },
         {
             title: 'Ставка зак.', key: 'customerPrice', width: 100, align: 'right' as const,
             render: (_: any, r: Order) => {
                 return r.customerPrice
-                    ? <span style={{ fontSize: 12, fontWeight: 600, color: '#389e0d' }}>{r.customerPrice.toLocaleString('ru-RU')}</span>
-                    : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                    ? <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{r.customerPrice.toLocaleString('ru-RU')}</span>
+                    : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1085,8 +1157,8 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => {
                 const cost = r.driverCost || (r as any).subForwarderPrice;
                 return cost
-                    ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span>
-                    : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                    ? <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--nova-neg)' }}>{cost.toLocaleString('ru-RU')}</span>
+                    : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1096,12 +1168,12 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => {
                 const invoice = r.accountingDocuments?.[0]?.document;
                 if (!invoice) {
-                    return <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>не выставлен</span>;
+                    return <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>не выставлен</span>;
                 }
                 return (
                     <Tooltip title={`Счёт № ${invoice.number}`}>
                         <span
-                            style={{ fontSize: 11, fontWeight: 600, color: '#158a5a', cursor: 'pointer' }}
+                            style={{ fontSize: 11, fontWeight: 600, color: 'var(--nova-accent)', cursor: 'pointer' }}
                             onClick={(e) => { e.stopPropagation(); router.push(`/company/accounting/invoices/${invoice.id}`); }}
                         >
                             № {invoice.number}
@@ -1114,7 +1186,7 @@ export default function CompanyOrdersPage() {
             title: '', key: 'actions', width: 50, fixed: 'right' as const,
             render: (_: any, r: Order) => (
                 <Tooltip title="Открыть заявку">
-                    <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0 text-[#1890ff]" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
+                    <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
                 </Tooltip>
             ),
         },
@@ -1123,17 +1195,17 @@ export default function CompanyOrdersPage() {
     const archiveColumns = [
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
-            render: (s: string) => <StatusPill status={s} />,
+            render: (s: string) => <OrderStatusPill status={s} />,
         },
-        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, render: (t: string) => <span className="lc-ordernum">{t}</span> },
+        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, ellipsis: true, render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip> },
         ...orgColumn,
-        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
+        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
         {
             title: 'Дата погр.', key: 'pickupDate', width: 90,
             render: (_: any, r: Order) => {
                 const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
                 const date = (pickupPt as any)?.expectedDate;
-                return date ? <span style={{ fontSize: 11, color: 'var(--lc-text-sec)' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                return date ? <span style={{ fontSize: 11, color: 'var(--nova-fg-2)' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
             },
         },
         {
@@ -1167,7 +1239,7 @@ export default function CompanyOrdersPage() {
             render: (_: any, r: Order) => {
                 const from = extractCity(r, 'pickup');
                 const to = extractCity(r, 'delivery');
-                if (!from && !to) return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                if (!from && !to) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
                 return <span style={{ fontSize: 12, fontWeight: 500 }}>{from || '?'} → {to || '?'}</span>;
             },
         },
@@ -1177,33 +1249,32 @@ export default function CompanyOrdersPage() {
                 if (r.responsibleManager) {
                     return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
                 }
-                return <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
             },
         },
         {
             title: 'Ставка зак.', key: 'customerPrice', width: 100, align: 'right' as const,
-            render: (_: any, r: Order) => r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600, color: '#389e0d' }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>,
+            render: (_: any, r: Order) => r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>,
         },
         {
             title: 'Ставка перев.', key: 'carrierPrice', width: 100, align: 'right' as const,
             render: (_: any, r: Order) => {
                 const cost = r.driverCost || (r as any).subForwarderPrice;
-                return cost ? <span style={{ fontSize: 12, fontWeight: 600, color: '#cf1322' }}>{cost.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--lc-text-ter)', fontSize: 11 }}>—</span>;
+                return cost ? <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--nova-neg)' }}>{cost.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
             },
         },
-        { title: '', key: 'actions', width: 50, render: (_: any, r: Order) => (
+        { title: '', key: 'actions', width: 50, fixed: 'right' as const, render: (_: any, r: Order) => (
             <Tooltip title="Открыть заявку">
-                <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0 text-[#1890ff]" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
+                <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
             </Tooltip>
         ) },
     ];
 
     // =================== RENDER ===================
 
-    const inTransitCount = orders.filter(o => ['IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length;
-    const pendingCount = orders.filter(o => o.status === 'PENDING').length;
-    const problemCount = orders.filter(o => o.status === 'PROBLEM').length;
-    const featured = previewOrder || filteredOrders[0] || orders[0] || null;
+    // Карточка рейса показывает то, что видно в списке первой строкой: если
+    // список сужен условиями, показывать рейс не из него — сбивать с толку.
+    const featured = previewOrder || visibleOrders[0] || orders[0] || null;
 
     // Один клик по строке — показать заявку на карте (не проваливаться внутрь)
     const handleRowSelect = (record: Order) => {
@@ -1212,60 +1283,16 @@ export default function CompanyOrdersPage() {
     };
 
     return (
-        <div className="lc-page" style={{ height: '100%' }}>
-            {/* ===== HERO ===== */}
-            <div className="lc2-hero">
+        <div className={journal.page}>
+            {/* ===== HERO =====
+                Плитки показателей («Всего заявок», «Сейчас в пути»,
+                «Ожидают назначения», «Проблемы») убраны по решению владельца:
+                они занимали верх экрана, а отвечали на вопросы, ради которых
+                на журнал не заходят. Их место занял сам список. */}
+            <div className={journal.hero}>
                 <div>
-                    <div className="lc-eyebrow">LogiCore — перевозки</div>
-                    <h1 className="lc2-title">Заявки компании</h1>
-                </div>
-                <div className="lc2-metrics">
-                    {/* Когда список не пришёл, плитки не должны бодро показывать
-                        нули и «всё назначено»: ноль по неудачной загрузке — это
-                        не факт о работе компании, а отсутствие ответа. */}
-                    <div className="lc2-metric">
-                        <span className="lc2-mic"><FileTextOutlined /></span>
-                        <div>
-                            <div className="lc2-mlabel">Всего заявок</div>
-                            {/* Именно `totalOrders`, а не длина `orders`: в `orders`
-                                лежит одна страница, и плитка «всего» показывала
-                                размер страницы — при 37 заявках писала 20. */}
-                            <div className="lc2-mvalue">{ordersError ? '—' : totalOrders}</div>
-                            <div className="lc2-msub" style={{ color: ordersError ? undefined : '#16a34a' }}>
-                                {ordersError ? 'нет данных' : 'активная база'}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="lc2-metric">
-                        <span className="lc2-mic"><TruckOutlined /></span>
-                        <div>
-                            <div className="lc2-mlabel">Сейчас в пути</div>
-                            <div className="lc2-mvalue">{ordersError ? '—' : inTransitCount}</div>
-                            <div className="lc2-msub" style={{ color: ordersError ? undefined : '#16a34a' }}>
-                                {ordersError ? 'нет данных' : 'по графику'}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="lc2-metric">
-                        <span className="lc2-mic"><ClockCircleOutlined /></span>
-                        <div>
-                            <div className="lc2-mlabel">Ожидают назначения</div>
-                            <div className="lc2-mvalue">{ordersError ? '—' : pendingCount}</div>
-                            <div className="lc2-msub" style={{ color: ordersError ? undefined : (pendingCount > 0 ? '#b45309' : '#16a34a') }}>
-                                {ordersError ? 'нет данных' : (pendingCount > 0 ? 'внимание ⚠' : 'всё назначено')}
-                            </div>
-                        </div>
-                    </div>
-                    {problemCount > 0 && (
-                        <div className="lc2-metric lc2-metric-alert">
-                            <span className="lc2-mic" style={{ background: '#fee2e2', color: '#dc2626' }}><ExclamationCircleOutlined /></span>
-                            <div>
-                                <div className="lc2-mlabel">Проблемы</div>
-                                <div className="lc2-mvalue" style={{ color: '#dc2626' }}>{problemCount}</div>
-                                <div className="lc2-msub" style={{ color: '#dc2626' }}>требуют решения</div>
-                            </div>
-                        </div>
-                    )}
+                    <div className={journal.eyebrow}>Заявки · журнал</div>
+                    <h1 className={journal.title}>Заявки компании</h1>
                 </div>
                 <Button
                     data-guide="orders-create"
@@ -1280,338 +1307,265 @@ export default function CompanyOrdersPage() {
                 Карточка занимала треть экрана и показывала один рейс, который
                 и так есть первой строкой в таблице ниже. Свёрнута по умолчанию,
                 выбор запоминается: экран открывается на списке, а не на
-                украшении. */}
+                украшении. Стрелка сворачивания живёт в шапке самой карточки. */}
             <div ref={featuredCardRef}>
-                <button
-                    type="button"
-                    onClick={() => setFeaturedOpen(!featuredOpen)}
-                    className="lc2-featured-toggle"
-                >
-                    {featuredOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                    <span>
-                        {featuredOpen ? 'Скрыть карточку рейса' : 'Показать карточку рейса'}
-                        {featured?.orderNumber ? ` · ${featured.orderNumber}` : ''}
-                    </span>
-                </button>
-                {featuredOpen && (
-                    <FeaturedOrderCard order={featured} onOpen={(id) => router.push(`/company/orders/${id}`)} />
-                )}
+                <FeaturedOrderCard
+                    order={featured}
+                    onOpen={(id) => router.push(`/company/orders/${id}`)}
+                    collapsed={!featuredOpen}
+                    onToggle={() => setFeaturedOpen(!featuredOpen)}
+                />
             </div>
 
-            <Tabs
-                activeKey={activeTab}
-                onChange={setActiveTab}
-                size="small"
-                items={[
-                    {
-                        key: 'all',
-                        label: <span>Все заявки <Tag style={{ marginLeft: 4, fontSize: 11 }}>{hasActiveFilters ? `${filteredOrders.length}/${totalOrders}` : totalOrders}</Tag></span>,
-                        children: (
-                            <div>
-                                {/* FILTER BAR */}
-                                <div className="lc-filterbar" style={{
-                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12,
-                                    alignItems: 'center'
-                                }}>
-                                    <FilterOutlined style={{ color: 'var(--lc-text-ter)', fontSize: 13 }} />
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Заказчик" style={{ width: 140 }}
-                                        value={filterCompany} onChange={setFilterCompany}
-                                    >
-                                        {uniqueCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Исполнитель" style={{ width: 140 }}
-                                        value={filterForwarder} onChange={setFilterForwarder}
-                                    >
-                                        {uniqueForwarders.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Экспедитор" style={{ width: 140 }}
-                                        value={filterExpeditor} onChange={setFilterExpeditor}
-                                    >
-                                        {uniqueExpeditors.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Водитель" style={{ width: 130 }}
-                                        value={filterDriver} onChange={setFilterDriver}
-                                    >
-                                        {uniqueDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear
-                                        placeholder="Статус" style={{ width: 120 }}
-                                        value={filterStatus} onChange={setFilterStatus}
-                                    >
-                                        {uniqueStatuses.map(s => <Select.Option key={s} value={s}>{STATUS_LABELS[s] || s}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Откуда" style={{ width: 110 }}
-                                        value={filterFrom} onChange={setFilterFrom}
-                                    >
-                                        {uniqueFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Куда" style={{ width: 110 }}
-                                        value={filterTo} onChange={setFilterTo}
-                                    >
-                                        {uniqueToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <InputNumber
-                                        size="small" placeholder="Сумма от" style={{ width: 90 }}
-                                        value={filterSumMin} onChange={v => setFilterSumMin(v ?? undefined)}
-                                        min={0} controls={false}
-                                    />
-                                    <InputNumber
-                                        size="small" placeholder="Сумма до" style={{ width: 90 }}
-                                        value={filterSumMax} onChange={v => setFilterSumMax(v ?? undefined)}
-                                        min={0} controls={false}
-                                    />
-                                    {hasActiveFilters && (
-                                        <Button variant="link" size="sm" className="text-destructive" onClick={clearFilters}>
-                                            <Eraser className="h-3.5 w-3.5" /> Сбросить
-                                        </Button>
-                                    )}
-                                </div>
+            {/* ===== КАРТОЧКА СПИСКА =====
+                Полоса управления живёт первой строкой внутри карточки, а не
+                над ней: она управляет списком, а не страницей. */}
+            <div className={journal.tablecard}>
+                <div className={journal.controls}>
+                    <div className={journal.tabs}>
+                        <button
+                            type="button"
+                            className={activeTab === 'all' ? `${journal.tab} ${journal.tabActive}` : journal.tab}
+                            onClick={() => setActiveTab('all')}
+                        >
+                            Все заявки <span>{totalOrders}</span>
+                        </button>
+                        <button
+                            type="button"
+                            className={activeTab === 'archive' ? `${journal.tab} ${journal.tabActive}` : journal.tab}
+                            onClick={() => setActiveTab('archive')}
+                        >
+                            Архив <span>{totalArchiveOrders}</span>
+                        </button>
+                    </div>
 
-                                {/* TABLE / MOBILE CARDS */}
-                                {isMobile ? (
-                                    <OrdersMobileList
-                                        orders={filteredOrders}
-                                        loading={loading}
-                                        userCompanyId={user?.companyId}
-                                        extractCity={extractCity}
-                                        onOpen={(id) => router.push(`/company/orders/${id}`)}
-                                        pagination={{
-                                            current: ordersPage,
-                                            pageSize: ordersPageSize,
-                                            total: totalOrders,
-                                            onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
-                                        }}
-                                    />
-                                ) : (
-                                <Table
-                                    columns={columns}
-                                    dataSource={filteredOrders}
-                                    rowKey="id"
-                                    loading={loading}
-                                    size="small"
-                                    scroll={{ x: 1600 }}
-                                    /* «Нет данных» при упавшем запросе — это неправда,
-                                       и именно на неё человек и опирается. */
-                                    locale={{
-                                        emptyText: ordersError
-                                            ? 'Список не загрузился. Обновите страницу.'
-                                            : 'Заявок пока нет',
-                                    }}
-                                    pagination={{
-                                        current: ordersPage,
-                                        pageSize: ordersPageSize,
-                                        total: totalOrders,
-                                        onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
-                                        showSizeChanger: true,
-                                        pageSizeOptions: ['20', '50', '100'],
-                                        size: 'small',
-                                        showTotal: (t) => `Всего: ${t}`
-                                    }}
-                                    style={{ fontSize: 12 }}
-                                    onRow={(record) => ({
-                                        style: { cursor: 'pointer' },
-                                        onClick: () => handleRowSelect(record),
-                                        onDoubleClick: () => router.push(`/company/orders/${record.id}`),
-                                    })}
-                                    rowClassName={(record) => {
-                                        const sel = previewOrder?.id === record.id ? 'row-selected ' : '';
-                                        // Завершённую заявку строкой не подсвечиваем — статус виден по тегу,
-                                        // а долг (если есть) горит красным на названии контрагента.
-                                        if (record.status === 'PROBLEM') return sel + 'row-problem';
-                                        if (record.status === 'CANCELLED') return sel + 'row-cancelled';
-                                        return sel;
-                                    }}
-                                />
-                                )}
-                            </div>
-                        ),
-                    },
-                    {
-                        key: 'archive',
-                        label: <span>Архив <Tag style={{ marginLeft: 4, fontSize: 11 }}>{hasActiveFilters ? `${filteredArchiveOrders.length}/${totalArchiveOrders}` : totalArchiveOrders}</Tag></span>,
-                        children: (
-                            <div>
-                                {/* FILTER BAR */}
-                                <div className="lc-filterbar" style={{
-                                    display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12,
-                                    alignItems: 'center'
-                                }}>
-                                    <FilterOutlined style={{ color: 'var(--lc-text-ter)', fontSize: 13 }} />
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Контрагент" style={{ width: 150 }}
-                                        value={filterCompany} onChange={setFilterCompany}
-                                    >
-                                        {uniqueArchiveCompanies.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Водитель" style={{ width: 140 }}
-                                        value={filterDriver} onChange={setFilterDriver}
-                                    >
-                                        {uniqueArchiveDrivers.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Откуда" style={{ width: 120 }}
-                                        value={filterFrom} onChange={setFilterFrom}
-                                    >
-                                        {uniqueArchiveFromCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <Select
-                                        size="small" allowClear showSearch optionFilterProp="children"
-                                        placeholder="Куда" style={{ width: 120 }}
-                                        value={filterTo} onChange={setFilterTo}
-                                    >
-                                        {uniqueArchiveToCities.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                                    </Select>
-                                    <InputNumber
-                                        size="small" placeholder="Сумма от" style={{ width: 90 }}
-                                        value={filterSumMin} onChange={v => setFilterSumMin(v ?? undefined)}
-                                        min={0} controls={false}
-                                    />
-                                    <InputNumber
-                                        size="small" placeholder="Сумма до" style={{ width: 90 }}
-                                        value={filterSumMax} onChange={v => setFilterSumMax(v ?? undefined)}
-                                        min={0} controls={false}
-                                    />
-                                    {hasActiveFilters && (
-                                        <Button variant="link" size="sm" className="text-destructive" onClick={clearFilters}>
-                                            <Eraser className="h-3.5 w-3.5" /> Сбросить
-                                        </Button>
-                                    )}
-                                </div>
+                    <div className={journal.search}>
+                        <Search className={journal.searchIcon} size={14} />
+                        <input
+                            ref={searchRef}
+                            className={journal.searchInput}
+                            placeholder="Номер, город, заказчик…"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            aria-label="Поиск по заявкам"
+                        />
+                        <span className={journal.searchKey}>⌘K</span>
+                    </div>
 
-                                {/* TABLE / MOBILE CARDS */}
-                                {isMobile ? (
-                                    <OrdersMobileList
-                                        orders={filteredArchiveOrders}
-                                        loading={archiveLoading}
-                                        userCompanyId={user?.companyId}
-                                        extractCity={extractCity}
-                                        onOpen={(id) => router.push(`/company/orders/${id}`)}
-                                        pagination={{
-                                            current: archivePage,
-                                            pageSize: archivePageSize,
-                                            total: totalArchiveOrders,
-                                            onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
-                                        }}
-                                    />
-                                ) : (
-                                <Table
-                                    columns={archiveColumns}
-                                    dataSource={filteredArchiveOrders}
-                                    rowKey="id"
-                                    loading={archiveLoading}
-                                    size="small"
-                                    scroll={{ x: 1500 }}
-                                    pagination={{
-                                        current: archivePage,
-                                        pageSize: archivePageSize,
-                                        total: totalArchiveOrders,
-                                        onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
-                                        showSizeChanger: true,
-                                        pageSizeOptions: ['20', '50', '100'],
-                                        size: 'small',
-                                        showTotal: (t) => `Всего: ${t}`
-                                    }}
-                                    onRow={(record) => ({
-                                        style: { cursor: 'pointer' },
-                                        onClick: () => handleRowSelect(record),
-                                        onDoubleClick: () => router.push(`/company/orders/${record.id}`),
-                                    })}
-                                    rowClassName={(record) => (previewOrder?.id === record.id ? 'row-selected row-cancelled' : 'row-cancelled')}
-                                />
-                                )}
-                            </div>
-                        ),
-                    },
-                ]}
-            />
+                    <button
+                        type="button"
+                        className={journal.control}
+                        aria-expanded={filtersOpen}
+                        onClick={() => setFiltersOpen(!filtersOpen)}
+                    >
+                        <SlidersHorizontal size={14} /> Фильтры
+                        {activeFilterCount > 0 && <span className={journal.badge}>{activeFilterCount}</span>}
+                    </button>
 
-            {/* ========== INLINE STYLES FOR COMPACT TABLE ========== */}
-            <style jsx global>{`
-                .ant-table-small .ant-table-thead > tr > th {
-                    padding: 6px 8px !important;
-                    font-size: 11px !important;
-                    font-weight: 600 !important;
-                    background: var(--lc-hover) !important;
-                    text-transform: uppercase;
-                    letter-spacing: 0.3px;
-                    color: var(--lc-text-sec) !important;
-                    white-space: nowrap;
-                    border-bottom: 1px solid var(--lc-border) !important;
-                }
-                .ant-table-small .ant-table-tbody > tr > td {
-                    padding: 4px 8px !important;
-                    font-size: 12px !important;
-                    border-bottom: 1px solid var(--lc-border-soft) !important;
-                }
-                .ant-table-small .ant-table-tbody > tr:hover > td {
-                    background: var(--lc-hover) !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-completed > td {
-                    background: rgba(34, 197, 94, 0.12) !important;
-                    color: #22c55e !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-completed > td span,
-                .ant-table-small .ant-table-tbody > tr.row-completed > td div,
-                .ant-table-small .ant-table-tbody > tr.row-completed > td a {
-                    color: #22c55e !important;
-                }
-                /* Завершена, но деньги ещё не закрыты — янтарный, не зелёный */
-                .ant-table-small .ant-table-tbody > tr.row-completed-unpaid > td {
-                    background: rgba(245, 158, 11, 0.12) !important;
-                    color: #b45309 !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-completed-unpaid > td span,
-                .ant-table-small .ant-table-tbody > tr.row-completed-unpaid > td div,
-                .ant-table-small .ant-table-tbody > tr.row-completed-unpaid > td a {
-                    color: #b45309 !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-problem > td {
-                    background: rgba(239, 68, 68, 0.12) !important;
-                    color: #ef4444 !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-problem > td span,
-                .ant-table-small .ant-table-tbody > tr.row-problem > td div,
-                .ant-table-small .ant-table-tbody > tr.row-problem > td a {
-                    color: #ef4444 !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-cancelled > td {
-                    background: var(--lc-hover) !important;
-                    color: var(--lc-text-ter) !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-cancelled > td span,
-                .ant-table-small .ant-table-tbody > tr.row-cancelled > td div,
-                .ant-table-small .ant-table-tbody > tr.row-cancelled > td a {
-                    color: var(--lc-text-ter) !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-cancelled > td .ant-tag {
-                    background: var(--lc-border-soft) !important;
-                    color: var(--lc-text-ter) !important;
-                    border-color: var(--lc-border) !important;
-                }
-                .ant-table-small .ant-table-tbody > tr.row-selected > td {
-                    background: rgba(22, 119, 255, 0.10) !important;
-                }
-                .ant-table-small .ant-pagination {
-                    margin: 8px 0 !important;
-                }
-            `}</style>
+                    <Tooltip title={sortDesc ? 'Сначала новые' : 'Сначала старые'}>
+                        <button
+                            type="button"
+                            className={journal.iconControl}
+                            aria-label={sortDesc ? 'Порядок: сначала новые' : 'Порядок: сначала старые'}
+                            onClick={() => setSortDesc(!sortDesc)}
+                        >
+                            <ArrowUpDown size={14} />
+                        </button>
+                    </Tooltip>
+
+                    {/* Отвечает на вопрос, ради которого раньше смотрели на ряд
+                        плашек с условиями: почему в списке 10 строк, а не 37.
+                        Сами плашки владелец отверг — они переползали на вторую
+                        строку и создавали кашу. */}
+                    <span className={journal.selected}>
+                        {isNarrowed ? (
+                            <>
+                                Отобрано <b>{shownCount}</b> из {totalCount}
+                                {' · '}
+                                <button type="button" className={journal.reset} onClick={clearAllFilters}>сбросить</button>
+                            </>
+                        ) : (
+                            <>Всего {totalCount}</>
+                        )}
+                    </span>
+                </div>
+
+                {filtersOpen && (
+                    <div className={journal.filters}>
+                        <Select
+                            size="small" allowClear showSearch optionFilterProp="children"
+                            placeholder={isArchive ? 'Контрагент' : 'Заказчик'} style={{ width: 150 }}
+                            value={filterCompany} onChange={setFilterCompany}
+                        >
+                            {(isArchive ? uniqueArchiveCompanies : uniqueCompanies).map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                        </Select>
+                        {!isArchive && (
+                            <Select
+                                size="small" allowClear showSearch optionFilterProp="children"
+                                placeholder="Исполнитель" style={{ width: 140 }}
+                                value={filterForwarder} onChange={setFilterForwarder}
+                            >
+                                {uniqueForwarders.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                            </Select>
+                        )}
+                        {!isArchive && (
+                            <Select
+                                size="small" allowClear showSearch optionFilterProp="children"
+                                placeholder="Экспедитор" style={{ width: 140 }}
+                                value={filterExpeditor} onChange={setFilterExpeditor}
+                            >
+                                {uniqueExpeditors.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                            </Select>
+                        )}
+                        <Select
+                            size="small" allowClear showSearch optionFilterProp="children"
+                            placeholder="Водитель" style={{ width: 140 }}
+                            value={filterDriver} onChange={setFilterDriver}
+                        >
+                            {(isArchive ? uniqueArchiveDrivers : uniqueDrivers).map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
+                        </Select>
+                        {!isArchive && (
+                            <Select
+                                size="small" allowClear
+                                placeholder="Статус" style={{ width: 130 }}
+                                value={filterStatus} onChange={setFilterStatus}
+                            >
+                                {uniqueStatuses.map(s => <Select.Option key={s} value={s}>{STATUS_LABELS[s] || s}</Select.Option>)}
+                            </Select>
+                        )}
+                        <Select
+                            size="small" allowClear showSearch optionFilterProp="children"
+                            placeholder="Откуда" style={{ width: 120 }}
+                            value={filterFrom} onChange={setFilterFrom}
+                        >
+                            {(isArchive ? uniqueArchiveFromCities : uniqueFromCities).map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                        </Select>
+                        <Select
+                            size="small" allowClear showSearch optionFilterProp="children"
+                            placeholder="Куда" style={{ width: 120 }}
+                            value={filterTo} onChange={setFilterTo}
+                        >
+                            {(isArchive ? uniqueArchiveToCities : uniqueToCities).map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                        </Select>
+                        <InputNumber
+                            size="small" placeholder="Сумма от" style={{ width: 100 }}
+                            value={filterSumMin} onChange={v => setFilterSumMin(v ?? undefined)}
+                            min={0} controls={false}
+                        />
+                        <InputNumber
+                            size="small" placeholder="Сумма до" style={{ width: 100 }}
+                            value={filterSumMax} onChange={v => setFilterSumMax(v ?? undefined)}
+                            min={0} controls={false}
+                        />
+                        {hasActiveFilters && (
+                            <Button variant="link" size="sm" className="text-destructive" onClick={clearFilters}>
+                                <Eraser className="h-3.5 w-3.5" /> Сбросить условия
+                            </Button>
+                        )}
+                    </div>
+                )}
+
+                <div className={journal.tableWrap}>
+                    {isArchive ? (
+                        isMobile ? (
+                            <OrdersMobileList
+                                orders={visibleArchiveOrders}
+                                loading={archiveLoading}
+                                userCompanyId={user?.companyId}
+                                extractCity={extractCity}
+                                onOpen={(id) => router.push(`/company/orders/${id}`)}
+                                pagination={{
+                                    current: archivePage,
+                                    pageSize: archivePageSize,
+                                    total: totalArchiveOrders,
+                                    onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
+                                }}
+                            />
+                        ) : (
+                            <Table
+                                columns={archiveColumns}
+                                dataSource={visibleArchiveOrders}
+                                rowKey="id"
+                                loading={archiveLoading}
+                                size="small"
+                                scroll={{ x: 1400 }}
+                                pagination={{
+                                    current: archivePage,
+                                    pageSize: archivePageSize,
+                                    total: totalArchiveOrders,
+                                    onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
+                                    showSizeChanger: true,
+                                    pageSizeOptions: ['20', '50', '100'],
+                                    size: 'small',
+                                    showTotal: (t, range) => `Показаны ${range[0]}–${range[1]} из ${t}`,
+                                }}
+                                onRow={(record) => ({
+                                    style: { cursor: 'pointer' },
+                                    onClick: () => handleRowSelect(record),
+                                    onDoubleClick: () => router.push(`/company/orders/${record.id}`),
+                                })}
+                                rowClassName={(record) => (previewOrder?.id === record.id ? 'row-selected row-cancelled' : 'row-cancelled')}
+                            />
+                        )
+                    ) : (
+                        isMobile ? (
+                            <OrdersMobileList
+                                orders={visibleOrders}
+                                loading={loading}
+                                userCompanyId={user?.companyId}
+                                extractCity={extractCity}
+                                onOpen={(id) => router.push(`/company/orders/${id}`)}
+                                pagination={{
+                                    current: ordersPage,
+                                    pageSize: ordersPageSize,
+                                    total: totalOrders,
+                                    onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
+                                }}
+                            />
+                        ) : (
+                            <Table
+                                columns={columns}
+                                dataSource={visibleOrders}
+                                rowKey="id"
+                                loading={loading}
+                                size="small"
+                                scroll={{ x: 1400 }}
+                                /* «Нет данных» при упавшем запросе — это неправда,
+                                   и именно на неё человек и опирается. */
+                                locale={{
+                                    emptyText: ordersError
+                                        ? 'Список не загрузился. Обновите страницу.'
+                                        : (isNarrowed ? 'Под условия ничего не подошло' : 'Заявок пока нет'),
+                                }}
+                                pagination={{
+                                    current: ordersPage,
+                                    pageSize: ordersPageSize,
+                                    total: totalOrders,
+                                    onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
+                                    showSizeChanger: true,
+                                    pageSizeOptions: ['20', '50', '100'],
+                                    size: 'small',
+                                    showTotal: (t, range) => `Показаны ${range[0]}–${range[1]} из ${t}`,
+                                }}
+                                onRow={(record) => ({
+                                    style: { cursor: 'pointer' },
+                                    onClick: () => handleRowSelect(record),
+                                    onDoubleClick: () => router.push(`/company/orders/${record.id}`),
+                                })}
+                                rowClassName={(record) => {
+                                    const sel = previewOrder?.id === record.id ? 'row-selected ' : '';
+                                    // Завершённую заявку строкой не подсвечиваем — статус виден по плашке,
+                                    // а долг (если есть) горит красным на названии контрагента.
+                                    if (record.status === 'PROBLEM') return sel + 'row-problem';
+                                    if (record.status === 'CANCELLED') return sel + 'row-cancelled';
+                                    return sel;
+                                }}
+                            />
+                        )
+                    )}
+                </div>
+            </div>
+
 
 
 
@@ -1667,7 +1621,7 @@ export default function CompanyOrdersPage() {
                                     }}
                                 >
                                     <Text style={{ fontSize: 13 }}>{item.label}</Text>
-                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', paddingLeft: 24 }}>{item.email}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--nova-fg-3)', paddingLeft: 24 }}>{item.email}</div>
                                 </Checkbox>
                             </div>
                         ))}
@@ -1745,7 +1699,7 @@ export default function CompanyOrdersPage() {
                                     {pt.pointType === 'PICKUP' ? 'Погрузка' : 
                                      pt.pointType === 'ADDITIONAL_PICKUP' ? 'Доп. погрузка' : 'Выгрузка'}:
                                 </strong> {pt.location.name}
-                                <div style={{ color: 'var(--lc-text-ter)' }}>{pt.location.address}</div>
+                                <div style={{ color: 'var(--nova-fg-3)' }}>{pt.location.address}</div>
                             </div>
                         ))}
 

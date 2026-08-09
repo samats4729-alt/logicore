@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useMemo, useState } from 'react';
-import { Button, Dropdown } from 'antd';
+import { useRouter } from 'next/navigation';
+import { Dropdown } from 'antd';
 import { RightOutlined, PhoneOutlined, EnvironmentOutlined, WhatsAppOutlined, CopyOutlined } from '@ant-design/icons';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import dayjs from 'dayjs';
-import StatusPill, { STATUS_LABELS } from './StatusPill';
+import { STATUS_LABELS } from './StatusPill';
+import OrderStatusPill from './OrderStatusPill';
+import styles from './FeaturedOrderCard.module.css';
 import { shortenCompanyName } from '@/lib/company-helper';
 import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
 import { useTheme } from '@/components/ThemeProvider';
@@ -245,105 +249,221 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
     );
 }
 
-export default function FeaturedOrderCard({ order, onOpen }: { order: any; onOpen?: (id: string) => void }) {
+/** Точка маршрута целиком — нужны адрес и срок, а не только город. */
+function pointOf(order: any, type: 'pickup' | 'delivery') {
+    const pts = (order?.routePoints || []) as any[];
+    if (type === 'pickup') return pts.find((p) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
+    const dels = pts.filter((p) => p.pointType === 'DELIVERY');
+    return dels.length ? dels[dels.length - 1] : undefined;
+}
+
+function money(value?: number | null) {
+    return value ? `${value.toLocaleString('ru-RU')} ₸` : '—';
+}
+
+/**
+ * Карточка рейса по эталону `design/orders-list`: три этажа в одной
+ * карточке — шапка с номером и действиями, середина «путь + карта», подвал
+ * с деньгами.
+ *
+ * Стрелка сворачивания живёт в шапке карточки. Отдельной серой полосы над
+ * карточкой больше нет: владелец смотрел прямо на неё и не понимал, чем
+ * свернулась карточка. В шапке стрелка стоит там же, где сама карточка, и
+ * читается как её собственный орган управления.
+ */
+export default function FeaturedOrderCard({
+    order,
+    onOpen,
+    collapsed = false,
+    onToggle,
+}: {
+    order: any;
+    onOpen?: (id: string) => void;
+    collapsed?: boolean;
+    onToggle?: () => void;
+}) {
     const { theme } = useTheme();
+    const router = useRouter();
 
     if (!order) return null;
 
     const progress = ORDER_STATUS_PROGRESS[order.status] ?? 0;
     const driverName = order.assignedDriverName
         || (order.driver ? `${order.driver.lastName} ${order.driver.firstName}` : '');
+    const plate = order.assignedDriverPlate || order.driver?.vehiclePlate || '';
+    const phone = order.assignedDriverPhone ? String(order.assignedDriverPhone) : '';
+    const digits = phone.replace(/[^\d]/g, '');
+    const hasDriverPosition = order.driverLat != null && order.driverLng != null;
+
+    const pickup = pointOf(order, 'pickup');
+    const delivery = pointOf(order, 'delivery');
+    const carrierName = order.subForwarder?.name || order.forwarder?.name || order.partner?.name || '';
+    const carrierPrice = order.driverCost || order.subForwarderPrice;
+    const margin = order.customerPrice != null && carrierPrice != null
+        ? order.customerPrice - carrierPrice
+        : null;
+    const invoice = order.accountingDocuments?.[0]?.document;
+
+    const cargo = [
+        order.natureOfCargo,
+        order.cargoWeight ? `${order.cargoWeight.toLocaleString('ru-RU')} кг` : null,
+        order.cargoType,
+    ].filter(Boolean).join(' · ') || order.cargoDescription || 'Груз не указан';
+
+    const stepDate = (pt: any) => (pt?.expectedDate ? dayjs(pt.expectedDate).format('DD.MM HH:mm') : '');
 
     return (
-        <div className="lc2-featured">
-            <div className="lc2-f-left">
-                <div className="lc2-f-head">
-                    <span className="lc-eyebrow" style={{ marginBottom: 0 }}>История рейса</span>
-                    <StatusPill status={order.status} />
-                </div>
-                <div className="lc2-f-num">{order.orderNumber}</div>
-                <div className="lc2-f-cargo">
-                    {[order.natureOfCargo, order.cargoWeight ? `${order.cargoWeight.toLocaleString('ru-RU')} кг` : null, order.cargoType]
-                        .filter(Boolean).join(' · ') || order.cargoDescription || 'Груз не указан'}
-                </div>
-                <div className="lc2-f-timeline">
-                    <div className="lc2-f-step done">
-                        <i /><div><b>{cityOf(order, 'pickup') || 'Погрузка'}</b><span>Точка погрузки</span></div>
-                    </div>
-                    <div className="lc2-f-step active">
-                        <i /><div><b>{STATUS_LABELS[order.status] || order.status}</b><span>Прогресс ≈ {progress}%</span></div>
-                    </div>
-                    <div className={`lc2-f-step ${order.status === 'COMPLETED' ? 'done' : ''}`}>
-                        <i /><div><b>{cityOf(order, 'delivery') || 'Выгрузка'}</b><span>Точка выгрузки</span></div>
-                    </div>
-                </div>
-                <div className="lc2-f-progress">
-                    <i style={{ width: `${progress}%`, background: orderProgressColor(order.status) }} />
-                </div>
-                <div className="lc2-f-stats">
-                    <div><span>Стоимость</span><b>{order.customerPrice ? `${order.customerPrice.toLocaleString('ru-RU')} ₸` : '—'}</b></div>
-                    <div><span>Дата</span><b>{dayjs(order.createdAt).format('DD.MM.YYYY')}</b></div>
-                    <div><span>Заказчик</span><b>{shortenCompanyName(order.customerCompany?.name || '') || '—'}</b></div>
-                </div>
-            </div>
-            <div className={`lc2-f-right ${theme}`}>
-                {/* Мини-карта маршрута */}
-                <RouteMapThumbnail order={order} theme={theme} />
+        <div className={styles.card}>
+            <div className={styles.head}>
+                <span className={styles.num}>{order.orderNumber}</span>
+                <OrderStatusPill status={order.status} />
+                <span className={styles.divider} />
+                <span className={styles.cargo}>{cargo}</span>
 
-                {/* Водитель */}
-                <div className="lc2-f-driver">
-                    <span className="lc2-avatar">{nameInitials(driverName)}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="lc2-f-driver-name" style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {driverName || 'Водитель не назначен'}
+                <div className={styles.actions}>
+                    {phone && (
+                        <button type="button" className={styles.act} onClick={() => { window.location.href = `tel:${phone}`; }}>
+                            <PhoneOutlined /> Позвонить
+                        </button>
+                    )}
+                    {phone && (
+                        <button type="button" className={styles.act} onClick={() => window.open(`https://wa.me/${digits}`, '_blank')}>
+                            <WhatsAppOutlined /> WhatsApp
+                        </button>
+                    )}
+                    {/* Кнопка есть, только когда машину видно: экран мониторинга
+                        без координат покажет пустую карту, а человек решит, что
+                        она сломалась. */}
+                    {hasDriverPosition && (
+                        <button type="button" className={styles.act} onClick={() => router.push('/company/tracking')}>
+                            <EnvironmentOutlined /> На карте
+                        </button>
+                    )}
+                    {onOpen && (
+                        <button type="button" className={`${styles.act} ${styles.actPrimary}`} onClick={() => onOpen(order.id)}>
+                            Открыть заявку <RightOutlined />
+                        </button>
+                    )}
+                    {onToggle && (
+                        <button
+                            type="button"
+                            className={styles.arrow}
+                            aria-label={collapsed ? 'Развернуть карточку рейса' : 'Свернуть карточку рейса'}
+                            aria-expanded={!collapsed}
+                            onClick={onToggle}
+                        >
+                            {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {!collapsed && (
+                <>
+                    <div className={styles.body}>
+                        <div className={styles.path}>
+                            <div className={`${styles.step} ${styles.stepDone}`}>
+                                <i />
+                                <div className={styles.stepText}>
+                                    <b>{cityOf(order, 'pickup') || 'Погрузка'}</b>
+                                    <span>{pickup?.location?.address || 'Точка погрузки'}</span>
+                                </div>
+                                <div className={styles.stepAside}>
+                                    <b>{stepDate(pickup) || '—'}</b>
+                                    <span>Погрузка</span>
+                                </div>
+                            </div>
+                            <div className={`${styles.step} ${styles.stepActive}`}>
+                                <i />
+                                <div className={styles.stepText}>
+                                    <b>{STATUS_LABELS[order.status] || order.status}</b>
+                                    <span>Текущий статус</span>
+                                </div>
+                                <div className={styles.stepAside}>
+                                    <b>сейчас</b>
+                                    <span>Пройдено {progress}%</span>
+                                </div>
+                            </div>
+                            <div className={`${styles.step} ${order.status === 'COMPLETED' ? styles.stepDone : ''}`}>
+                                <i />
+                                <div className={styles.stepText}>
+                                    <b>{cityOf(order, 'delivery') || 'Выгрузка'}</b>
+                                    <span>{delivery?.location?.address || 'Точка выгрузки'}</span>
+                                </div>
+                                <div className={styles.stepAside}>
+                                    <b>{stepDate(delivery) || '—'}</b>
+                                    <span>Выгрузка</span>
+                                </div>
+                            </div>
+
+                            <div className={styles.progress}>
+                                <i style={{ width: `${progress}%`, background: orderProgressColor(order.status) }} />
+                            </div>
+                            <div className={styles.progressCaption}>
+                                <span>Пройдено {progress}% пути</span>
+                                {stepDate(delivery) && <span>выгрузка {stepDate(delivery)}</span>}
+                            </div>
                         </div>
-                        <div className="lc2-f-driver-sub" style={{ fontSize: 11.5 }}>
-                            Водитель · {order.assignedDriverPlate || order.driver?.vehiclePlate || '—'}
+
+                        <div className={`${styles.mapCell} ${theme}`}>
+                            <RouteMapThumbnail order={order} theme={theme} />
+                            <div className={styles.driver}>
+                                <span className="lc2-avatar">{nameInitials(driverName)}</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div className={styles.driverName}>{driverName || 'Водитель не назначен'}</div>
+                                    <div className={styles.driverSub}>{[plate, phone].filter(Boolean).join(' · ') || '—'}</div>
+                                </div>
+                                {phone && (
+                                    <Dropdown
+                                        trigger={['click']}
+                                        placement="topRight"
+                                        menu={{
+                                            items: [
+                                                { key: 'wa', icon: <WhatsAppOutlined style={{ color: '#25D366' }} />, label: 'Написать в WhatsApp' },
+                                                { key: 'call', icon: <PhoneOutlined />, label: `Позвонить · ${phone}` },
+                                                { key: 'copy', icon: <CopyOutlined />, label: 'Скопировать номер' },
+                                            ],
+                                            onClick: ({ key, domEvent }) => {
+                                                domEvent?.stopPropagation?.();
+                                                if (key === 'wa') window.open(`https://wa.me/${digits}`, '_blank');
+                                                else if (key === 'call') window.location.href = `tel:${phone}`;
+                                                else if (key === 'copy') {
+                                                    navigator.clipboard?.writeText(phone);
+                                                    toast.success('Номер водителя скопирован');
+                                                }
+                                            },
+                                        }}
+                                    >
+                                        <a
+                                            className="lc2-callbtn"
+                                            role="button"
+                                            aria-label="Связаться с водителем"
+                                            onClick={(e) => e.stopPropagation()}
+                                            style={{ cursor: 'pointer' }}
+                                        >
+                                            <PhoneOutlined />
+                                        </a>
+                                    </Dropdown>
+                                )}
+                            </div>
                         </div>
                     </div>
-                    {order.assignedDriverPhone && (() => {
-                        const raw = String(order.assignedDriverPhone);
-                        const digits = raw.replace(/[^\d]/g, '');
-                        return (
-                            <Dropdown
-                                trigger={['click']}
-                                placement="topRight"
-                                menu={{
-                                    items: [
-                                        { key: 'wa', icon: <WhatsAppOutlined style={{ color: '#25D366' }} />, label: 'Написать в WhatsApp' },
-                                        { key: 'call', icon: <PhoneOutlined />, label: `Позвонить · ${raw}` },
-                                        { key: 'copy', icon: <CopyOutlined />, label: 'Скопировать номер' },
-                                    ],
-                                    onClick: ({ key, domEvent }) => {
-                                        domEvent?.stopPropagation?.();
-                                        if (key === 'wa') window.open(`https://wa.me/${digits}`, '_blank');
-                                        else if (key === 'call') window.location.href = `tel:${raw}`;
-                                        else if (key === 'copy') {
-                                            navigator.clipboard?.writeText(raw);
-                                            toast.success('Номер водителя скопирован');
-                                        }
-                                    },
-                                }}
-                            >
-                                <a
-                                    className="lc2-callbtn"
-                                    role="button"
-                                    aria-label="Связаться с водителем"
-                                    onClick={(e) => e.stopPropagation()}
-                                    style={{ cursor: 'pointer' }}
-                                >
-                                    <PhoneOutlined />
-                                </a>
-                            </Dropdown>
-                        );
-                    })()}
-                </div>
-                {onOpen && (
-                    <Button block className="lc2-openbtn" onClick={() => onOpen(order.id)}>
-                        Открыть заявку <RightOutlined />
-                    </Button>
-                )}
-            </div>
+
+                    <div className={styles.foot}>
+                        <div><span>Заказчик</span><b>{shortenCompanyName(order.customerCompany?.name || '') || '—'}</b></div>
+                        <div><span>Ставка заказчика</span><b>{money(order.customerPrice)}</b></div>
+                        <div><span>Перевозчик</span><b>{shortenCompanyName(carrierName) || '—'}</b></div>
+                        <div><span>Ставка перевозчика</span><b className={styles.neg}>{money(carrierPrice)}</b></div>
+                        <div><span>Маржа</span><b className={margin != null && margin >= 0 ? styles.pos : styles.neg}>{money(margin)}</b></div>
+                        <div>
+                            <span>Счёт</span>
+                            {invoice
+                                ? <b className={styles.accent}>№ {invoice.number}</b>
+                                : <b className={styles.muted}>не выставлен</b>}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

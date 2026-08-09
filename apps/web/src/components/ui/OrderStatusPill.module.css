@@ -1,0 +1,55 @@
+/* Плашка статуса журнала заявок — эталон `design/orders-list`. */
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 25px;
+    padding: 0 10px 0 4px;
+    border-radius: 999px;
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface);
+    color: var(--nova-fg);
+    font-size: 11.5px;
+    font-weight: 550;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* Единственное «украшение» в таблице: кружок выпуклый, чтобы взгляд цеплялся
+   за него на прокрутке в 1400 точек. Блик сверху, тень снизу. */
+.dot {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: #ffffff;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, 0) 62%),
+        var(--sp);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .5),
+        inset 0 -1px 0 rgba(0, 0, 0, .12),
+        0 1px 2px rgba(16, 24, 40, .22);
+}
+
+.glyph {
+    width: 10px;
+    height: 10px;
+    stroke-width: 3;
+}
+
+/* На тёмном полотне исходные цвета статусов почти чёрные, а белый знак в
+   светлом кружке слепит — знак берёт цвет фона страницы. */
+[data-theme='dark'] .dot {
+    color: var(--nova-bg);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 62%),
+        var(--sp-dark);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .22),
+        inset 0 -1px 0 rgba(0, 0, 0, .2),
+        0 1px 2px rgba(0, 0, 0, .3);
+}
