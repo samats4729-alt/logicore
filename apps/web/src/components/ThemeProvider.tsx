@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, startTransition, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 
 type Theme = 'light' | 'dark';
@@ -48,14 +48,20 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
     }, [isCabinet]);
 
     const handleSetTheme = (t: Theme) => {
-        const el = document.documentElement;
-        el.setAttribute('data-theme', t);
-        // Плавное «переливание»: включаем анимацию на ~250ms, затем выключаем
-        el.setAttribute('data-anim', 'on');
-        setTimeout(() => el.removeAttribute('data-anim'), 250);
+        // Атрибут ставим первым делом: цвета в стилях привязаны к нему, и
+        // страница перекрашивается тем же кадром. Раньше здесь ещё
+        // включалась анимация перелива на четверть секунды — она и создавала
+        // ощущение задержки, см. `globals.css`.
+        document.documentElement.setAttribute('data-theme', t);
+        try { localStorage.setItem('lc_theme', t); } catch { }
 
-        setTheme(t);
-        try { localStorage.setItem('lc_theme', t); } catch {}
+        // Состояние обновляем отложенно. От него зависит Ant Design: при
+        // первом переключении он пересобирает весь свой набор стилей под
+        // тёмную тему — почти треть секунды. Срочное обновление задержало бы
+        // на это время саму перекраску, хотя она уже готова. Отложенное
+        // пропускает браузер вперёд: страница меняет цвет сразу, а элементы
+        // Ant Design догоняют следующим кадром.
+        startTransition(() => setTheme(t));
     };
 
     return (
