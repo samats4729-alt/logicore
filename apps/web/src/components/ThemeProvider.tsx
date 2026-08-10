@@ -38,6 +38,47 @@ function applyTheme(t: Theme) {
     document.head.appendChild(meta);
 }
 
+/** Телефон и планшет на движке Safari — включая новые iPad, которые
+ *  представляются Маком, и Chrome с Firefox на iPhone: движок там тот же. */
+function isWebKitMobile() {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent;
+    return /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Заставить Safari перечитать цвет полосы состояния.
+ *
+ * Он читает `theme-color` при загрузке и дальше держит прочитанное: смена
+ * тега на живой странице панель не перекрашивает — цвет догонял тему
+ * только после перезагрузки. Перечитывает он её, когда страница едет,
+ * поэтому дёргаем прокрутку на одну точку и тем же кадром возвращаем
+ * обратно. На глаз незаметно: положение то же, а панель перекрашивается.
+ *
+ * Короткую страницу дёрнуть некуда — ей на один кадр добавляем высоты,
+ * иначе прокрутка стоит на нуле и ничего не происходит.
+ */
+function repaintStatusBar() {
+    if (!isWebKitMobile()) return;
+
+    const doc = document.documentElement;
+    const y = window.scrollY;
+
+    if (doc.scrollHeight > window.innerHeight + 1) {
+        window.scrollTo(0, y === 0 ? 1 : y - 1);
+        requestAnimationFrame(() => window.scrollTo(0, y));
+        return;
+    }
+
+    const prev = doc.style.minHeight;
+    doc.style.minHeight = `${window.innerHeight + 2}px`;
+    window.scrollTo(0, 1);
+    requestAnimationFrame(() => {
+        window.scrollTo(0, y);
+        doc.style.minHeight = prev;
+    });
+}
+
 export default function ThemeProvider({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     /**
@@ -77,6 +118,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
         // включалась анимация перелива на четверть секунды — она и создавала
         // ощущение задержки, см. `globals.css`.
         applyTheme(t);
+        repaintStatusBar();
         try { localStorage.setItem('lc_theme', t); } catch { }
 
         // Состояние обновляем отложенно. От него зависит Ant Design: при
