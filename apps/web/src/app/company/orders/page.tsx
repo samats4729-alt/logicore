@@ -23,8 +23,8 @@ import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import AssignDriverModal from '@/components/AssignDriverModal';
 import OrdersMobileList from '@/components/OrdersMobileList';
-import { STATUS_PILL, STATUS_LABELS } from '@/components/ui/StatusPill';
-import OrderStatusPill from '@/components/ui/OrderStatusPill';
+import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
+
 import { useIsMobile } from '@/lib/useIsMobile';
 import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
@@ -1043,7 +1043,7 @@ export default function CompanyOrdersPage() {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
             render: (s: string, r: Order) => (
                 <div>
-                    <OrderStatusPill status={s} />
+                    <StatusPill status={s} />
                     {r.pendingStatus === 'COMPLETED' && r.pendingStatusById !== user?.companyId && (
                         <Tooltip title="Ожидает вашего подтверждения завершения">
                             <ExclamationCircleOutlined style={{ color: '#faad14', marginLeft: 4, fontSize: 13 }} />
@@ -1195,7 +1195,7 @@ export default function CompanyOrdersPage() {
     const archiveColumns = [
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
-            render: (s: string) => <OrderStatusPill status={s} />,
+            render: (s: string) => <StatusPill status={s} />,
         },
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, ellipsis: true, render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip> },
         ...orgColumn,

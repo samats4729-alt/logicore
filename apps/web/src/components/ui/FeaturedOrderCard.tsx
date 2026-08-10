@@ -7,7 +7,7 @@ import { RightOutlined, PhoneOutlined, EnvironmentOutlined, WhatsAppOutlined, Co
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import dayjs from 'dayjs';
 import { STATUS_LABELS } from './StatusPill';
-import OrderStatusPill from './OrderStatusPill';
+import StatusPill from './StatusPill';
 import styles from './FeaturedOrderCard.module.css';
 import { shortenCompanyName } from '@/lib/company-helper';
 import maplibregl, { MAP_STYLE_URL } from '@/lib/maplibre';
@@ -316,7 +316,7 @@ export default function FeaturedOrderCard({
         <div className={styles.card}>
             <div className={styles.head}>
                 <span className={styles.num}>{order.orderNumber}</span>
-                <OrderStatusPill status={order.status} />
+                <StatusPill status={order.status} />
                 <span className={styles.divider} />
                 <span className={styles.cargo}>{cargo}</span>
 
