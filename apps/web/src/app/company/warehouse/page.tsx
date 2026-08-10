@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Table, Tag, Typography, Spin, Button, Space, List, Avatar } from 'antd';
+import { Card, Table, Tag, Typography, Button, Space, List, Avatar } from 'antd';
 import { CarOutlined, ClockCircleOutlined, ReloadOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 
@@ -138,7 +139,7 @@ export default function CompanyWarehousePage() {
 
             {loading && queueItems.length === 0 ? (
                 <div style={{ textAlign: 'center', marginTop: 50 }}>
-                    <Spin size="large" />
+                    <Loader size="large" />
                 </div>
             ) : Object.keys(groupedItems).length === 0 ? (
                 <div className="lc-card" style={{ padding: 20, textAlign: 'center' }}>

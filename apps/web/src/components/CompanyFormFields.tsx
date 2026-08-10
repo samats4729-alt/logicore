@@ -1,9 +1,10 @@
 'use client';
 
-import { Form, Input, Spin } from 'antd';
+import { Form, Input } from 'antd';
 import { api } from '@/lib/api';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 interface CompanyFormFieldsProps {
     form: any;
@@ -65,7 +66,7 @@ export default function CompanyFormFields({ form, isSettings = false }: CompanyF
                     size="large" 
                     maxLength={12} 
                     onChange={handleBinChange}
-                    suffix={lookupLoading ? <Spin size="small" /> : null}
+                    suffix={lookupLoading ? <Loader size="small" /> : null}
                     onKeyPress={(e) => { if (!/\d/.test(e.key)) e.preventDefault(); }}
                 />
             </Form.Item>

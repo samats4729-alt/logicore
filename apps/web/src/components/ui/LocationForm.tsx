@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Form, Input, Row, Col, Select, Typography, Button, FormInstance, Radio, Spin } from 'antd';
+import { Form, Input, Row, Col, Select, Typography, Button, FormInstance, Radio } from 'antd';
 import { EnvironmentOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api, Location, Country, City, GeoProviderHierarchy } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import AddressAutocomplete from './AddressAutocomplete';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const MapPicker = dynamic(() => import('./MapPicker'), {
     ssr: false,
@@ -388,7 +389,7 @@ export default function LocationForm({
                                     showSearch
                                     filterOption={false}
                                     loading={cityLoading}
-                                    notFoundContent={cityLoading ? <Spin size="small" /> : null}
+                                    notFoundContent={cityLoading ? <Loader size="small" /> : null}
                                 >
                                     {cityOptions.map(c => (
                                         <Option key={c.id} value={c.id}>

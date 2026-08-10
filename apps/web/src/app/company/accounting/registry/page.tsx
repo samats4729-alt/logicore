@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker, Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress, Modal, Form, InputNumber, theme, Spin } from 'antd';
+import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker, Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress, Modal, Form, InputNumber, theme } from 'antd';
 import {
     ArrowUpOutlined, ArrowDownOutlined, DollarOutlined,
     SearchOutlined, EyeOutlined, PlusOutlined, FileExcelOutlined,
@@ -16,6 +16,7 @@ import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
 import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -23,7 +24,6 @@ const { RangePicker } = DatePicker;
 // Подписи статусов — из общего словаря `lib/vocabulary`,
 // чтобы один и тот же статус везде назывался одинаково.
 const statusLabels = ORDER_STATUS_LABELS;
-
 
 interface RegistryOrder {
     id: string;
@@ -761,7 +761,7 @@ export default function FinancialRegistryPage() {
                                 </div>
 
                                 {loadingPayments ? (
-                                    <div style={{ textAlign: 'center', padding: '12px 0' }}><Spin size="small" /></div>
+                                    <div style={{ textAlign: 'center', padding: '12px 0' }}><Loader size="small" /></div>
                                 ) : selectedOrderPayments.length === 0 ? (
                                     <div style={{ textAlign: 'center', padding: '16px 0', background: token.colorBgLayout, borderRadius: 8, color: token.colorTextSecondary }}>
                                         Платежей по этой заявке еще не зарегистрировано

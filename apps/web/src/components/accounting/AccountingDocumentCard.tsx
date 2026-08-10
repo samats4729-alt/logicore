@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, DatePicker, Dropdown, Input, InputNumber, Modal, Select, Space, Spin, Switch, Table, Tooltip, theme } from 'antd';
+import { Alert, Button, DatePicker, Dropdown, Input, InputNumber, Modal, Select, Space, Switch, Table, Tooltip, theme } from 'antd';
 import {
     ArrowLeftOutlined,
     CheckOutlined,
@@ -46,6 +46,7 @@ import {
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
 import { VAT_RATES } from '@/lib/tax';
+import Loader from '@/components/ui/Loader';
 
 /**
  * Сумма со знаком валюты документа.
@@ -522,7 +523,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
-                <Spin size="large" />
+                <Loader size="large" />
             </div>
         );
     }
@@ -1231,7 +1232,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 />
 
                 {pickerLoading ? (
-                    <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+                    <div style={{ textAlign: 'center', padding: 40 }}><Loader size="large" /></div>
                 ) : (
                     <Table
                         rowKey="id"

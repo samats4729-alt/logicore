@@ -1,9 +1,10 @@
 'use client';
 
-import { Empty, Pagination, Spin } from 'antd';
-import StatusPill, { STATUS_PILL } from '@/components/ui/StatusPill';
+import { Empty, Pagination } from 'antd';
+import StatusPill, { statusTone } from '@/components/ui/StatusPill';
 import { ORDER_STATUS_PROGRESS } from '@/components/ui/FeaturedOrderCard';
 import { shortenCompanyName } from '@/lib/company-helper';
+import Loader from '@/components/ui/Loader';
 
 interface MobileOrder {
     id: string;
@@ -47,7 +48,7 @@ export default function OrdersMobileList({ orders, loading, userCompanyId, extra
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
-                <Spin />
+                <Loader />
             </div>
         );
     }
@@ -68,7 +69,6 @@ export default function OrdersMobileList({ orders, loading, userCompanyId, extra
                     || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '');
                 const plate = r.assignedDriverPlate || r.driver?.vehiclePlate || '';
                 const cost = r.driverCost || r.subForwarderPrice;
-                const barColor = (STATUS_PILL[r.status] || STATUS_PILL.DRAFT).fg;
 
                 return (
                     <div className="lc-mcard" key={r.id} onClick={() => onOpen(r.id)}>
@@ -83,8 +83,11 @@ export default function OrdersMobileList({ orders, loading, userCompanyId, extra
                         {(from || to) && (
                             <div className="lc-mcard-route">{from || '?'} → {to || '?'}</div>
                         )}
-                        <div className="lc-mcard-bar">
-                            <i style={{ width: `${ORDER_STATUS_PROGRESS[r.status] ?? 0}%`, background: barColor }} />
+                        {/* Цвет полоски приходит переменными: в тёмной теме
+                            стили берут осветлённый оттенок, иначе на чёрном
+                            полотне это почти невидимое пятно. */}
+                        <div className="lc-mcard-bar" style={statusTone(r.status)}>
+                            <i style={{ width: `${ORDER_STATUS_PROGRESS[r.status] ?? 0}%` }} />
                         </div>
 
                         {r.customerCompany?.name && (

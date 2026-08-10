@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Card, Button, Table, Tag, Space, Alert, Spin, Statistic, Row, Col, Select, Popconfirm } from 'antd';
+import { Typography, Card, Button, Table, Tag, Space, Alert, Statistic, Row, Col, Select, Popconfirm } from 'antd';
 import { ReloadOutlined, TeamOutlined, MergeCellsOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -318,7 +319,7 @@ export default function AdminIdentityPage() {
                 extra={<Button icon={<ReloadOutlined />} onClick={loadRecon} loading={reconLoading}>Пересчитать</Button>}
             >
                 {!recon ? (
-                    <div style={{ textAlign: 'center', padding: 20 }}>{reconLoading ? <Spin /> : <Text type="secondary">Нажмите «Пересчитать»</Text>}</div>
+                    <div style={{ textAlign: 'center', padding: 20 }}>{reconLoading ? <Loader /> : <Text type="secondary">Нажмите «Пересчитать»</Text>}</div>
                 ) : (
                     <>
                         <Alert
@@ -413,7 +414,7 @@ export default function AdminIdentityPage() {
                 />
 
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+                    <div style={{ textAlign: 'center', padding: 40 }}><Loader /></div>
                 ) : report ? (
                     <>
                         <Row gutter={16} style={{ marginBottom: 16 }}>

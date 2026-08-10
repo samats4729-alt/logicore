@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Tag, theme, Spin } from 'antd';
+import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import CurrencySelect from '@/components/orders/CurrencySelect';
@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Text } = Typography;
 
@@ -446,7 +447,7 @@ export default function FinanceSettingsPage() {
 
             {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 250, background: token.colorBgContainer, borderRadius: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
-                    <Spin />
+                    <Loader />
                 </div>
             ) : (
             <div className="lc-card" style={{ padding: 20 }}>

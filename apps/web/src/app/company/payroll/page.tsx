@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Tabs, Card, Table, Form, InputNumber, Select, Button, Space, Row, Col, Modal, DatePicker, Popconfirm, Tag, Spin } from 'antd';
+import { Typography, Tabs, Card, Table, Form, InputNumber, Select, Button, Space, Row, Col, Modal, DatePicker, Popconfirm, Tag } from 'antd';
 import { SettingOutlined, TableOutlined, PlusOutlined, DeleteOutlined, UserOutlined, PercentageOutlined, DollarOutlined, StarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -499,7 +500,7 @@ export default function PayrollAdminPage() {
                         </div>
 
                         {reportLoading ? (
-                            <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+                            <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
                         ) : (
                             <Space direction="vertical" size={16} style={{ width: '100%' }}>
                                 {/* Summary bar */}

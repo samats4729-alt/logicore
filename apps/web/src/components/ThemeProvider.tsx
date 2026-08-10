@@ -14,6 +14,21 @@ export function useTheme() {
     return useContext(ThemeContext);
 }
 
+/** Цвет полосы состояния телефона — тот же, что фон страницы. */
+const BAR = { light: '#ffffff', dark: '#20201f' };
+
+/**
+ * Применить тему к документу.
+ *
+ * Кроме атрибута, от которого пляшут все цвета, переставляем `theme-color`:
+ * им телефон красит полосу с часами и зарядом. Без этого в тёмной теме верх
+ * экрана оставался белым, и над чёрной страницей висела светлая полоса.
+ */
+function applyTheme(t: Theme) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', BAR[t]);
+}
+
 export default function ThemeProvider({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     /**
@@ -44,7 +59,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
             } catch {}
         }
         setTheme(next);
-        document.documentElement.setAttribute('data-theme', next);
+        applyTheme(next);
     }, [isCabinet]);
 
     const handleSetTheme = (t: Theme) => {
@@ -52,7 +67,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
         // страница перекрашивается тем же кадром. Раньше здесь ещё
         // включалась анимация перелива на четверть секунды — она и создавала
         // ощущение задержки, см. `globals.css`.
-        document.documentElement.setAttribute('data-theme', t);
+        applyTheme(t);
         try { localStorage.setItem('lc_theme', t); } catch { }
 
         // Состояние обновляем отложенно. От него зависит Ant Design: при

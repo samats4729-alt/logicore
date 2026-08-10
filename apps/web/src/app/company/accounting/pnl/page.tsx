@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Alert, Typography, Button, DatePicker, Table, Space, Spin, Tag, theme } from 'antd';
+import { Alert, Typography, Button, DatePicker, Table, Space, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, FileExcelOutlined, DollarOutlined, LineChartOutlined, WalletOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
+import Loader from '@/components/ui/Loader';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -303,7 +304,7 @@ export default function PnLReportPage() {
 
             {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 250 }}>
-                    <Spin size="large" tip="Составление отчета..." />
+                    <Loader size="large" tip="Составление отчета..." />
                 </div>
             ) : report ? (
                 <div className="lc-card" style={{ padding: 20 }}>

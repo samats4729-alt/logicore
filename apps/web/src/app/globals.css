@@ -153,6 +153,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Полотно под страницей в тёмной теме.
+ *
+ * Телефон показывает его там, где страница кончилась: за верхним и нижним
+ * краем при оттягивании и под панелью браузера внизу. Белое полотно под
+ * тёмной страницей читалось как белая полоса, которая появляется на
+ * прокрутке из ниоткуда. Значение то же, что `--nova-bg`. */
+html[data-theme='dark'],
+html[data-theme='dark'] body {
+  background: #20201f;
+  color: #f1f0ec;
+}
+
 /* Premium Card Style - Shadcn-like */
 .premium-card {
   background: #ffffff;
@@ -2493,6 +2505,89 @@ a.mapboxgl-ctrl-logo,
 
 
 /* ==========================================
+   МОБИЛЬНОЕ МЕНЮ (выдвижной ящик)
+   ==========================================
+   Тот же вид, что у пилюль наверху на компьютере: текущий пункт залит
+   фирменным тёмным, остальные — обычный текст. Синим в кабинете помечают
+   ссылки, и выделять им пункт меню нельзя.
+*/
+
+.lc-mnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lc-mnav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--nova-fg);
+  font: 500 14px/1.2 Inter, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lc-mnav-item i {
+  display: inline-flex;
+  font-size: 15px;
+  color: var(--nova-fg-3);
+}
+
+.lc-mnav-item:active {
+  background: var(--nova-hover);
+}
+
+.lc-mnav-item.is-on {
+  background: var(--nova-primary);
+  color: var(--nova-primary-fg);
+  font-weight: 600;
+}
+
+.lc-mnav-item.is-on i {
+  color: var(--nova-primary-fg);
+}
+
+.lc-mnav-group {
+  margin-top: 6px;
+}
+
+.lc-mnav-cap {
+  padding: 8px 12px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nova-fg-3);
+}
+
+.lc-mnav-foot {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--nova-border);
+}
+
+.lc-mnav-out {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--nova-border);
+  border-radius: 11px;
+  background: var(--nova-surface);
+  color: var(--nova-neg);
+  font: 500 13.5px/1 Inter, sans-serif;
+  cursor: pointer;
+}
+
+/* ==========================================
    МОБИЛЬНАЯ АДАПТАЦИЯ: заявки и мастер создания
    ========================================== */
 
@@ -2503,13 +2598,17 @@ a.mapboxgl-ctrl-logo,
   gap: 10px;
 }
 
+/* Карточка на телефоне живёт на тех же токенах, что и остальной кабинет.
+   Раньше она брала цвета из прежнего набора `--lc-*`: в тёмной теме
+   карточки оставались светло-серыми, а суммы — ядовито-зелёными и
+   красными из старой палитры. */
 .lc-mcard {
-  background: var(--lc-card);
-  border: 1px solid var(--lc-border);
-  border-radius: 16px;
+  background: var(--nova-surface);
+  border: 1px solid var(--nova-border);
+  border-radius: var(--nova-radius, 14px);
   padding: 12px 14px;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  box-shadow: var(--nova-shadow);
   transition: transform 0.12s ease;
 }
 
@@ -2526,7 +2625,7 @@ a.mapboxgl-ctrl-logo,
 .lc-mcard-date {
   margin-left: auto;
   font-size: 11px;
-  color: var(--lc-text-ter);
+  color: var(--nova-fg-3);
 }
 
 .lc-mcard-route {
@@ -2534,13 +2633,13 @@ a.mapboxgl-ctrl-logo,
   font-size: 14.5px;
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: var(--lc-text);
+  color: var(--nova-fg);
 }
 
 .lc-mcard-bar {
   height: 4px;
   border-radius: 999px;
-  background: var(--lc-hover);
+  background: var(--nova-hover);
   margin-top: 7px;
   margin-bottom: 2px;
   overflow: hidden;
@@ -2550,6 +2649,11 @@ a.mapboxgl-ctrl-logo,
   display: block;
   height: 100%;
   border-radius: 999px;
+  background: var(--sp);
+}
+
+[data-theme='dark'] .lc-mcard-bar i {
+  background: var(--sp-dark);
 }
 
 .lc-mcard-row {
@@ -2563,13 +2667,13 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-mcard-row span:first-child {
-  color: var(--lc-text-ter);
+  color: var(--nova-fg-3);
   flex-shrink: 0;
 }
 
 .lc-mcard-row b {
   font-weight: 500;
-  color: var(--lc-text);
+  color: var(--nova-fg);
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2585,8 +2689,8 @@ a.mapboxgl-ctrl-logo,
   font-variant-numeric: tabular-nums;
 }
 
-.lc-mcard-in { color: #389e0d; }
-.lc-mcard-out { color: #cf1322; }
+.lc-mcard-in { color: var(--nova-pos); }
+.lc-mcard-out { color: var(--nova-neg); }
 
 .lc-mcards-pager {
   display: flex;

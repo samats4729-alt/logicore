@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Typography, Table, Tag, Empty, Spin, Button, Modal, Form, Input, DatePicker, Tooltip, Alert, Checkbox } from 'antd';
+import { Typography, Table, Tag, Empty, Button, Modal, Form, Input, DatePicker, Tooltip, Alert, Checkbox } from 'antd';
 import {
     CheckCircleFilled,
     ClockCircleFilled,
@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 
@@ -25,7 +26,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 // Подписи статусов — из общего словаря: контрагент по ссылке должен
 // видеть ровно те же слова, что и мы внутри платформы.
 const statusLabels = ORDER_STATUS_LABELS;
-
 
 const C = {
     bg: '#f4f5f7',
@@ -652,7 +652,7 @@ export default function SharedReportPage() {
                 minHeight: '100vh', background: C.bg,
             }}>
                 <div style={{ textAlign: 'center' }}>
-                    <Spin size="large" />
+                    <Loader size="large" />
                     <div style={{ marginTop: 16, color: C.textSec, fontSize: 14 }}>Загружаем отчёт…</div>
                 </div>
             </div>

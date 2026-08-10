@@ -1,0 +1,57 @@
+/* Кольцо ожидания. Цвет приглушённый: ожидание не должно спорить с тем,
+   что уже нарисовано на экране. */
+
+.wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.full {
+    display: flex;
+    width: 100%;
+    min-height: 60vh;
+}
+
+.ring {
+    color: var(--nova-fg-3, #868e9c);
+    animation: lcSpin 0.85s linear infinite;
+}
+
+.tip {
+    font-size: 12.5px;
+    color: var(--nova-fg-3, #868e9c);
+    text-align: center;
+}
+
+/* Подпись для тех, кто читает экран голосом: кольцо им ничего не говорит. */
+.sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+@keyframes lcSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Кому системные настройки запрещают анимацию — кольцо не крутится, а
+   мигает: движение по кругу у них вызывает тошноту, но знать, что идёт
+   ожидание, всё равно надо. */
+@media (prefers-reduced-motion: reduce) {
+    .ring {
+        animation: lcFade 1.4s ease-in-out infinite;
+    }
+}
+
+@keyframes lcFade {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .35; }
+}

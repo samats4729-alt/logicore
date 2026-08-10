@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, Tabs, Table, Button, Typography, Space, Tag, Avatar, Descriptions, Modal, Form, Input, Select, Row, Col, Divider, DatePicker, Popconfirm, Spin, Empty, theme } from 'antd';
+import { Card, Tabs, Table, Button, Typography, Space, Tag, Avatar, Descriptions, Modal, Form, Input, Select, Row, Col, Divider, DatePicker, Popconfirm, Empty, theme } from 'antd';
 import {
     ShopOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined,
     PlusOutlined, UserOutlined, UserAddOutlined, CarOutlined,
@@ -14,6 +14,7 @@ import LocationForm from '@/components/ui/LocationForm';
 import { QuoteRequestsPanel } from '@/components/quotes/QuoteRequestsPanel';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 
@@ -281,7 +282,7 @@ export default function PartnerDetailPage() {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-                <Spin size="large" />
+                <Loader size="large" />
             </div>
         );
     }

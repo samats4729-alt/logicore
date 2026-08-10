@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select, Spin } from 'antd';
+import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import dayjs from 'dayjs';
 import { AllocationSuggestionItem, suggestAllocation } from '@/lib/accounting-documents';
+import Loader from '@/components/ui/Loader';
 
 const { TextArea } = Input;
 
@@ -207,7 +208,7 @@ export default function OrderFinanceModals({
                 {/* Разнесение по счетам: пока платёж не разнесён, видно
                     только что деньги пришли, но не какие счета закрыты. */}
                 {loadingInvoices ? (
-                    <div style={{ textAlign: 'center', padding: 12 }}><Spin size="small" /></div>
+                    <div style={{ textAlign: 'center', padding: 12 }}><Loader size="small" /></div>
                 ) : openInvoices.length > 0 && (
                     <div style={{ marginTop: 4 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>

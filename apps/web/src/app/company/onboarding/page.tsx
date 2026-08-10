@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, Form, Input, Result, Select, Space, Spin, Steps, Tag, Upload, theme } from 'antd';
+import { Alert, Button, Form, Input, Result, Select, Space, Steps, Tag, Upload, theme } from 'antd';
 import { CheckCircleOutlined, InboxOutlined, UploadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 /**
  * Документы, которыми в Казахстане подтверждают организацию.
@@ -109,7 +110,7 @@ export default function CompanyOnboardingPage() {
     };
 
     if (loading) {
-        return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>;
+        return <div style={{ textAlign: 'center', padding: 80 }}><Loader size="large" /></div>;
     }
 
     const status = verification?.verificationStatus ?? 'DRAFT';

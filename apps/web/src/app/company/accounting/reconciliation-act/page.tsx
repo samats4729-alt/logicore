@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
-import { Alert, Button, DatePicker, Spin, Empty } from 'antd';
+import { Alert, Button, DatePicker, Empty } from 'antd';
 import {
     ArrowLeftOutlined,
     CalendarOutlined,
@@ -18,6 +18,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { amountToWordsKzt } from '@/lib/amountToWords';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { RangePicker } = DatePicker;
 
@@ -198,7 +199,7 @@ function ReconciliationActInner() {
             )}
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+                <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
             ) : !data ? (
                 <Empty description="Нет данных" />
             ) : (
@@ -352,7 +353,7 @@ function ReconciliationActInner() {
 
 export default function ReconciliationActPage() {
     return (
-        <Suspense fallback={<div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>}>
+        <Suspense fallback={<div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>}>
             <ReconciliationActInner />
         </Suspense>
     );

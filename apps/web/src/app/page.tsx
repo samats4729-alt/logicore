@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Spin } from 'antd';
 import {
     ArrowRight,
     Banknote,
@@ -21,6 +20,7 @@ import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/components/ThemeProvider';
 import AssemblyStage from '@/components/landing/AssemblyStage';
 import styles from './landing.module.css';
+import Loader from '@/components/ui/Loader';
 
 /**
  * Главная страница.
@@ -107,7 +107,7 @@ export default function HomePage() {
     if (!hydrated || isAuthenticated) {
         return (
             <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: 'var(--nova-bg, #fff)' }}>
-                <Spin size="large" />
+                <Loader size="large" />
             </div>
         );
     }
@@ -144,7 +144,6 @@ export default function HomePage() {
                     </div>
                 </div>
             </header>
-
 
             {/* ===== Первый экран =====
                 Заголовок живёт внутри сцены, а не отдельным блоком над ней:
@@ -230,7 +229,6 @@ export default function HomePage() {
                     </div>
                 </div>
             </section>
-
 
             {/* ===== Кому подходит ===== */}
             <section className={`${styles.section} ${styles.sectionMuted}`} id="кому">

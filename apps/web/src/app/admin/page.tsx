@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Row, Col, Card, Statistic, Typography, Spin, Tag, Empty } from 'antd';
+import { Row, Col, Card, Statistic, Typography, Tag, Empty } from 'antd';
 import {
     ShopOutlined,
     TeamOutlined,
@@ -16,6 +16,7 @@ import {
 import { api } from '@/lib/api';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 
@@ -33,7 +34,6 @@ interface Overview {
 // чтобы один и тот же статус везде назывался одинаково.
 const statusLabels = ORDER_STATUS_LABELS;
 
-
 const fmt = (n: number) => n.toLocaleString('ru-RU');
 
 export default function AdminDashboard() {
@@ -48,7 +48,7 @@ export default function AdminDashboard() {
     }, []);
 
     if (loading) {
-        return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>;
+        return <div style={{ textAlign: 'center', padding: 80 }}><Loader size="large" /></div>;
     }
 
     if (!data) {

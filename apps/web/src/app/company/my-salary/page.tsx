@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Row, Col, DatePicker, Table, Space, Tag, Empty, Spin } from 'antd';
+import { Typography, Row, Col, DatePicker, Table, Space, Tag, Empty } from 'antd';
 import { DollarOutlined, FileTextOutlined, AccountBookOutlined, StarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import Link from 'next/link';
+import Loader from '@/components/ui/Loader';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -163,7 +164,7 @@ export default function MySalaryPage() {
             </div>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>
+                <div style={{ textAlign: 'center', padding: 80 }}><Loader size="large" /></div>
             ) : (
                 <Space direction="vertical" size={20} style={{ width: '100%' }}>
                     {/* Percent details */}

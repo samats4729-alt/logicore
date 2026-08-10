@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, DatePicker, Dropdown, Input, Modal, Select, Space, Spin, Table, Tabs, Tooltip, theme } from 'antd';
+import { Alert, Button, DatePicker, Dropdown, Input, Modal, Select, Space, Table, Tabs, Tooltip, theme } from 'antd';
 import {
     EyeOutlined,
     MoreOutlined,
@@ -27,6 +27,7 @@ import {
     routePointsLabel,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { RangePicker } = DatePicker;
 
@@ -448,7 +449,7 @@ export default function ActsJournalPage() {
                         Выберите контрагента
                     </div>
                 ) : loadingOrders ? (
-                    <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>
+                    <div style={{ textAlign: 'center', padding: 32 }}><Loader /></div>
                 ) : (
                     <Table
                         rowKey="id"

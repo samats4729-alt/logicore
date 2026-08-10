@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Spin, Tag } from 'antd';
+import { Button, Tag } from 'antd';
 import { CheckOutlined, ReloadOutlined, LogoutOutlined, LockOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import Loader from '@/components/ui/Loader';
 
 interface Plan {
     id: string;
@@ -56,7 +57,7 @@ export default function PaywallScreen({ status }: { status?: { status?: string |
             </div>
 
             {plans === null ? (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Loader /></div>
             ) : plans.length > 0 && (
                 <div style={{
                     display: 'grid',

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Layout, Menu, Button, Avatar, Dropdown, Typography, Spin, Drawer } from 'antd';
+import { Layout, Button, Avatar, Dropdown, Typography, Drawer } from 'antd';
 import {
     DashboardOutlined,
     FileTextOutlined,
@@ -45,6 +45,8 @@ import NoSectionAccess from '@/components/ui/NoSectionAccess';
 import { checkSectionAccess } from '@/lib/section-access';
 import { BetaClosed, BetaStrip } from '@/components/ui/BetaNotice';
 import { BETA_LABEL, betaStateOf, getBetaSection } from '@/lib/beta-sections';
+import Loader from '@/components/ui/Loader';
+import { isNavItemActive } from '@/lib/cabinet-nav';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -181,7 +183,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     if (!hydrated || isLoading || !user) {
         return (
             <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Spin size="large" />
+                <Loader size="large" />
             </div>
         );
     }
@@ -346,33 +348,65 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         ],
     };
 
-    // Мобильное меню через Drawer
+    /**
+     * Мобильное меню.
+     *
+     * Список свой, а не `Menu` из Ant Design. Тот красил текущий пункт синим
+     * — цветом, который в кабинете означает ссылку, а не выделение, — и на
+     * телефоне навигация выглядела из другого продукта. Здесь тот же вид,
+     * что у пилюль наверху: тёмная заливка и текст фоном страницы.
+     *
+     * «Мониторинг» на телефоне разложен сразу: выпадающий список внутри
+     * выдвижного ящика — лишнее нажатие ради двух строк.
+     */
     const MobileMenu = () => (
         <Drawer
             title={user.company?.name || 'Меню'}
             placement="left"
             onClose={() => setMobileMenuOpen(false)}
             open={mobileMenuOpen}
-            width={280}
-            styles={{ body: { padding: 0 } }}
+            width={286}
+            className="lc-nova"
+            styles={{ body: { padding: 12 }, header: { background: 'var(--nova-surface-2)' } }}
         >
-            <Menu
-                mode="inline"
-                selectedKeys={[pathname]}
-                items={getMenuItems()}
-                onClick={({ key }) => handleMenuClick(key)}
-                style={{ border: 'none' }}
-            />
-            <div style={{ padding: 16, borderTop: '1px solid var(--lc-border)', marginTop: 16 }}>
-                <Button
-                    type="text"
-                    danger
-                    icon={<LogoutOutlined />}
-                    onClick={handleLogout}
-                    block
-                >
-                    Выйти
-                </Button>
+            <nav className="lc-mnav">
+                {getMenuItems().map((item: any) => {
+                    if (item.children) {
+                        return (
+                            <div className="lc-mnav-group" key={item.key}>
+                                <div className="lc-mnav-cap">{item.label}</div>
+                                {item.children.map((child: any) => (
+                                    <button
+                                        type="button"
+                                        key={child.key}
+                                        className={`lc-mnav-item${isNavItemActive(child, pathname) ? ' is-on' : ''}`}
+                                        onClick={() => handleMenuClick(child.key)}
+                                    >
+                                        <i>{child.icon}</i>
+                                        <span>{child.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        );
+                    }
+                    return (
+                        <button
+                            type="button"
+                            key={item.key}
+                            className={`lc-mnav-item${isNavItemActive(item, pathname) ? ' is-on' : ''}`}
+                            onClick={() => handleMenuClick(item.key)}
+                        >
+                            <i>{item.icon}</i>
+                            <span>{item.label}</span>
+                        </button>
+                    );
+                })}
+            </nav>
+
+            <div className="lc-mnav-foot">
+                <button type="button" className="lc-mnav-out" onClick={handleLogout}>
+                    <LogoutOutlined /> Выйти
+                </button>
             </div>
         </Drawer>
     );
@@ -429,55 +463,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 {!isMobile && (
                     <nav className="lc2-nav">
                         {getMenuItems().map((item: any) => {
-                            const childKeys: string[] = (item.children || [])
-                                .flatMap((c: any) => (c?.type === 'group' && Array.isArray(c.children)) ? c.children : [c])
-                                .filter((c: any) => c?.key && String(c.key).startsWith('/'))
-                                .map((c: any) => String(c.key));
-                            // Хаб-страницы подсвечиваются и на своих подстраницах.
-                            // Списки не пересекаются: путь, попавший в два,
-                            // подсветил бы разом две пилюли.
-                            const cabinetRoutes = [
-                                '/company/cabinet', '/company/users', '/company/settings', '/company/audit',
-                                '/company/partners', '/company/contracts', '/company/locations',
-                                '/company/vehicles', '/company/documents', '/company/profile',
-                                '/company/accounting/settings', '/company/accounting/payment-conditions',
-                                '/company/accounting/payment-forms', '/company/accounting/ownership-types',
-                                '/company/accounting/banks', '/company/accounting/currencies',
-                                '/company/accounting/revaluation', '/company/accounting/document-numbering',
-                                '/company/accounting/order-numbering',
-                                '/company/inventory/nomenclature', '/company/inventory/warehouses',
-                            ];
-                            const financeRoutes = [
-                                '/company/finance', '/company/accounting/invoices', '/company/accounting/acts',
-                                '/company/accounting/transport-documents', '/company/accounting/incoming',
-                                '/company/accounting/calendar', '/company/accounting/planned',
-                                '/company/accounting/cash-in', '/company/accounting/cash-out',
-                                '/company/accounting/operations', '/company/accounting/balances',
-                                '/company/accounting/counterparty-report', '/company/accounting/reconciliation-act',
-                                '/company/accounting/opening-balances', '/company/accounting/act-of-work',
-                                '/company/inventory/balances', '/company/inventory/receipts',
-                                '/company/inventory/transfers', '/company/inventory/writeoffs',
-                                '/company/payroll', '/company/my-salary',
-                            ];
-                            const reportsRoutes = [
-                                '/company/reports', '/company/accounting/pnl', '/company/accounting/carrier-profit',
-                                '/company/accounting/registry', '/company/accounting/cashflow',
-                                '/company/accounting/expenses-by-category',
-                            ];
-                            const requestsRoutes = ['/company/requests', '/company/calculator'];
-                            const hubRoutes: Record<string, string[]> = {
-                                '/company/cabinet': cabinetRoutes,
-                                '/company/finance': financeRoutes,
-                                '/company/reports': reportsRoutes,
-                                '/company/requests': requestsRoutes,
-                            };
-                            const active = item.key === '/company'
-                                ? pathname === '/company'
-                                : hubRoutes[item.key as string]
-                                    ? hubRoutes[item.key as string].some(k => pathname === k || pathname.startsWith(k + '/'))
-                                    : String(item.key).startsWith('/')
-                                        ? (pathname === item.key || pathname.startsWith(item.key + '/'))
-                                        : childKeys.some(k => pathname === k || pathname.startsWith(k + '/'));
+                            const active = isNavItemActive(item, pathname);
 
                             if (item.children) {
                                 return (

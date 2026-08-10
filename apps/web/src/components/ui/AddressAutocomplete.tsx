@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { AutoComplete, Input, Spin } from 'antd';
+import { AutoComplete, Input } from 'antd';
 import { EnvironmentOutlined, SearchOutlined } from '@ant-design/icons';
 import { api, GeoProviderHierarchy } from '@/lib/api';
+import Loader from '@/components/ui/Loader';
 
 interface DgisAddressFeature {
     id: string;
@@ -149,7 +150,7 @@ export default function AddressAutocomplete({
             style={{ width: '100%' }}
             notFoundContent={
                 loading
-                    ? <Spin size="small" />
+                    ? <Loader size="small" />
                     : keyMissing && searchQuery.length >= 2
                         ? <span style={{ fontSize: 12, color: '#b45309' }}>Поиск адресов не настроен: задайте DGIS_API_KEY на api-сервисе</span>
                         : null
@@ -160,7 +161,7 @@ export default function AddressAutocomplete({
                 placeholder={placeholder}
                 size={size}
                 disabled={disabled}
-                suffix={loading ? <Spin size="small" /> : <SearchOutlined style={{ color: '#bbb' }} />}
+                suffix={loading ? <Loader size="small" /> : <SearchOutlined style={{ color: '#bbb' }} />}
             />
         </AutoComplete>
     );

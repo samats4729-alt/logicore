@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Select, Spin } from 'antd';
+import { Select } from 'antd';
 import { api } from '@/lib/api';
 import { reportLoadFailure } from '@/lib/load';
+import Loader from '@/components/ui/Loader';
 
 /**
  * Выбор заявки с поиском по всей базе.
@@ -96,7 +97,7 @@ export default function OrderSelect({
             // Отбор на месте выключен: список уже отобран сервером, а
             // повторная фильтрация по подписи прятала бы найденное.
             filterOption={false}
-            notFoundContent={loading ? <Spin size="small" /> : 'Ничего не найдено'}
+            notFoundContent={loading ? <Loader size="small" /> : 'Ничего не найдено'}
             options={shown}
             placeholder={placeholder}
             style={{ width: '100%' }}
