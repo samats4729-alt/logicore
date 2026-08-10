@@ -142,6 +142,44 @@ describe('Запросы на расчёт: сервис', () => {
             });
         });
 
+        it('паллеты из запроса переезжают в заявку составом, а не одним числом', async () => {
+            // Менеджер обещал клиенту пять финских паллет. Если в заявку
+            // уедет голое число, карточка рейса, кабинет водителя и печатные
+            // формы покажут «5 палет» без вида — и на погрузке выяснится, что
+            // машина не та. Размеры подставляются по виду, вручную их никто
+            // не вводит.
+            const { service, prisma, orders } = создать();
+            prisma.quoteRequest.findFirst.mockResolvedValue(запрос({
+                originLocationId: 'адрес-погрузки',
+                destinationLocationId: 'адрес-выгрузки',
+                palletKind: 'FIN',
+                palletCount: 5,
+            }));
+
+            await service.approve('наша-компания', 'з1');
+
+            expect(orders.create.mock.calls[0][0]).toMatchObject({
+                palletCount: 5,
+                pallets: [{ kind: 'FIN', count: 5, length: 120, width: 100 }],
+            });
+        });
+
+        it('без паллет состав в заявку не уходит', async () => {
+            // Пустая строка состава выглядит как забытый ввод и мешает
+            // больше, чем отсутствие состава.
+            const { service, prisma, orders } = создать();
+            prisma.quoteRequest.findFirst.mockResolvedValue(запрос({
+                originLocationId: 'адрес-погрузки',
+                destinationLocationId: 'адрес-выгрузки',
+                palletKind: null,
+                palletCount: null,
+            }));
+
+            await service.approve('наша-компания', 'з1');
+
+            expect(orders.create.mock.calls[0][0].pallets).toBeUndefined();
+        });
+
         it('запрос с оформленной заявкой не правится и не переоткрывается', async () => {
             const { service, prisma } = создать();
             prisma.quoteRequest.findFirst.mockResolvedValue(

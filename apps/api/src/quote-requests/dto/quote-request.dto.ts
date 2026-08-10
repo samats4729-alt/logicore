@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsNotEmpty, IsEnum, IsDateString, Min } from 'class-validator';
+import { IsString, IsNumber, IsInt, IsOptional, IsNotEmpty, IsEnum, IsDateString, Min } from 'class-validator';
 import { QuoteRequestStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -70,6 +70,17 @@ export class CreateQuoteRequestDto {
     @Min(0, { message: 'Объём не может быть отрицательным' })
     @IsOptional()
     cargoVolume?: number;
+
+    @ApiProperty({ required: false, description: 'Сколько паллет' })
+    @IsInt({ message: 'Количество паллет должно быть целым числом' })
+    @Min(0, { message: 'Количество паллет не может быть отрицательным' })
+    @IsOptional()
+    palletCount?: number;
+
+    @ApiProperty({ required: false, description: 'Вид паллеты: EUR, FIN, AMERICAN, HALF, CUSTOM' })
+    @IsString()
+    @IsOptional()
+    palletKind?: string;
 
     @ApiProperty({ required: false, description: 'Почём нашли машину' })
     @IsNumber({}, { message: 'Цена перевозчика должна быть числом' })

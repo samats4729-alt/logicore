@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Prisma, QuoteRequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPaginationParams, PaginationQueryDto } from '../common/dto/pagination.dto';
+import { palletLinesFromQuote } from '../common/utils/pallets';
 import { buildQuoteMemory, PastQuote, QuoteMemory } from './quote-memory';
 import { ContractsService } from '../contracts/contracts.service';
 import { OrdersService } from '../orders/orders.service';
@@ -105,6 +106,8 @@ export class QuoteRequestsService {
                 cargoType: dto.cargoType || null,
                 cargoWeight: dto.cargoWeight ?? null,
                 cargoVolume: dto.cargoVolume ?? null,
+                palletCount: dto.palletCount ?? null,
+                palletKind: dto.palletKind || null,
                 carrierCost: dto.carrierCost ?? null,
                 customerPrice: dto.customerPrice ?? null,
                 notes: dto.notes || null,
@@ -143,6 +146,8 @@ export class QuoteRequestsService {
         assignIfPresent(dto, data, 'notes');
         if (dto.cargoWeight !== undefined) data.cargoWeight = dto.cargoWeight ?? null;
         if (dto.cargoVolume !== undefined) data.cargoVolume = dto.cargoVolume ?? null;
+        if (dto.palletCount !== undefined) data.palletCount = dto.palletCount ?? null;
+        assignIfPresent(dto, data, 'palletKind');
         if (dto.carrierCost !== undefined) data.carrierCost = dto.carrierCost ?? null;
         if (dto.readyDate !== undefined) data.readyDate = dto.readyDate ? new Date(dto.readyDate) : null;
 
@@ -260,6 +265,11 @@ export class QuoteRequestsService {
             cargoWeight: request.cargoWeight ?? undefined,
             cargoVolume: request.cargoVolume ?? undefined,
             palletCount: request.palletCount ?? undefined,
+            // Состав груза в заявке — список строк, в запросе один вид.
+            // Переносим одной строкой, чтобы карточка рейса, кабинет
+            // водителя и печатные формы видели то же, что менеджер обещал
+            // клиенту, а не пустой состав рядом с числом паллет.
+            pallets: palletLinesFromQuote(request.palletKind, request.palletCount),
             // Согласованная сумма переносится как есть. Пересчёта здесь нет
             // и быть не должно: клиент подтвердил конкретное число.
             customerPrice: Number(request.customerPrice),
@@ -467,6 +477,8 @@ export interface CreateQuoteRequestData {
     cargoType?: string | null;
     cargoWeight?: number | null;
     cargoVolume?: number | null;
+    palletCount?: number | null;
+    palletKind?: string | null;
     carrierCost?: number | null;
     customerPrice?: number | null;
     notes?: string | null;
