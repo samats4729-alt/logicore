@@ -58,22 +58,36 @@ async function main() {
         }
     }
 
+    // Последний рейс идёт в пути, остальные завершены.
+    //
+    // Стенд из одних завершённых рейсов — это стенд, на котором нечего
+    // вести: половина кабинета (статусы, мониторинг, документы, которые
+    // выдаются по ходу рейса) рассчитана на работу, а показать её не на
+    // чем. Проверка «недоступный документ объясняет причину» именно из-за
+    // этого и падала: акт нельзя выдать до завершения, а незавершённого
+    // рейса на стенде не было.
     const specs = [
         { n: 'ЗК-2601', from: 'Алматы', to: 'Астана', cargo: 'Напитки', cust: 480000, sub: 390000, paidOut: 0, paidIn: 0 },
         { n: 'ЗК-2602', from: 'Шымкент', to: 'Алматы', cargo: 'Стройматериалы', cust: 320000, sub: 260000, paidOut: 100000, paidIn: 320000 },
         { n: 'ЗК-2603', from: 'Астана', to: 'Караганда', cargo: 'Бытовая техника', cust: 210000, sub: 165000, paidOut: 165000, paidIn: 90000 },
         { n: 'ЗК-2604', from: 'Актобе', to: 'Атырау', cargo: 'Трубы', cust: 540000, sub: 445000, paidOut: 0, paidIn: 0 },
         { n: 'ЗК-2605', from: 'Алматы', to: 'Тараз', cargo: 'Продукты', cust: 180000, sub: 140000, paidOut: 0, paidIn: 0 },
+        {
+            n: 'ЗК-2606', from: 'Алматы', to: 'Караганда', cargo: 'Мебель',
+            cust: 260000, sub: 205000, paidOut: 0, paidIn: 0, status: 'IN_TRANSIT',
+        },
     ];
 
     for (const s of specs) {
         const existing = await prisma.order.findFirst({ where: { orderNumber: s.n } });
         if (existing) await prisma.order.delete({ where: { id: existing.id } });
 
+        const done = (s.status || 'COMPLETED') === 'COMPLETED';
+
         const order = await prisma.order.create({
             data: {
                 orderNumber: s.n,
-                status: 'COMPLETED',
+                status: s.status || 'COMPLETED',
                 cargoDescription: s.cargo,
                 customerCompanyId: client.id,
                 customerId: clientUser.id,
@@ -84,9 +98,11 @@ async function main() {
                 assignedDriverPlate: '123 ABC 01',
                 customerPrice: D(s.cust),
                 subForwarderPrice: D(s.sub),
-                completedAt: new Date('2026-07-15'),
-                driverPaymentDate: new Date('2026-07-25'),
-                customerPaymentDate: new Date('2026-08-05'),
+                // Даты закрытия ставим только завершённому: у рейса в пути
+                // их нет, а отчёты считают по ним выручку и сроки оплаты.
+                completedAt: done ? new Date('2026-07-15') : null,
+                driverPaymentDate: done ? new Date('2026-07-25') : null,
+                customerPaymentDate: done ? new Date('2026-08-05') : null,
                 isSubForwarderPaid: s.paidOut >= s.sub,
                 routePoints: {
                     create: [
