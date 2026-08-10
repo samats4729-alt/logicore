@@ -107,6 +107,53 @@
     color: var(--nova-primary-fg);
 }
 
+/* ===== Пилюли-переключатели =====
+   Дорожка вкладок внутри страницы: период, вид отчёта. Тот же вид, что у
+   верхней навигации, — активная заливается тёмным. */
+
+.pills {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--nova-border);
+    border-radius: 999px;
+    flex-wrap: wrap;
+}
+
+.pill {
+    padding: 5px 12px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--nova-fg-2);
+    font: 500 12px/1 Inter, sans-serif;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.pill:hover {
+    background: var(--nova-hover);
+}
+
+.pillActive,
+.pillActive:hover {
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font-weight: 550;
+}
+
+/* ===== Две равные колонки =====
+   Для пары карточек: `columns` рассчитан на три и оставляет пустой
+   столбец, когда карточек две. */
+
+.duo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
 /* ===== Плитки показателей ===== */
 
 .tiles {

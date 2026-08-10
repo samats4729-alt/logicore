@@ -1,8 +1,25 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Table, Statistic, Row, Col, Button, Space, DatePicker, Tag, Tabs, Spin, Alert, Divider, theme } from 'antd';
-import { PrinterOutlined, ReloadOutlined, ArrowLeftOutlined, BarChartOutlined, DollarOutlined, TeamOutlined, CarOutlined, FileExcelOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Table, Statistic, Row, Col, Button, DatePicker, Tag, Spin, Alert, Divider } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
+import {
+    ChartColumn,
+    ChartPie,
+    ChevronRight,
+    Circle,
+    CircleDot,
+    FileSpreadsheet,
+    Printer,
+    RefreshCw,
+    Scale,
+    Table2,
+    TrendingUp,
+    Truck,
+    Zap,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import styles from '@/components/nova/nova.module.css';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -56,14 +73,35 @@ const PRESETS: {
  * Они живут отдельными страницами и раньше открывались только из «Финансов»:
  * человек, пришедший «за отчётами», половины из них не находил.
  */
-const MORE_REPORTS: { title: string; hint: string; href: string }[] = [
-    { title: 'Отчёт по прибыли', hint: 'доход − себестоимость − расходы', href: '/company/accounting/pnl' },
-    { title: 'Прибыль по перевозчику', hint: 'заработок на каждом перевозчике', href: '/company/accounting/carrier-profit' },
-    { title: 'Реестр заявок', hint: 'деньги по каждой заявке', href: '/company/accounting/registry' },
-    { title: 'Движение денежных средств', hint: 'куда пришли и ушли живые деньги', href: '/company/accounting/cashflow' },
-    { title: 'Расходы по статьям', hint: 'структура затрат за период', href: '/company/accounting/expenses-by-category' },
-    { title: 'Взаиморасчёты', hint: 'кто кому должен и с какой просрочкой', href: '/company/accounting/counterparty-report' },
+const MORE_REPORTS: { title: string; hint: string; href: string; icon: LucideIcon }[] = [
+    { title: 'Отчёт по прибыли', hint: 'доход − себестоимость − расходы', href: '/company/accounting/pnl', icon: ChartColumn },
+    { title: 'Прибыль по перевозчику', hint: 'заработок на каждом перевозчике', href: '/company/accounting/carrier-profit', icon: Truck },
+    { title: 'Реестр заявок', hint: 'деньги по каждой заявке', href: '/company/accounting/registry', icon: Table2 },
+    { title: 'Движение денежных средств', hint: 'куда пришли и ушли живые деньги', href: '/company/accounting/cashflow', icon: TrendingUp },
+    { title: 'Расходы по статьям', hint: 'структура затрат за период', href: '/company/accounting/expenses-by-category', icon: ChartPie },
+    { title: 'Взаиморасчёты', hint: 'кто кому должен и с какой просрочкой', href: '/company/accounting/counterparty-report', icon: Scale },
 ];
+
+/**
+ * Вкладки отчётов. «P&L» заменено на «Прибыль и убытки»: весь текст
+ * интерфейса на русском, а сокращение читают только бухгалтеры.
+ */
+const TAB_LABELS: [ReportType, string][] = [
+    ['pnl', 'Прибыль и убытки'],
+    ['counterparties', 'Контрагенты'],
+    ['profitability', 'Рентабельность'],
+    ['drivers', 'Водители'],
+    ['summary', 'Сводка'],
+];
+
+/** «2026-07» → «Июль 2026». Месяц по-русски и с большой буквы. */
+const RU_MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+function monthLabel(key: string): string {
+    const [year, month] = key.split('-');
+    return `${RU_MONTHS[Number(month) - 1] || month} ${year}`;
+}
 
 /** Колонки для выгрузки: те же поля, что в таблице на экране. */
 const EXPORT_COLUMNS: Record<Exclude<ReportType, 'summary'>, { key: string; title: string; numeric?: boolean }[]> = {
@@ -116,7 +154,6 @@ interface DriverReportEntry {
 }
 
 export default function ReportsPage() {
-    const { token } = theme.useToken();
     const router = useRouter();
 
     const [reportType, setReportType] = useState<ReportType>('pnl');
@@ -215,16 +252,19 @@ export default function ReportsPage() {
     // P&L by months
     const pnlData = useMemo(() => {
         const map = new Map<string, { income: number; expense: number }>();
+        // Ключ месяца — «2026-07», а не «Jul 2026»: по нему же идёт порядок
+        // строк. С английским названием сортировка была алфавитной, и апрель
+        // вставал перед январём. Группировка та же, суммы не меняются.
         filteredPayments.forEach(p => {
-            const key = dayjs(p.date).format('MMM YYYY');
+            const key = dayjs(p.date).format('YYYY-MM');
             const e = map.get(key) || { income: 0, expense: 0 };
             if (p.direction === 'IN') e.income += p.amount;
             else e.expense += p.amount;
             map.set(key, e);
         });
         return Array.from(map.entries())
-            .map(([month, val]) => ({ key: month, month, ...val, margin: val.income - val.expense }))
-            .sort((a, b) => a.month.localeCompare(b.month));
+            .map(([key, val]) => ({ key, month: monthLabel(key), ...val, margin: val.income - val.expense }))
+            .sort((a, b) => a.key.localeCompare(b.key));
     }, [filteredPayments]);
 
     // Counterparties Report
@@ -370,8 +410,7 @@ export default function ReportsPage() {
     const profitability = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0;
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
-            {/* ===== HERO 2026 ===== */}
+        <div className={`${styles.page} ${styles.pageWide}`}>
             {error && (
                 <Alert
                     type="warning"
@@ -383,177 +422,146 @@ export default function ReportsPage() {
                 />
             )}
 
-            <div className="lc2-hero">
+            <div className={styles.hero}>
                 <div>
-                    <div className="lc-eyebrow">
-                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company')} style={{ padding: '0 4px 0 0', marginRight: 6 }} />
-                        Отчёты · Аналитика
-                    </div>
-                    <h1 className="lc2-title">Конструктор отчётов</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Аналитика по периодам, контрагентам, водителям и рентабельности
+                    <div className={styles.eyebrow}>Отчёты · Итоги</div>
+                    <h1 className={styles.title}>Отчёты компании</h1>
+                    <p className={styles.subtitle}>
+                        Сколько заработали, кто кому должен и куда ушли деньги — за любой период.
                     </p>
-                    <Space wrap>
-                        <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchAll} className="lc-cta">Обновить</Button>
-                        <RangePicker value={dateRange as any} onChange={(d) => { setDateRange(d as any); setActivePreset(null); }} format="DD.MM.YYYY" allowClear={false} style={{ boxShadow: `0 1px 3px ${token.colorBorderSecondary}`, borderRadius: 8 }} />
-                        <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Печать</Button>
-                        <Button
-                            icon={<FileExcelOutlined />}
-                            loading={exporting}
-                            onClick={handleExport}
-                            disabled={reportType === 'summary'}
-                        >
-                            Выгрузить в Excel
-                        </Button>
-                    </Space>
                 </div>
-                <div className="lc2-metrics">
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
-                            <DollarOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Доходы</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#52c41a' }}>
-                                {fmt(totalIncome)} ₸
-                            </div>
-                        </div>
-                    </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc3545' }}>
-                            <BarChartOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Расходы</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#ff4d4f' }}>
-                                {fmt(totalExpense)} ₸
-                            </div>
-                        </div>
-                    </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
-                            <TeamOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Маржа</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: totalIncome >= totalExpense ? '#28a745' : '#dc3545' }}>
-                                {totalIncome >= totalExpense ? '+' : ''}{fmt(totalIncome - totalExpense)} ₸
-                            </div>
-                            <div className="lc2-msub">
-                                {profitability}% рентабельность
-                            </div>
-                        </div>
-                    </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#fff7e6', color: '#fa8c16' }}>
-                            <CarOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Контрагенты</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {uniqueCounterparties}
-                            </div>
-                            <div className="lc2-msub">
-                                активных
-                            </div>
-                        </div>
-                    </div>
+                <div className={styles.heroActions}>
+                    <RangePicker
+                        value={dateRange as any}
+                        onChange={(d) => { setDateRange(d as any); setActivePreset(null); }}
+                        format="DD.MM.YYYY"
+                        allowClear={false}
+                    />
+                    <button type="button" className={styles.action} disabled={loading} onClick={fetchAll}>
+                        <RefreshCw size={15} />
+                        Обновить
+                    </button>
+                    <button type="button" className={styles.action} onClick={() => window.print()}>
+                        <Printer size={15} />
+                        Печать
+                    </button>
+                    <button
+                        type="button"
+                        className={`${styles.action} ${styles.actionPrimary}`}
+                        disabled={exporting || reportType === 'summary'}
+                        onClick={handleExport}
+                    >
+                        <FileSpreadsheet size={15} />
+                        Выгрузить в Excel
+                    </button>
                 </div>
             </div>
 
-            {/* ===== ГОТОВЫЕ ОТЧЁТЫ ===== */}
-            <div className="lc-card" style={{ padding: '14px 20px', marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <ThunderboltOutlined style={{ color: '#fa8c16' }} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)' }}>Готовые отчёты</span>
-                    <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
-                        один клик вместо выбора вкладки и периода
-                    </span>
+            {/* Приход зелёным, расход красным — единственное место, где цвет
+                разрешён поверх чёрно-белой темы. */}
+            <div className={styles.tiles}>
+                <div className={styles.tile}>
+                    <div className={styles.tileHead}><span className={styles.tileLabel}>Доходы</span></div>
+                    <div className={`${styles.tileValue} ${styles.valuePos}`}>{fmt(totalIncome)} ₸</div>
+                    <div className={styles.tileSub}>за период</div>
                 </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {PRESETS.map((preset) => {
-                        const active = activePreset === preset.key;
-                        return (
+                <div className={styles.tile}>
+                    <div className={styles.tileHead}><span className={styles.tileLabel}>Расходы</span></div>
+                    <div className={`${styles.tileValue} ${styles.valueNeg}`}>{fmt(totalExpense)} ₸</div>
+                    <div className={styles.tileSub}>за период</div>
+                </div>
+                <div className={styles.tile}>
+                    <div className={styles.tileHead}>
+                        <span className={styles.tileLabel}>Маржа</span>
+                        <span className={`${styles.chip} ${totalIncome >= totalExpense ? '' : styles.chipNeg}`}>
+                            {profitability}%
+                        </span>
+                    </div>
+                    <div className={`${styles.tileValue} ${totalIncome >= totalExpense ? styles.valuePos : styles.valueNeg}`}>
+                        {totalIncome >= totalExpense ? '+' : ''}{fmt(totalIncome - totalExpense)} ₸
+                    </div>
+                    <div className={styles.tileSub}>рентабельность за период</div>
+                </div>
+                <div className={styles.tile}>
+                    <div className={styles.tileHead}><span className={styles.tileLabel}>Контрагенты</span></div>
+                    <div className={styles.tileValue}>{uniqueCounterparties}</div>
+                    <div className={styles.tileSub}>активных за период</div>
+                </div>
+            </div>
+
+            {/* Слева — сводки в один клик, справа — отчёты бухгалтерии.
+                Раньше вторые жили в «Финансах», и половина аналитики
+                оказывалась в разделе ежедневной работы. */}
+            <div className={styles.duo} style={{ marginBottom: 14 }}>
+                <section className={styles.card}>
+                    <div className={styles.cardHead}>
+                        <Zap size={15} />
+                        <h2 className={styles.cardTitle}>Готовые сводки</h2>
+                        <span className={styles.cardCount}>{PRESETS.length}</span>
+                    </div>
+                    <div className={styles.list}>
+                        {PRESETS.map((preset) => (
                             <button
                                 key={preset.key}
                                 type="button"
+                                className={styles.item}
                                 onClick={() => applyPreset(preset)}
-                                style={{
-                                    textAlign: 'left',
-                                    padding: '10px 14px',
-                                    borderRadius: 12,
-                                    cursor: 'pointer',
-                                    minWidth: 210,
-                                    border: `1px solid ${active ? 'var(--lc-text)' : 'var(--lc-border)'}`,
-                                    background: active ? 'var(--lc-text)' : 'transparent',
-                                    color: active ? '#fff' : 'var(--lc-text)',
-                                }}
                             >
-                                <div style={{ fontSize: 13, fontWeight: 600 }}>{preset.title}</div>
-                                <div style={{
-                                    fontSize: 11,
-                                    marginTop: 2,
-                                    color: active ? 'rgba(255,255,255,0.7)' : 'var(--lc-text-ter)',
-                                }}>
-                                    {preset.hint}
-                                </div>
+                                <span className={styles.itemIcon}>
+                                    {activePreset === preset.key ? <CircleDot size={16} /> : <Circle size={16} />}
+                                </span>
+                                <span className={styles.itemText}>
+                                    <span className={styles.itemLabel}>{preset.title}</span>
+                                    <span className={styles.itemDesc}>{preset.hint}</span>
+                                </span>
+                                <ChevronRight size={14} className={styles.chevron} />
                             </button>
-                        );
-                    })}
-                </div>
+                        ))}
+                    </div>
+                </section>
+
+                <section className={styles.card}>
+                    <div className={styles.cardHead}>
+                        <ChartColumn size={15} />
+                        <h2 className={styles.cardTitle}>Отчёты бухгалтерии</h2>
+                        <span className={styles.cardCount}>{MORE_REPORTS.length}</span>
+                    </div>
+                    <div className={styles.list}>
+                        {MORE_REPORTS.map((item) => (
+                            <button
+                                key={item.href}
+                                type="button"
+                                className={styles.item}
+                                onClick={() => router.push(item.href)}
+                            >
+                                <span className={styles.itemIcon}><item.icon size={16} /></span>
+                                <span className={styles.itemText}>
+                                    <span className={styles.itemLabel}>{item.title}</span>
+                                    <span className={styles.itemDesc}>{item.hint}</span>
+                                </span>
+                                <ChevronRight size={14} className={styles.chevron} />
+                            </button>
+                        ))}
+                    </div>
+                </section>
             </div>
 
-            {/* ===== ОСТАЛЬНЫЕ ОТЧЁТЫ =====
-                Раньше отчёты бухгалтерии жили в «Финансах», и половина
-                аналитики оказывалась в разделе ежедневной работы. Теперь всё,
-                что смотрят раз в месяц, собрано на одном экране. */}
-            <div className="lc-card" style={{ padding: '14px 20px', marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <BarChartOutlined style={{ color: '#1677ff' }} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)' }}>Остальные отчёты</span>
-                    <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
-                        деньги, прибыль и долги — по данным бухгалтерии
-                    </span>
+            <div className={styles.card}>
+                <div className={styles.cardHead}>
+                    <div className={styles.pills}>
+                        {TAB_LABELS.map(([key, label]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                className={`${styles.pill} ${reportType === key ? styles.pillActive : ''}`}
+                                onClick={() => { setReportType(key); setActivePreset(null); }}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {MORE_REPORTS.map((item) => (
-                        <button
-                            key={item.href}
-                            type="button"
-                            onClick={() => router.push(item.href)}
-                            style={{
-                                textAlign: 'left',
-                                padding: '10px 14px',
-                                borderRadius: 12,
-                                cursor: 'pointer',
-                                minWidth: 210,
-                                border: '1px solid var(--lc-border)',
-                                background: 'transparent',
-                                color: 'var(--lc-text)',
-                            }}
-                        >
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
-                            <div style={{ fontSize: 11, marginTop: 2, color: 'var(--lc-text-ter)' }}>
-                                {item.hint}
-                            </div>
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* ===== TABS & TABLE CARD ===== */}
-            <div className="lc-card" style={{ padding: 20 }}>
-                <Tabs
-                    activeKey={reportType}
-                    onChange={(k) => { setReportType(k as ReportType); setActivePreset(null); }}
-                    style={{ marginBottom: 20 }}
-                >
-                    <Tabs.TabPane tab="P&L" key="pnl" />
-                    <Tabs.TabPane tab="Контрагенты" key="counterparties" />
-                    <Tabs.TabPane tab="Рентабельность" key="profitability" />
-                    <Tabs.TabPane tab="Водители" key="drivers" />
-                    <Tabs.TabPane tab="Сводка" key="summary" />
-                </Tabs>
+                <div className={styles.cardBody}>
 
                 {reportType === 'pnl' && (
                     <Table 
@@ -651,6 +659,7 @@ export default function ReportsPage() {
                         </Col>
                     </Row>
                 )}
+                </div>
             </div>
         </div>
     );
