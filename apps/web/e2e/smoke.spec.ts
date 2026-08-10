@@ -92,5 +92,7 @@ test('карточка рейса открывается и предлагает
     await firstRow.locator('button').last().click();
 
     await page.waitForURL(/\/company\/orders\/[^/]+$/);
-    await expect(page.getByText(/Маршрут следования|Информация о грузе/).first()).toBeVisible();
+    // «Рейс» — карточка с маршрутом и грузом, «Стороны сделки» — с кем
+    // работаем. Обе появляются только когда заявка загрузилась.
+    await expect(page.getByText(/Стороны сделки|Деньги рейса/).first()).toBeVisible();
 });
