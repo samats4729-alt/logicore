@@ -22,9 +22,14 @@ export default function RootLayout({
                 {/* Цвет полосы состояния телефона — там, где часы и заряд.
                     Ставим его тем же кадром, что и тему: иначе в тёмной теме
                     верх экрана остаётся белым и выглядит как чужая полоса
-                    поверх приложения. Значения те же, что у `--nova-bg`. */}
-                <meta name="theme-color" content="#ffffff" />
-                <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('lc_theme')==='dark';if(t){document.documentElement.setAttribute('data-theme','dark');var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#20201f')}}catch(e){}` }} />
+                    поверх приложения. Значения те же, что у `--nova-bg`.
+
+                    Тег заводит скрипт, а не разметка. Пока он стоял в
+                    разметке, после гидратации на странице оказывалось два
+                    тега сразу — свой, уже перекрашенный, и восстановленный
+                    React'ом белый. Браузер брал не тот, и полоса меняла цвет
+                    только после перезагрузки. */}
+                <script dangerouslySetInnerHTML={{ __html: `try{var d=localStorage.getItem('lc_theme')==='dark';if(d)document.documentElement.setAttribute('data-theme','dark');var m=document.createElement('meta');m.setAttribute('name','theme-color');m.setAttribute('content',d?'#20201f':'#ffffff');document.head.appendChild(m)}catch(e){}` }} />
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
                 <link
