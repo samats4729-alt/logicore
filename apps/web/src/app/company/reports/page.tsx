@@ -50,6 +50,21 @@ const PRESETS: {
     },
 ];
 
+/**
+ * Отчёты бухгалтерии — ссылками отсюда.
+ *
+ * Они живут отдельными страницами и раньше открывались только из «Финансов»:
+ * человек, пришедший «за отчётами», половины из них не находил.
+ */
+const MORE_REPORTS: { title: string; hint: string; href: string }[] = [
+    { title: 'Отчёт по прибыли', hint: 'доход − себестоимость − расходы', href: '/company/accounting/pnl' },
+    { title: 'Прибыль по перевозчику', hint: 'заработок на каждом перевозчике', href: '/company/accounting/carrier-profit' },
+    { title: 'Реестр заявок', hint: 'деньги по каждой заявке', href: '/company/accounting/registry' },
+    { title: 'Движение денежных средств', hint: 'куда пришли и ушли живые деньги', href: '/company/accounting/cashflow' },
+    { title: 'Расходы по статьям', hint: 'структура затрат за период', href: '/company/accounting/expenses-by-category' },
+    { title: 'Взаиморасчёты', hint: 'кто кому должен и с какой просрочкой', href: '/company/accounting/counterparty-report' },
+];
+
 /** Колонки для выгрузки: те же поля, что в таблице на экране. */
 const EXPORT_COLUMNS: Record<Exclude<ReportType, 'summary'>, { key: string; title: string; numeric?: boolean }[]> = {
     pnl: [
@@ -485,6 +500,44 @@ export default function ReportsPage() {
                             </button>
                         );
                     })}
+                </div>
+            </div>
+
+            {/* ===== ОСТАЛЬНЫЕ ОТЧЁТЫ =====
+                Раньше отчёты бухгалтерии жили в «Финансах», и половина
+                аналитики оказывалась в разделе ежедневной работы. Теперь всё,
+                что смотрят раз в месяц, собрано на одном экране. */}
+            <div className="lc-card" style={{ padding: '14px 20px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <BarChartOutlined style={{ color: '#1677ff' }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)' }}>Остальные отчёты</span>
+                    <span style={{ fontSize: 12, color: 'var(--lc-text-ter)' }}>
+                        деньги, прибыль и долги — по данным бухгалтерии
+                    </span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {MORE_REPORTS.map((item) => (
+                        <button
+                            key={item.href}
+                            type="button"
+                            onClick={() => router.push(item.href)}
+                            style={{
+                                textAlign: 'left',
+                                padding: '10px 14px',
+                                borderRadius: 12,
+                                cursor: 'pointer',
+                                minWidth: 210,
+                                border: '1px solid var(--lc-border)',
+                                background: 'transparent',
+                                color: 'var(--lc-text)',
+                            }}
+                        >
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
+                            <div style={{ fontSize: 11, marginTop: 2, color: 'var(--lc-text-ter)' }}>
+                                {item.hint}
+                            </div>
+                        </button>
+                    ))}
                 </div>
             </div>
 
