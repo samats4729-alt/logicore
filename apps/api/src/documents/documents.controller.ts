@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -157,6 +157,25 @@ export class DocumentsController {
     @ApiOperation({ summary: 'Получить документ по ID' })
     async findOne(@Param('id') id: string, @Request() req: any) {
         return this.documentsService.findById(id, req.user);
+    }
+
+    @Delete(':id')
+    @ApiOperation({ summary: 'Удалить приложенный к рейсу файл' })
+    async remove(@Param('id') id: string, @Request() req: any) {
+        // Читаем до удаления: после него имя файла и рейс взять уже неоткуда,
+        // а в журнале должно остаться, что именно исчезло.
+        const doc = await this.documentsService.findById(id, req.user);
+        const result = await this.documentsService.remove(id, req.user);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'DELETE',
+            entity: 'document',
+            entityId: id,
+            entityLabel: documentLabel(doc.type, doc.fileName),
+            orderId: doc.orderId || undefined,
+        });
+        return result;
     }
 
     @Get(':id/download')
