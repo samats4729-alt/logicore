@@ -74,13 +74,81 @@
     min-width: 0;
 }
 
-/* ===== Кнопки создания ===== */
+/* ===== Кнопки =====
+ *
+ * Заливка — фирменная тёмная (`--nova-primary`), а не акцентный синий:
+ * синий в кабинете означает ссылку и подсветку, а не главное действие.
+ * В тёмной теме токен переворачивается сам, поэтому значений цвета здесь
+ * нет — только вёрстка.
+ */
 
 .makeRow {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     margin-bottom: 14px;
+}
+
+.act {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--nova-border, #e6e8ec);
+    background: var(--nova-surface, #fff);
+    color: var(--nova-fg, #0b0d12);
+    font: 500 12.5px/1 Inter, sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.act:hover:not(:disabled) {
+    background: var(--nova-hover, #f5f6f8);
+}
+
+.act:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.act svg {
+    color: var(--nova-fg-3, #868e9c);
+}
+
+.actPrimary {
+    background: var(--nova-primary, #0b0d12);
+    border-color: var(--nova-primary, #0b0d12);
+    color: var(--nova-primary-fg, #fff);
+    font-weight: 550;
+}
+
+.actPrimary:hover:not(:disabled) {
+    background: var(--nova-primary, #0b0d12);
+    opacity: .9;
+}
+
+.actPrimary svg {
+    color: var(--nova-primary-fg, #fff);
+}
+
+/* Действие в строке: то же, но ниже — строки списка плотнее шапки. */
+.actSm {
+    height: 29px;
+    padding: 0 10px;
+    border-radius: 8px;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.actDanger {
+    color: var(--nova-neg, #d92d20);
+    border-color: rgba(217, 45, 32, .25);
+}
+
+.actDanger svg {
+    color: var(--nova-neg, #d92d20);
 }
 
 /* ===== Список ===== */
@@ -185,6 +253,11 @@
     background: #e9f7f0;
     color: var(--nova-pos, #12855b);
     border-color: transparent;
+}
+
+/* Светлая подложка метки в тёмной теме слепит — берём приглушённую. */
+:global([data-theme='dark']) .chipLive {
+    background: rgba(91, 207, 149, .14);
 }
 
 .chipOld {

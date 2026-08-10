@@ -28,7 +28,6 @@ import {
     fetchAccountingDocuments,
     type AccountingDocumentListItem,
 } from '@/lib/accounting-documents';
-import { Button } from '@/components/ui/button';
 import styles from './order-documents.module.css';
 
 /**
@@ -336,12 +335,12 @@ export default function OrderDocuments({
                     </span>
                 </span>
                 <span className={styles.docActs}>
-                    <Button variant="outline" size="sm" onClick={() => downloadFormed(row)}>
-                        <Download className="h-3.5 w-3.5" /> Скачать
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => downloadFormed(row, true)}>
+                    <button type="button" className={`${styles.act} ${styles.actSm}`} onClick={() => downloadFormed(row)}>
+                        <Download size={13} /> Скачать
+                    </button>
+                    <button type="button" className={`${styles.act} ${styles.actSm}`} onClick={() => downloadFormed(row, true)}>
                         С печатью
-                    </Button>
+                    </button>
                 </span>
             </div>
         );
@@ -388,31 +387,30 @@ export default function OrderDocuments({
                 )}
 
                 <div className={styles.makeRow}>
-                    <Button size="sm" disabled={busy === 'CONTRACT'} onClick={() => formDocument('CONTRACT')}>
-                        {busy === 'CONTRACT'
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <Plus className="h-3.5 w-3.5" />}
+                    <button
+                        type="button"
+                        className={`${styles.act} ${styles.actPrimary}`}
+                        disabled={busy === 'CONTRACT'}
+                        onClick={() => formDocument('CONTRACT')}
+                    >
+                        {busy === 'CONTRACT' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                         {formed.CONTRACT.length ? 'Договор-заявка заново' : 'Договор-заявка'}
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant="outline"
+                    </button>
+                    <button
+                        type="button"
+                        className={styles.act}
                         disabled={busy === 'POWER_OF_ATTORNEY' || !driverAssigned}
                         title={driverAssigned ? undefined : 'Сначала назначьте водителя'}
                         onClick={() => formDocument('POWER_OF_ATTORNEY')}
                     >
-                        {busy === 'POWER_OF_ATTORNEY'
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <Plus className="h-3.5 w-3.5" />}
+                        {busy === 'POWER_OF_ATTORNEY' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                         {formed.POWER_OF_ATTORNEY.length ? 'Доверенность заново' : 'Доверенность'}
-                    </Button>
+                    </button>
                     <Upload customRequest={uploadFile} showUploadList={false}>
-                        <Button size="sm" variant="outline" disabled={busy === 'upload'}>
-                            {busy === 'upload'
-                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                : <UploadIcon className="h-3.5 w-3.5" />}
+                        <button type="button" className={styles.act} disabled={busy === 'upload'}>
+                            {busy === 'upload' ? <Loader2 size={14} className="animate-spin" /> : <UploadIcon size={14} />}
                             Загрузить файл
-                        </Button>
+                        </button>
                     </Upload>
                 </div>
 
@@ -438,22 +436,21 @@ export default function OrderDocuments({
                                         </span>
                                     </span>
                                     <span className={styles.docActs}>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
+                                        <button
+                                            type="button"
+                                            className={`${styles.act} ${styles.actSm}`}
                                             onClick={() => router.push(accountingDocumentHref({ id: row.id, type: row.type as any }))}
                                         >
                                             Открыть
-                                        </Button>
+                                        </button>
                                         {row.status === 'DRAFT' && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="text-destructive"
+                                            <button
+                                                type="button"
+                                                className={`${styles.act} ${styles.actSm} ${styles.actDanger}`}
                                                 onClick={() => removeDraft(row)}
                                             >
-                                                <Trash2 className="h-3.5 w-3.5" /> Удалить
-                                            </Button>
+                                                <Trash2 size={13} /> Удалить
+                                            </button>
                                         )}
                                     </span>
                                 </div>
@@ -484,18 +481,17 @@ export default function OrderDocuments({
                                     </span>
                                 </span>
                                 <span className={styles.docActs}>
-                                    <Button variant="outline" size="sm" onClick={() => downloadFile(row)}>
-                                        <Download className="h-3.5 w-3.5" /> Скачать
-                                    </Button>
+                                    <button type="button" className={`${styles.act} ${styles.actSm}`} onClick={() => downloadFile(row)}>
+                                        <Download size={13} /> Скачать
+                                    </button>
                                     {canRemoveFile(row) && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-destructive"
+                                        <button
+                                            type="button"
+                                            className={`${styles.act} ${styles.actSm} ${styles.actDanger}`}
                                             onClick={() => removeFile(row)}
                                         >
-                                            <Trash2 className="h-3.5 w-3.5" /> Удалить
-                                        </Button>
+                                            <Trash2 size={13} /> Удалить
+                                        </button>
                                     )}
                                 </span>
                             </div>
