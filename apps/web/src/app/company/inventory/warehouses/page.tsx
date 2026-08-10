@@ -63,10 +63,10 @@ export default function WarehousesPage() {
             <div className="lc2-hero">
                 <div>
                     <div className="lc-eyebrow">
-                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/finance')} style={{ padding: 0, marginRight: 8, height: 'auto' }} />
-                        ТМЦ · Справочники
+                        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/cabinet')} style={{ padding: 0, marginRight: 8, height: 'auto' }} />
+                        Материалы · Справочники
                     </div>
-                    <h1 className="lc2-title">Склады</h1>
+                    <h1 className="lc2-title">Склады хранения</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0', maxWidth: 560 }}>
                         Места хранения ТМЦ. По складам ведутся остатки, между ними оформляются перемещения.
                     </p>

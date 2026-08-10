@@ -2783,6 +2783,76 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* ==========================================
+   БЕТА-ТЕСТИРОВАНИЕ — метка на непроверенном
+   ==========================================
+   Полоса над страницей и подпись в списках разделов. Тон спокойный:
+   это предупреждение, а не ошибка — красным человек читает «сломалось».
+*/
+
+.lc-beta-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: var(--nova-max, 1360px);
+  margin: 12px auto 0;
+  padding: 8px 13px;
+  background: var(--nova-warn-soft, #fff5e8);
+  border: 1px solid rgba(178, 94, 9, 0.22);
+  border-radius: 12px;
+  color: var(--nova-warn, #b25e09);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.lc-beta-strip svg {
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.lc-beta-strip-title {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lc-beta-strip-text {
+  color: var(--nova-fg-2, #4c5460);
+  min-width: 0;
+}
+
+/* Подпись под названием пункта в списках «Деньги», «Отчёты», «Кабинет». */
+.lc-beta-tag {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--nova-warn-soft, #fff5e8);
+  color: var(--nova-warn, #b25e09);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+/* Закрытый пункт: серый и не нажимается. Курсор обязателен — без него
+   человек кликает в него до десяти раз, считая, что не попал. */
+.lc-item-closed {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lc-item-closed:hover {
+  background: transparent !important;
+}
+
+@media (max-width: 720px) {
+  .lc-beta-strip {
+    margin: 10px 12px 0;
+  }
+}
+
+/* ==========================================
    АВТОРИЗАЦИЯ — редакционный стиль лендинга
    ========================================== */
 

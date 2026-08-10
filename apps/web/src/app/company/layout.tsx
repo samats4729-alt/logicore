@@ -43,6 +43,8 @@ import UserAvatar from '@/components/UserAvatar';
 import PaywallScreen from '@/components/PaywallScreen';
 import NoSectionAccess from '@/components/ui/NoSectionAccess';
 import { checkSectionAccess } from '@/lib/section-access';
+import { BetaClosed, BetaStrip } from '@/components/ui/BetaNotice';
+import { BETA_LABEL, betaStateOf, getBetaSection } from '@/lib/beta-sections';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -55,6 +57,24 @@ const ROLE_LABELS: Record<string, string> = {
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
+
+/**
+ * Название пункта меню с подписью «бета-тестирование».
+ *
+ * Подпись стоит рядом с названием, а не всплывает при наведении: на
+ * телефоне наведения нет вовсе, а решение «идти сюда или нет» человек
+ * принимает до нажатия.
+ */
+function MenuLabel({ label, href }: { label: string; href: string }) {
+    const state = betaStateOf(href);
+    if (!state) return <>{label}</>;
+    return (
+        <span>
+            {label}
+            <span className="lc-beta-tag">{BETA_LABEL}</span>
+        </span>
+    );
+}
 
 const AssistantWidget = dynamic(() => import('@/components/ui/AssistantWidget'), { ssr: false });
 
@@ -211,19 +231,21 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         }
 
         // --- МОНИТОРИНГ ---
+        // «Склад» переименован в «Очередь на погрузку»: учёта товара здесь
+        // нет и не будет, а прежнее название его обещало.
         const monitoringChildren: any[] = [];
         if (hasPerm('tracking')) {
             monitoringChildren.push({
                 key: '/company/tracking',
                 icon: <EnvironmentOutlined />,
-                label: 'GPS / Мониторинг',
+                label: 'Карта и GPS',
             });
         }
         if (user.role === 'WAREHOUSE_MANAGER' || ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
             monitoringChildren.push({
                 key: '/company/warehouse',
                 icon: <HomeOutlined />,
-                label: 'Склад',
+                label: <MenuLabel label="Очередь на погрузку" href="/company/warehouse" />,
             });
         }
         if (monitoringChildren.length > 0) {
@@ -236,14 +258,24 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             });
         }
 
-        // --- ФИНАНСЫ (хаб-страница: операции, отчёты, инструменты) ---
+        // --- ДЕНЬГИ (ежедневная работа: документы, платежи, долги) ---
+        // Прежние «Финансы» держали на одном экране 38 ссылок: ежедневное
+        // вперемешку с отчётами и справочниками, которые заводят один раз.
+        // Адрес остался прежним — старые ссылки и закладки работают.
         items.push({
             key: '/company/finance',
             icon: <DollarOutlined />,
-            label: 'Финансы',
+            label: 'Деньги',
         });
 
-        // --- КАБИНЕТ (страница-хаб: сотрудники, настройки, журнал) ---
+        // --- ОТЧЁТЫ (то, что смотрят раз в месяц) ---
+        items.push({
+            key: '/company/reports',
+            icon: <BarChartOutlined />,
+            label: 'Отчёты',
+        });
+
+        // --- КАБИНЕТ (справочники, организация, сотрудники) ---
         items.push({
             key: '/company/cabinet',
             icon: <ApartmentOutlined />,
@@ -255,6 +287,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
     // Доступен ли текущий раздел этому человеку. Правило то же, что у меню.
     const sectionAccess = checkSectionAccess(pathname, user);
+
+    // Готов ли раздел. Проверяем здесь, а не на каждой странице: по прямой
+    // ссылке и из закладок человек приходит мимо меню.
+    const beta = getBetaSection(pathname);
 
     const userMenu = {
         items: [
@@ -397,12 +433,43 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 .flatMap((c: any) => (c?.type === 'group' && Array.isArray(c.children)) ? c.children : [c])
                                 .filter((c: any) => c?.key && String(c.key).startsWith('/'))
                                 .map((c: any) => String(c.key));
-                            // Хаб-страницы подсвечиваются и на своих подстраницах
-                            const cabinetRoutes = ['/company/cabinet', '/company/users', '/company/settings', '/company/audit', '/company/partners', '/company/contracts', '/company/locations', '/company/vehicles', '/company/documents'];
-                            const financeRoutes = ['/company/finance', '/company/accounting', '/company/payroll', '/company/my-salary', '/company/calculator', '/company/reports'];
+                            // Хаб-страницы подсвечиваются и на своих подстраницах.
+                            // Списки не пересекаются: путь, попавший в два,
+                            // подсветил бы разом две пилюли.
+                            const cabinetRoutes = [
+                                '/company/cabinet', '/company/users', '/company/settings', '/company/audit',
+                                '/company/partners', '/company/contracts', '/company/locations',
+                                '/company/vehicles', '/company/documents', '/company/profile',
+                                '/company/accounting/settings', '/company/accounting/payment-conditions',
+                                '/company/accounting/payment-forms', '/company/accounting/ownership-types',
+                                '/company/accounting/banks', '/company/accounting/currencies',
+                                '/company/accounting/revaluation', '/company/accounting/document-numbering',
+                                '/company/accounting/order-numbering',
+                                '/company/inventory/nomenclature', '/company/inventory/warehouses',
+                            ];
+                            const financeRoutes = [
+                                '/company/finance', '/company/accounting/invoices', '/company/accounting/acts',
+                                '/company/accounting/transport-documents', '/company/accounting/incoming',
+                                '/company/accounting/calendar', '/company/accounting/planned',
+                                '/company/accounting/cash-in', '/company/accounting/cash-out',
+                                '/company/accounting/operations', '/company/accounting/balances',
+                                '/company/accounting/counterparty-report', '/company/accounting/reconciliation-act',
+                                '/company/accounting/opening-balances', '/company/accounting/act-of-work',
+                                '/company/inventory/balances', '/company/inventory/receipts',
+                                '/company/inventory/transfers', '/company/inventory/writeoffs',
+                                '/company/payroll', '/company/my-salary',
+                            ];
+                            const reportsRoutes = [
+                                '/company/reports', '/company/accounting/pnl', '/company/accounting/carrier-profit',
+                                '/company/accounting/registry', '/company/accounting/cashflow',
+                                '/company/accounting/expenses-by-category',
+                            ];
+                            const requestsRoutes = ['/company/requests', '/company/calculator'];
                             const hubRoutes: Record<string, string[]> = {
                                 '/company/cabinet': cabinetRoutes,
                                 '/company/finance': financeRoutes,
+                                '/company/reports': reportsRoutes,
+                                '/company/requests': requestsRoutes,
                             };
                             const active = item.key === '/company'
                                 ? pathname === '/company'
@@ -552,8 +619,15 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                 и человек видел пустой экран без объяснений.
                                 Теперь — понятная причина. Главным остаётся
                                 сервер, здесь только объяснение. */}
-                            {sectionAccess.allowed ? children : (
+                            {!sectionAccess.allowed ? (
                                 <NoSectionAccess title={sectionAccess.title} roleLabel={ROLE_LABELS[user.role] || user.role} />
+                            ) : beta?.state === 'closed' ? (
+                                <BetaClosed section={beta} />
+                            ) : (
+                                <>
+                                    {beta?.state === 'beta' && <BetaStrip section={beta} />}
+                                    {children}
+                                </>
                             )}
                         </>
                     )}

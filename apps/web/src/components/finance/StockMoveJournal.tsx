@@ -25,9 +25,9 @@ const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
 const num = (v: number) => (v || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
 
 const CFG: Record<MoveType, { title: string; eyebrow: string; create: string; whLabel: string; hasTo: boolean; hasCounterparty: boolean; hasPrice: boolean; icon: any }> = {
-    receipt: { title: 'Поступление товаров и услуг', eyebrow: 'ТМЦ · Документы', create: 'Создать поступление', whLabel: 'Склад поступления', hasTo: false, hasCounterparty: true, hasPrice: true, icon: <InboxOutlined /> },
-    transfer: { title: 'Перемещение товаров', eyebrow: 'ТМЦ · Документы', create: 'Создать перемещение', whLabel: 'Склад-отправитель', hasTo: true, hasCounterparty: false, hasPrice: false, icon: <SwapOutlined /> },
-    writeoff: { title: 'Списание материалов', eyebrow: 'ТМЦ · Документы', create: 'Создать списание', whLabel: 'Склад списания', hasTo: false, hasCounterparty: false, hasPrice: false, icon: <ExportOutlined /> },
+    receipt: { title: 'Поступление материалов', eyebrow: 'Материалы · Документы', create: 'Создать поступление', whLabel: 'Склад поступления', hasTo: false, hasCounterparty: true, hasPrice: true, icon: <InboxOutlined /> },
+    transfer: { title: 'Перемещение материалов', eyebrow: 'Материалы · Документы', create: 'Создать перемещение', whLabel: 'Склад-отправитель', hasTo: true, hasCounterparty: false, hasPrice: false, icon: <SwapOutlined /> },
+    writeoff: { title: 'Списание материалов', eyebrow: 'Материалы · Документы', create: 'Создать списание', whLabel: 'Склад списания', hasTo: false, hasCounterparty: false, hasPrice: false, icon: <ExportOutlined /> },
 };
 
 export default function StockMoveJournal({ type }: { type: MoveType }) {
