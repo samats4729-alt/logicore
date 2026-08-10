@@ -107,6 +107,21 @@
     color: var(--nova-primary-fg);
 }
 
+/* Необратимое действие. Красным — только рамка и надпись: залитая красная
+   кнопка притягивает нажатие сильнее, чем безопасные соседи. */
+.actionDanger {
+    color: var(--nova-neg);
+    border-color: color-mix(in srgb, var(--nova-neg) 28%, transparent);
+}
+
+.actionDanger:hover {
+    background: var(--nova-neg-soft);
+}
+
+.actionDanger svg {
+    color: var(--nova-neg);
+}
+
 /* ===== Пилюли-переключатели =====
    Дорожка вкладок внутри страницы: период, вид отчёта. Тот же вид, что у
    верхней навигации, — активная заливается тёмным. */

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Typography, Tag, Descriptions, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Timeline, Space, Spin, Divider, Popconfirm, Upload, Tabs, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
+import { Typography, Tag, Descriptions, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Timeline, Space, Spin, Divider, Popconfirm, Upload, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
 import {
     EnvironmentOutlined, FlagOutlined, DollarOutlined, WalletOutlined, ClockCircleOutlined, FilePdfOutlined, FileTextOutlined, SwapOutlined, CarOutlined, InboxOutlined, TeamOutlined, ExclamationCircleOutlined, CopyOutlined, WhatsAppOutlined,
 } from '@ant-design/icons';
@@ -25,6 +25,8 @@ import AssignDriverModal from '@/components/AssignDriverModal';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
+import OrderCardTabs from '@/components/orders/OrderCardTabs';
+import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
@@ -1333,44 +1335,47 @@ export default function OrderDetailPage() {
     ];
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
-            {/* =================== HEADER =================== */}
-            <div className="lc2-hero" style={{ borderBottom: '1px solid var(--lc-border)', paddingBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Button variant="outline" size="icon" aria-label="Назад" onClick={() => router.back()}><ArrowLeft className="h-4 w-4" /></Button>
-                    <div>
-                        <div className="lc-eyebrow">Заявки · Детали</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <h1 className="lc2-title" style={{ margin: 0 }}>
-                                Заявка {order.orderNumber}
-                            </h1>
-                            <StatusPill status={order.status} />
-                        </div>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                            Создана {dayjs(order.createdAt).format('DD.MM.YYYY в HH:mm')}
-                        </Text>
+        <div className={`${nova.page} ${nova.pageWide}`}>
+            {/* =================== ШАПКА ===================
+                Оболочка карточки на языке кабинета: тот же надзаголовок,
+                заголовок и ряд действий, что на «Деньгах» и «Отчётах».
+                Главное действие заливается тёмным — синий в кабинете
+                означает ссылку, а не кнопку. */}
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Заявки · Рейс</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <h1 className={nova.title} style={{ margin: 0 }}>
+                            Заявка {order.orderNumber}
+                        </h1>
+                        <StatusPill status={order.status} />
                     </div>
+                    <p className={nova.subtitle}>
+                        Создана {dayjs(order.createdAt).format('DD.MM.YYYY в HH:mm')}
+                    </p>
                 </div>
 
-                {isEditing && (
-                    <Tag color="blue" style={{ fontSize: 13, padding: '4px 12px', borderRadius: 4, margin: 0 }}>Режим редактирования</Tag>
-                )}
-                {!isEditing && (
-                    <Space wrap size="small">
-                        {canChangeStatus && (
-                            <Button onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}>
-                                <ArrowLeftRight className="h-4 w-4" />
-                                {order.status === 'CANCELLED' ? 'Вернуть заявку в работу' : order.status === 'COMPLETED' ? 'Вернуть / изменить статус' : 'Изменить статус'}
-                            </Button>
-                        )}
+                {isEditing ? (
+                    <div className={nova.heroActions}>
+                        <span className={`${nova.chip} ${nova.chipWarn}`}>Режим редактирования</span>
+                    </div>
+                ) : (
+                    <div className={nova.heroActions}>
+                        <button type="button" className={nova.action} onClick={() => router.back()}>
+                            <ArrowLeft className="h-4 w-4" /> К заявкам
+                        </button>
                         {isNotFinished && (
-                            <Button variant="outline" onClick={startEditing}>
+                            <button type="button" className={nova.action} onClick={startEditing}>
                                 <Pencil className="h-4 w-4" /> Редактировать
-                            </Button>
+                            </button>
                         )}
-                        <Button variant="outline" onClick={() => router.push(`/company/orders/create?from=${orderId}`)}>
+                        <button
+                            type="button"
+                            className={nova.action}
+                            onClick={() => router.push(`/company/orders/create?from=${orderId}`)}
+                        >
                             <Copy className="h-4 w-4" /> Дублировать
-                        </Button>
+                        </button>
                         {isNotFinished && (
                             <Popconfirm
                                 title="Отменить заявку?"
@@ -1380,12 +1385,22 @@ export default function OrderDetailPage() {
                                 cancelText="Нет"
                                 okButtonProps={{ danger: true }}
                             >
-                                <Button variant="destructive">
+                                <button type="button" className={`${nova.action} ${nova.actionDanger}`}>
                                     <XCircle className="h-4 w-4" /> Отменить заявку
-                                </Button>
+                                </button>
                             </Popconfirm>
                         )}
-                    </Space>
+                        {canChangeStatus && (
+                            <button
+                                type="button"
+                                className={`${nova.action} ${nova.actionPrimary}`}
+                                onClick={() => { statusForm.resetFields(); setStatusModalOpen(true); }}
+                            >
+                                <ArrowLeftRight className="h-4 w-4" />
+                                {order.status === 'CANCELLED' ? 'Вернуть в работу' : order.status === 'COMPLETED' ? 'Вернуть / изменить статус' : 'Изменить статус'}
+                            </button>
+                        )}
+                    </div>
                 )}
             </div>
 
@@ -1471,12 +1486,11 @@ export default function OrderDetailPage() {
             )}
 
             {/* =================== MAIN TABS =================== */}
-            <Tabs
-                activeKey={activeTab}
+            {/* Вкладки — пилюли кабинета вместо подчёркнутых вкладок antd:
+                тот же переключатель, что на «Отчётах» и в верхнем меню. */}
+            <OrderCardTabs
+                active={activeTab}
                 onChange={setActiveTab}
-                size="large"
-                type="line"
-                style={{ marginBottom: 24 }}
                 items={[
                     {
                         key: 'details',
