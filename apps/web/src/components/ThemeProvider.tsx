@@ -23,10 +23,19 @@ const BAR = { light: '#ffffff', dark: '#20201f' };
  * Кроме атрибута, от которого пляшут все цвета, переставляем `theme-color`:
  * им телефон красит полосу с часами и зарядом. Без этого в тёмной теме верх
  * экрана оставался белым, и над чёрной страницей висела светлая полоса.
+ *
+ * Тег не правим, а заводим заново. Во-первых, их может оказаться больше
+ * одного — тогда браузер возьмёт не тот, и полоса останется прежней.
+ * Во-вторых, Safari на телефоне перечитывает цвет надёжнее, когда тег
+ * появился заново, а не сменил значение на месте.
  */
 function applyTheme(t: Theme) {
     document.documentElement.setAttribute('data-theme', t);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', BAR[t]);
+    document.head.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.remove());
+    const meta = document.createElement('meta');
+    meta.setAttribute('name', 'theme-color');
+    meta.setAttribute('content', BAR[t]);
+    document.head.appendChild(meta);
 }
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {
