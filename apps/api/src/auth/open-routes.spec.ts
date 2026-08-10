@@ -95,6 +95,7 @@ const ANY_LOGGED_IN_ROUTES: Record<string, string> = {
     'DocumentsController.findByOrder': 'права раздела «Документы»',
     'DocumentsController.findOne': 'права раздела «Документы»',
     'DocumentsController.downloadFile': 'права раздела «Документы»',
+    'DocumentsController.remove': 'права раздела «Документы»; внутри — только автор файла или руководитель',
 
     // Доступ проверяется внутри, по самой заявке.
     'OrdersController.history': 'историю видит тот, кто видит рейс — через findById',
