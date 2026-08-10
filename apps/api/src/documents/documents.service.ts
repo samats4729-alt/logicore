@@ -273,6 +273,34 @@ export class DocumentsService {
     }
 
     /**
+     * Удалить файл, приложенный к рейсу.
+     *
+     * Удаляем только приложенные файлы — накладные, сканы, фото. Печатные
+     * формы (договор-заявка, доверенность) сюда не попадают: они лежат
+     * отдельными версиями и остаются навсегда, потому что уже отданы
+     * контрагенту и водителю.
+     *
+     * Кто может: тот, кто загрузил, и руководитель компании. Логист не
+     * должен уметь убрать чужую накладную — по ней закрывают рейс.
+     *
+     * Сам файл в хранилище не трогаем: запись — это то, что видит человек,
+     * а физический файл остаётся следом на случай спора. Место он занимает
+     * несравнимо меньшее, чем цена потерянной накладной.
+     */
+    async remove(id: string, user: { sub: string; role: string; companyId?: string }) {
+        const doc = await this.findById(id, user);
+
+        const isOwner = doc.uploadedById === user.sub;
+        const isChief = ['ADMIN', 'COMPANY_ADMIN', 'FORWARDER'].includes(user.role);
+        if (!isOwner && !isChief) {
+            throw new ForbiddenException('Удалить может тот, кто загрузил файл, или руководитель компании');
+        }
+
+        await this.prisma.document.delete({ where: { id } });
+        return { id };
+    }
+
+    /**
      * Верификация документа админом
      */
     async verify(id: string) {

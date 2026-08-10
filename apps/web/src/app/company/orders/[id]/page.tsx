@@ -24,6 +24,7 @@ const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
+import OrderDocuments from '@/components/orders/OrderDocuments';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
@@ -116,8 +117,6 @@ export default function OrderDetailPage() {
 
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
-    const [documents, setDocuments] = useState<any[]>([]);
-    const [uploadingDoc, setUploadingDoc] = useState(false);
     const [actLoading, setActLoading] = useState(false);
     const [invoiceLoading, setInvoiceLoading] = useState(false);
     /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
@@ -335,13 +334,6 @@ export default function OrderDetailPage() {
         }
     };
 
-    const fetchDocuments = async () => {
-        try {
-            const res = await api.get(`/documents/order/${orderId}`);
-            setDocuments(res.data);
-        } catch (e: any) { reportLoadFailure('документы рейса', e); }
-    };
-
     // Передать заявку другому менеджеру своей компании
     const openTransferModal = async () => {
         setTransferModalOpen(true);
@@ -473,7 +465,6 @@ export default function OrderDetailPage() {
         // (по ним подставляются названия компаний). Остальные справочники
         // относятся к форме правки и грузятся, когда её открывают.
         fetchData();
-        fetchDocuments();
         fetchPartners();
         loadContracts();
     }, [orderId]);
@@ -531,38 +522,6 @@ export default function OrderDetailPage() {
     };
 
     // =================== DOCUMENT HANDLERS ===================
-
-    const customUploadTTN = async (options: any) => {
-        const { file, onSuccess, onError } = options;
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('type', 'TTN');
-        setUploadingDoc(true);
-        try {
-            await api.post(`/documents/upload/${orderId}`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-            toast.success('ТТН успешно загружена');
-            onSuccess("ok");
-            fetchDocuments();
-        } catch (err) {
-            toast.error('Ошибка загрузки документа');
-            onError(err);
-        } finally { setUploadingDoc(false); }
-    };
-
-    const handleDownloadDoc = async (doc: any) => {
-        try {
-            const response = await api.get(`/documents/${doc.id}/download`, { responseType: 'blob' });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', doc.fileName);
-            document.body.appendChild(link);
-            link.click();
-            link.parentNode?.removeChild(link);
-        } catch { toast.error('Ошибка при скачивании файла'); }
-    };
 
     // =================== UNIFIED PAYMENT HANDLERS ===================
 
@@ -1037,6 +996,9 @@ export default function OrderDetailPage() {
         POWER_OF_ATTORNEY: 'Доверенность',
     };
 
+    // Вкладка управляется состоянием: из блока водителя ведёт кнопка
+    // «Документы рейса», а несвязанные вкладки переключать нечем.
+    const [activeTab, setActiveTab] = useState('details');
     const [contracts, setContracts] = useState<any[]>([]);
     const [poaDocuments, setPoaDocuments] = useState<any[]>([]);
     const [docBusy, setDocBusy] = useState<OrderDocKind | null>(null);
@@ -1370,16 +1332,6 @@ export default function OrderDetailPage() {
         )},
     ];
 
-    const docColumns = [
-        { title: 'Тип', dataIndex: 'type', key: 'type', width: 100, render: (t: string) => t === 'TTN' ? 'ТТН' : t },
-        { title: 'Файл', dataIndex: 'fileName', key: 'fileName' },
-        { title: 'Размер', dataIndex: 'fileSize', key: 'size', width: 100, render: (s: number) => `${(s / 1024).toFixed(1)} KB` },
-        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 130, render: (d: string) => dayjs(d).format('DD.MM.YY HH:mm') },
-        { title: '', key: 'action', width: 80, render: (_: any, r: any) => (
-            <Button variant="link" size="sm" onClick={() => handleDownloadDoc(r)}>Скачать</Button>
-        )}
-    ];
-
     return (
         <div className="lc-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
             {/* =================== HEADER =================== */}
@@ -1520,7 +1472,8 @@ export default function OrderDetailPage() {
 
             {/* =================== MAIN TABS =================== */}
             <Tabs
-                defaultActiveKey="details"
+                activeKey={activeTab}
+                onChange={setActiveTab}
                 size="large"
                 type="line"
                 style={{ marginBottom: 24 }}
@@ -1754,34 +1707,21 @@ export default function OrderDetailPage() {
                                                         >
                                                             <FileTextOutlined /> Доверенность (PDF)
                                                         </Dropdown.Button>
+                                                        {/* Выдача и версии переехали на вкладку
+                                                            «Документы»: держать их в двух местах
+                                                            значит показывать разные списки одного
+                                                            и того же. Здесь остаётся отправка —
+                                                            она про водителя, а не про журнал. */}
                                                         <Button
                                                             variant="outline"
                                                             className="w-full"
-                                                            disabled={docBusy === 'POWER_OF_ATTORNEY'}
-                                                            onClick={() => formDocument('POWER_OF_ATTORNEY')}
+                                                            onClick={() => setActiveTab('documents')}
                                                         >
-                                                            {docBusy === 'POWER_OF_ATTORNEY'
-                                                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                                : <FileDown className="h-4 w-4" />}
-                                                            {poaDocuments.length
-                                                                ? 'Выдать исправленную доверенность'
-                                                                : 'Выдать доверенность (в журнал)'}
+                                                            <FileDown className="h-4 w-4" />
+                                                            Документы рейса
+                                                            {contracts.length + poaDocuments.length > 0
+                                                                && ` (${contracts.length + poaDocuments.length})`}
                                                         </Button>
-                                                        {renderDocumentVersions('POWER_OF_ATTORNEY', poaDocuments)}
-                                                        <Button
-                                                            variant="outline"
-                                                            className="w-full"
-                                                            disabled={docBusy === 'CONTRACT'}
-                                                            onClick={() => formDocument('CONTRACT')}
-                                                        >
-                                                            {docBusy === 'CONTRACT'
-                                                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                                : <FileDown className="h-4 w-4" />}
-                                                            {contracts.length
-                                                                ? 'Сформировать исправленный договор'
-                                                                : 'Сформировать договор-заявку'}
-                                                        </Button>
-                                                        {renderDocumentVersions('CONTRACT', contracts)}
                                                         <Button
                                                             variant="outline"
                                                             className="w-full"
@@ -2107,28 +2047,21 @@ export default function OrderDetailPage() {
                         label: (
                             <span>
                                 <FilePdfOutlined style={{ marginRight: 6 }} />
-                                Документы ({documents.length})
+                                Документы
                             </span>
                         ),
+                        // Все документы рейса одним списком: печатные формы с
+                        // версиями, счёт и акт, приложенные файлы. Раньше они
+                        // жили в трёх разных местах карточки.
                         children: (
-                            <Card
-                                size="small"
-                                title={<span style={{ fontWeight: 600 }}><FilePdfOutlined style={{ color: '#1890ff', marginRight: 6 }} />Документы ({documents.length})</span>}
-                                extra={
-                                    <Upload customRequest={customUploadTTN} showUploadList={false}>
-                                        <Button size="sm" disabled={uploadingDoc}>
-                                            {uploadingDoc
-                                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                : <UploadIcon className="h-3.5 w-3.5" />}
-                                            Загрузить ТТН
-                                        </Button>
-                                    </Upload>
-                                }
-                                bordered={false}
-                                className="premium-card"
-                            >
-                                <Table columns={docColumns} dataSource={documents} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет документов' }} scroll={{ x: true }} />
-                            </Card>
+                            <OrderDocuments
+                                orderId={orderId}
+                                orderNumber={order.orderNumber}
+                                orderUpdatedAt={order.updatedAt}
+                                driverAssigned={Boolean(order.assignedDriverName || order.driverId)}
+                                currentUserId={user?.id}
+                                isChief={['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '')}
+                            />
                         )
                     },
                     {

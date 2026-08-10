@@ -92,7 +92,9 @@ test('antd Upload по-прежнему получает клик от кноп�
 
     await page.getByRole('tab', { name: /Документы/ }).first().click();
 
-    const upload = page.getByRole('button', { name: /Загрузить ТТН/ }).first();
+    // Кнопка называется «Загрузить файл»: вкладка собрала все документы
+    // рейса, и вложить туда можно не только накладную.
+    const upload = page.getByRole('button', { name: /Загрузить файл/ }).first();
     await expect(upload).toBeVisible();
 
     const chooser = page.waitForEvent('filechooser', { timeout: 10_000 });

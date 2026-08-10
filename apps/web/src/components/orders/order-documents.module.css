@@ -1,0 +1,262 @@
+/* Раздел «Документы» в карточке заявки.
+ *
+ * Блоки те же, что у остальных экранов кабинета: карточка с серой шапкой,
+ * строки списка, приглушённые прежние версии. Значения цвета берутся из
+ * токенов `.lc-nova`, здесь только вёрстка.
+ */
+
+.card {
+    background: var(--nova-surface, #fff);
+    border: 1px solid var(--nova-border, #e6e8ec);
+    border-radius: var(--nova-radius, 14px);
+    box-shadow: var(--nova-shadow, 0 1px 2px rgba(16, 24, 40, .05));
+    overflow: hidden;
+}
+
+.cardHead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px 10px;
+    background: var(--nova-surface-2, #f6f7f8);
+    border-bottom: 1px solid var(--nova-border-2, #eff0f3);
+}
+
+.cardHead svg {
+    color: var(--nova-fg-2, #4c5460);
+}
+
+.cardTitle {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    color: var(--nova-fg, #0b0d12);
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+.cardCount {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--nova-fg-3, #868e9c);
+}
+
+.cardBody {
+    padding: 12px 14px 14px;
+}
+
+/* ===== Предупреждение, что документ отстал от заявки ===== */
+
+.warn {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 9px 12px;
+    margin-bottom: 12px;
+    border-radius: 11px;
+    background: var(--nova-warn-soft, #fff5e8);
+    border: 1px solid rgba(178, 94, 9, .22);
+    color: var(--nova-warn, #b25e09);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.warn svg {
+    align-self: center;
+    flex-shrink: 0;
+}
+
+.warn span {
+    color: var(--nova-fg-2, #4c5460);
+    min-width: 0;
+}
+
+/* ===== Кнопки создания ===== */
+
+.makeRow {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+/* ===== Список ===== */
+
+.group {
+    border: 1px solid var(--nova-border, #e6e8ec);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.doc {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 13px;
+    background: var(--nova-surface, #fff);
+}
+
+.doc + .doc {
+    border-top: 1px solid var(--nova-border-2, #eff0f3);
+}
+
+/* Прежняя версия: фон и приглушённое название. Читается как история,
+   а не как второй действующий документ. */
+.docOld {
+    background: var(--nova-surface-2, #f6f7f8);
+}
+
+.docIcon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: var(--nova-surface-2, #f6f7f8);
+    border: 1px solid var(--nova-border, #e6e8ec);
+    display: grid;
+    place-items: center;
+    color: var(--nova-fg-2, #4c5460);
+    flex-shrink: 0;
+}
+
+.docOld .docIcon {
+    background: var(--nova-surface, #fff);
+}
+
+.docMain {
+    flex: 1;
+    min-width: 0;
+}
+
+.docName {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.docName b {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nova-fg, #0b0d12);
+}
+
+.docOld .docName b {
+    font-weight: 500;
+    color: var(--nova-fg-2, #4c5460);
+}
+
+.docMeta {
+    display: block;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--nova-fg-3, #868e9c);
+    margin-top: 2px;
+}
+
+.docActs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* ===== Метки состояния ===== */
+
+.chip {
+    font-size: 10.5px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 3px 8px;
+    white-space: nowrap;
+    border: 1px solid var(--nova-border, #e6e8ec);
+    color: var(--nova-fg-2, #4c5460);
+}
+
+.chipVersion {
+    background: transparent;
+    color: var(--nova-fg-3, #868e9c);
+}
+
+.chipLive {
+    background: #e9f7f0;
+    color: var(--nova-pos, #12855b);
+    border-color: transparent;
+}
+
+.chipOld {
+    background: var(--nova-surface-2, #f6f7f8);
+    color: var(--nova-fg-3, #868e9c);
+    border-color: transparent;
+}
+
+.chipDraft {
+    background: var(--nova-warn-soft, #fff5e8);
+    color: var(--nova-warn, #b25e09);
+    border-color: transparent;
+}
+
+.chipPosted {
+    background: var(--nova-accent-soft, #eef4ff);
+    color: var(--nova-accent, #1677ff);
+    border-color: transparent;
+}
+
+.chipCancelled {
+    background: var(--nova-neg-soft, #fef2f1);
+    color: var(--nova-neg, #d92d20);
+    border-color: transparent;
+}
+
+/* ===== Свёртка прежних версий ===== */
+
+.more {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 13px;
+    border: 0;
+    border-top: 1px solid var(--nova-border-2, #eff0f3);
+    background: var(--nova-surface-2, #f6f7f8);
+    font: 500 12px Inter, sans-serif;
+    color: var(--nova-fg-2, #4c5460);
+    cursor: pointer;
+    text-align: left;
+}
+
+.more:hover {
+    background: var(--nova-hover, #f5f6f8);
+}
+
+.moreHint {
+    margin-left: auto;
+    font-weight: 400;
+    font-size: 11.5px;
+    color: var(--nova-fg-3, #868e9c);
+}
+
+.empty {
+    padding: 28px 0;
+    text-align: center;
+    font-size: 13px;
+    color: var(--nova-fg-3, #868e9c);
+}
+
+@media (max-width: 720px) {
+    .doc {
+        flex-wrap: wrap;
+    }
+
+    .docActs {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .moreHint {
+        display: none;
+    }
+}
