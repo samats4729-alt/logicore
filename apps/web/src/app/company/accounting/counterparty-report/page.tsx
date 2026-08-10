@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Collapse, Space, Empty, Spin, Drawer, Descriptions, Modal, Button, Segmented, theme } from 'antd';
+import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Collapse, Space, Empty, Drawer, Descriptions, Modal, Button, Segmented, theme } from 'antd';
 import {
     SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined,
     CheckCircleOutlined, CloseCircleOutlined, TeamOutlined,
@@ -15,13 +15,13 @@ import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
 import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 
 // Подписи статусов — из общего словаря `lib/vocabulary`,
 // чтобы один и тот же статус везде назывался одинаково.
 const statusLabels = ORDER_STATUS_LABELS;
-
 
 // Role definitions mapped dynamically inside the component using theme tokens
 
@@ -364,7 +364,7 @@ export default function CounterpartyReportPage() {
     ];
 
     if (loading) {
-        return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}><Spin size="large" /></div>;
+        return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}><Loader size="large" /></div>;
     }
 
     if (!data || data.counterparties.length === 0) {
@@ -789,7 +789,7 @@ export default function CounterpartyReportPage() {
                 width={520}
             >
                 {shareLoading ? (
-                    <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>
+                    <div style={{ textAlign: 'center', padding: 32 }}><Loader /></div>
                 ) : shareUrl ? (
                     <div>
                         <div style={{ marginBottom: 20 }}>

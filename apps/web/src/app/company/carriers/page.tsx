@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Spin } from 'antd';
+import Loader from '@/components/ui/Loader';
 
 export default function CarriersRedirectPage() {
     const router = useRouter();
@@ -13,7 +13,7 @@ export default function CarriersRedirectPage() {
 
     return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-            <Spin size="large" />
+            <Loader size="large" />
         </div>
     );
 }

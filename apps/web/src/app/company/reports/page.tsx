@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Table, Statistic, Row, Col, Button, DatePicker, Tag, Spin, Alert, Divider } from 'antd';
+import { Table, Statistic, Row, Col, Button, DatePicker, Tag, Alert, Divider } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import {
     ChartColumn,
@@ -24,6 +24,7 @@ import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { RangePicker } = DatePicker;
 
@@ -330,7 +331,6 @@ export default function ReportsPage() {
         return Array.from(map.values()).filter(d => d.orders > 0);
     }, [filteredOrders, drivers]);
 
-
     /** Данные активной вкладки — то, что сейчас видно в таблице. */
     const currentRows = useMemo((): Record<string, unknown>[] => {
         if (reportType === 'pnl') return pnlData;
@@ -401,7 +401,7 @@ export default function ReportsPage() {
         return (
             <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
-                    <Spin size="large" tip="Загрузка данных..." />
+                    <Loader size="large" tip="Загрузка данных..." />
                 </div>
             </div>
         );

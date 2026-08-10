@@ -2,13 +2,14 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Form, Input, Button, Typography, Steps, Result, Divider, Spin, Checkbox } from 'antd';
+import { Form, Input, Button, Typography, Steps, Result, Divider, Checkbox } from 'antd';
 import { UserOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { GoogleLogin } from '@react-oauth/google';
 import AuthShell from '@/components/AuthShell';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Text, Paragraph } = Typography;
 
@@ -255,7 +256,7 @@ function RegisterContent() {
 
 export default function RegisterCompanyPage() {
     return (
-        <Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+        <Suspense fallback={<Loader size="large" full />}>
             <RegisterContent />
         </Suspense>
     );

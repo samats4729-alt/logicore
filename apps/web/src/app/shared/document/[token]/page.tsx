@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Alert, Button, Card, Descriptions, Spin, Table, Typography, theme } from 'antd';
+import { Alert, Button, Card, Descriptions, Table, Typography, theme } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 
@@ -52,7 +53,7 @@ export default function SharedDocumentPage() {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
-                <Spin size="large" />
+                <Loader size="large" />
             </div>
         );
     }

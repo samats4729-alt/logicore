@@ -2,16 +2,17 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { Card, Tag, Typography, Spin, Badge, List, Avatar, Button } from 'antd';
+import { Card, Tag, Typography, Badge, List, Avatar, Button } from 'antd';
 import { CarOutlined, ReloadOutlined, AimOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const InteractiveAdminMap = dynamic(() => import('@/components/ui/InteractiveAdminMap'), {
     ssr: false,
     loading: () => (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f8f8' }}>
-            <Spin size="large" tip="Загрузка карты..." />
+            <Loader size="large" tip="Загрузка карты..." />
         </div>
     )
 });
@@ -33,8 +34,6 @@ const ORDER_COLORS = [
     '#a0d911', // lime
     '#f5222d', // red
 ];
-
-
 
 interface DriverPosition {
     driverId: string;
@@ -190,7 +189,7 @@ export default function TrackingMapPage() {
                 extra={<ReloadOutlined onClick={fetchDrivers} style={{ cursor: 'pointer' }} />}
             >
                 {loading ? (
-                    <Spin />
+                    <Loader />
                 ) : drivers.length === 0 ? (
                     <Text type="secondary">Нет активных водителей</Text>
                 ) : (

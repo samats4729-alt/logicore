@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Button, Input, Spin } from 'antd';
+import { Button, Input } from 'antd';
 import { RobotOutlined, SendOutlined, CloseOutlined, CompassOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import Loader from '@/components/ui/Loader';
 
 interface Step {
     selector?: string;
@@ -530,7 +531,7 @@ export default function AssistantWidget() {
                         )}
                         {loading && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--lc-text-ter)', fontSize: 13 }}>
-                                <Spin size="small" /> Думаю…
+                                <Loader size="small" /> Думаю…
                             </div>
                         )}
                     </div>

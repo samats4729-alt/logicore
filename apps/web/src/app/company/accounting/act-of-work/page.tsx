@@ -1,13 +1,14 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
-import { Button, Select, Spin, Empty } from 'antd';
+import { Button, Select, Empty } from 'antd';
 import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { amountToWordsKzt } from '@/lib/amountToWords';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 interface Party {
     id: string;
@@ -96,7 +97,7 @@ function ActOfWorkInner() {
             </div>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+                <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
             ) : !data ? (
                 <Empty description="Нет данных" />
             ) : (
@@ -279,7 +280,7 @@ function ActOfWorkInner() {
 
 export default function ActOfWorkPage() {
     return (
-        <Suspense fallback={<div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>}>
+        <Suspense fallback={<div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>}>
             <ActOfWorkInner />
         </Suspense>
     );

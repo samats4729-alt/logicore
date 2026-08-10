@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Card, Input, Tag, Typography, Space, Empty, Spin, Popconfirm } from 'antd';
+import { Button, Card, Input, Tag, Typography, Space, Empty, Popconfirm } from 'antd';
 import { NotificationOutlined, RobotOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -102,7 +103,7 @@ export default function AdminUpdatesPage() {
             </Text>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+                <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
             ) : (
                 <>
                     <Title level={5} style={{ marginBottom: 12 }}>На подтверждении ({drafts.length})</Title>

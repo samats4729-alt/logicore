@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Card, Button, Input, Typography, Collapse, Space, Spin, Popconfirm, Tooltip, Alert } from 'antd';
+import { Card, Button, Input, Typography, Collapse, Space, Popconfirm, Tooltip, Alert } from 'antd';
 import {
     SaveOutlined, UndoOutlined, ArrowLeftOutlined,
     PlusOutlined, DeleteOutlined, EditOutlined
@@ -9,6 +9,7 @@ import {
 import { api } from '@/lib/api';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -156,7 +157,7 @@ export default function EditContractContentPage() {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <Spin size="large" tip="Загрузка содержимого договора..." />
+                <Loader size="large" tip="Загрузка содержимого договора..." />
             </div>
         );
     }

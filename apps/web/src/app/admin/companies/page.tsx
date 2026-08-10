@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Descriptions, Empty, Input, Modal, Segmented, Space, Spin, Table, Tag, theme } from 'antd';
+import { Alert, Button, Descriptions, Empty, Input, Modal, Segmented, Space, Table, Tag, theme } from 'antd';
 import { CheckOutlined, CloseOutlined, FileTextOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const DOCUMENT_LABELS: Record<string, string> = {
     COMPANY_REGISTRATION: 'Справка о госрегистрации',
@@ -201,7 +202,7 @@ export default function AdminCompaniesPage() {
 
             <div className="lc-card" style={{ padding: 0 }}>
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+                    <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
                 ) : rows.length === 0 ? (
                     <Empty
                         style={{ padding: 48 }}

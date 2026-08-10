@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Typography, Tag, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Space, Spin, Divider, Popconfirm, Upload, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
+import { Typography, Tag, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Space, Divider, Popconfirm, Upload, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
 import {
     DollarOutlined, WalletOutlined, ClockCircleOutlined, FilePdfOutlined, FileTextOutlined, SwapOutlined, CarOutlined, ExclamationCircleOutlined, 
 } from '@ant-design/icons';
@@ -47,10 +47,10 @@ import {
 import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 import { ORDER_STATUS_COLORS as statusColors, getNextStatuses } from '@/lib/order-status';
+import Loader from '@/components/ui/Loader';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
-
 
 // Подписи статусов — из общего словаря `lib/vocabulary`,
 // чтобы один и тот же статус везде назывался одинаково.
@@ -109,7 +109,6 @@ interface LocationState {
     latitude?: number;
     longitude?: number;
 }
-
 
 export default function OrderDetailPage() {
     const { token } = theme.useToken();
@@ -1192,7 +1191,7 @@ export default function OrderDetailPage() {
 
     // =================== RENDER ===================
 
-    if (loading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>;
+    if (loading) return <div style={{ textAlign: 'center', padding: 80 }}><Loader size="large" /></div>;
     if (!data) return <div style={{ textAlign: 'center', padding: 80 }}>Заявка не найдена</div>;
 
     const { order, incomes, expenses, payments = [], summary } = data;

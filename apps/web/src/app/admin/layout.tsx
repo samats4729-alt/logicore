@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Layout, Menu, Avatar, Dropdown, Typography, Spin, Button, Drawer } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Typography, Button, Drawer } from 'antd';
 import {
     DashboardOutlined,
     TeamOutlined,
@@ -27,6 +27,7 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -189,7 +190,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 alignItems: 'center',
                 justifyContent: 'center'
             }}>
-                <Spin size="large" />
+                <Loader size="large" />
             </div>
         );
     }

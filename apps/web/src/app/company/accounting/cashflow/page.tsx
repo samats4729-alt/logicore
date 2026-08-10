@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Alert, Typography, Button, DatePicker, Table, Tabs, Space, Spin, Tag, theme } from 'antd';
+import { Alert, Typography, Button, DatePicker, Table, Tabs, Space, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, FileExcelOutlined, ArrowUpOutlined, ArrowDownOutlined, WalletOutlined, SwapOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { money as formatCurrency } from '@/lib/money-format';
+import Loader from '@/components/ui/Loader';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -335,7 +336,7 @@ export default function CashflowReportPage() {
 
             {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 250 }}>
-                    <Spin size="large" tip="Вычисление показателей..." />
+                    <Loader size="large" tip="Вычисление показателей..." />
                 </div>
             ) : report ? (
                 <div className="lc-card" style={{ padding: 20 }}>

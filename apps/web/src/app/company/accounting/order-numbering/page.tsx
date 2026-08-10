@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Button, Typography, Form, Input, InputNumber, App, Spin, Divider } from 'antd';
+import { Button, Typography, Form, Input, InputNumber, App, Divider } from 'antd';
 import { ArrowLeftOutlined, NumberOutlined, SaveOutlined, RetweetOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
 
 const { Text } = Typography;
 
@@ -110,7 +111,7 @@ export default function OrderNumberingPage() {
             </div>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+                <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
             ) : (
                 <div className="lc-card" style={{ padding: 24 }}>
                     <Form form={form} layout="vertical" onFinish={handleSave} disabled={!canEdit}>

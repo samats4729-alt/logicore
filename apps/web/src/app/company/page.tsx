@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Dropdown, Checkbox, Spin } from 'antd';
+import { Dropdown, Checkbox } from 'antd';
 import { Activity, ArrowDown, ArrowRight, ArrowUp, Bell, Plus, Scale, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -12,6 +12,7 @@ import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
 import dayjs from 'dayjs';
 import styles from '@/components/nova/nova.module.css';
 import dash from './dashboard.module.css';
+import Loader from '@/components/ui/Loader';
 
 // ==================== Типы ====================
 
@@ -319,7 +320,7 @@ export default function CompanyDashboard() {
                     </div>
 
                     {activityLoading ? (
-                        <div className={styles.empty}><Spin /></div>
+                        <div className={styles.empty}><Loader /></div>
                     ) : activityRows.length === 0 ? (
                         <div className={styles.empty}>Пока нет данных за месяц</div>
                     ) : (
@@ -368,7 +369,7 @@ export default function CompanyDashboard() {
                         </div>
 
                         {!debtTotals ? (
-                            <div className={styles.empty}><Spin /></div>
+                            <div className={styles.empty}><Loader /></div>
                         ) : (
                             <div className={styles.cardBody}>
                                 <div className={dash.debtRow}>
@@ -419,7 +420,7 @@ export default function CompanyDashboard() {
                         </div>
 
                         {eventsLoading ? (
-                            <div className={styles.empty}><Spin /></div>
+                            <div className={styles.empty}><Loader /></div>
                         ) : events.length === 0 ? (
                             <div className={styles.empty}>Пока тихо — событий нет</div>
                         ) : (

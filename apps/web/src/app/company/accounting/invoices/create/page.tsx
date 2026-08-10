@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, DatePicker, Empty, Input, InputNumber, Modal, Segmented, Select, Space, Spin, Switch, Table, Tooltip, theme } from 'antd';
+import { Alert, Button, DatePicker, Empty, Input, InputNumber, Modal, Segmented, Select, Space, Switch, Table, Tooltip, theme } from 'antd';
 import {
     ArrowLeftOutlined,
     DeleteOutlined,
@@ -27,6 +27,7 @@ import {
 import { toast } from 'sonner';
 import CurrencySelect from '@/components/orders/CurrencySelect';
 import { VAT_RATES } from '@/lib/tax';
+import Loader from '@/components/ui/Loader';
 
 const money = (value: number) =>
     `${(value ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₸`;
@@ -613,7 +614,7 @@ export default function CreateInvoicePage() {
                 />
 
                 {loadingOrders ? (
-                    <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+                    <div style={{ textAlign: 'center', padding: 40 }}><Loader size="large" /></div>
                 ) : (
                     <Table
                         rowKey="id"
