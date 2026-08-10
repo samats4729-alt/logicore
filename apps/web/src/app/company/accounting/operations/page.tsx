@@ -474,7 +474,7 @@ export default function AllOperationsPage() {
                     <Form.Item name="date" label="Дата" rules={[{ required: true, message: 'Укажите дату' }]}>
                         <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
                     </Form.Item>
-                    <Form.Item name="category" label="Статья" rules={[{ required: true, message: 'Выберите статью' }]} extra="Не хватает статьи? Добавьте в справочнике: Финансы → Статьи">
+                    <Form.Item name="category" label="Статья" rules={[{ required: true, message: 'Выберите статью' }]} extra="Не хватает статьи? Добавьте в справочнике: Кабинет → Статьи доходов и расходов">
                         <Select
                             placeholder="Выберите статью"
                             showSearch

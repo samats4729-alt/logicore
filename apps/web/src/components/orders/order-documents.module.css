@@ -113,6 +113,26 @@
     cursor: not-allowed;
 }
 
+/* Недоступный документ: гаснет, но остаётся на месте и остаётся нажимаемым.
+   Нажатие объясняет причину — исчезнувшая кнопка заставляла бы гадать, есть
+   такой документ у платформы или нет. Поэтому не `disabled`: выключенная
+   кнопка не отдаёт нажатие, и объяснить было бы нечем. */
+.actOff {
+    background: var(--nova-surface-2, #f6f7f8);
+    border-color: var(--nova-border-2, #eff0f3);
+    color: var(--nova-fg-3, #868e9c);
+    cursor: help;
+}
+
+.actOff:hover {
+    background: var(--nova-surface-2, #f6f7f8);
+    opacity: 1;
+}
+
+.actOff svg {
+    color: var(--nova-fg-3, #868e9c);
+}
+
 .act svg {
     color: var(--nova-fg-3, #868e9c);
 }

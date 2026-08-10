@@ -112,18 +112,28 @@ export default function OrderDocuments({
     orderId,
     orderNumber,
     orderUpdatedAt,
+    orderStatus,
     driverAssigned,
+    hasCustomer,
+    hasCarrier,
     currentUserId,
     isChief,
+    onCreateAccounting,
 }: {
     orderId: string;
     orderNumber?: string;
     /** Когда заявку правили в последний раз — для метки «документ отстал». */
     orderUpdatedAt?: string;
+    /** Статус рейса: от него зависит, можно ли выдать акт. */
+    orderStatus?: string;
     driverAssigned: boolean;
+    hasCustomer: boolean;
+    hasCarrier: boolean;
     currentUserId?: string;
     /** Руководитель компании: может удалять чужие файлы. */
     isChief: boolean;
+    /** Открыть или создать счёт/акт — карточка умеет это сама. */
+    onCreateAccounting?: (type: 'PAYMENT_INVOICE' | 'SERVICE_ACT') => void;
 }) {
     const router = useRouter();
 
@@ -198,6 +208,58 @@ export default function OrderDocuments({
 
     const total = formed.CONTRACT.length + formed.POWER_OF_ATTORNEY.length
         + accounting.length + files.length;
+
+    /**
+     * Когда документ выдать нельзя — и почему.
+     *
+     * Причины не выдуманы: договор-заявка выписывается на перевозчика,
+     * доверенность — на водителя, счёт нужен заказчик, а акт закрывает
+     * оказанную услугу — сервер и не даст актировать незавершённый рейс.
+     */
+    const blockers = {
+        cancelled: (s?: string) => (s === 'CANCELLED'
+            ? 'Заявка отменена — документы по ней не выдаются.'
+            : null),
+    };
+
+    const MAKERS: {
+        id: string;
+        label: string;
+        primary?: boolean;
+        blockedBy: (ctx: { status?: string; hasCustomer: boolean; hasCarrier: boolean; driverAssigned: boolean }) => string | null;
+        run: () => void;
+    }[] = [
+        {
+            id: 'CONTRACT',
+            label: 'Договор-заявка',
+            primary: true,
+            blockedBy: (c) => blockers.cancelled(c.status)
+                || (c.hasCarrier ? null : 'Сначала укажите перевозчика — договор-заявка выписывается на него.'),
+            run: () => formDocument('CONTRACT'),
+        },
+        {
+            id: 'POWER_OF_ATTORNEY',
+            label: 'Доверенность',
+            blockedBy: (c) => blockers.cancelled(c.status)
+                || (c.driverAssigned ? null : 'Сначала назначьте водителя — доверенность выписывается на него.'),
+            run: () => formDocument('POWER_OF_ATTORNEY'),
+        },
+        {
+            id: 'PAYMENT_INVOICE',
+            label: 'Счёт на оплату',
+            blockedBy: (c) => blockers.cancelled(c.status)
+                || (c.hasCustomer ? null : 'В заявке не указан заказчик — счёт выставлять некому.'),
+            run: () => onCreateAccounting?.('PAYMENT_INVOICE'),
+        },
+        {
+            id: 'SERVICE_ACT',
+            label: 'Акт выполненных работ',
+            blockedBy: (c) => blockers.cancelled(c.status)
+                || (c.hasCustomer ? null : 'В заявке не указан заказчик — акт составлять не с кем.')
+                || (c.status === 'COMPLETED' ? null : 'Акт выдаётся после завершения рейса: услуга ещё не оказана.'),
+            run: () => onCreateAccounting?.('SERVICE_ACT'),
+        },
+    ];
 
     const formDocument = async (kind: OrderDocKind) => {
         if (kind === 'POWER_OF_ATTORNEY' && !driverAssigned) {
@@ -386,26 +448,30 @@ export default function OrderDocuments({
                     </div>
                 )}
 
+                {/* Ряд одинаков всегда: недоступный документ не исчезает, а
+                    гаснет и по нажатию объясняет причину. Исчезающая кнопка
+                    заставляет гадать, есть такой документ у платформы или нет. */}
                 <div className={styles.makeRow}>
-                    <button
-                        type="button"
-                        className={`${styles.act} ${styles.actPrimary}`}
-                        disabled={busy === 'CONTRACT'}
-                        onClick={() => formDocument('CONTRACT')}
-                    >
-                        {busy === 'CONTRACT' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                        {formed.CONTRACT.length ? 'Договор-заявка заново' : 'Договор-заявка'}
-                    </button>
-                    <button
-                        type="button"
-                        className={styles.act}
-                        disabled={busy === 'POWER_OF_ATTORNEY' || !driverAssigned}
-                        title={driverAssigned ? undefined : 'Сначала назначьте водителя'}
-                        onClick={() => formDocument('POWER_OF_ATTORNEY')}
-                    >
-                        {busy === 'POWER_OF_ATTORNEY' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                        {formed.POWER_OF_ATTORNEY.length ? 'Доверенность заново' : 'Доверенность'}
-                    </button>
+                    {MAKERS.map((maker) => {
+                        const block = maker.blockedBy({ status: orderStatus, hasCustomer, hasCarrier, driverAssigned });
+                        const loading = busy === maker.id;
+                        return (
+                            <button
+                                key={maker.id}
+                                type="button"
+                                aria-disabled={Boolean(block) || loading}
+                                className={`${styles.act} ${maker.primary ? styles.actPrimary : ''} ${block ? styles.actOff : ''}`}
+                                onClick={() => {
+                                    if (block) { toast.warning(block); return; }
+                                    if (loading) return;
+                                    maker.run();
+                                }}
+                            >
+                                {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                                {maker.label}
+                            </button>
+                        );
+                    })}
                     <Upload customRequest={uploadFile} showUploadList={false}>
                         <button type="button" className={styles.act} disabled={busy === 'upload'}>
                             {busy === 'upload' ? <Loader2 size={14} className="animate-spin" /> : <UploadIcon size={14} />}
