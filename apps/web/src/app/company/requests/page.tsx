@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { Calculator } from 'lucide-react';
 import { QuoteRequestsPanel } from '@/components/quotes/QuoteRequestsPanel';
 import styles from '@/components/nova/nova.module.css';
 
@@ -12,6 +14,8 @@ import styles from '@/components/nova/nova.module.css';
  * одному.
  */
 export default function RequestsPage() {
+    const router = useRouter();
+
     return (
         <div className={`${styles.page} ${styles.pageWide}`}>
             <div className={styles.hero}>
@@ -22,6 +26,18 @@ export default function RequestsPage() {
                         Клиент спрашивает цену до заявки. Здесь видно, что предлагали раньше,
                         почём тогда нашли машину и чем всё кончилось.
                     </p>
+                </div>
+                {/* Калькулятор стоял в «Финансах», рядом с зарплатой. По работе
+                    он здесь: клиент спросил цену — посчитали — ответили. */}
+                <div className={styles.heroActions}>
+                    <button
+                        type="button"
+                        className={styles.action}
+                        onClick={() => router.push('/company/calculator')}
+                    >
+                        <Calculator size={15} />
+                        Калькулятор
+                    </button>
                 </div>
             </div>
 
