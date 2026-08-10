@@ -67,14 +67,15 @@ async function main() {
     // этого и падала: акт нельзя выдать до завершения, а незавершённого
     // рейса на стенде не было.
     const specs = [
-        { n: 'ЗК-2601', from: 'Алматы', to: 'Астана', cargo: 'Напитки', cust: 480000, sub: 390000, paidOut: 0, paidIn: 0 },
-        { n: 'ЗК-2602', from: 'Шымкент', to: 'Алматы', cargo: 'Стройматериалы', cust: 320000, sub: 260000, paidOut: 100000, paidIn: 320000 },
-        { n: 'ЗК-2603', from: 'Астана', to: 'Караганда', cargo: 'Бытовая техника', cust: 210000, sub: 165000, paidOut: 165000, paidIn: 90000 },
-        { n: 'ЗК-2604', from: 'Актобе', to: 'Атырау', cargo: 'Трубы', cust: 540000, sub: 445000, paidOut: 0, paidIn: 0 },
-        { n: 'ЗК-2605', from: 'Алматы', to: 'Тараз', cargo: 'Продукты', cust: 180000, sub: 140000, paidOut: 0, paidIn: 0 },
+        { n: 'ЗК-2601', from: 'Алматы', to: 'Астана', cargo: 'Напитки', cust: 480000, sub: 390000, paidOut: 0, paidIn: 0, kg: 20000, body: 'Тент', places: 22 },
+        { n: 'ЗК-2602', from: 'Шымкент', to: 'Алматы', cargo: 'Стройматериалы', cust: 320000, sub: 260000, paidOut: 100000, paidIn: 320000, kg: 22000, body: 'Тент', places: 14 },
+        { n: 'ЗК-2603', from: 'Астана', to: 'Караганда', cargo: 'Бытовая техника', cust: 210000, sub: 165000, paidOut: 165000, paidIn: 90000, kg: 12000, body: 'Тент', places: 18 },
+        { n: 'ЗК-2604', from: 'Актобе', to: 'Атырау', cargo: 'Трубы', cust: 540000, sub: 445000, paidOut: 0, paidIn: 0, kg: 18000, body: 'Площадка', places: 6 },
+        { n: 'ЗК-2605', from: 'Алматы', to: 'Тараз', cargo: 'Продукты', cust: 180000, sub: 140000, paidOut: 0, paidIn: 0, kg: 15000, body: 'Рефрижератор', places: 20 },
         {
             n: 'ЗК-2606', from: 'Алматы', to: 'Караганда', cargo: 'Мебель',
             cust: 260000, sub: 205000, paidOut: 0, paidIn: 0, status: 'IN_TRANSIT',
+            kg: 8000, body: 'Тент', places: 18,
         },
     ];
 
@@ -84,11 +85,26 @@ async function main() {
 
         const done = (s.status || 'COMPLETED') === 'COMPLETED';
 
+        // Сроки погрузки и выгрузки. Без них карточка рейса показывала
+        // «дата не указана» на обеих точках, и стенд выглядел так, будто
+        // платформа сроки не ведёт. Завершённым ставим прошедшие даты, рейсу
+        // в пути — вчера погрузился, завтра выгружается, чтобы он оставался
+        // «в работе» в любой день, когда стенд поднимут заново.
+        const day = 24 * 3600 * 1000;
+        const pickupAt = done ? new Date('2026-07-13T09:00:00Z') : new Date(Date.now() - day);
+        const deliveryAt = done ? new Date('2026-07-15T14:00:00Z') : new Date(Date.now() + day);
+
         const order = await prisma.order.create({
             data: {
                 orderNumber: s.n,
                 status: s.status || 'COMPLETED',
                 cargoDescription: s.cargo,
+                // Вес, кузов и число мест — то, без чего заявку не берут в
+                // работу. Стенд, где заполнено одно название груза, показывал
+                // пустую карточку и врал про платформу.
+                cargoWeight: s.kg,
+                cargoType: s.body,
+                placesCount: s.places,
                 customerCompanyId: client.id,
                 customerId: clientUser.id,
                 forwarderId: us.id,
@@ -107,11 +123,11 @@ async function main() {
                 routePoints: {
                     create: [
                         {
-                            sequence: 1, pointType: 'PICKUP',
+                            sequence: 1, pointType: 'PICKUP', expectedDate: pickupAt,
                             location: { create: { name: `Склад ${s.from}`, city: s.from, address: `г. ${s.from}`, latitude: 43.2, longitude: 76.9 } },
                         },
                         {
-                            sequence: 2, pointType: 'DELIVERY',
+                            sequence: 2, pointType: 'DELIVERY', expectedDate: deliveryAt,
                             location: { create: { name: `Склад ${s.to}`, city: s.to, address: `г. ${s.to}`, latitude: 51.1, longitude: 71.4 } },
                         },
                     ],
