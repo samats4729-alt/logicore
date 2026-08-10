@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { reportRequestFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
+import { PALLET_KINDS } from '@/lib/cargo';
 import { PickerOption, RecordPicker } from './RecordPicker';
 import { CityOption, CityPicker } from './CityPicker';
 import { QuoteMemory, QuoteMemoryPanel } from './QuoteMemoryPanel';
@@ -28,6 +29,10 @@ export interface QuoteFormValues {
     /** В тоннах — так говорит клиент. В килограммы переводим один раз, на отправке. */
     cargoWeightTons: string;
     cargoVolume: string;
+    /** Вид паллеты — ключ из `PALLET_KINDS`. Одного вида на запрос хватает:
+     *  клиент говорит «две европаллеты», смешанный состав появляется в заявке. */
+    palletKind: string;
+    palletCount: string;
     carrierCost: string;
     customerPrice: string;
     notes: string;
@@ -37,7 +42,8 @@ const EMPTY: QuoteFormValues = {
     customerCompanyId: '', originCityId: '', destinationCityId: '',
     originAddress: '', destinationAddress: '', readyDate: '',
     natureOfCargo: '', cargoDescription: '', cargoType: '',
-    cargoWeightTons: '', cargoVolume: '', carrierCost: '', customerPrice: '', notes: '',
+    cargoWeightTons: '', cargoVolume: '', palletKind: '', palletCount: '',
+    carrierCost: '', customerPrice: '', notes: '',
 };
 
 /** Тонны с экрана в килограммы для базы. Единственное место, где это происходит. */
@@ -151,6 +157,8 @@ export function QuoteFormDialog({
             cargoType: values.cargoType || undefined,
             cargoWeight: tonsToKg(values.cargoWeightTons),
             cargoVolume: num(values.cargoVolume),
+            palletKind: values.palletKind || undefined,
+            palletCount: num(values.palletCount),
             carrierCost: num(values.carrierCost),
             customerPrice: num(values.customerPrice),
             notes: values.notes || undefined,
@@ -303,6 +311,31 @@ export function QuoteFormDialog({
                                 onChange={(e) => set('cargoVolume', e.target.value)}
                                 placeholder="86"
                                 inputMode="decimal"
+                                className="h-9 text-[13px] tabular-nums"
+                            />
+                        </Field>
+                        {/* Паллеты — то, чем клиент чаще всего и меряет груз:
+                            «две европаллеты Астана — Алматы». Без вида одно
+                            количество ничего не говорит: европаллет и
+                            американский отличаются на треть площади. */}
+                        <Field label="Вид паллеты">
+                            <select
+                                value={values.palletKind}
+                                onChange={(e) => set('palletKind', e.target.value)}
+                                className="h-9 w-full rounded-md border bg-background px-2 text-[13px]"
+                            >
+                                <option value="">Не указан</option>
+                                {PALLET_KINDS.map((k) => (
+                                    <option key={k.key} value={k.key}>{k.label}</option>
+                                ))}
+                            </select>
+                        </Field>
+                        <Field label="Паллет, шт">
+                            <Input
+                                value={values.palletCount}
+                                onChange={(e) => set('palletCount', e.target.value)}
+                                placeholder="2"
+                                inputMode="numeric"
                                 className="h-9 text-[13px] tabular-nums"
                             />
                         </Field>

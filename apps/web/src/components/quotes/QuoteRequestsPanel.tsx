@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { loadOrReport } from '@/lib/load';
 import { QUOTE_REQUEST_STATUS_LABELS } from '@/lib/vocabulary';
+import { PALLET_KINDS } from '@/lib/cargo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,6 +26,20 @@ const STATUS_STYLE: Record<string, string> = {
 const money = (v: any) => (v == null ? '—' : `${Math.round(Number(v)).toLocaleString('ru-RU')} ₸`);
 const tons = (kg: number | null) => (kg == null ? '—' : `${(kg / 1000).toLocaleString('ru-RU')} т`);
 const date = (iso: string) => new Date(iso).toLocaleDateString('ru-RU');
+
+/**
+ * Паллеты одной строкой: «2 европаллета».
+ *
+ * Количество без вида не говорит, влезет ли груз: европаллет и
+ * американский отличаются на треть площади. Поэтому если названо только
+ * число — так и пишем, а вид без числа не показываем вовсе.
+ */
+const palletsText = (r: any): string | null => {
+    if (!r?.palletCount) return null;
+    const kind = PALLET_KINDS.find((k) => k.key === r.palletKind);
+    const name = kind ? kind.label.replace(/\s*\(.*\)$/, '').toLowerCase() : 'паллет';
+    return `${r.palletCount} ${name}`;
+};
 
 /**
  * Список запросов на расчёт.
@@ -154,6 +169,8 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
             cargoType: r.cargoType || '',
             cargoWeightTons: r.cargoWeight != null ? String(r.cargoWeight / 1000) : '',
             cargoVolume: r.cargoVolume != null ? String(r.cargoVolume) : '',
+            palletKind: r.palletKind || '',
+            palletCount: r.palletCount != null ? String(r.palletCount) : '',
             carrierCost: r.carrierCost != null ? String(Math.round(Number(r.carrierCost))) : '',
             customerPrice: r.customerPrice != null ? String(Math.round(Number(r.customerPrice))) : '',
             notes: r.notes || '',
@@ -247,7 +264,7 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
                                     {!customerCompanyId && <Td className="max-w-[220px] truncate">{r.customerCompany?.name}</Td>}
                                     <Td>{r.originCity?.name} → {r.destinationCity?.name}</Td>
                                     <Td className="text-muted-foreground">
-                                        {[tons(r.cargoWeight), r.cargoVolume ? `${r.cargoVolume} м³` : null, r.cargoType]
+                                        {[tons(r.cargoWeight), r.cargoVolume ? `${r.cargoVolume} м³` : null, palletsText(r), r.cargoType]
                                             .filter((v) => v && v !== '—').join(' · ') || '—'}
                                     </Td>
                                     <Td align="right" className="tabular-nums">{money(r.carrierCost)}</Td>
@@ -302,6 +319,7 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
                                 <Row label="Характер груза" value={detail.natureOfCargo} />
                                 <Row label="Вес" value={detail.cargoWeight != null ? tons(detail.cargoWeight) : null} />
                                 <Row label="Объём" value={detail.cargoVolume ? `${detail.cargoVolume} м³` : null} />
+                                <Row label="Паллеты" value={palletsText(detail)} />
                                 <Row label="Тип кузова" value={detail.cargoType} />
                                 <Row label="Что везём" value={detail.cargoDescription} />
                                 <Row label="Нашли машину за" value={money(detail.carrierCost)} />
