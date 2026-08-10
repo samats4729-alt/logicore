@@ -97,6 +97,20 @@ function lighten(hex: string) {
     return `hsl(${Math.round(h)} ${Math.round(Math.min(1, s * 0.9) * 100)}% 68%)`;
 }
 
+/**
+ * Цвет статуса для обеих тем, готовый к подстановке в стили.
+ *
+ * Возвращает пару переменных: `--sp` для светлой темы и `--sp-dark` для
+ * тёмной. Нужен всем, кто красит статус не плашкой, — например полоске
+ * готовности в карточке заявки на телефоне. Раньше такие места брали
+ * `STATUS_PILL[...].fg` напрямую и в тёмной теме показывали почти чёрное
+ * пятно: #15803d на #20201f не читается.
+ */
+export function statusTone(status: string): React.CSSProperties {
+    const meta = STATUS_PILL[status] || STATUS_PILL.DRAFT;
+    return { ['--sp' as string]: meta.fg, ['--sp-dark' as string]: lighten(meta.fg) };
+}
+
 export default function StatusPill({ status }: { status: string }) {
     const meta = STATUS_PILL[status] || STATUS_PILL.DRAFT;
     const Glyph = status === 'PROBLEM' ? Bang : GLYPHS[status] || FileText;
@@ -104,7 +118,7 @@ export default function StatusPill({ status }: { status: string }) {
     return (
         <span
             className={styles.pill}
-            style={{ ['--sp' as string]: meta.fg, ['--sp-dark' as string]: lighten(meta.fg) }}
+            style={statusTone(status)}
         >
             <i className={styles.dot}>
                 <Glyph className={styles.glyph} />

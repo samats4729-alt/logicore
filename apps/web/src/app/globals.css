@@ -153,6 +153,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Полотно под страницей в тёмной теме.
+ *
+ * Телефон показывает его там, где страница кончилась: за верхним и нижним
+ * краем при оттягивании и под панелью браузера внизу. Белое полотно под
+ * тёмной страницей читалось как белая полоса, которая появляется на
+ * прокрутке из ниоткуда. Значение то же, что `--nova-bg`. */
+html[data-theme='dark'],
+html[data-theme='dark'] body {
+  background: #20201f;
+  color: #f1f0ec;
+}
+
 /* Premium Card Style - Shadcn-like */
 .premium-card {
   background: #ffffff;
@@ -2586,13 +2598,17 @@ a.mapboxgl-ctrl-logo,
   gap: 10px;
 }
 
+/* Карточка на телефоне живёт на тех же токенах, что и остальной кабинет.
+   Раньше она брала цвета из прежнего набора `--lc-*`: в тёмной теме
+   карточки оставались светло-серыми, а суммы — ядовито-зелёными и
+   красными из старой палитры. */
 .lc-mcard {
-  background: var(--lc-card);
-  border: 1px solid var(--lc-border);
-  border-radius: 16px;
+  background: var(--nova-surface);
+  border: 1px solid var(--nova-border);
+  border-radius: var(--nova-radius, 14px);
   padding: 12px 14px;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  box-shadow: var(--nova-shadow);
   transition: transform 0.12s ease;
 }
 
@@ -2609,7 +2625,7 @@ a.mapboxgl-ctrl-logo,
 .lc-mcard-date {
   margin-left: auto;
   font-size: 11px;
-  color: var(--lc-text-ter);
+  color: var(--nova-fg-3);
 }
 
 .lc-mcard-route {
@@ -2617,13 +2633,13 @@ a.mapboxgl-ctrl-logo,
   font-size: 14.5px;
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: var(--lc-text);
+  color: var(--nova-fg);
 }
 
 .lc-mcard-bar {
   height: 4px;
   border-radius: 999px;
-  background: var(--lc-hover);
+  background: var(--nova-hover);
   margin-top: 7px;
   margin-bottom: 2px;
   overflow: hidden;
@@ -2633,6 +2649,11 @@ a.mapboxgl-ctrl-logo,
   display: block;
   height: 100%;
   border-radius: 999px;
+  background: var(--sp);
+}
+
+[data-theme='dark'] .lc-mcard-bar i {
+  background: var(--sp-dark);
 }
 
 .lc-mcard-row {
@@ -2646,13 +2667,13 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-mcard-row span:first-child {
-  color: var(--lc-text-ter);
+  color: var(--nova-fg-3);
   flex-shrink: 0;
 }
 
 .lc-mcard-row b {
   font-weight: 500;
-  color: var(--lc-text);
+  color: var(--nova-fg);
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2668,8 +2689,8 @@ a.mapboxgl-ctrl-logo,
   font-variant-numeric: tabular-nums;
 }
 
-.lc-mcard-in { color: #389e0d; }
-.lc-mcard-out { color: #cf1322; }
+.lc-mcard-in { color: var(--nova-pos); }
+.lc-mcard-out { color: var(--nova-neg); }
 
 .lc-mcards-pager {
   display: flex;
