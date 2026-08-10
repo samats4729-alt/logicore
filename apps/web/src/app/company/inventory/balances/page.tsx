@@ -50,9 +50,9 @@ export default function StockBalancesPage() {
                 <div>
                     <div className="lc-eyebrow">
                         <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/company/finance')} style={{ padding: 0, marginRight: 8, height: 'auto' }} />
-                        ТМЦ · Отчёт
+                        Материалы · Отчёт
                     </div>
-                    <h1 className="lc2-title">Ведомость по остаткам</h1>
+                    <h1 className="lc2-title">Остатки материалов</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0' }}>
                         Сколько и чего сейчас на складах. Остаток считается по документам: поступления плюс, списания и перемещения — минус.
                     </p>
