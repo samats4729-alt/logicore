@@ -1982,7 +1982,7 @@ export default function OrderDetailPage() {
                                                     showIcon
                                                     style={{ marginBottom: 12 }}
                                                     message={`Нет курса: ${summary.unconvertedCurrencies.join(', ')}`}
-                                                    description="Пока курс не загружен, эта сумма в прибыль и долги не входит — цифры ниже неполные. Загрузите курс в разделе «Финансы → Курсы валют» и сохраните заявку заново."
+                                                    description="Пока курс не загружен, эта сумма в прибыль и долги не входит — цифры ниже неполные. Загрузите курс в разделе «Кабинет → Курсы валют» и сохраните заявку."
                                                 />
                                             ) : null}
 
@@ -2072,9 +2072,13 @@ export default function OrderDetailPage() {
                                 orderId={orderId}
                                 orderNumber={order.orderNumber}
                                 orderUpdatedAt={order.updatedAt}
+                                orderStatus={order.status}
                                 driverAssigned={Boolean(order.assignedDriverName || order.driverId)}
+                                hasCustomer={Boolean(order.customerCompanyId || order.customerCompany?.id)}
+                                hasCarrier={Boolean(order.subForwarderId || order.partnerId || order.assignedDriverName)}
                                 currentUserId={user?.id}
                                 isChief={['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '')}
+                                onCreateAccounting={openOrCreateOrderDocument}
                             />
                         )
                     },

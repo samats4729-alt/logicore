@@ -21,15 +21,16 @@ test.describe('Документы заявки', () => {
 
         await page.getByRole('tab', { name: /Документы/ }).first().click();
 
-        // Первая выдача: кнопка называется по документу, а не «сформировать».
-        const make = page.getByRole('button', { name: /Договор-заявка/ }).first();
+        // Кнопка называется по документу и не меняет подпись после выдачи:
+        // «заново» ничего не добавляет, а ряд кнопок должен быть постоянным.
+        const make = page.getByRole('button', { name: 'Договор-заявка', exact: true }).first();
         await expect(make).toBeVisible();
         await make.click();
 
         await expect(page.getByText('действующий').first()).toBeVisible({ timeout: 20_000 });
 
         // Вторая выдача: прежняя версия обязана остаться и смениться меткой.
-        await page.getByRole('button', { name: /Договор-заявка заново/ }).first().click();
+        await make.click();
         const older = page.getByRole('button', { name: /Показать прежние версии/ });
         await expect(older).toBeVisible({ timeout: 20_000 });
 
@@ -38,5 +39,29 @@ test.describe('Документы заявки', () => {
 
         // Действующая ровно одна: иначе непонятно, какая бумага в ходу.
         await expect(page.getByText('действующий')).toHaveCount(1);
+    });
+
+    test('недоступный документ виден, погашен и объясняет причину', async ({ page }) => {
+        await login(page);
+        await page.goto('/company/orders');
+
+        // Нужен рейс не в статусе «Завершён»: акт по неоказанной услуге
+        // выдавать нельзя, и кнопка должна быть погашена, а не спрятана.
+        const inWork = page.locator('.ant-table-row').filter({ hasNot: page.getByText('Завершён') }).first();
+        await expect(inWork).toBeVisible();
+        await inWork.locator('button').last().click();
+        await page.waitForURL(/\/company\/orders\/[^/]+$/);
+
+        await page.getByRole('tab', { name: /Документы/ }).first().click();
+
+        const act = page.getByRole('button', { name: 'Акт выполненных работ', exact: true }).first();
+        await expect(act).toBeVisible();
+        await expect(act).toHaveAttribute('aria-disabled', 'true');
+
+        // Кнопка не `disabled`: выключенная не отдаёт нажатие, и объяснить
+        // причину было бы нечем. Playwright такую считает неактивной —
+        // отсюда force, у человека нажатие проходит обычным образом.
+        await act.click({ force: true });
+        await expect(page.getByText(/услуга ещё не оказана/)).toBeVisible();
     });
 });

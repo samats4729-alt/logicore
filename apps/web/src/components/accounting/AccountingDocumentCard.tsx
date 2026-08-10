@@ -1013,7 +1013,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                                 В печатной форме будут реквизиты из карточки организации.
                                 Заполните их в разделе{' '}
                                 <a onClick={() => router.push('/company/accounting/settings?tab=accounts')}>
-                                    Финансы → Настройки → Счета и кассы
+                                    Кабинет → Счета и кассы
                                 </a>.
                             </span>
                         }
