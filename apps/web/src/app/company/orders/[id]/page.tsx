@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Typography, Tag, Descriptions, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Timeline, Space, Spin, Divider, Popconfirm, Upload, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
+import { Typography, Tag, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Space, Spin, Divider, Popconfirm, Upload, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
 import {
-    EnvironmentOutlined, FlagOutlined, DollarOutlined, WalletOutlined, ClockCircleOutlined, FilePdfOutlined, FileTextOutlined, SwapOutlined, CarOutlined, InboxOutlined, TeamOutlined, ExclamationCircleOutlined, CopyOutlined, WhatsAppOutlined,
+    DollarOutlined, WalletOutlined, ClockCircleOutlined, FilePdfOutlined, FileTextOutlined, SwapOutlined, CarOutlined, ExclamationCircleOutlined, 
 } from '@ant-design/icons';
 import {
-    ArrowLeft, ArrowLeftRight, CheckCircle2, Copy, FileDown, FileText,
-    Loader2, Mail, MapPin, Pencil, Plus, Trash2, Upload as UploadIcon,
-    UserPlus, XCircle,
+    ArrowLeft, ArrowLeftRight, CheckCircle2, Copy, FileText,
+    Loader2, Pencil, Plus, Trash2,
+    XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, Location } from '@/lib/api';
@@ -17,7 +17,7 @@ import { reportLoadFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
-import { resolveCompanyName, prepareCompanyOptions, shortenCompanyName } from '@/lib/company-helper';
+import { prepareCompanyOptions } from '@/lib/company-helper';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -26,6 +26,7 @@ import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
 import OrderCardTabs from '@/components/orders/OrderCardTabs';
+import OrderDetails from '@/components/orders/OrderDetails';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
@@ -34,7 +35,7 @@ import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
 import OrderHistory from '@/components/orders/OrderHistory';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import {
-    adrLabel, EMPTY_CARGO, loadingLabel, packagingLabel, palletsSummary, totalPallets,
+    EMPTY_CARGO, totalPallets,
     type CargoState, type PalletLine,
 } from '@/lib/cargo';
 import {
@@ -1532,285 +1533,26 @@ export default function OrderDetailPage() {
                                     setCargo={setCargoState}
                                 />
                             ) : (
-                                <Row gutter={[24, 24]}>
-                                    <Col xs={24} lg={15}>
-                                        {/* Route Card */}
-                                        <Card
-                                            title={<span style={{ fontWeight: 600 }}><EnvironmentOutlined style={{ marginRight: 8, color: '#1677ff' }} />Маршрут следования</span>}
-                                            bordered={false}
-                                            className="premium-card"
-                                            style={{ marginBottom: 20 }}
-                                        >
-                                            <Timeline
-                                                style={{ marginTop: 16, paddingLeft: 8 }}
-                                                items={order.routePoints?.map((pt: any, i: number) => {
-                                                    const isDelivery = pt.pointType === 'DELIVERY';
-                                                    const isAdditional = pt.pointType === 'ADDITIONAL_PICKUP';
-                                                    const icon = isDelivery ? (
-                                                        <FlagOutlined style={{ color: '#52c41a', fontSize: 16 }} />
-                                                    ) : (
-                                                        <EnvironmentOutlined style={{ color: isAdditional ? '#faad14' : '#1677ff', fontSize: 16 }} />
-                                                    );
-                                                    const labelText = isDelivery ? 'Выгрузка' : isAdditional ? 'Доп. погрузка' : 'Погрузка';
-                                                    
-                                                    return {
-                                                        dot: icon,
-                                                        children: (
-                                                            <div style={{ marginBottom: 12 }}>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
-                                                                    <Text strong style={{ fontSize: 15 }}>
-                                                                        {labelText}: {pt.location?.city || pt.location?.name}
-                                                                    </Text>
-                                                                    {pt.expectedDate && (
-                                                                        <Text type="secondary" style={{ fontSize: 12 }}>
-                                                                            {dayjs(pt.expectedDate).format('DD.MM.YYYY HH:mm')}
-                                                                        </Text>
-                                                                    )}
-                                                                </div>
-                                                                <div style={{ marginTop: 4 }}>
-                                                                    <Text type="secondary" style={{ fontSize: 13 }}>
-                                                                        {pt.location?.address}
-                                                                    </Text>
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    };
-                                                })}
-                                            />
-                                        </Card>
-
-                                        {/* Cargo Card */}
-                                        <Card
-                                            title={<span style={{ fontWeight: 600 }}><InboxOutlined style={{ marginRight: 8, color: '#1677ff' }} />Информация о грузе</span>}
-                                            bordered={false}
-                                            className="premium-card"
-                                        >
-                                            <Descriptions column={{ xs: 1, sm: 2 }} size="middle">
-                                                <Descriptions.Item label="Груз">{order.cargoDescription || '—'}</Descriptions.Item>
-                                                <Descriptions.Item label="Характер груза">{order.natureOfCargo || '—'}</Descriptions.Item>
-                                                <Descriptions.Item label="Вес">{order.cargoWeight ? `${fmt(order.cargoWeight)} кг` : '—'}</Descriptions.Item>
-                                                <Descriptions.Item label="Объем">{order.cargoVolume ? `${order.cargoVolume} м³` : '—'}</Descriptions.Item>
-                                                {(order.cargoLength || order.cargoWidth || order.cargoHeight) && (
-                                                    <Descriptions.Item label="Габариты (Д×Ш×В)">
-                                                        {`${order.cargoLength ?? '—'} × ${order.cargoWidth ?? '—'} × ${order.cargoHeight ?? '—'} м`}
-                                                    </Descriptions.Item>
-                                                )}
-                                                {/* Раньше здесь стояло голое число «Палет: 15» — а рейс почти
-                                                    всегда смешанный, и водителю с логистом важно именно чем
-                                                    именно. Состав вводят при создании заявки, и до этого места
-                                                    он не доезжал. */}
-                                                {order.palletCount || palletLines.length ? (
-                                                    <Descriptions.Item label="Палеты">
-                                                        {palletLines.length
-                                                            ? `${order.palletCount ?? totalPallets(palletLines)} — ${palletsSummary(palletLines)}`
-                                                            : order.palletCount}
-                                                    </Descriptions.Item>
-                                                ) : null}
-                                                {order.placesCount ? (
-                                                    <Descriptions.Item label="Мест">{order.placesCount}</Descriptions.Item>
-                                                ) : null}
-                                                {order.loadingTypes?.length ? (
-                                                    <Descriptions.Item label="Способ погрузки">
-                                                        {order.loadingTypes.map(loadingLabel).join(', ')}
-                                                    </Descriptions.Item>
-                                                ) : null}
-                                                {order.packagingTypes?.length ? (
-                                                    <Descriptions.Item label="Упаковка">
-                                                        {order.packagingTypes.map(packagingLabel).join(', ')}
-                                                    </Descriptions.Item>
-                                                ) : null}
-                                                {order.tempMin != null || order.tempMax != null ? (
-                                                    <Descriptions.Item label="Температура">
-                                                        {`${order.tempMin ?? '—'} … ${order.tempMax ?? '—'} °C`}
-                                                    </Descriptions.Item>
-                                                ) : null}
-                                                {order.stackable != null ? (
-                                                    <Descriptions.Item label="Штабелирование">
-                                                        {order.stackable ? 'Допускается' : 'Запрещено'}
-                                                    </Descriptions.Item>
-                                                ) : null}
-                                                {order.adr ? (
-                                                    <Descriptions.Item label="Опасный груз">
-                                                        {/* Полная расшифровка класса длинная и ломает колонку —
-                                                            держим её в подсказке. */}
-                                                        <Tooltip title={order.adrClass ? adrLabel(order.adrClass) : 'Класс не указан'}>
-                                                            <Tag color="red" style={{ marginInlineEnd: 0 }}>
-                                                                ДОПОГ{order.adrClass ? ` · класс ${order.adrClass}` : ''}
-                                                            </Tag>
-                                                        </Tooltip>
-                                                    </Descriptions.Item>
-                                                ) : null}
-                                                {order.cargoValue ? (
-                                                    <Descriptions.Item label="Объявленная стоимость">
-                                                        {`${fmt(order.cargoValue)} ₸`}
-                                                    </Descriptions.Item>
-                                                ) : null}
-                                                <Descriptions.Item label="Тип кузова">{order.cargoType || '—'}</Descriptions.Item>
-                                                <Descriptions.Item label="Доп. требования">{order.requirements || '—'}</Descriptions.Item>
-                                            </Descriptions>
-                                        </Card>
-                                    </Col>
-
-                                    <Col xs={24} lg={9}>
-                                        {/* Driver & Power of Attorney Card */}
-                                        <Card
-                                            title={<span style={{ fontWeight: 600 }}><CarOutlined style={{ marginRight: 8, color: '#1677ff' }} />Исполнитель и Водитель</span>}
-                                            bordered={false}
-                                            className="premium-card"
-                                            style={{ marginBottom: 20 }}
-                                        >
-                                            {hasDriver ? (
-                                                <div>
-                                                    <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-                                                        <Descriptions.Item label="ФИО">{driverName || '—'}</Descriptions.Item>
-                                                        <Descriptions.Item label="Телефон">
-                                                            {driverPhone ? (
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-                                                                    <a href={`tel:${driverPhone}`} style={{ color: '#1677ff' }}>{driverPhone}</a>
-                                                                    <Tooltip title="Написать в WhatsApp">
-                                                                        <a href={`https://wa.me/${String(driverPhone).replace(/[^\d]/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', fontSize: 16 }}>
-                                                                            <WhatsAppOutlined />
-                                                                        </a>
-                                                                    </Tooltip>
-                                                                    <Tooltip title="Скопировать номер">
-                                                                        <a
-                                                                            onClick={() => { navigator.clipboard?.writeText(String(driverPhone)); toast.success('Номер водителя скопирован'); }}
-                                                                            style={{ color: 'var(--lc-text-ter)', cursor: 'pointer', fontSize: 15 }}
-                                                                        >
-                                                                            <CopyOutlined />
-                                                                        </a>
-                                                                    </Tooltip>
-                                                                </span>
-                                                            ) : '—'}
-                                                        </Descriptions.Item>
-                                                        <Descriptions.Item label="Автомобиль">{driverPlate || '—'}</Descriptions.Item>
-                                                        <Descriptions.Item label="Прицеп">{driverTrailer || '—'}</Descriptions.Item>
-                                                    </Descriptions>
-
-                                                    <Divider style={{ margin: '12px 0' }} />
-
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                                        <Button
-                                                            className="w-full"
-                                                            onClick={openDriverLink}
-                                                            disabled={driverLinkLoading}
-                                                        >
-                                                            {driverLinkLoading
-                                                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                                : <MapPin className="h-4 w-4" />}
-                                                            Ссылка для водителя
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            className="w-full"
-                                                            onClick={openAssignModal}
-                                                        >
-                                                            <UserPlus className="h-4 w-4" /> Изменить водителя
-                                                        </Button>
-                                                        <Dropdown.Button
-                                                            style={{ width: '100%' }}
-                                                            buttonsRender={([left, right]) => [left, right]}
-                                                            onClick={() => handleDownloadPoA()}
-                                                            menu={{
-                                                                items: [{
-                                                                    key: 'stamp',
-                                                                    label: 'С подписью и печатью',
-                                                                    onClick: () => handleDownloadPoA(true),
-                                                                }],
-                                                            }}
-                                                        >
-                                                            <FileTextOutlined /> Доверенность (PDF)
-                                                        </Dropdown.Button>
-                                                        {/* Выдача и версии переехали на вкладку
-                                                            «Документы»: держать их в двух местах
-                                                            значит показывать разные списки одного
-                                                            и того же. Здесь остаётся отправка —
-                                                            она про водителя, а не про журнал. */}
-                                                        <Button
-                                                            variant="outline"
-                                                            className="w-full"
-                                                            onClick={() => setActiveTab('documents')}
-                                                        >
-                                                            <FileDown className="h-4 w-4" />
-                                                            Документы рейса
-                                                            {contracts.length + poaDocuments.length > 0
-                                                                && ` (${contracts.length + poaDocuments.length})`}
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            className="w-full"
-                                                            onClick={openSharePoAModal}
-                                                        >
-                                                            <Mail className="h-4 w-4" /> Отправить доверенность по email
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                                                    <div style={{ marginBottom: 12 }}>
-                                                        <Tag color="warning" style={{ fontSize: 13, padding: '4px 16px', borderRadius: 4 }}>Водитель не назначен</Tag>
-                                                    </div>
-                                                    <Button
-                                                        className="w-full"
-                                                        onClick={openAssignModal}
-                                                    >
-                                                        <UserPlus className="h-4 w-4" /> Назначить водителя
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </Card>
-
-                                        {/* Participants Card */}
-                                        <Card
-                                            title={<span style={{ fontWeight: 600 }}><TeamOutlined style={{ marginRight: 8, color: '#1677ff' }} />Участники перевозки</span>}
-                                            bordered={false}
-                                            className="premium-card"
-                                        >
-                                            <Descriptions column={1} size="small">
-                                                <Descriptions.Item label="Заказчик">
-                                                    <Text strong>{resolveCompanyName(order.customerCompanyId, partners, order.customerCompany?.name)}</Text>
-                                                </Descriptions.Item>
-                                                <Descriptions.Item label="Контактное лицо">
-                                                    {order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : '—'}
-                                                </Descriptions.Item>
-                                                <Descriptions.Item label="Телефон заказчика">
-                                                    {order.customer?.phone ? (
-                                                        <a href={`tel:${order.customer.phone}`} style={{ color: '#1677ff' }}>{order.customer.phone}</a>
-                                                    ) : '—'}
-                                                </Descriptions.Item>
-                                                
-                                                <Divider style={{ margin: '8px 0' }} />
-                                                
-                                                <Descriptions.Item label="Экспедитор">
-                                                    <Text strong>{resolveCompanyName(order.forwarderId || order.partnerId, partners, order.forwarder?.name || order.partner?.name)}</Text>
-                                                </Descriptions.Item>
-                                                {order.subForwarder && (
-                                                    <Descriptions.Item label="Перевозчик">
-                                                        <Text strong>{resolveCompanyName(order.subForwarderId, partners, order.subForwarder.name)}</Text>
-                                                    </Descriptions.Item>
-                                                )}
-                                                {order.responsibleManager && (
-                                                    <Descriptions.Item label="Менеджер">
-                                                        {order.responsibleManager.firstName} {order.responsibleManager.lastName}
-                                                    </Descriptions.Item>
-                                                )}
-                                                {(order.responsibles || []).map((r: any) => (
-                                                    <Descriptions.Item
-                                                        key={r.id}
-                                                        label={`Ответственный · ${r.company?.name ? shortenCompanyName(r.company.name) : 'компания'}`}
-                                                    >
-                                                        <Text strong>{r.user?.lastName} {r.user?.firstName}</Text>
-                                                        {r.companyId === user?.companyId && ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '') && (
-                                                            <Button variant="link" size="sm" onClick={openTransferModal}>
-                                                                Передать
-                                                            </Button>
-                                                        )}
-                                                    </Descriptions.Item>
-                                                ))}
-                                            </Descriptions>
-                                        </Card>
-                                    </Col>
-                                </Row>
+                                <OrderDetails
+                                    order={order}
+                                    partners={partners}
+                                    user={user}
+                                    fmt={fmt}
+                                    palletLines={palletLines}
+                                    hasDriver={hasDriver}
+                                    driverName={driverName}
+                                    driverPhone={driverPhone}
+                                    driverPlate={driverPlate}
+                                    driverTrailer={driverTrailer}
+                                    driverLinkLoading={driverLinkLoading}
+                                    documentsCount={contracts.length + poaDocuments.length}
+                                    openDriverLink={openDriverLink}
+                                    openAssignModal={openAssignModal}
+                                    handleDownloadPoA={handleDownloadPoA}
+                                    openSharePoAModal={openSharePoAModal}
+                                    openTransferModal={openTransferModal}
+                                    onOpenDocuments={() => setActiveTab('documents')}
+                                />
                             )
                         )
                     },
