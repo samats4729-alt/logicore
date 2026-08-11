@@ -104,10 +104,6 @@ export default function PayrollAdminPage() {
             const gen = allSchemes.find((s: Scheme) => s.userId === null);
             setGeneralScheme(gen || null);
 
-            if (gen) {
-                generalForm.setFieldsValue(gen);
-            }
-
             setKpiRules(kpiRes.data || []);
         } catch (err) {
             console.error('Failed to load payroll setup data', err);
@@ -135,6 +131,18 @@ export default function PayrollAdminPage() {
     useEffect(() => {
         loadData();
     }, []);
+
+    /**
+     * Значения в форму подставляем, когда она уже на экране.
+     *
+     * Пока идёт загрузка, страница показывает кольцо ожидания, и формы
+     * ещё нет. Раньше значения раскладывались прямо в `loadData` — Ant
+     * Design ругался, что форма ни к чему не подключена, и подстановка
+     * зависела от того, кто успел раньше.
+     */
+    useEffect(() => {
+        if (!loading && generalScheme) generalForm.setFieldsValue(generalScheme);
+    }, [loading, generalScheme, generalForm]);
 
     useEffect(() => {
         if (activeTab === '2' && dates[0] && dates[1]) {
