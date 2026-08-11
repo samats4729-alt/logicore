@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Tabs, Card, Table, Form, InputNumber, Select, Button, Space, Row, Col, Modal, DatePicker, Popconfirm, Tag } from 'antd';
-import { SettingOutlined, TableOutlined, PlusOutlined, DeleteOutlined, UserOutlined, PercentageOutlined, DollarOutlined, StarOutlined } from '@ant-design/icons';
+import { Table, Form, InputNumber, Select, Button, Row, Col, Modal, DatePicker, Popconfirm } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
+import { Plus, Table2, Target, UserRound, Wallet } from 'lucide-react';
+import styles from '@/components/nova/nova.module.css';
 import { api } from '@/lib/api';
+import { ROLE_LABELS } from '@/lib/vocabulary';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
 
-const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 interface Scheme {
@@ -38,6 +40,22 @@ interface User {
     lastName: string;
     role: string;
 }
+
+/**
+ * Схема без денег бессмысленна, поэтому что-то одно заполнить надо — но
+ * что именно, решает компания: кому-то оклад, кому-то процент, кому-то
+ * оба. Проверка висит на обоих полях сразу и смотрит на пару, а не на
+ * своё поле: иначе «укажите оклад» выскакивало бы у тех, кто платит
+ * только процентом.
+ */
+const SCHEME_VALIDATOR = ({ getFieldValue }: any) => ({
+    validator() {
+        const fixed = Number(getFieldValue('fixedAmount')) || 0;
+        const percent = Number(getFieldValue('percentValue')) || 0;
+        if (fixed > 0 || percent > 0) return Promise.resolve();
+        return Promise.reject(new Error('Укажите оклад, процент или и то и другое'));
+    },
+});
 
 export default function PayrollAdminPage() {
     const [activeTab, setActiveTab] = useState('1');
@@ -86,10 +104,6 @@ export default function PayrollAdminPage() {
             const gen = allSchemes.find((s: Scheme) => s.userId === null);
             setGeneralScheme(gen || null);
 
-            if (gen) {
-                generalForm.setFieldsValue(gen);
-            }
-
             setKpiRules(kpiRes.data || []);
         } catch (err) {
             console.error('Failed to load payroll setup data', err);
@@ -118,15 +132,47 @@ export default function PayrollAdminPage() {
         loadData();
     }, []);
 
+    /**
+     * Значения в форму подставляем, когда она уже на экране.
+     *
+     * Пока идёт загрузка, страница показывает кольцо ожидания, и формы
+     * ещё нет. Раньше значения раскладывались прямо в `loadData` — Ant
+     * Design ругался, что форма ни к чему не подключена, и подстановка
+     * зависела от того, кто успел раньше.
+     */
+    useEffect(() => {
+        if (!loading && generalScheme) generalForm.setFieldsValue(generalScheme);
+    }, [loading, generalScheme, generalForm]);
+
     useEffect(() => {
         if (activeTab === '2' && dates[0] && dates[1]) {
             loadReport(dates[0], dates[1]);
         }
     }, [activeTab, dates]);
 
+    /**
+     * Оклад и процент — две части одной схемы, а не выбор из двух.
+     *
+     * Раньше в форме стоял «тип начисления» — FIXED, PERCENT или HYBRID, — и
+     * поля показывались по типу. Выбрал «Оклад» — поле процента исчезало;
+     * выбрал «Процент» — исчезал оклад. Заполнить и то и другое можно было
+     * только через «Гибридный (HYBRID)», а по этому слову никто не догадался:
+     * компания написала в поддержку, что второе поле «блокируется или не
+     * сохраняется». В базе оба значения лежат всегда — мешала только форма.
+     *
+     * Теперь оба поля стоят рядом и заполняются свободно, а тип выводится из
+     * того, что заполнено. Заводить его руками человеку незачем.
+     */
+    const schemeType = (values: any) => {
+        const fixed = Number(values.fixedAmount) > 0;
+        const percent = Number(values.percentValue) > 0;
+        if (fixed && percent) return 'HYBRID';
+        return percent ? 'PERCENT' : 'FIXED';
+    };
+
     const handleSaveGeneral = async (values: any) => {
         try {
-            await api.put('/payroll/schemes', values);
+            await api.put('/payroll/schemes', { ...values, type: schemeType(values) });
             toast.success('Общая схема успешно обновлена');
             loadData();
         } catch (err) {
@@ -137,7 +183,7 @@ export default function PayrollAdminPage() {
 
     const handleAddPersonal = async (values: any) => {
         try {
-            await api.put(`/payroll/schemes/user/${values.userId}`, values);
+            await api.put(`/payroll/schemes/user/${values.userId}`, { ...values, type: schemeType(values) });
             toast.success('Персональная схема создана/обновлена');
             setPersonalModalVisible(false);
             personalForm.resetFields();
@@ -189,16 +235,16 @@ export default function PayrollAdminPage() {
             title: 'Сотрудник',
             dataIndex: 'name',
             key: 'name',
-            render: (text: string) => <Text strong style={{ fontSize: 13 }}>{text}</Text>,
+            render: (text: string) => <b style={{ fontSize: 13, fontWeight: 600 }}>{text}</b>,
         },
         {
             title: 'Роль',
             dataIndex: 'role',
             key: 'role',
-            render: (role: string) => <Tag>{role}</Tag>,
+            render: (role: string) => <span className={styles.chip}>{ROLE_LABELS[role] || role}</span>,
         },
         {
-            title: 'Завершено заявок',
+            title: 'Завершено рейсов',
             dataIndex: 'ordersCount',
             key: 'ordersCount',
             align: 'center' as const,
@@ -219,7 +265,7 @@ export default function PayrollAdminPage() {
             render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{v.toLocaleString('ru-RU')} ₸</span>,
         },
         {
-            title: 'Бонусы KPI',
+            title: 'Бонусы',
             dataIndex: 'kpiTotal',
             key: 'kpiTotal',
             align: 'right' as const,
@@ -246,9 +292,8 @@ export default function PayrollAdminPage() {
             dataIndex: 'type',
             key: 'type',
             render: (t: string) => {
-                if (t === 'FIXED') return <Tag color="green">Оклад</Tag>;
-                if (t === 'PERCENT') return <Tag color="blue">Процент</Tag>;
-                return <Tag color="purple">Гибрид</Tag>;
+                const label = t === 'FIXED' ? 'Оклад' : t === 'PERCENT' ? 'Процент' : 'Оклад и процент';
+                return <span className={styles.chip}>{label}</span>;
             },
         },
         {
@@ -266,7 +311,7 @@ export default function PayrollAdminPage() {
             render: (v: number, r: Scheme) => r.type !== 'FIXED' ? `${v}%` : '—',
         },
         {
-            title: 'База расчета',
+            title: 'Процент от',
             dataIndex: 'percentBase',
             key: 'base',
             render: (b: string, r: Scheme) => {
@@ -275,7 +320,7 @@ export default function PayrollAdminPage() {
             },
         },
         {
-            title: 'Триггер',
+            title: 'Когда начисляем',
             dataIndex: 'accrualStatus',
             key: 'trigger',
             render: (t: string) => {
@@ -301,16 +346,16 @@ export default function PayrollAdminPage() {
         {
             title: 'Сотрудник',
             key: 'user',
-            render: (_: any, r: KpiRule) => r.user ? `${r.user.lastName || ''} ${r.user.firstName || ''}`.trim() : <Tag color="default">Все сотрудники</Tag>,
+            render: (_: any, r: KpiRule) => r.user ? `${r.user.lastName || ''} ${r.user.firstName || ''}`.trim() : <span className={styles.chip}>Все сотрудники</span>,
         },
         {
-            title: 'Метрика',
+            title: 'За что',
             dataIndex: 'metric',
             key: 'metric',
-            render: () => 'Кол-во завершенных заявок за месяц',
+            render: () => 'Завершённые рейсы за месяц',
         },
         {
-            title: 'Порог заявок',
+            title: 'Норма рейсов',
             dataIndex: 'threshold',
             key: 'threshold',
             align: 'center' as const,
@@ -334,228 +379,225 @@ export default function PayrollAdminPage() {
         },
     ];
 
+    if (loading) {
+        return (
+            <div className={`${styles.page} ${styles.pageWide}`}>
+                <Loader size="large" full />
+            </div>
+        );
+    }
+
+    const personalSchemes = schemes.filter(s => s.userId !== null);
+
     return (
-        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
-            {/* ===== HERO 2026 ===== */}
-            <div className="lc2-hero">
+        <div className={`${styles.page} ${styles.pageWide}`}>
+            <div className={styles.hero}>
                 <div>
-                    <div className="lc-eyebrow">Финансы компании</div>
-                    <h1 className="lc2-title">Зарплаты и мотивация</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Настройка схем начислений и KPI для менеджеров
+                    <div className={styles.eyebrow}>Деньги · Зарплата</div>
+                    <h1 className={styles.title}>Зарплата и мотивация</h1>
+                    <p className={styles.subtitle}>
+                        Кому сколько платим: оклад, процент с рейса и бонусы за месяц.
                     </p>
                 </div>
-                <div className="lc2-metrics">
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
-                            <UserOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Схемы</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {schemes.length}
-                            </div>
-                            <div className="lc2-msub">персональных</div>
-                        </div>
+                {activeTab === '2' && (
+                    <div className={styles.heroActions}>
+                        <RangePicker
+                            picker="month"
+                            value={dates}
+                            onChange={(val) => {
+                                if (val && val[0] && val[1]) setDates([val[0], val[1]]);
+                            }}
+                            allowClear={false}
+                        />
                     </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
-                            <StarOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">KPI</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {kpiRules.length}
-                            </div>
-                            <div className="lc2-msub">правил</div>
-                        </div>
-                    </div>
-                </div>
+                )}
             </div>
 
-            {/* ===== TABS CARD ===== */}
-            <div className="lc-card" style={{ padding: 20 }}>
-            <Tabs activeKey={activeTab} onChange={setActiveTab}>
-                {/* TAB 1: SCHEMES CONFIG */}
-                <Tabs.TabPane tab={<span><SettingOutlined />Настройки схем и KPI</span>} key="1">
-                    <div style={{ padding: '0 8px' }}>
-                        <Row gutter={[20, 20]}>
-                            {/* GENERAL SCHEME */}
-                            <Col xs={24} lg={10}>
-                                <Card title={<span style={{ fontWeight: 600 }}>Общая схема начислений по умолчанию</span>} size="small">
-                                    <Form
-                                        form={generalForm}
-                                        layout="vertical"
-                                        onFinish={handleSaveGeneral}
+            {/* Переключатель разделов — те же пилюли, что в шапке кабинета и
+                на «Отчётах». */}
+            <div className={styles.pills} style={{ marginBottom: 14 }}>
+                <button
+                    type="button"
+                    className={`${styles.pill} ${activeTab === '1' ? styles.pillActive : ''}`}
+                    onClick={() => setActiveTab('1')}
+                >
+                    Схемы и бонусы
+                </button>
+                <button
+                    type="button"
+                    className={`${styles.pill} ${activeTab === '2' ? styles.pillActive : ''}`}
+                    onClick={() => setActiveTab('2')}
+                >
+                    Сводный отчёт
+                </button>
+            </div>
+
+            {activeTab === '1' ? (
+                <>
+                    <div className={styles.duo}>
+                        <section className={styles.card}>
+                            <div className={styles.cardHead}>
+                                <Wallet size={14} />
+                                <h2 className={styles.cardTitle}>Общая схема — для всех, кому не задана своя</h2>
+                            </div>
+                            <div className={styles.cardBody}>
+                                <Form
+                                    form={generalForm}
+                                    layout="vertical"
+                                    onFinish={handleSaveGeneral}
+                                    initialValues={{ percentBase: 'MARGIN', accrualStatus: 'COMPLETED' }}
+                                >
+                                    <Form.Item
+                                        name="fixedAmount"
+                                        label="Оклад в месяц (₸)"
+                                        dependencies={['percentValue']}
+                                        help="Оставьте пустым, если оклада нет"
+                                        rules={[SCHEME_VALIDATOR]}
                                     >
-                                        <Form.Item name="type" label="Тип начисления" rules={[{ required: true }]}>
-                                            <Select>
-                                                <Select.Option value="FIXED">Оклад (FIXED)</Select.Option>
-                                                <Select.Option value="PERCENT">Процент (PERCENT)</Select.Option>
-                                                <Select.Option value="HYBRID">Гибридный (HYBRID)</Select.Option>
-                                            </Select>
-                                        </Form.Item>
+                                        <InputNumber min={0} style={{ width: '100%' }} formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
+                                    </Form.Item>
 
-                                        <Form.Item
-                                            noStyle
-                                            shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}
-                                        >
-                                            {({ getFieldValue }) => {
-                                                const type = getFieldValue('type');
-                                                return (
-                                                    <>
-                                                        {(type === 'FIXED' || type === 'HYBRID') && (
-                                                            <Form.Item name="fixedAmount" label="Сумма оклада в месяц (₸)" rules={[{ required: true, message: 'Укажите оклад' }]}>
-                                                                <InputNumber min={0} style={{ width: '100%' }} formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
-                                                            </Form.Item>
-                                                        )}
-                                                        {(type === 'PERCENT' || type === 'HYBRID') && (
-                                                            <Row gutter={12}>
-                                                                <Col span={12}>
-                                                                    <Form.Item name="percentValue" label="Процент (%)" rules={[{ required: true, message: 'Укажите процент' }]}>
-                                                                        <InputNumber min={0} max={100} style={{ width: '100%' }} />
-                                                                    </Form.Item>
-                                                                </Col>
-                                                                <Col span={12}>
-                                                                    <Form.Item name="percentBase" label="База для процента" rules={[{ required: true }]}>
-                                                                        <Select>
-                                                                            <Select.Option value="MARGIN">Маржа заявки</Select.Option>
-                                                                            <Select.Option value="ORDER_AMOUNT">Сумма заявки</Select.Option>
-                                                                        </Select>
-                                                                    </Form.Item>
-                                                                </Col>
-                                                            </Row>
-                                                        )}
-                                                    </>
-                                                );
-                                            }}
-                                        </Form.Item>
+                                    <Row gutter={12}>
+                                        <Col span={12}>
+                                            <Form.Item
+                                                name="percentValue"
+                                                label="Процент с рейса (%)"
+                                                dependencies={['fixedAmount']}
+                                                rules={[SCHEME_VALIDATOR]}
+                                            >
+                                                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="percentBase" label="Процент считать от" rules={[{ required: true }]}>
+                                                <Select>
+                                                    <Select.Option value="MARGIN">Маржи рейса</Select.Option>
+                                                    <Select.Option value="ORDER_AMOUNT">Суммы рейса</Select.Option>
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
 
-                                        <Form.Item name="accrualStatus" label="Статус-триггер для процента" rules={[{ required: true }]}>
-                                            <Select>
-                                                <Select.Option value="COMPLETED">Заявка завершена (COMPLETED)</Select.Option>
-                                                <Select.Option value="CUSTOMER_PAID">Оплачена клиентом (CUSTOMER_PAID)</Select.Option>
-                                            </Select>
-                                        </Form.Item>
+                                    <Form.Item name="accrualStatus" label="Когда начислять процент" rules={[{ required: true }]}>
+                                        <Select>
+                                            <Select.Option value="COMPLETED">Когда рейс завершён</Select.Option>
+                                            <Select.Option value="CUSTOMER_PAID">Когда заказчик оплатил</Select.Option>
+                                        </Select>
+                                    </Form.Item>
 
-                                        <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-                                            <Button type="primary" htmlType="submit">Сохранить настройки</Button>
-                                        </Form.Item>
-                                    </Form>
-                                </Card>
-                            </Col>
+                                    <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+                                        <button type="submit" className={`${styles.action} ${styles.actionPrimary}`}>
+                                            Сохранить
+                                        </button>
+                                    </Form.Item>
+                                </Form>
+                            </div>
+                        </section>
 
-                            {/* PERSONAL SCHEMES OVERRIDES */}
-                            <Col xs={24} lg={14}>
-                                <Card
-                                    title={<span style={{ fontWeight: 600 }}>Персональные схемы</span>}
-                                    size="small"
-                                    extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setPersonalModalVisible(true)}>Добавить</Button>}
-                                >
-                                    <Table
-                                        columns={personalColumns}
-                                        dataSource={schemes.filter(s => s.userId !== null)}
-                                        rowKey="id"
-                                        size="small"
-                                        pagination={{ pageSize: 5 }}
-                                    />
-                                </Card>
-                            </Col>
-
-                            {/* KPI RULES SETUP */}
-                            <Col span={24}>
-                                <Card
-                                    title={<span style={{ fontWeight: 600 }}>Правила KPI и бонусов</span>}
-                                    size="small"
-                                    extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setKpiModalVisible(true)}>Добавить</Button>}
-                                >
-                                    <Table
-                                        columns={kpiColumns}
-                                        dataSource={kpiRules}
-                                        rowKey="id"
-                                        size="small"
-                                        pagination={{ pageSize: 5 }}
-                                    />
-                                </Card>
-                            </Col>
-                        </Row>
-                    </div>
-                </Tabs.TabPane>
-
-                {/* TAB 2: DETAILED REPORT */}
-                <Tabs.TabPane tab={<span><TableOutlined />Сводный отчет</span>} key="2">
-                    <div style={{ padding: '0 8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-                            <Text type="secondary">Здесь рассчитывается зарплата за период на основе схем и выполненных KPI</Text>
-                            <RangePicker
-                                picker="month"
-                                value={dates}
-                                onChange={(val) => {
-                                    if (val && val[0] && val[1]) {
-                                        setDates([val[0], val[1]]);
-                                    }
-                                }}
-                                allowClear={false}
-                            />
-                        </div>
-
-                        {reportLoading ? (
-                            <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
-                        ) : (
-                            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                                {/* Summary bar */}
-                                <Row gutter={[12, 12]}>
-                                    <Col xs={24} sm={12} lg={6}>
-                                        <Card size="small" bordered={false} style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                            <Text type="secondary" style={{ fontSize: 12 }}>Итого начислено за период</Text>
-                                            <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                                                {reportData.totals.total.toLocaleString('ru-RU')} ₸
-                                            </div>
-                                        </Card>
-                                    </Col>
-                                    <Col xs={24} sm={12} lg={6}>
-                                        <Card size="small" bordered={false} style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                            <Text type="secondary" style={{ fontSize: 12 }}>Оклады суммарно</Text>
-                                            <div style={{ fontSize: 20, fontWeight: 800, color: '#475569', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                                                {reportData.totals.salary.toLocaleString('ru-RU')} ₸
-                                            </div>
-                                        </Card>
-                                    </Col>
-                                    <Col xs={24} sm={12} lg={6}>
-                                        <Card size="small" bordered={false} style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                            <Text type="secondary" style={{ fontSize: 12 }}>Проценты суммарно</Text>
-                                            <div style={{ fontSize: 20, fontWeight: 800, color: '#475569', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                                                {reportData.totals.percentTotal.toLocaleString('ru-RU')} ₸
-                                            </div>
-                                        </Card>
-                                    </Col>
-                                    <Col xs={24} sm={12} lg={6}>
-                                        <Card size="small" bordered={false} style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                            <Text type="secondary" style={{ fontSize: 12 }}>KPI-бонусы суммарно</Text>
-                                            <div style={{ fontSize: 20, fontWeight: 800, color: '#475569', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                                                {reportData.totals.kpiTotal.toLocaleString('ru-RU')} ₸
-                                            </div>
-                                        </Card>
-                                    </Col>
-                                </Row>
-
+                        <section className={styles.card}>
+                            <div className={styles.cardHead}>
+                                <UserRound size={14} />
+                                <h2 className={styles.cardTitle}>Свои условия у сотрудников</h2>
+                                <span className={styles.cardCount}>{personalSchemes.length}</span>
+                                <button type="button" className={styles.action} onClick={() => setPersonalModalVisible(true)}>
+                                    <Plus size={14} /> Добавить
+                                </button>
+                            </div>
+                            {personalSchemes.length === 0 ? (
+                                <div className={styles.empty}>
+                                    Ни у кого нет своих условий — все на общей схеме.
+                                </div>
+                            ) : (
                                 <Table
-                                    columns={reportColumns}
-                                    dataSource={reportData.report}
-                                    rowKey="userId"
+                                    columns={personalColumns}
+                                    dataSource={personalSchemes}
+                                    rowKey="id"
                                     size="small"
-                                    pagination={false}
+                                    pagination={personalSchemes.length > 5 ? { pageSize: 5 } : false}
                                 />
-                            </Space>
-                        )}
+                            )}
+                        </section>
                     </div>
-                </Tabs.TabPane>
-            </Tabs>
-            </div>
+
+                    <section className={styles.card} style={{ marginTop: 14 }}>
+                        <div className={styles.cardHead}>
+                            <Target size={14} />
+                            <h2 className={styles.cardTitle}>Бонусы за месяц</h2>
+                            <span className={styles.cardCount}>{kpiRules.length}</span>
+                            <button type="button" className={styles.action} onClick={() => setKpiModalVisible(true)}>
+                                <Plus size={14} /> Добавить
+                            </button>
+                        </div>
+                        {kpiRules.length === 0 ? (
+                            <div className={styles.empty}>
+                                Бонусов нет. Бонус — это доплата, когда сотрудник закрыл за месяц
+                                не меньше заданного числа рейсов.
+                            </div>
+                        ) : (
+                            <Table
+                                columns={kpiColumns}
+                                dataSource={kpiRules}
+                                rowKey="id"
+                                size="small"
+                                pagination={kpiRules.length > 5 ? { pageSize: 5 } : false}
+                            />
+                        )}
+                    </section>
+                </>
+            ) : reportLoading ? (
+                <Loader size="large" full />
+            ) : (
+                <>
+                    {/* Начислено — зелёным: это единственное место, где цвет
+                        разрешён поверх чёрно-белой темы. */}
+                    <div className={styles.tiles}>
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Всего за период</span></div>
+                            <div className={`${styles.tileValue} ${styles.valuePos}`}>
+                                {reportData.totals.total.toLocaleString('ru-RU')} ₸
+                            </div>
+                        </div>
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Оклады</span></div>
+                            <div className={styles.tileValue}>{reportData.totals.salary.toLocaleString('ru-RU')} ₸</div>
+                        </div>
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Проценты с рейсов</span></div>
+                            <div className={styles.tileValue}>{reportData.totals.percentTotal.toLocaleString('ru-RU')} ₸</div>
+                        </div>
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Бонусы</span></div>
+                            <div className={styles.tileValue}>{reportData.totals.kpiTotal.toLocaleString('ru-RU')} ₸</div>
+                        </div>
+                    </div>
+
+                    <section className={styles.card}>
+                        <div className={styles.cardHead}>
+                            <Table2 size={14} />
+                            <h2 className={styles.cardTitle}>Кому сколько начислено</h2>
+                            <span className={styles.cardCount}>{reportData.report.length}</span>
+                        </div>
+                        {reportData.report.length === 0 ? (
+                            <div className={styles.empty}>
+                                За выбранные месяцы начислений нет. Они появляются, когда рейс
+                                доходит до статуса, заданного в схеме.
+                            </div>
+                        ) : (
+                            <Table
+                                columns={reportColumns}
+                                dataSource={reportData.report}
+                                rowKey="userId"
+                                size="small"
+                                pagination={false}
+                            />
+                        )}
+                    </section>
+                </>
+            )}
 
             {/* Modal: Create/Edit Personal Scheme */}
             <Modal
-                title="Настроить персональную схему сотрудника"
+                title="Свои условия для сотрудника"
                 open={personalModalVisible}
                 onCancel={() => setPersonalModalVisible(false)}
                 footer={null}
@@ -565,7 +607,7 @@ export default function PayrollAdminPage() {
                     form={personalForm}
                     layout="vertical"
                     onFinish={handleAddPersonal}
-                    initialValues={{ type: 'FIXED', percentBase: 'MARGIN', accrualStatus: 'COMPLETED' }}
+                    initialValues={{ percentBase: 'MARGIN', accrualStatus: 'COMPLETED' }}
                 >
                     <Form.Item name="userId" label="Сотрудник" rules={[{ required: true, message: 'Выберите сотрудника' }]}>
                         <Select showSearch placeholder="ФИО сотрудника" filterOption={(input, option) =>
@@ -579,68 +621,60 @@ export default function PayrollAdminPage() {
                         </Select>
                     </Form.Item>
 
-                    <Form.Item name="type" label="Тип начисления" rules={[{ required: true }]}>
-                        <Select>
-                            <Select.Option value="FIXED">Оклад (FIXED)</Select.Option>
-                            <Select.Option value="PERCENT">Процент (PERCENT)</Select.Option>
-                            <Select.Option value="HYBRID">Гибридный (HYBRID)</Select.Option>
-                        </Select>
-                    </Form.Item>
-
                     <Form.Item
-                        noStyle
-                        shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}
+                        name="fixedAmount"
+                        label="Оклад в месяц (₸)"
+                        dependencies={['percentValue']}
+                        help="Оставьте пустым, если оклада нет"
+                        rules={[SCHEME_VALIDATOR]}
                     >
-                        {({ getFieldValue }) => {
-                            const type = getFieldValue('type');
-                            return (
-                                <>
-                                    {(type === 'FIXED' || type === 'HYBRID') && (
-                                        <Form.Item name="fixedAmount" label="Сумма оклада в месяц (₸)" rules={[{ required: true, message: 'Укажите оклад' }]}>
-                                            <InputNumber min={0} style={{ width: '100%' }} />
-                                        </Form.Item>
-                                    )}
-                                    {(type === 'PERCENT' || type === 'HYBRID') && (
-                                        <Row gutter={12}>
-                                            <Col span={12}>
-                                                <Form.Item name="percentValue" label="Процент (%)" rules={[{ required: true, message: 'Укажите процент' }]}>
-                                                    <InputNumber min={0} max={100} style={{ width: '100%' }} />
-                                                </Form.Item>
-                                            </Col>
-                                            <Col span={12}>
-                                                <Form.Item name="percentBase" label="База для процента" rules={[{ required: true }]}>
-                                                    <Select>
-                                                        <Select.Option value="MARGIN">Маржа заявки</Select.Option>
-                                                        <Select.Option value="ORDER_AMOUNT">Сумма заявки</Select.Option>
-                                                    </Select>
-                                                </Form.Item>
-                                            </Col>
-                                        </Row>
-                                    )}
-                                </>
-                            );
-                        }}
+                        <InputNumber min={0} style={{ width: '100%' }} />
                     </Form.Item>
 
-                    <Form.Item name="accrualStatus" label="Статус-триггер для процента" rules={[{ required: true }]}>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="percentValue"
+                                label="Процент с рейса (%)"
+                                dependencies={['fixedAmount']}
+                                rules={[SCHEME_VALIDATOR]}
+                            >
+                                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="percentBase" label="Процент считать от" rules={[{ required: true }]}>
+                                <Select>
+                                    <Select.Option value="MARGIN">Маржи рейса</Select.Option>
+                                    <Select.Option value="ORDER_AMOUNT">Суммы рейса</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Form.Item name="accrualStatus" label="Когда начислять процент" rules={[{ required: true }]}>
                         <Select>
-                            <Select.Option value="COMPLETED">Заявка завершена (COMPLETED)</Select.Option>
-                            <Select.Option value="CUSTOMER_PAID">Оплачена клиентом (CUSTOMER_PAID)</Select.Option>
+                            <Select.Option value="COMPLETED">Когда рейс завершён</Select.Option>
+                            <Select.Option value="CUSTOMER_PAID">Когда заказчик оплатил</Select.Option>
                         </Select>
                     </Form.Item>
 
                     <Form.Item style={{ textAlign: 'right', marginTop: 24, marginBottom: 0 }}>
-                        <Space>
-                            <Button onClick={() => setPersonalModalVisible(false)}>Отмена</Button>
-                            <Button type="primary" htmlType="submit">Сохранить</Button>
-                        </Space>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button type="button" className={styles.action} onClick={() => setPersonalModalVisible(false)}>
+                                Отмена
+                            </button>
+                            <button type="submit" className={`${styles.action} ${styles.actionPrimary}`}>
+                                Сохранить
+                            </button>
+                        </div>
                     </Form.Item>
                 </Form>
             </Modal>
 
             {/* Modal: Create KPI Rule */}
             <Modal
-                title="Добавить правило KPI"
+                title="Бонус за месяц"
                 open={kpiModalVisible}
                 onCancel={() => setKpiModalVisible(false)}
                 footer={null}
@@ -652,7 +686,7 @@ export default function PayrollAdminPage() {
                     onFinish={handleAddKpi}
                     initialValues={{ metric: 'COMPLETED_ORDERS_MONTH' }}
                 >
-                    <Form.Item name="userId" label="Сотрудник (необязательно)" help="Если пустой — применяется ко всем менеджерам">
+                    <Form.Item name="userId" label="Кому" help="Не выбирать — бонус получат все менеджеры">
                         <Select showSearch placeholder="Все сотрудники" allowClear filterOption={(input, option) =>
                             ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
                         }>
@@ -664,25 +698,29 @@ export default function PayrollAdminPage() {
                         </Select>
                     </Form.Item>
 
-                    <Form.Item name="metric" label="Показатель / Метрика" rules={[{ required: true }]}>
+                    <Form.Item name="metric" label="За что считаем" rules={[{ required: true }]}>
                         <Select>
-                            <Select.Option value="COMPLETED_ORDERS_MONTH">Завершенные заявки за месяц</Select.Option>
+                            <Select.Option value="COMPLETED_ORDERS_MONTH">Завершённые рейсы за месяц</Select.Option>
                         </Select>
                     </Form.Item>
 
-                    <Form.Item name="threshold" label="Пороговое количество заявок" rules={[{ required: true, message: 'Укажите порог' }]}>
+                    <Form.Item name="threshold" label="Сколько рейсов закрыть за месяц" rules={[{ required: true, message: 'Укажите порог' }]}>
                         <InputNumber min={1} style={{ width: '100%' }} />
                     </Form.Item>
 
-                    <Form.Item name="bonusAmount" label="Сумма бонуса при достижении (₸)" rules={[{ required: true, message: 'Укажите сумму бонуса' }]}>
+                    <Form.Item name="bonusAmount" label="Бонус, если норма выполнена (₸)" rules={[{ required: true, message: 'Укажите сумму бонуса' }]}>
                         <InputNumber min={0} style={{ width: '100%' }} />
                     </Form.Item>
 
                     <Form.Item style={{ textAlign: 'right', marginTop: 24, marginBottom: 0 }}>
-                        <Space>
-                            <Button onClick={() => setKpiModalVisible(false)}>Отмена</Button>
-                            <Button type="primary" htmlType="submit">Сохранить</Button>
-                        </Space>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button type="button" className={styles.action} onClick={() => setKpiModalVisible(false)}>
+                                Отмена
+                            </button>
+                            <button type="submit" className={`${styles.action} ${styles.actionPrimary}`}>
+                                Сохранить
+                            </button>
+                        </div>
                     </Form.Item>
                 </Form>
             </Modal>
