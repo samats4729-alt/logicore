@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SubscriptionStatus } from '@prisma/client';
 import { BillingService } from './billing.service';
+import { addMonths } from '../common/utils/business-date';
 
 /**
  * Подписки компаний.
@@ -429,9 +430,15 @@ describe('Подписки компаний', () => {
 
             await service.updateCompanySubscription(COMPANY, { months: 1 });
 
+            // Ожидаемую дату считаем тем же правилом, что и продакшен:
+            // месяц прибавляется с прижатием к последнему дню. Наивный
+            // `setMonth(+1)` от 31 августа даёт «31 сентября», а такого дня
+            // нет — JS молча переносит на 1 октября, и проверка падала
+            // ровно в те дни года, когда конец периода попадал на 31-е.
+            // Проверяем здесь другое: продление считается от конца
+            // оплаченного периода, а не от сегодня.
             const periodEnd: Date = prisma.companySubscription.upsert.mock.calls[0][0].update.periodEnd;
-            const expected = new Date(end);
-            expected.setMonth(expected.getMonth() + 1);
+            const expected = addMonths(end, 1);
             expect(periodEnd.toISOString().slice(0, 10)).toBe(expected.toISOString().slice(0, 10));
         });
 
