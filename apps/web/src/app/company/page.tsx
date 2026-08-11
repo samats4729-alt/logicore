@@ -140,6 +140,12 @@ export default function CompanyDashboard() {
             .catch(() => { })
             .finally(() => setEventsLoading(false));
 
+        // Свой заработок смотрит кто угодно, у кого есть схема, — в том
+        // числе владелец: он тоже может вести рейсы и получать процент.
+        api.get('/payroll/my/summary')
+            .then(res => setPayrollSummary(res.data))
+            .catch(() => { });
+
         if (isOwner) {
             api.get('/company/dashboard-activity')
                 .then(res => setActivity(res.data))
@@ -168,10 +174,6 @@ export default function CompanyDashboard() {
                         completed: list.filter(o => o.status === 'COMPLETED').length,
                     });
                 })
-                .catch(() => { });
-
-            api.get('/payroll/my/summary')
-                .then(res => setPayrollSummary(res.data))
                 .catch(() => { });
 
             setActivityLoading(false);
@@ -285,6 +287,14 @@ export default function CompanyDashboard() {
                             tone={(activity?.problemNow || 0) > 0 ? 'neg' : undefined}
                         />
                         <Tile label="Заявок за месяц" value={cur?.created ?? '—'} sub="создано с начала месяца" />
+                        {payrollSummary?.hasScheme && (
+                            <Tile
+                                label="Заработано за месяц"
+                                value={`${fmt(payrollSummary.total)} ₸`}
+                                sub="перейти к деталям"
+                                onClick={() => router.push('/company/my-salary')}
+                            />
+                        )}
                     </>
                 ) : (
                     <>
