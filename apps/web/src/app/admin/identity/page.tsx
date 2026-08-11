@@ -6,6 +6,7 @@ import { ReloadOutlined, TeamOutlined, MergeCellsOutlined } from '@ant-design/ic
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import { ROLE_LABELS } from '@/lib/vocabulary';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -70,17 +71,6 @@ interface ReadReconcile {
     employees: ReadArea;
     drivers: ReadArea;
 }
-
-const ROLE_LABELS: Record<string, string> = {
-    COMPANY_ADMIN: 'Администратор',
-    LOGISTICIAN: 'Менеджер',
-    FORWARDER: 'Экспедитор',
-    ACCOUNTANT: 'Бухгалтер',
-    WAREHOUSE_MANAGER: 'Завсклад',
-    DRIVER: 'Водитель',
-    PARTNER: 'Партнёр',
-    ADMIN: 'Админ платформы',
-};
 
 export default function AdminIdentityPage() {
     const [report, setReport] = useState<DupReport | null>(null);

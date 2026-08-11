@@ -47,15 +47,7 @@ import { BetaClosed, BetaStrip } from '@/components/ui/BetaNotice';
 import { BETA_LABEL, betaStateOf, getBetaSection } from '@/lib/beta-sections';
 import Loader from '@/components/ui/Loader';
 import { isNavItemActive } from '@/lib/cabinet-nav';
-
-const ROLE_LABELS: Record<string, string> = {
-    COMPANY_ADMIN: 'Администратор',
-    LOGISTICIAN: 'Логист',
-    FORWARDER: 'Экспедитор',
-    ACCOUNTANT: 'Бухгалтер',
-    WAREHOUSE_MANAGER: 'Завскладом',
-    PARTNER: 'Партнёр',
-};
+import { ROLE_LABELS } from '@/lib/vocabulary';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
