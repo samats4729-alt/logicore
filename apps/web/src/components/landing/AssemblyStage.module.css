@@ -197,6 +197,56 @@
     -webkit-mask-image: radial-gradient(150px 150px at var(--mx, -999px) var(--my, -999px), #000 0%, rgba(0, 0, 0, .45) 45%, transparent 72%);
 }
 
+/* Двоичный код под курсором.
+ *
+ * Те же клетки в 22 точки, что у сетки: на месте точек проступают нули и
+ * единицы. Цифры лежат в плитке-маске, а красит их заливка — поэтому они
+ * берут цвет темы и не заведены дважды под светлую и тёмную.
+ *
+ * Масок две, и они пересекаются: одна даёт форму цифр, вторая — пятно
+ * вокруг курсора. Пересечение и есть «код проступает только там, где
+ * ведут мышью».
+ */
+.code {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-color: var(--nova-fg-2);
+    opacity: calc((1 - var(--p)) * var(--lit, 0));
+    transition: opacity .25s ease;
+
+    mask-image:
+        url('/landing-binary-a.svg'),
+        radial-gradient(160px 160px at var(--mx, -999px) var(--my, -999px), #000 0%, #000 28%, rgba(0, 0, 0, .55) 52%, transparent 76%);
+    mask-size: 176px 176px, 100% 100%;
+    mask-repeat: repeat, no-repeat;
+    mask-composite: intersect;
+    -webkit-mask-image:
+        url('/landing-binary-a.svg'),
+        radial-gradient(160px 160px at var(--mx, -999px) var(--my, -999px), #000 0%, #000 28%, rgba(0, 0, 0, .55) 52%, transparent 76%);
+    -webkit-mask-size: 176px 176px, 100% 100%;
+    -webkit-mask-repeat: repeat, no-repeat;
+    -webkit-mask-composite: source-in;
+}
+
+/* Вторая плитка — те клетки, которых нет в первой. Она проступает и
+   гаснет, поэтому часть разрядов перещёлкивается, а сам код никуда не
+   пропадает. Плитки не накладываются: цифры не наезжают друг на друга. */
+.codeAlt {
+    animation: flick 3.2s ease-in-out infinite;
+    mask-image:
+        url('/landing-binary-b.svg'),
+        radial-gradient(160px 160px at var(--mx, -999px) var(--my, -999px), #000 0%, #000 28%, rgba(0, 0, 0, .55) 52%, transparent 76%);
+    -webkit-mask-image:
+        url('/landing-binary-b.svg'),
+        radial-gradient(160px 160px at var(--mx, -999px) var(--my, -999px), #000 0%, #000 28%, rgba(0, 0, 0, .55) 52%, transparent 76%);
+}
+
+@keyframes flick {
+    0%, 100% { opacity: 0; }
+    45%, 65% { opacity: calc((1 - var(--p)) * var(--lit, 0)); }
+}
+
 [data-theme='dark'] .frame {
     box-shadow: 0 2px 6px rgba(0, 0, 0, .4), 0 24px 60px -28px rgba(0, 0, 0, .7);
 }
