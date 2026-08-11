@@ -39,6 +39,22 @@ interface User {
     role: string;
 }
 
+/**
+ * Схема без денег бессмысленна, поэтому что-то одно заполнить надо — но
+ * что именно, решает компания: кому-то оклад, кому-то процент, кому-то
+ * оба. Проверка висит на обоих полях сразу и смотрит на пару, а не на
+ * своё поле: иначе «укажите оклад» выскакивало бы у тех, кто платит
+ * только процентом.
+ */
+const SCHEME_VALIDATOR = ({ getFieldValue }: any) => ({
+    validator() {
+        const fixed = Number(getFieldValue('fixedAmount')) || 0;
+        const percent = Number(getFieldValue('percentValue')) || 0;
+        if (fixed > 0 || percent > 0) return Promise.resolve();
+        return Promise.reject(new Error('Укажите оклад, процент или и то и другое'));
+    },
+});
+
 export default function PayrollAdminPage() {
     const [activeTab, setActiveTab] = useState('1');
     const [users, setUsers] = useState<User[]>([]);
@@ -124,9 +140,29 @@ export default function PayrollAdminPage() {
         }
     }, [activeTab, dates]);
 
+    /**
+     * Оклад и процент — две части одной схемы, а не выбор из двух.
+     *
+     * Раньше в форме стоял «тип начисления» — FIXED, PERCENT или HYBRID, — и
+     * поля показывались по типу. Выбрал «Оклад» — поле процента исчезало;
+     * выбрал «Процент» — исчезал оклад. Заполнить и то и другое можно было
+     * только через «Гибридный (HYBRID)», а по этому слову никто не догадался:
+     * компания написала в поддержку, что второе поле «блокируется или не
+     * сохраняется». В базе оба значения лежат всегда — мешала только форма.
+     *
+     * Теперь оба поля стоят рядом и заполняются свободно, а тип выводится из
+     * того, что заполнено. Заводить его руками человеку незачем.
+     */
+    const schemeType = (values: any) => {
+        const fixed = Number(values.fixedAmount) > 0;
+        const percent = Number(values.percentValue) > 0;
+        if (fixed && percent) return 'HYBRID';
+        return percent ? 'PERCENT' : 'FIXED';
+    };
+
     const handleSaveGeneral = async (values: any) => {
         try {
-            await api.put('/payroll/schemes', values);
+            await api.put('/payroll/schemes', { ...values, type: schemeType(values) });
             toast.success('Общая схема успешно обновлена');
             loadData();
         } catch (err) {
@@ -137,7 +173,7 @@ export default function PayrollAdminPage() {
 
     const handleAddPersonal = async (values: any) => {
         try {
-            await api.put(`/payroll/schemes/user/${values.userId}`, values);
+            await api.put(`/payroll/schemes/user/${values.userId}`, { ...values, type: schemeType(values) });
             toast.success('Персональная схема создана/обновлена');
             setPersonalModalVisible(false);
             personalForm.resetFields();
@@ -387,54 +423,42 @@ export default function PayrollAdminPage() {
                                         form={generalForm}
                                         layout="vertical"
                                         onFinish={handleSaveGeneral}
+                                        initialValues={{ percentBase: 'MARGIN', accrualStatus: 'COMPLETED' }}
                                     >
-                                        <Form.Item name="type" label="Тип начисления" rules={[{ required: true }]}>
-                                            <Select>
-                                                <Select.Option value="FIXED">Оклад (FIXED)</Select.Option>
-                                                <Select.Option value="PERCENT">Процент (PERCENT)</Select.Option>
-                                                <Select.Option value="HYBRID">Гибридный (HYBRID)</Select.Option>
-                                            </Select>
-                                        </Form.Item>
-
                                         <Form.Item
-                                            noStyle
-                                            shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}
+                                            name="fixedAmount"
+                                            label="Оклад в месяц (₸)"
+                                            help="Оставьте пустым, если оклада нет"
+                                            rules={[SCHEME_VALIDATOR]}
                                         >
-                                            {({ getFieldValue }) => {
-                                                const type = getFieldValue('type');
-                                                return (
-                                                    <>
-                                                        {(type === 'FIXED' || type === 'HYBRID') && (
-                                                            <Form.Item name="fixedAmount" label="Сумма оклада в месяц (₸)" rules={[{ required: true, message: 'Укажите оклад' }]}>
-                                                                <InputNumber min={0} style={{ width: '100%' }} formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
-                                                            </Form.Item>
-                                                        )}
-                                                        {(type === 'PERCENT' || type === 'HYBRID') && (
-                                                            <Row gutter={12}>
-                                                                <Col span={12}>
-                                                                    <Form.Item name="percentValue" label="Процент (%)" rules={[{ required: true, message: 'Укажите процент' }]}>
-                                                                        <InputNumber min={0} max={100} style={{ width: '100%' }} />
-                                                                    </Form.Item>
-                                                                </Col>
-                                                                <Col span={12}>
-                                                                    <Form.Item name="percentBase" label="База для процента" rules={[{ required: true }]}>
-                                                                        <Select>
-                                                                            <Select.Option value="MARGIN">Маржа заявки</Select.Option>
-                                                                            <Select.Option value="ORDER_AMOUNT">Сумма заявки</Select.Option>
-                                                                        </Select>
-                                                                    </Form.Item>
-                                                                </Col>
-                                                            </Row>
-                                                        )}
-                                                    </>
-                                                );
-                                            }}
+                                            <InputNumber min={0} style={{ width: '100%' }} formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
                                         </Form.Item>
 
-                                        <Form.Item name="accrualStatus" label="Статус-триггер для процента" rules={[{ required: true }]}>
+                                        <Row gutter={12}>
+                                            <Col span={12}>
+                                                <Form.Item
+                                                    name="percentValue"
+                                                    label="Процент с рейса (%)"
+                                                    rules={[SCHEME_VALIDATOR]}
+                                                >
+                                                    <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col span={12}>
+                                                <Form.Item name="percentBase" label="База для процента" rules={[{ required: true }]}>
+                                                    <Select>
+                                                        <Select.Option value="MARGIN">Маржа заявки</Select.Option>
+                                                        <Select.Option value="ORDER_AMOUNT">Сумма заявки</Select.Option>
+                                                    </Select>
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
+
+
+                                        <Form.Item name="accrualStatus" label="Когда начислять процент" rules={[{ required: true }]}>
                                             <Select>
-                                                <Select.Option value="COMPLETED">Заявка завершена (COMPLETED)</Select.Option>
-                                                <Select.Option value="CUSTOMER_PAID">Оплачена клиентом (CUSTOMER_PAID)</Select.Option>
+                                                <Select.Option value="COMPLETED">Когда рейс завершён</Select.Option>
+                                                <Select.Option value="CUSTOMER_PAID">Когда заказчик оплатил</Select.Option>
                                             </Select>
                                         </Form.Item>
 
@@ -565,7 +589,7 @@ export default function PayrollAdminPage() {
                     form={personalForm}
                     layout="vertical"
                     onFinish={handleAddPersonal}
-                    initialValues={{ type: 'FIXED', percentBase: 'MARGIN', accrualStatus: 'COMPLETED' }}
+                    initialValues={{ percentBase: 'MARGIN', accrualStatus: 'COMPLETED' }}
                 >
                     <Form.Item name="userId" label="Сотрудник" rules={[{ required: true, message: 'Выберите сотрудника' }]}>
                         <Select showSearch placeholder="ФИО сотрудника" filterOption={(input, option) =>
@@ -579,53 +603,41 @@ export default function PayrollAdminPage() {
                         </Select>
                     </Form.Item>
 
-                    <Form.Item name="type" label="Тип начисления" rules={[{ required: true }]}>
-                        <Select>
-                            <Select.Option value="FIXED">Оклад (FIXED)</Select.Option>
-                            <Select.Option value="PERCENT">Процент (PERCENT)</Select.Option>
-                            <Select.Option value="HYBRID">Гибридный (HYBRID)</Select.Option>
-                        </Select>
-                    </Form.Item>
-
                     <Form.Item
-                        noStyle
-                        shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}
+                        name="fixedAmount"
+                        label="Оклад в месяц (₸)"
+                        dependencies={['percentValue']}
+                        help="Оставьте пустым, если оклада нет"
+                        rules={[SCHEME_VALIDATOR]}
                     >
-                        {({ getFieldValue }) => {
-                            const type = getFieldValue('type');
-                            return (
-                                <>
-                                    {(type === 'FIXED' || type === 'HYBRID') && (
-                                        <Form.Item name="fixedAmount" label="Сумма оклада в месяц (₸)" rules={[{ required: true, message: 'Укажите оклад' }]}>
-                                            <InputNumber min={0} style={{ width: '100%' }} />
-                                        </Form.Item>
-                                    )}
-                                    {(type === 'PERCENT' || type === 'HYBRID') && (
-                                        <Row gutter={12}>
-                                            <Col span={12}>
-                                                <Form.Item name="percentValue" label="Процент (%)" rules={[{ required: true, message: 'Укажите процент' }]}>
-                                                    <InputNumber min={0} max={100} style={{ width: '100%' }} />
-                                                </Form.Item>
-                                            </Col>
-                                            <Col span={12}>
-                                                <Form.Item name="percentBase" label="База для процента" rules={[{ required: true }]}>
-                                                    <Select>
-                                                        <Select.Option value="MARGIN">Маржа заявки</Select.Option>
-                                                        <Select.Option value="ORDER_AMOUNT">Сумма заявки</Select.Option>
-                                                    </Select>
-                                                </Form.Item>
-                                            </Col>
-                                        </Row>
-                                    )}
-                                </>
-                            );
-                        }}
+                        <InputNumber min={0} style={{ width: '100%' }} />
                     </Form.Item>
 
-                    <Form.Item name="accrualStatus" label="Статус-триггер для процента" rules={[{ required: true }]}>
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="percentValue"
+                                label="Процент с рейса (%)"
+                                dependencies={['fixedAmount']}
+                                rules={[SCHEME_VALIDATOR]}
+                            >
+                                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="percentBase" label="База для процента" rules={[{ required: true }]}>
+                                <Select>
+                                    <Select.Option value="MARGIN">Маржа заявки</Select.Option>
+                                    <Select.Option value="ORDER_AMOUNT">Сумма заявки</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Form.Item name="accrualStatus" label="Когда начислять процент" rules={[{ required: true }]}>
                         <Select>
-                            <Select.Option value="COMPLETED">Заявка завершена (COMPLETED)</Select.Option>
-                            <Select.Option value="CUSTOMER_PAID">Оплачена клиентом (CUSTOMER_PAID)</Select.Option>
+                            <Select.Option value="COMPLETED">Когда рейс завершён</Select.Option>
+                            <Select.Option value="CUSTOMER_PAID">Когда заказчик оплатил</Select.Option>
                         </Select>
                     </Form.Item>
 
