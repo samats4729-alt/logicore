@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="176" height="176" viewBox="0 0 176 176">
+<g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="600" text-anchor="middle" fill="#000">
+<text x="33" y="15">1</text>
+<text x="55" y="15">1</text>
+<text x="77" y="15">0</text>
+<text x="99" y="15">1</text>
+<text x="121" y="15">0</text>
+<text x="33" y="37">1</text>
+<text x="99" y="37">1</text>
+<text x="121" y="37">0</text>
+<text x="77" y="59">0</text>
+<text x="99" y="59">1</text>
+<text x="121" y="59">0</text>
+<text x="143" y="59">0</text>
+<text x="165" y="59">1</text>
+<text x="11" y="81">1</text>
+<text x="33" y="81">0</text>
+<text x="55" y="81">1</text>
+<text x="77" y="81">1</text>
+<text x="99" y="81">0</text>
+<text x="121" y="81">0</text>
+<text x="143" y="81">1</text>
+<text x="165" y="81">0</text>
+<text x="33" y="103">1</text>
+<text x="99" y="103">0</text>
+<text x="121" y="103">1</text>
+<text x="11" y="125">0</text>
+<text x="33" y="125">0</text>
+<text x="55" y="125">0</text>
+<text x="77" y="125">1</text>
+<text x="121" y="125">0</text>
+<text x="143" y="125">1</text>
+<text x="165" y="125">0</text>
+<text x="11" y="147">1</text>
+<text x="33" y="147">1</text>
+<text x="55" y="147">1</text>
+<text x="99" y="147">1</text>
+<text x="121" y="147">0</text>
+<text x="143" y="147">0</text>
+<text x="165" y="147">1</text>
+<text x="33" y="169">1</text>
+<text x="55" y="169">0</text>
+<text x="77" y="169">0</text>
+<text x="99" y="169">0</text>
+<text x="121" y="169">0</text>
+<text x="165" y="169">1</text>
+</g>
+</svg>

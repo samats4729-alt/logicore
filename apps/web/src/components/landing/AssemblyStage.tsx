@@ -187,6 +187,12 @@ export default function AssemblyStage({ children }: { children: React.ReactNode 
                                 мере того, как окно заполняется. */}
                             <div className={styles.dots} aria-hidden />
                             <div className={styles.dotsLit} aria-hidden />
+                            {/* Под курсором точки становятся нулями и
+                                единицами. Две плитки с разными цифрами
+                                перемигиваются — код читается живым, а не
+                                напечатанным один раз. */}
+                            <div className={styles.code} aria-hidden />
+                            <div className={`${styles.code} ${styles.codeAlt}`} aria-hidden />
                         </div>
 
                         <div className={styles.window}>
