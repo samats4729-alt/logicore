@@ -1901,7 +1901,8 @@ a.mapboxgl-ctrl-logo,
   border: 1px solid var(--lc-border) !important;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12),
               0 2px 8px rgba(0, 0, 0, 0.04) !important;
-  background: #ffffff !important;
+  background: var(--nova-surface) !important;
+  border-color: var(--nova-border) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   min-width: 200px;
@@ -1925,30 +1926,30 @@ a.mapboxgl-ctrl-logo,
   padding: 8px 10px !important;
   font-size: 13px !important;
   font-weight: 400 !important;
-  color: #0b0d12 !important;
+  color: var(--nova-fg) !important;
   transition: background 0.15s ease !important;
   margin: 1px 0 !important;
   letter-spacing: -0.006em;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item:hover {
-  background: #f2f3f6 !important;
-  color: #0b0d12 !important;
+  background: var(--nova-hover) !important;
+  color: var(--nova-fg) !important;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item .anticon {
-  color: #5f6672 !important;
+  color: var(--nova-fg-3) !important;
   font-size: 15px !important;
   margin-right: 8px !important;
   transition: color 0.15s ease !important;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item:hover .anticon {
-  color: #1677ff !important;
+  color: var(--nova-fg) !important;
 }
 
 .lc2-nav-drop .ant-dropdown-menu-item-divider {
-  background: rgba(0, 0, 0, 0.06) !important;
+  background: var(--nova-border-2) !important;
   margin: 4px 8px !important;
 }
 
@@ -2149,7 +2150,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-profile:hover {
-  background: #f2f3f6;
+  background: var(--nova-hover);
 }
 
 .lc2-profile-av {
@@ -3253,6 +3254,7 @@ a.mapboxgl-ctrl-logo,
    заливки — белый текст на белом. `tsc` и сборка при этом зелёные; поймал
    живой тест `buttons.spec.ts`, он ровно для такой поломки и написан.  */
 
+:root,
 .lc-nova {
     --nova-bg: #ffffff;
     --nova-surface: #ffffff;
@@ -3281,6 +3283,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* Тёплый серый, выбранный владельцем. Холодные синевато-чёрные отвергнуты. */
+:root[data-theme='dark'],
 [data-theme='dark'] .lc-nova {
     --nova-bg: #20201f;
     --nova-surface: #20201f;
