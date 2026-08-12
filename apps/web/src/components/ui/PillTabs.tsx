@@ -4,30 +4,34 @@ import type { ReactNode } from 'react';
 import styles from '@/components/nova/nova.module.css';
 
 /**
- * Переключатель разделов карточки заявки.
+ * Переключатель разделов внутри страницы.
  *
  * Тот же вид, что у верхнего меню и у отчётов: пилюли, активная залита
  * тёмным. Подчёркнутые вкладки antd остались от прежнего скина и рядом с
  * переведёнными экранами читались как чужие.
  *
- * Содержимое неактивных разделов не рисуется вовсе — в карточке это
- * тяжёлые таблицы и формы, и держать их в разметке скрытыми значит
- * дважды платить за то, чего не видно.
+ * Один компонент на все страницы: карточка рейса и карточка контрагента
+ * переключают разделы одинаково, и второй такой же вводить нельзя — именно
+ * так однажды разъехались плашки статусов.
+ *
+ * Содержимое неактивных разделов не рисуется вовсе — внутри бывают тяжёлые
+ * таблицы и формы, и держать их в разметке скрытыми значит дважды платить за
+ * то, чего не видно.
  */
-export interface OrderCardTab {
+export interface PillTab {
     key: string;
     label: ReactNode;
     children: ReactNode;
 }
 
-export default function OrderCardTabs({
+export default function PillTabs({
     active,
     onChange,
     items,
 }: {
     active: string;
     onChange: (key: string) => void;
-    items: OrderCardTab[];
+    items: PillTab[];
 }) {
     const current = items.find((item) => item.key === active) || items[0];
 

@@ -8,6 +8,7 @@ import {
     ClockCircleOutlined,
     FileDoneOutlined,
     FileExclamationOutlined,
+    SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import nova from '@/components/nova/nova.module.css';
@@ -30,6 +31,7 @@ interface PendingWorkGroup {
 }
 
 interface PendingWork {
+    unconfirmedSettlements: PendingWorkGroup;
     ordersWithoutAct: PendingWorkGroup;
     actsWithoutInvoice: PendingWorkGroup;
     overdueInvoices: PendingWorkGroup;
@@ -58,6 +60,16 @@ const GROUPS: {
     color: string;
     background: string;
 }[] = [
+    {
+        // Первым: пока расчёты не проверены, по рейсу нельзя ни заверить
+        // договор, ни выставить счёт — то есть встают и остальные две группы.
+        key: 'unconfirmedSettlements',
+        title: 'Расчёты ждут проверки',
+        hint: 'в карточке контрагента не заполнены НДС или срок оплаты',
+        icon: <SafetyCertificateOutlined />,
+        color: '#0f766e',
+        background: '#ecfeff',
+    },
     {
         key: 'ordersWithoutAct',
         title: 'Рейс завершён, акта нет',

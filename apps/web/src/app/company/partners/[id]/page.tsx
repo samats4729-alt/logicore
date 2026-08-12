@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, Tabs, Table, Button, Typography, Space, Tag, Avatar, Descriptions, Modal, Form, Input, Select, Row, Col, Divider, DatePicker, Popconfirm, Empty, theme } from 'antd';
+import { Card, Table, Button, Typography, Space, Tag, Avatar, Descriptions, Modal, Form, Input, Select, Row, Col, Divider, DatePicker, Popconfirm, Empty, theme } from 'antd';
 import {
-    ShopOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined,
+    ShopOutlined, EditOutlined, DeleteOutlined,
     PlusOutlined, UserOutlined, UserAddOutlined, CarOutlined,
     FileTextOutlined, IdcardOutlined, EnvironmentOutlined
 } from '@ant-design/icons';
@@ -15,11 +15,18 @@ import { QuoteRequestsPanel } from '@/components/quotes/QuoteRequestsPanel';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import PillTabs from '@/components/ui/PillTabs';
+import PartnerSettlementTerms from '@/components/partners/PartnerSettlementTerms';
+import { useAuthStore } from '@/store/auth';
+import { canAccounting } from '@/lib/permissions';
+import { vatLabel } from '@/lib/settlement-terms';
+import nova from '@/components/nova/nova.module.css';
 
 const { Title, Text } = Typography;
 
 export default function PartnerDetailPage() {
     const { token } = theme.useToken();
+    const { user } = useAuthStore();
     const params = useParams();
     const router = useRouter();
     const partnerId = params.id as string;
@@ -605,8 +612,22 @@ export default function PartnerDetailPage() {
     // «Запросы» стоят сразу после профиля намеренно: менеджер приходит в
     // карточку клиента именно тогда, когда тот прислал запрос на расчёт,
     // и лезть за этим в отдельный раздел ему незачем.
+    // Право «Бухгалтерия» — та самая галочка сотруднику. Условия расчётов
+    // видны всем, кто открыл карточку (менеджеру полезно знать, с НДС
+    // контрагент или нет), а менять их может только бухгалтер.
+    const mayAccount = canAccounting(user);
+
+    const settlementsContent = (
+        <PartnerSettlementTerms
+            partner={partner}
+            canEdit={mayAccount && isExternal}
+            onSaved={(terms) => setPartner((prev: any) => ({ ...prev, ...terms }))}
+        />
+    );
+
     const tabItems: any[] = [
         { key: 'profile', label: 'Профиль', children: profileContent },
+        { key: 'settlements', label: 'Расчёты', children: settlementsContent },
         { key: 'quotes', label: 'Запросы', children: <QuoteRequestsPanel customerCompanyId={partnerId} /> },
         { key: 'contracts', label: 'Договоры', children: contractsContent },
         { key: 'addresses', label: `Адреса${addressesLoaded ? ` (${addresses.length})` : ''}`, children: addressesContent },
@@ -619,50 +640,48 @@ export default function PartnerDetailPage() {
         );
     }
 
-    const initials = (partner?.name || '').split(/\s+/).filter(Boolean).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase() || 'КГ';
-
     return (
-        <div className="lc-page" style={{ maxWidth: 1200, margin: '0 auto' }}>
-            {/* ===== HERO 2026 ===== */}
-            <div className="lc2-hero">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <Button
-                        type="text"
-                        icon={<ArrowLeftOutlined />}
-                        onClick={() => router.push('/company/partners')}
-                        style={{ padding: '4px 8px', flexShrink: 0 }}
-                    />
-                    <span className="lc2-avatar" style={{ width: 48, height: 48, fontSize: 18, background: partner.isCarrier ? '#e6ffed' : '#e0f2fe', color: partner.isCarrier ? '#28a745' : '#0369a1', flexShrink: 0 }}>
-                        {initials}
-                    </span>
-                    <div>
-                        <div className="lc-eyebrow">Справочники · Контрагенты</div>
-                        <h1 className="lc2-title" style={{ marginBottom: 4 }}>{partner.name}</h1>
-                        <Space size={4}>
-                            {partner.bin && <span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>БИН: {partner.bin}</span>}
-                            {partner.isCustomer && <Tag color="blue" style={{ margin: 0 }}>Заказчик</Tag>}
-                            {partner.isCarrier && <Tag color="green" style={{ margin: 0 }}>Перевозчик</Tag>}
-                            {!isExternal && <Tag color="cyan" style={{ margin: 0 }}>В системе</Tag>}
-                        </Space>
-                    </div>
+        <div className={nova.page}>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Справочники · Контрагенты</div>
+                    <h1 className={nova.title}>{partner.name}</h1>
+                    <p className={nova.subtitle}>
+                        {[
+                            partner.bin ? `БИН ${partner.bin}` : null,
+                            [
+                                partner.isCustomer ? 'заказчик' : null,
+                                partner.isCarrier ? 'перевозчик' : null,
+                            ].filter(Boolean).join(' и ') || null,
+                            isExternal ? null : 'работает на платформе',
+                            // Условия расчётов — первое, что о контрагенте
+                            // нужно знать в работе, поэтому они в подписи, а
+                            // не спрятаны во вкладке.
+                            vatLabel(partner.vatPayer, partner.vatPayer ? Number(partner.vatRate) : null),
+                        ].filter(Boolean).join(' · ')}
+                    </p>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexShrink: 0 }}>
+                <div className={nova.heroActions}>
+                    <button
+                        type="button"
+                        className={nova.action}
+                        onClick={() => router.push('/company/partners')}
+                    >
+                        Назад к списку
+                    </button>
                     {isExternal && (
-                        <Button icon={<EditOutlined />} onClick={handleEditPartner}>
+                        <button
+                            type="button"
+                            className={`${nova.action} ${nova.actionPrimary}`}
+                            onClick={handleEditPartner}
+                        >
                             Редактировать
-                        </Button>
+                        </button>
                     )}
                 </div>
             </div>
 
-            {/* ===== TABS CARD ===== */}
-            <div className="lc-card" style={{ padding: '20px' }}>
-                <Tabs
-                    activeKey={activeTab}
-                    onChange={setActiveTab}
-                    items={tabItems}
-                />
-            </div>
+            <PillTabs active={activeTab} onChange={setActiveTab} items={tabItems} />
 
             {/* Edit Partner Modal */}
             <Modal

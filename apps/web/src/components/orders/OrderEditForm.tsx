@@ -9,6 +9,9 @@ import { DEFAULT_VAT_RATE, VAT_RATES } from '@/lib/tax';
 import { CargoComposition } from '@/components/orders/CargoComposition';
 import type { CargoState } from '@/lib/cargo';
 import CurrencySelect from '@/components/orders/CurrencySelect';
+import nova from '@/components/nova/nova.module.css';
+import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
+import type { OrderSettlements } from '@/lib/settlement-terms';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -53,6 +56,17 @@ interface OrderEditFormProps {
 
     /** Права на правку денежных полей — у логиста их нет. */
     canEditFinance: boolean;
+    /**
+     * Условия расчётов по рейсу: НДС сторон и сроки оплаты.
+     *
+     * Правит их бухгалтер во вкладке «Финансы», а здесь они показаны строкой
+     * для тех, у кого есть право «Бухгалтерия». Менеджеру не показываются
+     * вовсе: раньше он видел галочку «НДС» со снятой отметкой и ставку 16% по
+     * умолчанию — и решал за бухгалтера, сам того не зная.
+     */
+    settlements?: OrderSettlements | null;
+    /** Есть ли у смотрящего право «Бухгалтерия». */
+    mayAccount: boolean;
     setIsEditing: (editing: boolean) => void;
 
     /**
@@ -78,6 +92,7 @@ export default function OrderEditForm(props: OrderEditFormProps) {
         selectedCustomer, setSelectedCustomer, selectedCarrier, setSelectedCarrier,
         getPartyOptions, myCompanyName, roleInfo,
         setQuickPartnerModalOpen, setQuickPartnerTarget, customerRefLabel,
+        settlements, mayAccount,
         cargoCategories, paymentConditions, paymentForms,
         showCustomerPriceField, showDriverCostField, customerPriceLabel, driverCostLabel,
         canEditFinance, setIsEditing,
@@ -361,7 +376,7 @@ export default function OrderEditForm(props: OrderEditFormProps) {
 
                         {showCustomerPriceField && (
                             <Row gutter={12}>
-                                <Col span={12}>
+                                <Col span={mayAccount ? 12 : 24}>
                                     <Form.Item name="customerPrice" label={customerPriceLabel}>
                                         <InputNumber
                                             min={0} style={{ width: '100%' }} placeholder="0" size="large"
@@ -374,29 +389,36 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                         />
                                     </Form.Item>
                                 </Col>
-                                <Col span={6}>
-                                    <Form.Item name="hasVat" label="НДС" initialValue={false}>
-                                        <Select size="large" disabled={!canEditFinance}>
-                                            <Select.Option value={false}>Без</Select.Option>
-                                            <Select.Option value={true}>С НДС</Select.Option>
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={6}>
-                                    <Form.Item name="vatRate" label="Ставка" initialValue={DEFAULT_VAT_RATE}>
-                                        <Select size="large" disabled={!canEditFinance}>
-                                            {VAT_RATES.map((rate) => (
-                                                <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
-                                            ))}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
+                                {/* НДС — не работа того, кто ведёт рейс. Ответ
+                                    приходит из карточки контрагента, где его
+                                    один раз дал бухгалтер. */}
+                                {mayAccount && (
+                                    <>
+                                        <Col span={6}>
+                                            <Form.Item name="hasVat" label="НДС" initialValue={false}>
+                                                <Select size="large" disabled={!canEditFinance}>
+                                                    <Select.Option value={false}>Без</Select.Option>
+                                                    <Select.Option value={true}>С НДС</Select.Option>
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={6}>
+                                            <Form.Item name="vatRate" label="Ставка" initialValue={DEFAULT_VAT_RATE}>
+                                                <Select size="large" disabled={!canEditFinance}>
+                                                    {VAT_RATES.map((rate) => (
+                                                        <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
+                                                    ))}
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                    </>
+                                )}
                             </Row>
                         )}
 
                         {showDriverCostField && (
                             <Row gutter={12}>
-                                <Col span={12}>
+                                <Col span={mayAccount ? 12 : 24}>
                                     <Form.Item name="driverCost" label={driverCostLabel}>
                                         <InputNumber
                                             min={0} style={{ width: '100%' }} placeholder="0" size="large"
@@ -409,24 +431,63 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                         />
                                     </Form.Item>
                                 </Col>
-                                <Col span={6}>
-                                    <Form.Item name="executorHasVat" label="НДС" initialValue={false}>
-                                        <Select size="large" disabled={!canEditFinance}>
-                                            <Select.Option value={false}>Без</Select.Option>
-                                            <Select.Option value={true}>С НДС</Select.Option>
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={6}>
-                                    <Form.Item name="executorVatRate" label="Ставка" initialValue={DEFAULT_VAT_RATE}>
-                                        <Select size="large" disabled={!canEditFinance}>
-                                            {VAT_RATES.map((rate) => (
-                                                <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
-                                            ))}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
+                                {mayAccount && (
+                                    <>
+                                        <Col span={6}>
+                                            <Form.Item name="executorHasVat" label="НДС" initialValue={false}>
+                                                <Select size="large" disabled={!canEditFinance}>
+                                                    <Select.Option value={false}>Без</Select.Option>
+                                                    <Select.Option value={true}>С НДС</Select.Option>
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={6}>
+                                            <Form.Item name="executorVatRate" label="Ставка" initialValue={DEFAULT_VAT_RATE}>
+                                                <Select size="large" disabled={!canEditFinance}>
+                                                    {VAT_RATES.map((rate) => (
+                                                        <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
+                                                    ))}
+                                                </Select>
+                                            </Form.Item>
+                                        </Col>
+                                    </>
+                                )}
                             </Row>
+                        )}
+
+                        {/* Условия расчётов — не поле, а справка.
+                            Менеджеру они нужны, чтобы разговаривать с
+                            перевозчиком, но менять их он не может: ответ
+                            принадлежит карточке контрагента. */}
+                        {settlements && (settlements.customer.companyId || settlements.carrier.companyId) && (
+                            <div className={nova.item} style={{ marginBottom: 12 }}>
+                                <span className={nova.itemText}>
+                                    <span className={nova.itemLabel}>Условия расчётов</span>
+                                    {/* Строка длинная и в узкой колонке обрезалась
+                                        на «перевозчик — с НД…»: обрезать условия
+                                        сделки нельзя, их читают целиком. */}
+                                    <span className={nova.itemDesc} style={{ whiteSpace: 'normal' }}>
+                                        {settlements.customer.companyId && (
+                                            <>
+                                                заказчик — {vatLabel(settlements.customer.vatPayer, settlements.customer.vatRate)}
+                                                {paymentTermsLabel(settlements.customer.days, settlements.customer.from)
+                                                    && `, оплата ${paymentTermsLabel(settlements.customer.days, settlements.customer.from)}`}
+                                            </>
+                                        )}
+                                        {settlements.customer.companyId && settlements.carrier.companyId && ' · '}
+                                        {settlements.carrier.companyId && (
+                                            <>
+                                                перевозчик — {vatLabel(settlements.carrier.vatPayer, settlements.carrier.vatRate)}
+                                                {paymentTermsLabel(settlements.carrier.days, settlements.carrier.from)
+                                                    && `, платим ${paymentTermsLabel(settlements.carrier.days, settlements.carrier.from)}`}
+                                            </>
+                                        )}
+                                    </span>
+                                </span>
+                                <span className={nova.chip}>
+                                    {settlements.confirmed ? 'проверено' : 'ждёт бухгалтера'}
+                                </span>
+                            </div>
                         )}
 
                         <Form.Item name="customerPriceType" label="Тип оплаты" initialValue="FIXED">
@@ -437,32 +498,39 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                             </Select>
                         </Form.Item>
 
-                        <Row gutter={16}>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="customerPaymentCondition" label="Условие оплаты заказчика">
-                                    <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                        options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="customerPaymentForm" label="Форма оплаты заказчика">
-                                    <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                        options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="driverPaymentCondition" label="Условие оплаты перевозчика">
-                                    <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                        options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="driverPaymentForm" label="Форма оплаты перевозчика">
-                                    <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                        options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
-                                </Form.Item>
-                            </Col>
-                        </Row>
+                        {/* Форма оплаты — это «НДС / без НДС» из справочника, а
+                            условие оплаты — та самая свободная строка, из
+                            которой не посчитать ни одной даты. И то и другое
+                            теперь приходит из карточки контрагента, поэтому
+                            менеджеру этих полей не показываем. */}
+                        {mayAccount && (
+                            <Row gutter={16}>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="customerPaymentCondition" label="Условие оплаты заказчика">
+                                        <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                            options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="customerPaymentForm" label="Форма оплаты заказчика">
+                                        <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                            options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="driverPaymentCondition" label="Условие оплаты перевозчика">
+                                        <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                            options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="driverPaymentForm" label="Форма оплаты перевозчика">
+                                        <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
+                                            options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                        )}
 
                         {/* Margin preview */}
                         <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'hasVat', 'vatRate', 'executorHasVat', 'executorVatRate']}>

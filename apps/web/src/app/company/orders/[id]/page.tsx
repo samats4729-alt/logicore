@@ -25,10 +25,13 @@ import AssignDriverModal from '@/components/AssignDriverModal';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
-import OrderCardTabs from '@/components/orders/OrderCardTabs';
+import PillTabs from '@/components/ui/PillTabs';
 import OrderDetails from '@/components/orders/OrderDetails';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
+import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
+import { canAccounting } from '@/lib/permissions';
+import type { OrderSettlements } from '@/lib/settlement-terms';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
 import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
@@ -123,6 +126,12 @@ export default function OrderDetailPage() {
     const [invoiceLoading, setInvoiceLoading] = useState(false);
     /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
     const [documentChainKey, setDocumentChainKey] = useState(0);
+    const [settlements, setSettlements] = useState<OrderSettlements | null>(null);
+    const [settlementsBusy, setSettlementsBusy] = useState(false);
+    const [settlementsEdit, setSettlementsEdit] = useState(false);
+    // Право «Бухгалтерия»: им открываются НДС, сроки оплаты и вкладка
+    // «Финансы». Менеджеру без него всего этого не видно.
+    const mayAccount = canAccounting(user);
     /** Разнесение платежа по счетам — суммы редактируются в окне платежа. */
     const [allocations, setAllocations] = useState<Record<string, number>>({});
 
@@ -336,6 +345,20 @@ export default function OrderDetailPage() {
         }
     };
 
+    /**
+     * Условия расчётов по рейсу: НДС сторон, сроки оплаты и то, проверил ли
+     * их бухгалтер. Отдельным запросом, потому что собираются из карточек
+     * контрагентов, а не лежат в заявке готовой строкой.
+     */
+    const fetchSettlements = useCallback(async () => {
+        try {
+            const res = await api.get(`/orders/${orderId}/settlements`);
+            setSettlements(res.data);
+        } catch {
+            setSettlements(null);
+        }
+    }, [orderId]);
+
     // Передать заявку другому менеджеру своей компании
     const openTransferModal = async () => {
         setTransferModalOpen(true);
@@ -469,6 +492,7 @@ export default function OrderDetailPage() {
         fetchData();
         fetchPartners();
         loadContracts();
+        fetchSettlements();
     }, [orderId]);
 
     /**
@@ -1488,7 +1512,7 @@ export default function OrderDetailPage() {
             {/* =================== MAIN TABS =================== */}
             {/* Вкладки — пилюли кабинета вместо подчёркнутых вкладок antd:
                 тот же переключатель, что на «Отчётах» и в верхнем меню. */}
-            <OrderCardTabs
+            <PillTabs
                 active={activeTab}
                 onChange={setActiveTab}
                 items={[
@@ -1516,6 +1540,8 @@ export default function OrderDetailPage() {
                                     getPartyOptions={getPartyOptions}
                                     myCompanyName={myCompanyName}
                                     roleInfo={roleInfo}
+                                    settlements={settlements}
+                                    mayAccount={mayAccount}
                                     setQuickPartnerModalOpen={setQuickPartnerModalOpen}
                                     setQuickPartnerTarget={setQuickPartnerTarget}
                                     customerRefLabel={customerRefLabel}
@@ -1555,7 +1581,10 @@ export default function OrderDetailPage() {
                             )
                         )
                     },
-                    {
+                    // Вкладка «Финансы» — работа бухгалтера: НДС, сроки
+                    // оплаты, счёт и акт. Менеджеру её не показываем вовсе:
+                    // спрятать по одному полю не выйдет, здесь всё об этом.
+                    mayAccount && {
                         key: 'finances',
                         label: (
                             <span>
@@ -1565,6 +1594,14 @@ export default function OrderDetailPage() {
                         ),
                         children: (
                             <div>
+                                {/* Первое на вкладке — условия расчётов: с них
+                                    начинается и счёт, и печать на договоре. */}
+                                <OrderSettlementsCard
+                                    orderId={orderId}
+                                    settlements={settlements}
+                                    mayAccount={mayAccount}
+                                    onChanged={() => { fetchSettlements(); fetchData(); }}
+                                />
                                 {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
                                         <Space size={8}>
@@ -1845,7 +1882,7 @@ export default function OrderDetailPage() {
                             </Card>
                         )
                     }
-                ]}
+                ].filter(Boolean) as any}
             />
 
             {/* =================== ASSIGN DRIVER MODAL =================== */}

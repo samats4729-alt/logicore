@@ -94,6 +94,13 @@ export class OrderSettlementsService {
      * Возвращает готовый набор полей для записи в заявку. Ставки НДС и сроки
      * — снимок: договорённость с контрагентом могут поменять через полгода, а
      * этот рейс прошёл по прежним условиям.
+     *
+     * Условия заполнены только у карточек справочника — их заводим мы, и
+     * договорённость наша. Если сторона рейса — компания, которая сама
+     * работает на платформе, её условия хранить у неё нельзя: у неё свои
+     * договорённости с другими. По таким рейсам ответ даёт бухгалтер в самой
+     * заявке, и до тех пор рейс ждёт его — та же защита, что и при незаполненной
+     * карточке.
      */
     async termsFromCards(order: any, companyId: string) {
         const { customerId, carrierId } = this.sidesOf(order, companyId);
@@ -106,6 +113,10 @@ export class OrderSettlementsService {
                     invoiceTiming: true,
                     customerPaymentDays: true, customerPaymentFrom: true,
                     carrierPaymentDays: true, carrierPaymentFrom: true,
+                    // Наша ли это карточка справочника. У компании, которая
+                    // сама работает на платформе, условий не спросишь: они
+                    // задаются по рейсу.
+                    isExternal: true, createdByCompanyId: true,
                 },
             })
             : [];
@@ -312,20 +323,40 @@ export class OrderSettlementsService {
             })
             : null;
 
+        /**
+         * Чего не хватает — и что с этим делать.
+         *
+         * Два разных случая, и путать их нельзя. Если сторона — наша карточка
+         * справочника, ответ живёт в ней и заполняется один раз на все рейсы.
+         * Если сторона сама работает на платформе, карточки нет и быть не
+         * может: условия задаются здесь, по этому рейсу.
+         *
+         * Список показывается только у непроверенных расчётов: у проверенных
+         * он противоречил бы отметке «проверено».
+         */
+        const ourCard = (card: any) => !!card?.isExternal && card?.createdByCompanyId === companyId;
         const missing: string[] = [];
-        if (customerId && !termsAreComplete({
-            vatPayer: customerCard?.vatPayer,
-            days: customerCard?.customerPaymentDays,
-            anchor: customerCard?.customerPaymentFrom,
-        })) {
-            missing.push(`В карточке заказчика «${customerCard?.name || '—'}» не заполнены условия расчётов`);
-        }
-        if (carrierId && !termsAreComplete({
-            vatPayer: carrierCard?.vatPayer,
-            days: carrierCard?.carrierPaymentDays,
-            anchor: carrierCard?.carrierPaymentFrom,
-        })) {
-            missing.push(`В карточке перевозчика «${carrierCard?.name || '—'}» не заполнены условия расчётов`);
+        if (!order.settlementsConfirmedAt) {
+            if (customerId && !termsAreComplete({
+                vatPayer: customerCard?.vatPayer,
+                days: customerCard?.customerPaymentDays,
+                anchor: customerCard?.customerPaymentFrom,
+            })) {
+                missing.push(ourCard(customerCard)
+                    ? `В карточке заказчика «${customerCard?.name || '—'}» не заполнены условия расчётов`
+                    : `Заказчик «${customerCard?.name || '—'}» работает на платформе — условия по этому`
+                        + ' рейсу задайте здесь: в чужой карточке их хранить нельзя');
+            }
+            if (carrierId && !termsAreComplete({
+                vatPayer: carrierCard?.vatPayer,
+                days: carrierCard?.carrierPaymentDays,
+                anchor: carrierCard?.carrierPaymentFrom,
+            })) {
+                missing.push(ourCard(carrierCard)
+                    ? `В карточке перевозчика «${carrierCard?.name || '—'}» не заполнены условия расчётов`
+                    : `Перевозчик «${carrierCard?.name || '—'}» работает на платформе — условия по этому`
+                        + ' рейсу задайте здесь: в чужой карточке их хранить нельзя');
+            }
         }
 
         // Три разных «подтверждено», и на экране они звучат по-разному.
