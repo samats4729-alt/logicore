@@ -1,24 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Input, Space, Typography, Tag, Tabs, Modal, Form, Select } from 'antd';
-import { usePathname, useRouter } from 'next/navigation';
-import {
-    PlusOutlined, SearchOutlined, EnvironmentOutlined,
-    GlobalOutlined, AppstoreOutlined, EditOutlined, DeleteOutlined
-} from '@ant-design/icons';
+import { Table, Input, Modal, Form, Select, Space } from 'antd';
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { MapPin } from 'lucide-react';
 import { api, City, Country, Region } from '@/lib/api';
 import { toast } from 'sonner';
+import GeographyHeader from './GeographyHeader';
+import nova from '@/components/nova/nova.module.css';
 
-const { Title } = Typography;
 const { Option } = Select;
 
 export default function AdminLocationsPage() {
-    const router = useRouter();
-    const pathname = usePathname();
-
     // Cities State
     const [cities, setCities] = useState<City[]>([]);
+    const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -97,19 +93,6 @@ export default function AdminLocationsPage() {
         }
     };
 
-    const tabsItems = [
-        { key: '/admin/locations', label: 'Города', icon: <EnvironmentOutlined /> },
-        { key: '/admin/locations/regions', label: 'Регионы', icon: <AppstoreOutlined /> },
-        { key: '/admin/locations/countries', label: 'Страны', icon: <GlobalOutlined /> },
-    ];
-
-    // Handle tab change
-    const onTabChange = (key: string) => {
-        if (key !== pathname) {
-            router.push(key);
-        }
-    };
-
     const columns = [
         {
             title: 'Название',
@@ -119,7 +102,7 @@ export default function AdminLocationsPage() {
             render: (text: string, record: City) => (
                 <Space>
                     <strong>{text}</strong>
-                    {record.country && <Tag>{record.country.code}</Tag>}
+                    {record.country && <span className={nova.chip}>{record.country.code}</span>}
                 </Space>
             )
         },
@@ -127,7 +110,7 @@ export default function AdminLocationsPage() {
             title: 'Координаты',
             key: 'coords',
             render: (_: any, record: City) => (
-                <span style={{ fontSize: 12, color: '#888' }}>
+                <span style={{ fontSize: 12, color: 'var(--nova-fg-3)' }}>
                     {record.latitude.toFixed(4)}, {record.longitude.toFixed(4)}
                 </span>
             )
@@ -155,33 +138,50 @@ export default function AdminLocationsPage() {
         // }
     ];
 
+    // Поиск раньше был нарисован, но не работал: поле стояло без состояния,
+    // человек печатал название и получал тот же список.
+    const shown = search.trim()
+        ? cities.filter((city) => city.name.toLowerCase().includes(search.trim().toLowerCase()))
+        : cities;
+
     return (
         <div>
-            <div style={{ marginBottom: 24 }}>
-                <Title level={2} style={{ marginTop: 0 }}>Управление географией</Title>
-                <Tabs
-                    activeKey="/admin/locations"
-                    onChange={onTabChange}
-                    items={tabsItems}
-                />
-            </div>
+            <GeographyHeader
+                actions={(
+                    <button
+                        type="button"
+                        className={`${nova.action} ${nova.actionPrimary}`}
+                        onClick={prepareNewCity}
+                    >
+                        <PlusOutlined /> Город
+                    </button>
+                )}
+            />
 
-            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-                    <Input prefix={<SearchOutlined />} placeholder="Поиск города..." style={{ width: 300 }} />
-                    <Button type="primary" icon={<PlusOutlined />} onClick={prepareNewCity}>
-                        Добавить город
-                    </Button>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <MapPin size={14} />
+                    <h2 className={nova.cardTitle}>Города</h2>
+                    <span className={nova.cardCount}>{shown.length}</span>
+                    <Input
+                        prefix={<SearchOutlined />}
+                        placeholder="Поиск города"
+                        allowClear
+                        style={{ width: 240 }}
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
                 </div>
-
                 <Table
-                    dataSource={cities}
+                    dataSource={shown}
                     columns={columns}
                     rowKey="id"
+                    size="small"
                     loading={loading}
                     pagination={{ pageSize: 20 }}
+                    locale={{ emptyText: search ? 'Такого города в справочнике нет' : 'Справочник пуст' }}
                 />
-            </Card>
+            </section>
 
             <Modal
                 title={editingId ? "Редактировать город" : "Новый город"}

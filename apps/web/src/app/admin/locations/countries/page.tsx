@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Modal, Form, Input, Space, Typography } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, GlobalOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Space } from 'antd';
+import { Globe } from 'lucide-react';
+import GeographyHeader from '../GeographyHeader';
+import nova from '@/components/nova/nova.module.css';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { api, Country } from '@/lib/api';
 import { toast } from 'sonner';
-
-const { Title } = Typography;
 
 export default function AdminCountriesPage() {
     const [countries, setCountries] = useState<Country[]>([]);
@@ -75,7 +76,7 @@ export default function AdminCountriesPage() {
             title: 'Код (ISO)',
             dataIndex: 'code',
             key: 'code',
-            render: (text: string) => <Typography.Text code>{text}</Typography.Text>,
+            render: (text: string) => <span className={nova.chip}>{text}</span>,
         },
         {
             title: 'Действия',
@@ -91,25 +92,33 @@ export default function AdminCountriesPage() {
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, alignItems: 'center' }}>
-                <Title level={2} style={{ margin: 0 }}>
-                    <GlobalOutlined style={{ marginRight: 12 }} />
-                    Страны
-                </Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>
-                    Добавить страну
-                </Button>
-            </div>
+            <GeographyHeader
+                actions={(
+                    <button
+                        type="button"
+                        className={`${nova.action} ${nova.actionPrimary}`}
+                        onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}
+                    >
+                        <PlusOutlined /> Страна
+                    </button>
+                )}
+            />
 
-            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <Globe size={14} />
+                    <h2 className={nova.cardTitle}>Страны</h2>
+                    {countries.length > 0 && <span className={nova.cardCount}>{countries.length}</span>}
+                </div>
                 <Table
                     dataSource={countries}
                     columns={columns}
                     rowKey="id"
+                    size="small"
                     loading={loading}
                     pagination={false}
                 />
-            </Card>
+            </section>
 
             <Modal
                 title={editingId ? "Редактировать страну" : "Новая страна"}
