@@ -112,6 +112,7 @@ function makeService() {
         periodClosing as any,
         financialReports as any,
         currency as any,
+        { recomputeForDocument: jest.fn().mockResolvedValue(0) } as any,
     );
     return { service, prisma, tx, periodClosing, financialReports, currency };
 }

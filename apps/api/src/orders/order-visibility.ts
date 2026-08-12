@@ -29,6 +29,7 @@ type ExecutorCostFields = {
     executorVatRate?: unknown;
     carrierPaymentDays?: unknown;
     carrierPaymentFrom?: unknown;
+    carrierOriginalsAt?: unknown;
     driverPaymentDate?: unknown;
     driverPaymentCondition?: unknown;
     driverPaymentForm?: unknown;
@@ -71,6 +72,9 @@ export function hideExecutorCost<T extends ExecutorCostFields>(order: T): T {
     masked.executorVatRate = null;
     masked.carrierPaymentDays = null;
     masked.carrierPaymentFrom = null;
+    // Когда оригиналы пришли к нам от перевозчика — часть той же
+    // договорённости: по этой дате видно, когда мы платим ему.
+    masked.carrierOriginalsAt = null;
     masked.driverPaymentDate = null;
     masked.driverPaymentCondition = null;
     masked.driverPaymentForm = null;

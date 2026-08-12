@@ -4,6 +4,7 @@ import {
     ForbiddenException,
     Inject,
     Injectable,
+    Logger,
     NotFoundException,
 } from '@nestjs/common';
 import {
@@ -21,6 +22,7 @@ import { CurrencyService } from '../currency/currency.service';
 import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import type { FinancialReportsService } from '../accounting/services/financial-reports.service';
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
+import { OrderSettlementsService } from '../orders/order-settlements.service';
 import { toNum } from '../common/utils/money';
 import {
     AccountingDocumentListQueryDto,
@@ -183,6 +185,8 @@ type ReconciliationReports = Pick<FinancialReportsService, 'getReconciliationAct
 
 @Injectable()
 export class AccountingDocumentsService {
+    private readonly logger = new Logger(AccountingDocumentsService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly calculator: AccountingDocumentCalculatorService,
@@ -190,6 +194,7 @@ export class AccountingDocumentsService {
         @Inject(RECONCILIATION_REPORTS)
         private readonly financialReports: ReconciliationReports,
         private readonly currency: CurrencyService,
+        private readonly orderSettlements: OrderSettlementsService,
     ) {}
 
     /**
@@ -885,7 +890,30 @@ export class AccountingDocumentsService {
         if (result.count !== 1) {
             throw new ConflictException('Документ уже был изменён другим пользователем');
         }
+
+        // Проведённый счёт запускает отсрочку «от даты счёта»: у рейсов,
+        // привязанных к нему, ровно сейчас появился день отсчёта.
+        await this.recomputeOrderDueDates(document);
+
         return this.getById(companyId, id);
+    }
+
+    /**
+     * Пересчитать плановые даты платежей по рейсам этого счёта.
+     *
+     * Только для счетов на оплату: акт и сверка отсрочку не запускают. Молча
+     * переживает ошибку — пересчёт срока не повод отменить проведение
+     * документа, а расхождение всё равно поправится при следующем пересчёте.
+     */
+    private async recomputeOrderDueDates(document: { id: string; type: AccountingDocumentType }) {
+        if (document.type !== AccountingDocumentType.PAYMENT_INVOICE) return;
+        try {
+            await this.orderSettlements.recomputeForDocument(document.id);
+        } catch (error) {
+            this.logger.warn(
+                `Не удалось пересчитать сроки оплаты по документу ${document.id}: ${error}`,
+            );
+        }
     }
 
     async cancel(companyId: string, userId: string, id: string, reason: string) {
@@ -914,6 +942,11 @@ export class AccountingDocumentsService {
         if (result.count !== 1) {
             throw new ConflictException('Документ уже был изменён другим пользователем');
         }
+
+        // Отменённый счёт больше не запускает отсрочку «от даты счёта»:
+        // плановая дата платежа по его рейсам уходит вместе с ним.
+        await this.recomputeOrderDueDates(document);
+
         return this.getById(companyId, id);
     }
 

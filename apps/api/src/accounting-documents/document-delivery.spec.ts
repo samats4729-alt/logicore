@@ -49,6 +49,7 @@ describe('Отправка документа контрагенту', () => {
             { checkPeriodNotClosed: jest.fn() } as any,
             {} as any,
             { toBase: jest.fn().mockResolvedValue(null) } as any,
+            { recomputeForDocument: jest.fn().mockResolvedValue(0) } as any,
         );
         return { service, prisma, updates };
     };
@@ -213,6 +214,7 @@ describe('Отправка документа контрагенту', () => {
                 { checkPeriodNotClosed: jest.fn() } as any,
                 {} as any,
                 { toBase: jest.fn().mockResolvedValue(null) } as any,
+                { recomputeForDocument: jest.fn().mockResolvedValue(0) } as any,
             );
             return service;
         };
@@ -307,6 +309,7 @@ describe('Отправка документа контрагенту', () => {
                 { checkPeriodNotClosed: jest.fn() } as any,
                 {} as any,
                 { toBase: jest.fn().mockResolvedValue(null) } as any,
+                { recomputeForDocument: jest.fn().mockResolvedValue(0) } as any,
             );
             return { service, prisma };
         };

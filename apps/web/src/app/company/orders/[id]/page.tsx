@@ -30,6 +30,7 @@ import OrderDetails from '@/components/orders/OrderDetails';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
+import OrderOriginalsCard from '@/components/orders/OrderOriginalsCard';
 import { canAccounting } from '@/lib/permissions';
 import type { OrderSettlements } from '@/lib/settlement-terms';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
@@ -1855,6 +1856,15 @@ export default function OrderDetailPage() {
                         // версиями, счёт и акт, приложенные файлы. Раньше они
                         // жили в трёх разных местах карточки.
                         children: (
+                            <>
+                            {/* Оригиналы накладных — первым: от их получения
+                                идёт отсрочка, и отметку ставит менеджер, а не
+                                бухгалтер. */}
+                            <OrderOriginalsCard
+                                orderId={orderId}
+                                settlements={settlements}
+                                onChanged={() => { fetchSettlements(); fetchData(); }}
+                            />
                             <OrderDocuments
                                 orderId={orderId}
                                 orderNumber={order.orderNumber}
@@ -1867,6 +1877,7 @@ export default function OrderDetailPage() {
                                 isChief={['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '')}
                                 onCreateAccounting={openOrCreateOrderDocument}
                             />
+                            </>
                         )
                     },
                     {

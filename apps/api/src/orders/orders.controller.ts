@@ -346,6 +346,47 @@ export class OrdersController {
         return state;
     }
 
+    /**
+     * Отметить, что оригиналы накладных дошли.
+     *
+     * Без права «Бухгалтерия»: получить конверт от перевозчика и убедиться,
+     * что заказчик его получил, — обычная работа с документами. Бухгалтеру
+     * принадлежит другое — сколько дней отсрочки и от какого события их
+     * считать; отметка лишь сообщает платформе, что событие наступило.
+     */
+    @Post(':id/originals')
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.LOGISTICIAN, UserRole.ACCOUNTANT,
+    )
+    @ApiOperation({ summary: 'Отметить получение оригиналов накладных' })
+    async markOriginals(@Param('id') id: string, @Request() req: any, @Body() dto: {
+        side?: string;
+        date?: string | null;
+    }) {
+        // Сторону выбирают явно: у оригиналов от перевозчика и оригиналов у
+        // заказчика разные даты и разные деньги, и угадывать здесь нечего.
+        const side = String(dto?.side || '').toLowerCase();
+        if (side !== 'carrier' && side !== 'customer') {
+            throw new BadRequestException('Укажите, чьи оригиналы отмечаете: CARRIER или CUSTOMER');
+        }
+        const state = await this.settlements.markOriginals(
+            id, req.user.companyId, side, dto?.date ?? null,
+        );
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order',
+            entityId: id,
+            entityLabel: side === 'carrier'
+                ? (dto?.date ? 'Оригиналы получены от перевозчика' : 'Снята отметка об оригиналах от перевозчика')
+                : (dto?.date ? 'Заказчик получил оригиналы' : 'Снята отметка о получении оригиналов заказчиком'),
+            orderId: id,
+        });
+        return state;
+    }
+
     @Post(':id/settlements/confirm')
     @Roles(
         UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,

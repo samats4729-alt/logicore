@@ -50,6 +50,7 @@ describe('Курс в счёте и акте', () => {
             { checkPeriodNotClosed: jest.fn() } as any,
             {} as any,
             currency as any,
+            { recomputeForDocument: jest.fn().mockResolvedValue(0) } as any,
         );
         // getById в проведении отдаёт документ целиком — подделываем его,
         // чтобы проверять именно правило про курс, а не выборку из базы.
