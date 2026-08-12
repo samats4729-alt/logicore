@@ -116,6 +116,22 @@ export default function FinanceHubPage() {
     ]);
     const [summary, setSummary] = useState<DashboardSummary | null>(null);
     const [query, setQuery] = useState('');
+    /**
+     * Есть ли у человека схема начислений.
+     *
+     * По ней решаем, показывать ли ссылку «Моя зарплата». Раньше условием
+     * была роль логиста — и экспедитор, бухгалтер или завскладом, которым
+     * зарплата считается точно так же, своих начислений в кабинете не
+     * видели вовсе. Сервер и так отдаёт только свои: ссылка ничего не
+     * открывает сверх того, что человеку и так положено.
+     */
+    const [hasSalary, setHasSalary] = useState(false);
+
+    useEffect(() => {
+        api.get('/payroll/my/summary')
+            .then((res) => setHasSalary(!!res.data?.hasScheme))
+            .catch(() => setHasSalary(false));
+    }, []);
 
     useEffect(() => {
         if (!acc) return;
@@ -191,7 +207,7 @@ export default function FinanceHubPage() {
             icon: Users,
             links: [
                 { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin, icon: Users, desc: 'Начисления и выплаты сотрудникам' },
-                { label: 'Моя зарплата', href: '/company/my-salary', show: user?.role === 'LOGISTICIAN', icon: Users, desc: 'Ваши начисления' },
+                { label: 'Моя зарплата', href: '/company/my-salary', show: hasSalary, icon: Users, desc: 'Сколько начислено вам' },
             ],
         },
     ];

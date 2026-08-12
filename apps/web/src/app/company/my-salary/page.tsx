@@ -1,15 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Typography, Row, Col, DatePicker, Table, Space, Tag, Empty } from 'antd';
-import { DollarOutlined, FileTextOutlined, AccountBookOutlined, StarOutlined } from '@ant-design/icons';
+import { DatePicker, Table } from 'antd';
+import { Banknote, CalendarDays, Route, Star } from 'lucide-react';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import Link from 'next/link';
 import Loader from '@/components/ui/Loader';
+import styles from '@/components/nova/nova.module.css';
 
-const { Text } = Typography;
 const { RangePicker } = DatePicker;
+
+/**
+ * Что человеку начислили — его собственный экран.
+ *
+ * Сервер отдаёт только свои начисления: чужую зарплату отсюда не видно ни
+ * при каких правах. Разбивка на три части — оклад, проценты по рейсам,
+ * бонусы — та же, что у руководителя в разделе «Зарплата и мотивация»,
+ * чтобы разговор о деньгах шёл по одним и тем же числам.
+ */
 
 interface Accrual {
     id: string;
@@ -27,6 +36,21 @@ interface Accrual {
         date: string;
     } | null;
 }
+
+const MONTHS = [
+    'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+    'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+];
+
+/** «2026-08» → «август 2026». Месяц по-русски: `dayjs` без локали пишет
+ *  его по-английски, и в ведомости появлялось «August 2026». */
+function monthLabel(periodMonth: string) {
+    const [year, month] = periodMonth.split('-');
+    const name = MONTHS[Number(month) - 1];
+    return name ? `${name} ${year}` : periodMonth;
+}
+
+const fmt = (v: number) => v.toLocaleString('ru-RU');
 
 export default function MySalaryPage() {
     const [dates, setDates] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
@@ -65,7 +89,7 @@ export default function MySalaryPage() {
 
     const columns = [
         {
-            title: 'Заявка',
+            title: 'Рейс',
             key: 'order',
             render: (_: any, r: Accrual) => r.order ? (
                 <Link href={`/company/orders/${r.order.id}`} className="lc-ordernum" style={{ fontSize: 13 }}>
@@ -74,23 +98,25 @@ export default function MySalaryPage() {
             ) : '—',
         },
         {
-            title: 'Дата завершения',
+            title: 'Завершён',
             key: 'date',
-            render: (_: any, r: Accrual) => r.order?.date ? (
-                <Text style={{ fontSize: 12 }}>{dayjs(r.order.date).format('DD.MM.YYYY HH:mm')}</Text>
-            ) : '—',
+            render: (_: any, r: Accrual) => r.order?.date
+                ? <span style={{ fontSize: 12 }}>{dayjs(r.order.date).format('DD.MM.YYYY, HH:mm')}</span>
+                : '—',
         },
         {
-            title: 'База расчета',
+            title: 'Считали от',
             dataIndex: 'baseAmount',
             key: 'base',
             align: 'right' as const,
             render: (v: number | null, r: Accrual) => {
                 if (v === null || v === undefined) return '—';
-                const baseText = r.percentBase === 'MARGIN' ? ' (Маржа)' : ' (Сумма)';
                 return (
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
-                        {v.toLocaleString('ru-RU')} ₸ <span style={{ color: 'var(--lc-text-ter)', fontSize: 10 }}>{baseText}</span>
+                        {fmt(v)} ₸
+                        <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>
+                            {r.percentBase === 'MARGIN' ? ' · маржа' : ' · сумма рейса'}
+                        </span>
                     </span>
                 );
             },
@@ -100,136 +126,151 @@ export default function MySalaryPage() {
             dataIndex: 'percentValue',
             key: 'rate',
             align: 'center' as const,
-            render: (v: number | null) => v !== null ? <Tag color="blue">{v}%</Tag> : '—',
+            render: (v: number | null) => v !== null && v !== undefined ? `${v}%` : '—',
         },
         {
-            title: 'Начислено ₸',
+            title: 'Начислено',
             dataIndex: 'amount',
             key: 'amount',
             align: 'right' as const,
-            render: (v: number) => <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{v.toLocaleString('ru-RU')} ₸</span>,
+            render: (v: number) => (
+                <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(v)} ₸</span>
+            ),
         },
     ];
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1200, margin: '0 auto' }}>
-            {/* ===== HERO 2026 ===== */}
-            <div className="lc2-hero">
+        <div className={styles.page}>
+            <div className={styles.hero}>
                 <div>
-                    <div className="lc-eyebrow">Мои финансы</div>
-                    <h1 className="lc2-title">Моя зарплата</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Личный кабинет начислений
+                    <div className={styles.eyebrow}>Деньги · Мои начисления</div>
+                    <h1 className={styles.title}>Моя зарплата</h1>
+                    <p className={styles.subtitle}>
+                        Сколько начислено вам: оклад, проценты с рейсов и бонусы. Чужих начислений
+                        здесь нет.
                     </p>
+                </div>
+                <div className={styles.heroActions}>
                     <RangePicker
                         picker="month"
                         value={dates}
                         onChange={(val) => {
-                            if (val && val[0] && val[1]) {
-                                setDates([val[0], val[1]]);
-                            }
+                            if (val && val[0] && val[1]) setDates([val[0], val[1]]);
                         }}
                         allowClear={false}
                         placeholder={['Начало', 'Конец']}
                     />
                 </div>
-                {!loading && (
-                    <div className="lc2-metrics">
-                        <div className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: '#fdf2f8', color: '#db2777' }}>
-                                <DollarOutlined />
-                            </div>
-                            <div>
-                                <div className="lc2-mlabel">Всего</div>
-                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#db2777' }}>
-                                    {data.totals.total.toLocaleString('ru-RU')} ₸
-                                </div>
-                                <div className="lc2-msub">за период</div>
-                            </div>
-                        </div>
-                        <div className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: '#f0fdf4', color: '#16a34a' }}>
-                                <AccountBookOutlined />
-                            </div>
-                            <div>
-                                <div className="lc2-mlabel">Оклад</div>
-                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                    {data.totals.salary.toLocaleString('ru-RU')} ₸
-                                </div>
-                                <div className="lc2-msub">фиксированная часть</div>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 80 }}><Loader size="large" /></div>
+                <Loader size="large" full />
             ) : (
-                <Space direction="vertical" size={20} style={{ width: '100%' }}>
-                    {/* Percent details */}
-                    <div className="lc-card" style={{ padding: 20 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 16 }}>
-                            <FileTextOutlined style={{ marginRight: 8, color: '#2563eb' }} />Начисленные проценты по заявкам
+                <>
+                    {/* Начислено — зелёным: это единственное место, где цвет
+                        разрешён поверх чёрно-белой темы. */}
+                    <div className={styles.tiles}>
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Всего за период</span></div>
+                            <div className={`${styles.tileValue} ${styles.valuePos}`}>{fmt(data.totals.total)} ₸</div>
                         </div>
-                        <Table
-                            columns={columns}
-                            dataSource={percentAccruals}
-                            rowKey="id"
-                            size="small"
-                            pagination={{ pageSize: 10, showSizeChanger: false }}
-                            locale={{ emptyText: <Empty description="Нет начислений за этот период" /> }}
-                        />
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Оклад</span></div>
+                            <div className={styles.tileValue}>{fmt(data.totals.salary)} ₸</div>
+                        </div>
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Проценты с рейсов</span></div>
+                            <div className={styles.tileValue}>{fmt(data.totals.percentTotal)} ₸</div>
+                        </div>
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Бонусы</span></div>
+                            <div className={styles.tileValue}>{fmt(data.totals.kpiTotal)} ₸</div>
+                        </div>
                     </div>
 
-                    {/* Salary & KPI details side-by-side */}
-                    <Row gutter={[16, 16]}>
-                        <Col xs={24} lg={12}>
-                            <div className="lc-card" style={{ padding: 20 }}>
-                                <div style={{ fontWeight: 600, marginBottom: 12 }}>
-                                    <AccountBookOutlined style={{ marginRight: 8, color: '#16a34a' }} />Оклад по месяцам
-                                </div>
+                    <section className={styles.card}>
+                        <div className={styles.cardHead}>
+                            <Route size={14} />
+                            <h2 className={styles.cardTitle}>Проценты по рейсам</h2>
+                            <span className={styles.cardCount}>{percentAccruals.length}</span>
+                        </div>
+                        {percentAccruals.length === 0 ? (
+                            <div className={styles.empty}>
+                                За выбранные месяцы процентов нет. Они начисляются, когда рейс
+                                доходит до статуса, заданного в вашей схеме.
+                            </div>
+                        ) : (
+                            <Table
+                                columns={columns}
+                                dataSource={percentAccruals}
+                                rowKey="id"
+                                size="small"
+                                pagination={percentAccruals.length > 10 ? { pageSize: 10, showSizeChanger: false } : false}
+                            />
+                        )}
+                    </section>
+
+                    <div className={styles.duo} style={{ marginTop: 14 }}>
+                        <section className={styles.card}>
+                            <div className={styles.cardHead}>
+                                <CalendarDays size={14} />
+                                <h2 className={styles.cardTitle}>Оклад по месяцам</h2>
+                                <span className={styles.cardCount}>{salaryAccruals.length}</span>
+                            </div>
+                            <div className={styles.cardBody}>
                                 {salaryAccruals.length === 0 ? (
-                                    <Empty description="Оклады не начислялись" style={{ padding: 20 }} />
+                                    <div className={styles.empty}>Оклад за этот период не начислялся.</div>
                                 ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    <div className={styles.list}>
                                         {salaryAccruals.map(s => (
-                                            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: 8 }}>
-                                                <Text strong>{dayjs(s.periodMonth + '-02').format('MMMM YYYY')}</Text>
-                                                <Text style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{s.amount.toLocaleString('ru-RU')} ₸</Text>
+                                            <div key={s.id} className={styles.item}>
+                                                <span className={styles.itemIcon}><Banknote size={14} /></span>
+                                                <span className={styles.itemText}>
+                                                    <span className={styles.itemLabel}>{monthLabel(s.periodMonth)}</span>
+                                                </span>
+                                                <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(s.amount)} ₸</b>
                                             </div>
                                         ))}
                                     </div>
                                 )}
                             </div>
-                        </Col>
-                        <Col xs={24} lg={12}>
-                            <div className="lc-card" style={{ padding: 20 }}>
-                                <div style={{ fontWeight: 600, marginBottom: 12 }}>
-                                    <StarOutlined style={{ marginRight: 8, color: '#7c3aed' }} />Бонусы KPI
-                                </div>
+                        </section>
+
+                        <section className={styles.card}>
+                            <div className={styles.cardHead}>
+                                <Star size={14} />
+                                <h2 className={styles.cardTitle}>Бонусы за месяц</h2>
+                                <span className={styles.cardCount}>{kpiAccruals.length}</span>
+                            </div>
+                            <div className={styles.cardBody}>
                                 {kpiAccruals.length === 0 ? (
-                                    <Empty description="KPI бонусы не начислялись" style={{ padding: 20 }} />
+                                    <div className={styles.empty}>
+                                        Бонусов не было. Бонус приходит, когда за месяц закрыто не
+                                        меньше рейсов, чем задано в правиле.
+                                    </div>
                                 ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    <div className={styles.list}>
                                         {kpiAccruals.map(k => {
                                             const snap = k.schemeSnapshot as any;
                                             return (
-                                                <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: 8 }}>
-                                                    <div>
-                                                        <Text strong style={{ display: 'block' }}>{dayjs(k.periodMonth + '-02').format('MMMM YYYY')}</Text>
-                                                        <Text type="secondary" style={{ fontSize: 11 }}>Порог: {snap?.threshold || 0} завершенных заявок</Text>
-                                                    </div>
-                                                    <Text style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#7c3aed' }}>+{k.amount.toLocaleString('ru-RU')} ₸</Text>
+                                                <div key={k.id} className={styles.item}>
+                                                    <span className={styles.itemIcon}><Star size={14} /></span>
+                                                    <span className={styles.itemText}>
+                                                        <span className={styles.itemLabel}>{monthLabel(k.periodMonth)}</span>
+                                                        <span className={styles.itemDesc}>
+                                                            норма — {snap?.threshold || 0} рейсов за месяц
+                                                        </span>
+                                                    </span>
+                                                    <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(k.amount)} ₸</b>
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 )}
                             </div>
-                        </Col>
-                    </Row>
-                </Space>
+                        </section>
+                    </div>
+                </>
             )}
         </div>
     );
