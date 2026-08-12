@@ -1,31 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Tag, Space, Modal, Form, Input, Select, Typography, Switch } from 'antd';
-import { PlusOutlined, EditOutlined, StopOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, Input, Select } from 'antd';
+import { PlusOutlined, StopOutlined } from '@ant-design/icons';
+import { Users } from 'lucide-react';
 import { api, User } from '@/lib/api';
 import { toast } from 'sonner';
+import { ROLE_LABELS } from '@/lib/vocabulary';
+import nova from '@/components/nova/nova.module.css';
 
-const { Title } = Typography;
 const { Option } = Select;
 
-const roleLabels: Record<string, string> = {
-    ADMIN: 'Администратор',
-    CUSTOMER: 'Заказчик',
-    WAREHOUSE: 'Завсклад',
-    DRIVER: 'Водитель',
-    RECIPIENT: 'Грузополучатель',
-    PARTNER: 'Партнёр ТК',
-};
+/**
+ * Люди на платформе — все, из всех компаний.
+ *
+ * Подписи ролей раньше жили здесь своим списком, и он отстал от жизни: в
+ * таблице стояло `LOGISTICIAN` и `COMPANY_ADMIN` — владелец читал название
+ * роли из кода. Теперь берутся из общего словаря, где их правят один раз на
+ * всю платформу.
+ */
 
-const roleColors: Record<string, string> = {
-    ADMIN: 'purple',
-    CUSTOMER: 'blue',
-    WAREHOUSE: 'cyan',
-    DRIVER: 'green',
-    RECIPIENT: 'orange',
-    PARTNER: 'magenta',
-};
+/** Кого заводят из админки. Водителя и получателя заводит компания у себя. */
+const CREATABLE_ROLES = ['COMPANY_ADMIN', 'LOGISTICIAN', 'FORWARDER', 'ACCOUNTANT', 'WAREHOUSE_MANAGER', 'DRIVER'];
 
 export default function UsersPage() {
     const [users, setUsers] = useState<User[]>([]);
@@ -103,38 +99,44 @@ export default function UsersPage() {
             dataIndex: 'role',
             key: 'role',
             render: (role: string) => (
-                <Tag color={roleColors[role] || 'default'}>
-                    {roleLabels[role] || role}
-                </Tag>
+                <span className={nova.chip}>{ROLE_LABELS[role] || role}</span>
             ),
         },
         {
             title: 'Транспорт',
             key: 'vehicle',
-            render: (_: any, record: User) =>
-                record.vehiclePlate ? `${record.vehicleModel} (${record.vehiclePlate})` : '—',
+            // Модель знают не про каждую машину, а госномер — всегда. Раньше
+            // без модели в таблице стояло «null (123 ABC 01)».
+            render: (_: any, record: User) => (
+                record.vehicleModel && record.vehiclePlate
+                    ? `${record.vehicleModel} (${record.vehiclePlate})`
+                    : record.vehiclePlate || '—'
+            ),
         },
         {
             title: 'Статус',
             dataIndex: 'isActive',
             key: 'isActive',
             render: (isActive: boolean) => (
-                <Tag color={isActive ? 'green' : 'red'}>
-                    {isActive ? 'Активен' : 'Неактивен'}
-                </Tag>
+                // Цветом — только отключённый: «активен» это обычное
+                // состояние, и подсвечивать его нечем.
+                <span className={`${nova.chip}${isActive ? '' : ` ${nova.chipNeg}`}`}>
+                    {isActive ? 'Активен' : 'Отключён'}
+                </span>
             ),
         },
         {
-            title: 'Действия',
+            title: '',
             key: 'actions',
+            width: 60,
             render: (_: any, record: User) => (
                 <Space>
-                    <Button type="text" icon={<EditOutlined />} />
                     {record.isActive && (
                         <Button
                             type="text"
                             danger
                             icon={<StopOutlined />}
+                            title="Отключить вход"
                             onClick={() => handleDeactivate(record.id)}
                         />
                     )}
@@ -145,22 +147,41 @@ export default function UsersPage() {
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                <Title level={3} style={{ margin: 0 }}>Пользователи</Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-                    Добавить
-                </Button>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Пользователи</h1>
+                    <p className={nova.subtitle}>
+                        Все люди на платформе — из всех компаний. Отсюда заводят учётную запись и
+                        закрывают вход тем, кто больше не работает.
+                    </p>
+                </div>
+                <div className={nova.heroActions}>
+                    <button
+                        type="button"
+                        className={`${nova.action} ${nova.actionPrimary}`}
+                        onClick={() => setModalOpen(true)}
+                    >
+                        <PlusOutlined /> Добавить
+                    </button>
+                </div>
             </div>
 
-            <Card>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <Users size={14} />
+                    <h2 className={nova.cardTitle}>Учётные записи</h2>
+                    {users.length > 0 && <span className={nova.cardCount}>{users.length}</span>}
+                </div>
                 <Table
                     columns={columns}
                     dataSource={users}
                     rowKey="id"
                     loading={loading}
+                    size="small"
                     pagination={{ pageSize: 15 }}
                 />
-            </Card>
+            </section>
 
             <Modal
                 title="Новый пользователь"
@@ -176,8 +197,8 @@ export default function UsersPage() {
                         rules={[{ required: true, message: 'Выберите роль' }]}
                     >
                         <Select placeholder="Выберите роль">
-                            {Object.entries(roleLabels).map(([key, label]) => (
-                                <Option key={key} value={key}>{label}</Option>
+                            {CREATABLE_ROLES.map((role) => (
+                                <Option key={role} value={role}>{ROLE_LABELS[role] || role}</Option>
                             ))}
                         </Select>
                     </Form.Item>

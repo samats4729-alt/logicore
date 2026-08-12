@@ -6,9 +6,11 @@ import { PlusOutlined, EyeOutlined, EditOutlined, UserAddOutlined } from '@ant-d
 import { api, Order, Location, User } from '@/lib/api';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
-import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
+import StatusPill from '@/components/ui/StatusPill';
+import { FileText } from 'lucide-react';
+import nova from '@/components/nova/nova.module.css';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 // Подписи статусов — из общего словаря `lib/vocabulary`,
@@ -160,25 +162,31 @@ export default function OrdersPage() {
             key: 'cargoWeight',
             render: (w: number) => w ? w.toLocaleString() : '—',
         },
+        // Маршрут читается из точек рейса. Раньше графы брали `pickupLocation`
+        // и `deliveryPoints` — полей, которых сервер давно не отдаёт, и обе
+        // стояли пустыми: журнал перевозок не показывал, откуда и куда едут.
         {
             title: 'Откуда',
-            dataIndex: ['pickupLocation', 'name'],
             key: 'pickupLocation',
+            render: (_: any, r: any) => (
+                r.routePoints?.find((p: any) => p.pointType === 'PICKUP')?.location?.name || '—'
+            ),
         },
         {
             title: 'Куда',
             key: 'deliveryLocation',
-            render: (_: any, r: Order) => r.deliveryPoints?.[0]?.location?.name || '—',
+            render: (_: any, r: any) => (
+                [...(r.routePoints || [])].reverse()
+                    .find((p: any) => p.pointType === 'DELIVERY')?.location?.name || '—'
+            ),
         },
         {
             title: 'Статус',
             dataIndex: 'status',
             key: 'status',
-            render: (status: string) => (
-                <Tag color={statusColors[status] || 'default'}>
-                    {statusLabels[status] || status}
-                </Tag>
-            ),
+            // Та же плашка, что в кабинете: один статус не должен выглядеть
+            // в двух местах платформы по-разному.
+            render: (status: string) => <StatusPill status={status} />,
         },
         {
             title: 'Водитель',
@@ -192,7 +200,7 @@ export default function OrdersPage() {
                         <Text type="secondary" style={{ fontSize: 12 }}>{driver.vehiclePlate}</Text>
                     </span>
                 ) : (
-                    <Tag color="warning">Не назначен</Tag>
+                    <span className={`${nova.chip} ${nova.chipWarn}`}>Не назначен</span>
                 ),
         },
         {
@@ -207,7 +215,11 @@ export default function OrdersPage() {
             render: (_: any, r: Order) => (
                 <Space direction="vertical" size={0}>
                     <Text style={{ fontSize: 12 }}>{r.customerPaymentForm || '-'}</Text>
-                    {r.customerPaymentDate && <Text type="secondary" style={{ fontSize: 10 }}>{new Date(r.customerPaymentDate).toLocaleDateString()}</Text>}
+                    {r.customerPaymentDate && (
+                        <Text type="secondary" style={{ fontSize: 10 }}>
+                            {new Date(r.customerPaymentDate).toLocaleDateString('ru-RU')}
+                        </Text>
+                    )}
                 </Space>
             )
         },
@@ -239,22 +251,41 @@ export default function OrdersPage() {
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                <Title level={3} style={{ margin: 0 }}>Заявки на перевозку</Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-                    Новая заявка
-                </Button>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Заявки</h1>
+                    <p className={nova.subtitle}>
+                        Все перевозки на платформе — по всем компаниям.
+                    </p>
+                </div>
+                <div className={nova.heroActions}>
+                    <button
+                        type="button"
+                        className={`${nova.action} ${nova.actionPrimary}`}
+                        onClick={() => setModalOpen(true)}
+                    >
+                        <PlusOutlined /> Заявка
+                    </button>
+                </div>
             </div>
 
-            <Card>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <FileText size={14} />
+                    <h2 className={nova.cardTitle}>Перевозки</h2>
+                    {orders.length > 0 && <span className={nova.cardCount}>{orders.length}</span>}
+                </div>
                 <Table
                     columns={columns}
                     dataSource={orders}
                     rowKey="id"
                     loading={loading}
+                    size="small"
+                    scroll={{ x: 'max-content' }}
                     pagination={{ pageSize: 15 }}
                 />
-            </Card>
+            </section>
 
             {/* Модал создания */}
             <Modal
@@ -529,9 +560,7 @@ export default function OrdersPage() {
                     <>
                         <Descriptions column={1} bordered size="small">
                             <Descriptions.Item label="Статус">
-                                <Tag color={statusColors[selectedOrder.status]}>
-                                    {statusLabels[selectedOrder.status]}
-                                </Tag>
+                                <StatusPill status={selectedOrder.status} />
                             </Descriptions.Item>
                             <Descriptions.Item label="Груз">
                                 {selectedOrder.cargoDescription}

@@ -36,6 +36,8 @@ export interface SettlementSide {
     dueDate: Date | null;
     /** Чего ждём, чтобы посчитать дату: «выгрузки», «счёта», «оригиналов». */
     dueDependsOn: string | null;
+    /** Когда оригиналы накладных дошли до этой стороны. */
+    originalsAt: Date | null;
 }
 
 export interface SettlementState {
@@ -60,6 +62,25 @@ const WAITING_FOR: Record<string, string> = {
     UNLOAD: 'выгрузки',
     INVOICE: 'выставления счёта',
     ORIGINALS: 'получения оригиналов накладных',
+};
+
+/** Сторона расчётов. Заказчик платит нам, перевозчику платим мы. */
+export type SettlementSideKey = 'customer' | 'carrier';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Срок оплаты — это день, а не момент.
+ *
+ * Отметку ставит человек в своём часовом поясе, а сравнивают её с датами
+ * маршрута и счетов, которые лежат в базе полуночью UTC. Без приведения
+ * «7 августа» из Алматы стало бы 6 августа, и вся отсрочка съехала бы на день.
+ */
+const asDay = (value: Date | string | null | undefined): Date | null => {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 };
 
 @Injectable()
@@ -185,6 +206,9 @@ export class OrderSettlementsService {
         );
         const complete = this.isComplete({ customerId, carrierId, customerCard, carrierCard });
 
+        // У новой заявки известен только день выгрузки: ни счёта, ни оригиналов
+        // накладных по ней ещё нет и быть не может. Даты по этим условиям
+        // посчитаются позже — когда события произойдут.
         return {
             ...patch,
             customerPaymentDate: patch.customerPaymentFrom === 'UNLOAD'
@@ -195,6 +219,89 @@ export class OrderSettlementsService {
                 : null,
             settlementsConfirmedAt: complete ? new Date() : null,
         };
+    }
+
+    /**
+     * День, от которого идёт отсрочка каждой стороны.
+     *
+     * Точек отсчёта три, и все три теперь настоящие:
+     *   * `UNLOAD` — день выгрузки по маршруту;
+     *   * `ORIGINALS` — день, когда оригиналы накладных дошли до этой стороны
+     *     (отметку ставит человек, до неё дня нет);
+     *   * `INVOICE` — день счёта по этому рейсу.
+     *
+     * Пусто означает «событие ещё не наступило»: заплатить «через 15 дней от
+     * получения оригиналов» нельзя, пока оригиналы едут почтой, и выдумывать
+     * дату вместо этого — хуже, чем показать, чего ждём.
+     */
+    private async anchorDates(order: any, companyId: string) {
+        const unloadAt = this.unloadDate(order.routePoints);
+
+        const dayOf = async (anchor: string | null, side: SettlementSideKey) => {
+            if (anchor === 'UNLOAD') return asDay(unloadAt);
+            if (anchor === 'ORIGINALS') {
+                return asDay(side === 'carrier' ? order.carrierOriginalsAt : order.customerOriginalsAt);
+            }
+            if (anchor === 'INVOICE') return this.invoiceDate(order, companyId, side);
+            return null;
+        };
+
+        return {
+            customer: await dayOf(order.customerPaymentFrom ?? null, 'customer'),
+            carrier: await dayOf(order.carrierPaymentFrom ?? null, 'carrier'),
+        };
+    }
+
+    /**
+     * Дата счёта, от которой идёт отсрочка.
+     *
+     * Заказчику счёт выставляем мы — это наш исходящий счёт по этому рейсу.
+     * Перевозчик выставляет счёт нам — счёт входящий, и день в нём стоит его,
+     * а не тот, когда мы завели документ у себя; поэтому берётся `externalDate`.
+     *
+     * Считает самый ранний проведённый счёт: отсрочку запускает первый
+     * выставленный счёт, а не последняя перевыставленная копия. Черновики и
+     * отменённые счета не в счёт — по ним никто ничего не должен.
+     */
+    private async invoiceDate(order: any, companyId: string, side: SettlementSideKey) {
+        if (!order?.id || !companyId) return null;
+        const { customerId, carrierId } = this.sidesOf(order, companyId);
+        const counterpartyId = side === 'customer' ? customerId : carrierId;
+        if (!counterpartyId) return null;
+
+        const invoice = await this.prisma.accountingDocument.findFirst({
+            where: {
+                companyId,
+                counterpartyId,
+                type: 'PAYMENT_INVOICE',
+                direction: side === 'customer' ? 'OUTGOING' : 'INCOMING',
+                status: 'POSTED',
+                orders: { some: { orderId: order.id } },
+            },
+            orderBy: { documentDate: 'asc' },
+            select: { documentDate: true, externalDate: true },
+        });
+        if (!invoice) return null;
+
+        return asDay(side === 'customer'
+            ? invoice.documentDate
+            : invoice.externalDate ?? invoice.documentDate);
+    }
+
+    /**
+     * Плановая дата платежа по условиям стороны.
+     *
+     * `undefined` — «эта дата не наша»: у рейса нет наших условий (старые
+     * заявки из Excel), и то, что в поле лежит, вписал человек руками.
+     * Затирать его нечем.
+     */
+    private derivedDueDate(
+        days: number | null | undefined,
+        anchor: string | null | undefined,
+        anchorDate: Date | null,
+    ): Date | null | undefined {
+        if (days === null || days === undefined || !anchor) return undefined;
+        return dueDateFrom(anchorDate, days);
     }
 
     /**
@@ -215,6 +322,7 @@ export class OrderSettlementsService {
             select: {
                 id: true, customerCompanyId: true, forwarderId: true, partnerId: true,
                 subForwarderId: true, settlementsConfirmedById: true,
+                carrierOriginalsAt: true, customerOriginalsAt: true,
                 routePoints: { select: { pointType: true, expectedDate: true }, orderBy: { sequence: 'asc' } },
             },
         });
@@ -224,21 +332,16 @@ export class OrderSettlementsService {
             await this.termsFromCards(order, companyId);
 
         const complete = this.isComplete({ customerId, carrierId, customerCard, carrierCard });
-        const unloadAt = this.unloadDate(order.routePoints);
+        // Считаем по новым условиям, а не по тем, что лежат в заявке: стороны
+        // только что поменяли, вместе с ними поменялись и сроки.
+        const anchors = await this.anchorDates({ ...order, ...patch }, companyId);
 
         return this.prisma.order.update({
             where: { id: orderId },
             data: {
                 ...patch,
-                // Плановые даты платежей считаются только от того дня, который
-                // уже известен: от счёта и от оригиналов накладных срок
-                // посчитать нельзя, пока их нет.
-                customerPaymentDate: patch.customerPaymentFrom === 'UNLOAD'
-                    ? dueDateFrom(unloadAt, patch.customerPaymentDays)
-                    : null,
-                driverPaymentDate: patch.carrierPaymentFrom === 'UNLOAD'
-                    ? dueDateFrom(unloadAt, patch.carrierPaymentDays)
-                    : null,
+                customerPaymentDate: dueDateFrom(anchors.customer, patch.customerPaymentDays),
+                driverPaymentDate: dueDateFrom(anchors.carrier, patch.carrierPaymentDays),
                 settlementsConfirmedAt: complete ? new Date() : null,
                 settlementsConfirmedById: null,
             },
@@ -250,35 +353,101 @@ export class OrderSettlementsService {
      * Пересчитать плановые даты платежей по уже сохранённым условиям.
      *
      * Отдельно от подстановки из карточек: когда в рейсе сдвинули дату
-     * выгрузки, сроки оплаты не меняются — меняется день, от которого их
-     * считают. Условия и проверку бухгалтера этот путь не трогает, иначе
-     * правка даты в маршруте сбрасывала бы его работу.
+     * выгрузки, отметили оригиналы или провели счёт, сроки оплаты не
+     * меняются — меняется день, от которого их считают. Условия и проверку
+     * бухгалтера этот путь не трогает, иначе правка даты в маршруте сбрасывала
+     * бы его работу.
      */
     async recomputeDueDates(orderId: string) {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             select: {
-                id: true,
+                id: true, customerCompanyId: true, forwarderId: true, partnerId: true,
+                subForwarderId: true,
                 customerPaymentDays: true, customerPaymentFrom: true,
                 carrierPaymentDays: true, carrierPaymentFrom: true,
+                carrierOriginalsAt: true, customerOriginalsAt: true,
                 routePoints: { select: { pointType: true, expectedDate: true }, orderBy: { sequence: 'asc' } },
             },
         });
         if (!order) return null;
 
-        const unloadAt = this.unloadDate(order.routePoints);
+        const anchors = await this.anchorDates(order, this.ownerOf(order));
         return this.prisma.order.update({
             where: { id: orderId },
             data: {
-                customerPaymentDate: order.customerPaymentFrom === 'UNLOAD'
-                    ? dueDateFrom(unloadAt, order.customerPaymentDays)
-                    : undefined,
-                driverPaymentDate: order.carrierPaymentFrom === 'UNLOAD'
-                    ? dueDateFrom(unloadAt, order.carrierPaymentDays)
-                    : undefined,
+                customerPaymentDate: this.derivedDueDate(
+                    order.customerPaymentDays, order.customerPaymentFrom, anchors.customer,
+                ),
+                driverPaymentDate: this.derivedDueDate(
+                    order.carrierPaymentDays, order.carrierPaymentFrom, anchors.carrier,
+                ),
             },
             select: { id: true },
         });
+    }
+
+    /**
+     * Пересчитать сроки по рейсам, к которым привязан счёт.
+     *
+     * Зовётся, когда счёт провели или отменили: для условий «от даты счёта»
+     * ровно в этот момент появляется (или исчезает) день отсчёта. Без этого
+     * плановая дата платежа так и осталась бы пустой у всех, кто работает по
+     * счёту, — а это половина заказчиков.
+     */
+    async recomputeForDocument(documentId: string) {
+        const links = await this.prisma.accountingDocumentOrder.findMany({
+            where: { documentId },
+            select: { orderId: true },
+        });
+        for (const link of links) {
+            await this.recomputeDueDates(link.orderId);
+        }
+        return links.length;
+    }
+
+    /**
+     * Отметить, что оригиналы накладных дошли.
+     *
+     * Отметку ставит тот, кто ведёт рейс: получить оригиналы от перевозчика и
+     * убедиться, что заказчик их получил, — обычная работа с документами, а не
+     * бухгалтерия. Бухгалтеру принадлежит другое — сколько дней отсрочки и от
+     * какого события их считать.
+     *
+     * Дата разрешена задним числом: оригиналы приходят почтой, и отметку
+     * ставят, когда до них дошли руки, а срок идёт с того дня, когда конверт
+     * пришёл на самом деле.
+     */
+    async markOriginals(
+        orderId: string,
+        companyId: string,
+        side: SettlementSideKey,
+        date: Date | string | null,
+    ) {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { id: true, forwarderId: true, partnerId: true, customerCompanyId: true },
+        });
+        if (!order) throw new NotFoundException('Заявка не найдена');
+        this.assertOwner(order, companyId);
+
+        const day = asDay(date);
+        if (date && !day) throw new BadRequestException('Не понял дату получения оригиналов');
+        if (day && day.getTime() > asDay(new Date())!.getTime() + DAY_MS) {
+            throw new BadRequestException('Оригиналы нельзя получить завтра');
+        }
+
+        await this.prisma.order.update({
+            where: { id: orderId },
+            data: side === 'carrier' ? { carrierOriginalsAt: day } : { customerOriginalsAt: day },
+        });
+        await this.recomputeDueDates(orderId);
+        return this.stateOf(orderId, companyId);
+    }
+
+    /** Компания, которая ведёт рейс. */
+    private ownerOf(order: any): string {
+        return order.forwarderId || order.partnerId || order.customerCompanyId || '';
     }
 
     /** Дата выгрузки по маршруту: от неё считаются сроки «от выгрузки». */
@@ -322,6 +491,7 @@ export class OrderSettlementsService {
                 customerPaymentDays: true, customerPaymentFrom: true,
                 carrierPaymentDays: true, carrierPaymentFrom: true,
                 customerPaymentDate: true, driverPaymentDate: true,
+                carrierOriginalsAt: true, customerOriginalsAt: true,
                 settlementsConfirmedAt: true, settlementsConfirmedById: true,
                 routePoints: { select: { pointType: true, expectedDate: true }, orderBy: { sequence: 'asc' } },
             },
@@ -395,6 +565,7 @@ export class OrderSettlementsService {
             days: number | null;
             from: string | null;
             dueDate: Date | null;
+            originalsAt: Date | null;
         }): SettlementSide => ({
             ...input,
             dueDependsOn: input.dueDate || !input.from
@@ -421,6 +592,7 @@ export class OrderSettlementsService {
                 days: order.customerPaymentDays,
                 from: order.customerPaymentFrom,
                 dueDate: order.customerPaymentDate,
+                originalsAt: order.customerOriginalsAt,
             }),
             carrier: side({
                 companyId: carrierId,
@@ -430,6 +602,7 @@ export class OrderSettlementsService {
                 days: order.carrierPaymentDays,
                 from: order.carrierPaymentFrom,
                 dueDate: order.driverPaymentDate,
+                originalsAt: order.carrierOriginalsAt,
             }),
         };
     }
@@ -456,6 +629,8 @@ export class OrderSettlementsService {
             where: { id: orderId },
             select: {
                 id: true, forwarderId: true, partnerId: true, customerCompanyId: true,
+                subForwarderId: true,
+                carrierOriginalsAt: true, customerOriginalsAt: true,
                 routePoints: { select: { pointType: true, expectedDate: true }, orderBy: { sequence: 'asc' } },
             },
         });
@@ -490,7 +665,6 @@ export class OrderSettlementsService {
         if (dto.executorHasVat !== undefined) patch.executorHasVat = !!dto.executorHasVat;
         if (dto.executorVatRate !== undefined) patch.executorVatRate = rate(dto.executorVatRate) ?? 0;
 
-        const unloadAt = this.unloadDate(order.routePoints);
         if (dto.customerPaymentDays !== undefined || dto.customerPaymentFrom !== undefined) {
             const d = days(dto.customerPaymentDays);
             const a = anchor(dto.customerPaymentFrom);
@@ -499,7 +673,6 @@ export class OrderSettlementsService {
             }
             patch.customerPaymentDays = d;
             patch.customerPaymentFrom = a;
-            patch.customerPaymentDate = a === 'UNLOAD' ? dueDateFrom(unloadAt, d) : null;
         }
         if (dto.carrierPaymentDays !== undefined || dto.carrierPaymentFrom !== undefined) {
             const d = days(dto.carrierPaymentDays);
@@ -509,7 +682,25 @@ export class OrderSettlementsService {
             }
             patch.carrierPaymentDays = d;
             patch.carrierPaymentFrom = a;
-            patch.driverPaymentDate = a === 'UNLOAD' ? dueDateFrom(unloadAt, d) : null;
+        }
+
+        // Плановые даты — от новых условий: бухгалтер поменял отсрочку, и день
+        // платежа обязан переехать вместе с ней. Если по новой точке отсчёта
+        // события ещё не было (оригиналы не пришли, счёт не выставлен), дата
+        // очищается — вернётся сама, когда событие наступит.
+        const anchors = await this.anchorDates(
+            {
+                ...order,
+                customerPaymentFrom: patch.customerPaymentFrom ?? null,
+                carrierPaymentFrom: patch.carrierPaymentFrom ?? null,
+            },
+            companyId,
+        );
+        if (patch.customerPaymentFrom !== undefined) {
+            patch.customerPaymentDate = dueDateFrom(anchors.customer, patch.customerPaymentDays as number | null);
+        }
+        if (patch.carrierPaymentFrom !== undefined) {
+            patch.driverPaymentDate = dueDateFrom(anchors.carrier, patch.carrierPaymentDays as number | null);
         }
 
         // Правка бухгалтера и есть проверка: второй кнопки для этого не нужно.

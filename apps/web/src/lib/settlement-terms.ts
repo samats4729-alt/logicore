@@ -63,6 +63,8 @@ export interface SettlementSide {
     dueDate: string | null;
     /** Чего ждём, чтобы её посчитать: «выгрузки», «оригиналов накладных». */
     dueDependsOn: string | null;
+    /** Когда оригиналы накладных дошли до этой стороны. */
+    originalsAt: string | null;
 }
 
 export interface OrderSettlements {

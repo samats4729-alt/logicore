@@ -1,0 +1,41 @@
+/* Типы груза внутри категории: плашки, которые можно снять. */
+
+.types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.type {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px 6px 11px;
+    border: 1px solid var(--nova-border);
+    border-radius: 10px;
+    background: var(--nova-surface-2);
+    color: var(--nova-fg);
+    font: 500 12.5px/1 Inter, sans-serif;
+}
+
+/* Крестик отдельной кнопкой, а не значком с курсором: удаление — действие,
+   и до него надо доходить нажатием, а не случайным попаданием по плашке. */
+.typeDrop {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--nova-fg-3);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.typeDrop:hover {
+    background: var(--nova-neg-soft);
+    color: var(--nova-neg);
+}

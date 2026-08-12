@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Card, Button, Modal, Form, Input, Select, Space, Typography } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Space } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Landmark } from 'lucide-react';
 import { api, Country, Region } from '@/lib/api';
 import { toast } from 'sonner';
+import GeographyHeader from '../GeographyHeader';
+import nova from '@/components/nova/nova.module.css';
 
-const { Title } = Typography;
 const { Option } = Select;
 
 export default function AdminRegionsPage() {
@@ -115,49 +117,55 @@ export default function AdminRegionsPage() {
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, alignItems: 'center' }}>
-                <Title level={2} style={{ margin: 0 }}>
-                    <EnvironmentOutlined style={{ marginRight: 12 }} />
-                    Регионы / Области
-                </Title>
-                <div style={{ display: 'flex', gap: 16 }}>
-                    <Select
-                        style={{ width: 200 }}
-                        placeholder="Выберите страну"
-                        value={selectedCountryId}
-                        onChange={setSelectedCountryId}
-                    >
-                        {countries.map(c => (
-                            <Option key={c.id} value={c.id}>{c.name}</Option>
-                        ))}
-                    </Select>
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}
-                        disabled={!selectedCountryId}
-                    >
-                        Добавить регион
-                    </Button>
-                </div>
-            </div>
+            <GeographyHeader
+                actions={(
+                    <>
+                        <Select
+                            style={{ width: 200 }}
+                            placeholder="Выберите страну"
+                            value={selectedCountryId}
+                            onChange={setSelectedCountryId}
+                        >
+                            {countries.map(c => (
+                                <Option key={c.id} value={c.id}>{c.name}</Option>
+                            ))}
+                        </Select>
+                        <button
+                            type="button"
+                            className={`${nova.action} ${nova.actionPrimary}`}
+                            disabled={!selectedCountryId}
+                            onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}
+                        >
+                            <PlusOutlined /> Регион
+                        </button>
+                    </>
+                )}
+            />
 
-            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <Landmark size={14} />
+                    <h2 className={nova.cardTitle}>Регионы и области</h2>
+                    {selectedCountryId && regions.length > 0 && (
+                        <span className={nova.cardCount}>{regions.length}</span>
+                    )}
+                </div>
                 {!selectedCountryId ? (
-                    <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                        Выберите страну, чтобы увидеть список регионов
+                    <div className={nova.empty}>
+                        Выберите страну — области показываются по одной стране за раз.
                     </div>
                 ) : (
                     <Table
                         dataSource={regions}
                         columns={columns}
                         rowKey="id"
+                        size="small"
                         loading={loading}
                         pagination={false}
                         locale={{ emptyText: 'В этой стране пока нет регионов' }}
                     />
                 )}
-            </Card>
+            </section>
 
             <Modal
                 title={editingId ? "Редактировать регион" : "Новый регион"}

@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Descriptions, Empty, Input, Modal, Segmented, Space, Table, Tag, theme } from 'antd';
+import { Alert, Button, Descriptions, Input, Modal, Space, Table } from 'antd';
 import { CheckOutlined, CloseOutlined, FileTextOutlined } from '@ant-design/icons';
+import { ShieldCheck } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import nova from '@/components/nova/nova.module.css';
 
 const DOCUMENT_LABELS: Record<string, string> = {
     COMPANY_REGISTRATION: 'Справка о госрегистрации',
@@ -14,12 +16,20 @@ const DOCUMENT_LABELS: Record<string, string> = {
     DIRECTOR_ID: 'Удостоверение личности руководителя',
 };
 
-const STATUS_VIEW: Record<string, { label: string; color: string }> = {
-    DRAFT: { label: 'Черновик', color: 'default' },
-    PENDING: { label: 'На проверке', color: 'processing' },
-    VERIFIED: { label: 'Подтверждена', color: 'success' },
-    REJECTED: { label: 'Отклонена', color: 'error' },
+/** Состояние заявки. Цветом — только то, что требует действия или пошло не так. */
+const STATUS_VIEW: Record<string, { label: string; chip?: 'warn' | 'neg' }> = {
+    DRAFT: { label: 'Черновик' },
+    PENDING: { label: 'На проверке', chip: 'warn' },
+    VERIFIED: { label: 'Подтверждена' },
+    REJECTED: { label: 'Отклонена', chip: 'neg' },
 };
+
+const STATUS_TABS = [
+    { value: 'PENDING', label: 'На проверке' },
+    { value: 'VERIFIED', label: 'Подтверждённые' },
+    { value: 'REJECTED', label: 'Отклонённые' },
+    { value: 'DRAFT', label: 'Черновики' },
+];
 
 interface ReviewCompany {
     id: string;
@@ -46,7 +56,6 @@ interface ReviewCompany {
  * доказывает: допуск компании к работе даёт человек, сверив документы.
  */
 export default function AdminCompaniesPage() {
-    const { token } = theme.useToken();
     const [status, setStatus] = useState('PENDING');
     const [rows, setRows] = useState<ReviewCompany[]>([]);
     const [loading, setLoading] = useState(true);
@@ -104,7 +113,7 @@ export default function AdminCompaniesPage() {
                         Этот БИН заведён как контрагент у: {owners || '—'}. Незавершённые рейсы
                         с этой карточкой станут видны организации в её кабинете.
                     </p>
-                    <p style={{ color: token.colorTextSecondary }}>
+                    <p style={{ color: 'var(--nova-fg-3)' }}>
                         Завершённые и отменённые рейсы остаются как были. Счета и платежи не
                         трогаются — они остаются у того, кто завёл карточку.
                     </p>
@@ -136,7 +145,7 @@ export default function AdminCompaniesPage() {
             title: `Отклонить «${company.name}»?`,
             content: (
                 <div>
-                    <p style={{ fontSize: 13, color: token.colorTextSecondary }}>
+                    <p style={{ fontSize: 13, color: 'var(--nova-fg-3)' }}>
                         Причина видна заявителю — по ней он поймёт, что исправить и приложить заново.
                     </p>
                     <Input.TextArea
@@ -176,38 +185,49 @@ export default function AdminCompaniesPage() {
     };
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <div className="lc2-hero">
+        <div>
+            <div className={nova.hero}>
                 <div>
-                    <div className="lc-eyebrow">Платформа</div>
-                    <h1 className="lc2-title">Подтверждение организаций</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0' }}>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Подтверждение организаций</h1>
+                    <p className={nova.subtitle}>
                         БИН в Казахстане — публичные данные, поэтому его ввод ничего не доказывает.
                         Сверьте справку о регистрации, приказ о руководителе и удостоверение личности.
                     </p>
                 </div>
             </div>
 
-            <Segmented
-                value={status}
-                onChange={(value) => setStatus(String(value))}
-                style={{ marginBottom: 14 }}
-                options={[
-                    { value: 'PENDING', label: 'На проверке' },
-                    { value: 'VERIFIED', label: 'Подтверждённые' },
-                    { value: 'REJECTED', label: 'Отклонённые' },
-                    { value: 'DRAFT', label: 'Черновики' },
-                ]}
-            />
+            <div className={nova.pills} style={{ marginBottom: 14 }} role="tablist">
+                {STATUS_TABS.map((tab) => (
+                    <button
+                        key={tab.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={status === tab.value}
+                        className={`${nova.pill} ${status === tab.value ? nova.pillActive : ''}`}
+                        onClick={() => setStatus(tab.value)}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
-            <div className="lc-card" style={{ padding: 0 }}>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <ShieldCheck size={14} />
+                    <h2 className={nova.cardTitle}>
+                        {STATUS_TABS.find((tab) => tab.value === status)?.label}
+                    </h2>
+                    {rows.length > 0 && <span className={nova.cardCount}>{rows.length}</span>}
+                </div>
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
+                    <div className={nova.empty}><Loader size="large" /></div>
                 ) : rows.length === 0 ? (
-                    <Empty
-                        style={{ padding: 48 }}
-                        description={status === 'PENDING' ? 'Заявок на проверке нет' : 'Пусто'}
-                    />
+                    <div className={nova.empty}>
+                        {status === 'PENDING'
+                            ? 'Заявок на проверке нет — все организации разобраны'
+                            : 'Пусто'}
+                    </div>
                 ) : (
                     <Table
                         dataSource={rows}
@@ -288,7 +308,7 @@ export default function AdminCompaniesPage() {
                                 render: (_: unknown, record: ReviewCompany) => (
                                     <div>
                                         <div style={{ fontWeight: 600 }}>{record.name}</div>
-                                        <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>
                                             БИН {record.bin}
                                         </div>
                                     </div>
@@ -307,10 +327,10 @@ export default function AdminCompaniesPage() {
                                 width: 110,
                                 align: 'center' as const,
                                 render: (_: unknown, record: ReviewCompany) => (
-                                    <span style={{
-                                        color: record.documents.length === 3 ? token.colorSuccess : token.colorWarning,
-                                        fontWeight: 600,
-                                    }}>
+                                    <span
+                                        className={record.documents.length === 3 ? undefined : nova.valueWarn}
+                                        style={{ fontWeight: 600 }}
+                                    >
                                         {record.documents.length} / 3
                                     </span>
                                 ),
@@ -321,9 +341,14 @@ export default function AdminCompaniesPage() {
                                 width: 130,
                                 render: (value: string, record: ReviewCompany) => (
                                     <div>
-                                        <Tag color={STATUS_VIEW[value]?.color}>{STATUS_VIEW[value]?.label}</Tag>
+                                        <span className={`${nova.chip} ${
+                                            STATUS_VIEW[value]?.chip === 'neg' ? nova.chipNeg
+                                                : STATUS_VIEW[value]?.chip === 'warn' ? nova.chipWarn : ''
+                                        }`}>
+                                            {STATUS_VIEW[value]?.label || value}
+                                        </span>
                                         {record.rejectionReason && (
-                                            <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
+                                            <div style={{ fontSize: 11, color: 'var(--nova-fg-3)', marginTop: 4 }}>
                                                 {record.rejectionReason}
                                             </div>
                                         )}
@@ -362,7 +387,7 @@ export default function AdminCompaniesPage() {
                         ]}
                     />
                 )}
-            </div>
+            </section>
         </div>
     );
 }

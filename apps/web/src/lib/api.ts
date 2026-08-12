@@ -96,7 +96,15 @@ api.interceptors.response.use(
                     // перезагружает страницу целиком и стирает уже набранные
                     // почту с паролем. Человек видит, что форма сама
                     // очистилась, без единого сообщения, и набирает заново.
-                    if (!window.location.pathname.startsWith('/login')) {
+                    //
+                    // Страниц входа две: общая и вход в панель платформы.
+                    // Вторую это правило и делало недоступной: оболочка
+                    // админки спрашивала «кто вошёл», получала 401 — и
+                    // отсюда же уезжала на общий вход, так что своя форма
+                    // владельцу никогда не показывалась.
+                    const path = window.location.pathname;
+                    const onLoginScreen = path.startsWith('/login') || path.startsWith('/admin/login');
+                    if (!onLoginScreen) {
                         window.location.href = '/login';
                     }
                 }

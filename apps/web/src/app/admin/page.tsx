@@ -1,24 +1,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Row, Col, Card, Statistic, Typography, Tag, Empty } from 'antd';
 import {
-    ShopOutlined,
-    TeamOutlined,
-    CarOutlined,
-    CheckCircleOutlined,
-    ClockCircleOutlined,
-    ExclamationCircleOutlined,
-    DollarOutlined,
-    CustomerServiceOutlined,
-    RiseOutlined,
-} from '@ant-design/icons';
+    Building2,
+    CarFront,
+    CheckCircle2,
+    Clock3,
+    Headset,
+    TrendingUp,
+    Users,
+    Wallet,
+} from 'lucide-react';
 import { api } from '@/lib/api';
-import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
-import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
+import StatusPill from '@/components/ui/StatusPill';
 import Loader from '@/components/ui/Loader';
+import nova from '@/components/nova/nova.module.css';
+import styles from './admin-dashboard.module.css';
 
-const { Title, Text } = Typography;
+/**
+ * Сводка по платформе — первое, что видит владелец.
+ *
+ * Цифры те же, что были, но читаются иначе. Раньше каждая плитка красилась
+ * своим цветом: синяя, бирюзовая, зелёная, фиолетовая — восемь показателей и
+ * шесть цветов, из которых ни один ничего не означал. Цвет остался там, где
+ * он несёт смысл: проблемные заявки и открытые обращения.
+ */
 
 interface Overview {
     companies: { total: number; new30: number };
@@ -30,11 +36,29 @@ interface Overview {
     ordersDaily: { date: string; count: number }[];
 }
 
-// Подписи статусов — из общего словаря `lib/vocabulary`,
-// чтобы один и тот же статус везде назывался одинаково.
-const statusLabels = ORDER_STATUS_LABELS;
-
 const fmt = (n: number) => n.toLocaleString('ru-RU');
+
+/** Плитка показателя: подпись, значение и строка пояснения под ним. */
+function Tile({ icon, label, value, sub, tone }: {
+    icon: React.ReactNode;
+    label: string;
+    value: string;
+    sub?: React.ReactNode;
+    tone?: 'pos' | 'warn';
+}) {
+    return (
+        <div className={nova.tile}>
+            <div className={nova.tileHead}>
+                <span className={nova.tileLabel}>{label}</span>
+                <span className={styles.tileIcon}>{icon}</span>
+            </div>
+            <div className={`${nova.tileValue}${tone === 'warn' ? ` ${nova.valueWarn}` : ''}`}>
+                {value}
+            </div>
+            {sub && <div className={nova.tileSub}>{sub}</div>}
+        </div>
+    );
+}
 
 export default function AdminDashboard() {
     const [data, setData] = useState<Overview | null>(null);
@@ -48,11 +72,11 @@ export default function AdminDashboard() {
     }, []);
 
     if (loading) {
-        return <div style={{ textAlign: 'center', padding: 80 }}><Loader size="large" /></div>;
+        return <div className={nova.empty}><Loader size="large" /></div>;
     }
 
     if (!data) {
-        return <Empty description="Не удалось загрузить статистику" style={{ marginTop: 80 }} />;
+        return <div className={nova.empty}>Не удалось загрузить статистику</div>;
     }
 
     const maxDaily = Math.max(1, ...data.ordersDaily.map(d => d.count));
@@ -60,130 +84,117 @@ export default function AdminDashboard() {
 
     return (
         <div>
-            <Title level={3}>Дашборд</Title>
-            <Text type="secondary">Сводка по всей платформе. Обновляется при каждом открытии страницы.</Text>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Дашборд</h1>
+                    <p className={nova.subtitle}>
+                        Сводка по всей платформе. Обновляется при каждом открытии страницы.
+                    </p>
+                </div>
+            </div>
 
-            {/* Компании и люди */}
-            <Row gutter={[16, 16]} style={{ marginTop: 20, marginBottom: 16 }}>
-                <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic title="Компаний на платформе" value={fmt(data.companies.total)} prefix={<ShopOutlined />} />
-                        <Text type="success" style={{ fontSize: 12 }}>
-                            <RiseOutlined /> +{data.companies.new30} за 30 дней
-                        </Text>
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic title="Сотрудников компаний" value={fmt(data.users.office)} prefix={<TeamOutlined />} />
-                        <Text type="secondary" style={{ fontSize: 12 }}>без учёта водителей</Text>
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic title="Водителей" value={fmt(data.users.drivers)} prefix={<CarOutlined />} />
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic
-                            title="Открытых обращений"
-                            value={fmt(data.openTickets)}
-                            prefix={<CustomerServiceOutlined />}
-                            valueStyle={{ color: data.openTickets > 0 ? '#faad14' : undefined }}
-                        />
-                    </Card>
-                </Col>
-            </Row>
+            <div className={nova.tiles}>
+                <Tile
+                    icon={<Building2 size={15} />}
+                    label="Компаний"
+                    value={fmt(data.companies.total)}
+                    sub={<><TrendingUp size={11} /> +{data.companies.new30} за 30 дней</>}
+                />
+                <Tile
+                    icon={<Users size={15} />}
+                    label="Сотрудников компаний"
+                    value={fmt(data.users.office)}
+                    sub="без учёта водителей"
+                />
+                <Tile
+                    icon={<CarFront size={15} />}
+                    label="Водителей"
+                    value={fmt(data.users.drivers)}
+                />
+                <Tile
+                    icon={<Headset size={15} />}
+                    label="Открытых обращений"
+                    value={fmt(data.openTickets)}
+                    // Цветом только то, что требует действия: ждущее обращение
+                    // — это человек, которому не ответили.
+                    tone={data.openTickets > 0 ? 'warn' : undefined}
+                    sub={data.openTickets > 0 ? 'ждут ответа' : 'все закрыты'}
+                />
+            </div>
 
-            {/* Заявки и деньги */}
-            <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-                <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic title="Заявок за месяц" value={fmt(data.orders.month)} prefix={<ClockCircleOutlined />} valueStyle={{ color: '#1677ff' }} />
-                        <Text type="secondary" style={{ fontSize: 12 }}>всего за всё время: {fmt(data.orders.total)}</Text>
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic title="Активных заявок" value={fmt(data.orders.active)} prefix={<CarOutlined />} valueStyle={{ color: '#13c2c2' }} />
-                        <Text type="secondary" style={{ fontSize: 12 }}>в работе прямо сейчас</Text>
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic title="Завершено заявок" value={fmt(data.orders.completed)} prefix={<CheckCircleOutlined />} valueStyle={{ color: '#52c41a' }} />
-                        {data.orders.problem > 0 && (
-                            <Text type="danger" style={{ fontSize: 12 }}>
-                                <ExclamationCircleOutlined /> проблемных: {data.orders.problem}
-                            </Text>
-                        )}
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <Card>
-                        <Statistic
-                            title="Оборот за месяц"
-                            value={fmt(Math.round(data.gmvMonth))}
-                            prefix={<DollarOutlined />}
-                            suffix="₸"
-                            valueStyle={{ color: '#722ed1' }}
-                        />
-                        <Text type="secondary" style={{ fontSize: 12 }}>сумма завершённых заявок</Text>
-                    </Card>
-                </Col>
-            </Row>
+            <div className={nova.tiles}>
+                <Tile
+                    icon={<Clock3 size={15} />}
+                    label="Заявок за месяц"
+                    value={fmt(data.orders.month)}
+                    sub={`всего за всё время: ${fmt(data.orders.total)}`}
+                />
+                <Tile
+                    icon={<CarFront size={15} />}
+                    label="Активных заявок"
+                    value={fmt(data.orders.active)}
+                    sub="в работе прямо сейчас"
+                />
+                <Tile
+                    icon={<CheckCircle2 size={15} />}
+                    label="Завершено заявок"
+                    value={fmt(data.orders.completed)}
+                    sub={data.orders.problem > 0
+                        ? <span className={nova.valueNeg}>проблемных: {data.orders.problem}</span>
+                        : undefined}
+                />
+                <Tile
+                    icon={<Wallet size={15} />}
+                    label="Оборот за месяц"
+                    value={`${fmt(Math.round(data.gmvMonth))} ₸`}
+                    sub="сумма завершённых заявок"
+                />
+            </div>
 
-            <Row gutter={[16, 16]}>
-                {/* Мини-график заявок по дням */}
-                <Col xs={24} lg={14}>
-                    <Card title="Новые заявки за 14 дней">
-                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 160, paddingTop: 8 }}>
-                            {data.ordersDaily.map((d) => {
-                                const h = Math.round((d.count / maxDaily) * 130);
-                                const day = d.date.slice(8, 10);
-                                return (
-                                    <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                                        <span style={{ fontSize: 11, color: 'var(--lc-text-ter, #999)', minHeight: 14 }}>
-                                            {d.count > 0 ? d.count : ''}
-                                        </span>
-                                        <div
-                                            title={`${d.date}: ${d.count}`}
-                                            style={{
-                                                width: '100%',
-                                                maxWidth: 28,
-                                                height: Math.max(h, 3),
-                                                background: d.count > 0 ? 'linear-gradient(180deg, #4096ff, #1677ff)' : '#e8e8e8',
-                                                borderRadius: 4,
-                                                transition: 'height .3s ease',
-                                            }}
-                                        />
-                                        <span style={{ fontSize: 11, color: 'var(--lc-text-ter, #999)' }}>{day}</span>
-                                    </div>
-                                );
-                            })}
+            <div className={nova.duo}>
+                <section className={nova.card}>
+                    <div className={nova.cardHead}>
+                        <TrendingUp size={14} />
+                        <h2 className={nova.cardTitle}>Новые заявки за 14 дней</h2>
+                    </div>
+                    <div className={nova.cardBody}>
+                        <div className={styles.chart}>
+                            {data.ordersDaily.map((d) => (
+                                <div key={d.date} className={styles.bar} title={`${d.date}: ${d.count}`}>
+                                    <span className={styles.barValue}>{d.count > 0 ? d.count : ''}</span>
+                                    <span
+                                        className={`${styles.barFill}${d.count > 0 ? '' : ` ${styles.barEmpty}`}`}
+                                        style={{ height: `${Math.max(Math.round((d.count / maxDaily) * 130), 3)}px` }}
+                                    />
+                                    <span className={styles.barDay}>{d.date.slice(8, 10)}</span>
+                                </div>
+                            ))}
                         </div>
-                    </Card>
-                </Col>
+                    </div>
+                </section>
 
-                {/* Заявки по статусам */}
-                <Col xs={24} lg={10}>
-                    <Card title="Заявки по статусам">
+                <section className={nova.card}>
+                    <div className={nova.cardHead}>
+                        <CheckCircle2 size={14} />
+                        <h2 className={nova.cardTitle}>Заявки по статусам</h2>
+                    </div>
+                    <div className={nova.cardBody}>
                         {statusEntries.length === 0 ? (
-                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Пока нет заявок" />
+                            <div className={nova.empty}>Пока нет заявок</div>
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <div className={styles.statuses}>
                                 {statusEntries.map(([status, count]) => (
-                                    <div key={status} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <Tag color={statusColors[status] || 'default'}>{statusLabels[status] || status}</Tag>
-                                        <Text strong>{fmt(count)}</Text>
+                                    <div key={status} className={styles.statusRow}>
+                                        <StatusPill status={status} />
+                                        <b className={styles.statusCount}>{fmt(count)}</b>
                                     </div>
                                 ))}
                             </div>
                         )}
-                    </Card>
-                </Col>
-            </Row>
+                    </div>
+                </section>
+            </div>
         </div>
     );
 }

@@ -1,25 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Tag, Select, Typography, Space, Segmented, Button, Tooltip } from 'antd';
-import { CustomerServiceOutlined, SendOutlined } from '@ant-design/icons';
+import { Table, Select, Space, Button, Tooltip } from 'antd';
+import { SendOutlined } from '@ant-design/icons';
+import { Headset } from 'lucide-react';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
+import styles from './support.module.css';
 
-const { Title, Text, Paragraph } = Typography;
-
-const STATUS_META: Record<string, { label: string; color: string }> = {
-    NEW: { label: 'Новый', color: 'red' },
-    IN_PROGRESS: { label: 'В работе', color: 'orange' },
-    DONE: { label: 'Решён', color: 'green' },
-    REJECTED: { label: 'Отклонён', color: 'default' },
+const STATUS_META: Record<string, { label: string }> = {
+    NEW: { label: 'Новый' },
+    IN_PROGRESS: { label: 'В работе' },
+    DONE: { label: 'Решён' },
+    REJECTED: { label: 'Отклонён' },
 };
 
-const SEVERITY_META: Record<string, { label: string; color: string }> = {
-    low: { label: 'Низкая', color: 'default' },
-    medium: { label: 'Средняя', color: 'orange' },
-    high: { label: 'Высокая', color: 'red' },
+/** Важность — единственное, что здесь стоит красить: по ней выбирают, за что браться. */
+const SEVERITY_META: Record<string, { label: string; chip?: 'warn' | 'neg' }> = {
+    low: { label: 'Низкая' },
+    medium: { label: 'Средняя', chip: 'warn' },
+    high: { label: 'Высокая', chip: 'neg' },
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -119,7 +121,7 @@ export default function AdminSupportPage() {
             render: (_: any, r: any) => (
                 <div>
                     <div style={{ fontWeight: 500, fontSize: 13 }}>{r.companyName}</div>
-                    <div style={{ fontSize: 11, color: '#8c8c8c' }}>{r.userName}{r.userEmail ? ` · ${r.userEmail}` : ''}</div>
+                    <div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{r.userName}{r.userEmail ? ` · ${r.userEmail}` : ''}</div>
                 </div>
             ),
         },
@@ -131,7 +133,7 @@ export default function AdminSupportPage() {
                 <div>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{t}</div>
                     {r.orders?.length > 0 && (
-                        <div style={{ fontSize: 11, color: '#8c8c8c' }}>Заявки: {r.orders.join(', ')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>Заявки: {r.orders.join(', ')}</div>
                     )}
                 </div>
             ),
@@ -141,7 +143,7 @@ export default function AdminSupportPage() {
             dataIndex: 'category',
             key: 'category',
             width: 120,
-            render: (c: string) => <Tag>{CATEGORY_LABEL[c] || c}</Tag>,
+            render: (c: string) => <span className={nova.chip}>{CATEGORY_LABEL[c] || c}</span>,
         },
         {
             title: 'Важность',
@@ -150,7 +152,13 @@ export default function AdminSupportPage() {
             width: 100,
             render: (s: string) => {
                 const meta = SEVERITY_META[s] || SEVERITY_META.medium;
-                return <Tag color={meta.color}>{meta.label}</Tag>;
+                return (
+                    <span className={`${nova.chip}${
+                        meta.chip === 'neg' ? ` ${nova.chipNeg}` : meta.chip === 'warn' ? ` ${nova.chipWarn}` : ''
+                    }`}>
+                        {meta.label}
+                    </span>
+                );
             },
         },
         {
@@ -177,7 +185,7 @@ export default function AdminSupportPage() {
                 r.telegramSentAt ? (
                     <Tooltip title={`Отправлено ${dayjs(r.telegramSentAt).format('DD.MM.YYYY HH:mm')}. Нажмите, чтобы прислать ещё раз.`}>
                         <Button size="small" type="text" icon={<SendOutlined />} onClick={() => resendOne(r.id)}>
-                            <span style={{ fontSize: 12, color: '#52c41a' }}>Ушло</span>
+                            <span className={nova.valuePos} style={{ fontSize: 12 }}>Ушло</span>
                         </Button>
                     </Tooltip>
                 ) : (
@@ -192,32 +200,57 @@ export default function AdminSupportPage() {
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-                <Title level={4} style={{ margin: 0 }}>
-                    <CustomerServiceOutlined style={{ marginRight: 8, color: '#1677ff' }} />
-                    Обращения в поддержку
-                </Title>
-                <Space>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Обращения в поддержку</h1>
+                    <p className={nova.subtitle}>
+                        Что не сработало у людей в кабинетах. Обращение приходит из ассистента и
+                        дублируется в телеграм — здесь видно, дошло оно или нет.
+                    </p>
+                </div>
+                <div className={nova.heroActions}>
                     {pending.length > 0 && (
                         <Tooltip title="Отправит в телеграм всё, что туда ещё не уходило — от старых к новым, по 50 за раз">
-                            <Button type="primary" icon={<SendOutlined />} loading={resending} onClick={resendAll}>
-                                Отправить в телеграм ({pending.length})
-                            </Button>
+                            <button
+                                type="button"
+                                className={`${nova.action} ${nova.actionPrimary}`}
+                                disabled={resending}
+                                onClick={resendAll}
+                            >
+                                <SendOutlined /> Отправить в телеграм ({pending.length})
+                            </button>
                         </Tooltip>
                     )}
-                    <Segmented
-                        value={statusFilter}
-                        onChange={(v) => setStatusFilter(v as string)}
-                        options={[
-                            { value: 'all', label: `Все (${tickets.length})` },
-                            { value: 'NEW', label: `Новые (${tickets.filter((t) => t.status === 'NEW').length})` },
-                            { value: 'IN_PROGRESS', label: 'В работе' },
-                            { value: 'DONE', label: 'Решённые' },
-                        ]}
-                    />
-                </Space>
+                </div>
             </div>
 
+            <div className={nova.pills} style={{ marginBottom: 14 }} role="tablist">
+                {[
+                    { value: 'all', label: `Все (${tickets.length})` },
+                    { value: 'NEW', label: `Новые (${tickets.filter((t) => t.status === 'NEW').length})` },
+                    { value: 'IN_PROGRESS', label: 'В работе' },
+                    { value: 'DONE', label: 'Решённые' },
+                ].map((tab) => (
+                    <button
+                        key={tab.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={statusFilter === tab.value}
+                        className={`${nova.pill} ${statusFilter === tab.value ? nova.pillActive : ''}`}
+                        onClick={() => setStatusFilter(tab.value)}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <Headset size={14} />
+                    <h2 className={nova.cardTitle}>Обращения</h2>
+                    {filtered.length > 0 && <span className={nova.cardCount}>{filtered.length}</span>}
+                </div>
             <Table
                 dataSource={filtered}
                 columns={columns}
@@ -228,40 +261,43 @@ export default function AdminSupportPage() {
                 expandable={{
                     expandedRowRender: (r: any) => (
                         <div style={{ maxWidth: 900 }}>
-                            <Paragraph style={{ whiteSpace: 'pre-wrap', fontSize: 13, marginBottom: 12 }}>{r.description}</Paragraph>
+                            <div className={styles.note}>{r.description}</div>
                             {r.details?.where && (
-                                <div style={{ marginBottom: 10, fontSize: 13 }}>
-                                    <Text strong>Где смотреть: </Text>
-                                    <Text>{r.details.where}</Text>
+                                <div className={styles.note}>
+                                    <span className={styles.noteCap}>Где смотреть</span>
+                                    {r.details.where}
                                 </div>
                             )}
                             {r.details?.process && (
-                                <div style={{ background: '#f6f8ff', border: '1px solid #dbe3f5', borderRadius: 8, padding: 12, marginBottom: 10 }}>
-                                    <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Бизнес-процесс</Text>
-                                    <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{r.details.process}</div>
+                                <div className={styles.note}>
+                                    <span className={styles.noteCap}>Бизнес-процесс</span>
+                                    {r.details.process}
                                 </div>
                             )}
                             {(r.details?.expected || r.details?.actual) && (
-                                <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                                <div className={styles.pair}>
                                     {r.details?.expected && (
-                                        <div style={{ flex: 1, minWidth: 260, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 12 }}>
-                                            <Text strong style={{ fontSize: 12, color: '#15803d', display: 'block', marginBottom: 4 }}>Ожидается</Text>
-                                            <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{r.details.expected}</div>
+                                        <div className={`${styles.note} ${styles.noteGood}`}>
+                                            <span className={styles.noteCap}>Ожидается</span>
+                                            {r.details.expected}
                                         </div>
                                     )}
                                     {r.details?.actual && (
-                                        <div style={{ flex: 1, minWidth: 260, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 12 }}>
-                                            <Text strong style={{ fontSize: 12, color: '#b91c1c', display: 'block', marginBottom: 4 }}>Фактически</Text>
-                                            <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{r.details.actual}</div>
+                                        <div className={`${styles.note} ${styles.noteBad}`}>
+                                            <span className={styles.noteCap}>Фактически</span>
+                                            {r.details.actual}
                                         </div>
                                     )}
                                 </div>
                             )}
                             {Array.isArray(r.transcript) && r.transcript.length > 0 && (
-                                <div style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 8, padding: 12 }}>
-                                    <Text strong style={{ fontSize: 12 }}>Диалог с ассистентом:</Text>
+                                <div className={styles.dialog}>
+                                    <span className={styles.noteCap}>Диалог с ассистентом</span>
                                     {r.transcript.map((m: any, i: number) => (
-                                        <div key={i} style={{ fontSize: 12, margin: '6px 0', color: m.role === 'user' ? '#0958d9' : '#595959' }}>
+                                        <div
+                                            key={i}
+                                            className={`${styles.line}${m.role === 'user' ? ` ${styles.lineUser}` : ''}`}
+                                        >
                                             <b>{m.role === 'user' ? 'Пользователь' : 'Ассистент'}:</b> {m.content}
                                         </div>
                                     ))}
@@ -270,7 +306,8 @@ export default function AdminSupportPage() {
                         </div>
                     ),
                 }}
-            />
+                />
+            </section>
         </div>
     );
 }

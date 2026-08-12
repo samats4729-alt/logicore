@@ -73,6 +73,47 @@ test.describe('Документы заявки', () => {
         await expect(page.getByRole('button', { name: 'Отправить' }).first()).toBeVisible();
     });
 
+    test('отметка об оригиналах превращает отсрочку в дату платежа', async ({ page }) => {
+        /**
+         * До отметки условие «15 дней от получения оригиналов» было мёртвым:
+         * дней система знала, а дня отсчёта у неё не было — и плановая дата
+         * платежа по таким рейсам пустовала. Проверяем весь путь: отметить
+         * может менеджер, а дата считается сразу.
+         */
+        await login(page);
+        await page.goto('/company/orders');
+
+        // Тот же рейс с заполненными условиями: у перевозчика «Алтын Жол»
+        // отсрочка идёт от оригиналов накладных.
+        const row = page.locator('.ant-table-row').filter({ hasText: 'ЗК-2607' }).first();
+        await expect(
+            row,
+            'Нет рейса ЗК-2607. Его заводит prisma/seed-demo.js — проверьте, что сид отработал.',
+        ).toBeVisible();
+        await row.locator('button').last().click();
+        await page.waitForURL(/\/company\/orders\/[^/]+$/);
+
+        await page.getByRole('tab', { name: /Документы/ }).first().click();
+
+        const card = page.locator('section').filter({ hasText: 'Оригиналы накладных' }).first();
+        await expect(card).toBeVisible({ timeout: 20_000 });
+
+        const carrierRow = card.locator('div').filter({ hasText: 'Получили от перевозчика' }).last();
+        // Отметки может не быть, а может остаться от прошлого прогона —
+        // снимаем её, чтобы тест начинался с одного и того же места.
+        const clear = carrierRow.getByRole('button', { name: 'Снять' });
+        if (await clear.count()) {
+            await clear.click();
+            await expect(carrierRow.getByRole('button', { name: 'Сегодня' })).toBeVisible({ timeout: 20_000 });
+        }
+        await expect(carrierRow).toContainText('без отметки дата платежа не считается');
+
+        await carrierRow.getByRole('button', { name: 'Сегодня' }).click();
+
+        // Дату считает сервер: экран показывает её ровно так, как посчитали.
+        await expect(card).toContainText(/оплата до \d{2}\.\d{2}\.\d{4}/, { timeout: 20_000 });
+    });
+
     test('недоступный документ виден, погашен и объясняет причину', async ({ page }) => {
         await login(page);
         await page.goto('/company/orders');

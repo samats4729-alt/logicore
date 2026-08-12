@@ -11,7 +11,13 @@ import Loader from '@/components/ui/Loader';
 const InteractiveAdminMap = dynamic(() => import('@/components/ui/InteractiveAdminMap'), {
     ssr: false,
     loading: () => (
-        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f8f8' }}>
+        <div style={{
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--nova-surface-2)',
+        }}>
             <Loader size="large" tip="Загрузка карты..." />
         </div>
     )
@@ -21,7 +27,11 @@ const { Text } = Typography;
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
-// Цвета для разных рейсов
+// Цвета для разных рейсов.
+//
+// Единственное место в админке, где палитра осталась пёстрой, и намеренно:
+// цвет здесь не украшение, а способ различить нитки маршрутов на одной карте.
+// Десять машин в рейсе — десять линий, и одинаковыми их делать нельзя.
 const ORDER_COLORS = [
     '#1677ff', // blue
     '#52c41a', // green

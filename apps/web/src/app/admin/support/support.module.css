@@ -1,0 +1,74 @@
+/* Разбор обращения: что человек ждал, что получил, и о чём говорил с
+   ассистентом.
+
+   Подложки этих блоков были записаны цветом прямо в разметке — #f6f8ff,
+   #f0fdf4, #fef2f2, #fafafa. В тёмной теме они оставались светлыми пятнами с
+   тёмным текстом поверх тёмного полотна. */
+
+.note {
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface-2);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    white-space: pre-wrap;
+}
+
+.noteCap {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+    margin-bottom: 4px;
+}
+
+.pair {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.pair > * {
+    flex: 1;
+    min-width: 260px;
+    margin-bottom: 0;
+}
+
+/* «Ожидается» и «Фактически» — единственная пара, где цвет говорит: одно
+   правильное поведение, другое сломанное. */
+.noteGood {
+    border-color: color-mix(in srgb, var(--nova-pos) 30%, transparent);
+}
+
+.noteGood .noteCap {
+    color: var(--nova-pos);
+}
+
+.noteBad {
+    border-color: color-mix(in srgb, var(--nova-neg) 30%, transparent);
+}
+
+.noteBad .noteCap {
+    color: var(--nova-neg);
+}
+
+.dialog {
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface-2);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.line {
+    font-size: 12px;
+    margin: 6px 0;
+    color: var(--nova-fg-2);
+}
+
+.lineUser {
+    color: var(--nova-fg);
+}

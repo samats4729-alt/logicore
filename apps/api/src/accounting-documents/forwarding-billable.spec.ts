@@ -29,6 +29,7 @@ describe('Подбор рейсов и экспедиторский НДС', () 
             { checkPeriodNotClosed: jest.fn() } as any,
             {} as any,
             { toBase: jest.fn().mockResolvedValue(null) } as any,
+            { recomputeForDocument: jest.fn().mockResolvedValue(0) } as any,
         );
         return { service, prisma };
     };

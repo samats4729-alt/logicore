@@ -2,12 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Layout, Menu, Avatar, Dropdown, Typography, Button, Drawer } from 'antd';
+import { Dropdown, Drawer } from 'antd';
 import {
     DashboardOutlined,
     TeamOutlined,
     CarOutlined,
-    EnvironmentOutlined,
     FileTextOutlined,
     SettingOutlined,
     LogoutOutlined,
@@ -24,19 +23,34 @@ import {
     CheckCircleOutlined,
     FolderOpenOutlined,
 } from '@ant-design/icons';
+import { Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { useTheme } from '@/components/ThemeProvider';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import { ROLE_LABELS } from '@/lib/vocabulary';
+import shell from './admin-shell.module.css';
 
-const { Header, Sider, Content } = Layout;
-const { Text } = Typography;
-
+/**
+ * Оболочка админки — рабочее место владельца платформы.
+ *
+ * Раскладка своя, а не готовая из Ant Design: та красила логотип синим,
+ * держала белый фон значением в коде и про тёмную тему не знала вовсе.
+ * Владелец переключал тему в кабинете, заходил сюда — и получал белый экран.
+ * Теперь цвета берутся из общей палитры, и переключатель темы стоит в шапке,
+ * как в кабинете.
+ *
+ * Меню осталось слева. В кабинете разделы стоят пилюлями наверху, но там их
+ * шесть, а здесь четырнадцать: наверху они не помещаются, а прятать их в
+ * «ещё» — значит спрятать половину работы.
+ */
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const isTrackingPage = pathname === '/admin/tracking';
     const { user, isAuthenticated, logout, checkAuth } = useAuthStore();
+    const { theme, setTheme } = useTheme();
     const [collapsed, setCollapsed] = useState(false);
     const [loading, setLoading] = useState(true);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -44,40 +58,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [draftCount, setDraftCount] = useState(0);
     const [pendingCompanies, setPendingCompanies] = useState(0);
 
-    /** Значок с числом у пункта меню — им же помечены черновики нововведений. */
-    const menuBadge = (text: string, count: number) => (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-            <span>{text}</span>
-            {count > 0 && (
-                <span style={{
-                    background: '#ff4d4f',
-                    color: '#fff',
-                    borderRadius: 10,
-                    padding: '0 6px',
-                    fontSize: 11,
-                    lineHeight: '18px',
-                    height: 18,
-                    minWidth: 18,
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    display: 'inline-block'
-                }}>
-                    {count}
-                </span>
-            )}
-        </div>
-    );
-
     // Разделы платформы: страницы были на месте и работали, но ссылок на них
     // в меню не было — попасть можно было только по прямому адресу, который
     // надо знать наизусть. Так пряталось и подтверждение новых организаций:
     // клиент отправлял документы и ждал, а владелец об этом не узнавал.
-    const menuItems = [
+    const menuItems: { key: string; icon: React.ReactNode; label: string; count?: number }[] = [
         { key: '/admin', icon: <DashboardOutlined />, label: 'Дашборд' },
         {
             key: '/admin/companies',
             icon: <CheckCircleOutlined />,
-            label: menuBadge('Проверка организаций', pendingCompanies),
+            label: 'Проверка организаций',
+            count: pendingCompanies,
         },
         { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
         { key: '/admin/orders', icon: <FileTextOutlined />, label: 'Заявки' },
@@ -88,7 +79,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {
             key: '/admin/updates',
             icon: <NotificationOutlined />,
-            label: menuBadge('Нововведения', draftCount),
+            label: 'Нововведения',
+            count: draftCount,
         },
         { key: '/admin/billing', icon: <DollarOutlined />, label: 'Биллинг' },
         { key: '/admin/audit', icon: <HistoryOutlined />, label: 'Журнал' },
@@ -108,6 +100,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }, []);
 
     const [hydrated, setHydrated] = useState(false);
+    // Своя страница входа живёт внутри /admin, но оболочки у неё быть не
+    // может: меню и шапка — для того, кто уже вошёл.
+    const isLoginPage = pathname === '/admin/login';
 
     // Дожидаемся гидратации хранилища Zustand из localStorage
     useEffect(() => {
@@ -120,12 +115,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     useEffect(() => {
         if (!hydrated) return;
+        if (isLoginPage) { setLoading(false); return; }
         const init = async () => {
             await checkAuth();
             setLoading(false);
         };
         init();
-    }, [hydrated, checkAuth]);
+    }, [hydrated, checkAuth, isLoginPage]);
 
     useEffect(() => {
         if (!hydrated || loading || !isAuthenticated || user?.role !== 'ADMIN') return;
@@ -161,7 +157,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }, [hydrated, loading, isAuthenticated, user]);
 
     useEffect(() => {
-        if (loading) return;
+        if (loading || isLoginPage) return;
         if (!isAuthenticated) {
             // Not logged in -> Go to Admin Login
             router.push('/admin/login');
@@ -170,7 +166,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             toast.error('У вас нет прав администратора');
             router.push('/'); // Or access-denied
         }
-    }, [loading, isAuthenticated, user, router]);
+    }, [loading, isAuthenticated, user, router, isLoginPage]);
 
     const handleLogout = () => {
         logout();
@@ -182,14 +178,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         setMobileMenuOpen(false);
     };
 
+    // Форма входа — сама по себе: ни меню, ни шапки, ни проверки прав.
+    if (isLoginPage) return <>{children}</>;
+
     if (!hydrated || loading) {
         return (
-            <div style={{
-                height: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}>
+            <div className={`lc-nova ${shell.center}`}>
                 <Loader size="large" />
             </div>
         );
@@ -201,144 +195,125 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { key: 'logout', icon: <LogoutOutlined />, label: 'Выйти', onClick: handleLogout },
     ];
 
-    // Мобильное меню через Drawer
-    const MobileMenu = () => (
-        <Drawer
-            title="LogiCore Admin"
-            placement="left"
-            onClose={() => setMobileMenuOpen(false)}
-            open={mobileMenuOpen}
-            width={280}
-            styles={{ body: { padding: 0 } }}
-        >
-            <Menu
-                mode="inline"
-                selectedKeys={[pathname]}
-                items={menuItems}
-                onClick={({ key }) => handleMenuClick(key)}
-                style={{ border: 'none' }}
-            />
-            <div style={{ padding: 16, borderTop: '1px solid #f0f0f0', marginTop: 16 }}>
-                <Button
-                    type="text"
-                    danger
-                    icon={<LogoutOutlined />}
-                    onClick={handleLogout}
-                    block
-                >
-                    Выйти
-                </Button>
-            </div>
-        </Drawer>
-    );
+    /** Пункт меню. Свёрнутое меню оставляет значок, число садится на него уголком. */
+    const NavItem = ({ item, compact }: { item: typeof menuItems[number]; compact: boolean }) => {
+        const active = pathname === item.key;
+        return (
+            <button
+                type="button"
+                className={`${shell.item}${active ? ` ${shell.itemOn}` : ''}${compact ? ` ${shell.itemCollapsed}` : ''}`}
+                onClick={() => handleMenuClick(item.key)}
+                title={compact ? item.label : undefined}
+            >
+                <i>{item.icon}</i>
+                {!compact && <span className={shell.itemText}>{item.label}</span>}
+                {!!item.count && (
+                    <span className={`${shell.badge}${compact ? ` ${shell.badgeDot}` : ''}`}>
+                        {item.count}
+                    </span>
+                )}
+            </button>
+        );
+    };
 
     return (
-        <Layout style={{ minHeight: '100vh' }}>
-            {/* Desktop Sidebar */}
+        <div className={`lc-nova ${shell.shell}`}>
             {!isMobile && (
-                <Sider
-                    trigger={null}
-                    collapsible
-                    collapsed={collapsed}
-                    theme="light"
-                    style={{
-                        boxShadow: '2px 0 8px rgba(0,0,0,0.05)',
-                        position: 'fixed',
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        zIndex: 100,
-                    }}
-                >
-                    <div style={{
-                        height: 64,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderBottom: '1px solid #f0f0f0',
-                    }}>
-                        <Text strong style={{ fontSize: collapsed ? 20 : 24, color: '#1677ff' }}>
-                            {collapsed ? 'LC' : 'LogiCore'}
-                        </Text>
+                <aside className={`${shell.side}${collapsed ? ` ${shell.sideCollapsed}` : ''}`}>
+                    <div className={shell.brand} onClick={() => router.push('/admin')}>
+                        <span className={shell.brandMark}>{collapsed ? 'LC' : 'LogiCore'}</span>
+                        {!collapsed && <span className={shell.brandKind}>админ</span>}
                     </div>
-                    <Menu
-                        mode="inline"
-                        selectedKeys={[pathname]}
-                        items={menuItems}
-                        onClick={({ key }) => router.push(key)}
-                        style={{ borderRight: 0 }}
-                    />
-                </Sider>
+                    <nav className={shell.nav}>
+                        {menuItems.map((item) => (
+                            <NavItem key={item.key} item={item} compact={collapsed} />
+                        ))}
+                    </nav>
+                </aside>
             )}
 
-            {/* Mobile Drawer */}
-            {isMobile && <MobileMenu />}
-
-            <Layout style={{
-                marginLeft: isMobile ? 0 : (collapsed ? 80 : 200),
-                transition: 'all 0.2s',
-                position: 'relative'
-            }}>
-                <Header
-                    className={isTrackingPage ? 'tracking-header' : ''}
-                    style={{
-                        padding: isMobile ? '0 12px' : '0 24px',
-                        background: isTrackingPage ? 'rgba(255, 255, 255, 0.005)' : '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        borderBottom: isTrackingPage ? '1px solid rgba(255, 255, 255, 0.04)' : 'none',
-                        boxShadow: isTrackingPage ? 'none' : '0 1px 4px rgba(0,0,0,0.05)',
-                        position: isTrackingPage ? 'absolute' : 'sticky',
-                        left: 0,
-                        right: 0,
-                        top: 0,
-                        zIndex: 99,
-                        backdropFilter: isTrackingPage ? 'blur(12px)' : 'none',
-                        WebkitBackdropFilter: isTrackingPage ? 'blur(12px)' : 'none',
-                    }}
+            {isMobile && (
+                <Drawer
+                    title="LogiCore · админ"
+                    placement="left"
+                    onClose={() => setMobileMenuOpen(false)}
+                    open={mobileMenuOpen}
+                    width={286}
+                    className="lc-nova"
+                    styles={{ body: { padding: 12 }, header: { background: 'var(--nova-surface-2)' } }}
                 >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {isMobile ? (
-                            <Button
-                                type="text"
-                                icon={<MenuOutlined />}
-                                onClick={() => setMobileMenuOpen(true)}
-                                style={{ color: isTrackingPage ? 'inherit' : undefined }}
-                            />
-                        ) : (
-                            <div
-                                onClick={() => setCollapsed(!collapsed)}
-                                className="sidebar-toggle-btn"
-                                style={{ fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8 }}
-                            >
-                                {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                            </div>
-                        )}
-                        {isMobile && (
-                            <Text strong style={{ color: '#1677ff' }}>LogiCore</Text>
-                        )}
+                    <nav className={shell.drawerNav}>
+                        {menuItems.map((item) => (
+                            <NavItem key={item.key} item={item} compact={false} />
+                        ))}
+                    </nav>
+                    <div className={shell.drawerFoot}>
+                        <button type="button" className={shell.drawerOut} onClick={handleLogout}>
+                            <LogoutOutlined /> Выйти
+                        </button>
                     </div>
+                </Drawer>
+            )}
 
-                    <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                        <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }} className="user-profile-trigger">
-                            <Avatar icon={<UserOutlined />} size={isMobile ? 'small' : 'default'} />
-                            {!isMobile && <Text style={{ color: isTrackingPage ? 'inherit' : undefined }}>{user?.firstName} {user?.lastName}</Text>}
+            <div className={`${shell.main}${isMobile ? ` ${shell.mainBare}` : (collapsed ? ` ${shell.mainCollapsed}` : '')}`}>
+                <header className={shell.head}>
+                    <button
+                        type="button"
+                        className={shell.iconBtn}
+                        onClick={() => (isMobile ? setMobileMenuOpen(true) : setCollapsed(!collapsed))}
+                        aria-label="Меню"
+                    >
+                        {isMobile
+                            ? <MenuOutlined />
+                            : (collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />)}
+                    </button>
+                    {isMobile && <span className={shell.brandMark}>LogiCore</span>}
+
+                    <div className={shell.headSpacer} />
+
+                    {/* Переключателя темы здесь не было вовсе: владелец выбирал
+                        тёмную в кабинете, заходил в админку — и получал белый
+                        экран. Теперь тот же выбор, что и в кабинете. */}
+                    <button
+                        type="button"
+                        className={shell.iconBtn}
+                        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                        title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+                        aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+                    >
+                        {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+                    </button>
+
+                    <Dropdown
+                        menu={{ items: userMenuItems }}
+                        placement="bottomRight"
+                        trigger={['click']}
+                        overlayClassName="lc2-nav-drop"
+                        transitionName=""
+                    >
+                        <div className={`${shell.profile} user-profile-trigger`}>
+                            <span className={shell.profileAv}>
+                                {((user?.firstName?.[0] || '') + (user?.lastName?.[0] || '')).toUpperCase()
+                                    || <UserOutlined />}
+                            </span>
+                            {!isMobile && (
+                                <span className={shell.profileWho}>
+                                    <span className={shell.profileName}>
+                                        {user?.firstName} {user?.lastName}
+                                    </span>
+                                    <span className={shell.profileRole}>
+                                        {ROLE_LABELS[user?.role || ''] || 'Администратор'} · платформа
+                                    </span>
+                                </span>
+                            )}
                         </div>
                     </Dropdown>
-                </Header>
+                </header>
 
-                <Content style={{
-                    margin: isTrackingPage ? 0 : (isMobile ? 8 : 24),
-                    padding: isTrackingPage ? 0 : (isMobile ? 12 : 24),
-                    background: isTrackingPage ? 'transparent' : '#fff',
-                    borderRadius: isTrackingPage ? 0 : 8,
-                    minHeight: isTrackingPage ? '100vh' : 'calc(100vh - 64px - 48px)',
-                    overflow: isTrackingPage ? 'hidden' : 'auto',
-                }}>
+                <main className={isTrackingPage ? shell.contentBare : shell.content}>
                     {children}
-                </Content>
-            </Layout>
-        </Layout>
+                </main>
+            </div>
+        </div>
     );
 }

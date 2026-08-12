@@ -1,13 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Button, Table, Modal, Form, Input, Select, Space, Typography, Popconfirm, Collapse, List } from 'antd';
+import { Modal, Form, Input, Popconfirm } from 'antd';
 import { PlusOutlined, DeleteOutlined, FolderAddOutlined } from '@ant-design/icons';
+import { Boxes } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import Loader from '@/components/ui/Loader';
+import nova from '@/components/nova/nova.module.css';
+import styles from './cargo-types.module.css';
 
-const { Title, Text } = Typography;
-const { Panel } = Collapse;
+/**
+ * Справочник грузов: категории и типы внутри них.
+ *
+ * Из него выбирают груз в заявке, поэтому список общий на всю платформу —
+ * заводит его владелец. Экран был на белых карточках Ant Design с серыми
+ * плашками, записанными цветом прямо в разметке; в тёмной теме от них
+ * оставались белые пятна.
+ */
 
 export default function AdminCargoTypesPage() {
     const [categories, setCategories] = useState<any[]>([]);
@@ -88,54 +98,87 @@ export default function AdminCargoTypesPage() {
     };
 
     return (
-        <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <Title level={2}>Справочник типов грузов</Title>
-                <Button type="primary" icon={<FolderAddOutlined />} onClick={() => setIsCategoryModalOpen(true)}>
-                    Добавить категорию
-                </Button>
+        <div>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Справочник</div>
+                    <h1 className={nova.title}>Виды груза</h1>
+                    <p className={nova.subtitle}>
+                        Из этого списка выбирают груз в заявке. Он общий на всю платформу:
+                        категория — крупными словами, типы внутри — тем языком, которым груз
+                        называют в накладной.
+                    </p>
+                </div>
+                <div className={nova.heroActions}>
+                    <button
+                        type="button"
+                        className={`${nova.action} ${nova.actionPrimary}`}
+                        onClick={() => setIsCategoryModalOpen(true)}
+                    >
+                        <FolderAddOutlined /> Категория
+                    </button>
+                </div>
             </div>
 
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
-                {categories.map(category => (
-                    <Card
-                        key={category.id}
-                        title={<span style={{ fontSize: 18, fontWeight: 'bold' }}>{category.name}</span>}
-                        extra={
-                            <Popconfirm title="Удалить категорию и все типы в ней?" onConfirm={() => handleDeleteCategory(category.id)}>
-                                <Button danger type="text" icon={<DeleteOutlined />}>Удалить категорию</Button>
-                            </Popconfirm>
-                        }
-                        size="small"
-                    >
-                        <List
-                            grid={{ gutter: 16, column: 4 }}
-                            dataSource={category.types}
-                            renderItem={(item: any) => (
-                                <List.Item>
-                                    <div style={{
-                                        padding: '8px 12px',
-                                        background: '#f5f5f5',
-                                        borderRadius: 6,
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        border: '1px solid #eee'
-                                    }}>
-                                        <Text>{item.name}</Text>
-                                        <Popconfirm title="Удалить этот тип?" onConfirm={() => handleDeleteType(item.id)}>
-                                            <DeleteOutlined style={{ color: '#ff4d4f', cursor: 'pointer' }} />
-                                        </Popconfirm>
-                                    </div>
-                                </List.Item>
+            {loading && categories.length === 0 && (
+                <div className={nova.empty}><Loader size="large" /></div>
+            )}
+
+            {!loading && categories.length === 0 && (
+                <div className={nova.empty}>
+                    Справочник пуст — заведите первую категорию, иначе в заявке нечего выбрать.
+                </div>
+            )}
+
+            {categories.map(category => (
+                <section className={nova.card} key={category.id}>
+                    <div className={nova.cardHead}>
+                        <Boxes size={14} />
+                        <h2 className={nova.cardTitle}>{category.name}</h2>
+                        <span className={nova.cardCount}>{category.types?.length || 0}</span>
+                        <Popconfirm
+                            title="Удалить категорию и все типы в ней?"
+                            okText="Удалить"
+                            cancelText="Отмена"
+                            onConfirm={() => handleDeleteCategory(category.id)}
+                        >
+                            <button type="button" className={`${nova.action} ${nova.actionDanger}`}>
+                                <DeleteOutlined /> Удалить
+                            </button>
+                        </Popconfirm>
+                    </div>
+                    <div className={nova.cardBody}>
+                        <div className={styles.types}>
+                            {(category.types || []).map((item: any) => (
+                                <span className={styles.type} key={item.id}>
+                                    {item.name}
+                                    <Popconfirm
+                                        title="Удалить этот тип?"
+                                        okText="Удалить"
+                                        cancelText="Отмена"
+                                        onConfirm={() => handleDeleteType(item.id)}
+                                    >
+                                        <button type="button" className={styles.typeDrop} aria-label="Удалить тип">
+                                            <DeleteOutlined />
+                                        </button>
+                                    </Popconfirm>
+                                </span>
+                            ))}
+                            {(category.types || []).length === 0 && (
+                                <span className={nova.itemDesc}>В категории пока нет типов</span>
                             )}
-                        />
-                        <Button type="dashed" block icon={<PlusOutlined />} onClick={() => openTypeModal(category.id)} style={{ marginTop: 12 }}>
-                            Добавить тип в "{category.name}"
-                        </Button>
-                    </Card>
-                ))}
-            </Space>
+                        </div>
+                        <button
+                            type="button"
+                            className={nova.action}
+                            style={{ marginTop: 12 }}
+                            onClick={() => openTypeModal(category.id)}
+                        >
+                            <PlusOutlined /> Тип в «{category.name}»
+                        </button>
+                    </div>
+                </section>
+            ))}
 
             {/* Modal: Create Category */}
             <Modal

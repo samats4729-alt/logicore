@@ -6,9 +6,10 @@ import { ReloadOutlined, TeamOutlined, MergeCellsOutlined } from '@ant-design/ic
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import nova from '@/components/nova/nova.module.css';
 import { ROLE_LABELS } from '@/lib/vocabulary';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface DupUser {
     userId: string;
@@ -292,15 +293,19 @@ export default function AdminIdentityPage() {
     };
 
     return (
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <Title level={3} style={{ marginBottom: 4 }}>
-                <TeamOutlined style={{ marginRight: 8 }} />Личности (Фаза 1)
-            </Title>
-            <Paragraph type="secondary" style={{ marginBottom: 20 }}>
-                Новый слой «Личность» — фундамент, чтобы один физический человек не дублировался между
-                компаниями. Существующие данные и логика не меняются. Слияние дубликатов здесь не выполняется —
-                только показывается для вашего решения.
-            </Paragraph>
+        <div style={{ maxWidth: 1100 }}>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа · переход</div>
+                    <h1 className={nova.title}>Личности</h1>
+                    <p className={nova.subtitle}>
+                        Слой «Личность» нужен, чтобы один и тот же человек не заводился заново в
+                        каждой компании. Старые данные и порядок работы он не трогает: здесь видно,
+                        сошлось ли новое со старым, а дубликаты только показываются — решение за
+                        вами.
+                    </p>
+                </div>
+            </div>
 
             {/* Сверка — готовность к переключению */}
             <Card
@@ -327,7 +332,7 @@ export default function AdminIdentityPage() {
                                     <Statistic title="Активных пользователей" value={recon.persons.activeUsers} />
                                     <div style={{ marginTop: 8 }}>
                                         С личностью: <b>{recon.persons.withPerson}</b> · без личности:{' '}
-                                        <b style={{ color: recon.persons.withoutPerson ? '#dc2626' : undefined }}>{recon.persons.withoutPerson}</b>
+                                        <b style={{ color: recon.persons.withoutPerson ? 'var(--nova-neg)' : undefined }}>{recon.persons.withoutPerson}</b>
                                     </div>
                                 </Card>
                             </Col>
@@ -335,8 +340,8 @@ export default function AdminIdentityPage() {
                                 <Card size="small" title="Членство">
                                     <div>Ожидается: <b>{recon.affiliations.expected}</b> · в новом: <b>{recon.affiliations.inNew}</b></div>
                                     <div style={{ marginTop: 8 }}>
-                                        Нет в новом: <b style={{ color: recon.affiliations.missingInNew ? '#dc2626' : undefined }}>{recon.affiliations.missingInNew}</b>{' '}
-                                        · лишних: <b style={{ color: recon.affiliations.extraInNew ? '#dc2626' : undefined }}>{recon.affiliations.extraInNew}</b>
+                                        Нет в новом: <b style={{ color: recon.affiliations.missingInNew ? 'var(--nova-neg)' : undefined }}>{recon.affiliations.missingInNew}</b>{' '}
+                                        · лишних: <b style={{ color: recon.affiliations.extraInNew ? 'var(--nova-neg)' : undefined }}>{recon.affiliations.extraInNew}</b>
                                     </div>
                                 </Card>
                             </Col>
@@ -344,8 +349,8 @@ export default function AdminIdentityPage() {
                                 <Card size="small" title="Транспорт">
                                     <div>Ожидается связей: <b>{recon.vehicles.expectedLinks}</b> · связано: <b>{recon.vehicles.linkedOk}</b></div>
                                     <div style={{ marginTop: 8 }}>
-                                        Не хватает: <b style={{ color: recon.vehicles.missingLinks ? '#dc2626' : undefined }}>{recon.vehicles.missingLinks}</b>{' '}
-                                        · расхождений: <b style={{ color: recon.vehicles.mismatched ? '#dc2626' : undefined }}>{recon.vehicles.mismatched}</b>
+                                        Не хватает: <b style={{ color: recon.vehicles.missingLinks ? 'var(--nova-neg)' : undefined }}>{recon.vehicles.missingLinks}</b>{' '}
+                                        · расхождений: <b style={{ color: recon.vehicles.mismatched ? 'var(--nova-neg)' : undefined }}>{recon.vehicles.mismatched}</b>
                                     </div>
                                 </Card>
                             </Col>
@@ -379,7 +384,7 @@ export default function AdminIdentityPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                         <div>
                             <Text strong>Шаг 1. Создать личности</Text>
-                            <div style={{ color: '#8a91a0', fontSize: 13 }}>
+                            <div style={{ color: 'var(--nova-fg-3)', fontSize: 13 }}>
                                 Создаёт по одной записи «Личность» на каждого пользователя (1:1), без слияния.
                                 Безопасно запускать повторно.
                             </div>
@@ -425,9 +430,9 @@ export default function AdminIdentityPage() {
                                         <Card key={i} size="small" type="inner"
                                             title={
                                                 <Space>
-                                                    <Tag color={g.reason === 'iin' ? 'purple' : 'blue'}>
+                                                    <span className={nova.chip}>
                                                         {g.reason === 'iin' ? 'Совпадает ИИН' : 'Совпадает телефон'}
-                                                    </Tag>
+                                                    </span>
                                                     <Text code>{g.key}</Text>
                                                     <Text type="secondary">— {g.users.length} записи</Text>
                                                 </Space>
@@ -460,7 +465,7 @@ export default function AdminIdentityPage() {
                                             )}
 
                                             {selectedWithPerson.length >= 2 && (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--lc-border, #f0f0f0)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--nova-border)' }}>
                                                     <Text style={{ fontSize: 13 }}>Основная запись:</Text>
                                                     <Select
                                                         size="small"
@@ -555,7 +560,7 @@ export default function AdminIdentityPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                     <div>
                         <Text strong>Заполнить членство</Text>
-                        <div style={{ color: '#8a91a0', fontSize: 13 }}>
+                        <div style={{ color: 'var(--nova-fg-3)', fontSize: 13 }}>
                             Безопасно и идемпотентно. Требует, чтобы сначала были созданы личности (Шаг 1).
                         </div>
                     </div>
@@ -616,7 +621,7 @@ export default function AdminIdentityPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                     <div>
                         <Text strong>Связать машины с водителями</Text>
-                        <div style={{ color: '#8a91a0', fontSize: 13 }}>
+                        <div style={{ color: 'var(--nova-fg-3)', fontSize: 13 }}>
                             Безопасно и идемпотентно. Требует, чтобы сначала были созданы личности (Шаг 1).
                         </div>
                     </div>
@@ -653,7 +658,7 @@ export default function AdminIdentityPage() {
 
             <Card
                 title={<span>Шаг 7. Переключить всё на новый слой (за флагами)</span>}
-                style={{ marginTop: 16, borderColor: '#1677ff' }}
+                style={{ marginTop: 16 }}
                 extra={<Button icon={<ReloadOutlined />} onClick={loadReadRecon} loading={readReconLoading}>Проверить паритет</Button>}
             >
                 <Alert
@@ -681,7 +686,7 @@ export default function AdminIdentityPage() {
                                         <div>Паритет: {area.ok ? <Tag color="green">полный</Tag> : <Tag color="red">расхождений {area.companiesWithDiff}</Tag>}</div>
                                         <div style={{ marginTop: 8 }}>Сейчас читается: {flags[key] ? <Tag color="blue">новый слой</Tag> : <Tag>старый</Tag>}</div>
                                         {!area.ok && area.diffs.length > 0 && (
-                                            <div style={{ marginTop: 8, fontSize: 12, color: '#8a91a0' }}>
+                                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--nova-fg-3)' }}>
                                                 {area.diffs.slice(0, 3).map((d, i) => (
                                                     <div key={i}>{d.companyName}: {[...d.onlyOld.map(x => `−${x}`), ...d.onlyNew.map(x => `+${x}`)].join(', ')}</div>
                                                 ))}
@@ -694,7 +699,7 @@ export default function AdminIdentityPage() {
                     </>
                 )}
 
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid var(--nova-border)' }}>
                     <Popconfirm
                         title="Переключить всё на новый слой?"
                         description="Включится только там, где сверка идеальна. Откатить можно кнопкой рядом."

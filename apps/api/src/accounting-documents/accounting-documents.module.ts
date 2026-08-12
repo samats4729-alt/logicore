@@ -14,12 +14,16 @@ import { PaymentAllocationModule } from './payment-allocation.module';
 import { PendingWorkService } from './pending-work.service';
 import { SharedReportInvoiceService } from './shared-report-invoice.service';
 import { CompanyVerificationModule } from '../company/company-verification.module';
+import { OrderSettlementsModule } from '../orders/order-settlements.module';
 
 import { CurrencyModule } from '../currency/currency.module';
 import { EmailModule } from '../email/email.module';
 
 @Module({
-    imports: [CurrencyModule, AccountingModule, CompanyVerificationModule, PaymentAllocationModule, EmailModule],
+    imports: [
+        CurrencyModule, AccountingModule, CompanyVerificationModule, PaymentAllocationModule, EmailModule,
+        OrderSettlementsModule,
+    ],
     controllers: [AccountingDocumentsController, PublicAccountingDocumentController],
     providers: [
         AccountingDocumentsService,

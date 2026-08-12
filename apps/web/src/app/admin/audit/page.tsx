@@ -1,32 +1,56 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Table, Tag, Select, Switch, Space, Typography, Tooltip } from 'antd';
-import { HistoryOutlined } from '@ant-design/icons';
+import { Table, Select, Switch, Space, Tooltip } from 'antd';
+import { History, ListFilter } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { ROLE_LABELS } from '@/lib/vocabulary';
+import nova from '@/components/nova/nova.module.css';
 
-const { Title, Text } = Typography;
-
-const ACTION_META: Record<string, { label: string; color: string }> = {
-    CREATE: { label: 'Создание', color: 'green' },
-    UPDATE: { label: 'Изменение', color: 'blue' },
-    DELETE: { label: 'Удаление', color: 'red' },
-    STATUS: { label: 'Статус', color: 'orange' },
-    SETTINGS: { label: 'Настройки', color: 'purple' },
+/**
+ * Журнал действий по всей платформе.
+ *
+ * Пять видов действия были покрашены в пять цветов: зелёный, синий, красный,
+ * оранжевый, фиолетовый. В ленте из полусотни строк это превращалось в
+ * светофор, где ничего не выделено, потому что выделено всё. Цветом осталось
+ * только удаление — единственное, что нельзя отменить.
+ */
+const ACTION_META: Record<string, { label: string; danger?: boolean }> = {
+    CREATE: { label: 'Создание' },
+    UPDATE: { label: 'Изменение' },
+    DELETE: { label: 'Удаление', danger: true },
+    STATUS: { label: 'Статус' },
+    SETTINGS: { label: 'Настройки' },
 };
 
+/**
+ * Названия объектов. Список полный по тому, что пишет сервер: незнакомый
+ * вид показывался как есть, и в журнале стояло «order_document» — владелец
+ * читал название таблицы вместо названия дела.
+ */
 const ENTITY_LABELS: Record<string, string> = {
     order: 'Заявка',
+    order_document: 'Документ рейса',
+    document: 'Документ',
+    accounting_document: 'Бухгалтерский документ',
+    accounting_document_numbering: 'Нумерация документов',
     expense: 'Расход',
     income: 'Доход',
     payment: 'Платёж',
+    payment_proof: 'Подтверждение оплаты',
+    finance_account: 'Счёт организации',
+    closed_period: 'Закрытый период',
+    exchange_rate: 'Курс валюты',
+    currency_revaluation: 'Переоценка валюты',
     partner: 'Контрагент',
     employee: 'Сотрудник',
     driver: 'Водитель',
     permissions: 'Права',
     location: 'Адрес',
+    company: 'Организация',
+    company_bin_conflict: 'Совпадение БИН',
     subscription: 'Подписка',
     billing: 'Биллинг',
 };
@@ -94,15 +118,23 @@ export default function AdminAuditPage() {
             render: (_: any, r: any) => (
                 <div>
                     <div style={{ fontSize: 12, fontWeight: 600 }}>{r.userName || '—'}</div>
-                    {r.userRole && <div style={{ fontSize: 11, color: '#8a91a0' }}>{r.userRole}</div>}
+                    {r.userRole && (
+                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>
+                            {ROLE_LABELS[r.userRole] || r.userRole}
+                        </div>
+                    )}
                 </div>
             ),
         },
         {
             title: 'Действие', dataIndex: 'action', key: 'action', width: 110,
             render: (v: string) => {
-                const meta = ACTION_META[v] || { label: v, color: 'default' };
-                return <Tag color={meta.color}>{meta.label}</Tag>;
+                const meta = ACTION_META[v] || { label: v };
+                return (
+                    <span className={`${nova.chip}${meta.danger ? ` ${nova.chipNeg}` : ''}`}>
+                        {meta.label}
+                    </span>
+                );
             },
         },
         {
@@ -110,7 +142,7 @@ export default function AdminAuditPage() {
             render: (_: any, r: any) => (
                 <div>
                     <div style={{ fontSize: 12.5, fontWeight: 500 }}>{r.entityLabel || '—'}</div>
-                    <div style={{ fontSize: 11, color: '#8a91a0' }}>{ENTITY_LABELS[r.entity] || r.entity}</div>
+                    <div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{ENTITY_LABELS[r.entity] || r.entity}</div>
                 </div>
             ),
         },
@@ -118,37 +150,57 @@ export default function AdminAuditPage() {
             title: 'Детали', dataIndex: 'details', key: 'details', width: 220, ellipsis: true,
             render: (v: any) => v ? (
                 <Tooltip title={<pre style={{ margin: 0, fontSize: 11 }}>{JSON.stringify(v, null, 2)}</pre>}>
-                    <span style={{ fontSize: 11.5, color: '#8a91a0' }}>{JSON.stringify(v)}</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--nova-fg-3)' }}>{JSON.stringify(v)}</span>
                 </Tooltip>
             ) : null,
         },
     ];
 
     return (
-        <div style={{ padding: '0 4px' }}>
-            <Title level={3} style={{ marginBottom: 4 }}><HistoryOutlined /> Журнал действий</Title>
-            <Text type="secondary">Все изменения данных по всем компаниям платформы</Text>
+        <div>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Журнал действий</h1>
+                    <p className={nova.subtitle}>
+                        Все изменения данных по всем компаниям платформы: кто, что и когда.
+                    </p>
+                </div>
+            </div>
 
-            <Card size="small" style={{ marginTop: 16 }}>
-                <Space size="large" wrap>
-                    <Space>
-                        <Switch checked={companiesEnabled} loading={savingFlag} onChange={handleToggleCompanies} />
-                        <span>Раздел «Журнал действий» виден админам компаний</span>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <ListFilter size={14} />
+                    <h2 className={nova.cardTitle}>Отбор</h2>
+                </div>
+                <div className={nova.cardBody}>
+                    <Space size="large" wrap>
+                        <Space>
+                            <Switch checked={companiesEnabled} loading={savingFlag} onChange={handleToggleCompanies} />
+                            <span style={{ fontSize: 13 }}>
+                                Раздел «Журнал действий» виден админам компаний
+                            </span>
+                        </Space>
+                        <Select
+                            allowClear
+                            showSearch
+                            optionFilterProp="label"
+                            placeholder="Все компании"
+                            style={{ width: 260 }}
+                            value={companyFilter}
+                            onChange={(v) => { setCompanyFilter(v); setPage(1); load(1, v); }}
+                            options={companies.map(c => ({ value: c.id, label: c.name }))}
+                        />
                     </Space>
-                    <Select
-                        allowClear
-                        showSearch
-                        optionFilterProp="label"
-                        placeholder="Все компании"
-                        style={{ width: 260 }}
-                        value={companyFilter}
-                        onChange={(v) => { setCompanyFilter(v); setPage(1); load(1, v); }}
-                        options={companies.map(c => ({ value: c.id, label: c.name }))}
-                    />
-                </Space>
-            </Card>
+                </div>
+            </section>
 
-            <Card size="small" style={{ marginTop: 12 }}>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <History size={14} />
+                    <h2 className={nova.cardTitle}>Что происходило</h2>
+                    {total > 0 && <span className={nova.cardCount}>{total}</span>}
+                </div>
                 <Table
                     rowKey="id"
                     columns={columns}
@@ -164,7 +216,7 @@ export default function AdminAuditPage() {
                         showTotal: (t) => `Всего: ${t}`,
                     }}
                 />
-            </Card>
+            </section>
         </div>
     );
 }
