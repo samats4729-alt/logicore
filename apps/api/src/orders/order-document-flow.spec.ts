@@ -315,6 +315,41 @@ describe('Жизнь документа по рейсу', () => {
             expect(result.inCabinet).toBe(true);
         });
 
+        it('доверенность уходит на указанный адрес: постоянного получателя у неё нет', async () => {
+            // Её выписывают на водителя и предъявляют на погрузке. Кому
+            // отправить, знает менеджер, а не платформа — поэтому спрашиваем
+            // адрес, а не отказываем «получатель не указан».
+            const { service, email, updates } = build({
+                document: {
+                    id: 'd-2', kind: 'POWER_OF_ATTORNEY', version: 1, status: 'POSTED', orderId: 'o-1',
+                    recipientCounterpartyId: null, recipientCompanyId: null, sentAt: null,
+                    snapshot: { orderNumber: 'ЗК-2606' }, replacesId: null,
+                    order: { orderNumber: 'ЗК-2606' },
+                },
+                counterparty: null,
+            });
+
+            await service.send('d-2', 'c-1', 'u-1', 'sklad@magnum.kz');
+
+            expect(email.sendOrderDocumentEmail).toHaveBeenCalledWith(
+                'sklad@magnum.kz', expect.objectContaining({ title: 'Доверенность' }),
+            );
+            expect(updates[0].data.status).toBe('SENT');
+        });
+
+        it('без получателя и без адреса — просят адрес', async () => {
+            const { service } = build({
+                document: {
+                    id: 'd-2', kind: 'POWER_OF_ATTORNEY', version: 1, status: 'POSTED', orderId: 'o-1',
+                    recipientCounterpartyId: null, recipientCompanyId: null, sentAt: null,
+                    snapshot: {}, replacesId: null, order: { orderNumber: 'ЗК-2606' },
+                },
+                counterparty: null,
+            });
+
+            await expect(service.send('d-2', 'c-1', 'u-1')).rejects.toThrow(/Укажите почту/);
+        });
+
         it('второй раз тот же документ не уходит — исправление отправляют версией', async () => {
             const { service } = build({
                 document: {

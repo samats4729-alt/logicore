@@ -785,9 +785,19 @@ export default function OrderDocuments({
             >
                 {sending && (
                     <div style={{ display: 'grid', gap: 10 }}>
-                        <div>
-                            Получатель: <b>{sending.target.recipient?.name}</b>
-                        </div>
+                        {sending.target.recipient ? (
+                            <div>
+                                Получатель: <b>{sending.target.recipient.name}</b>
+                            </div>
+                        ) : (
+                            // У доверенности постоянного адресата нет: её
+                            // предъявляют на погрузке, и кому отправить —
+                            // знает менеджер, а не платформа.
+                            <div style={{ color: 'var(--nova-fg-2)' }}>
+                                У этого документа нет постоянного получателя — укажите, кому
+                                отправить.
+                            </div>
+                        )}
                         {sending.target.recipient?.onPlatform ? (
                             <div style={{ color: 'var(--nova-fg-2)' }}>
                                 У контрагента есть кабинет на платформе — оригинал ляжет туда,
@@ -795,10 +805,12 @@ export default function OrderDocuments({
                             </div>
                         ) : (
                             <>
-                                <div style={{ color: 'var(--nova-fg-2)' }}>
-                                    Кабинета на платформе у него нет — отправим письмом с документом
-                                    во вложении.
-                                </div>
+                                {sending.target.recipient && (
+                                    <div style={{ color: 'var(--nova-fg-2)' }}>
+                                        Кабинета на платформе у него нет — отправим письмом с
+                                        документом во вложении.
+                                    </div>
+                                )}
                                 <Input
                                     value={sending.email}
                                     onChange={(e) => setSending({ ...sending, email: e.target.value })}

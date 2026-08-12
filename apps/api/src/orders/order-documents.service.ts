@@ -187,13 +187,14 @@ export class OrderDocumentsService {
             document.recipientCounterpartyId, companyId,
         );
 
+        // Получателя может и не быть: доверенность выписывается на водителя, а
+        // предъявляют её на погрузке — постоянного адресата у неё нет.
+        // Отправку это не запрещает, просто адрес спрашиваем при отправке.
         const reason = document.status === 'DRAFT'
             ? 'Черновик не отправляется: сначала документ проводят'
             : document.sentAt
                 ? 'Документ уже отправлен. Исправление уходит новой версией'
-                : !counterparty
-                    ? 'В документе не указан получатель'
-                    : null;
+                : null;
 
         return {
             available: !reason,
@@ -242,8 +243,8 @@ export class OrderDocumentsService {
         });
         if (!document) throw new NotFoundException('Документ не найден');
 
-        const recipient = delivery.recipient!;
-        const address = (email || recipient.email || '').trim();
+        const recipient = delivery.recipient;
+        const address = (email || recipient?.email || '').trim();
 
         // Кабинет получателя — главный путь: документ остаётся один, у
         // контрагента появляется он же, а не набранная на слух копия.
@@ -251,14 +252,16 @@ export class OrderDocumentsService {
         let recipientCompanyId: string | null = null;
         let sentToEmail: string | null = null;
 
-        if (recipient.onPlatform && recipient.platformCompanyId) {
+        if (recipient?.onPlatform && recipient.platformCompanyId) {
             recipientCompanyId = recipient.platformCompanyId;
             deliveredTo = `${recipient.name} (кабинет на платформе)`;
         } else {
             if (!address) {
                 throw new BadRequestException(
-                    `У «${recipient.name}» нет кабинета на платформе и не указана почта. `
-                    + 'Впишите адрес — документ уйдёт письмом.',
+                    recipient
+                        ? `У «${recipient.name}» нет кабинета на платформе и не указана почта. `
+                            + 'Впишите адрес — документ уйдёт письмом.'
+                        : 'Укажите почту получателя — документ уйдёт письмом с вложением.',
                 );
             }
             const company = await this.prisma.company.findUnique({
