@@ -10,6 +10,7 @@ import { OrderSettlementsService } from './order-settlements.service';
 
 const CARD_FULL_CUSTOMER = {
     id: 'cust-1', name: 'ТОО «Магнум»',
+    isExternal: true, createdByCompanyId: 'we-1',
     vatPayer: true, vatRate: 16, invoiceTiming: 'AFTER_UNLOAD',
     customerPaymentDays: 30, customerPaymentFrom: 'UNLOAD',
     carrierPaymentDays: null, carrierPaymentFrom: null,
@@ -17,6 +18,7 @@ const CARD_FULL_CUSTOMER = {
 
 const CARD_FULL_CARRIER = {
     id: 'carr-1', name: 'ИП Сериков',
+    isExternal: true, createdByCompanyId: 'we-1',
     vatPayer: false, vatRate: null, invoiceTiming: null,
     customerPaymentDays: null, customerPaymentFrom: null,
     carrierPaymentDays: 15, carrierPaymentFrom: 'ORIGINALS',
@@ -177,6 +179,19 @@ describe('Расчёты по рейсу', () => {
         });
 
         it('чего не хватает — написано карточкой и именем контрагента', async () => {
+            const { service } = build(
+                [CARD_FULL_CUSTOMER, { ...CARD_FULL_CARRIER, vatPayer: null, carrierPaymentDays: null }],
+                { ...DEFAULT_ORDER, settlementsConfirmedAt: null },
+            );
+
+            const state = await service.stateOf('o-1', 'we-1');
+
+            expect(state.missing).toEqual([
+                'В карточке перевозчика «ИП Сериков» не заполнены условия расчётов',
+            ]);
+        });
+
+        it('у проверенных расчётов списка нехватки нет — он спорил бы с отметкой', async () => {
             const { service } = build([
                 CARD_FULL_CUSTOMER,
                 { ...CARD_FULL_CARRIER, vatPayer: null, carrierPaymentDays: null },
@@ -184,9 +199,27 @@ describe('Расчёты по рейсу', () => {
 
             const state = await service.stateOf('o-1', 'we-1');
 
-            expect(state.missing).toEqual([
-                'В карточке перевозчика «ИП Сериков» не заполнены условия расчётов',
-            ]);
+            expect(state.confirmed).toBe(true);
+            expect(state.missing).toEqual([]);
+        });
+
+        it('сторона работает на платформе — сказано, что условия задают по рейсу', async () => {
+            // В чужой организации нашу договорённость хранить нельзя: у неё
+            // свои договорённости с другими. Просить «заполните карточку» в
+            // этом случае — отправлять человека туда, где поля не появятся.
+            const { service } = build(
+                [CARD_FULL_CUSTOMER, {
+                    ...CARD_FULL_CARRIER,
+                    isExternal: false, createdByCompanyId: null,
+                    vatPayer: null, carrierPaymentDays: null,
+                }],
+                { ...DEFAULT_ORDER, settlementsConfirmedAt: null },
+            );
+
+            const state = await service.stateOf('o-1', 'we-1');
+
+            expect(state.missing[0]).toContain('работает на платформе');
+            expect(state.missing[0]).toContain('задайте здесь');
         });
 
         it('подтверждение человеком подписано именем', async () => {
