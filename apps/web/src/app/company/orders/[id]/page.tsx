@@ -521,7 +521,19 @@ export default function OrderDetailPage() {
     // =================== LOCATION OPTIONS ===================
 
     const getLocationOptions = () => {
-        if (!locations || locations.length === 0) return [];
+        // Пока справочник адресов не загрузился, в полях маршрута видно
+        // внутренний код точки вместо «Склад Алматы»: у выпадающего списка
+        // ещё нет варианта с таким значением, и он показывает само значение.
+        // Выглядит как испорченная заявка. Адреса самого рейса известны сразу
+        // — их и подставляем, чтобы поле с первого кадра читалось.
+        const ownPoints = (data?.order?.routePoints || [])
+            .map((point: any) => point.location)
+            .filter(Boolean);
+        if (!locations || locations.length === 0) {
+            return ownPoints.length
+                ? [{ label: 'Адреса этого рейса', options: ownPoints }]
+                : [];
+        }
         const customerCompanyId = selectedCustomer === MY_COMPANY_VALUE ? user?.companyId : selectedCustomer;
         const carrierCompanyId = selectedCarrier === MY_COMPANY_VALUE ? user?.companyId : 
             (selectedCarrier === MARKETPLACE_VALUE || !selectedCarrier) ? undefined : selectedCarrier;
