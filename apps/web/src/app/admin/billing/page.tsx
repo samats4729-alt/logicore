@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Table, Button, Tag, Modal, Form, Input, InputNumber, Select, Switch, Popconfirm, Space, Typography, Alert, Divider } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, Popconfirm, Space } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { CreditCard, Layers, ToggleLeft } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-
-const { Title, Text } = Typography;
+import nova from '@/components/nova/nova.module.css';
 
 const STATUS_LABELS: Record<string, string> = {
     TRIAL: 'Пробный период',
@@ -16,11 +16,9 @@ const STATUS_LABELS: Record<string, string> = {
     CANCELLED: 'Отменена',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-    TRIAL: 'gold',
-    ACTIVE: 'green',
-    PAST_DUE: 'red',
-    CANCELLED: 'default',
+/** Цветом — только просрочка: остальное обычные состояния подписки. */
+const STATUS_CHIP: Record<string, string> = {
+    PAST_DUE: 'neg',
 };
 
 interface Plan {
@@ -195,7 +193,9 @@ export default function AdminBillingPage() {
     // ==================== Колонки таблиц ====================
 
     const planColumns = [
-        { title: 'Название', dataIndex: 'name', key: 'name', render: (t: string, r: Plan) => <b>{t}{!r.isActive && <Tag style={{ marginLeft: 8 }}>выключен</Tag>}</b> },
+        { title: 'Название', dataIndex: 'name', key: 'name', render: (t: string, r: Plan) => (
+            <b>{t}{!r.isActive && <span className={nova.chip} style={{ marginLeft: 8 }}>выключен</span>}</b>
+        ) },
         { title: 'Цена, ₸/мес', dataIndex: 'priceMonthly', key: 'price', render: (v: number) => <b>{v.toLocaleString('ru-RU')}</b> },
         { title: 'Сотрудники', dataIndex: 'maxUsers', key: 'maxUsers', render: (v: number | null) => v ?? '∞' },
         { title: 'Заявки/мес', dataIndex: 'maxOrdersPerMonth', key: 'maxOrders', render: (v: number | null) => v ?? '∞' },
@@ -214,12 +214,18 @@ export default function AdminBillingPage() {
     ];
 
     const subColumns = [
-        { title: 'Компания', key: 'name', render: (_: any, r: any) => <div><b>{r.name}</b><div style={{ fontSize: 11, color: '#8a91a0' }}>{r.bin || 'БИН не указан'} · {r._count?.users ?? 0} польз.</div></div> },
+        { title: 'Компания', key: 'name', render: (_: any, r: any) => <div><b>{r.name}</b><div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{r.bin || 'БИН не указан'} · {r._count?.users ?? 0} польз.</div></div> },
         {
             title: 'Статус', key: 'status',
-            render: (_: any, r: any) => r.subscription
-                ? <Tag color={STATUS_COLORS[r.subscription.status]}>{STATUS_LABELS[r.subscription.status] || r.subscription.status}</Tag>
-                : <Tag>Нет подписки</Tag>,
+            render: (_: any, r: any) => (
+                <span className={`${nova.chip}${
+                    STATUS_CHIP[r.subscription?.status] === 'neg' ? ` ${nova.chipNeg}` : ''
+                }`}>
+                    {r.subscription
+                        ? STATUS_LABELS[r.subscription.status] || r.subscription.status
+                        : 'Нет подписки'}
+                </span>
+            ),
         },
         { title: 'План', key: 'plan', render: (_: any, r: any) => r.subscription?.plan ? `${r.subscription.plan.name} (${r.subscription.plan.priceMonthly.toLocaleString('ru-RU')} ₸)` : '—' },
         {
@@ -231,7 +237,7 @@ export default function AdminBillingPage() {
                 return d ? dayjs(d).format('DD.MM.YYYY') : '—';
             },
         },
-        { title: 'Заметка', key: 'note', render: (_: any, r: any) => <span style={{ fontSize: 12, color: '#8a91a0' }}>{r.subscription?.note || ''}</span> },
+        { title: 'Заметка', key: 'note', render: (_: any, r: any) => <span style={{ fontSize: 12, color: 'var(--nova-fg-3)' }}>{r.subscription?.note || ''}</span> },
         {
             title: '', key: 'actions', width: 110,
             render: (_: any, r: any) => <Button size="small" onClick={() => openSubModal(r)}>Управлять</Button>,
@@ -239,53 +245,95 @@ export default function AdminBillingPage() {
     ];
 
     return (
-        <div style={{ padding: '0 4px' }}>
-            <Title level={3} style={{ marginBottom: 4 }}><DollarOutlined /> Биллинг</Title>
-            <Text type="secondary">Подписки компаний, тарифы и глобальный рубильник</Text>
+        <div>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Биллинг</h1>
+                    <p className={nova.subtitle}>
+                        Подписки компаний, тарифы и общий рубильник: пока он выключен, платформа
+                        работает бесплатно для всех.
+                    </p>
+                </div>
+            </div>
 
-            {/* ===== Настройки ===== */}
-            <Card size="small" style={{ marginTop: 16 }} loading={loading && !settings}>
-                <Space size="large" wrap>
-                    <Space>
-                        <Switch
-                            checked={settings?.enabled ?? false}
-                            loading={savingSettings}
-                            onChange={handleToggleBilling}
-                        />
-                        <b>{settings?.enabled ? 'Биллинг включён' : 'Биллинг выключен'}</b>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <ToggleLeft size={14} />
+                    <h2 className={nova.cardTitle}>Как работает платформа</h2>
+                    <span className={`${nova.chip}${settings?.enabled ? ` ${nova.chipWarn}` : ''}`}>
+                        {settings?.enabled ? 'биллинг включён' : 'бесплатно для всех'}
+                    </span>
+                </div>
+                <div className={nova.cardBody}>
+                    <Space size="large" wrap>
+                        <Space>
+                            <Switch
+                                checked={settings?.enabled ?? false}
+                                loading={savingSettings}
+                                onChange={handleToggleBilling}
+                            />
+                            <b style={{ fontSize: 13 }}>
+                                {settings?.enabled ? 'Биллинг включён' : 'Биллинг выключен'}
+                            </b>
+                        </Space>
+                        <Space>
+                            <span style={{ fontSize: 13 }}>Пробный период, дней:</span>
+                            <InputNumber
+                                min={1} max={365}
+                                value={settings?.trialDays}
+                                onChange={handleTrialDaysChange}
+                                style={{ width: 80 }}
+                            />
+                        </Space>
                     </Space>
-                    <Space>
-                        <span>Пробный период, дней:</span>
-                        <InputNumber
-                            min={1} max={365}
-                            value={settings?.trialDays}
-                            onChange={handleTrialDaysChange}
-                            style={{ width: 80 }}
-                        />
-                    </Space>
-                </Space>
-                <Divider style={{ margin: '12px 0' }} />
-                {settings?.enabled ? (
-                    <Alert type="warning" showIcon message="Биллинг активен: компании без действующей подписки или пробного периода не имеют доступа к кабинету." />
-                ) : (
-                    <Alert type="info" showIcon message="Биллинг выключен: платформа работает бесплатно для всех, ограничения и баннеры не показываются." />
-                )}
-            </Card>
+                    <div className={nova.itemDesc} style={{ marginTop: 12, whiteSpace: 'normal' }}>
+                        {settings?.enabled
+                            ? 'Компании без действующей подписки или пробного периода в кабинет не попадают.'
+                            : 'Ограничения и баннеры не показываются никому.'}
+                    </div>
+                </div>
+            </section>
 
-            {/* ===== Тарифные планы ===== */}
-            <Card
-                size="small"
-                style={{ marginTop: 16 }}
-                title="Тарифные планы"
-                extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => openPlanModal()}>Добавить план</Button>}
-            >
-                <Table rowKey="id" columns={planColumns} dataSource={plans} loading={loading} size="small" pagination={false} />
-            </Card>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <Layers size={14} />
+                    <h2 className={nova.cardTitle}>Тарифные планы</h2>
+                    {plans.length > 0 && <span className={nova.cardCount}>{plans.length}</span>}
+                    <button
+                        type="button"
+                        className={`${nova.action} ${nova.actionPrimary}`}
+                        onClick={() => openPlanModal()}
+                    >
+                        <PlusOutlined /> План
+                    </button>
+                </div>
+                <Table
+                    rowKey="id"
+                    columns={planColumns}
+                    dataSource={plans}
+                    loading={loading}
+                    size="small"
+                    pagination={false}
+                    locale={{ emptyText: 'Планов нет — пока биллинг выключен, они и не нужны' }}
+                />
+            </section>
 
-            {/* ===== Подписки компаний ===== */}
-            <Card size="small" style={{ marginTop: 16 }} title="Подписки компаний">
-                <Table rowKey="id" columns={subColumns} dataSource={subs} loading={loading} size="small" pagination={{ pageSize: 20, size: 'small' }} />
-            </Card>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <CreditCard size={14} />
+                    <h2 className={nova.cardTitle}>Подписки компаний</h2>
+                    {subs.length > 0 && <span className={nova.cardCount}>{subs.length}</span>}
+                </div>
+                <Table
+                    rowKey="id"
+                    columns={subColumns}
+                    dataSource={subs}
+                    loading={loading}
+                    size="small"
+                    pagination={{ pageSize: 20, size: 'small' }}
+                />
+            </section>
 
             {/* ===== Modal: план ===== */}
             <Modal
