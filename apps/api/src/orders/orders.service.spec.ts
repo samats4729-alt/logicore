@@ -15,6 +15,7 @@ describe('OrdersService.takeOrder', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
         );
     };
 

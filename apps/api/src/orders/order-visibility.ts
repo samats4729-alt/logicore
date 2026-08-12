@@ -60,12 +60,76 @@ export function hideExecutorCost<T extends ExecutorCostFields>(order: T): T {
     return order;
 }
 
-/** Применить правило к заявке, если компания в ней только заказчик. */
-export function maskForCustomer<T extends ExecutorCostFields & OrderSides>(
+/**
+ * Налоговая часть, которую видно контрагенту только после проверки.
+ *
+ * Заявка появляется у контрагента на платформе сразу — он должен знать, что
+ * везёт и куда. А НДС и срок оплаты до проверки бухгалтером — это ещё не
+ * условия, а значения по умолчанию: «без НДС» и пустой срок. Показать их
+ * контрагенту значит сказать ему неправду и потом переигрывать.
+ */
+type SettlementFields = {
+    hasVat?: unknown;
+    vatRate?: unknown;
+    executorHasVat?: unknown;
+    executorVatRate?: unknown;
+    customerPaymentDays?: unknown;
+    customerPaymentFrom?: unknown;
+    carrierPaymentDays?: unknown;
+    carrierPaymentFrom?: unknown;
+    customerPaymentDate?: unknown;
+    driverPaymentDate?: unknown;
+    customerPaymentCondition?: unknown;
+    driverPaymentCondition?: unknown;
+    settlementsConfirmedAt?: unknown;
+};
+
+export function hideUnconfirmedSettlements<T extends SettlementFields>(order: T): T {
+    const masked = order as any;
+    masked.hasVat = null;
+    masked.vatRate = null;
+    masked.executorHasVat = null;
+    masked.executorVatRate = null;
+    masked.customerPaymentDays = null;
+    masked.customerPaymentFrom = null;
+    masked.carrierPaymentDays = null;
+    masked.carrierPaymentFrom = null;
+    masked.customerPaymentDate = null;
+    masked.driverPaymentDate = null;
+    masked.customerPaymentCondition = null;
+    masked.driverPaymentCondition = null;
+    // Отдельным признаком, чтобы на экране контрагента вместо цифр стояло
+    // «условия расчётов уточняются», а не пустота без объяснения.
+    masked.settlementsPending = true;
+    return order;
+}
+
+/**
+ * Заявка ведётся этой компанией — она хозяин рейса и его расчётов.
+ *
+ * Хозяин определяется так же, как в отчёте по взаиморасчётам: экспедитор —
+ * `forwarderId`, а если его нет — `partnerId`. Остальные участники видят
+ * рейс со своей стороны и чужую кухню видеть не должны.
+ */
+function isOrderOwner(order: OrderSides, companyId?: string | null): boolean {
+    if (!companyId) return false;
+    return (order.forwarderId || order.partnerId) === companyId;
+}
+
+/** Применить правила видимости к заявке, уезжающей контрагенту. */
+export function maskForCustomer<T extends ExecutorCostFields & OrderSides & SettlementFields>(
     order: T,
     companyId?: string | null,
 ): T {
-    return isCustomerOnly(order, companyId) ? hideExecutorCost(order) : order;
+    if (isCustomerOnly(order, companyId)) hideExecutorCost(order);
+
+    // Налоговую часть скрываем у всех участников, кроме хозяина рейса, пока
+    // её не проверил бухгалтер: до проверки там значения по умолчанию, а не
+    // условия сделки.
+    if (companyId && !isOrderOwner(order, companyId) && !order.settlementsConfirmedAt) {
+        hideUnconfirmedSettlements(order);
+    }
+    return order;
 }
 
 /**

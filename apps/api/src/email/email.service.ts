@@ -342,6 +342,74 @@ export class EmailService {
         }
     }
 
+    /**
+     * Документ по рейсу — контрагенту, у которого нет кабинета на платформе.
+     *
+     * Общая для договора-заявки и доверенности: документ уходит вложением,
+     * потому что получателю нужен сам файл — распечатать, подписать, вернуть.
+     * Ссылку, по которой файл ещё надо забрать, в этом сценарии не просят.
+     */
+    async sendOrderDocumentEmail(
+        to: string,
+        document: {
+            title: string;
+            orderNumber: string;
+            senderCompanyName: string;
+            pdfBuffer: Buffer;
+            fileName: string;
+        },
+    ): Promise<void> {
+        const subject = `${document.title} по заявке № ${document.orderNumber} — ${document.senderCompanyName}`;
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
+    <div style="max-width: 480px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+        <div style="background: #0b0d12; padding: 28px 24px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">LogiCore</h1>
+        </div>
+        <div style="padding: 28px 24px;">
+            <h2 style="margin: 0 0 12px; font-size: 19px; color: #1a1a1a;">${document.title}</h2>
+            <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
+                Компания <strong>${document.senderCompanyName}</strong> направляет вам
+                документ по заявке № ${document.orderNumber}. Файл приложен к письму.
+            </p>
+            <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 24px 0;">
+            <p style="color: #bfbfbf; font-size: 12px; line-height: 1.5; margin: 0;">
+                Это письмо отправлено из системы LogiCore. Пожалуйста, не отвечайте на него.
+            </p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+        if (!this.resend) {
+            this.logger.log(
+                `📧 [DEV] ${document.title} для ${to} (заявка ${document.orderNumber}, `
+                + `от ${document.senderCompanyName}), вложение ${document.pdfBuffer.length} байт`,
+            );
+            return;
+        }
+
+        try {
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to,
+                subject,
+                html,
+                attachments: [{ filename: document.fileName, content: document.pdfBuffer }],
+            });
+            this.logger.log(`📧 ${document.title} отправлен на ${to}, id: ${(result as any)?.data?.id}`);
+        } catch (error: any) {
+            this.logger.error(`Не удалось отправить документ на ${to}: ${error.message}`);
+            throw error;
+        }
+    }
+
     async sendInvoiceEmail(
         to: string,
         shareUrl: string,

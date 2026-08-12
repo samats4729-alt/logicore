@@ -56,14 +56,43 @@ export class PendingWorkService {
         ordersWithoutAct: PendingWorkGroup;
         actsWithoutInvoice: PendingWorkGroup;
         overdueInvoices: PendingWorkGroup;
+        unconfirmedSettlements: PendingWorkGroup;
         generatedAt: Date;
     }> {
-        const [ordersWithoutAct, actsWithoutInvoice, overdueInvoices] = await Promise.all([
-            this.ordersWithoutAct(companyId),
-            this.actsWithoutInvoice(companyId),
-            this.overdueInvoices(companyId),
-        ]);
-        return { ordersWithoutAct, actsWithoutInvoice, overdueInvoices, generatedAt: new Date() };
+        const [ordersWithoutAct, actsWithoutInvoice, overdueInvoices, unconfirmedSettlements] =
+            await Promise.all([
+                this.ordersWithoutAct(companyId),
+                this.actsWithoutInvoice(companyId),
+                this.overdueInvoices(companyId),
+                this.unconfirmedSettlements(companyId),
+            ]);
+        return {
+            ordersWithoutAct,
+            actsWithoutInvoice,
+            overdueInvoices,
+            unconfirmedSettlements,
+            generatedAt: new Date(),
+        };
+    }
+
+    /**
+     * Рейсы, где расчёты ждут бухгалтера.
+     *
+     * Обычно это новый контрагент, у которого в карточке ещё не заполнены НДС
+     * и срок оплаты. Пока не заполнены, по рейсу нельзя заверить договор и
+     * выставить счёт — и без этого списка бухгалтер узнавал бы о таких рейсах
+     * от менеджера, у которого не работает кнопка.
+     */
+    private async unconfirmedSettlements(companyId: string): Promise<PendingWorkGroup> {
+        return this.collectOrders({
+            settlementsConfirmedAt: null,
+            status: { notIn: [OrderStatus.CANCELLED, OrderStatus.COMPLETED] },
+            OR: [
+                { forwarderId: companyId },
+                { partnerId: companyId },
+                { responsibleManager: { companyId } },
+            ],
+        });
     }
 
     /**

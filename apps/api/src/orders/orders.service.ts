@@ -11,6 +11,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
 import { kzStartOfToday, kzTodayString } from '../common/utils/business-date';
 import { hideCustomerPrice, maskForCustomer } from './order-visibility';
+import { OrderSettlementsService } from './order-settlements.service';
 
 const STATUS_CHAIN = [
     OrderStatus.ASSIGNED,
@@ -100,6 +101,7 @@ export class OrdersService {
         private notificationsService: NotificationsService,
         private payrollService: PayrollService,
         private currencyService: CurrencyService,
+        private settlementsService: OrderSettlementsService,
     ) { }
 
     private readonly logger = new Logger('OrdersService');
@@ -279,6 +281,20 @@ export class OrdersService {
             loadingDate: pickupDate,
         });
 
+        // Условия расчётов — из карточек сторон, а не из головы того, кто
+        // заводит рейс. НДС и срок оплаты один раз заполнил бухгалтер; здесь
+        // они просто снимаются, чтобы этот рейс навсегда остался на тех
+        // условиях, о которых договаривались сейчас.
+        const unloadAt = data.routePoints?.filter((rp) => rp.pointType === 'DELIVERY').pop()?.expectedDate
+            ?? null;
+        const settlements = await this.settlementsService.termsForNewOrder({
+            ourCompanyId: data.ownerCompanyId,
+            customerCompanyId: targetCustomerCompanyId,
+            forwarderId: data.forwarderId,
+            subForwarderId: data.subForwarderId,
+            unloadAt,
+        });
+
         const order = await this.prisma.order.create({
             data: {
                 orderNumber,
@@ -330,10 +346,22 @@ export class OrdersService {
                 // New fields
                 customerPaymentCondition: data.customerPaymentCondition,
                 customerPaymentForm: data.customerPaymentForm,
-                customerPaymentDate: data.customerPaymentDate,
                 driverPaymentCondition: data.driverPaymentCondition,
                 driverPaymentForm: data.driverPaymentForm,
-                driverPaymentDate: data.driverPaymentDate,
+                // Налоги и сроки оплаты из карточек контрагентов. Плановая
+                // дата платежа, посчитанная по сроку, важнее переданной
+                // руками: она следует из договорённости, а не из памяти.
+                hasVat: settlements.hasVat,
+                vatRate: settlements.vatRate ?? 0,
+                executorHasVat: settlements.executorHasVat,
+                executorVatRate: settlements.executorVatRate ?? 0,
+                customerPaymentDays: settlements.customerPaymentDays,
+                customerPaymentFrom: settlements.customerPaymentFrom,
+                carrierPaymentDays: settlements.carrierPaymentDays,
+                carrierPaymentFrom: settlements.carrierPaymentFrom,
+                customerPaymentDate: settlements.customerPaymentDate ?? data.customerPaymentDate,
+                driverPaymentDate: settlements.driverPaymentDate ?? data.driverPaymentDate,
+                settlementsConfirmedAt: settlements.settlementsConfirmedAt,
                 ttnNumber: data.ttnNumber,
                 customerRefNumber: data.customerRefNumber,
                 atiCodeCustomer: data.atiCodeCustomer,
@@ -1135,6 +1163,21 @@ export class OrdersService {
             data.subForwarderId !== undefined
         ) {
             await this.paymentsService.syncOrderPaymentFlags(orderId);
+        }
+
+        // Стороны рейса и сроки оплаты связаны: у другого перевозчика другие
+        // условия. Поменялась сторона — условия подставляются из его карточки
+        // заново; сдвинулась дата выгрузки — меняется только день, от которого
+        // считается срок.
+        const ourCompanyId = user?.companyId
+            || (updated as any).forwarderId || (updated as any).partnerId || null;
+        const sidesChanged = data.customerCompanyId !== undefined
+            || data.subForwarderId !== undefined
+            || data.forwarderId !== undefined;
+        if (sidesChanged && ourCompanyId) {
+            await this.settlementsService.applyFromCards(orderId, ourCompanyId);
+        } else if (routePoints !== undefined) {
+            await this.settlementsService.recomputeDueDates(orderId);
         }
 
         return updated;

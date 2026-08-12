@@ -1289,7 +1289,7 @@ export class AccountingDocumentsService {
         if (!recipient) {
             throw new BadRequestException(
                 `Организация с БИН ${document.counterparty.bin} на платформе не зарегистрирована. ` +
-                'Отправьте документ ссылкой — она работает без учётной записи',
+                'Отправьте документ на почту — письмо со ссылкой работает без учётной записи',
             );
         }
 
@@ -1308,6 +1308,61 @@ export class AccountingDocumentsService {
             },
             include: { recipientCompany: { select: { id: true, name: true, bin: true } } },
         });
+    }
+
+    /**
+     * Данные для отправки документа почтой — без записи в базу.
+     *
+     * Кабинет есть не у всех, а счёт нужен всем. Отдельный шаг «проверить и
+     * собрать» нужен для того, чтобы документ не оказался помеченным
+     * отправленным, если письмо не ушло: у почты бывает свой отказ, и тогда
+     * контрагент не получил ничего, а у нас написано «отправлено».
+     */
+    async emailDeliveryInfo(companyId: string, id: string) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: {
+                id: true, number: true, type: true, total: true, status: true, sentAt: true,
+                shareToken: true, shareRevokedAt: true,
+                counterparty: { select: { name: true, email: true } },
+                company: { select: { name: true } },
+            },
+        });
+        if (!document) throw new NotFoundException('Документ не найден');
+        if (document.status !== AccountingDocumentStatus.POSTED) {
+            throw new BadRequestException(
+                'Отправить можно только проведённый документ — черновик ещё меняется',
+            );
+        }
+        if (document.sentAt) {
+            throw new BadRequestException('Документ уже отправлен контрагенту');
+        }
+        if (document.shareRevokedAt) {
+            throw new BadRequestException(
+                'Ссылка на документ отозвана. Выпустите её заново — иначе письмо приведёт в никуда',
+            );
+        }
+
+        return {
+            token: document.shareToken,
+            number: document.number,
+            total: Number(document.total ?? 0),
+            senderName: document.company?.name || 'LogiCore',
+            counterpartyName: document.counterparty?.name || null,
+            counterpartyEmail: document.counterparty?.email || null,
+        };
+    }
+
+    /** Отметить, что документ ушёл почтой. Вызывается после самой отправки. */
+    async markSentByEmail(companyId: string, userId: string, id: string) {
+        const updated = await this.prisma.accountingDocument.updateMany({
+            where: { id, companyId, sentAt: null },
+            data: { sentAt: new Date(), sentById: userId },
+        });
+        if (updated.count === 0) {
+            throw new BadRequestException('Документ уже отправлен контрагенту');
+        }
+        return { ok: true };
     }
 
     /**

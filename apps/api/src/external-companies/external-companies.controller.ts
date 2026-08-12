@@ -77,6 +77,38 @@ export class ExternalCompaniesController {
         return result;
     }
 
+    /**
+     * Условия расчётов — вход для бухгалтера.
+     *
+     * Своя ручка, а не поля в общей правке карточки: в общую правку бухгалтера
+     * не пускают, а менеджеру нечего делать в НДС и сроках оплаты. Право
+     * «Бухгалтерия» и открывает эти поля — та самая галочка, которую
+     * руководитель ставит сотруднику в «Сотрудниках».
+     */
+    @Patch(':id/settlement-terms')
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.ACCOUNTANT, UserRole.LOGISTICIAN,
+    )
+    @RequirePermissions('accounting')
+    @ApiOperation({ summary: 'Условия расчётов с контрагентом: НДС и сроки оплаты' })
+    async updateSettlementTerms(@Req() req: any, @Param('id') id: string, @Body() dto: {
+        vatPayer?: boolean | null;
+        vatRate?: number | null;
+        invoiceTiming?: string | null;
+        customerPaymentDays?: number | null;
+        customerPaymentFrom?: string | null;
+        carrierPaymentDays?: number | null;
+        carrierPaymentFrom?: string | null;
+    }) {
+        const result = await this.service.updateSettlementTerms(req.user.companyId, id, dto);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'partner',
+            entityId: id, entityLabel: `Условия расчётов: «${(result as any)?.name || id}»`,
+        });
+        return result;
+    }
+
     @Delete(':id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @RequirePermissions('partners')

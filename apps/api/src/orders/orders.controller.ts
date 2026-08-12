@@ -4,6 +4,8 @@ import { OrdersService } from './orders.service';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
 import { OrderDocumentsService } from './order-documents.service';
+import { OrderSettlementsService } from './order-settlements.service';
+import { ACCOUNTING_ORDER_FIELDS, canTouchAccounting } from '../auth/accounting-access';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -28,6 +30,7 @@ export class OrdersController {
         private poaService: PowerOfAttorneyService,
         private contractService: OrderContractService,
         private orderDocuments: OrderDocumentsService,
+        private settlements: OrderSettlementsService,
         private emailService: EmailService,
         private prisma: PrismaService,
         private billingService: BillingService,
@@ -229,23 +232,166 @@ export class OrdersController {
         return document;
     }
 
+    /**
+     * Провести документ: заверить и разрешить печать.
+     *
+     * Право «Бухгалтерия», потому что проведение — это ответ «в документе всё
+     * верно, включая налоговую часть». Договор-заявку проводит бухгалтер;
+     * доверенность проводить не нужно вовсе — в ней нет денег, и она целиком
+     * остаётся за менеджером (см. `OrderDocumentsService.post`).
+     */
+    @Post('documents/:documentId/post')
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.ACCOUNTANT, UserRole.LOGISTICIAN,
+    )
+    @RequirePermissions('accounting')
+    @ApiOperation({ summary: 'Провести документ по рейсу' })
+    async postOrderDocument(@Param('documentId') documentId: string, @Request() req: any) {
+        const document = await this.orderDocuments.post(documentId, req.user.companyId, req.user.sub);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order_document',
+            entityId: documentId,
+            entityLabel: `Проведён: ${document.title}`,
+            orderId: document.orderId,
+        });
+        return document;
+    }
+
+    /**
+     * Отправить документ получателю.
+     *
+     * Отправлять может и менеджер, и бухгалтер: документ к этому моменту уже
+     * проверен и заверен, дальше это обычная работа с контрагентом. Кому
+     * отправлять, человек не выбирает — получатель записан в самом документе.
+     */
+    @Post('documents/:documentId/send')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Отправить документ по рейсу получателю' })
+    async sendOrderDocument(
+        @Param('documentId') documentId: string,
+        @Request() req: any,
+        @Body() body: { email?: string },
+    ) {
+        const result = await this.orderDocuments.send(
+            documentId, req.user.companyId, req.user.sub, body?.email,
+        );
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order_document',
+            entityId: documentId,
+            entityLabel: `Отправлен: ${result.title} → ${result.sentTo}`,
+            orderId: result.orderId,
+        });
+        return result;
+    }
+
+    /** Кому уйдёт документ и можно ли его отправить прямо сейчас. */
+    @Get('documents/:documentId/delivery')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Куда уйдёт документ по рейсу' })
+    deliveryOfOrderDocument(@Param('documentId') documentId: string, @Request() req: any) {
+        return this.orderDocuments.deliveryTarget(documentId, req.user.companyId);
+    }
+
     /** Вид документа из строки запроса; по умолчанию — доверенность. */
     private documentKind(kind?: string): OrderDocumentKind {
         return kind === 'CONTRACT' ? OrderDocumentKind.CONTRACT : OrderDocumentKind.POWER_OF_ATTORNEY;
     }
 
+    // ─── Расчёты по рейсу: НДС и сроки оплаты ───
+
+    @Get(':id/settlements')
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.LOGISTICIAN, UserRole.ACCOUNTANT,
+    )
+    @ApiOperation({ summary: 'Условия расчётов по рейсу и их проверка' })
+    settlementsOf(@Param('id') id: string, @Request() req: any) {
+        return this.settlements.stateOf(id, req.user.companyId);
+    }
+
+    @Put(':id/settlements')
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.ACCOUNTANT, UserRole.LOGISTICIAN,
+    )
+    @RequirePermissions('accounting')
+    @ApiOperation({ summary: 'Исправить условия расчётов по рейсу' })
+    async patchSettlements(@Param('id') id: string, @Request() req: any, @Body() dto: {
+        hasVat?: boolean;
+        vatRate?: number | null;
+        executorHasVat?: boolean;
+        executorVatRate?: number | null;
+        customerPaymentDays?: number | null;
+        customerPaymentFrom?: string | null;
+        carrierPaymentDays?: number | null;
+        carrierPaymentFrom?: string | null;
+    }) {
+        const state = await this.settlements.patchTerms(id, req.user.companyId, req.user.sub, dto);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order',
+            entityId: id,
+            entityLabel: 'Условия расчётов по рейсу',
+            orderId: id,
+        });
+        return state;
+    }
+
+    @Post(':id/settlements/confirm')
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.ACCOUNTANT, UserRole.LOGISTICIAN,
+    )
+    @RequirePermissions('accounting')
+    @ApiOperation({ summary: 'Подтвердить расчёты по рейсу как есть' })
+    async confirmSettlements(@Param('id') id: string, @Request() req: any) {
+        const state = await this.settlements.confirm(id, req.user.companyId, req.user.sub);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order',
+            entityId: id,
+            entityLabel: 'Расчёты по рейсу подтверждены',
+            orderId: id,
+        });
+        return state;
+    }
+
     @Get(':id/contract')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
-    @ApiOperation({ summary: 'Скачать договор-заявку на перевозку (PDF)' })
+    @ApiOperation({
+        summary: 'Скачать договор-заявку на перевозку (PDF)',
+        description: 'Печать «на лету» из текущих данных заявки — всегда без печати и подписи.',
+    })
     async downloadContract(
         @Param('id') id: string,
         @Request() req: any,
         @Res() res: Response,
-        // Флажок «Подпись и печать»: по умолчанию бланк чистый.
         @Query('withStamp') withStamp?: string,
     ) {
+        // Заверить можно только сформированную и проведённую версию.
+        //
+        // Этот путь печатает «живые» данные заявки, которые меняются каждый
+        // час. Печать на таком листе означала бы, что компания отвечает за
+        // содержимое, которого через минуту уже нет.
+        if (withStamp === 'true') {
+            throw new BadRequestException(
+                'Договор-заявку с печатью выдаёт проведённая версия документа. '
+                + 'Сформируйте её во вкладке «Документы».',
+            );
+        }
         const pdfBuffer = await this.contractService.generatePdf(id, req.user.companyId, {
-            withStamp: withStamp === 'true',
+            withStamp: false,
         });
         res.set({
             'Content-Type': 'application/pdf',
@@ -359,6 +505,19 @@ export class OrdersController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Обновить заявку' })
     async update(@Param('id') id: string, @Body() dto: Partial<CreateOrderDto>, @Request() req: any) {
+        // Бухгалтерские поля этим путём не проходят.
+        //
+        // Форма заявки их менеджеру больше не показывает, но запрос можно
+        // отправить и без формы. Раньше именно так и работало: «НДС» стоял в
+        // общей правке рейса, по умолчанию снятый, и уходил в договор с
+        // печатью. Кто вправе их менять — решает право «Бухгалтерия», а сами
+        // правки идут отдельной ручкой ниже, где остаётся след.
+        if (!canTouchAccounting(req.user)) {
+            for (const field of ACCOUNTING_ORDER_FIELDS) {
+                delete (dto as any)[field];
+            }
+        }
+
         const updated = await this.ordersService.update(id, {
             ...dto,
             customerPaymentDate: dto.customerPaymentDate ? new Date(dto.customerPaymentDate) : undefined,

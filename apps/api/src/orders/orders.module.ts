@@ -6,6 +6,7 @@ import { OrdersController } from './orders.controller';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
 import { OrderDocumentsService } from './order-documents.service';
+import { OrderSettlementsService } from './order-settlements.service';
 import { StampImageService } from '../common/services/stamp-image.service';
 import { EmailModule } from '../email/email.module';
 import { AccountingModule } from '../accounting/accounting.module';
@@ -23,8 +24,9 @@ import { CurrencyModule } from '../currency/currency.module';
         PowerOfAttorneyService,
         OrderContractService,
         OrderDocumentsService,
+        OrderSettlementsService,
         StampImageService,
     ],
-    exports: [OrdersService],
+    exports: [OrdersService, OrderSettlementsService],
 })
 export class OrdersModule { }
