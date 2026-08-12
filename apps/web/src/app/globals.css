@@ -945,6 +945,31 @@ a.mapboxgl-ctrl-logo,
   border-radius: 8px !important;
 }
 
+/* Текущая страница — тёмная, как главное действие.
+   Правило для неё уже было, но только под `.lc-page`: переведённые экраны
+   размечены классами из CSS-модуля, селектор туда не доставал, и в журналах
+   оставался синий кружок antd. */
+.ant-pagination .ant-pagination-item-active {
+  background: var(--nova-primary) !important;
+  border-color: var(--nova-primary) !important;
+}
+
+.ant-pagination .ant-pagination-item-active a {
+  color: var(--nova-primary-fg) !important;
+}
+
+/* Сортировка и выделенная строка — тем же чёрно-белым.
+   Синие стрелки сортировки в шапке таблицы выглядели как ссылка, хотя это
+   состояние колонки. */
+.ant-table-column-sorter-up.active,
+.ant-table-column-sorter-down.active {
+  color: var(--nova-fg) !important;
+}
+
+.ant-table-tbody > tr.ant-table-row-selected > td {
+  background: var(--nova-hover) !important;
+}
+
 /* Statistic numbers */
 .ant-statistic .ant-statistic-content {
   font-weight: 600;
