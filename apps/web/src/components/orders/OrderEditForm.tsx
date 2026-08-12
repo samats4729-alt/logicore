@@ -1,11 +1,10 @@
 'use client';
 
-import {  AutoComplete, Button, Card, Col, DatePicker, Divider, Form, Input, InputNumber, Row, Select, Tag , Typography } from 'antd';
+import {  AutoComplete, Button, Col, DatePicker, Divider, Form, Input, InputNumber, Row, Select, Tag , Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import { CheckCircleOutlined, DeleteOutlined, EnvironmentOutlined, FlagOutlined, InboxOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { prepareCompanyOptions } from '@/lib/company-helper';
-import { DEFAULT_VAT_RATE, VAT_RATES } from '@/lib/tax';
 import { CargoComposition } from '@/components/orders/CargoComposition';
 import type { CargoState } from '@/lib/cargo';
 import CurrencySelect from '@/components/orders/CurrencySelect';
@@ -45,8 +44,6 @@ interface OrderEditFormProps {
 
     /** Справочники формы — грузятся при входе в режим правки */
     cargoCategories: any[];
-    paymentConditions: any[];
-    paymentForms: any[];
 
     /** Деньги: какие поля показывать и как их назвать зависит от роли */
     showCustomerPriceField: boolean;
@@ -59,14 +56,13 @@ interface OrderEditFormProps {
     /**
      * Условия расчётов по рейсу: НДС сторон и сроки оплаты.
      *
-     * Правит их бухгалтер во вкладке «Финансы», а здесь они показаны строкой
-     * для тех, у кого есть право «Бухгалтерия». Менеджеру не показываются
-     * вовсе: раньше он видел галочку «НДС» со снятой отметкой и ставку 16% по
-     * умолчанию — и решал за бухгалтера, сам того не зная.
+     * Здесь они показаны строкой и не правятся: ответ принадлежит карточке
+     * контрагента, а по конкретному рейсу его меняет бухгалтер во вкладке
+     * «Финансы». Раньше в этой форме стояла галочка «НДС» со снятой отметкой
+     * и ставка 16% по умолчанию — и тот, кто ведёт рейс, решал за бухгалтера,
+     * сам того не зная.
      */
     settlements?: OrderSettlements | null;
-    /** Есть ли у смотрящего право «Бухгалтерия». */
-    mayAccount: boolean;
     setIsEditing: (editing: boolean) => void;
 
     /**
@@ -92,8 +88,8 @@ export default function OrderEditForm(props: OrderEditFormProps) {
         selectedCustomer, setSelectedCustomer, selectedCarrier, setSelectedCarrier,
         getPartyOptions, myCompanyName, roleInfo,
         setQuickPartnerModalOpen, setQuickPartnerTarget, customerRefLabel,
-        settlements, mayAccount,
-        cargoCategories, paymentConditions, paymentForms,
+        settlements,
+        cargoCategories,
         showCustomerPriceField, showDriverCostField, customerPriceLabel, driverCostLabel,
         canEditFinance, setIsEditing,
         cargo, setCargo,
@@ -104,22 +100,25 @@ export default function OrderEditForm(props: OrderEditFormProps) {
             <Row gutter={[24, 24]}>
                 <Col xs={24} lg={15}>
                     {/* Route Card (Editable) */}
-                    <Card
-                        title={<span style={{ fontWeight: 600 }}><EnvironmentOutlined style={{ marginRight: 8, color: '#1677ff' }} />Маршрут следования</span>}
-                        bordered={false}
-                        className="premium-card"
-                        style={{ marginBottom: 20 }}
-                    >
+                    <section className={nova.card} style={{ marginBottom: 16 }}>
+                        <div className={nova.cardHead}>
+                            <EnvironmentOutlined />
+                            <h2 className={nova.cardTitle}>Маршрут следования</h2>
+                        </div>
+                        <div className={nova.cardBody}>
                         <Form.Item name="pickupDate" label="Дата погрузки" rules={[{ required: true, message: 'Укажите дату' }]}>
                             <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
                         </Form.Item>
                         {routePointsState.map((pt, i) => (
+                            /* Точки различаются подписью, а не цветом заливки:
+                               синий и зелёный блоки читались как светофор и
+                               спорили с чёрно-белой темой кабинета. */
                             <div key={i} style={{
                                 padding: '12px 16px',
-                                background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff',
-                                borderRadius: 10,
+                                background: 'var(--nova-surface-2)',
+                                borderRadius: 12,
                                 marginBottom: 12,
-                                border: pt.pointType === 'DELIVERY' ? '1px solid #b7eb8f' : '1px solid #adc6ff',
+                                border: '1px solid var(--nova-border)',
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                                     <Select
@@ -129,9 +128,9 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                         style={{ width: 160, fontWeight: 600 }}
                                         variant="borderless"
                                     >
-                                        <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }} /> Погрузка</Select.Option>
-                                        <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }} /> Доп. погрузка</Select.Option>
-                                        <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }} /> Выгрузка</Select.Option>
+                                        <Select.Option value="PICKUP"><EnvironmentOutlined style={{ marginRight: 4 }} /> Погрузка</Select.Option>
+                                        <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ marginRight: 4 }} /> Доп. погрузка</Select.Option>
+                                        <Select.Option value="DELIVERY"><FlagOutlined style={{ marginRight: 4 }} /> Выгрузка</Select.Option>
                                     </Select>
                                     {routePointsState.length > 2 && (
                                         <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => {
@@ -176,14 +175,16 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                         >
                             Добавить точку
                         </Button>
-                    </Card>
+                        </div>
+                    </section>
 
                     {/* Cargo Card (Editable) */}
-                    <Card
-                        title={<span style={{ fontWeight: 600 }}><InboxOutlined style={{ marginRight: 8, color: '#1677ff' }} />Информация о грузе</span>}
-                        bordered={false}
-                        className="premium-card"
-                    >
+                    <section className={nova.card}>
+                        <div className={nova.cardHead}>
+                            <InboxOutlined />
+                            <h2 className={nova.cardTitle}>Информация о грузе</h2>
+                        </div>
+                        <div className={nova.cardBody}>
                         <Row gutter={12}>
                             <Col span={12}>
                                 <Form.Item name="natureOfCargo" label="Характер груза" rules={[{ required: true, message: 'Выберите из списка или впишите свой вариант' }]}>
@@ -263,29 +264,31 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                         <Form.Item name="requirements" label="Доп. требования">
                             <TextArea rows={2} placeholder="Ремни, коники, гидроборт..." />
                         </Form.Item>
-                    </Card>
+                        </div>
+                    </section>
                 </Col>
 
                 <Col xs={24} lg={9}>
                     {/* Role & Parties Card (Editable) */}
-                    <Card
-                        title={<span style={{ fontWeight: 600 }}><TeamOutlined style={{ marginRight: 8, color: '#1677ff' }} />Участники и Ставки</span>}
-                        bordered={false}
-                        className="premium-card"
-                    >
+                    <section className={nova.card}>
+                        <div className={nova.cardHead}>
+                            <TeamOutlined />
+                            <h2 className={nova.cardTitle}>Участники и ставки</h2>
+                        </div>
+                        <div className={nova.cardBody}>
                         {/* Role info text */}
                         <div style={{
-                            padding: '10px 16px',
-                            background: `${roleInfo.color}10`,
-                            border: `1px solid ${roleInfo.color}40`,
-                            borderRadius: 8,
-                            marginBottom: 20,
+                            padding: '10px 14px',
+                            background: 'var(--nova-surface-2)',
+                            border: '1px solid var(--nova-border)',
+                            borderRadius: 12,
+                            marginBottom: 18,
                             display: 'flex',
                             alignItems: 'center',
                             gap: 8,
                         }}>
-                            <CheckCircleOutlined style={{ color: roleInfo.color, fontSize: 16 }} />
-                            <Text style={{ color: roleInfo.color, fontWeight: 500, fontSize: 13 }}>{roleInfo.text}</Text>
+                            <CheckCircleOutlined style={{ color: 'var(--nova-fg-3)', fontSize: 15 }} />
+                            <Text style={{ color: 'var(--nova-fg-2)', fontWeight: 500, fontSize: 13 }}>{roleInfo.text}</Text>
                         </div>
 
                         <div style={{ marginBottom: 16 }}>
@@ -376,7 +379,7 @@ export default function OrderEditForm(props: OrderEditFormProps) {
 
                         {showCustomerPriceField && (
                             <Row gutter={12}>
-                                <Col span={mayAccount ? 12 : 24}>
+                                <Col span={24}>
                                     <Form.Item name="customerPrice" label={customerPriceLabel}>
                                         <InputNumber
                                             min={0} style={{ width: '100%' }} placeholder="0" size="large"
@@ -389,36 +392,13 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                         />
                                     </Form.Item>
                                 </Col>
-                                {/* НДС — не работа того, кто ведёт рейс. Ответ
-                                    приходит из карточки контрагента, где его
-                                    один раз дал бухгалтер. */}
-                                {mayAccount && (
-                                    <>
-                                        <Col span={6}>
-                                            <Form.Item name="hasVat" label="НДС" initialValue={false}>
-                                                <Select size="large" disabled={!canEditFinance}>
-                                                    <Select.Option value={false}>Без</Select.Option>
-                                                    <Select.Option value={true}>С НДС</Select.Option>
-                                                </Select>
-                                            </Form.Item>
-                                        </Col>
-                                        <Col span={6}>
-                                            <Form.Item name="vatRate" label="Ставка" initialValue={DEFAULT_VAT_RATE}>
-                                                <Select size="large" disabled={!canEditFinance}>
-                                                    {VAT_RATES.map((rate) => (
-                                                        <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
-                                                    ))}
-                                                </Select>
-                                            </Form.Item>
-                                        </Col>
-                                    </>
-                                )}
+
                             </Row>
                         )}
 
                         {showDriverCostField && (
                             <Row gutter={12}>
-                                <Col span={mayAccount ? 12 : 24}>
+                                <Col span={24}>
                                     <Form.Item name="driverCost" label={driverCostLabel}>
                                         <InputNumber
                                             min={0} style={{ width: '100%' }} placeholder="0" size="large"
@@ -431,27 +411,7 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                         />
                                     </Form.Item>
                                 </Col>
-                                {mayAccount && (
-                                    <>
-                                        <Col span={6}>
-                                            <Form.Item name="executorHasVat" label="НДС" initialValue={false}>
-                                                <Select size="large" disabled={!canEditFinance}>
-                                                    <Select.Option value={false}>Без</Select.Option>
-                                                    <Select.Option value={true}>С НДС</Select.Option>
-                                                </Select>
-                                            </Form.Item>
-                                        </Col>
-                                        <Col span={6}>
-                                            <Form.Item name="executorVatRate" label="Ставка" initialValue={DEFAULT_VAT_RATE}>
-                                                <Select size="large" disabled={!canEditFinance}>
-                                                    {VAT_RATES.map((rate) => (
-                                                        <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
-                                                    ))}
-                                                </Select>
-                                            </Form.Item>
-                                        </Col>
-                                    </>
-                                )}
+
                             </Row>
                         )}
 
@@ -498,49 +458,25 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                             </Select>
                         </Form.Item>
 
-                        {/* Форма оплаты — это «НДС / без НДС» из справочника, а
-                            условие оплаты — та самая свободная строка, из
-                            которой не посчитать ни одной даты. И то и другое
-                            теперь приходит из карточки контрагента, поэтому
-                            менеджеру этих полей не показываем. */}
-                        {mayAccount && (
-                            <Row gutter={16}>
-                                <Col xs={24} md={12}>
-                                    <Form.Item name="customerPaymentCondition" label="Условие оплаты заказчика">
-                                        <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                            options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
-                                    </Form.Item>
-                                </Col>
-                                <Col xs={24} md={12}>
-                                    <Form.Item name="customerPaymentForm" label="Форма оплаты заказчика">
-                                        <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                            options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
-                                    </Form.Item>
-                                </Col>
-                                <Col xs={24} md={12}>
-                                    <Form.Item name="driverPaymentCondition" label="Условие оплаты перевозчика">
-                                        <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                            options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
-                                    </Form.Item>
-                                </Col>
-                                <Col xs={24} md={12}>
-                                    <Form.Item name="driverPaymentForm" label="Форма оплаты перевозчика">
-                                        <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                            options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                        )}
+                        {/* Условия и формы оплаты из общего справочника убраны:
+                            «форма оплаты» — это «НДС / без НДС», а «условие» —
+                            та самая свободная строка, из которой не посчитать
+                            ни одной даты. И то и другое приходит из карточки
+                            контрагента. Налоги и сроки по конкретному рейсу
+                            правит бухгалтер во вкладке «Финансы» — так у них
+                            одно место, а не два. */}
 
                         {/* Margin preview */}
-                        <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'hasVat', 'vatRate', 'executorHasVat', 'executorVatRate']}>
+                        <Form.Item noStyle dependencies={['customerPrice', 'driverCost']}>
                             {({ getFieldValue }) => {
                                 const cp = getFieldValue('customerPrice') || 0;
                                 const dc = getFieldValue('driverCost') || 0;
-                                const hasVat = getFieldValue('hasVat') ?? false;
-                                const vatRate = getFieldValue('vatRate') ?? 0;
-                                const executorHasVat = getFieldValue('executorHasVat') ?? false;
-                                const executorVatRate = getFieldValue('executorVatRate') ?? 0;
+                                // НДС — из условий расчётов рейса, то есть оттуда
+                                // же, откуда его берут документы и отчёты.
+                                const hasVat = !!settlements?.customer.vatPayer;
+                                const vatRate = Number(settlements?.customer.vatRate ?? 0);
+                                const executorHasVat = !!settlements?.carrier.vatPayer;
+                                const executorVatRate = Number(settlements?.carrier.vatRate ?? 0);
 
                                 if (cp && dc && showCustomerPriceField && showDriverCostField) {
                                     const cpNet = hasVat ? (cp / (1 + vatRate / 100)) : cp;
@@ -569,7 +505,8 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                 return null;
                             }}
                         </Form.Item>
-                    </Card>
+                        </div>
+                    </section>
 
                     {/* Action buttons for saving the inline form */}
                     <div style={{ marginTop: 20, background: 'var(--lc-card-2)', padding: 16, borderRadius: 8, border: '1px solid var(--lc-border)', display: 'flex', gap: 12 }}>

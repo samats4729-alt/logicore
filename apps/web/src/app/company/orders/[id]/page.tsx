@@ -1553,13 +1553,10 @@ export default function OrderDetailPage() {
                                     myCompanyName={myCompanyName}
                                     roleInfo={roleInfo}
                                     settlements={settlements}
-                                    mayAccount={mayAccount}
                                     setQuickPartnerModalOpen={setQuickPartnerModalOpen}
                                     setQuickPartnerTarget={setQuickPartnerTarget}
                                     customerRefLabel={customerRefLabel}
                                     cargoCategories={cargoCategories}
-                                    paymentConditions={paymentConditions}
-                                    paymentForms={paymentForms}
                                     showCustomerPriceField={showCustomerPriceField}
                                     showDriverCostField={showDriverCostField}
                                     customerPriceLabel={customerPriceLabel}
