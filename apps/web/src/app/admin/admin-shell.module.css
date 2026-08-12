@@ -1,0 +1,317 @@
+/* Оболочка админки: боковое меню, шапка, холст.
+ *
+ * До этого админка жила на готовой раскладке Ant Design: белое зашито
+ * значением, логотип синий, тёмной темы нет вовсе — владелец переключал тему
+ * в кабинете, заходил в админку и получал белый экран в глаза. Здесь всё то
+ * же самое, но на общих токенах: цвета берутся из палитры, а не из кода.
+ *
+ * Меню осталось слева, в отличие от кабинета. Разделов четырнадцать, и
+ * пилюлями наверху они не помещаются: это рабочее место владельца, где
+ * переключаются между разделами целый день, а не десяток экранов сотрудника.
+ */
+
+.shell {
+    display: flex;
+    min-height: 100vh;
+    background: var(--nova-bg);
+    color: var(--nova-fg);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Боковое меню ===== */
+
+.side {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    width: 236px;
+    display: flex;
+    flex-direction: column;
+    background: var(--nova-surface);
+    border-right: 1px solid var(--nova-border);
+    transition: width .18s ease;
+}
+
+.sideCollapsed {
+    width: 72px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 60px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--nova-border);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.brandMark {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    color: var(--nova-fg);
+    white-space: nowrap;
+}
+
+/* Приписка «админ» — чтобы владелец с одного взгляда видел, что он не в
+   кабинете своей компании, а в панели платформы. */
+.brandKind {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+    border: 1px solid var(--nova-border);
+    border-radius: 6px;
+    padding: 2px 5px;
+}
+
+.nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 11px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--nova-fg);
+    font: 500 13px/1.2 Inter, sans-serif;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.item:hover {
+    background: var(--nova-hover);
+}
+
+.item i {
+    display: inline-flex;
+    font-size: 15px;
+    color: var(--nova-fg-3);
+    flex-shrink: 0;
+}
+
+.itemOn {
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font-weight: 600;
+}
+
+.itemOn i {
+    color: var(--nova-primary-fg);
+}
+
+.itemText {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Число у пункта: сколько организаций ждут проверки, сколько черновиков.
+   Красным — потому что это не ссылка и не выделение, а «здесь лежит
+   непрочитанное»; синий в проекте занят ссылками. */
+.badge {
+    background: var(--nova-neg);
+    color: #fff;
+    border-radius: 9px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font: 600 11px/18px Inter, sans-serif;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* Свёрнутое меню: у пункта остаётся значок, а число садится на него
+   уголком — иначе непрочитанное исчезает вместе с подписями. */
+.badgeDot {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    min-width: 15px;
+    height: 15px;
+    line-height: 15px;
+    font-size: 10px;
+}
+
+.itemCollapsed {
+    position: relative;
+    justify-content: center;
+    padding: 9px 0;
+}
+
+/* ===== Шапка ===== */
+
+.main {
+    flex: 1;
+    min-width: 0;
+    margin-left: 236px;
+    transition: margin-left .18s ease;
+}
+
+.mainCollapsed {
+    margin-left: 72px;
+}
+
+.mainBare {
+    margin-left: 0;
+}
+
+.head {
+    position: sticky;
+    top: 0;
+    z-index: 99;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 60px;
+    padding: 0 20px;
+    background: var(--nova-surface);
+    border-bottom: 1px solid var(--nova-border);
+}
+
+.headSpacer {
+    flex: 1;
+}
+
+.iconBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--nova-fg-2);
+    cursor: pointer;
+}
+
+.iconBtn:hover {
+    background: var(--nova-hover);
+}
+
+.profile {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 9px 4px 4px;
+    border: 1px solid var(--nova-border);
+    border-radius: 999px;
+    cursor: pointer;
+    background: var(--nova-surface);
+}
+
+.profile:hover {
+    background: var(--nova-hover);
+}
+
+.profileAv {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font: 600 11.5px/1 Inter, sans-serif;
+}
+
+.profileWho {
+    display: block;
+    line-height: 1.25;
+}
+
+.profileName {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    white-space: nowrap;
+}
+
+.profileRole {
+    display: block;
+    font-size: 10.5px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+}
+
+/* ===== Холст ===== */
+
+/* Поля страницы задаёт оболочка, а не каждый экран: слева уже стоит меню,
+   и вторая колонка полей от `nova.page` сдвинула бы содержимое к правому
+   краю. Экраны админки приносят блоки (шапку, плитки, карточки), а место
+   под них даёт холст. */
+.content {
+    min-height: calc(100vh - 60px);
+    padding: 22px 24px 40px;
+    /* Холст на полтона глуше, чем меню и шапка: так рабочая область
+       читается отдельным слоем, а карточки на ней не сливаются с фоном.
+       Тот же приём, что в кабинете. */
+    background: var(--nova-surface-2);
+}
+
+/* Карта занимает экран целиком: у неё своя шапка поверх слоя. */
+.contentBare {
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.center {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ===== Телефон ===== */
+
+.drawerNav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.drawerFoot {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--nova-border);
+}
+
+.drawerOut {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--nova-neg);
+    font: 500 14px/1.2 Inter, sans-serif;
+    cursor: pointer;
+}
+
+.drawerOut:hover {
+    background: var(--nova-neg-soft);
+}
