@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Table, Card, Button, Tag, Modal, Form, Input, Select, Typography, Space, Popconfirm, Tabs, Alert, Checkbox, Radio, Divider, Empty, Row, Col, DatePicker, Tooltip, Segmented, Switch } from 'antd';
+import { Table, Button, Tag, Modal, Form, Input, Select, Typography, Space, Popconfirm, Alert, Checkbox, Divider, Empty, Row, Col, DatePicker, Tooltip, Switch } from 'antd';
 import dayjs from 'dayjs';
 import { 
     MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, BankOutlined, 
-    ApartmentOutlined, FolderOpenOutlined, PlusOutlined, UnorderedListOutlined, UserOutlined,
+    ApartmentOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined,
     DollarOutlined, CalculatorOutlined, TruckOutlined, TeamOutlined, CarryOutOutlined,
     NotificationOutlined, ShopOutlined, CoffeeOutlined, UserAddOutlined, DisconnectOutlined,
     CarOutlined, InboxOutlined, PushpinOutlined, FileTextOutlined, EnvironmentOutlined, DashboardOutlined,
@@ -17,6 +17,8 @@ import { VEHICLE_TYPES } from '@/lib/constants';
 import UserAvatar from '@/components/UserAvatar';
 import EmployeeAccessModal from '@/components/company/EmployeeAccessModal';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
+import PillTabs from '@/components/ui/PillTabs';
 
 const ROLE_OPTIONS = [
     { label: 'Менеджер', value: 'LOGISTICIAN' },
@@ -264,6 +266,8 @@ export default function CompanyUsersPage() {
 
     // Права менеджеров (что видят логисты) — настройки компании
     const [rightsModalOpen, setRightsModalOpen] = useState(false);
+    /** Какой список открыт: люди или приглашения. */
+    const [peopleTab, setPeopleTab] = useState('people');
     const [managerToggles, setManagerToggles] = useState({ orders: true, partners: false });
     const [toggleSaving, setToggleSaving] = useState(false);
 
@@ -1141,7 +1145,7 @@ export default function CompanyUsersPage() {
     );
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+        <div className={`${nova.page} ${nova.pageWide}`}>
             {/* Elegant Background Dot Grid Pattern for modern aesthetics */}
             <style>{`
                 .org-tree-container {
@@ -1686,94 +1690,82 @@ export default function CompanyUsersPage() {
             `}</style>
 
             {/* ===== HERO 2026 ===== */}
-            <div className="lc2-hero">
+            <div className={nova.hero}>
                 <div>
-                    <div className="lc-eyebrow">Кабинет · Сотрудники</div>
-                    <h1 className="lc2-title">Персонал</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Управление структурой, сотрудниками и водителями
+                    <div className={nova.eyebrow}>Кабинет · Сотрудники</div>
+                    <h1 className={nova.title}>Персонал</h1>
+                    <p className={nova.subtitle}>
+                        Кто работает в компании, что каждому доступно и кто из них за рулём
                     </p>
-                    <Space>
-                        <Segmented
-                            value={activeSegment}
-                            onChange={(value) => {
-                                setActiveSegment(value as 'office' | 'drivers');
-                                if (value === 'drivers') {
-                                    setViewMode('list');
-                                }
-                            }}
-                            options={[
-                                { label: 'Офис', value: 'office' },
-                                { label: 'Водители', value: 'drivers' }
-                            ]}
-                        />
+                    {/* Переключатели — пилюли, как везде в кабинете. Раньше
+                        здесь стояли Segmented и Radio.Group из antd: три
+                        разных вида переключателя на одном экране. */}
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+                        {/* Два разных вопроса — два переключателя: кого
+                            показывать и в каком виде. В одной строке они
+                            читались бы как один список из четырёх пунктов. */}
+                        <div className={nova.pills}>
+                            {([['office', 'Офис'], ['drivers', 'Водители']] as const).map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    className={`${nova.pill} ${activeSegment === value ? nova.pillActive : ''}`}
+                                    onClick={() => {
+                                        setActiveSegment(value);
+                                        if (value === 'drivers') setViewMode('list');
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                         {activeSegment === 'office' && (
-                            <Radio.Group value={viewMode} onChange={e => setViewMode(e.target.value)} buttonStyle="solid">
-                                <Radio.Button value="tree">
-                                    <ApartmentOutlined style={{ marginRight: 6 }} />
-                                    Схема
-                                </Radio.Button>
-                                <Radio.Button value="list">
-                                    <UnorderedListOutlined style={{ marginRight: 6 }} />
-                                    Список
-                                </Radio.Button>
-                            </Radio.Group>
+                            <div className={nova.pills}>
+                                {([['tree', 'Схема'], ['list', 'Список']] as const).map(([value, label]) => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        className={`${nova.pill} ${viewMode === value ? nova.pillActive : ''}`}
+                                        onClick={() => setViewMode(value)}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
                         )}
-                        {activeSegment === 'drivers' ? (
-                            <Button type="primary" icon={<CarOutlined />} onClick={() => handleOpenUnifiedModal()} className="lc-cta">
-                                Добавить водителя
-                            </Button>
-                        ) : (
-                            <Button type="primary" icon={<MailOutlined />} onClick={() => handleOpenUnifiedModal()} className="lc-cta">
-                                Пригласить
-                            </Button>
-                        )}
-                        {activeSegment === 'office' && (
-                            <Button icon={<SettingOutlined />} onClick={() => setRightsModalOpen(true)}>
-                                Права доступа
-                            </Button>
-                        )}
-                    </Space>
+                    </div>
                 </div>
-                <div className="lc2-metrics">
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
-                            <TeamOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Сотрудники</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {users.filter(u => u.role !== 'DRIVER').length}
-                            </div>
-                            <div className="lc2-msub">офис</div>
-                        </div>
-                    </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
-                            <CarOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Водители</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {users.filter(u => u.role === 'DRIVER').length}
-                            </div>
-                            <div className="lc2-msub">в штате</div>
-                        </div>
-                    </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: invitations.length > 0 ? '#ffeef0' : '#f1f2f5', color: invitations.length > 0 ? '#dc3545' : '#5f6672' }}>
-                            <MailOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Приглашения</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {invitations.length}
-                            </div>
-                            <div className="lc2-msub" style={{ color: invitations.length > 0 ? '#dc3545' : '#8a91a0' }}>
-                                {invitations.length > 0 ? 'ожидают активации' : 'нет активных'}
-                            </div>
-                        </div>
-                    </div>
+                <div className={nova.heroActions}>
+                    <button
+                        type="button"
+                        className={`${nova.action} ${nova.actionPrimary}`}
+                        onClick={() => handleOpenUnifiedModal()}
+                    >
+                        {activeSegment === 'drivers' ? 'Добавить водителя' : 'Пригласить'}
+                    </button>
+                    {activeSegment === 'office' && (
+                        <button type="button" className={nova.action} onClick={() => setRightsModalOpen(true)}>
+                            Права доступа
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Показатели — те же плитки, что на остальных экранах кабинета.
+                Цветные кружки под иконками остались от прежнего скина: на
+                чёрно-белой теме они читались как ошибка. */}
+            <div className={nova.tiles}>
+                <div className={nova.tile}>
+                    <div className={nova.tileHead}><span className={nova.tileLabel}>Сотрудники</span></div>
+                    <div className={nova.tileValue}>{users.filter(u => u.role !== 'DRIVER').length}</div>
+                </div>
+                <div className={nova.tile}>
+                    <div className={nova.tileHead}><span className={nova.tileLabel}>Водители</span></div>
+                    <div className={nova.tileValue}>{users.filter(u => u.role === 'DRIVER').length}</div>
+                </div>
+                <div className={nova.tile}>
+                    <div className={nova.tileHead}><span className={nova.tileLabel}>Приглашения</span></div>
+                    <div className={nova.tileValue}>{invitations.length}</div>
                 </div>
             </div>
 
@@ -1900,32 +1892,50 @@ export default function CompanyUsersPage() {
                     </Col>
                 </Row>
             ) : (
-                <div className="lc-card" style={{ padding: 20 }}>
-                    <Tabs defaultActiveKey="1">
-                        <Tabs.TabPane tab={activeSegment === 'drivers' ? `Водители (${filteredUsers.length})` : `Активные (${filteredUsers.length})`} key="1">
-                            <Table
-                                columns={activeSegment === 'drivers' ? driverColumns : userColumns}
-                                dataSource={filteredUsers}
-                                rowKey="id"
-                                loading={loading}
-                                pagination={{ pageSize: 10 }}
-                                size="small"
-                            />
-                        </Tabs.TabPane>
-                        {activeSegment === 'office' && (
-                            <Tabs.TabPane tab={`Приглашения (${invitations.length})`} key="2">
-                                <Table
-                                    columns={invitationColumns}
-                                    dataSource={invitations}
-                                    rowKey="id"
-                                    loading={loading}
-                                    pagination={{ pageSize: 10 }}
-                                    size="small"
-                                />
-                            </Tabs.TabPane>
-                        )}
-                    </Tabs>
-                </div>
+                <PillTabs
+                    active={peopleTab}
+                    onChange={setPeopleTab}
+                    items={[
+                        {
+                            key: 'people',
+                            label: activeSegment === 'drivers'
+                                ? `Водители (${filteredUsers.length})`
+                                : `Активные (${filteredUsers.length})`,
+                            children: (
+                                <section className={nova.card}>
+                                    <div className={nova.cardBody}>
+                                        <Table
+                                            columns={activeSegment === 'drivers' ? driverColumns : userColumns}
+                                            dataSource={filteredUsers}
+                                            rowKey="id"
+                                            loading={loading}
+                                            pagination={{ pageSize: 10 }}
+                                            size="small"
+                                        />
+                                    </div>
+                                </section>
+                            ),
+                        },
+                        ...(activeSegment === 'office' ? [{
+                            key: 'invites',
+                            label: `Приглашения (${invitations.length})`,
+                            children: (
+                                <section className={nova.card}>
+                                    <div className={nova.cardBody}>
+                                        <Table
+                                            columns={invitationColumns}
+                                            dataSource={invitations}
+                                            rowKey="id"
+                                            loading={loading}
+                                            pagination={{ pageSize: 10 }}
+                                            size="small"
+                                        />
+                                    </div>
+                                </section>
+                            ),
+                        }] : []),
+                    ]}
+                />
             )}
 
             {/* Modal: Create Department */}
