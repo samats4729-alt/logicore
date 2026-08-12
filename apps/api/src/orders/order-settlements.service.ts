@@ -67,6 +67,21 @@ export class OrderSettlementsService {
     constructor(private readonly prisma: PrismaService) {}
 
     /**
+     * Рейс ведёт эта компания — она и распоряжается его расчётами.
+     *
+     * Проверка обязательна на каждом входе: в расчётах видны обе стороны, а
+     * заказчику незачем знать, на каких условиях мы работаем с перевозчиком —
+     * из ставки и отсрочки складывается наш заработок. Хозяин рейса —
+     * экспедитор, а если его нет, то компания, которая заказала перевозку.
+     */
+    private assertOwner(order: any, companyId: string) {
+        const owner = order.forwarderId || order.partnerId || order.customerCompanyId;
+        if (!companyId || owner !== companyId) {
+            throw new ForbiddenException('Расчёты по рейсу видит компания, которая его ведёт');
+        }
+    }
+
+    /**
      * Кто в этом рейсе заказчик, а кто перевозчик — с точки зрения нашей
      * компании.
      *
@@ -312,6 +327,7 @@ export class OrderSettlementsService {
             },
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
+        this.assertOwner(order, companyId);
 
         const { customerId, carrierId, customerCard, carrierCard } =
             await this.termsFromCards(order, companyId);
@@ -436,22 +452,15 @@ export class OrderSettlementsService {
         carrierPaymentDays?: number | null;
         carrierPaymentFrom?: string | null;
     }) {
-        const order = await this.prisma.order.findFirst({
-            where: {
-                id: orderId,
-                OR: [
-                    { customerCompanyId: companyId },
-                    { forwarderId: companyId },
-                    { subForwarderId: companyId },
-                    { partnerId: companyId },
-                ],
-            },
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
             select: {
-                id: true,
+                id: true, forwarderId: true, partnerId: true, customerCompanyId: true,
                 routePoints: { select: { pointType: true, expectedDate: true }, orderBy: { sequence: 'asc' } },
             },
         });
-        if (!order) throw new ForbiddenException('Заявка не найдена или не ваша');
+        if (!order) throw new NotFoundException('Заявка не найдена');
+        this.assertOwner(order, companyId);
 
         const rate = (value: number | null | undefined) => {
             if (value === null || value === undefined) return null;
@@ -513,19 +522,12 @@ export class OrderSettlementsService {
 
     /** Подтвердить расчёты как есть — без правок. */
     async confirm(orderId: string, companyId: string, userId: string) {
-        const order = await this.prisma.order.findFirst({
-            where: {
-                id: orderId,
-                OR: [
-                    { customerCompanyId: companyId },
-                    { forwarderId: companyId },
-                    { subForwarderId: companyId },
-                    { partnerId: companyId },
-                ],
-            },
-            select: { id: true },
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { id: true, forwarderId: true, partnerId: true, customerCompanyId: true },
         });
-        if (!order) throw new ForbiddenException('Заявка не найдена или не ваша');
+        if (!order) throw new NotFoundException('Заявка не найдена');
+        this.assertOwner(order, companyId);
 
         await this.prisma.order.update({
             where: { id: orderId },

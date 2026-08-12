@@ -255,6 +255,42 @@ describe('Расчёты по рейсу', () => {
         });
     });
 
+    describe('кому расчёты вообще видны', () => {
+        /**
+         * В расчётах видны обе стороны сразу. Заказчику незачем знать, на
+         * каких условиях мы работаем с перевозчиком: из ставки и отсрочки
+         * складывается наш заработок — то самое, что скрывают в карточке
+         * рейса. Раньше отбор шёл по «участник рейса», и заказчик получал
+         * условия перевозчика вместе со своими.
+         */
+        it('заказчику расчёты по чужому рейсу не отдаются', async () => {
+            const { service } = build([CARD_FULL_CUSTOMER, CARD_FULL_CARRIER]);
+
+            await expect(service.stateOf('o-1', 'cust-1'))
+                .rejects.toThrow(/видит компания, которая его ведёт/);
+        });
+
+        it('перевозчику — тоже', async () => {
+            const { service } = build([CARD_FULL_CUSTOMER, CARD_FULL_CARRIER]);
+
+            await expect(service.stateOf('o-1', 'carr-1'))
+                .rejects.toThrow(/видит компания, которая его ведёт/);
+        });
+
+        it('подтвердить чужой рейс нельзя', async () => {
+            const { service, updates } = build([CARD_FULL_CUSTOMER, CARD_FULL_CARRIER]);
+
+            await expect(service.confirm('o-1', 'cust-1', 'u-9')).rejects.toThrow();
+            expect(updates).toHaveLength(0);
+        });
+
+        it('хозяин рейса проходит', async () => {
+            const { service } = build([CARD_FULL_CUSTOMER, CARD_FULL_CARRIER]);
+
+            await expect(service.stateOf('o-1', 'we-1')).resolves.toBeDefined();
+        });
+    });
+
     describe('правка бухгалтером', () => {
         it('правка и есть проверка: второй кнопки не нужно', async () => {
             const { service, updates } = build([CARD_FULL_CUSTOMER, CARD_FULL_CARRIER]);
