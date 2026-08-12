@@ -873,6 +873,60 @@ a.mapboxgl-ctrl-logo,
   box-shadow: 0 24px 64px -16px rgba(16, 24, 40, 0.28) !important;
 }
 
+/* Переключатели antd — в нашей теме.
+   
+   Флажок, радиокнопка и тумблер красились фирменным синим antd. Внутри
+   модального окна с тёмной главной кнопкой это выглядело как два разных
+   продукта: кнопка чёрная, галочка синяя. Цвет здесь ничего не значит —
+   значит только «включено», поэтому берём тот же тёмный. */
+.ant-checkbox-checked .ant-checkbox-inner,
+.ant-checkbox-indeterminate .ant-checkbox-inner::after {
+  background-color: var(--nova-primary) !important;
+  border-color: var(--nova-primary) !important;
+}
+
+/* Сама галочка рисуется рамкой псевдоэлемента и у antd она белая. В тёмной
+   теме заливка светлая — белая галочка на ней исчезает. Берём цвет текста
+   главной кнопки: он по определению читается на этой заливке. */
+.ant-checkbox-checked .ant-checkbox-inner::after {
+  border-color: var(--nova-primary-fg) !important;
+}
+
+.ant-checkbox-wrapper:hover .ant-checkbox-inner,
+.ant-checkbox:hover .ant-checkbox-inner {
+  border-color: var(--nova-primary) !important;
+}
+
+.ant-radio-checked .ant-radio-inner {
+  border-color: var(--nova-primary) !important;
+  background-color: var(--nova-primary) !important;
+}
+
+.ant-radio-inner::after {
+  background-color: var(--nova-primary-fg) !important;
+}
+
+.ant-switch.ant-switch-checked {
+  background: var(--nova-primary) !important;
+}
+
+/* Подсказка внутри окна — не синяя плашка, а обычная заметка.
+   Синий остаётся ссылкам: когда им залит целый блок, глаз читает его как
+   действие, хотя это просто пояснение. */
+.ant-alert-info {
+  background: var(--nova-surface-2) !important;
+  border-color: var(--nova-border) !important;
+}
+
+.ant-alert-info .ant-alert-icon {
+  color: var(--nova-fg-3) !important;
+}
+
+.ant-alert-info .ant-alert-message,
+.ant-alert-info .ant-alert-description {
+  color: var(--nova-fg-2) !important;
+}
+
 /* Dropdowns & select menus — rounded, padded */
 .ant-dropdown .ant-dropdown-menu,
 .ant-select-dropdown {
