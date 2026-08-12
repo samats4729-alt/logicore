@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Card, Input, Tag, Typography, Space, Empty, Popconfirm } from 'antd';
-import { NotificationOutlined, RobotOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { Input, Space, Popconfirm } from 'antd';
+import { RobotOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { Megaphone } from 'lucide-react';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import nova from '@/components/nova/nova.module.css';
+import styles from './updates.module.css';
 
-const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 interface PlatformUpdate {
@@ -86,135 +88,175 @@ export default function AdminUpdatesPage() {
     const published = updates.filter(u => u.status === 'PUBLISHED');
     const rejected = updates.filter(u => u.status === 'REJECTED');
 
+    /** Одна карточка анонса с правкой текста — черновик и отклонённый правятся одинаково. */
+    const Editable = ({ u, actions }: { u: PlatformUpdate; actions: React.ReactNode }) => {
+        const e = getEdit(u);
+        return (
+            <div className={styles.item} key={u.id}>
+                <Input
+                    value={e.title}
+                    onChange={ev => setEdit(u.id, { title: ev.target.value })}
+                    style={{ fontWeight: 600, marginBottom: 8 }}
+                    maxLength={120}
+                />
+                <TextArea
+                    value={e.description}
+                    onChange={ev => setEdit(u.id, { description: ev.target.value })}
+                    autoSize={{ minRows: 2, maxRows: 5 }}
+                    style={{ marginBottom: 10 }}
+                    maxLength={2000}
+                />
+                <div className={styles.itemFoot}>
+                    <span className={nova.itemDesc}>
+                        {dayjs(u.createdAt).format('DD.MM.YYYY HH:mm')} · коммитов: {u.sourceCommits.length}
+                    </span>
+                    <Space>{actions}</Space>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-                <Title level={4} style={{ margin: 0 }}>
-                    <NotificationOutlined style={{ marginRight: 8, color: '#1677ff' }} />
-                    Нововведения платформы
-                </Title>
-                <Button type="primary" icon={<RobotOutlined />} loading={generating} onClick={handleGenerate}>
-                    Найти нововведения (ИИ)
-                </Button>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Нововведения</h1>
+                    <p className={nova.subtitle}>
+                        ИИ читает свежие коммиты разработки, отбирает заметные пользователям
+                        изменения и готовит короткие анонсы. Поправьте текст и опубликуйте — гид
+                        сразу узнает о нововведении и сможет рассказывать о нём людям.
+                    </p>
+                </div>
+                <div className={nova.heroActions}>
+                    <button
+                        type="button"
+                        className={`${nova.action} ${nova.actionPrimary}`}
+                        disabled={generating}
+                        onClick={handleGenerate}
+                    >
+                        <RobotOutlined /> Найти нововведения
+                    </button>
+                </div>
             </div>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 20, fontSize: 13 }}>
-                ИИ читает свежие коммиты разработки, отбирает заметные пользователям изменения и готовит короткие анонсы.
-                Отредактируйте текст при необходимости и опубликуйте — ИИ-гид сразу узнает о нововведениях и сможет рассказывать о них пользователям.
-            </Text>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 60 }}><Loader size="large" /></div>
+                <div className={nova.empty}><Loader size="large" /></div>
             ) : (
                 <>
-                    <Title level={5} style={{ marginBottom: 12 }}>На подтверждении ({drafts.length})</Title>
-                    {drafts.length === 0 ? (
-                        <Empty description="Черновиков нет — нажмите «Найти нововведения»" style={{ margin: '24px 0 36px' }} />
-                    ) : (
-                        <Space direction="vertical" size={12} style={{ width: '100%', marginBottom: 32 }}>
-                            {drafts.map(u => {
-                                const e = getEdit(u);
-                                return (
-                                    <Card key={u.id} size="small" style={{ borderColor: '#c6dcff' }}>
-                                        <Input
-                                            value={e.title}
-                                            onChange={ev => setEdit(u.id, { title: ev.target.value })}
-                                            style={{ fontWeight: 600, marginBottom: 8 }}
-                                            maxLength={120}
-                                        />
-                                        <TextArea
-                                            value={e.description}
-                                            onChange={ev => setEdit(u.id, { description: ev.target.value })}
-                                            autoSize={{ minRows: 2, maxRows: 5 }}
-                                            style={{ marginBottom: 10 }}
-                                            maxLength={2000}
-                                        />
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                                            <Text type="secondary" style={{ fontSize: 11 }}>
-                                                {dayjs(u.createdAt).format('DD.MM.YYYY HH:mm')} · коммитов: {u.sourceCommits.length}
-                                            </Text>
-                                            <Space>
-                                                <Popconfirm title="Отклонить анонс?" okText="Да" cancelText="Нет" onConfirm={() => applyStatus(u, 'REJECTED')}>
-                                                    <Button size="small" danger icon={<CloseOutlined />}>Отклонить</Button>
-                                                </Popconfirm>
-                                                <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => applyStatus(u, 'PUBLISHED')}>
-                                                    Опубликовать
-                                                </Button>
-                                            </Space>
-                                        </div>
-                                    </Card>
-                                );
-                            })}
-                        </Space>
-                    )}
+                    <section className={nova.card}>
+                        <div className={nova.cardHead}>
+                            <Megaphone size={14} />
+                            <h2 className={nova.cardTitle}>На подтверждении</h2>
+                            {drafts.length > 0 && <span className={nova.cardCount}>{drafts.length}</span>}
+                        </div>
+                        <div className={nova.cardBody}>
+                            {drafts.length === 0 ? (
+                                <div className={nova.empty}>
+                                    Черновиков нет — нажмите «Найти нововведения»
+                                </div>
+                            ) : drafts.map(u => (
+                                <Editable
+                                    key={u.id}
+                                    u={u}
+                                    actions={(
+                                        <>
+                                            <Popconfirm
+                                                title="Отклонить анонс?"
+                                                okText="Да"
+                                                cancelText="Нет"
+                                                onConfirm={() => applyStatus(u, 'REJECTED')}
+                                            >
+                                                <button type="button" className={`${nova.action} ${nova.actionDanger}`}>
+                                                    <CloseOutlined /> Отклонить
+                                                </button>
+                                            </Popconfirm>
+                                            <button
+                                                type="button"
+                                                className={`${nova.action} ${nova.actionPrimary}`}
+                                                onClick={() => applyStatus(u, 'PUBLISHED')}
+                                            >
+                                                <CheckOutlined /> Опубликовать
+                                            </button>
+                                        </>
+                                    )}
+                                />
+                            ))}
+                        </div>
+                    </section>
 
-                    <Title level={5} style={{ marginBottom: 12 }}>Опубликовано ({published.length})</Title>
-                    {published.length === 0 ? (
-                        <Empty description="Пока нет опубликованных нововведений" style={{ marginBottom: 24 }} />
-                    ) : (
-                        <Space direction="vertical" size={10} style={{ width: '100%', marginBottom: 24 }}>
-                            {published.map(u => (
-                                <Card key={u.id} size="small">
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                                        <div style={{ flex: 1, minWidth: 240 }}>
-                                            <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                                                {u.title} <Tag color="green" style={{ marginLeft: 6 }}>Опубликовано</Tag>
-                                            </div>
-                                            <div style={{ fontSize: 13, color: '#595959' }}>{u.description}</div>
+                    <section className={nova.card}>
+                        <div className={nova.cardHead}>
+                            <Megaphone size={14} />
+                            <h2 className={nova.cardTitle}>Опубликовано</h2>
+                            {published.length > 0 && <span className={nova.cardCount}>{published.length}</span>}
+                        </div>
+                        <div className={nova.cardBody}>
+                            {published.length === 0 ? (
+                                <div className={nova.empty}>Пока нет опубликованных нововведений</div>
+                            ) : published.map(u => (
+                                <div className={styles.item} key={u.id}>
+                                    <div className={styles.published}>
+                                        <div>
+                                            <div className={styles.publishedTitle}>{u.title}</div>
+                                            <div className={styles.publishedText}>{u.description}</div>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                                            <Text type="secondary" style={{ fontSize: 11 }}>
+                                        <div className={styles.publishedSide}>
+                                            <span className={nova.itemDesc}>
                                                 {u.publishedAt ? dayjs(u.publishedAt).format('DD.MM.YYYY HH:mm') : ''}
-                                            </Text>
-                                            <Popconfirm title="Снять с публикации?" okText="Да" cancelText="Нет" onConfirm={() => applyStatus(u, 'REJECTED')}>
-                                                <Button size="small" type="text" danger>Снять</Button>
+                                            </span>
+                                            <Popconfirm
+                                                title="Снять с публикации?"
+                                                okText="Да"
+                                                cancelText="Нет"
+                                                onConfirm={() => applyStatus(u, 'REJECTED')}
+                                            >
+                                                <button type="button" className={`${nova.action} ${nova.actionDanger}`}>
+                                                    Снять
+                                                </button>
                                             </Popconfirm>
                                         </div>
                                     </div>
-                                </Card>
+                                </div>
                             ))}
-                        </Space>
-                    )}
+                        </div>
+                    </section>
 
-                    <Title level={5} style={{ marginBottom: 12 }}>Служебные и отклонённые изменения ({rejected.length})</Title>
-                    {rejected.length === 0 ? (
-                        <Empty description="Пока нет отклонённых или технических коммитов" />
-                    ) : (
-                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                            {rejected.map(u => {
-                                const e = getEdit(u);
-                                return (
-                                    <Card key={u.id} size="small" style={{ borderColor: '#f0f0f0', background: '#fafafa' }}>
-                                        <Input
-                                            value={e.title}
-                                            onChange={ev => setEdit(u.id, { title: ev.target.value })}
-                                            style={{ fontWeight: 600, marginBottom: 8, background: '#fff' }}
-                                            maxLength={120}
-                                        />
-                                        <TextArea
-                                            value={e.description}
-                                            onChange={ev => setEdit(u.id, { description: ev.target.value })}
-                                            autoSize={{ minRows: 2, maxRows: 5 }}
-                                            style={{ marginBottom: 10, background: '#fff' }}
-                                            maxLength={2000}
-                                        />
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                                            <Text type="secondary" style={{ fontSize: 11 }}>
-                                                {dayjs(u.createdAt).format('DD.MM.YYYY HH:mm')} · коммитов: {u.sourceCommits.length}
-                                            </Text>
-                                            <Space>
-                                                <Button size="small" icon={<CheckOutlined />} onClick={() => applyStatus(u, 'DRAFT')}>
-                                                    Вернуть в черновики
-                                                </Button>
-                                                <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => applyStatus(u, 'PUBLISHED')}>
-                                                    Опубликовать
-                                                </Button>
-                                            </Space>
-                                        </div>
-                                    </Card>
-                                );
-                            })}
-                        </Space>
-                    )}
+                    <section className={nova.card}>
+                        <div className={nova.cardHead}>
+                            <Megaphone size={14} />
+                            <h2 className={nova.cardTitle}>Служебные и отклонённые</h2>
+                            {rejected.length > 0 && <span className={nova.cardCount}>{rejected.length}</span>}
+                        </div>
+                        <div className={nova.cardBody}>
+                            {rejected.length === 0 ? (
+                                <div className={nova.empty}>Пока нет отклонённых или технических коммитов</div>
+                            ) : rejected.map(u => (
+                                <Editable
+                                    key={u.id}
+                                    u={u}
+                                    actions={(
+                                        <>
+                                            <button
+                                                type="button"
+                                                className={nova.action}
+                                                onClick={() => applyStatus(u, 'DRAFT')}
+                                            >
+                                                Вернуть в черновики
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`${nova.action} ${nova.actionPrimary}`}
+                                                onClick={() => applyStatus(u, 'PUBLISHED')}
+                                            >
+                                                <CheckOutlined /> Опубликовать
+                                            </button>
+                                        </>
+                                    )}
+                                />
+                            ))}
+                        </div>
+                    </section>
                 </>
             )}
         </div>

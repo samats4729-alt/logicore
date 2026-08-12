@@ -1,23 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Tag, Typography, Input, Select, DatePicker, Upload, Dropdown, Modal } from 'antd';
-import {
-    FileTextOutlined,
-    DownloadOutlined,
-    EyeOutlined,
-    DeleteOutlined,
-    UploadOutlined,
-    SearchOutlined,
-    FilterOutlined,
-    MoreOutlined,
-} from '@ant-design/icons';
+import { Table, Button, Space, Input, Select, Modal } from 'antd';
+import { DownloadOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import { FolderOpen } from 'lucide-react';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
-
-const { Title, Text } = Typography;
-const { RangePicker } = DatePicker;
+import nova from '@/components/nova/nova.module.css';
 
 interface Document {
     id: string;
@@ -36,15 +26,15 @@ interface Document {
 // стояли «Накладная» и «Договор», которых в системе нет, а настоящих видов
 // не было: каждый документ подписывался «Другое», и фильтр предлагал выбрать
 // то, чего не бывает.
-const documentTypes: Record<string, { label: string; color: string }> = {
-    TTN: { label: 'ТТН', color: 'cyan' },
-    POWER_OF_ATTORNEY: { label: 'Доверенность', color: 'orange' },
-    ACT: { label: 'Акт', color: 'purple' },
-    INVOICE: { label: 'Счёт', color: 'green' },
-    COMPANY_REGISTRATION: { label: 'Справка о регистрации', color: 'blue' },
-    DIRECTOR_APPOINTMENT: { label: 'Приказ о руководителе', color: 'blue' },
-    DIRECTOR_ID: { label: 'Удостоверение руководителя', color: 'blue' },
-    OTHER: { label: 'Другое', color: 'default' },
+const documentTypes: Record<string, { label: string }> = {
+    TTN: { label: 'ТТН' },
+    POWER_OF_ATTORNEY: { label: 'Доверенность' },
+    ACT: { label: 'Акт' },
+    INVOICE: { label: 'Счёт' },
+    COMPANY_REGISTRATION: { label: 'Справка о регистрации' },
+    DIRECTOR_APPOINTMENT: { label: 'Приказ о руководителе' },
+    DIRECTOR_ID: { label: 'Удостоверение руководителя' },
+    OTHER: { label: 'Другое' },
 };
 
 export default function DocumentsPage() {
@@ -119,10 +109,9 @@ export default function DocumentsPage() {
             title: 'Тип',
             dataIndex: 'type',
             key: 'type',
-            render: (type: string) => {
-                const typeInfo = documentTypes[type] || documentTypes.OTHER;
-                return <Tag color={typeInfo.color}>{typeInfo.label}</Tag>;
-            },
+            render: (type: string) => (
+                <span className={nova.chip}>{(documentTypes[type] || documentTypes.OTHER).label}</span>
+            ),
         },
         {
             title: 'Номер',
@@ -135,7 +124,7 @@ export default function DocumentsPage() {
             key: 'order',
             render: (_: any, record: Document) =>
                 record.order?.orderNumber ? (
-                    <Tag>{record.order.orderNumber}</Tag>
+                    <span className={nova.chip}>{record.order.orderNumber}</span>
                 ) : '—',
         },
         {
@@ -168,34 +157,45 @@ export default function DocumentsPage() {
 
     return (
         <div>
-            <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-                <Title level={4} style={{ margin: 0 }}>
-                    <FileTextOutlined style={{ marginRight: 8 }} />
-                    Документы
-                </Title>
+            <div className={nova.hero}>
+                <div>
+                    <div className={nova.eyebrow}>Платформа</div>
+                    <h1 className={nova.title}>Документы</h1>
+                    <p className={nova.subtitle}>
+                        Все файлы, приложенные к рейсам и организациям на платформе.
+                    </p>
+                </div>
             </div>
 
-            <Card>
-                <Space style={{ marginBottom: 16, flexWrap: 'wrap' }}>
-                    <Input
-                        placeholder="Поиск по номеру..."
-                        prefix={<SearchOutlined />}
-                        value={searchText}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        style={{ width: 200 }}
-                    />
-                    <Select
-                        placeholder="Тип документа"
-                        allowClear
-                        style={{ width: 150 }}
-                        value={typeFilter}
-                        onChange={setTypeFilter}
-                        options={Object.entries(documentTypes).map(([key, val]) => ({
-                            value: key,
-                            label: val.label,
-                        }))}
-                    />
-                </Space>
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <FolderOpen size={14} />
+                    <h2 className={nova.cardTitle}>Файлы</h2>
+                    {filteredDocuments.length > 0 && (
+                        <span className={nova.cardCount}>{filteredDocuments.length}</span>
+                    )}
+                    <Space wrap>
+                        <Input
+                            placeholder="Поиск по номеру"
+                            prefix={<SearchOutlined />}
+                            allowClear
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            style={{ width: 200 }}
+                        />
+                        <Select
+                            placeholder="Вид документа"
+                            allowClear
+                            style={{ width: 180 }}
+                            value={typeFilter}
+                            onChange={setTypeFilter}
+                            options={Object.entries(documentTypes).map(([key, val]) => ({
+                                value: key,
+                                label: val.label,
+                            }))}
+                        />
+                    </Space>
+                </div>
 
                 <Table
                     columns={columns}
@@ -203,9 +203,14 @@ export default function DocumentsPage() {
                     rowKey="id"
                     loading={loading}
                     pagination={{ pageSize: 20 }}
-                    locale={{ emptyText: 'Нет документов' }}
+                    size="small"
+                    locale={{
+                        emptyText: searchText || typeFilter
+                            ? 'По такому отбору документов нет'
+                            : 'Документов пока нет',
+                    }}
                 />
-            </Card>
+            </section>
         </div>
     );
 }

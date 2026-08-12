@@ -1,0 +1,50 @@
+/* Анонсы нововведений: черновик правится прямо в списке. */
+
+.item {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--nova-border-2);
+}
+
+.item:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.item:first-child {
+    padding-top: 0;
+}
+
+.itemFoot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.published {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.publishedTitle {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    margin-bottom: 4px;
+}
+
+.publishedText {
+    font-size: 13px;
+    color: var(--nova-fg-2);
+    max-width: 80ch;
+}
+
+.publishedSide {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
