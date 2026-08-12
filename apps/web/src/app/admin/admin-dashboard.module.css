@@ -1,0 +1,76 @@
+/* Сводка по платформе: столбики заявок по дням и разбор по статусам. */
+
+.tileIcon {
+    display: inline-flex;
+    color: var(--nova-fg-3);
+}
+
+/* ===== Столбики по дням ===== */
+
+.chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 170px;
+    padding-top: 6px;
+}
+
+.bar {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.barValue {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg-3);
+    min-height: 14px;
+}
+
+/* Столбик основным цветом, а не синим градиентом: это не ссылка и не
+   выделение, а просто «столько заявок». В тёмной теме основной цвет
+   светлый — столбик остаётся видимым сам, без второго набора правил. */
+.barFill {
+    display: block;
+    width: 100%;
+    max-width: 28px;
+    background: var(--nova-primary);
+    border-radius: 5px;
+    transition: height .3s ease;
+}
+
+.barEmpty {
+    background: var(--nova-border);
+}
+
+.barDay {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg-3);
+}
+
+/* ===== Статусы ===== */
+
+.statuses {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.statusRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.statusCount {
+    font-size: 13px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
