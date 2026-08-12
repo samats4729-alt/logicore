@@ -150,6 +150,24 @@ describe('Видимость денег по рейсу', () => {
             expect(masked.settlementsPending).toBe(true);
         });
 
+        it('условия с перевозчиком заказчику не видны и после проверки', () => {
+            // Отсрочка и НДС перевозчика — часть нашей договорённости с ним.
+            // По ним заказчику видно, как устроена наша сторона сделки, — это
+            // та же чувствительность, что и сумма, которую мы платим.
+            const masked: any = maskForCustomer(
+                withSettlements({
+                    settlementsConfirmedAt: new Date('2026-08-12'),
+                    executorHasVat: true,
+                    carrierPaymentDays: 15,
+                    carrierPaymentFrom: 'ORIGINALS',
+                }),
+                CUSTOMER,
+            );
+
+            expect(masked.carrierPaymentDays).toBeNull();
+            expect(masked.executorHasVat).toBeNull();
+        });
+
         it('после проверки бухгалтером контрагент видит условия', () => {
             const masked: any = maskForCustomer(
                 withSettlements({ settlementsConfirmedAt: new Date('2026-08-12') }),

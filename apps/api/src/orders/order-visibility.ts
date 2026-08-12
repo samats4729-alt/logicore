@@ -22,6 +22,16 @@ type ExecutorCostFields = {
     subForwarderPaidAt?: unknown;
     partner?: unknown;
     partnerId?: unknown;
+    // Условия расчётов с исполнителем — та же чувствительность, что и сумма.
+    // Отсрочка и НДС перевозчика — часть нашей договорённости с ним, и
+    // заказчику по ним видно, как устроена наша сторона сделки.
+    executorHasVat?: unknown;
+    executorVatRate?: unknown;
+    carrierPaymentDays?: unknown;
+    carrierPaymentFrom?: unknown;
+    driverPaymentDate?: unknown;
+    driverPaymentCondition?: unknown;
+    driverPaymentForm?: unknown;
 };
 
 type OrderSides = {
@@ -57,6 +67,13 @@ export function hideExecutorCost<T extends ExecutorCostFields>(order: T): T {
     masked.isSubForwarderPaid = false;
     masked.subForwarderPaidAt = null;
     masked.partner = null;
+    masked.executorHasVat = null;
+    masked.executorVatRate = null;
+    masked.carrierPaymentDays = null;
+    masked.carrierPaymentFrom = null;
+    masked.driverPaymentDate = null;
+    masked.driverPaymentCondition = null;
+    masked.driverPaymentForm = null;
     return order;
 }
 
