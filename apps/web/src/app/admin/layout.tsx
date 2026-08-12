@@ -100,6 +100,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }, []);
 
     const [hydrated, setHydrated] = useState(false);
+    // Своя страница входа живёт внутри /admin, но оболочки у неё быть не
+    // может: меню и шапка — для того, кто уже вошёл.
+    const isLoginPage = pathname === '/admin/login';
 
     // Дожидаемся гидратации хранилища Zustand из localStorage
     useEffect(() => {
@@ -112,12 +115,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     useEffect(() => {
         if (!hydrated) return;
+        if (isLoginPage) { setLoading(false); return; }
         const init = async () => {
             await checkAuth();
             setLoading(false);
         };
         init();
-    }, [hydrated, checkAuth]);
+    }, [hydrated, checkAuth, isLoginPage]);
 
     useEffect(() => {
         if (!hydrated || loading || !isAuthenticated || user?.role !== 'ADMIN') return;
@@ -153,7 +157,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }, [hydrated, loading, isAuthenticated, user]);
 
     useEffect(() => {
-        if (loading) return;
+        if (loading || isLoginPage) return;
         if (!isAuthenticated) {
             // Not logged in -> Go to Admin Login
             router.push('/admin/login');
@@ -162,7 +166,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             toast.error('У вас нет прав администратора');
             router.push('/'); // Or access-denied
         }
-    }, [loading, isAuthenticated, user, router]);
+    }, [loading, isAuthenticated, user, router, isLoginPage]);
 
     const handleLogout = () => {
         logout();
@@ -173,6 +177,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.push(key);
         setMobileMenuOpen(false);
     };
+
+    // Форма входа — сама по себе: ни меню, ни шапки, ни проверки прав.
+    if (isLoginPage) return <>{children}</>;
 
     if (!hydrated || loading) {
         return (

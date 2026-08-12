@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Form, Input, Button, Card, Typography, Layout } from 'antd';
-import { UserOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { Form, Input } from 'antd';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
-
-const { Title, Text } = Typography;
-const { Content } = Layout;
+import nova from '@/components/nova/nova.module.css';
+import styles from './admin-login.module.css';
 
 export default function AdminLoginPage() {
     const router = useRouter();
@@ -37,25 +37,13 @@ export default function AdminLoginPage() {
     const onFinish = async (values: any) => {
         setLoading(true);
         try {
-            // 1. Perform standard login
             await login(values.email, values.password, 'web-admin');
 
-            // 2. We can't immediately check 'user' from store here because state updates are async/batched.
-            // CheckAuth or the login response usually handles setting the user.
-            // However, after await login(), the store state for user MIGHT be updated or we need to rely on the API response.
-            // Since useAuthStore.login returns void/throws, we rely on the implementation.
-
-            // Let's do a quick check via a direct store access or just redirect to layout which checks it.
-            // But better UX is to check right here.
-
-            // Re-accessing the store state directly from the hook won't work inside the function closure effectively if it's stale.
-            // So we will trust the Layout to kick us out if we are not admin, 
-            // OR we can explicitly fetch "me" here if we want to be super sure.
-
-            // Let's rely on the layout redirect for simplicity, BUT for better UX let's try to verify.
-
+            // Права проверяет оболочка админки: она в любом случае смотрит
+            // роль вошедшего и выкидывает не-администратора. Проверять их
+            // здесь во второй раз — держать две копии одного правила.
             router.push('/admin');
-            toast.success('Добро пожаловать в Панель Администратора');
+            toast.success('С возвращением');
         } catch (error: any) {
             console.error(error);
             if (error.response?.status === 401) {
@@ -69,29 +57,24 @@ export default function AdminLoginPage() {
     };
 
     return (
-        <Layout style={{ minHeight: '100vh', background: '#f5f5f5' }}>
-            <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Card
-                    style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: 8 }}
-                    bordered={false}
-                >
-                    <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                        <SafetyCertificateOutlined style={{ fontSize: 48, color: '#1677ff', marginBottom: 16 }} />
-                        <Title level={3}>Admin Panel</Title>
-                        <Text type="secondary">Вход только для сотрудников LogiCore</Text>
+        <div className={`lc-nova ${styles.screen}`}>
+            <section className={`${nova.card} ${styles.card}`}>
+                <div className={nova.cardBody}>
+                    <div className={styles.head}>
+                        <span className={styles.mark}><ShieldCheck size={20} /></span>
+                        <h1 className={styles.title}>Панель платформы</h1>
+                        <p className={styles.sub}>Вход только для сотрудников LogiCore</p>
                     </div>
 
-                    <Form
-                        name="admin_login"
-                        onFinish={onFinish}
-                        layout="vertical"
-                        size="large"
-                    >
+                    <Form name="admin_login" onFinish={onFinish} layout="vertical" size="large">
                         <Form.Item
                             name="email"
-                            rules={[{ required: true, message: 'Введите Email' }, { type: 'email', message: 'Некорректный Email' }]}
+                            rules={[
+                                { required: true, message: 'Введите почту' },
+                                { type: 'email', message: 'Похоже, в адресе опечатка' },
+                            ]}
                         >
-                            <Input prefix={<UserOutlined />} placeholder="Email" />
+                            <Input prefix={<UserOutlined />} placeholder="Почта" />
                         </Form.Item>
 
                         <Form.Item
@@ -101,14 +84,16 @@ export default function AdminLoginPage() {
                             <Input.Password prefix={<LockOutlined />} placeholder="Пароль" />
                         </Form.Item>
 
-                        <Form.Item>
-                            <Button type="primary" htmlType="submit" block loading={loading}>
-                                Войти
-                            </Button>
-                        </Form.Item>
+                        <button
+                            type="submit"
+                            className={`${nova.action} ${nova.actionPrimary} ${styles.submit}`}
+                            disabled={loading}
+                        >
+                            Войти
+                        </button>
                     </Form>
-                </Card>
-            </Content>
-        </Layout>
+                </div>
+            </section>
+        </div>
     );
 }
