@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     Body,
     Controller,
     Delete,
@@ -24,6 +25,7 @@ import { AccountingDocumentPdfService } from './accounting-document-pdf.service'
 import { StampImageService } from '../common/services/stamp-image.service';
 import { PaymentAllocationService } from './payment-allocation.service';
 import { PendingWorkService } from './pending-work.service';
+import { EmailService } from '../email/email.service';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import {
     AccountingDocumentListQueryDto,
@@ -72,6 +74,7 @@ export class AccountingDocumentsController {
         private readonly stamps: StampImageService,
         private readonly allocations: PaymentAllocationService,
         private readonly pendingWork: PendingWorkService,
+        private readonly email: EmailService,
         private readonly audit: AuditService,
     ) {}
 
@@ -252,6 +255,47 @@ export class AccountingDocumentsController {
             entityLabel: `Документ ${sent.number} отправлен: ${sent.recipientCompany?.name ?? ''}`,
         });
         return sent;
+    }
+
+    /**
+     * Отправить документ почтой — когда кабинета у контрагента нет.
+     *
+     * Письмо со ссылкой на документ: страница открывается без учётной записи,
+     * а ссылку в любой момент можно отозвать. Отметка «отправлено» ставится
+     * только после того, как письмо действительно ушло.
+     */
+    @Post(':id/send-email')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Отправить документ контрагенту почтой' })
+    async sendByEmail(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { email?: string },
+    ) {
+        const info = await this.documents.emailDeliveryInfo(req.user.companyId, id);
+        const address = (body?.email || info.counterpartyEmail || '').trim();
+        if (!address) {
+            throw new BadRequestException(
+                `У «${info.counterpartyName || 'контрагента'}» не указана почта. `
+                + 'Впишите адрес — документ уйдёт письмом со ссылкой.',
+            );
+        }
+
+        const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+        await this.email.sendInvoiceEmail(
+            address,
+            `${base}/shared/document/${info.token}`,
+            info.senderName,
+            info.number,
+            info.total,
+        );
+        await this.documents.markSentByEmail(req.user.companyId, req.user.id, id);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'accounting_document', entityId: id,
+            entityLabel: `Документ ${info.number} отправлен почтой: ${address}`,
+        });
+        return { ok: true, sentTo: address };
     }
 
     @Post(':id/receipt')

@@ -24,6 +24,13 @@ interface Partner {
     isExternal?: boolean;
     isCustomer?: boolean;
     isCarrier?: boolean;
+    /** Условия расчётов из карточки: их заполнил бухгалтер. */
+    vatPayer?: boolean | null;
+    vatRate?: number | null;
+    customerPaymentDays?: number | null;
+    customerPaymentFrom?: string | null;
+    carrierPaymentDays?: number | null;
+    carrierPaymentFrom?: string | null;
 }
 
 import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEmails';
@@ -32,8 +39,9 @@ import { AddressPicker } from '@/components/orders/AddressPicker';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Loader2, Plus, X } from 'lucide-react';
 import { EMPTY_CARGO, totalPallets, type CargoState } from '@/lib/cargo';
-import { VAT_RATES, vatRateWhenEnabled } from '@/lib/tax';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
+import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 import CurrencySelect from '@/components/orders/CurrencySelect';
 
@@ -93,8 +101,6 @@ export default function CreateOrderPage() {
     const [officeUsers, setOfficeUsers] = useState<{ id: string; firstName: string; lastName: string; role: string }[]>([]);
     const [quickPartnerTarget, setQuickPartnerTarget] = useState<'CUSTOMER' | 'CARRIER' | null>(null);
     // Справочники условий и форм оплаты (для заявки)
-    const [paymentConditions, setPaymentConditions] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
-    const [paymentForms, setPaymentForms] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
 
     const isOwnOrExternalCarrier = selectedCarrier === MY_COMPANY_VALUE || 
         (selectedCarrier && partners.find(p => p.id === selectedCarrier)?.isExternal === true);
@@ -351,26 +357,6 @@ export default function CreateOrderPage() {
         setPendingParties(null);
     }, [pendingParties, partners]);
 
-    // Загрузка справочников условий и форм оплаты + подстановка значений по умолчанию
-    useEffect(() => {
-        const activeOnly = (arr: any[]) => (arr || []).filter((x: any) => x.isActive !== false);
-        Promise.all([
-            api.get('/accounting/dictionaries/payment-condition').catch(() => ({ data: [] })),
-            api.get('/accounting/dictionaries/payment-form').catch(() => ({ data: [] })),
-        ]).then(([condRes, formRes]) => {
-            const conds = activeOnly(condRes.data);
-            const forms = activeOnly(formRes.data);
-            setPaymentConditions(conds);
-            setPaymentForms(forms);
-            const defCond = conds.find((c: any) => c.isDefault)?.name;
-            const defForm = forms.find((f: any) => f.isDefault)?.name;
-            const patch: any = {};
-            if (defCond) { if (!form.getFieldValue('customerPaymentCondition')) patch.customerPaymentCondition = defCond; if (!form.getFieldValue('driverPaymentCondition')) patch.driverPaymentCondition = defCond; }
-            if (defForm) { if (!form.getFieldValue('customerPaymentForm')) patch.customerPaymentForm = defForm; if (!form.getFieldValue('driverPaymentForm')) patch.driverPaymentForm = defForm; }
-            if (Object.keys(patch).length) form.setFieldsValue(patch);
-        });
-    }, []);
-
     const fetchLocations = async () => {
         try {
             const response = await api.get('/locations');
@@ -411,6 +397,15 @@ export default function CreateOrderPage() {
                 // пересобирался по нескольким полям, и настройка терялась
                 // по дороге.
                 customerRefLabel: e.customerRefLabel ?? null,
+                // Условия расчётов: по ним в мастере видно, с НДС контрагент
+                // или без и когда он платит. Спрашивать это у логиста больше
+                // не нужно — ответ уже есть в карточке.
+                vatPayer: e.vatPayer ?? null,
+                vatRate: e.vatRate ?? null,
+                customerPaymentDays: e.customerPaymentDays ?? null,
+                customerPaymentFrom: e.customerPaymentFrom ?? null,
+                carrierPaymentDays: e.carrierPaymentDays ?? null,
+                carrierPaymentFrom: e.carrierPaymentFrom ?? null,
             }));
             const combined = [...partnersList, ...externalList];
             setPartners(combined);
@@ -419,6 +414,19 @@ export default function CreateOrderPage() {
             }
         } catch (e: any) { reportLoadFailure('список контрагентов', e); }
     };
+
+    /**
+     * Условия расчётов выбранных сторон — из их карточек.
+     *
+     * Своя компания карточкой не является: с самим собой не рассчитываются.
+     */
+    const termsOf = (id: string) => (
+        !id || id === MY_COMPANY_VALUE || id === MARKETPLACE_VALUE
+            ? null
+            : partners.find((p) => p.id === id) ?? null
+    );
+    const customerTerms = termsOf(selectedCustomer);
+    const carrierTerms = termsOf(selectedCarrier);
 
     // Location options grouped by company
     const getLocationOptions = () => {
@@ -697,20 +705,14 @@ export default function CreateOrderPage() {
                 currency: values.currency || 'KZT',
                 driverCostCurrency: values.driverCostCurrency || 'KZT',
                 customerPriceType: values.customerPriceType || 'FIXED',
-                customerPaymentDate: values.customerPaymentDate ? values.customerPaymentDate.toISOString() : undefined,
-                driverPaymentDate: values.driverPaymentDate ? values.driverPaymentDate.toISOString() : undefined,
-                customerPaymentCondition: values.customerPaymentCondition || undefined,
-                customerPaymentForm: values.customerPaymentForm || undefined,
-                driverPaymentCondition: values.driverPaymentCondition || undefined,
-                driverPaymentForm: values.driverPaymentForm || undefined,
                 routePoints,
                 customerId: user?.id,
                 responsibleUserId: responsibleChoice === 'SELF' ? undefined : responsibleChoice,
                 appliedTariffId: appliedTariff?.id || undefined,
-                vatRate: values.vatRate ?? 0,
-                hasVat: values.hasVat ?? false,
-                executorVatRate: values.executorVatRate ?? 0,
-                executorHasVat: values.executorHasVat ?? false,
+                // НДС и сроки оплаты в заявку кладёт сервер — из карточек
+                // сторон, где их заполнил бухгалтер. Отправлять их отсюда
+                // значило бы спрашивать у того, кто ведёт рейс, ответ, за
+                // который он не отвечает.
                 driverId: isOwnOrExternalCarrier ? finalDriverId : undefined,
             };
 
@@ -1162,8 +1164,8 @@ export default function CreateOrderPage() {
             </div>
 
             <div className="lc-wiz-head">
-                <div className="t">Ставки и НДС</div>
-                <div className="h">Стоимость перевозки и налоговые условия</div>
+                <div className="t">Ставки</div>
+                <div className="h">Стоимость перевозки. НДС и сроки оплаты подставятся из карточек сторон</div>
             </div>
 
             <Row gutter={12}>
@@ -1188,23 +1190,7 @@ export default function CreateOrderPage() {
                                 </div>
                             )}
                         </Col>
-                        <Col xs={12} md={8}>
-                            <Form.Item name="hasVat" label="НДС заказчика" initialValue={false}>
-                                <Select onChange={(val: boolean) => { form.setFieldsValue({ vatRate: vatRateWhenEnabled(val) }); }}>
-                                    <Select.Option value={false}>Без НДС</Select.Option>
-                                    <Select.Option value={true}>С НДС</Select.Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col xs={12} md={8}>
-                            <Form.Item name="vatRate" label="Ставка НДС" initialValue={0}>
-                                <Select>
-                                    {VAT_RATES.map((rate) => (
-                                        <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
+
                     </>
                 )}
             </Row>
@@ -1228,23 +1214,7 @@ export default function CreateOrderPage() {
                                 />
                             </Form.Item>
                         </Col>
-                        <Col xs={12} md={8}>
-                            <Form.Item name="executorHasVat" label="НДС перевозчика" initialValue={false}>
-                                <Select onChange={(val: boolean) => { form.setFieldsValue({ executorVatRate: vatRateWhenEnabled(val) }); }}>
-                                    <Select.Option value={false}>Без НДС</Select.Option>
-                                    <Select.Option value={true}>С НДС</Select.Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col xs={12} md={8}>
-                            <Form.Item name="executorVatRate" label="Ставка НДС" initialValue={0}>
-                                <Select>
-                                    {VAT_RATES.map((rate) => (
-                                        <Select.Option key={rate.value} value={rate.value}>{rate.label}</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
+
                     </>
                 )}
             </Row>
@@ -1261,68 +1231,48 @@ export default function CreateOrderPage() {
                 </Col>
             </Row>
 
-            <Row gutter={12}>
-                {showCustomerPriceField && (
-                    <Col xs={24} md={12}>
-                        <Form.Item name="customerPaymentDate" label="Плановая дата оплаты заказчиком">
-                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="Когда заказчик оплатит" />
-                        </Form.Item>
-                    </Col>
-                )}
-                {showDriverCostField && (
-                    <Col xs={24} md={12}>
-                        <Form.Item name="driverPaymentDate" label="Плановая дата оплаты перевозчику">
-                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="Когда оплатим перевозчику" />
-                        </Form.Item>
-                    </Col>
-                )}
-            </Row>
+            {/* Плановые даты оплаты платформа считает сама — по срокам из
+                карточек сторон. Спрашивать их у того, кто заводит рейс, значит
+                просить его помнить договорённость, которая уже записана.
 
-            {/* Условия и формы оплаты (из справочников) */}
-            <Row gutter={12}>
-                {showCustomerPriceField && (
-                    <>
-                        <Col xs={24} md={6}>
-                            <Form.Item name="customerPaymentCondition" label="Условие оплаты заказчика">
-                                <Select allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                    options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={6}>
-                            <Form.Item name="customerPaymentForm" label="Форма оплаты заказчика">
-                                <Select allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                    options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
-                            </Form.Item>
-                        </Col>
-                    </>
-                )}
-                {showDriverCostField && (
-                    <>
-                        <Col xs={24} md={6}>
-                            <Form.Item name="driverPaymentCondition" label="Условие оплаты перевозчика">
-                                <Select allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                    options={paymentConditions.map(c => ({ value: c.name, label: c.name }))} />
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} md={6}>
-                            <Form.Item name="driverPaymentForm" label="Форма оплаты перевозчика">
-                                <Select allowClear showSearch optionFilterProp="label" placeholder="Из справочника"
-                                    options={paymentForms.map(f => ({ value: f.name, label: f.name }))} />
-                            </Form.Item>
-                        </Col>
-                    </>
-                )}
-            </Row>
+                Условия показываем строкой: логисту они нужны, чтобы
+                разговаривать с перевозчиком, а менять их он не может. */}
+            {(customerTerms || carrierTerms) && (
+                <div className={nova.item} style={{ marginTop: 4 }}>
+                    <span className={nova.itemText}>
+                        <span className={nova.itemLabel}>Условия расчётов</span>
+                        <span className={nova.itemDesc} style={{ whiteSpace: 'normal' }}>
+                            {[
+                                customerTerms && `заказчик — ${vatLabel(customerTerms.vatPayer, customerTerms.vatRate)}`
+                                    + (paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom)
+                                        ? `, оплата ${paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom)}`
+                                        : ', срок оплаты не указан'),
+                                carrierTerms && `перевозчик — ${vatLabel(carrierTerms.vatPayer, carrierTerms.vatRate)}`
+                                    + (paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom)
+                                        ? `, платим ${paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom)}`
+                                        : ', срок оплаты не указан'),
+                            ].filter(Boolean).join(' · ')}
+                        </span>
+                        <span className={nova.itemDesc} style={{ whiteSpace: 'normal' }}>
+                            Заполняются в карточке контрагента, раздел «Расчёты». Не заполнены —
+                            рейс дождётся бухгалтера, заводить его это не мешает.
+                        </span>
+                    </span>
+                </div>
+            )}
 
             {/* Margin preview */}
-            <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'hasVat', 'vatRate', 'executorHasVat', 'executorVatRate']}>
+            <Form.Item noStyle dependencies={['customerPrice', 'driverCost']}>
                 {({ getFieldValue }) => {
                     const cp = getFieldValue('customerPrice') || 0;
                     const dc = getFieldValue('driverCost') || 0;
-                    const hasVat = getFieldValue('hasVat') ?? false;
-                    const vatRate = getFieldValue('vatRate') ?? 0;
-                    const executorHasVat = getFieldValue('executorHasVat') ?? false;
-                    const executorVatRate = getFieldValue('executorVatRate') ?? 0;
+                    // НДС берём из карточек сторон — там же, откуда его возьмёт
+                    // сервер при сохранении. Иначе маржа в мастере и маржа в
+                    // карточке рейса расходились бы на сумму налога.
+                    const hasVat = !!customerTerms?.vatPayer;
+                    const vatRate = Number(customerTerms?.vatRate ?? 0);
+                    const executorHasVat = !!carrierTerms?.vatPayer;
+                    const executorVatRate = Number(carrierTerms?.vatRate ?? 0);
 
                     if (cp && dc && showCustomerPriceField && showDriverCostField) {
                         const cpNet = hasVat ? (cp / (1 + vatRate / 100)) : cp;
@@ -1542,10 +1492,11 @@ export default function CreateOrderPage() {
             {!profileComplete && (
                 <div style={{
                     marginBottom: 16, padding: '12px 16px',
-                    background: token.colorWarningBg, border: `1px solid ${token.colorWarningBorder}`,
-                    borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
+                    background: 'var(--nova-surface-2)', border: '1px solid var(--nova-border)',
+                    borderRadius: 12, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
+                    color: 'var(--nova-fg-2)',
                 }}>
-                    <ExclamationCircleOutlined style={{ color: token.colorWarning }} />
+                    <ExclamationCircleOutlined style={{ color: 'var(--nova-fg-3)' }} />
                     <span>
                         Заявку можно создать сейчас, но для формирования документов (доверенности, счета)
                         заполните <a onClick={() => router.push('/company/settings')} style={{ fontWeight: 600 }}>профиль компании</a>
@@ -1555,11 +1506,25 @@ export default function CreateOrderPage() {
 
             {/* ===== WIZARD CARD ===== */}
             <div className="lc-wiz-shell">
-            <Steps
-                className="lc-wiz-steps"
-                current={currentStep}
-                items={steps.map(s => ({ title: s.title, icon: s.icon }))}
-            />
+            {/* Шаги — пилюли, как переключатели разделов в остальном
+                кабинете. Синие «Steps» из antd рядом с ними читались как
+                другой продукт. Пройденные шаги кликабельны: вернуться к
+                сторонам сделки посреди груза — обычное дело. */}
+            <div className={nova.pills} style={{ marginBottom: 18 }} role="tablist">
+                {steps.map((step, idx) => (
+                    <button
+                        key={idx}
+                        type="button"
+                        role="tab"
+                        aria-selected={idx === currentStep}
+                        className={`${nova.pill} ${idx === currentStep ? nova.pillActive : ''}`}
+                        onClick={() => { if (idx < currentStep) setCurrentStep(idx); }}
+                        disabled={idx > currentStep}
+                    >
+                        {idx + 1}. {step.title}
+                    </button>
+                ))}
+            </div>
 
             {/* Form */}
             <Form form={form} layout="vertical">

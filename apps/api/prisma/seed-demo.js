@@ -24,6 +24,55 @@ async function main() {
     const carrier = await company('p3-carrier', 'ИП Сериков (перевозки)', '210987654321');
     const client = await company('p3-client', 'ТОО «Магнум Дистрибуция»', '555444333222');
 
+    /**
+     * Контрагенты из справочника — те, которых мы заводим руками.
+     *
+     * Так работает большинство перевозчиков и заказчиков: своего кабинета на
+     * платформе у них нет, есть наша карточка. Именно в ней живут условия
+     * расчётов, и без такой карточки на стенде не видно главного пути —
+     * когда НДС и срок оплаты подставляются в рейс сами.
+     *
+     * У «Алтын Жол» условия заполнены: рейсы с ним проходят проверку сразу.
+     * У «Береке» их нет намеренно — на нём видно вторую половину правила:
+     * рейс ждёт бухгалтера, договор нельзя заверить, счёт нельзя выставить.
+     */
+    const directoryCard = (id, name, bin, extra) => prisma.company.upsert({
+        where: { id },
+        update: extra,
+        create: {
+            id, name, bin, type: 'FORWARDER',
+            isExternal: true, createdByCompanyId: us.id,
+            ...extra,
+        },
+    });
+
+    const altynZhol = await directoryCard('p3-cp-altyn', 'ТОО «Алтын Жол»', '150641116666', {
+        isCustomer: false,
+        isCarrier: true,
+        email: 'buh@altynzhol.kz',
+        vatPayer: true,
+        vatRate: D(16),
+        carrierPaymentDays: 15,
+        carrierPaymentFrom: 'ORIGINALS',
+    });
+
+    await directoryCard('p3-cp-bereke', 'ИП «Береке Транс»', '870512300456', {
+        isCustomer: false,
+        isCarrier: true,
+        email: 'bereke@mail.kz',
+    });
+
+    await directoryCard('p3-cp-magnum', 'ТОО «Магнум Дистрибуция»', '555444333222', {
+        isCustomer: true,
+        isCarrier: false,
+        email: 'buh@magnum.kz',
+        vatPayer: true,
+        vatRate: D(16),
+        invoiceTiming: 'AFTER_UNLOAD',
+        customerPaymentDays: 30,
+        customerPaymentFrom: 'UNLOAD',
+    });
+
     const hash = await bcrypt.hash('Test12345!', 10);
     const user = (email, first, last, role, companyId, extra = {}) => prisma.user.upsert({
         where: { email },
@@ -40,6 +89,19 @@ async function main() {
         phone: '+77010000077', vehiclePlate: '123 ABC 01',
     });
 
+    /**
+     * Менеджер без права «Бухгалтерия» — вторая половина стенда.
+     *
+     * На одном администраторе не проверить главного: менеджер не должен видеть
+     * НДС, сроки оплаты и вкладку «Финансы», а печать на договоре ему
+     * недоступна. Пока такого сотрудника на стенде не было, всё это выглядело
+     * работающим просто потому, что смотрели под руководителем.
+     */
+    const manager = await user('manager@p3.kz', 'Алия', 'Менеджер', 'LOGISTICIAN', us.id, {
+        phone: '+77010000055',
+        permissions: ['orders', 'partners', 'tracking', 'documents'],
+    });
+
     // Роль берётся из связи с компанией — без неё запросы отвечают 401.
     //
     // Связь заводится каждому, а не только администратору. Раньше её имел
@@ -47,7 +109,7 @@ async function main() {
     // водитель спокойно входили, а дальше любой запрос отвечал «Пользователь
     // не найден». Вход есть, работы нет — и разобраться по сообщению
     // невозможно.
-    for (const [person, company] of [[admin, us], [clientUser, client], [driver, us]]) {
+    for (const [person, company] of [[admin, us], [clientUser, client], [driver, us], [manager, us]]) {
         const relation = await prisma.userCompanyRelation.findFirst({
             where: { userId: person.id, companyId: company.id },
         });
@@ -76,6 +138,19 @@ async function main() {
             n: 'ЗК-2606', from: 'Алматы', to: 'Караганда', cargo: 'Мебель',
             cust: 260000, sub: 205000, paidOut: 0, paidIn: 0, status: 'IN_TRANSIT',
             kg: 8000, body: 'Тент', places: 18,
+        },
+        // Два рейса с контрагентами из справочника — на них видно оба
+        // состояния расчётов: у «Алтын Жол» условия заполнены, и рейс проходит
+        // проверку сам; у «Береке» их нет, и рейс ждёт бухгалтера.
+        {
+            n: 'ЗК-2607', from: 'Алматы', to: 'Актобе', cargo: 'Бумага',
+            cust: 430000, sub: 350000, paidOut: 0, paidIn: 0, status: 'IN_TRANSIT',
+            kg: 16000, body: 'Тент', places: 24, carrierId: 'p3-cp-altyn',
+        },
+        {
+            n: 'ЗК-2608', from: 'Астана', to: 'Павлодар', cargo: 'Оборудование',
+            cust: 295000, sub: 240000, paidOut: 0, paidIn: 0, status: 'ASSIGNED',
+            kg: 9000, body: 'Тент', places: 8, carrierId: 'p3-cp-bereke',
         },
     ];
 
@@ -108,7 +183,7 @@ async function main() {
                 customerCompanyId: client.id,
                 customerId: clientUser.id,
                 forwarderId: us.id,
-                subForwarderId: carrier.id,
+                subForwarderId: s.carrierId || carrier.id,
                 driverId: driver.id,
                 assignedDriverName: 'Иванов Иван',
                 assignedDriverPlate: '123 ABC 01',
@@ -120,15 +195,30 @@ async function main() {
                 driverPaymentDate: done ? new Date('2026-07-25') : null,
                 customerPaymentDate: done ? new Date('2026-08-05') : null,
                 isSubForwarderPaid: s.paidOut >= s.sub,
+                // Условия расчётов: у рейсов с карточкой справочника они
+                // подставлены и проверка пройдена, у остальных — ждут
+                // бухгалтера. Ровно так их проставляет платформа при
+                // заведении заявки (`OrderSettlementsService`).
+                ...(s.carrierId === 'p3-cp-altyn'
+                    ? {
+                        hasVat: true, vatRate: D(16),
+                        executorHasVat: true, executorVatRate: D(16),
+                        customerPaymentDays: 30, customerPaymentFrom: 'UNLOAD',
+                        carrierPaymentDays: 15, carrierPaymentFrom: 'ORIGINALS',
+                        settlementsConfirmedAt: new Date(),
+                    }
+                    : s.carrierId === 'p3-cp-bereke'
+                        ? { settlementsConfirmedAt: null }
+                        : { settlementsConfirmedAt: new Date() }),
                 routePoints: {
                     create: [
                         {
                             sequence: 1, pointType: 'PICKUP', expectedDate: pickupAt,
-                            location: { create: { name: `Склад ${s.from}`, city: s.from, address: `г. ${s.from}`, latitude: 43.2, longitude: 76.9 } },
+                            location: { create: { name: `Склад ${s.from}`, city: s.from, address: `г. ${s.from}`, latitude: 43.2, longitude: 76.9, createdById: admin.id } },
                         },
                         {
                             sequence: 2, pointType: 'DELIVERY', expectedDate: deliveryAt,
-                            location: { create: { name: `Склад ${s.to}`, city: s.to, address: `г. ${s.to}`, latitude: 51.1, longitude: 71.4 } },
+                            location: { create: { name: `Склад ${s.to}`, city: s.to, address: `г. ${s.to}`, latitude: 51.1, longitude: 71.4, createdById: admin.id } },
                         },
                     ],
                 },
@@ -159,7 +249,8 @@ async function main() {
     const carrierLink = await link(carrier.id, 'Экспедитор');
     const clientLink = await link(client.id, 'Экспедитор');
 
-    console.log('вход:        admin@p3.kz / Test12345!');
+    console.log('вход:        admin@p3.kz / Test12345!   (руководитель, видит бухгалтерию)');
+    console.log('менеджер:    manager@p3.kz / Test12345!  (без права «Бухгалтерия»)');
     console.log('перевозчик:  ' + carrierLink.token + '   (выставляет нам счёт)');
     console.log('заказчик:    ' + clientLink.token + '   (присылает нам чек)');
 }

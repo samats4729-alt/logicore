@@ -97,7 +97,11 @@ function makeService() {
     const stamps: any = { loadFor: jest.fn(async () => ({ stamp: null, signature: null })) };
     const poa = new PowerOfAttorneyService(prisma, stamps);
     const contracts = new OrderContractService(prisma, stamps);
-    const documents = new OrderDocumentsService(prisma, contracts, poa);
+    // Проверка расчётов и почта здесь не участвуют: эти тесты про печатную
+    // форму и версии, а не про проведение и отправку.
+    const settlements: any = { stateOf: jest.fn(async () => ({ confirmed: true, missing: [] })) };
+    const email: any = { sendOrderDocumentEmail: jest.fn() };
+    const documents = new OrderDocumentsService(prisma, contracts, poa, settlements, email);
     return { poa, documents, prisma, stamps, saved };
 }
 

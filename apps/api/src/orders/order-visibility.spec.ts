@@ -118,6 +118,85 @@ describe('Видимость денег по рейсу', () => {
         });
     });
 
+    describe('налоговая часть до проверки бухгалтером', () => {
+        /**
+         * Заявка появляется у контрагента сразу — он должен знать, что везёт.
+         * А НДС и срок оплаты до проверки — это ещё не условия сделки, а
+         * значения по умолчанию: «без НДС» и пустой срок. Показать их
+         * контрагенту значит сказать неправду и потом переигрывать.
+         */
+        const withSettlements = (overrides: any = {}) => order({
+            hasVat: false,
+            vatRate: 0,
+            executorHasVat: false,
+            customerPaymentDays: 30,
+            customerPaymentFrom: 'UNLOAD',
+            customerPaymentDate: new Date('2026-09-30'),
+            settlementsConfirmedAt: null,
+            ...overrides,
+        });
+
+        it('заказчик не видит неподтверждённые НДС и сроки', () => {
+            const masked: any = maskForCustomer(withSettlements(), CUSTOMER);
+
+            expect(masked.hasVat).toBeNull();
+            expect(masked.customerPaymentDays).toBeNull();
+            expect(masked.customerPaymentDate).toBeNull();
+        });
+
+        it('вместо цифр остаётся признак «уточняются» — чтобы объяснить пустоту', () => {
+            const masked: any = maskForCustomer(withSettlements(), CUSTOMER);
+
+            expect(masked.settlementsPending).toBe(true);
+        });
+
+        it('условия с перевозчиком заказчику не видны и после проверки', () => {
+            // Отсрочка и НДС перевозчика — часть нашей договорённости с ним.
+            // По ним заказчику видно, как устроена наша сторона сделки, — это
+            // та же чувствительность, что и сумма, которую мы платим.
+            const masked: any = maskForCustomer(
+                withSettlements({
+                    settlementsConfirmedAt: new Date('2026-08-12'),
+                    executorHasVat: true,
+                    carrierPaymentDays: 15,
+                    carrierPaymentFrom: 'ORIGINALS',
+                }),
+                CUSTOMER,
+            );
+
+            expect(masked.carrierPaymentDays).toBeNull();
+            expect(masked.executorHasVat).toBeNull();
+        });
+
+        it('после проверки бухгалтером контрагент видит условия', () => {
+            const masked: any = maskForCustomer(
+                withSettlements({ settlementsConfirmedAt: new Date('2026-08-12') }),
+                CUSTOMER,
+            );
+
+            expect(masked.hasVat).toBe(false);
+            expect(masked.customerPaymentDays).toBe(30);
+            expect(masked.settlementsPending).toBeUndefined();
+        });
+
+        it('перевозчик со своей стороны — то же правило', () => {
+            const CARRIER = 'перевозчик';
+            const masked: any = maskForCustomer(
+                withSettlements({ subForwarderId: CARRIER }),
+                CARRIER,
+            );
+
+            expect(masked.executorHasVat).toBeNull();
+        });
+
+        it('хозяин рейса видит свою кухню всегда — иначе бухгалтеру нечего проверять', () => {
+            const visible: any = maskForCustomer(withSettlements(), FORWARDER);
+
+            expect(visible.hasVat).toBe(false);
+            expect(visible.customerPaymentDays).toBe(30);
+        });
+    });
+
     describe('что видит водитель', () => {
         it('цена заказчика скрыта', () => {
             // Водителю платит перевозчик или экспедитор. Сколько за тот же

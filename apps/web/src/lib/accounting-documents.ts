@@ -85,6 +85,8 @@ export interface AccountingDocumentListItem {
     balanceDue: number;
     shareToken: string;
     shareRevokedAt: string | null;
+    /** Когда документ ушёл контрагенту: в кабинет или письмом. */
+    sentAt?: string | null;
     counterparty: AccountingDocumentParty | null;
     orders?: AccountingDocumentOrderRef[];
     _count?: { lines: number; orders: number; paymentAllocations: number };

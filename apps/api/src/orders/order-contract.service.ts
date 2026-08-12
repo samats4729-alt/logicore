@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StampImageService } from '../common/services/stamp-image.service';
 import { moneyWithWords } from '../common/utils/amount-to-words';
 import { toNum } from '../common/utils/money';
+import { paymentConditionText } from '../common/utils/payment-terms';
 
 /** Официальный документ печатается чёрным: цветных выделений в нём нет. */
 const INK = '#000000';
@@ -148,6 +149,12 @@ export class OrderContractService {
                 driverCost: toNum(order.driverCost ?? order.subForwarderPrice ?? 0),
                 executorHasVat: order.executorHasVat,
                 driverPaymentCondition: order.driverPaymentCondition,
+                // Срок оплаты перевозчику: сколько дней и от какого дня.
+                // Раньше здесь была только строка выше — свободный текст,
+                // который в печатной форме подменялся на «15 Календарных
+                // дней», если его не заполнили.
+                carrierPaymentDays: order.carrierPaymentDays,
+                carrierPaymentFrom: order.carrierPaymentFrom,
                 assignedDriverName: order.assignedDriverName,
                 assignedDriverPhone: order.assignedDriverPhone,
                 assignedDriverPlate: order.assignedDriverPlate,
@@ -313,12 +320,23 @@ export class OrderContractService {
             .text('Предоплата', left + half, y + 3, { width: half, align: 'center' });
 
         const rate = toNum(order.driverCost ?? order.subForwarderPrice ?? 0);
+
+        // Срок оплаты печатается только тот, о котором договорились.
+        //
+        // Прежде здесь стояло «15 Календарных дней» — подстановка на случай
+        // пустого поля. Документ с ней уходил перевозчику за подписью и
+        // печатью, и спорить с ним потом было нечем. Нет договорённости —
+        // строки нет: пустое место в договоре человек заметит, а неверный
+        // срок под печатью — нет.
+        const condition = paymentConditionText(order.carrierPaymentDays, order.carrierPaymentFrom)
+            || order.driverPaymentCondition
+            || null;
         const terms = [
             `${moneyWithWords(rate)} Тенге.`,
             order.executorHasVat ? 'Безналичный расчет в т.ч. НДС.' : 'Безналичный расчет без НДС.',
             'По копиям накладных (ТН, ТТН, CMR).',
-            order.driverPaymentCondition || '15 Календарных дней',
-        ].join(' ');
+            condition,
+        ].filter(Boolean).join(' ');
 
         const boxY = y + 12;
         const boxHeight = Math.max(24, doc.font('Roboto').fontSize(7).heightOfString(terms, { width: half - 8 }) + 8);

@@ -125,7 +125,11 @@ function makeService(stampAllowed = false) {
     };
     const service = new OrderContractService(prisma, stamps);
     const poa = new PowerOfAttorneyService(prisma, stamps);
-    const documents = new OrderDocumentsService(prisma, service, poa);
+    // Проверка расчётов и почта здесь не участвуют: эти тесты про печатную
+    // форму и версии, а не про проведение и отправку.
+    const settlements: any = { stateOf: jest.fn(async () => ({ confirmed: true, missing: [] })) };
+    const email: any = { sendOrderDocumentEmail: jest.fn() };
+    const documents = new OrderDocumentsService(prisma, service, poa, settlements, email);
     return { service, documents, poa, prisma, stamps, stampBuffer, saved };
 }
 
@@ -163,6 +167,42 @@ describe('OrderContractService — договор-заявка', () => {
         expect(all).toContain('Безналичный расчет в т.ч. НДС.');
         expect(all).toContain('По копиям накладных (ТН, ТТН, CMR).');
         expect(all).toContain('15 Календарных дней');
+    });
+
+    it('печатает срок оплаты, о котором договорились, а не подстановку', async () => {
+        // Раньше в договор уходило «15 Календарных дней» независимо от
+        // договорённости — просто потому, что поле не заполнили. Теперь срок
+        // складывается из числа дней и дня отсчёта, и печатается как есть.
+        const { service, prisma } = makeService();
+        prisma.order.findUnique.mockResolvedValue({
+            ...order(),
+            driverPaymentCondition: null,
+            carrierPaymentDays: 15,
+            carrierPaymentFrom: 'ORIGINALS',
+        });
+
+        const all = (await printedText(() => service.generatePdf('order-1', COMPANY))).join('\n');
+
+        expect(all).toContain('Оплата в течение 15 календарных дней с момента получения оригиналов накладных.');
+    });
+
+    it('без договорённости о сроке в договоре про оплату ничего не печатается', async () => {
+        // Пустое место в бумаге человек заметит и спросит. Выдуманный срок под
+        // печатью и подписью не заметит никто — до первого спора.
+        const { service, prisma } = makeService();
+        prisma.order.findUnique.mockResolvedValue({
+            ...order(),
+            driverPaymentCondition: null,
+            carrierPaymentDays: null,
+            carrierPaymentFrom: null,
+        });
+
+        const all = (await printedText(() => service.generatePdf('order-1', COMPANY))).join('\n');
+
+        expect(all).not.toContain('15 Календарных дней');
+        expect(all).not.toContain('Оплата в течение');
+        // Остальная часть блока цены на месте — исчезает только срок.
+        expect(all).toContain('По копиям накладных (ТН, ТТН, CMR).');
     });
 
     it('печатает водителя, тягач и прицеп', async () => {

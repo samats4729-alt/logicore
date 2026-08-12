@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { CompanyVerificationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { isInvoiceTiming, isPaymentAnchor } from '../common/utils/payment-terms';
 
 @Injectable()
 export class ExternalCompaniesService {
@@ -49,6 +50,15 @@ export class ExternalCompaniesService {
                 // печатать ли его в счёте.
                 customerRefLabel: true,
                 customerRefPrintInvoice: true,
+                // Условия расчётов: из них берутся НДС и сроки оплаты в
+                // заявке, поэтому нужны в списке, а не только в карточке.
+                vatPayer: true,
+                vatRate: true,
+                invoiceTiming: true,
+                customerPaymentDays: true,
+                customerPaymentFrom: true,
+                carrierPaymentDays: true,
+                carrierPaymentFrom: true,
                 isActive: true,
                 createdAt: true,
                 responsibleManagerId: true,
@@ -191,6 +201,109 @@ export class ExternalCompaniesService {
         return this.prisma.company.update({
             where: { id: externalId },
             data,
+        });
+    }
+
+    /**
+     * Условия расчётов с контрагентом — НДС и сроки оплаты.
+     *
+     * Отдельно от общей правки карточки, потому что это ответы бухгалтера:
+     * менеджеру их не показывают, а бухгалтера в общую правку контрагента не
+     * пускают (там название, БИН, адреса, ответственный менеджер). Разные
+     * люди, разные поля — разные входы.
+     *
+     * Поля стороны, которой контрагент не является, не сохраняются: у
+     * перевозчика нет графы «когда мы выставляем ему счёт», и хранить в ней
+     * что-то — значит однажды это напечатать.
+     */
+    async updateSettlementTerms(companyId: string, externalId: string, data: {
+        vatPayer?: boolean | null;
+        vatRate?: number | null;
+        invoiceTiming?: string | null;
+        customerPaymentDays?: number | null;
+        customerPaymentFrom?: string | null;
+        carrierPaymentDays?: number | null;
+        carrierPaymentFrom?: string | null;
+    }) {
+        const company = await this.prisma.company.findUnique({
+            where: { id: externalId },
+            select: { id: true, isExternal: true, createdByCompanyId: true, isCustomer: true, isCarrier: true },
+        });
+        if (!company) throw new NotFoundException('Контрагент не найден');
+        if (!company.isExternal || company.createdByCompanyId !== companyId) {
+            throw new ForbiddenException('Нет доступа');
+        }
+
+        const days = (value: number | null | undefined, field: string) => {
+            if (value === null || value === undefined) return null;
+            if (!Number.isInteger(value) || value < 0 || value > 365) {
+                throw new BadRequestException(
+                    `${field}: срок оплаты — целое число дней от 0 до 365`,
+                );
+            }
+            return value;
+        };
+        const anchor = (value: string | null | undefined) => {
+            if (!value) return null;
+            if (!isPaymentAnchor(value)) {
+                throw new BadRequestException('Не понял, от какого дня считать отсрочку');
+            }
+            return value;
+        };
+        const rate = (value: number | null | undefined) => {
+            if (value === null || value === undefined) return null;
+            if (!Number.isFinite(value) || value < 0 || value > 100) {
+                throw new BadRequestException('Ставка НДС — от 0 до 100 процентов');
+            }
+            return value;
+        };
+
+        // Срок без точки отсчёта — это те самые «15 дней», из которых
+        // непонятно, от чего их считать. Просим оба ответа или ни одного.
+        const pair = (d: number | null, a: string | null, side: string) => {
+            if (d !== null && a === null) {
+                throw new BadRequestException(`${side}: укажите, от какого дня считать отсрочку`);
+            }
+            return { days: d, from: a };
+        };
+
+        const patch: Record<string, unknown> = {};
+        if (data.vatPayer !== undefined) patch.vatPayer = data.vatPayer;
+        if (data.vatRate !== undefined) patch.vatRate = rate(data.vatRate);
+        if (data.invoiceTiming !== undefined) {
+            if (data.invoiceTiming && !isInvoiceTiming(data.invoiceTiming)) {
+                throw new BadRequestException('Не понял, когда выставлять счёт');
+            }
+            patch.invoiceTiming = company.isCustomer ? (data.invoiceTiming || null) : null;
+        }
+        if (data.customerPaymentDays !== undefined || data.customerPaymentFrom !== undefined) {
+            const side = pair(
+                days(data.customerPaymentDays, 'Заказчик'),
+                anchor(data.customerPaymentFrom),
+                'Заказчик',
+            );
+            patch.customerPaymentDays = company.isCustomer ? side.days : null;
+            patch.customerPaymentFrom = company.isCustomer ? side.from : null;
+        }
+        if (data.carrierPaymentDays !== undefined || data.carrierPaymentFrom !== undefined) {
+            const side = pair(
+                days(data.carrierPaymentDays, 'Перевозчик'),
+                anchor(data.carrierPaymentFrom),
+                'Перевозчик',
+            );
+            patch.carrierPaymentDays = company.isCarrier ? side.days : null;
+            patch.carrierPaymentFrom = company.isCarrier ? side.from : null;
+        }
+
+        return this.prisma.company.update({
+            where: { id: externalId },
+            data: patch,
+            select: {
+                id: true, name: true,
+                vatPayer: true, vatRate: true, invoiceTiming: true,
+                customerPaymentDays: true, customerPaymentFrom: true,
+                carrierPaymentDays: true, carrierPaymentFrom: true,
+            },
         });
     }
 

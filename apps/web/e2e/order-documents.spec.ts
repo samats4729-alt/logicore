@@ -41,6 +41,38 @@ test.describe('Документы заявки', () => {
         await expect(page.getByText('действующий')).toHaveCount(1);
     });
 
+    test('печать появляется только после проведения', async ({ page }) => {
+        /**
+         * Главная защита всей затеи: заверить можно только проверенный
+         * документ. Раньше «С печатью» стояла рядом со «Скачать» и работала
+         * на чём угодно — документ с чужой ошибкой уходил перевозчику уже с
+         * подписью директора, и отозвать его было нельзя.
+         */
+        await login(page);
+        await page.goto('/company/orders');
+
+        // Рейс с заполненными условиями расчётов: у него проведение проходит.
+        // Демо-стенд заводит такой (ЗК-2607, перевозчик «Алтын Жол»).
+        const row = page.locator('.ant-table-row').filter({ hasText: 'ЗК-2607' }).first();
+        await expect(
+            row,
+            'Нет рейса ЗК-2607. Его заводит prisma/seed-demo.js — проверьте, что сид отработал.',
+        ).toBeVisible();
+        await row.locator('button').last().click();
+        await page.waitForURL(/\/company\/orders\/[^/]+$/);
+
+        await page.getByRole('tab', { name: /Документы/ }).first().click();
+        await page.getByRole('button', { name: 'Договор-заявка', exact: true }).first().click();
+
+        await expect(page.getByText('черновик').first()).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByRole('button', { name: 'С печатью' })).toHaveCount(0);
+
+        await page.getByRole('button', { name: 'Провести' }).first().click();
+        await expect(page.getByText('проведён').first()).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByRole('button', { name: 'С печатью' }).first()).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Отправить' }).first()).toBeVisible();
+    });
+
     test('недоступный документ виден, погашен и объясняет причину', async ({ page }) => {
         await login(page);
         await page.goto('/company/orders');

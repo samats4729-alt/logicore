@@ -111,6 +111,8 @@ model User {
   /// Компании, которые этот пользователь подтвердил как админ платформы.
   verifiedCompanies     Company[]             @relation("VerifiedCompanies")
   createdOrderDocuments OrderDocument[]       @relation("CreatedOrderDocuments")
+  postedOrderDocuments  OrderDocument[]       @relation("PostedOrderDocuments")
+  sentOrderDocuments    OrderDocument[]       @relation("SentOrderDocuments")
   createdCurrencyRevaluations CurrencyRevaluation[] @relation("CreatedCurrencyRevaluations")
   sentAccountingDocuments     AccountingDocument[]  @relation("SentAccountingDocuments")
   reviewedAccountingDocuments AccountingDocument[]  @relation("ReviewedAccountingDocuments")
@@ -420,6 +422,40 @@ model Company {
   /// поэтому решение принимает бухгалтер и оно хранится у организации.
   vatScheme String @default("STANDARD")
 
+  // ─── Блок «Расчёты»: условия работы с этим контрагентом ───
+  //
+  // Раньше этих ответов в системе не было нигде. Работает контрагент с НДС
+  // или нет — галочку ставили заново в каждой заявке, и ставил её менеджер,
+  // который про НДС не знает. Срок оплаты жил свободной строкой текста, из
+  // которой нельзя посчитать ни одной даты. Оба ответа принадлежат
+  // контрагенту, а не рейсу: договорились один раз — работает всегда.
+
+  /// Работает ли контрагент с НДС.
+  ///
+  /// null — не выяснено, и это не то же самое, что «без НДС». Напечатать
+  /// «без НДС» наугад в документе, который уходит с печатью, нельзя:
+  /// пока ответа нет, платформа обязана спросить, а не догадываться.
+  vatPayer Boolean?
+  /// Ставка НДС этого контрагента: у разных стран и режимов она разная.
+  vatRate  Decimal? @db.Decimal(5, 2)
+
+  /// Когда мы выставляем счёт заказчику: AFTER_UNLOAD — по факту выгрузки,
+  /// AFTER_ORIGINALS — когда придут оригиналы накладных, MONTHLY — раз в
+  /// месяц одним счётом за все рейсы.
+  invoiceTiming String?
+
+  /// Отсрочка, которую мы дали ЗАКАЗЧИКУ: через сколько дней и от какого дня
+  /// он обязан заплатить нам. Точка отсчёта: UNLOAD — от выгрузки,
+  /// INVOICE — от даты счёта, ORIGINALS — от получения оригиналов накладных.
+  customerPaymentDays Int?
+  customerPaymentFrom String?
+
+  /// Отсрочка, которую дал нам ПЕРЕВОЗЧИК: через сколько дней и от какого
+  /// дня мы обязаны заплатить ему. Точки отсчёта те же. Именно это
+  /// печатается в договоре-заявке — вместо прежних «15 календарных дней»,
+  /// которые подставлялись вслепую.
+  carrierPaymentDays Int?
+  carrierPaymentFrom String?
 }
 
 // ... existing models ...
@@ -731,6 +767,33 @@ model Order {
   driverPaymentCondition String?
   driverPaymentForm      String?
   driverPaymentDate      DateTime?
+
+  // ─── Условия расчётов по рейсу ───
+  //
+  // Снимок условий из карточек контрагентов на момент рейса. Именно снимок:
+  // договорённость с контрагентом могут поменять через полгода, а этот рейс
+  // прошёл по прежним условиям, и документ по нему должен остаться прежним.
+  //
+  // Из этих чисел считаются `customerPaymentDate` и `driverPaymentDate` выше —
+  // плановые даты платежей. До сих пор они пустовали, потому что условие
+  // оплаты хранилось свободной строкой: посчитать по ней дату невозможно.
+  customerPaymentDays Int?
+  customerPaymentFrom String?
+  carrierPaymentDays  Int?
+  carrierPaymentFrom  String?
+
+  /// Расчёты по рейсу проверены бухгалтером.
+  ///
+  /// Пока не проверены: договор-заявку можно только сформировать черновиком
+  /// (без печати), счёт выставить нельзя, а контрагент на платформе видит
+  /// рейс без налоговой части — «условия расчётов уточняются». Так менеджер
+  /// не решает за бухгалтера, а бухгалтер не узнаёт о своей заявке от
+  /// контрагента.
+  ///
+  /// Подтверждается само, когда в карточках сторон всё заполнено и ставки
+  /// подставились из них: подтверждение — про исключения, а не про рутину.
+  settlementsConfirmedAt   DateTime?
+  settlementsConfirmedById String?
 
   // Документы и коды
   ttnNumber       String? // Номер ТТН
@@ -2025,8 +2088,47 @@ model OrderDocument {
   createdBy   User     @relation("CreatedOrderDocuments", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
 
+  // ─── Черновик → проведён → отправлен ───
+  //
+  // Раньше этих состояний не было: документ появлялся сразу готовым, и печать
+  // с подписью ставились одной кнопкой — любым, кто ведёт рейс. Заверенный
+  // документ с чужой ошибкой уходил контрагенту, и узнавали об этом от него.
+  //
+  // DRAFT — сформирован, годится для согласования, печати на нём нет.
+  // POSTED — проверен и заверен: содержимое замерло, можно печатать и
+  //          отправлять. Исправление — не правка, а следующая версия.
+  // SENT   — ушёл получателю.
+  status     String    @default("DRAFT")
+  postedAt   DateTime?
+  postedById String?
+  postedBy   User?     @relation("PostedOrderDocuments", fields: [postedById], references: [id], onDelete: SetNull)
+
+  /// Кому этот документ выписан — компания из справочника на момент
+  /// формирования. Хранится у документа, а не берётся из заявки на лету:
+  /// перевозчика в рейсе могут поменять, а документ выписан прежнему, и
+  /// «отправить перевозчику» должно означать того, кто стоит в бумаге.
+  recipientCounterpartyId String?
+  /// Кому доставлен на платформе, если у получателя есть кабинет.
+  recipientCompanyId      String?
+  /// Куда ушёл по почте, если кабинета у получателя нет.
+  sentToEmail             String?
+  sentAt                  DateTime?
+  sentById                String?
+  sentBy                  User?     @relation("SentOrderDocuments", fields: [sentById], references: [id], onDelete: SetNull)
+
+  /// Что получатель ответил: ACCEPTED или REJECTED с причиной.
+  receiptStatus String?
+  receiptReason String?
+  receiptAt     DateTime?
+
+  /// Какую версию заменяет этот документ. Отправить исправление можно, а вот
+  /// оставить у контрагента два разных документа с одним номером — нельзя:
+  /// у него в кабинете прежний помечается заменённым.
+  replacesId String?
+
   @@unique([orderId, kind, version])
   @@index([companyId, kind, createdAt])
+  @@index([recipientCompanyId])
 }
 
 model AccountingDocumentLink {
