@@ -586,12 +586,20 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         <PaywallScreen status={billingStatus} />
                     ) : (
                         <>
-                            {billingStatus?.enabled && !billingStatus?.blocked && billingStatus?.status === 'TRIAL' && billingStatus?.trialEndsAt && (
-                                <div className="lc-trial-banner">
-                                    Пробный период до {new Date(billingStatus.trialEndsAt).toLocaleDateString('ru-RU')} — осталось{' '}
-                                    {Math.max(0, Math.ceil((new Date(billingStatus.trialEndsAt).getTime() - Date.now()) / 86400000))} дн.
-                                </div>
-                            )}
+                            {/* Полоска про бесплатные дни. Показывается всем
+                                сотрудникам, а не только руководителю: плитка
+                                «Тариф» есть лишь у него, а закроется кабинет
+                                у всех сразу. Слова разные — «пробный период»
+                                у новой компании и «дни на оплату» у той, что
+                                уже работала, когда назначили цену. */}
+                            {billingStatus?.enabled && !billingStatus?.blocked && billingStatus?.trialEndsAt
+                                && ['TRIAL', 'GRACE'].includes(billingStatus?.status) && (
+                                    <div className="lc-trial-banner">
+                                        {billingStatus.status === 'GRACE' ? 'Оплатить подписку' : 'Пробный период'} до{' '}
+                                        {new Date(billingStatus.trialEndsAt).toLocaleDateString('ru-RU')} — осталось{' '}
+                                        {Math.max(0, Math.ceil((new Date(billingStatus.trialEndsAt).getTime() - Date.now()) / 86400000))} дн.
+                                    </div>
+                                )}
                             {/* Прямая ссылка в чужой раздел раньше открывала
                                 страницу: она грузилась, запросы получали отказ,
                                 и человек видел пустой экран без объяснений.
