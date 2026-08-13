@@ -1,21 +1,35 @@
-import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionStatus } from '@prisma/client';
+import { SubscriptionStatus, SubscriptionRequestStatus } from '@prisma/client';
+import { TelegramService } from '../telegram/telegram.service';
 import { addMonths, kzStartOfMonth } from '../common/utils/business-date';
 
 const SETTING_ENABLED = 'billing_enabled';
 const SETTING_TRIAL_DAYS = 'billing_trial_days';
+const SETTING_GRACE_DAYS = 'billing_grace_days';
 const DEFAULT_TRIAL_DAYS = 14;
+/**
+ * Сколько дней даётся на оплату тем, кто работал бесплатно, когда владелец
+ * назначил цену. Три дня — то, что он назвал; меняется в админке.
+ */
+const DEFAULT_GRACE_DAYS = 3;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Кэш в памяти, чтобы не ходить в БД на каждый запрос */
 const SETTINGS_CACHE_TTL_MS = 30_000;
 const ACCESS_CACHE_TTL_MS = 60_000;
 
+/** Статусы, при которых кабинет открыт без оплаты — до даты в `trialEndsAt`. */
+const FREE_STATUSES: SubscriptionStatus[] = [SubscriptionStatus.TRIAL, SubscriptionStatus.GRACE];
+
 @Injectable()
 export class BillingService {
-    constructor(private prisma: PrismaService) { }
+    private readonly logger = new Logger(BillingService.name);
 
-    private settingsCache: { enabled: boolean; trialDays: number; expiresAt: number } | null = null;
+    constructor(private prisma: PrismaService, private telegram: TelegramService) { }
+
+    private settingsCache: { enabled: boolean; trialDays: number; graceDays: number; expiresAt: number } | null = null;
     private accessCache = new Map<string, { allowed: boolean; expiresAt: number }>();
 
     private invalidateCaches() {
@@ -25,68 +39,125 @@ export class BillingService {
 
     // ==================== Настройки ====================
 
-    async getSettings(): Promise<{ enabled: boolean; trialDays: number }> {
+    async getSettings(): Promise<{ enabled: boolean; trialDays: number; graceDays: number }> {
         if (this.settingsCache && this.settingsCache.expiresAt > Date.now()) {
-            return { enabled: this.settingsCache.enabled, trialDays: this.settingsCache.trialDays };
+            const { enabled, trialDays, graceDays } = this.settingsCache;
+            return { enabled, trialDays, graceDays };
         }
         const rows = await this.prisma.platformSetting.findMany({
-            where: { key: { in: [SETTING_ENABLED, SETTING_TRIAL_DAYS] } },
+            where: { key: { in: [SETTING_ENABLED, SETTING_TRIAL_DAYS, SETTING_GRACE_DAYS] } },
         });
         const map = new Map(rows.map(r => [r.key, r.value]));
         const enabled = map.get(SETTING_ENABLED) === 'true';
         const trialDays = parseInt(map.get(SETTING_TRIAL_DAYS) || '', 10) || DEFAULT_TRIAL_DAYS;
-        this.settingsCache = { enabled, trialDays, expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS };
-        return { enabled, trialDays };
+        const graceDays = parseInt(map.get(SETTING_GRACE_DAYS) || '', 10) || DEFAULT_GRACE_DAYS;
+        this.settingsCache = { enabled, trialDays, graceDays, expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS };
+        return { enabled, trialDays, graceDays };
     }
 
-    async updateSettings(data: { enabled?: boolean; trialDays?: number }) {
+    /**
+     * Настройки тарифа целиком: цена, сроки и рубильник.
+     *
+     * Цена лежит не в настройках, а в основном тарифном плане — там же, где
+     * её видят подписки. Но правится вместе с остальным и одним действием:
+     * «назначить цену» и «включить оплату» для владельца одно и то же
+     * решение, и разваливаться на два запроса оно не должно.
+     */
+    async updateSettings(data: {
+        enabled?: boolean;
+        trialDays?: number;
+        graceDays?: number;
+        priceMonthly?: number;
+    }) {
         const current = await this.getSettings();
         const enabled = data.enabled ?? current.enabled;
         const trialDays = data.trialDays ?? current.trialDays;
+        const graceDays = data.graceDays ?? current.graceDays;
         if (trialDays < 1 || trialDays > 365) {
             throw new BadRequestException('Пробный период: от 1 до 365 дней');
         }
+        if (graceDays < 1 || graceDays > 90) {
+            throw new BadRequestException('Дней на оплату: от 1 до 90');
+        }
+        if (data.priceMonthly != null && data.priceMonthly < 0) {
+            throw new BadRequestException('Цена должна быть неотрицательной');
+        }
 
-        await this.prisma.platformSetting.upsert({
-            where: { key: SETTING_ENABLED },
-            create: { key: SETTING_ENABLED, value: String(enabled) },
-            update: { value: String(enabled) },
-        });
-        await this.prisma.platformSetting.upsert({
-            where: { key: SETTING_TRIAL_DAYS },
-            create: { key: SETTING_TRIAL_DAYS, value: String(trialDays) },
-            update: { value: String(trialDays) },
-        });
+        if (data.priceMonthly != null) {
+            await this.setTariffPrice(Math.round(data.priceMonthly));
+        }
 
-        // При включении биллинга все компании без подписки получают пробный период —
-        // никого не отрубаем сразу
-        let trialsCreated = 0;
+        const saved: Array<[string, string]> = [
+            [SETTING_ENABLED, String(enabled)],
+            [SETTING_TRIAL_DAYS, String(trialDays)],
+            [SETTING_GRACE_DAYS, String(graceDays)],
+        ];
+        for (const [key, value] of saved) {
+            await this.prisma.platformSetting.upsert({
+                where: { key },
+                create: { key, value },
+                update: { value },
+            });
+        }
+
+        // День включения оплаты. Отрубать разом всех, кто работал бесплатно,
+        // нельзя: у них рейсы в пути. Каждый получает названное владельцем
+        // число дней, чтобы успеть оплатить.
+        let graceGranted = 0;
         if (enabled && !current.enabled) {
-            trialsCreated = await this.provisionTrials(trialDays);
+            graceGranted = await this.provisionGrace(graceDays);
         }
 
         this.invalidateCaches();
-        return { enabled, trialDays, trialsCreated };
+        return { enabled, trialDays, graceDays, graceGranted };
     }
 
-    /** Выдать триал всем реальным компаниям без подписки */
-    private async provisionTrials(trialDays: number): Promise<number> {
-        const companies = await this.prisma.company.findMany({
+    /**
+     * Дать всем работающим компаниям срок на оплату.
+     *
+     * Правило одно: только добавляем. У кого доступ и так дальше этого срока
+     * (оплачен вперёд, бессрочная подписка, длинный пробный период) — того не
+     * трогаем, иначе включение оплаты отняло бы у него оплаченные дни.
+     */
+    private async provisionGrace(graceDays: number): Promise<number> {
+        const graceEndsAt = new Date(Date.now() + graceDays * DAY_MS);
+
+        const fresh = await this.prisma.company.findMany({
             where: { isExternal: false, isActive: true, subscription: null },
             select: { id: true },
         });
-        if (companies.length === 0) return 0;
+        if (fresh.length > 0) {
+            await this.prisma.companySubscription.createMany({
+                data: fresh.map(c => ({
+                    companyId: c.id,
+                    status: SubscriptionStatus.GRACE,
+                    trialEndsAt: graceEndsAt,
+                })),
+                skipDuplicates: true,
+            });
+        }
 
-        const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
-        await this.prisma.companySubscription.createMany({
-            data: companies.map(c => ({
-                companyId: c.id,
-                status: SubscriptionStatus.TRIAL,
-                trialEndsAt,
-            })),
-            skipDuplicates: true,
+        const shortened = await this.prisma.companySubscription.updateMany({
+            where: {
+                company: { isExternal: false, isActive: true },
+                OR: [
+                    // Бесплатный доступ кончается раньше срока на оплату
+                    {
+                        status: { in: FREE_STATUSES },
+                        OR: [{ trialEndsAt: null }, { trialEndsAt: { lt: graceEndsAt } }],
+                    },
+                    // Оплаченный период кончается раньше (бессрочные — periodEnd
+                    // пустой — сюда не попадают и остаются как были)
+                    { status: SubscriptionStatus.ACTIVE, periodEnd: { lt: graceEndsAt } },
+                    // Уже отключённые: до сегодняшнего дня они всё равно
+                    // работали, потому что биллинг был выключен
+                    { status: { in: [SubscriptionStatus.PAST_DUE, SubscriptionStatus.CANCELLED] } },
+                ],
+            },
+            data: { status: SubscriptionStatus.GRACE, trialEndsAt: graceEndsAt },
         });
-        return companies.length;
+
+        return fresh.length + shortened.count;
     }
 
     // ==================== Проверка доступа ====================
@@ -126,7 +197,7 @@ export class BillingService {
 
         const now = new Date();
 
-        if (sub.status === SubscriptionStatus.TRIAL) {
+        if (FREE_STATUSES.includes(sub.status)) {
             if (sub.trialEndsAt && sub.trialEndsAt > now) return true;
             await this.prisma.companySubscription.update({
                 where: { id: sub.id },
@@ -147,7 +218,56 @@ export class BillingService {
         return false; // PAST_DUE / CANCELLED
     }
 
-    /** Статус подписки для кабинета компании (баннер, страница тарифов) */
+    // ==================== Тариф платформы ====================
+
+    /**
+     * Основной тариф — тот, что показывают на лендинге и по которому считают
+     * счёт. Планов в базе может быть несколько, но продаётся один; берём
+     * первый по порядку сортировки.
+     */
+    private async getMainPlan() {
+        return this.prisma.subscriptionPlan.findFirst({
+            where: { isActive: true },
+            orderBy: [{ sortOrder: 'asc' }, { priceMonthly: 'asc' }],
+        });
+    }
+
+    /** Записать цену в основной тариф, заведя его, если тарифа ещё нет. */
+    private async setTariffPrice(priceMonthly: number) {
+        const plan = await this.getMainPlan();
+        if (plan) {
+            return this.prisma.subscriptionPlan.update({
+                where: { id: plan.id },
+                data: { priceMonthly },
+            });
+        }
+        return this.prisma.subscriptionPlan.create({
+            data: { name: 'Стандарт', priceMonthly, sortOrder: 0 },
+        });
+    }
+
+    /**
+     * Тариф для лендинга и кабинета. Открыт без авторизации: цену видят и те,
+     * кто ещё не зарегистрировался.
+     *
+     * Пока оплата не включена, цена ноль — независимо от того, какая сумма
+     * уже заведена в тарифе. Иначе на сайте висела бы цена, которую никто не
+     * платит.
+     */
+    async getTariff() {
+        const { enabled, trialDays } = await this.getSettings();
+        const plan = await this.getMainPlan();
+        return {
+            paid: enabled,
+            name: plan?.name ?? 'Стандарт',
+            priceMonthly: enabled ? (plan?.priceMonthly ?? 0) : 0,
+            currency: plan?.currency ?? 'KZT',
+            trialDays,
+            features: plan?.features ?? [],
+        };
+    }
+
+    /** Статус подписки для кабинета компании (плитка «Тариф», пейволл) */
     async getCompanyStatus(companyId?: string) {
         const { enabled } = await this.getSettings();
         if (!enabled || !companyId) {
@@ -155,10 +275,23 @@ export class BillingService {
         }
 
         const allowed = await this.isCompanyAllowed(companyId);
-        const sub = await this.prisma.companySubscription.findUnique({
-            where: { companyId },
-            include: { plan: { select: { id: true, name: true, priceMonthly: true, currency: true } } },
-        });
+        const [sub, tariff, request] = await Promise.all([
+            this.prisma.companySubscription.findUnique({
+                where: { companyId },
+                include: { plan: { select: { id: true, name: true, priceMonthly: true, currency: true } } },
+            }),
+            this.getTariff(),
+            this.prisma.subscriptionRequest.findFirst({
+                where: { companyId, status: SubscriptionRequestStatus.PENDING },
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, months: true, amount: true, createdAt: true },
+            }),
+        ]);
+
+        // Цена компании — из её плана, если он назначен: тариф мог подорожать
+        // после того, как она оплатила.
+        const priceMonthly = sub?.plan?.priceMonthly ?? tariff.priceMonthly;
+        const until = sub && FREE_STATUSES.includes(sub.status) ? sub.trialEndsAt : sub?.periodEnd ?? null;
 
         return {
             enabled: true,
@@ -167,6 +300,10 @@ export class BillingService {
             trialEndsAt: sub?.trialEndsAt ?? null,
             periodEnd: sub?.periodEnd ?? null,
             plan: sub?.plan ?? null,
+            priceMonthly,
+            until,
+            daysLeft: until ? Math.max(0, Math.ceil((until.getTime() - Date.now()) / DAY_MS)) : null,
+            request,
         };
     }
 
@@ -377,5 +514,129 @@ export class BillingService {
 
         this.invalidateCaches();
         return result;
+    }
+
+    // ==================== Запросы на покупку ====================
+
+    /**
+     * Компания просит счёт на N месяцев.
+     *
+     * Сумма считается здесь, а не приходит из браузера: цену назначает
+     * владелец платформы, и подставить свою компания не должна.
+     */
+    async createRequest(
+        companyId: string,
+        user: { id?: string; firstName?: string; lastName?: string },
+        data: { months: number; comment?: string },
+    ) {
+        const months = Math.round(Number(data.months));
+        if (!Number.isFinite(months) || months < 1 || months > 36) {
+            throw new BadRequestException('Срок подписки: от 1 до 36 месяцев');
+        }
+
+        const pending = await this.prisma.subscriptionRequest.findFirst({
+            where: { companyId, status: SubscriptionRequestStatus.PENDING },
+        });
+        if (pending) {
+            throw new BadRequestException('Запрос уже отправлен — ждём счёт');
+        }
+
+        const [company, plan] = await Promise.all([
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true, bin: true } }),
+            this.getMainPlan(),
+        ]);
+        if (!company) throw new NotFoundException('Компания не найдена');
+
+        const requesterName = [user.lastName, user.firstName].filter(Boolean).join(' ').trim() || null;
+        const request = await this.prisma.subscriptionRequest.create({
+            data: {
+                companyId,
+                months,
+                amount: (plan?.priceMonthly ?? 0) * months,
+                planId: plan?.id ?? null,
+                requestedById: user.id ?? null,
+                requesterName,
+                comment: data.comment?.trim() || null,
+            },
+        });
+
+        await this.notifyOwner(
+            'Запрос на подписку\n\n' +
+            `${company.name}${company.bin ? ` · БИН ${company.bin}` : ''}\n` +
+            `${months} мес · ${request.amount.toLocaleString('ru-RU')} ₸\n` +
+            (requesterName ? `Отправил: ${requesterName}\n` : '') +
+            (request.comment ? `\n${request.comment}` : ''),
+        );
+
+        return request;
+    }
+
+    /** Запросы компаний: сначала те, на которые не ответили. */
+    async listRequests() {
+        return this.prisma.subscriptionRequest.findMany({
+            orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+            take: 200,
+            include: {
+                company: {
+                    select: {
+                        id: true, name: true, bin: true,
+                        subscription: { select: { status: true, periodEnd: true, trialEndsAt: true } },
+                    },
+                },
+            },
+        });
+    }
+
+    /** Оплата пришла: продлеваем подписку на запрошенный срок и закрываем запрос. */
+    async approveRequest(id: string, note?: string | null) {
+        const request = await this.prisma.subscriptionRequest.findUnique({ where: { id } });
+        if (!request) throw new NotFoundException('Запрос не найден');
+        if (request.status !== SubscriptionRequestStatus.PENDING) {
+            throw new BadRequestException('На этот запрос уже ответили');
+        }
+
+        await this.updateCompanySubscription(request.companyId, {
+            months: request.months,
+            planId: request.planId ?? undefined,
+            note: note?.trim() || `Запрос на ${request.months} мес · ${request.amount.toLocaleString('ru-RU')} ₸`,
+        });
+
+        return this.prisma.subscriptionRequest.update({
+            where: { id },
+            data: {
+                status: SubscriptionRequestStatus.APPROVED,
+                decisionNote: note?.trim() || null,
+                decidedAt: new Date(),
+            },
+        });
+    }
+
+    async rejectRequest(id: string, note?: string | null) {
+        const request = await this.prisma.subscriptionRequest.findUnique({ where: { id } });
+        if (!request) throw new NotFoundException('Запрос не найден');
+        if (request.status !== SubscriptionRequestStatus.PENDING) {
+            throw new BadRequestException('На этот запрос уже ответили');
+        }
+
+        return this.prisma.subscriptionRequest.update({
+            where: { id },
+            data: {
+                status: SubscriptionRequestStatus.REJECTED,
+                decisionNote: note?.trim() || null,
+                decidedAt: new Date(),
+            },
+        });
+    }
+
+    /**
+     * Сообщить владельцу в телеграм. Запрос уже сохранён, поэтому падать
+     * из-за мессенджера нельзя: не дошло — значит увидит в админке.
+     */
+    private async notifyOwner(text: string) {
+        try {
+            await this.telegram.send(text);
+        } catch (error) {
+            this.logger.warn(`Не удалось отправить уведомление о подписке: ${error}`);
+        }
     }
 }

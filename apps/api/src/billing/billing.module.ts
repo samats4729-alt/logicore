@@ -3,9 +3,10 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { BillingService } from './billing.service';
 import { BillingController } from './billing.controller';
 import { SubscriptionInterceptor } from './subscription.interceptor';
+import { PublicBillingController } from './public-billing.controller';
 
 @Module({
-    controllers: [BillingController],
+    controllers: [BillingController, PublicBillingController],
     providers: [
         BillingService,
         {

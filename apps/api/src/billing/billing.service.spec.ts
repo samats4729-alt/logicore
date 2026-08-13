@@ -26,11 +26,16 @@ describe('Подписки компаний', () => {
     const build = (options: {
         enabled?: boolean;
         trialDays?: string;
+        graceDays?: string;
         subscription?: any;
         companies?: any[];
         plan?: any;
+        mainPlan?: any;
+        request?: any;
+        requestId?: any;
         userCount?: number;
         orderCount?: number;
+        graceUpdated?: number;
     } = {}) => {
         // Настройки живут в базе, а не в объекте сборки: сохранение обязано
         // менять то, что прочитают следующим запросом, иначе проверка
@@ -40,6 +45,9 @@ describe('Подписки компаний', () => {
             ...(options.trialDays === undefined
                 ? []
                 : [['billing_trial_days', options.trialDays] as [string, string]]),
+            ...(options.graceDays === undefined
+                ? []
+                : [['billing_grace_days', options.graceDays] as [string, string]]),
         ]);
         const prisma: any = {
             platformSetting: {
@@ -53,25 +61,35 @@ describe('Подписки компаний', () => {
                 findUnique: jest.fn().mockResolvedValue(options.subscription ?? null),
                 create: jest.fn(async ({ data }: any) => ({ id: 'sub-new', ...data })),
                 createMany: jest.fn().mockResolvedValue({ count: 0 }),
+                updateMany: jest.fn().mockResolvedValue({ count: options.graceUpdated ?? 0 }),
                 update: jest.fn().mockResolvedValue({}),
                 upsert: jest.fn(async (args: any) => ({ companyId: COMPANY, ...args.update })),
                 count: jest.fn().mockResolvedValue(0),
             },
             company: {
                 findMany: jest.fn().mockResolvedValue(options.companies ?? []),
-                findUnique: jest.fn().mockResolvedValue({ id: COMPANY }),
+                findUnique: jest.fn().mockResolvedValue({ id: COMPANY, name: 'ТОО «Пример»', bin: '123456789012' }),
             },
             subscriptionPlan: {
                 findUnique: jest.fn().mockResolvedValue(options.plan ?? null),
-                create: jest.fn(async ({ data }: any) => data),
+                findFirst: jest.fn().mockResolvedValue(options.mainPlan ?? null),
+                create: jest.fn(async ({ data }: any) => ({ id: 'plan-new', ...data })),
                 update: jest.fn(async (args: any) => ({ id: args.where.id, ...args.data })),
                 delete: jest.fn().mockResolvedValue({}),
                 findMany: jest.fn().mockResolvedValue([]),
             },
+            subscriptionRequest: {
+                findFirst: jest.fn().mockResolvedValue(options.request ?? null),
+                findUnique: jest.fn().mockResolvedValue(options.requestId ?? null),
+                findMany: jest.fn().mockResolvedValue([]),
+                create: jest.fn(async ({ data }: any) => ({ id: 'req-1', ...data })),
+                update: jest.fn(async (args: any) => ({ id: args.where.id, ...args.data })),
+            },
             user: { count: jest.fn().mockResolvedValue(options.userCount ?? 0) },
             order: { count: jest.fn().mockResolvedValue(options.orderCount ?? 0) },
         };
-        return { service: new BillingService(prisma), prisma };
+        const telegram: any = { send: jest.fn().mockResolvedValue(true) };
+        return { service: new BillingService(prisma, telegram), prisma, telegram };
     };
 
     describe('пока биллинг выключен', () => {
@@ -222,9 +240,10 @@ describe('Подписки компаний', () => {
         });
     });
 
-    describe('включение биллинга', () => {
-        it('все действующие компании получают пробный период', async () => {
-            // Иначе в момент включения вся платформа встаёт разом.
+    describe('день, когда назначили цену', () => {
+        it('все действующие компании получают дни на оплату', async () => {
+            // Иначе в момент включения оплаты вся платформа встаёт разом —
+            // вместе с рейсами, которые уже в пути.
             const { service, prisma } = build({
                 enabled: false,
                 companies: [{ id: 'c-1' }, { id: 'c-2' }],
@@ -232,11 +251,55 @@ describe('Подписки компаний', () => {
 
             const result = await service.updateSettings({ enabled: true });
 
-            expect(result.trialsCreated).toBe(2);
+            expect(result.graceGranted).toBe(2);
             expect(prisma.companySubscription.createMany.mock.calls[0][0].data).toHaveLength(2);
+            expect(prisma.companySubscription.createMany.mock.calls[0][0].data[0].status)
+                .toBe(SubscriptionStatus.GRACE);
         });
 
-        it('триал выдаётся только настоящим арендаторам', async () => {
+        it('срок на оплату по умолчанию — три дня', async () => {
+            const { service, prisma } = build({ enabled: false, companies: [{ id: 'c-1' }] });
+            await service.updateSettings({ enabled: true });
+
+            const { trialEndsAt } = prisma.companySubscription.createMany.mock.calls[0][0].data[0];
+            expect(Math.round((trialEndsAt.getTime() - Date.now()) / DAY)).toBe(3);
+        });
+
+        it('число дней задаёт владелец', async () => {
+            const { service, prisma } = build({ enabled: false, companies: [{ id: 'c-1' }] });
+            await service.updateSettings({ enabled: true, graceDays: 10 });
+
+            const { trialEndsAt } = prisma.companySubscription.createMany.mock.calls[0][0].data[0];
+            expect(Math.round((trialEndsAt.getTime() - Date.now()) / DAY)).toBe(10);
+        });
+
+        it('те, у кого подписка уже кончилась, тоже получают срок', async () => {
+            // До этого дня они работали: платформа была бесплатной. Отключить
+            // их в ту же секунду, когда назначили цену, было бы нечестно.
+            const { service, prisma } = build({ enabled: false, graceUpdated: 4 });
+
+            const result = await service.updateSettings({ enabled: true });
+
+            expect(result.graceGranted).toBe(4);
+            const { where, data } = prisma.companySubscription.updateMany.mock.calls[0][0];
+            expect(data.status).toBe(SubscriptionStatus.GRACE);
+            expect(where.OR).toEqual(expect.arrayContaining([
+                { status: { in: [SubscriptionStatus.PAST_DUE, SubscriptionStatus.CANCELLED] } },
+            ]));
+        });
+
+        it('оплаченное вперёд не отбирается', async () => {
+            // Правило перехода одно: только добавляем. Бессрочная подписка —
+            // periodEnd пустой — под условие не подходит и остаётся как была.
+            const { service, prisma } = build({ enabled: false });
+            await service.updateSettings({ enabled: true });
+
+            const { where } = prisma.companySubscription.updateMany.mock.calls[0][0];
+            const active = where.OR.find((c: any) => c.status === SubscriptionStatus.ACTIVE);
+            expect(active.periodEnd.lt.getTime()).toBeCloseTo(Date.now() + 3 * DAY, -4);
+        });
+
+        it('срок выдаётся только настоящим арендаторам', async () => {
             const { service, prisma } = build({ enabled: false, companies: [{ id: 'c-1' }] });
             await service.updateSettings({ enabled: true });
 
@@ -246,21 +309,22 @@ describe('Подписки компаний', () => {
             expect(where.subscription).toBeNull();
         });
 
-        it('повторное сохранение настроек триалы не раздаёт', async () => {
-            // Иначе правка срока пробного периода продлевала бы жизнь всем,
-            // кого уже отключили за неоплату.
+        it('повторное сохранение настроек сроков не раздаёт', async () => {
+            // Иначе правка цены продлевала бы жизнь всем, кого уже отключили
+            // за неоплату.
             const { service, prisma } = build({ enabled: true, companies: [{ id: 'c-1' }] });
 
             const result = await service.updateSettings({ trialDays: 20 });
 
-            expect(result.trialsCreated).toBe(0);
+            expect(result.graceGranted).toBe(0);
             expect(prisma.companySubscription.createMany).not.toHaveBeenCalled();
+            expect(prisma.companySubscription.updateMany).not.toHaveBeenCalled();
         });
 
-        it('выключение биллинга разблокирует сразу', async () => {
+        it('выключение оплаты разблокирует сразу', async () => {
             const { service } = build({
                 enabled: true,
-                subscription: { id: 's-1', status: SubscriptionStatus.TRIAL, trialEndsAt: past(1) },
+                subscription: { id: 's-1', status: SubscriptionStatus.GRACE, trialEndsAt: past(1) },
             });
 
             expect(await service.isCompanyAllowed(COMPANY)).toBe(false);
@@ -281,6 +345,75 @@ describe('Подписки компаний', () => {
 
             await expect(service.updateSettings({ trialDays: 366 }))
                 .rejects.toThrow(/от 1 до 365/);
+        });
+
+        it('нулевой срок на оплату не принимается', async () => {
+            const { service } = build({ enabled: false });
+
+            await expect(service.updateSettings({ graceDays: 0 }))
+                .rejects.toThrow(/от 1 до 90/);
+        });
+
+        it('действующий срок на оплату пускает', async () => {
+            const { service } = build({
+                enabled: true,
+                subscription: { id: 's-1', status: SubscriptionStatus.GRACE, trialEndsAt: future(2) },
+            });
+
+            expect(await service.isCompanyAllowed(COMPANY)).toBe(true);
+        });
+
+        it('истёкший срок на оплату закрывает доступ', async () => {
+            const { service, prisma } = build({
+                enabled: true,
+                subscription: { id: 's-1', status: SubscriptionStatus.GRACE, trialEndsAt: past(1) },
+            });
+
+            expect(await service.isCompanyAllowed(COMPANY)).toBe(false);
+            expect(prisma.companySubscription.update.mock.calls[0][0].data.status)
+                .toBe(SubscriptionStatus.PAST_DUE);
+        });
+    });
+
+    describe('цена тарифа', () => {
+        it('пока оплата не включена, на сайте ноль', async () => {
+            // Сумма в тарифе может быть заведена заранее. Показывать её,
+            // пока никто не платит, — обещать цену, которой ещё нет.
+            const { service } = build({ enabled: false, mainPlan: { priceMonthly: 25000, features: [] } });
+
+            expect(await service.getTariff()).toMatchObject({ paid: false, priceMonthly: 0 });
+        });
+
+        it('после включения показывается назначенная сумма', async () => {
+            const { service } = build({ enabled: true, mainPlan: { name: 'Стандарт', priceMonthly: 25000, features: [] } });
+
+            expect(await service.getTariff()).toMatchObject({ paid: true, priceMonthly: 25000 });
+        });
+
+        it('цена правится в админке, а не в коде', async () => {
+            const { service, prisma } = build({ enabled: false, mainPlan: { id: 'p-1', priceMonthly: 0 } });
+
+            await service.updateSettings({ priceMonthly: 25000 });
+
+            expect(prisma.subscriptionPlan.update.mock.calls[0][0].data.priceMonthly).toBe(25000);
+        });
+
+        it('первая назначенная цена заводит тариф сама', async () => {
+            // Владельцу не нужно знать про «тарифные планы»: он называет
+            // сумму, а всё остальное появляется само.
+            const { service, prisma } = build({ enabled: false, mainPlan: null });
+
+            await service.updateSettings({ priceMonthly: 25000 });
+
+            expect(prisma.subscriptionPlan.create.mock.calls[0][0].data)
+                .toMatchObject({ name: 'Стандарт', priceMonthly: 25000 });
+        });
+
+        it('отрицательная цена не принимается', async () => {
+            const { service } = build({ enabled: false });
+
+            await expect(service.updateSettings({ priceMonthly: -1 }))
+                .rejects.toBeInstanceOf(BadRequestException);
         });
     });
 
@@ -510,6 +643,129 @@ describe('Подписки компаний', () => {
             await service.updateCompanySubscription(COMPANY, { planId: null });
 
             expect(prisma.companySubscription.upsert.mock.calls[0][0].update.planId).toBeNull();
+        });
+    });
+
+    describe('запрос на покупку подписки', () => {
+        const USER = { id: 'u-1', firstName: 'Данияр', lastName: 'Заказчик' };
+        const PLAN = { id: 'p-1', name: 'Стандарт', priceMonthly: 25000, features: [] };
+
+        it('сумму считает сервер, а не браузер', async () => {
+            // Иначе компания прислала бы свою цену и «оплатила» тариф рублём.
+            const { service, prisma } = build({ enabled: true, mainPlan: PLAN });
+
+            await service.createRequest(COMPANY, USER, { months: 3, comment: undefined });
+
+            expect(prisma.subscriptionRequest.create.mock.calls[0][0].data)
+                .toMatchObject({ months: 3, amount: 75000, planId: 'p-1' });
+        });
+
+        it('второй запрос не создаётся, пока не ответили на первый', async () => {
+            const { service } = build({
+                enabled: true, mainPlan: PLAN,
+                request: { id: 'req-0', status: 'PENDING' },
+            });
+
+            await expect(service.createRequest(COMPANY, USER, { months: 1 }))
+                .rejects.toThrow(/уже отправлен/);
+        });
+
+        it('срок длиннее трёх лет не принимается', async () => {
+            const { service } = build({ enabled: true, mainPlan: PLAN });
+
+            await expect(service.createRequest(COMPANY, USER, { months: 48 }))
+                .rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        it('запрос уходит владельцу в телеграм', async () => {
+            // Иначе владелец узнает о желании заплатить, когда сам зайдёт
+            // в админку.
+            const { service, telegram } = build({ enabled: true, mainPlan: PLAN });
+
+            await service.createRequest(COMPANY, USER, { months: 3 });
+
+            expect(telegram.send).toHaveBeenCalled();
+            const text: string = telegram.send.mock.calls[0][0];
+            expect(text).toContain('ТОО «Пример»');
+            expect(text).toContain('3 мес');
+        });
+
+        it('молчащий телеграм запрос не роняет', async () => {
+            const { service, telegram } = build({ enabled: true, mainPlan: PLAN });
+            telegram.send.mockRejectedValue(new Error('нет сети'));
+
+            await expect(service.createRequest(COMPANY, USER, { months: 1 })).resolves.toBeDefined();
+        });
+
+        it('имя отправителя сохраняется снимком', async () => {
+            // Сотрудник может уволиться, а запрос должен остаться читаемым.
+            const { service, prisma } = build({ enabled: true, mainPlan: PLAN });
+
+            await service.createRequest(COMPANY, USER, { months: 1 });
+
+            expect(prisma.subscriptionRequest.create.mock.calls[0][0].data.requesterName)
+                .toBe('Заказчик Данияр');
+        });
+
+        it('одобрение продлевает подписку на запрошенный срок', async () => {
+            const { service, prisma } = build({
+                enabled: true,
+                requestId: { id: 'req-1', companyId: COMPANY, months: 3, amount: 75000, planId: 'p-1', status: 'PENDING' },
+                plan: PLAN,
+                subscription: { id: 's-1', status: SubscriptionStatus.GRACE, trialEndsAt: future(1) },
+            });
+
+            await service.approveRequest('req-1', 'Счёт №12');
+
+            const update = prisma.companySubscription.upsert.mock.calls[0][0].update;
+            expect(update.status).toBe(SubscriptionStatus.ACTIVE);
+            expect(update.periodEnd.toISOString().slice(0, 10))
+                .toBe(addMonths(new Date(), 3).toISOString().slice(0, 10));
+            expect(prisma.subscriptionRequest.update.mock.calls[0][0].data.status).toBe('APPROVED');
+        });
+
+        it('одобренный запрос повторно не проводится', async () => {
+            // Иначе двойной клик дарит компании ещё три месяца.
+            const { service, prisma } = build({
+                enabled: true,
+                requestId: { id: 'req-1', companyId: COMPANY, months: 3, amount: 75000, status: 'APPROVED' },
+            });
+
+            await expect(service.approveRequest('req-1')).rejects.toThrow(/уже ответили/);
+            expect(prisma.companySubscription.upsert).not.toHaveBeenCalled();
+        });
+
+        it('отказ подписку не трогает', async () => {
+            const { service, prisma } = build({
+                enabled: true,
+                requestId: { id: 'req-1', companyId: COMPANY, months: 3, amount: 75000, status: 'PENDING' },
+            });
+
+            await service.rejectRequest('req-1', 'Оплата не поступила');
+
+            expect(prisma.companySubscription.upsert).not.toHaveBeenCalled();
+            expect(prisma.subscriptionRequest.update.mock.calls[0][0].data.status).toBe('REJECTED');
+        });
+
+        it('несуществующий запрос не одобряется', async () => {
+            const { service } = build({ enabled: true, requestId: null });
+
+            await expect(service.approveRequest('req-нет')).rejects.toBeInstanceOf(NotFoundException);
+        });
+
+        it('кабинет видит отправленный запрос', async () => {
+            // На плитке «Тариф» должно быть написано «ждём счёт», иначе
+            // человек нажмёт «Купить» ещё раз.
+            const { service } = build({
+                enabled: true,
+                mainPlan: PLAN,
+                subscription: { id: 's-1', status: SubscriptionStatus.GRACE, trialEndsAt: future(2) },
+                request: { id: 'req-1', months: 3, amount: 75000, createdAt: new Date() },
+            });
+
+            const status: any = await service.getCompanyStatus(COMPANY);
+            expect(status.request).toMatchObject({ months: 3, amount: 75000 });
+            expect(status.daysLeft).toBe(2);
         });
     });
 });

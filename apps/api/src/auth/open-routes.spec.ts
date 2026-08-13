@@ -48,6 +48,7 @@ const PUBLIC_ROUTES: Record<string, string> = {
     'MonitoringController.health': 'проверка живости для Railway',
     'MonitoringController.reportClientError': 'ошибки браузера — их шлёт и разлогиненная страница',
     'PublicPaymentProofController.submit': 'чек по ссылке от контрагента',
+    'PublicBillingController.getTariff': 'цена тарифа для лендинга — её смотрят до регистрации',
 };
 
 /** Требуют входа, но роль не ограничена — с указанием, почему так и должно быть. */

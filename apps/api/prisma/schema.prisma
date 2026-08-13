@@ -389,6 +389,7 @@ model Company {
   affiliations                    Affiliation[]                 @relation("CompanyAffiliations")
   documents                       Document[]
   subscription                    CompanySubscription?
+  subscriptionRequests            SubscriptionRequest[]
   orderResponsibilities           OrderResponsible[]            @relation("CompanyOrderResponsibilities")
   counterpartyOpenings            CounterpartyOpeningBalance[]  @relation("CompanyCounterpartyOpenings")
   openingsAsCounterparty          CounterpartyOpeningBalance[]  @relation("CounterpartyOpenings")
@@ -2312,27 +2313,72 @@ model SubscriptionPlan {
 }
 
 enum SubscriptionStatus {
-  TRIAL // Пробный период
+  TRIAL // Пробный период у новой компании
+  GRACE // Дни на оплату у тех, кто работал до включения оплаты
   ACTIVE // Оплачена
   PAST_DUE // Просрочена
   CANCELLED // Отменена
 }
 
 model CompanySubscription {
-  id          String             @id @default(cuid())
-  companyId   String             @unique
-  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  planId      String?
-  plan        SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: SetNull)
-  status      SubscriptionStatus @default(TRIAL)
+  id        String             @id @default(cuid())
+  companyId String             @unique
+  company   Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId    String?
+  plan      SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: SetNull)
+  status    SubscriptionStatus @default(TRIAL)
+  /// До какого момента компания работает бесплатно.
+  ///
+  /// Одно поле на два разных повода, и это намеренно: и в пробном периоде,
+  /// и в днях на оплату речь про одно и то же — до какого числа кабинет
+  /// открыт без денег. Различает их статус: TRIAL у новой компании, GRACE
+  /// у тех, кто уже работал, когда владелец назначил цену.
   trialEndsAt DateTime?
   periodStart DateTime?
   periodEnd   DateTime?
   note        String? // Комментарий админа (№ счёта, детали оплаты)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([status])
+}
+
+enum SubscriptionRequestStatus {
+  PENDING // Компания попросила счёт, ответа ещё нет
+  APPROVED // Оплата получена, срок продлён
+  REJECTED // Отказано
+}
+
+/// Запрос компании на покупку подписки.
+///
+/// Оплата идёт по счёту мимо платформы, поэтому кнопка «Купить» не может
+/// ничего списать. Она делает единственное, что здесь имеет смысл: оставляет
+/// заявку — какая компания, на сколько месяцев и на какую сумму. Владелец
+/// платформы видит её в биллинге, выставляет счёт и после оплаты продлевает
+/// подписку одной кнопкой.
+model SubscriptionRequest {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  months Int // на сколько месяцев просят
+  amount Int // сумма в тенге на момент запроса
+  planId String? // какой тариф показывали компании (снимок, без связи)
+
+  /// Кто нажал кнопку. Снимок, как в аудит-логе: сотрудник может уволиться,
+  /// а запрос должен остаться читаемым.
+  requestedById String?
+  requesterName String?
+  comment       String? // сообщение от компании
+
+  status       SubscriptionRequestStatus @default(PENDING)
+  decisionNote String? // № счёта или причина отказа
+  decidedAt    DateTime?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([companyId, status])
 }
 
 // ==================== АУДИТ-ЛОГ ДЕЙСТВИЙ ====================
