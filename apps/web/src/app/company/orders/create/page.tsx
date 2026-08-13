@@ -770,7 +770,7 @@ export default function CreateOrderPage() {
 
     const stepRoute = (
         <Card size="small" className="lc-wiz-panel">
-            <Form.Item name="pickupDate" label="Дата и время погрузки" rules={[{ required: true, message: 'Укажите дату' }]}>
+            <Form.Item name="pickupDate" label="Дата и время погрузки" rules={[{ required: true, message: 'Укажите дату' }]} data-guide="wizard-pickup-date">
                 <DatePicker
                     style={{ width: '100%' }}
                     format="DD.MM.YYYY HH:mm"
@@ -937,7 +937,7 @@ export default function CreateOrderPage() {
                     </Form.Item>
                 </Col>
             </Row>
-            <Form.Item name="cargoDescription" label="Описание груза">
+            <Form.Item name="cargoDescription" label="Описание груза" data-guide="wizard-cargo">
                 <TextArea rows={2} placeholder="Мебель, 20 коробок, палеты..." />
             </Form.Item>
             <Row gutter={12}>
@@ -1030,7 +1030,7 @@ export default function CreateOrderPage() {
 
             <Row gutter={12}>
                 <Col xs={24} md={12}>
-                    <div className="lc-wiz-field">
+                    <div className="lc-wiz-field" data-guide="wizard-customer">
                         <div className="lc-wiz-lbl">Заказчик</div>
                         <Select
                             placeholder="Выберите заказчика"
@@ -1083,7 +1083,7 @@ export default function CreateOrderPage() {
                     </div>
                 </Col>
                 <Col xs={24} md={12}>
-                    <div className="lc-wiz-field">
+                    <div className="lc-wiz-field" data-guide="wizard-carrier">
                         <div className="lc-wiz-lbl">Перевозчик</div>
                         <Select
                             placeholder="Выберите перевозчика"
@@ -1520,6 +1520,9 @@ export default function CreateOrderPage() {
                         className={`${nova.pill} ${idx === currentStep ? nova.pillActive : ''}`}
                         onClick={() => { if (idx < currentStep) setCurrentStep(idx); }}
                         disabled={idx > currentStep}
+                        // Якоря для ИИ-гида: он ведёт по мастеру шаг за шагом,
+                        // и до сих пор ему нечего было показать внутри формы.
+                        data-guide={`wizard-step-${idx}`}
                     >
                         {idx + 1}. {step.title}
                     </button>
@@ -1539,7 +1542,7 @@ export default function CreateOrderPage() {
             <div className="lc-wizard-nav" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, marginBottom: 32 }}>
                 <div>
                     {currentStep > 0 && (
-                        <Button variant="outline" onClick={goBack}>
+                        <Button variant="outline" onClick={goBack} data-guide="wizard-back">
                             ← Назад
                         </Button>
                     )}
@@ -1549,13 +1552,14 @@ export default function CreateOrderPage() {
                         Отмена
                     </Button>
                     {currentStep < steps.length - 1 ? (
-                        <Button onClick={goNext}>
+                        <Button onClick={goNext} data-guide="wizard-next">
                             Далее →
                         </Button>
                     ) : (
                         <Button
                             onClick={handleSubmit}
                             disabled={submitting || !selectedCustomer || !selectedCarrier}
+                            data-guide="wizard-submit"
                         >
                             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                             Создать заявку

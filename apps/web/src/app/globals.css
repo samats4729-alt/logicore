@@ -2612,6 +2612,16 @@ a.mapboxgl-ctrl-logo,
   transform: rotate(45deg);
 }
 
+/* Подсказка встала над элементом — хвостик разворачивается вниз. */
+.ai-spot-tip-above::before {
+  top: auto;
+  bottom: -7px;
+  border-left: none;
+  border-top: none;
+  border-right: 1px solid rgba(64, 47, 181, 0.35);
+  border-bottom: 1px solid rgba(64, 47, 181, 0.35);
+}
+
 /* Tooltip Buttons */
 .ai-spot-btn-secondary {
   background: var(--lc-hover);

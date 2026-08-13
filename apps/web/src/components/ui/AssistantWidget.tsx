@@ -11,6 +11,15 @@ interface Step {
     selector?: string;
     goto?: string;
     say?: string;
+    /**
+     * Шаг, на котором надо заполнить поле, а не нажать кнопку.
+     *
+     * Обычный шаг перескакивает от касания подсвеченного элемента — для
+     * кнопки это верно, для поля нет: человек кликает в список заказчиков,
+     * маршрут тут же уходит вперёд и подсвечивает «Далее», пока форма
+     * пустая. Такой шаг ждёт, пока человек сам нажмёт «Дальше».
+     */
+    fill?: boolean;
 }
 
 interface TicketDraft {
@@ -170,8 +179,22 @@ export default function AssistantWidget() {
                 ring.style.width = `${r.width + 12}px`;
                 ring.style.height = `${r.height + 12}px`;
                 if (tip) {
-                    tip.style.top = `${Math.min(r.bottom + 14, window.innerHeight - 110)}px`;
+                    // Подсказка становится под элементом, а если внизу не
+                    // помещается — над ним.
+                    //
+                    // Прежнее правило прижимало её к низу окна, и у кнопки в
+                    // подвале страницы подсказка ложилась прямо на неё: гид
+                    // показывал «Далее», а нажать было нельзя — палец и курсор
+                    // попадали в саму подсказку. На длинном маршруте по мастеру
+                    // это останавливало человека намертво.
+                    const tipH = tip.offsetHeight || 96;
+                    const below = r.bottom + 14;
+                    const fitsBelow = below + tipH <= window.innerHeight - 8;
+                    tip.style.top = `${fitsBelow ? below : Math.max(8, r.top - tipH - 14)}px`;
                     tip.style.left = `${Math.min(Math.max(r.left, 8), window.innerWidth - 320)}px`;
+                    // Хвостик смотрит на элемент: вверх, когда подсказка под
+                    // ним, и вниз, когда над.
+                    tip.classList.toggle('ai-spot-tip-above', !fitsBelow);
                 }
             } else if (ring) {
                 ring.style.opacity = '0';
@@ -187,6 +210,7 @@ export default function AssistantWidget() {
         const onClick = (e: MouseEvent) => {
             const el = targetElRef.current;
             if (!el) return;
+            if (stepsRef.current[indexRef.current]?.fill) return;
             if (el.contains(e.target as Node)) {
                 window.setTimeout(() => advance(), 480);
             }
@@ -211,6 +235,8 @@ export default function AssistantWidget() {
             return;
         }
 
+        // Ждём элемент десять секунд, а не пять: шаг мастера появляется
+        // после проверки формы, а карточка рейса — после загрузки данных.
         let tries = 0;
         const tryFind = () => {
             if (!activeRef.current || indexRef.current !== i) return;
@@ -218,7 +244,7 @@ export default function AssistantWidget() {
             if (el) {
                 targetElRef.current = el;
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } else if (tries < 20) {
+            } else if (tries < 40) {
                 tries++;
                 if (tries === 2) {
                     // На мобильном пункты меню живут в Drawer — просим layout открыть его
