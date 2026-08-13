@@ -1,0 +1,91 @@
+/* Тариф и запросы на подписку.
+
+   Отдельным файлом, потому что тут две вещи, которых нет в общем наборе:
+   форма из трёх чисел в одну строку и строка запроса, где слева компания,
+   а справа сумма и решение. */
+
+.form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: flex-end;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fieldLabel {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+}
+
+.formActions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* Что случится, если нажать. Пишется словами, а не звёздочкой у поля:
+   включение оплаты — решение, которое видят все компании разом. */
+.explain {
+    margin-top: 14px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--nova-fg-2);
+    max-width: 720px;
+}
+
+.request {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 0;
+    border-top: 1px solid var(--nova-border);
+}
+
+.request:first-child {
+    border-top: none;
+}
+
+.requestWho {
+    flex: 1;
+    min-width: 220px;
+}
+
+.requestName {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--nova-fg);
+}
+
+.requestMeta {
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+    margin-top: 2px;
+}
+
+.requestSum {
+    font-size: 13.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+    white-space: nowrap;
+}
+
+.requestSumSub {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--nova-fg-3);
+}
+
+.requestActions {
+    display: flex;
+    gap: 8px;
+}

@@ -547,7 +547,16 @@ export class BillingService {
         ]);
         if (!company) throw new NotFoundException('Компания не найдена');
 
-        const requesterName = [user.lastName, user.firstName].filter(Boolean).join(' ').trim() || null;
+        // В токене ФИО нет — берём из базы, как это делает аудит-лог. Иначе в
+        // админке было бы видно компанию, но не человека, который просил счёт.
+        let requesterName = [user.lastName, user.firstName].filter(Boolean).join(' ').trim() || null;
+        if (!requesterName && user.id) {
+            const dbUser = await this.prisma.user.findUnique({
+                where: { id: user.id },
+                select: { firstName: true, lastName: true },
+            });
+            requesterName = [dbUser?.lastName, dbUser?.firstName].filter(Boolean).join(' ').trim() || null;
+        }
         const request = await this.prisma.subscriptionRequest.create({
             data: {
                 companyId,

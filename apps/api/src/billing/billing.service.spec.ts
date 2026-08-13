@@ -85,7 +85,10 @@ describe('Подписки компаний', () => {
                 create: jest.fn(async ({ data }: any) => ({ id: 'req-1', ...data })),
                 update: jest.fn(async (args: any) => ({ id: args.where.id, ...args.data })),
             },
-            user: { count: jest.fn().mockResolvedValue(options.userCount ?? 0) },
+            user: {
+                count: jest.fn().mockResolvedValue(options.userCount ?? 0),
+                findUnique: jest.fn().mockResolvedValue(null),
+            },
             order: { count: jest.fn().mockResolvedValue(options.orderCount ?? 0) },
         };
         const telegram: any = { send: jest.fn().mockResolvedValue(true) };
@@ -702,6 +705,17 @@ describe('Подписки компаний', () => {
             const { service, prisma } = build({ enabled: true, mainPlan: PLAN });
 
             await service.createRequest(COMPANY, USER, { months: 1 });
+
+            expect(prisma.subscriptionRequest.create.mock.calls[0][0].data.requesterName)
+                .toBe('Заказчик Данияр');
+        });
+
+        it('имя берётся из базы, когда его нет в токене', async () => {
+            // В JWT фамилии нет, и в админке был виден только БИН компании.
+            const { service, prisma } = build({ enabled: true, mainPlan: PLAN });
+            prisma.user.findUnique.mockResolvedValue({ firstName: 'Данияр', lastName: 'Заказчик' });
+
+            await service.createRequest(COMPANY, { id: 'u-1' }, { months: 1 });
 
             expect(prisma.subscriptionRequest.create.mock.calls[0][0].data.requesterName)
                 .toBe('Заказчик Данияр');

@@ -82,7 +82,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             label: 'Нововведения',
             count: draftCount,
         },
-        { key: '/admin/billing', icon: <DollarOutlined />, label: 'Биллинг' },
+        { key: '/admin/billing', icon: <DollarOutlined />, label: 'Тариф и оплата' },
         { key: '/admin/audit', icon: <HistoryOutlined />, label: 'Журнал' },
         { key: '/admin/locations', icon: <GlobalOutlined />, label: 'География' },
         { key: '/admin/identity', icon: <TeamOutlined />, label: 'Личности' },
