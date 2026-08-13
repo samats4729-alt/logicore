@@ -7,8 +7,8 @@ import {
     DollarOutlined, WalletOutlined, ClockCircleOutlined, FilePdfOutlined, FileTextOutlined, SwapOutlined, CarOutlined, ExclamationCircleOutlined, 
 } from '@ant-design/icons';
 import {
-    ArrowLeft, ArrowLeftRight, CheckCircle2, Copy, FileText,
-    Loader2, Pencil, Plus, Trash2,
+    ArrowLeft, ArrowLeftRight, Banknote, CheckCircle2, Copy, FileText,
+    History, Loader2, Pencil, Plus, Receipt, Trash2, Wallet,
     XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -1613,36 +1613,38 @@ export default function OrderDetailPage() {
                                     onChanged={() => { fetchSettlements(); fetchData(); }}
                                 />
                                 {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                                        <Space size={8}>
-                                            <Button
-                                                disabled={invoiceLoading}
-                                                onClick={() => openOrCreateOrderDocument('PAYMENT_INVOICE')}
+                                    <div className={nova.heroActions} style={{ justifyContent: 'flex-end', marginBottom: 12 }}>
+                                        <button
+                                            type="button"
+                                            className={`${nova.action} ${nova.actionPrimary}`}
+                                            disabled={invoiceLoading}
+                                            onClick={() => openOrCreateOrderDocument('PAYMENT_INVOICE')}
+                                        >
+                                            {invoiceLoading
+                                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                : <FileText className="h-3.5 w-3.5" />}
+                                            Выставить счёт
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={nova.action}
+                                            disabled={actLoading}
+                                            onClick={() => openOrCreateOrderDocument('SERVICE_ACT')}
+                                        >
+                                            {actLoading
+                                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                : <FileText className="h-3.5 w-3.5" />}
+                                            Акт выполненных работ
+                                        </button>
+                                        <Tooltip title="Расчёт по текущим данным заявки — меняется вместе с ней">
+                                            <button
+                                                type="button"
+                                                className={nova.action}
+                                                onClick={() => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank')}
                                             >
-                                                {invoiceLoading
-                                                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                    : <FileText className="h-4 w-4" />}
-                                                Выставить счёт
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                disabled={actLoading}
-                                                onClick={() => openOrCreateOrderDocument('SERVICE_ACT')}
-                                            >
-                                                {actLoading
-                                                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                    : <FileText className="h-4 w-4" />}
-                                                Акт выполненных работ
-                                            </Button>
-                                            <Tooltip title="Расчёт по текущим данным заявки — меняется вместе с ней">
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={() => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank')}
-                                                >
-                                                    Предпросмотр
-                                                </Button>
-                                            </Tooltip>
-                                        </Space>
+                                                Предпросмотр
+                                            </button>
+                                        </Tooltip>
                                     </div>
                                 )}
                                 {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
@@ -1663,28 +1665,30 @@ export default function OrderDetailPage() {
                                 )}
                                 {/* Условия и формы оплаты */}
                                 {(order.customerPaymentCondition || order.customerPaymentForm || order.driverPaymentCondition || order.driverPaymentForm) && (
-                                    <div className="lc-card" style={{ padding: 16, marginBottom: 16 }}>
-                                        <Row gutter={[16, 12]}>
-                                            {(order.customerPaymentCondition || order.customerPaymentForm) && (
-                                                <Col xs={24} md={12}>
-                                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Оплата от заказчика</div>
-                                                    <div>
-                                                        {order.customerPaymentCondition && <Tag color="blue">{order.customerPaymentCondition}</Tag>}
-                                                        {order.customerPaymentForm && <Tag>{order.customerPaymentForm}</Tag>}
-                                                    </div>
-                                                </Col>
-                                            )}
-                                            {(order.driverPaymentCondition || order.driverPaymentForm) && (
-                                                <Col xs={24} md={12}>
-                                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Оплата перевозчику</div>
-                                                    <div>
-                                                        {order.driverPaymentCondition && <Tag color="blue">{order.driverPaymentCondition}</Tag>}
-                                                        {order.driverPaymentForm && <Tag>{order.driverPaymentForm}</Tag>}
-                                                    </div>
-                                                </Col>
-                                            )}
-                                        </Row>
-                                    </div>
+                                    <section className={nova.card}>
+                                        <div className={nova.cardBody}>
+                                            <Row gutter={[16, 12]}>
+                                                {(order.customerPaymentCondition || order.customerPaymentForm) && (
+                                                    <Col xs={24} md={12}>
+                                                        <div className={nova.tileLabel} style={{ marginBottom: 6 }}>Оплата от заказчика</div>
+                                                        <Space size={6} wrap>
+                                                            {order.customerPaymentCondition && <span className={nova.chip}>{order.customerPaymentCondition}</span>}
+                                                            {order.customerPaymentForm && <span className={nova.chip}>{order.customerPaymentForm}</span>}
+                                                        </Space>
+                                                    </Col>
+                                                )}
+                                                {(order.driverPaymentCondition || order.driverPaymentForm) && (
+                                                    <Col xs={24} md={12}>
+                                                        <div className={nova.tileLabel} style={{ marginBottom: 6 }}>Оплата перевозчику</div>
+                                                        <Space size={6} wrap>
+                                                            {order.driverPaymentCondition && <span className={nova.chip}>{order.driverPaymentCondition}</span>}
+                                                            {order.driverPaymentForm && <span className={nova.chip}>{order.driverPaymentForm}</span>}
+                                                        </Space>
+                                                    </Col>
+                                                )}
+                                            </Row>
+                                        </div>
+                                    </section>
                                 )}
 
                                 {/* Financial Summary */}
@@ -1697,27 +1701,66 @@ export default function OrderDetailPage() {
                                             ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
                                             : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses));
 
-                                    const Metric = ({ label, value, color, bg, icon, sub }: any) => (
-                                        <div className="lc2-metric">
-                                            <div className="lc2-mic" style={{ background: bg, color }}>{icon}</div>
-                                            <div>
-                                                <div className="lc2-mlabel">{label}</div>
-                                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color }}>{fmt(value)} ₸</div>
-                                                {sub && <div className="lc2-msub">{sub}</div>}
+                                    /**
+                                     * Плитка показателя.
+                                     *
+                                     * Цвет — только там, где он что-то значит: убыток и долг,
+                                     * который ещё висит. Раньше каждая плитка красилась своим
+                                     * (синий, серый, оранжевый, зелёный) вместе с кружком-значком,
+                                     * и пять цветов подряд не выделяли ничего.
+                                     */
+                                    const Metric = ({ label, value, sub, tone }: any) => (
+                                        <div className={nova.tile}>
+                                            <div className={nova.tileLabel}>{label}</div>
+                                            <div className={`${nova.tileValue}${
+                                                tone === 'neg' ? ` ${nova.valueNeg}` : tone === 'pos' ? ` ${nova.valuePos}` : ''
+                                            }`}>
+                                                {fmt(value)} ₸
                                             </div>
+                                            {sub && <div className={nova.tileSub}>{sub}</div>}
                                         </div>
                                     );
 
-                                    const Breakdown = ({ title, accent, gross, net, vat, vatRate, debt }: any) => (
-                                        <div className="lc-card" style={{ padding: 14, height: '100%' }}>
-                                            <div style={{ fontWeight: 600, marginBottom: 10, color: accent, fontSize: 13 }}>{title}</div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Всего с НДС</Text><Text strong>{fmt(gross)} ₸</Text></div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Без НДС</Text><Text>{fmt(net)} ₸</Text></div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">НДС ({vatRate}%)</Text><Text>{fmt(vat)} ₸</Text></div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--lc-border)', paddingTop: 6, marginTop: 2 }}><Text strong style={{ color: '#dc2626' }}>Остаток долга</Text><Text strong style={{ color: '#dc2626' }}>{fmt(debt)} ₸</Text></div>
+                                    /** Плашка «оплачено / не оплачено» — не цветная метка antd. */
+                                    const PaidChip = ({ paid, label }: { paid: boolean; label?: string }) => (
+                                        <span className={`${nova.chip}${paid ? '' : ` ${nova.chipWarn}`}`}>
+                                            {paid ? (label || 'Оплачено') : 'Не оплачено'}
+                                        </span>
+                                    );
+
+                                    const Breakdown = ({ title, gross, net, vat, vatRate, debt }: any) => (
+                                        <section className={nova.card} style={{ marginBottom: 0, height: '100%' }}>
+                                            <div className={nova.cardHead}>
+                                                <Receipt size={14} />
+                                                <h3 className={nova.cardTitle}>{title}</h3>
                                             </div>
-                                        </div>
+                                            <div className={nova.cardBody} style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span style={{ color: 'var(--nova-fg-3)' }}>Всего с НДС</span>
+                                                    <b>{fmt(gross)} ₸</b>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span style={{ color: 'var(--nova-fg-3)' }}>Без НДС</span>
+                                                    <span>{fmt(net)} ₸</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span style={{ color: 'var(--nova-fg-3)' }}>НДС ({vatRate}%)</span>
+                                                    <span>{fmt(vat)} ₸</span>
+                                                </div>
+                                                {/* Красным — только непогашенный остаток. Ноль долга
+                                                    красить не за что: это как раз хорошая новость. */}
+                                                <div style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    borderTop: '1px solid var(--nova-border)',
+                                                    paddingTop: 6,
+                                                    marginTop: 2,
+                                                }}>
+                                                    <b className={debt > 0 ? nova.valueNeg : undefined}>Остаток долга</b>
+                                                    <b className={debt > 0 ? nova.valueNeg : undefined}>{fmt(debt)} ₸</b>
+                                                </div>
+                                            </div>
+                                        </section>
                                     );
 
                                     /**
@@ -1774,73 +1817,122 @@ export default function OrderDetailPage() {
                                                 />
                                             ) : null}
 
-                                            <div className="lc2-metrics" style={{ marginBottom: 14 }}>
+                                            {/* У экспедитора показателей пять, у заказчика
+                                                четыре — сетка под своё число, чтобы маржа не
+                                                висела одна во второй строке. */}
+                                            <div className={`${nova.tiles}${isClient ? '' : ` ${nova.tiles5}`}`}>
                                                 {isClient ? (
                                                     <>
-                                                        <Metric label="Стоимость перевозки" value={customerGross} color="#0369a1" bg="#e0f2fe" icon={<WalletOutlined />} sub={<Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{order.isCustomerPaid ? 'Оплачено' : 'Не оплачено'}</Tag>} />
-                                                        <Metric label="Поступления" value={summary.totalIncomes} color="#16a34a" bg="#e6ffed" icon={<WalletOutlined />} />
-                                                        <Metric label="Расходы" value={summary.totalExpenses} color="#dc2626" bg="#ffeef0" icon={<DollarOutlined />} />
-                                                        <Metric label="Долг экспедитору" value={summary.customerDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
+                                                        <Metric
+                                                            label="Стоимость перевозки"
+                                                            value={customerGross}
+                                                            sub={<PaidChip paid={!!order.isCustomerPaid} />}
+                                                        />
+                                                        <Metric label="Поступления" value={summary.totalIncomes} />
+                                                        <Metric label="Расходы" value={summary.totalExpenses} />
+                                                        <Metric
+                                                            label="Долг экспедитору"
+                                                            value={summary.customerDebt}
+                                                            tone={summary.customerDebt > 0 ? 'neg' : undefined}
+                                                        />
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Metric label="Стоимость от заказчика" value={customerGross} color="#0369a1" bg="#e0f2fe" icon={<WalletOutlined />} sub={<Tag color={order.isCustomerPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{order.isCustomerPaid ? 'Оплачено заказчиком' : 'Не оплачено'}</Tag>} />
-                                                        <Metric label="Ставка исполнителю" value={executorGross} color="#5f6672" bg="#f1f2f5" icon={<CarOutlined />} sub={<Tag color={isExecutorPaid ? 'green' : 'orange'} style={{ margin: 0 }}>{isExecutorPaid ? 'Оплачено' : 'Не оплачено'}</Tag>} />
-                                                        <Metric label="Долг заказчика" value={summary.customerDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
-                                                        <Metric label="Наш долг исполнителю" value={executorDebt} color="#e67e22" bg="#fff3e0" icon={<DollarOutlined />} />
-                                                        <Metric label="Ожидаемая маржа" value={summary.margin} color={summary.margin >= 0 ? '#16a34a' : '#dc2626'} bg="#e6ffed" icon={<SwapOutlined />} />
+                                                        <Metric
+                                                            label="Стоимость от заказчика"
+                                                            value={customerGross}
+                                                            sub={<PaidChip paid={!!order.isCustomerPaid} label="Оплачено заказчиком" />}
+                                                        />
+                                                        <Metric
+                                                            label="Ставка исполнителю"
+                                                            value={executorGross}
+                                                            sub={<PaidChip paid={!!isExecutorPaid} />}
+                                                        />
+                                                        <Metric
+                                                            label="Долг заказчика"
+                                                            value={summary.customerDebt}
+                                                            tone={summary.customerDebt > 0 ? 'neg' : undefined}
+                                                        />
+                                                        <Metric
+                                                            label="Наш долг исполнителю"
+                                                            value={executorDebt}
+                                                            tone={executorDebt > 0 ? 'neg' : undefined}
+                                                        />
+                                                        <Metric
+                                                            label="Ожидаемая маржа"
+                                                            value={summary.margin}
+                                                            tone={summary.margin >= 0 ? 'pos' : 'neg'}
+                                                        />
                                                     </>
                                                 )}
                                             </div>
-                                            <Row gutter={[16, 16]}>
+                                            <div className={nova.duo}>
                                                 {isClient ? (
-                                                    <Col xs={24} md={12}>
-                                                        <Breakdown title="Расчёты с экспедитором" accent="#16a34a" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
-                                                    </Col>
+                                                    <Breakdown title="Расчёты с экспедитором" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
                                                 ) : (
                                                     <>
-                                                        <Col xs={24} md={12}>
-                                                            <Breakdown title="Расчёты с заказчиком" accent="#16a34a" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
-                                                        </Col>
-                                                        <Col xs={24} md={12}>
-                                                            <Breakdown title="Расчёты с исполнителем" accent="#e67e22" gross={executorGross} net={summary.executorCostNet || 0} vat={summary.executorCostVat || 0} vatRate={order.executorVatRate || 0} debt={executorDebt || 0} />
-                                                        </Col>
+                                                        <Breakdown title="Расчёты с заказчиком" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
+                                                        <Breakdown title="Расчёты с исполнителем" gross={executorGross} net={summary.executorCostNet || 0} vat={summary.executorCostVat || 0} vatRate={order.executorVatRate || 0} debt={executorDebt || 0} />
                                                     </>
                                                 )}
-                                            </Row>
+                                            </div>
                                         </div>
                                     );
                                 })()}
 
                                 {/* Платежи по заявке */}
-                                <div className="lc-card" style={{ padding: 0, marginBottom: 16 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
-                                        <span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: token.colorPrimary, marginRight: 6 }} />Платежи по заявке ({payments.length})</span>
-                                        {canEditFinance && <Button size="sm" onClick={handleAddPaymentClick}><Plus className="h-3.5 w-3.5" /> Зарегистрировать платёж</Button>}
+                                <section className={nova.card}>
+                                    <div className={nova.cardHead}>
+                                        <Wallet size={14} />
+                                        <h3 className={nova.cardTitle}>Платежи по заявке</h3>
+                                        {payments.length > 0 && <span className={nova.cardCount}>{payments.length}</span>}
+                                        {canEditFinance && (
+                                            <button type="button" className={nova.action} onClick={handleAddPaymentClick}>
+                                                <Plus className="h-3.5 w-3.5" /> Зарегистрировать платёж
+                                            </button>
+                                        )}
                                     </div>
                                     <Table columns={paymentColumns} dataSource={payments} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет зарегистрированных платежей' }} scroll={{ x: true }} />
-                                </div>
+                                </section>
 
-                                <Row gutter={[16, 16]}>
-                                    <Col xs={24} lg={12}>
-                                        <div className="lc-card" style={{ padding: 0 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
-                                                <span style={{ fontWeight: 600 }}><WalletOutlined style={{ color: '#16a34a', marginRight: 6 }} />Поступления ({incomes.length})</span>
-                                                {canEditFinance && <Button size="sm" onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setIncomeModalOpen(true); }}><Plus className="h-3.5 w-3.5" /> Добавить</Button>}
-                                            </div>
-                                            <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
+                                <div className={nova.duo}>
+                                    <section className={nova.card} style={{ marginBottom: 0 }}>
+                                        <div className={nova.cardHead}>
+                                            <Wallet size={14} />
+                                            <h3 className={nova.cardTitle}>Поступления</h3>
+                                            {incomes.length > 0 && <span className={nova.cardCount}>{incomes.length}</span>}
+                                            {canEditFinance && (
+                                                <button
+                                                    type="button"
+                                                    className={nova.action}
+                                                    onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setIncomeModalOpen(true); }}
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" /> Добавить
+                                                </button>
+                                            )}
                                         </div>
-                                    </Col>
-                                    <Col xs={24} lg={12}>
-                                        <div className="lc-card" style={{ padding: 0 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid var(--lc-border)' }}>
-                                                <span style={{ fontWeight: 600 }}><DollarOutlined style={{ color: '#dc2626', marginRight: 6 }} />Расходы ({expenses.length})</span>
-                                                {canEditFinance && <Button size="sm" variant="destructive" onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setExpenseModalOpen(true); }}><Plus className="h-3.5 w-3.5" /> Добавить</Button>}
-                                            </div>
-                                            <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
+                                        <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
+                                    </section>
+                                    <section className={nova.card} style={{ marginBottom: 0 }}>
+                                        <div className={nova.cardHead}>
+                                            <Banknote size={14} />
+                                            <h3 className={nova.cardTitle}>Расходы</h3>
+                                            {expenses.length > 0 && <span className={nova.cardCount}>{expenses.length}</span>}
+                                            {/* Кнопка обычная, а не красная: добавить расход —
+                                                рядовая запись, а не необратимое действие. */}
+                                            {canEditFinance && (
+                                                <button
+                                                    type="button"
+                                                    className={nova.action}
+                                                    onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setExpenseModalOpen(true); }}
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" /> Добавить
+                                                </button>
+                                            )}
                                         </div>
-                                    </Col>
-                                </Row>
+                                        <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
+                                    </section>
+                                </div>
                             </div>
                         )
                     },
@@ -1889,17 +1981,19 @@ export default function OrderDetailPage() {
                             </span>
                         ),
                         children: (
-                            <Card
-                                title={<span style={{ fontWeight: 600 }}><ClockCircleOutlined style={{ color: '#1677ff', marginRight: 8 }} />Что происходило с рейсом</span>}
-                                bordered={false}
-                                className="premium-card"
-                            >
-                                {/* Смены статуса и действия людей — одной лентой.
-                                    Раньше здесь были только статусы, и даже они без
-                                    автора: «кто вложил этот документ» узнать было
-                                    негде. */}
-                                <OrderHistory orderId={orderId} />
-                            </Card>
+                            <section className={nova.card}>
+                                <div className={nova.cardHead}>
+                                    <History size={14} />
+                                    <h3 className={nova.cardTitle}>Что происходило с рейсом</h3>
+                                </div>
+                                <div className={nova.cardBody}>
+                                    {/* Смены статуса и действия людей — одной лентой.
+                                        Раньше здесь были только статусы, и даже они без
+                                        автора: «кто вложил этот документ» узнать было
+                                        негде. */}
+                                    <OrderHistory orderId={orderId} />
+                                </div>
+                            </section>
                         )
                     }
                 ].filter(Boolean) as any}

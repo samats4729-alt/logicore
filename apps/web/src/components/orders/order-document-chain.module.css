@@ -1,0 +1,33 @@
+/* Цепочка «Рейс → Счёт → Акт → Оплата».
+ *
+ * Номер документа — кнопка перехода, а не ссылка: синим в кабинете
+ * подсвечиваются ссылки наружу, а это переход внутри той же работы. */
+
+.docLink {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--nova-fg);
+    font: 600 13px/1.3 Inter, sans-serif;
+    text-align: left;
+    text-decoration: underline;
+    text-decoration-color: var(--nova-border);
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.docLink:hover {
+    text-decoration-color: var(--nova-fg-3);
+}
+
+.docNumber {
+    font: 600 13px/1.3 Inter, sans-serif;
+    color: var(--nova-fg);
+}
+
+.amount {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
