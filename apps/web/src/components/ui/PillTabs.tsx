@@ -45,6 +45,13 @@ export default function PillTabs({
                         role="tab"
                         aria-selected={item.key === active}
                         className={`${styles.pill} ${item.key === active ? styles.pillActive : ''}`}
+                        // Якорь для ИИ-гида. Проставляется здесь, а не руками на
+                        // каждой странице: гид умеет подсвечивать шаги, но
+                        // указывать ему внутри экрана было не на что — до
+                        // вкладок карточки рейса он довести не мог, хотя туда
+                        // ведёт половина вопросов. Одна строка — и якорь
+                        // появился у каждой вкладки во всём кабинете.
+                        data-guide={`tab-${item.key}`}
                         onClick={() => onChange(item.key)}
                     >
                         {item.label}

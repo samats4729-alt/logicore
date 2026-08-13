@@ -86,7 +86,38 @@ describe('карта интерфейса ИИ-гида не разошлась 
 
     // Якоря живут и в страницах (app/), и в общих компонентах шапки
     // (components/), поэтому ищем по всему исходнику веба.
+    //
+    // Часть якорей не написана буквой, а собирается из ключа: вкладки получают
+    // `tab-${ключ}` в одном общем компоненте, строки отметки об оригиналах —
+    // `originals-${сторона}`. Искать такие простым поиском по строке нельзя,
+    // поэтому для них проверяется и шаблон в компоненте, и что ключ, из
+    // которого якорь собирается, действительно существует.
+    const COMPUTED: Record<string, { file: string; pattern: string; keyOwner: string }> = {
+        'tab-': {
+            file: 'components/ui/PillTabs.tsx',
+            pattern: 'data-guide={`tab-',
+            keyOwner: 'app/company/orders/[id]/page.tsx',
+        },
+        'originals-': {
+            file: 'components/orders/OrderOriginalsCard.tsx',
+            pattern: 'data-guide={`originals-',
+            keyOwner: 'components/orders/OrderOriginalsCard.tsx',
+        },
+    };
+
     it.each(guideAnchors)('якорь data-guide="%s" есть в разметке', (anchor) => {
+        const prefix = Object.keys(COMPUTED).find((p) => anchor.startsWith(p));
+
+        if (prefix) {
+            const { file, pattern, keyOwner } = COMPUTED[prefix];
+            expect(fs.readFileSync(path.join(WEB_SRC, file), 'utf8')).toContain(pattern);
+            // Ключ, из которого собирается якорь, должен быть настоящим:
+            // иначе гид уверенно подсветит вкладку, которой нет.
+            const key = anchor.slice(prefix.length);
+            expect(fs.readFileSync(path.join(WEB_SRC, keyOwner), 'utf8')).toContain(`'${key}'`);
+            return;
+        }
+
         const found = allWebSources(WEB_SRC).some((file) =>
             fs.readFileSync(file, 'utf8').includes(`data-guide="${anchor}"`),
         );

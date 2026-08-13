@@ -363,6 +363,7 @@ export default function InvoicesRegistryPage() {
                             icon={<PlusOutlined />}
                             onClick={() => router.push('/company/accounting/invoices/create')}
                             className="lc-cta"
+                            data-guide="invoice-create"
                         >
                             Выставить счёт
                         </Button>

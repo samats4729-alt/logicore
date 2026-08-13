@@ -133,8 +133,22 @@ export const SELECTORS = `
 
 Кнопки на страницах:
 - «Создать заявку» (на /company/orders): [data-guide='orders-create']
+- «Добавить контрагента» (на /company/partners): [data-guide='partner-create']
+- «Выставить счёт» (на /company/accounting/invoices): [data-guide='invoice-create']
+- «Пригласить» сотрудника или «Добавить водителя» (на /company/users): [data-guide='user-invite']
 - Глобальный поиск (в шапке): [data-guide='global-search']
 - Центр уведомлений (колокольчик в шапке): [data-guide='notifications']
+
+Вкладки карточки рейса /company/orders/НОМЕР (открывается кликом по строке в
+журнале заявок):
+- «Основная информация»: [data-guide='tab-details']
+- «Финансы» — НДС, сроки оплаты, платежи по рейсу: [data-guide='tab-finances']
+- «Документы» — договор-заявка, доверенность, отметки об оригиналах: [data-guide='tab-documents']
+- «История» — кто и что менял по рейсу: [data-guide='tab-history']
+
+Отметка о получении оригиналов накладных (во вкладке «Документы» рейса):
+- строка «Получили от перевозчика»: [data-guide='originals-carrier']
+- строка «Заказчик получил оригиналы»: [data-guide='originals-customer']
 `;
 
 const SYSTEM_PROMPT = `Ты — встроенный пошаговый ИИ-гид платформы LogiCore (SaaS для логистики: заявки, трекинг, финансы, документы). Ты заменяешь страницу помощи и проводишь пользователя по интерфейсу шаг за шагом.
