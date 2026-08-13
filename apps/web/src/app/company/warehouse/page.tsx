@@ -5,6 +5,7 @@ import { Card, Table, Tag, Typography, Button, Space, List, Avatar } from 'antd'
 import { CarOutlined, ClockCircleOutlined, ReloadOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
+import nova from '@/components/nova/nova.module.css';
 import Loader from '@/components/ui/Loader';
 
 const { Title, Text } = Typography;
@@ -74,10 +75,14 @@ export default function CompanyWarehousePage() {
     }, {} as Record<string, QueueItem[]>);
 
     const getStatusTag = (item: QueueItem) => {
-        if (item.completedAt) return <Tag color="green">Загружен</Tag>;
-        if (item.startedAt) return <Tag color="blue">Погрузка</Tag>;
-        if (item.assignedAt) return <Tag color="orange">К воротам {item.gate?.gateNumber}</Tag>;
-        return <Tag color="default">Ожидает</Tag>;
+        // Цветом — то, что требует движения: машину зовут к воротам. Остальное
+        // просто где она сейчас.
+        if (item.completedAt) return <span className={nova.chip}>Загружен</span>;
+        if (item.startedAt) return <span className={nova.chip}>Погрузка</span>;
+        if (item.assignedAt) {
+            return <span className={`${nova.chip} ${nova.chipWarn}`}>К воротам {item.gate?.gateNumber}</span>;
+        }
+        return <span className={nova.chip}>Ожидает</span>;
     };
 
     const waitingCount = queueItems.filter(i => !i.assignedAt).length;
@@ -209,7 +214,7 @@ export default function CompanyWarehousePage() {
                                     {
                                         title: 'Ворота',
                                         key: 'gate',
-                                        render: (_, record) => record.gate ? <Tag color="volcano">{record.gate.gateNumber}</Tag> : '-',
+                                        render: (_, record) => record.gate ? <span className={nova.chip}>{record.gate.gateNumber}</span> : '-',
                                     }
                                 ]}
                             />

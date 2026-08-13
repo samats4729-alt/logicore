@@ -6,6 +6,7 @@ import { CheckCircleOutlined, InfoCircleOutlined, EyeOutlined, EnvironmentOutlin
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 const { Title, Text } = Typography;
 
@@ -168,9 +169,9 @@ export default function ForwarderSearchPage() {
                 {selectedOrder && (
                     <div>
                         <Card size="small" style={{ marginBottom: 16 }}>
-                            <Tag color="cyan" style={{ marginBottom: 8 }}>
+                            <span className={nova.chip} style={{ marginBottom: 8, display: 'inline-block' }}>
                                 Статус: В ожидании исполнителя
-                            </Tag>
+                            </span>
                             <div style={{ marginTop: 8 }}>
                                 <Text type="secondary">Создана: {new Date(selectedOrder.createdAt).toLocaleDateString()}</Text>
                             </div>

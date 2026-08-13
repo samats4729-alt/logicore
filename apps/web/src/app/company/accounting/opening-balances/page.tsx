@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 const { Text } = Typography;
 
@@ -129,7 +130,7 @@ export default function OpeningBalancesPage() {
     const kindLabel = (k: string) => k === 'BANK' ? 'Банк' : k === 'CASH' ? 'Касса' : k;
 
     const accColumns = [
-        { title: 'Счёт / касса', dataIndex: 'name', key: 'name', render: (v: string, r: AccountRow) => <span><Tag>{kindLabel(r.kind)}</Tag> {v}</span> },
+        { title: 'Счёт / касса', dataIndex: 'name', key: 'name', render: (v: string, r: AccountRow) => <span><span className={nova.chip}>{kindLabel(r.kind)}</span> {v}</span> },
         { title: 'Начальный остаток', dataIndex: 'openingBalance', key: 'ob', align: 'right' as const, render: (v: number) => <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}</strong> },
         { title: 'На дату', dataIndex: 'openingDate', key: 'od', width: 130, render: (d: string | null) => d ? dayjs(d).format('DD.MM.YYYY') : <Text type="secondary">—</Text> },
         { title: 'Текущий остаток', dataIndex: 'balance', key: 'bal', align: 'right' as const, render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums', color: v < 0 ? '#dc2626' : undefined }}>{money(v)}</span> },

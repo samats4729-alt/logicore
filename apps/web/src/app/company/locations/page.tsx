@@ -10,6 +10,7 @@ import {
 import { api, Location } from '@/lib/api';
 import LocationForm from '@/components/ui/LocationForm';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 export default function CompanyLocationsPage() {
     const [locations, setLocations] = useState<Location[]>([]);
@@ -238,9 +239,9 @@ export default function CompanyLocationsPage() {
                 );
                 return (
                     <Tooltip title={tooltipContent} placement="top" color="#1c2536">
-                        <Tag icon={<MailOutlined />} color="blue" style={{ cursor: 'pointer', margin: 0, fontWeight: 500 }}>
-                            {list.length}
-                        </Tag>
+                        <span className={nova.chip} style={{ cursor: 'pointer' }}>
+                            <MailOutlined /> {list.length}
+                        </span>
                     </Tooltip>
                 );
             }
@@ -413,7 +414,7 @@ export default function CompanyLocationsPage() {
                                     {getInitials(selectedPartner.name) || 'КГ'}
                                 </span>
                                 <strong style={{ fontSize: 15 }}>{selectedPartner.name}</strong>
-                                <Tag>{selectedPartner.items.length} {pluralAddr(selectedPartner.items.length)}</Tag>
+                                <span className={nova.chip}>{selectedPartner.items.length} {pluralAddr(selectedPartner.items.length)}</span>
                             </Space>
                             <Button
                                 type="dashed"

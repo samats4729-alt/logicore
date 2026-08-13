@@ -8,6 +8,7 @@ import { downloadCsv } from '@/lib/exportCsv';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 interface Row { warehouseId: string; warehouse: string; nomenclatureId: string; nomenclature: string; unit: string; quantity: number; avgCost: number; value: number }
 interface Wh { id: string; name: string }
@@ -37,9 +38,9 @@ export default function StockBalancesPage() {
     const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
 
     const columns = [
-        { title: 'Склад', dataIndex: 'warehouse', key: 'wh', width: 200, render: (v: string) => <Tag color="blue">{v}</Tag> },
+        { title: 'Склад', dataIndex: 'warehouse', key: 'wh', width: 200, render: (v: string) => <span className={nova.chip}>{v}</span> },
         { title: 'Номенклатура', dataIndex: 'nomenclature', key: 'nom', render: (v: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{v}</span> },
-        { title: 'Остаток', dataIndex: 'quantity', key: 'qty', width: 150, align: 'right' as const, render: (v: number, r: Row) => <strong style={{ fontVariantNumeric: 'tabular-nums', color: v < 0 ? '#dc2626' : undefined }}>{num(v)} {r.unit}</strong> },
+        { title: 'Остаток', dataIndex: 'quantity', key: 'qty', width: 150, align: 'right' as const, render: (v: number, r: Row) => <strong style={{ fontVariantNumeric: 'tabular-nums', color: v < 0 ? 'var(--nova-neg)' : undefined }}>{num(v)} {r.unit}</strong> },
         { title: 'Ср. цена', dataIndex: 'avgCost', key: 'cost', width: 120, align: 'right' as const, render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--lc-text-ter)' }}>{v ? money(v) : '—'}</span> },
         { title: 'Сумма', dataIndex: 'value', key: 'value', width: 150, align: 'right' as const, render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{v ? money(v) : '—'}</span> },
     ];

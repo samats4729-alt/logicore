@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 const { Text } = Typography;
 
@@ -58,7 +59,7 @@ export default function NomenclaturePage() {
     const columns = [
         { title: 'Наименование', dataIndex: 'name', key: 'name', render: (v: string, r: Item) => <Text style={{ fontSize: 13, color: r.isActive ? undefined : 'var(--lc-text-ter)' }}>{v}</Text> },
         { title: 'Артикул', dataIndex: 'sku', key: 'sku', width: 160, render: (v: string) => <Text type="secondary">{v || '—'}</Text> },
-        { title: 'Ед. изм.', dataIndex: 'unit', key: 'unit', width: 110, render: (v: string) => <Tag>{v}</Tag> },
+        { title: 'Ед. изм.', dataIndex: 'unit', key: 'unit', width: 110, render: (v: string) => <span className={nova.chip}>{v}</span> },
         { title: 'Статус', dataIndex: 'isActive', key: 'active', width: 100, render: (v: boolean, r: Item) => <Switch checked={v} disabled={!canEdit} size="small" onChange={(c) => toggleActive(r, c)} /> },
         ...(canEdit ? [{ title: '', key: 'act', width: 56, render: (_: any, r: Item) => <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} /> }] : []),
     ];

@@ -6,6 +6,7 @@ import { Alert, Button, Form, Input, Result, Select, Space, Steps, Tag, Upload, 
 import { CheckCircleOutlined, InboxOutlined, UploadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 import Loader from '@/components/ui/Loader';
 
 /**
@@ -203,7 +204,9 @@ export default function CompanyOnboardingPage() {
                             <div style={{ fontWeight: 600, fontSize: 15 }}>{company.name}</div>
                             <div style={{ fontSize: 12, color: token.colorTextSecondary }}>БИН {company.bin}</div>
                         </div>
-                        <Tag color={STATUS_VIEW[status]?.color}>{STATUS_VIEW[status]?.label}</Tag>
+                        <span className={`${nova.chip}${status === 'REJECTED' ? ` ${nova.chipNeg}` : status === 'PENDING' ? ` ${nova.chipWarn}` : ''}`}>
+                            {STATUS_VIEW[status]?.label}
+                        </span>
                     </div>
 
                     {status === 'REJECTED' && (

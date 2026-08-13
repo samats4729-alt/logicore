@@ -1058,10 +1058,10 @@ export default function CompanyUsersPage() {
             dataIndex: 'department',
             key: 'department',
             render: (dept: any) => dept ? (
-                <Tag color="cyan">
+                <span className={nova.chip}>
                     <FolderOpenOutlined style={{ marginRight: 4 }} />
                     {dept.name}
-                </Tag>
+                </span>
             ) : (
                 <Text type="secondary">—</Text>
             ),

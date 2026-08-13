@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Table, Tag, Tooltip, Empty } from 'antd';
 import { HistoryOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import nova from '@/components/nova/nova.module.css';
 import { api } from '@/lib/api';
 
 const ACTION_META: Record<string, { label: string; color: string }> = {
@@ -78,7 +79,12 @@ export default function CompanyAuditPage() {
             title: 'Действие', dataIndex: 'action', key: 'action', width: 110,
             render: (v: string) => {
                 const meta = ACTION_META[v] || { label: v, color: 'default' };
-                return <Tag color={meta.color}>{meta.label}</Tag>;
+                // Цветом — только удаление: единственное, что нельзя отменить.
+                return (
+                    <span className={`${nova.chip}${v === 'DELETE' ? ` ${nova.chipNeg}` : ''}`}>
+                        {meta.label}
+                    </span>
+                );
             },
         },
         {

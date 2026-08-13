@@ -27,6 +27,7 @@ import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 
 import { useIsMobile } from '@/lib/useIsMobile';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 import {
     DEBT_RED,
@@ -1655,7 +1656,7 @@ export default function CompanyOrdersPage() {
                 {selectedOrder && (
                     <div>
                         <div style={{ marginBottom: 16 }}>
-                            <Tag color={statusColors[selectedOrder.status]} style={{ fontSize: 13 }}>{STATUS_LABELS[selectedOrder.status]}</Tag>
+                            <StatusPill status={selectedOrder.status} />
                         </div>
 
                         <Title level={5}>Заказчик и Ответственный</Title>
@@ -1717,7 +1718,7 @@ export default function CompanyOrdersPage() {
                                     {selectedOrder.assignedDriverPlate || selectedOrder.driver?.vehiclePlate || '—'}
                                 </Descriptions.Item>
                             </Descriptions>
-                        ) : <Tag color="warning">Не назначен</Tag>}
+                        ) : <span className={`${nova.chip} ${nova.chipWarn}`}>Не назначен</span>}
 
                         <div style={{ marginTop: 24 }}>
                             <Button className="w-full" onClick={() => { setDetailDrawerOpen(false); openAssignModal(selectedOrder); }}>
@@ -1803,7 +1804,7 @@ export default function CompanyOrdersPage() {
             <Modal title="Изменить статус" open={statusModalOpen} onCancel={() => setStatusModalOpen(false)} onOk={() => statusForm.submit()} okText="Обновить" cancelText="Отмена" confirmLoading={statusLoading}>
                 {selectedOrder && (
                     <Form form={statusForm} layout="vertical" onFinish={handleStatusChange}>
-                        <div style={{ marginBottom: 16 }}>Текущий: <Tag color={statusColors[selectedOrder.status]}>{STATUS_LABELS[selectedOrder.status]}</Tag></div>
+                        <div style={{ marginBottom: 16 }}>Текущий: <StatusPill status={selectedOrder.status} /></div>
                         <Form.Item name="status" label="Новый статус" rules={[{ required: true }]}>
                             <Select placeholder="Статус" size="large">
                                 {getNextStatuses(selectedOrder.status).map(s => <Select.Option key={s.value} value={s.value}>{s.label}</Select.Option>)}
