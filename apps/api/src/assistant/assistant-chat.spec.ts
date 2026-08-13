@@ -9,7 +9,7 @@ import { AssistantService } from './assistant.service';
  * запросе — разные вещи, и расходились они уже не раз.
  */
 describe('Запрос ИИ-гида', () => {
-    const service = (): { service: AssistantService; sent: () => any } => {
+    const service = (): { service: AssistantService; sent: () => any; prisma: any } => {
         let body: any = null;
         (global as any).fetch = jest.fn(async (_url: string, init: any) => {
             body = JSON.parse(init.body);
@@ -19,17 +19,27 @@ describe('Запрос ИИ-гида', () => {
             } as any;
         });
 
+        const prisma: any = {
+            platformUpdate: { findMany: jest.fn().mockResolvedValue([]) },
+            company: { findUnique: jest.fn().mockResolvedValue({ name: 'ТОО «Пример»' }) },
+            order: {
+                count: jest.fn().mockResolvedValue(3),
+                findMany: jest.fn().mockResolvedValue([{ orderNumber: 'LC-1', status: 'IN_TRANSIT' }]),
+            },
+            accountingDocument: { count: jest.fn().mockResolvedValue(7) },
+        };
+
         const instance = new AssistantService(
             { get: () => 'test-key' } as any,
-            { platformUpdate: { findMany: jest.fn().mockResolvedValue([]) } } as any,
+            prisma as any,
             { isEnabled: () => false } as any,
         );
-        return { service: instance, sent: () => body };
+        return { service: instance, sent: () => body, prisma };
     };
 
-    const ask = async (user?: any, context?: string) => {
+    const ask = async (user?: any, context?: string, companyId?: string) => {
         const { service: instance, sent } = service();
-        await instance.chat([{ role: 'user', content: 'Как выставить счёт?' }], context, user);
+        await instance.chat([{ role: 'user', content: 'Как выставить счёт?' }], context, user, companyId);
         return sent().messages[0].content as string;
     };
 
@@ -82,6 +92,75 @@ describe('Запрос ИИ-гида', () => {
 
         expect(reply).toContain('не настроен');
         expect((global as any).fetch).not.toHaveBeenCalled();
+    });
+
+    describe('что гид видит про компанию', () => {
+        it('состояние рейсов уезжает в запрос', async () => {
+            // Раньше гид не видел ничего и на «сколько у меня рейсов в работе»
+            // отвечал «посмотрите на дашборде».
+            const system = await ask({ role: 'COMPANY_ADMIN' }, '/company', 'c-1');
+
+            expect(system).toContain('Данные компании собеседника');
+            expect(system).toContain('ТОО «Пример»');
+            expect(system).toContain('Рейсов в работе: 3');
+            expect(system).toContain('LC-1');
+        });
+
+        it('деньги видит тот, кому открыта бухгалтерия', async () => {
+            const system = await ask({ role: 'ACCOUNTANT', permissions: ['accounting'] }, '/company', 'c-1');
+
+            expect(system).toContain('Неоплаченных счетов');
+        });
+
+        it('владельцу деньги открыты без отдельного права', async () => {
+            const system = await ask({ role: 'COMPANY_ADMIN' }, '/company', 'c-1');
+
+            expect(system).toContain('Неоплаченных счетов');
+        });
+
+        it('без права «Бухгалтерия» денег в запросе нет вовсе', async () => {
+            // Не «гиду велено молчать», а именно нет: то, чего не отправили,
+            // невозможно выманить формулировкой вопроса.
+            const system = await ask({ role: 'WAREHOUSE_MANAGER', permissions: ['orders'] }, '/company', 'c-1');
+
+            expect(system).not.toContain('Неоплаченных счетов');
+            expect(system).toContain('Деньги этому человеку закрыты');
+        });
+
+        it('счета считаются по своей компании, а не по всем подряд', async () => {
+            const { service: instance, prisma } = service();
+
+            await instance.chat([{ role: 'user', content: 'сколько долгов' }], '/company',
+                { role: 'COMPANY_ADMIN' }, 'c-1');
+
+            for (const call of prisma.accountingDocument.count.mock.calls) {
+                expect(call[0].where.companyId).toBe('c-1');
+            }
+        });
+
+        it('без компании данные не собираются', async () => {
+            // Помощник открыт и тому, кто ещё не подключил организацию.
+            const { service: instance, prisma } = service();
+
+            await instance.chat([{ role: 'user', content: 'привет' }], undefined, { role: 'COMPANY_ADMIN' });
+
+            expect(prisma.order.count).not.toHaveBeenCalled();
+        });
+
+        it('упавшая база не мешает ответить про интерфейс', async () => {
+            // «Как создать заявку» данных не требует, и молчать из-за сводки
+            // было бы хуже, чем ответить без цифр.
+            const { service: instance, sent, prisma } = service();
+            prisma.order.count.mockRejectedValue(new Error('база недоступна'));
+
+            const { reply } = await instance.chat([{ role: 'user', content: 'как создать заявку' }],
+                '/company', { role: 'COMPANY_ADMIN' }, 'c-1');
+
+            expect(reply).toBe('ответ');
+            // Сводки в запросе нет — сверяемся по строке из неё самой, а не по
+            // заголовку блока: заголовок упомянут ещё и в правилах поведения.
+            expect(sent().messages[0].content).not.toContain('Рейсов в работе');
+        });
     });
 
     it('пустой разговор не тратит запрос к модели', async () => {

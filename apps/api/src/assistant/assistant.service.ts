@@ -1,9 +1,17 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { buildSupportTicketMessage } from '../telegram/support-ticket-message';
-import { PLATFORM_KNOWLEDGE, describeUser } from './platform-knowledge';
+import { PLATFORM_KNOWLEDGE, describeUser, FULL_ACCESS_ROLES } from './platform-knowledge';
+
+/** Статусы, при которых рейс считается идущим прямо сейчас. */
+const IN_WORK_STATUSES: OrderStatus[] = [
+    OrderStatus.ASSIGNED, OrderStatus.EN_ROUTE_PICKUP, OrderStatus.AT_PICKUP,
+    OrderStatus.LOADING, OrderStatus.IN_TRANSIT, OrderStatus.AT_DELIVERY,
+    OrderStatus.UNLOADING,
+];
 
 /**
  * Сколько накопившихся обращений досылать при запуске за один раз.
@@ -280,10 +288,77 @@ export class AssistantService implements OnApplicationBootstrap {
      * владельца, и завсклада в разделы, куда второго не пускают. Человек
      * доходил до отказа и решал, что сломалась платформа.
      */
+    /**
+     * Что гид видит про компанию собеседника.
+     *
+     * До сих пор — ничего: на «сколько мне должен Магнум» он отвечал «это на
+     * экране Взаиморасчёты», и человек шёл смотреть сам. Половина вопросов к
+     * помощнику именно такая.
+     *
+     * Отбор идёт по тем же правам, что и сам кабинет. Деньги видит только
+     * тот, кому открыта бухгалтерия: иначе гид рассказал бы завскладу про
+     * долги компании, хотя ни на один экран с ними его не пускают.
+     */
+    private async buildCabinetSnapshot(
+        companyId: string,
+        user: { role?: string; permissions?: string[] },
+    ): Promise<string> {
+        const seesMoney = FULL_ACCESS_ROLES.includes(user.role || '')
+            || (user.permissions || []).includes('accounting');
+
+        const participation = [
+            { customerCompanyId: companyId },
+            { forwarderId: companyId },
+            { partnerId: companyId },
+            { subForwarderId: companyId },
+        ];
+
+        const [company, active, pending, problem, recent] = await Promise.all([
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }),
+            this.prisma.order.count({ where: { OR: participation, status: { in: IN_WORK_STATUSES } } }),
+            this.prisma.order.count({ where: { OR: participation, status: 'PENDING' } }),
+            this.prisma.order.count({ where: { OR: participation, status: 'PROBLEM' } }),
+            this.prisma.order.findMany({
+                where: { OR: participation },
+                orderBy: { createdAt: 'desc' },
+                take: 5,
+                select: { orderNumber: true, status: true },
+            }),
+        ]);
+
+        const lines = [
+            `Компания: ${company?.name ?? 'без названия'}.`,
+            `Рейсов в работе: ${active}. Ждут назначения: ${pending}. С проблемой: ${problem}.`,
+            recent.length
+                ? `Последние рейсы: ${recent.map((o) => `${o.orderNumber} (${o.status})`).join(', ')}.`
+                : 'Рейсов пока нет.',
+        ];
+
+        if (!seesMoney) {
+            lines.push('Деньги этому человеку закрыты — про суммы и долги не отвечай, скажи, что раздел ему не открыт.');
+            return lines.join('\n');
+        }
+
+        // Неоплаченный счёт — тот, у которого остался долг. Отдельного поля
+        // «оплачен» нет: платежи разносятся частями, и правда живёт в остатке.
+        const unpaid = { type: 'PAYMENT_INVOICE' as const, status: 'POSTED' as const, balanceDue: { gt: 0 } };
+        const [unpaidOut, unpaidIn] = await Promise.all([
+            this.prisma.accountingDocument.count({ where: { companyId, direction: 'OUTGOING', ...unpaid } }),
+            this.prisma.accountingDocument.count({ where: { companyId, direction: 'INCOMING', ...unpaid } }),
+        ]);
+
+        lines.push(
+            `Неоплаченных счетов: нам не заплатили по ${unpaidOut}, мы не заплатили по ${unpaidIn}.`,
+            'Точные суммы долгов по контрагентам — во «Взаиморасчётах»: если спрашивают конкретную цифру, доведи туда.',
+        );
+        return lines.join('\n');
+    }
+
     async chat(
         messages: ChatMessage[],
         context?: string,
         user?: { role?: string; permissions?: string[] },
+        companyId?: string,
     ): Promise<{ reply: string }> {
         const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
         if (!apiKey) {
@@ -302,8 +377,24 @@ export class AssistantService implements OnApplicationBootstrap {
         }
 
         const updatesBlock = await this.getPublishedUpdatesBlock();
+
+        // Данные подтягиваем, только если компания известна: помощник открыт и
+        // тому, кто ещё не подключил организацию.
+        let dataBlock = '';
+        if (companyId) {
+            try {
+                dataBlock = `\n\n=== Данные компании собеседника ===\n`
+                    + `${await this.buildCabinetSnapshot(companyId, user || {})}`;
+            } catch (e) {
+                // Не ответить из-за упавшего запроса к базе хуже, чем ответить
+                // без цифр: на «как создать заявку» данные и не нужны.
+                this.logger.warn(`Сводка для гида не собралась: ${(e as Error).message}`);
+            }
+        }
+
         const systemContent = `${SYSTEM_PROMPT}${updatesBlock}`
             + `\n\n=== Кто спрашивает ===\n${describeUser(user)}`
+            + dataBlock
             + `\n\nТекущая страница пользователя: ${context || 'неизвестно'}`;
 
         try {
