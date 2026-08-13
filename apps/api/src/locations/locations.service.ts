@@ -146,6 +146,36 @@ export class LocationsService {
         }
     }
 
+    /**
+     * Какие адреса видит компания.
+     *
+     * `Location.companyId` — это контрагент, к которому привязана точка, а не
+     * её владелец. У общих адресов там пусто, и таких в справочнике
+     * большинство. Отбор «где companyId равен нашему» отсекал бы как раз их,
+     * поэтому условие собрано здесь один раз — и для списка, и для подсчёта
+     * адресов без координат.
+     */
+    async visibleToCompany(companyId?: string): Promise<Record<string, any>> {
+        if (!companyId) return {};
+
+        // Сотрудники компании: их точки видны, даже если привязаны к партнёру.
+        const companyUsers = await this.prisma.user.findMany({
+            where: { companyId },
+            select: { id: true },
+        });
+        const companyUserIds = companyUsers.map((u) => u.id);
+
+        return {
+            OR: [
+                { companyId },
+                { companyId: null }, // Общие адреса без привязки к компании
+                // Точки, привязанные к внешним контрагентам компании
+                { company: { isExternal: true, createdByCompanyId: companyId } },
+                ...(companyUserIds.length ? [{ createdById: { in: companyUserIds } }] : []),
+            ],
+        };
+    }
+
     async findAll(search?: string, companyId?: string) {
         const cacheKey = companyId ? `locations:${companyId}` : 'locations:all';
         if (!search) {
@@ -163,24 +193,7 @@ export class LocationsService {
             });
         }
         if (companyId) {
-            // Сотрудники компании, чтобы показывать созданные ими точки
-            // независимо от привязки (например, склад контрагента)
-            const companyUsers = await this.prisma.user.findMany({
-                where: { companyId },
-                select: { id: true },
-            });
-            const companyUserIds = companyUsers.map(u => u.id);
-
-            whereConditions.push({
-                OR: [
-                    { companyId },
-                    { companyId: null }, // Общие адреса без привязки к компании
-                    // Точки, привязанные к внешним контрагентам компании
-                    { company: { isExternal: true, createdByCompanyId: companyId } },
-                    // Точки, созданные сотрудниками компании (привязанные к партнёрам)
-                    ...(companyUserIds.length ? [{ createdById: { in: companyUserIds } }] : []),
-                ],
-            });
+            whereConditions.push(await this.visibleToCompany(companyId));
         }
 
         const where = whereConditions.length > 0

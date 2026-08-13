@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { GeoService } from '../geo/geo.service';
+import { LocationsService } from './locations.service';
 
 /**
  * Дозапись координат адресам, которые завели без них.
@@ -61,6 +62,7 @@ export class LocationGeocodingService implements OnApplicationBootstrap {
         private prisma: PrismaService,
         private redis: RedisService,
         private geo: GeoService,
+        private locations: LocationsService,
     ) { }
 
     onApplicationBootstrap() {
@@ -77,7 +79,7 @@ export class LocationGeocodingService implements OnApplicationBootstrap {
 
     /** Сколько адресов ждут координат. Для списка в кабинете. */
     async countMissing(companyId?: string): Promise<{ total: number; failed: number }> {
-        const where = this.whereMissing(companyId);
+        const where = await this.whereMissing(companyId);
         const [total, failed] = await Promise.all([
             this.prisma.location.count({ where }),
             this.prisma.location.count({ where: { ...where, geocodeFailedAt: { not: null } } }),
@@ -87,7 +89,7 @@ export class LocationGeocodingService implements OnApplicationBootstrap {
 
     async listMissing(companyId?: string, take = 100) {
         return this.prisma.location.findMany({
-            where: this.whereMissing(companyId),
+            where: await this.whereMissing(companyId),
             orderBy: [{ geocodeFailedAt: 'asc' }, { createdAt: 'desc' }],
             take,
             select: {
@@ -120,7 +122,7 @@ export class LocationGeocodingService implements OnApplicationBootstrap {
             const probe = await this.geo.suggest('Алматы');
             if (!probe.configured) return { ...empty, configured: false };
 
-            const where = this.whereMissing(options.companyId);
+            const where = await this.whereMissing(options.companyId);
             const locations = await this.prisma.location.findMany({
                 where: options.force ? where : {
                     ...where,
@@ -195,14 +197,18 @@ export class LocationGeocodingService implements OnApplicationBootstrap {
         return null;
     }
 
-    private whereMissing(companyId?: string) {
+    private async whereMissing(companyId?: string) {
+        // Видимость уезжает в `AND`, а не в корень: у неё внутри свой `OR`,
+        // и в корне его затёрло бы условием про недавние неудачи — компания
+        // увидела бы чужой счётчик вместо своего.
+        const visible = await this.locations.visibleToCompany(companyId);
         return {
             latitude: null,
             // Ручные точки сюда не попадают по определению: у них координаты
             // есть. Условие оставлено явным, чтобы правка отбора не съела
             // главное правило.
             coordinatesManual: false,
-            ...(companyId ? { companyId } : {}),
+            ...(Object.keys(visible).length ? { AND: [visible] } : {}),
         };
     }
 }

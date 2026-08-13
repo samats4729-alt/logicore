@@ -10,6 +10,9 @@ import { LocationGeocodingService } from './location-geocoding.service';
  * Взять всё разом — значит выжечь месячный лимит платных запросов за минуту.
  */
 describe('Дозапись координат адресам', () => {
+    /** Что вернёт `visibleToCompany`, когда компанию действительно передали. */
+    const VISIBILITY = { OR: [{ companyId: 'c-1' }, { companyId: null }] };
+
     const build = (options: {
         configured?: boolean;
         locations?: any[];
@@ -29,7 +32,13 @@ describe('Дозапись координат адресам', () => {
                 items: options.point ? [{ point: options.point }] : [],
             }),
         };
-        return { service: new LocationGeocodingService(prisma, redis, geo), prisma, geo, redis };
+        const locations: any = {
+            visibleToCompany: jest.fn(async (companyId?: string) => (companyId ? VISIBILITY : {})),
+        };
+        return {
+            service: new LocationGeocodingService(prisma, redis, geo, locations),
+            prisma, geo, redis, locations,
+        };
     };
 
     it('без ключа геокодера ничего не помечается ненайденным', async () => {
@@ -156,5 +165,30 @@ describe('Дозапись координат адресам', () => {
         await service.sweep();
 
         expect(prisma.location.findMany.mock.calls[0][0].where.OR).toHaveLength(2);
+    });
+
+    it('компания считает свои адреса по тому же правилу, что и список', async () => {
+        // `Location.companyId` — это контрагент, к которому привязана точка, а
+        // не владелец. У общих адресов там пусто, и их большинство. Отбор
+        // «где companyId равен нашему» показал бы ноль там, где адресов без
+        // координат десятки.
+        const { service, prisma, locations } = build();
+
+        await service.countMissing('c-1');
+
+        expect(locations.visibleToCompany).toHaveBeenCalledWith('c-1');
+        expect(prisma.location.count.mock.calls[0][0].where.AND).toEqual([VISIBILITY]);
+    });
+
+    it('видимость не затирается условием про недавние неудачи', async () => {
+        // Оба условия — списком `OR`. Если положить их в один корень, второе
+        // перебьёт первое, и компания увидит чужие адреса.
+        const { service, prisma } = build();
+
+        await service.sweep({ companyId: 'c-1' });
+
+        const where = prisma.location.findMany.mock.calls[0][0].where;
+        expect(where.AND).toEqual([VISIBILITY]);
+        expect(where.OR).toHaveLength(2);
     });
 });
