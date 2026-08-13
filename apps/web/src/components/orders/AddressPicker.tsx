@@ -8,9 +8,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import styles from './address-picker.module.css';
 
 export interface AddressOption {
     id: string;
@@ -95,47 +95,44 @@ export function AddressPicker({
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className={cn(
-                    'flex h-10 w-full items-center gap-2 rounded-xl bg-card px-3 text-left text-[13px] shadow-soft',
-                    'transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                )}
+                className={cn(styles.trigger, !valueId && styles.triggerEmpty)}
             >
-                <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className={cn('flex-1 truncate', !valueId && 'text-muted-foreground')}>
+                <MapPin size={15} className={styles.triggerIcon} />
+                <span className={styles.triggerText}>
                     {valueId ? valueLabel : 'Выберите адрес или склад'}
                 </span>
                 {valueId && (
                     <span
                         role="button"
                         aria-label="Очистить адрес"
-                        className="rounded-full p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        className={styles.clear}
                         onClick={(e) => { e.stopPropagation(); onSelect(null); }}
                     >
-                        <X className="h-3.5 w-3.5" />
+                        <X size={13} />
                     </span>
                 )}
             </button>
 
             <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
-                <DialogContent className="max-w-2xl gap-0 p-0">
-                    <DialogHeader className="border-b border-border px-4 py-3">
-                        <DialogTitle className="text-[15px]">Адрес точки маршрута</DialogTitle>
+                <DialogContent className={styles.panel}>
+                    <DialogHeader className={styles.head}>
+                        <DialogTitle className={styles.title}>Адрес точки маршрута</DialogTitle>
                     </DialogHeader>
 
-                    <div className="border-b border-border px-4 py-3">
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input
+                    <div className={styles.search}>
+                        <div className={styles.field}>
+                            <Search size={15} />
+                            <input
                                 autoFocus
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 placeholder="Название склада, город или улица"
-                                className="h-9 pl-8 text-[13px]"
+                                className={styles.input}
                             />
                         </div>
 
                         {(cities.length > 1 || groups.length > 1) && (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
+                            <div className={styles.chips}>
                                 {groups.length > 1 && groups.map((group) => (
                                     <FilterChip
                                         key={group.label}
@@ -158,17 +155,15 @@ export function AddressPicker({
                         )}
                     </div>
 
-                    <div className="max-h-[50vh] overflow-y-auto px-2 py-2">
+                    <div className={styles.list}>
                         {total === 0 ? (
-                            <div className="px-2 py-8 text-center text-[13px] text-muted-foreground">
+                            <div className={styles.empty}>
                                 Ничего не нашлось. Проверьте фильтры или заведите новый адрес.
                             </div>
                         ) : (
                             visible.map((group) => (
-                                <div key={group.label} className="mb-2">
-                                    <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                        {group.label}
-                                    </div>
+                                <div key={group.label} className={styles.group}>
+                                    <div className={styles.groupLabel}>{group.label}</div>
                                     {group.options.map((option) => (
                                         <button
                                             key={option.id}
@@ -180,20 +175,15 @@ export function AddressPicker({
                                             // фильтр — на пустом стенде это не проявлялось.
                                             data-address-option={option.id}
                                             onClick={() => { onSelect(option.id); close(); }}
-                                            className={cn(
-                                                'flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent',
-                                                option.id === valueId && 'bg-accent',
-                                            )}
+                                            className={cn(styles.option, option.id === valueId && styles.optionActive)}
                                         >
                                             <Check
-                                                className={cn(
-                                                    'mt-0.5 h-4 w-4 shrink-0',
-                                                    option.id === valueId ? 'opacity-100' : 'opacity-0',
-                                                )}
+                                                size={15}
+                                                className={cn(styles.tick, option.id === valueId && styles.tickOn)}
                                             />
-                                            <span className="min-w-0">
-                                                <span className="block truncate text-[13px] font-medium">{option.name}</span>
-                                                <span className="block truncate text-xs text-muted-foreground">
+                                            <span style={{ minWidth: 0 }}>
+                                                <span className={styles.optionName}>{option.name}</span>
+                                                <span className={styles.optionAddress}>
                                                     {option.city ? `${option.city}, ` : ''}{option.address}
                                                 </span>
                                             </span>
@@ -204,7 +194,7 @@ export function AddressPicker({
                         )}
                     </div>
 
-                    <div className="border-t border-border px-4 py-3">
+                    <div className={styles.foot}>
                         <Button
                             variant="outline"
                             size="sm"
@@ -232,10 +222,7 @@ function FilterChip({
         <button
             type="button"
             onClick={onClick}
-            className={cn(
-                'rounded-full px-2.5 py-1 text-[12px] font-medium leading-none transition-colors',
-                active ? 'bg-foreground text-background' : 'bg-secondary text-muted-foreground hover:text-foreground',
-            )}
+            className={cn(styles.chip, active && styles.chipActive)}
         >
             {children}
         </button>

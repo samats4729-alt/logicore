@@ -44,8 +44,9 @@ test('гид доводит по шагам, и подсказка не закр
 
     await login(page);
 
-    // Открываем помощника и задаём вопрос — ответ придёт подменённый.
-    await page.locator('button').filter({ has: page.locator('svg') }).first().click();
+    // Открываем помощника по его подписи, а не «первой кнопкой со значком»:
+    // такой отбор ловил соседнюю кнопку шапки, и тест падал через раз.
+    await page.getByRole('button', { name: 'ИИ-помощник' }).click();
     const field = page.getByPlaceholder(/Спросите/i).first();
     await field.fill('Как создать заявку?');
     await field.press('Enter');
