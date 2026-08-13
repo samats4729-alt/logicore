@@ -1,0 +1,44 @@
+/* Плитка «Тариф» на главной кабинета.
+
+   Отдельная строка, а не пятая плитка в ряду: у неё длинная подпись
+   («после 16 августа доступ закроется») и кнопка, а в общем ряду подписи
+   обрезаются многоточием — и человек не прочитает главного. */
+
+.card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
+    padding: 13px 16px 12px;
+    margin-bottom: 14px;
+}
+
+/* Дни на исходе — единственное состояние, где рамка должна ловить взгляд:
+   после этого срока кабинет закроется. */
+.urgent {
+    border-color: color-mix(in srgb, var(--nova-warn) 45%, var(--nova-border));
+}
+
+.body {
+    flex: 1;
+    min-width: 220px;
+}
+
+.value {
+    font-size: 21px;
+    font-weight: 650;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    margin-top: 6px;
+    color: var(--nova-fg);
+}
+
+.sub {
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+    margin-top: 2px;
+}
