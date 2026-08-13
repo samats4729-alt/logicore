@@ -1105,7 +1105,7 @@ export default function OrderDetailPage() {
                     <span style={{ whiteSpace: 'nowrap' }}>
                         от {dayjs(row.createdAt).format('DD.MM.YYYY HH:mm')}
                     </span>
-                    {row.isCurrent && <Tag color="green" style={{ margin: 0 }}>действующий</Tag>}
+                    {row.isCurrent && <span className={nova.chip}>действующий</span>}
                 </div>
                 <div style={{
                     color: 'var(--lc-text-ter)', fontSize: 11,
@@ -1247,9 +1247,9 @@ export default function OrderDetailPage() {
             width: 120,
             render: (dir: string) => (
                 dir === 'IN' ? (
-                    <Tag color="green">Поступление</Tag>
+                    <span className={`${nova.chip} ${nova.valuePos}`}>Поступление</span>
                 ) : (
-                    <Tag color="volcano">Расход</Tag>
+                    <span className={`${nova.chip} ${nova.valueNeg}`}>Расход</span>
                 )
             ),
         },

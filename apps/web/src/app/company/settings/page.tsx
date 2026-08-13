@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import CompanyFormFields from '@/components/CompanyFormFields';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 
 const { Text } = Typography;
@@ -298,7 +299,7 @@ export default function SettingsPage() {
                                                             </div>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                                                                 {isCurrent
-                                                                    ? <Tag color="blue" style={{ margin: 0 }}>Текущая</Tag>
+                                                                    ? <span className={nova.chip}>Текущая</span>
                                                                     : <Button size="small" onClick={() => handleSwitchCompany(c.id)}>Переключиться</Button>}
                                                                 {user?.role === 'COMPANY_ADMIN' && (myCompanies.length > 1) && (
                                                                     <Popconfirm

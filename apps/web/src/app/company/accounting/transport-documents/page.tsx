@@ -14,6 +14,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { api } from '@/lib/api';
 import StatusPill from '@/components/ui/StatusPill';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 const { RangePicker } = DatePicker;
 
@@ -176,7 +177,7 @@ export default function TransportDocumentsPage() {
                 <div>
                     <div style={{ fontSize: 12 }}>
                         от {dayjs(record.createdAt).format('DD.MM.YY HH:mm')}
-                        {record.isCurrent && <Tag color="green" style={{ marginLeft: 6 }}>действующий</Tag>}
+                        {record.isCurrent && <span className={nova.chip} style={{ marginLeft: 6 }}>действующий</span>}
                     </div>
                     {record.createdBy && (
                         <div style={{ fontSize: 11, color: token.colorTextSecondary }}>

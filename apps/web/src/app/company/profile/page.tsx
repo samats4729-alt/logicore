@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth';
 import UserAvatar, { notifyAvatarUpdated } from '@/components/UserAvatar';
 import { shortenCompanyName } from '@/lib/company-helper';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 const ROLE_LABELS: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -102,7 +103,7 @@ export default function ProfilePage() {
         {
             icon: <IdcardOutlined />,
             label: 'Роль',
-            value: <Tag color={ROLE_COLORS[user.role] || 'default'} style={{ marginRight: 0 }}>{ROLE_LABELS[user.role] || user.role}</Tag>,
+            value: <span className={nova.chip}>{ROLE_LABELS[user.role] || user.role}</span>,
         },
         { icon: <BankOutlined />, label: 'Компания', value: user.company?.name ? shortenCompanyName(user.company.name) : '—' },
     ];

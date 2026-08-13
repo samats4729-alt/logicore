@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 import { money as formatCurrency } from '@/lib/money-format';
 import Loader from '@/components/ui/Loader';
 
@@ -127,7 +128,10 @@ export default function CashflowReportPage() {
             key: 'direction',
             width: 120,
             render: (dir: 'IN' | 'OUT') => (
-                dir === 'IN' ? <Tag color="green">Поступление</Tag> : <Tag color="volcano">Расход</Tag>
+                // Приход и расход — то самое исключение, где цвет разрешён.
+                <span className={`${nova.chip} ${dir === 'IN' ? nova.valuePos : nova.valueNeg}`}>
+                    {dir === 'IN' ? 'Поступление' : 'Расход'}
+                </span>
             )
         },
         {
@@ -221,7 +225,9 @@ export default function CashflowReportPage() {
             key: 'direction',
             width: 150,
             render: (val: 'IN' | 'OUT') => (
-                val === 'IN' ? <Tag color="green">Доход</Tag> : <Tag color="volcano">Расход</Tag>
+                <span className={`${nova.chip} ${val === 'IN' ? nova.valuePos : nova.valueNeg}`}>
+                    {val === 'IN' ? 'Доход' : 'Расход'}
+                </span>
             )
         },
         {

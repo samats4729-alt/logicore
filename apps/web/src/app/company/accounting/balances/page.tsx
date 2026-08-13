@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 import { money as formatMoney } from '@/lib/money-format';
 
 const { Text } = Typography;
@@ -61,9 +62,9 @@ export default function AccountBalancesPage() {
                         ? <WalletOutlined style={{ color: '#16a34a' }} />
                         : <BankOutlined style={{ color: '#0369a1' }} />}
                     <span style={{ fontWeight: 600 }}>{val}</span>
-                    <Tag color={r.kind === 'CASH' ? 'green' : 'blue'} style={{ margin: 0 }}>{r.kind === 'CASH' ? 'касса' : 'счёт'}</Tag>
+                    <span className={nova.chip}>{r.kind === 'CASH' ? 'касса' : 'счёт'}</span>
                     {r.currency && r.currency !== 'KZT' && (
-                        <Tag color="gold" style={{ margin: 0 }}>{r.currency}</Tag>
+                        <span className={nova.chip}>{r.currency}</span>
                     )}
                 </span>
             ),

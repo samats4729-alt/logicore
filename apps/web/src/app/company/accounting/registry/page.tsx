@@ -12,6 +12,7 @@ import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
 import { shortenCompanyName } from '@/lib/company-helper';
 import StatusPill from '@/components/ui/StatusPill';
+import nova from '@/components/nova/nova.module.css';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
@@ -373,7 +374,7 @@ export default function FinancialRegistryPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                             <Tooltip title={name}>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>
-                                    <span className="lc2-avatar lc2-avatar-sm" style={{ marginRight: 6, background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                                    <span className="lc2-avatar lc2-avatar-sm" style={{ marginRight: 6, background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
                                         {getInitials(name) || 'ЗК'}
                                     </span>
                                     {shortenCompanyName(name)}
@@ -387,7 +388,7 @@ export default function FinancialRegistryPage() {
                             </div>
                         )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? token.colorSuccess : token.colorPrimary} style={{ flex: 1, margin: 0 }} />
+                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? 'var(--nova-pos)' : 'var(--nova-fg-3)'} style={{ flex: 1, margin: 0 }} />
                             <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
                         </div>
                     </div>
@@ -415,11 +416,11 @@ export default function FinancialRegistryPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                             <Tooltip title={name}>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>
-                                    <span className="lc2-avatar lc2-avatar-sm" style={{ marginRight: 6, background: '#f1f2f5', color: '#5f6672', flexShrink: 0 }}>
+                                    <span className="lc2-avatar lc2-avatar-sm" style={{ marginRight: 6, background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
                                         {getInitials(name) || 'ПВ'}
                                     </span>
                                     {shortenCompanyName(name)}
-                                    {isSub && <Tag color="purple" style={{ fontSize: 9, padding: '0 4px', lineHeight: '14px', margin: '0 0 0 4px', flexShrink: 0 }}>Суб</Tag>}
+                                    {isSub && <span className={nova.chip} style={{ marginLeft: 4, flexShrink: 0 }}>Суб</span>}
                                 </span>
                             </Tooltip>
                             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{money(total, currency)}</span>
@@ -430,7 +431,7 @@ export default function FinancialRegistryPage() {
                             </div>
                         )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? token.colorSuccess : token.colorPrimary} style={{ flex: 1, margin: 0 }} />
+                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? 'var(--nova-pos)' : 'var(--nova-fg-3)'} style={{ flex: 1, margin: 0 }} />
                             <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
                         </div>
                     </div>
@@ -451,11 +452,17 @@ export default function FinancialRegistryPage() {
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: paid ? token.colorSuccess : token.colorError }}>
+                            {/* Красным — только просроченный долг: у него ниже
+                                стоит и объяснение. Обычная непогашенная сумма
+                                просто сумма, а «Оплачено» — не событие. */}
+                            <span
+                                className={isLate ? nova.valueNeg : undefined}
+                                style={{ fontSize: 12, fontWeight: 700 }}
+                            >
                                 {debt === 0 ? 'Оплачено' : `${fmt(debt)} ₸`}
                             </span>
                             {isLate && (
-                                <div style={{ fontSize: 9, color: token.colorError, fontWeight: 600 }}>Просрочка 5д+</div>
+                                <div className={nova.valueNeg} style={{ fontSize: 9, fontWeight: 600 }}>Просрочка 5д+</div>
                             )}
                             {/* Долга формально нет, пока нет счёта. Без этой
                                 пометки строка выглядит как «всё в порядке»,
@@ -469,7 +476,7 @@ export default function FinancialRegistryPage() {
                                 <div style={{
                                     fontSize: 9,
                                     fontWeight: 600,
-                                    color: debt > 0 ? '#b45309' : token.colorTextTertiary,
+                                    color: debt > 0 ? 'var(--nova-warn)' : 'var(--nova-fg-3)',
                                 }}>
                                     Счёт не выставлен
                                 </div>
@@ -483,7 +490,7 @@ export default function FinancialRegistryPage() {
                                     shape="circle"
                                     icon={<PlusOutlined />}
                                     onClick={(e) => handleAddPaymentClick(e, r, 'IN')}
-                                    style={{ background: token.colorSuccess, borderColor: token.colorSuccess, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 />
                             </Tooltip>
                         )}
@@ -500,7 +507,7 @@ export default function FinancialRegistryPage() {
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: paid ? token.colorSuccess : token.colorWarning }}>
+                            <span style={{ fontSize: 12, fontWeight: 700 }}>
                                 {paid ? 'Оплачено' : `${fmt(debt)} ₸`}
                             </span>
                         </div>
@@ -512,7 +519,7 @@ export default function FinancialRegistryPage() {
                                     shape="circle"
                                     icon={<PlusOutlined />}
                                     onClick={(e) => handleAddPaymentClick(e, r, 'OUT')}
-                                    style={{ background: token.colorWarning, borderColor: token.colorWarning, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 />
                             </Tooltip>
                         )}
@@ -530,7 +537,10 @@ export default function FinancialRegistryPage() {
                 const percent = revenue > 0 ? Math.round((m / revenue) * 100) : 0;
                 return (
                     <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: m >= 0 ? token.colorSuccess : token.colorError }}>
+                        <span
+                            className={m >= 0 ? nova.valuePos : nova.valueNeg}
+                            style={{ fontSize: 12, fontWeight: 700 }}
+                        >
                             {m >= 0 ? '+' : ''}{fmt(m)}
                         </span>
                         <div style={{ fontSize: 10, color: token.colorTextSecondary }}>{percent}%</div>
@@ -554,10 +564,11 @@ export default function FinancialRegistryPage() {
             value: totals.totalMargin,
             hint: `${totals.totalIncome ? Math.round((totals.totalMargin / totals.totalIncome) * 100) : 0}% маржинальность`,
             icon: <DollarOutlined />,
-            valueColor: totals.totalMargin >= 0 ? '#34c759' : '#ff3b30'
+            // Цветом — только прибыль и убыток: остальные плитки просто суммы.
+            valueTone: totals.totalMargin >= 0 ? nova.valuePos : nova.valueNeg,
         },
-        { label: 'Дебиторка', value: totals.debtorSum, hint: 'долг клиентов', icon: <ArrowUpOutlined />, hintColor: totals.debtorSum > 0 ? '#ff9500' : undefined },
-        { label: 'Кредиторка', value: totals.creditorSum, hint: 'наш долг перед ТК', icon: <ArrowDownOutlined />, hintColor: totals.creditorSum > 0 ? '#ff3b30' : undefined },
+        { label: 'Дебиторка', value: totals.debtorSum, hint: 'долг клиентов', icon: <ArrowUpOutlined />, hintTone: totals.debtorSum > 0 ? nova.valueWarn : undefined },
+        { label: 'Кредиторка', value: totals.creditorSum, hint: 'наш долг перед ТК', icon: <ArrowDownOutlined />, hintTone: totals.creditorSum > 0 ? nova.valueWarn : undefined },
     ];
 
     return (
@@ -575,19 +586,14 @@ export default function FinancialRegistryPage() {
                         Доход, себестоимость, маржа и статус оплат по каждой заявке.
                     </p>
                 </div>
-                <div className="lc2-metrics">
+                <div className={`${nova.tiles} ${nova.tiles5}`} style={{ marginBottom: 0, minWidth: 560 }}>
                     {metricsData.map((m, i) => (
-                        <div key={i} className="lc2-metric">
-                            <div className="lc2-mic">
-                                {m.icon}
+                        <div key={i} className={nova.tile}>
+                            <div className={nova.tileLabel}>{m.label}</div>
+                            <div className={`${nova.tileValue}${m.valueTone ? ` ${m.valueTone}` : ''}`}>
+                                {typeof m.value === 'number' ? `${fmt(m.value)} ₸` : m.value}
                             </div>
-                            <div>
-                                <div className="lc2-mlabel">{m.label}</div>
-                                <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: m.valueColor || 'var(--lc-text)' }}>
-                                    {typeof m.value === 'number' ? `${fmt(m.value)} ₸` : m.value}
-                                </div>
-                                <div className="lc2-msub" style={{ color: m.hintColor || 'var(--lc-text-ter)' }}>{m.hint}</div>
-                            </div>
+                            <div className={`${nova.tileSub}${m.hintTone ? ` ${m.hintTone}` : ''}`}>{m.hint}</div>
                         </div>
                     ))}
                 </div>
@@ -608,7 +614,7 @@ export default function FinancialRegistryPage() {
                 <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
                     <Input
                         placeholder="Поиск по №, грузу, заказчику..."
-                        prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+                        prefix={<SearchOutlined style={{ color: 'var(--nova-fg-3)' }} />}
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         style={{ width: 240 }}
@@ -653,11 +659,7 @@ export default function FinancialRegistryPage() {
                         style: { cursor: 'pointer' },
                         onDoubleClick: () => setSelectedOrder(record),
                     })}
-                    rowClassName={(record) => {
-                        if (record.status === 'COMPLETED') return 'row-completed';
-                        if (record.status === 'PROBLEM') return 'row-problem';
-                        return '';
-                    }}
+                    rowClassName={(record) => (record.status === 'PROBLEM' ? 'row-problem' : '')}
                 />
             </div>
 
@@ -681,11 +683,11 @@ export default function FinancialRegistryPage() {
                 .ant-table-tbody > tr:hover > td {
                     background: ${token.colorPrimaryBg} !important;
                 }
-                .row-completed td {
-                    background: ${token.colorSuccessBg} !important;
-                }
+                /* Завершённый рейс — большинство строк в реестре, и заливать
+                   их зелёным значит красить весь экран. Статус подписан в своей
+                   графе. Цветом осталась только проблема — её ищут глазами. */
                 .row-problem td {
-                    background: ${token.colorErrorBg} !important;
+                    background: var(--nova-neg-soft) !important;
                 }
             `}</style>
 
@@ -706,7 +708,7 @@ export default function FinancialRegistryPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                             <Descriptions column={1} size="small" bordered>
                                 <Descriptions.Item label="Маршрут">{pickupCity} → {deliveryCity}</Descriptions.Item>
-                                <Descriptions.Item label="Статус рейса"><Tag color={statusColors[o.status]}>{statusLabels[o.status] || o.status}</Tag></Descriptions.Item>
+                                <Descriptions.Item label="Статус рейса"><StatusPill status={o.status} /></Descriptions.Item>
                                 <Descriptions.Item label="Груз">{o.cargoDescription || '—'}</Descriptions.Item>
                                 <Descriptions.Item label="Заказчик">{o.customerCompany?.name || '—'}</Descriptions.Item>
                                 <Descriptions.Item label="Исполнитель">{executor}</Descriptions.Item>
@@ -739,9 +741,9 @@ export default function FinancialRegistryPage() {
                                                 {o.margin >= 0 ? '+' : ''}{fmt(o.margin)} ₸
                                             </span>
                                         </div>
-                                        <Tag color={o.margin >= 0 ? 'green' : 'red'} style={{ fontSize: 13, padding: '4px 8px', fontWeight: 600 }}>
+                                        <span className={`${nova.chip} ${o.margin >= 0 ? '' : nova.chipNeg}`} style={{ fontSize: 12 }}>
                                             {o.customerPrice ? Math.round((o.margin / o.customerPrice) * 100) : 0}%
-                                        </Tag>
+                                        </span>
                                     </div>
                                 </Card>
                             </div>
@@ -784,9 +786,9 @@ export default function FinancialRegistryPage() {
                                             >
                                                 <div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                        <Tag color={p.direction === 'IN' ? 'green' : 'orange'} style={{ fontSize: 10 }}>
+                                                        <span className={nova.chip}>
                                                             {p.direction === 'IN' ? 'Входящий' : 'Исходящий'}
-                                                        </Tag>
+                                                        </span>
                                                         <strong style={{ fontSize: 13 }}>{fmt(p.amount)} ₸</strong>
                                                         <span style={{ fontSize: 11, color: token.colorTextSecondary }}>({p.method === 'BANK' ? 'Банк' : p.method === 'CASH' ? 'Наличные' : p.method === 'CARD' ? 'Карта' : 'Другое'})</span>
                                                     </div>
@@ -827,7 +829,7 @@ export default function FinancialRegistryPage() {
             >
                 {paymentModalData && (
                     <Form form={paymentForm} layout="vertical" onFinish={handleSavePayment}>
-                        <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                        <div style={{ background: 'var(--nova-surface-2)', padding: 12, borderRadius: 8, marginBottom: 16 }}>
                             <Descriptions column={1} size="small">
                                 <Descriptions.Item label="Контрагент"><strong>{paymentModalData.counterpartyName}</strong></Descriptions.Item>
                                 <Descriptions.Item label="Остаток долга"><strong>{fmt(paymentModalData.maxAmount)} ₸</strong></Descriptions.Item>

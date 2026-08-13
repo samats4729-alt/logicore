@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -299,8 +300,10 @@ export default function AllOperationsPage() {
         {
             title: 'Тип', key: 'dir', width: 130,
             render: (_: any, r: OpRow) => r.direction === 'IN'
-                ? <Tag color="green" style={{ margin: 0 }}><ArrowDownOutlined /> Поступление</Tag>
-                : <Tag color="red" style={{ margin: 0 }}><ArrowUpOutlined /> Списание</Tag>,
+                // Приход и расход — единственное место, где цвет оставлен по
+                // решению владельца: деньги пришли или ушли.
+                ? <span className={`${nova.chip} ${nova.valuePos}`}><ArrowDownOutlined /> Поступление</span>
+                : <span className={`${nova.chip} ${nova.valueNeg}`}><ArrowUpOutlined /> Списание</span>,
         },
         {
             title: 'Основание', key: 'basis',
@@ -310,18 +313,19 @@ export default function AllOperationsPage() {
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{r.title}</span>
                         {/* Возврат виден сразу: иначе в журнале это выглядит
                             как обычное движение денег в другую сторону. */}
-                        {r.isRefund && <Tag color="orange" style={{ margin: 0 }}>Возврат</Tag>}
+                        {r.isRefund && <span className={`${nova.chip} ${nova.chipWarn}`}>Возврат</span>}
                         {!r.isRefund && (r.refundedAmount ?? 0) > 0 && (
-                            <Tag color="gold" style={{ margin: 0 }}>Возвращено {money(r.refundedAmount!)}</Tag>
+                            <span className={`${nova.chip} ${nova.chipWarn}`}>Возвращено {money(r.refundedAmount!)}</span>
                         )}
                         {r.orderNumber && (
-                            <Tag
-                                color="blue"
-                                style={{ margin: 0, cursor: 'pointer' }}
+                            <button
+                                type="button"
+                                className={nova.chip}
+                                style={{ cursor: 'pointer', background: 'transparent' }}
                                 onClick={() => router.push('/company/accounting/registry')}
                             >
                                 Заявка {r.orderNumber}
-                            </Tag>
+                            </button>
                         )}
                     </Space>
                     <Text type="secondary" style={{ fontSize: 12 }}>

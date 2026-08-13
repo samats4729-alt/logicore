@@ -6,6 +6,7 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, CarOutlined, SearchOutlined
 import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 interface Vehicle {
     id: string;
@@ -298,12 +299,12 @@ export default function VehiclesPage() {
                 if (record.source === 'carrier') {
                     return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <Tag color="orange" style={{ margin: 0, width: 'fit-content' }}>От перевозчика</Tag>
+                            <span className={nova.chip}>От перевозчика</span>
                             {record.carrierName && <span style={{ color: 'var(--lc-text-ter)', fontSize: 12 }}>{record.carrierName}</span>}
                         </div>
                     );
                 }
-                return <Tag color="blue" style={{ margin: 0 }}>Свой</Tag>;
+                return <span className={nova.chip}>Свой</span>;
             },
         },
         {

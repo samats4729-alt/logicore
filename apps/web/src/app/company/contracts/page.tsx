@@ -9,6 +9,7 @@ import {
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -499,8 +500,8 @@ export default function CompanyContractsPage() {
                                                     <Space>
                                                         <ExclamationCircleOutlined style={{ color: token.colorWarning }} />
                                                         <span>ДС №{agreement.agreementNumber}</span>
-                                                        <Tag color="orange">На согласовании</Tag>
-                                                        <Tag>{agreement.proposedBy === 'CUSTOMER' ? 'От заказчика' : 'От экспедитора'}</Tag>
+                                                        <span className={`${nova.chip} ${nova.chipWarn}`}>На согласовании</span>
+                                                        <span className={nova.chip}>{agreement.proposedBy === 'CUSTOMER' ? 'От заказчика' : 'От экспедитора'}</span>
                                                     </Space>
                                                 }
                                                 extra={
@@ -561,9 +562,9 @@ export default function CompanyContractsPage() {
                                                     <Space>
                                                         <FileTextOutlined />
                                                         <span>Договор №{contract.contractNumber}</span>
-                                                        <Tag color={statusColors[contract.status]}>
+                                                        <span className={`${nova.chip}${contract.status === 'PENDING' ? ` ${nova.chipWarn}` : ''}`}>
                                                             {statusLabels[contract.status]}
-                                                        </Tag>
+                                                        </span>
                                                     </Space>
                                                 }
                                                 extra={
@@ -610,11 +611,11 @@ export default function CompanyContractsPage() {
                                                             title={
                                                                 <Space>
                                                                     <span>ДС №{agreement.agreementNumber}</span>
-                                                                    <Tag color={statusColors[agreement.status]}>
+                                                                    <span className={`${nova.chip}${agreement.status === 'PENDING' ? ` ${nova.chipWarn}` : ''}`}>
                                                                         {statusLabels[agreement.status]}
-                                                                    </Tag>
+                                                                    </span>
                                                                     {agreement.proposedBy === 'CUSTOMER' && (
-                                                                        <Tag color="blue">Ваше предложение</Tag>
+                                                                        <span className={nova.chip}>Ваше предложение</span>
                                                                     )}
                                                                     <Badge
                                                                         count={agreement.tariffs?.length || 0}
@@ -694,11 +695,11 @@ export default function CompanyContractsPage() {
                                                 header={
                                                     <Space>
                                                         <span>ДС №{item.agreementNumber}</span>
-                                                        <Tag color={statusColors[item.status]}>
+                                                        <span className={`${nova.chip}${item.status === 'PENDING' ? ` ${nova.chipWarn}` : ''}`}>
                                                             {statusLabels[item.status]}
-                                                        </Tag>
+                                                        </span>
                                                         {item.proposedBy === 'CUSTOMER' && (
-                                                            <Tag color="blue">Ваше предложение</Tag>
+                                                            <span className={nova.chip}>Ваше предложение</span>
                                                         )}
                                                     </Space>
                                                 }

@@ -21,6 +21,7 @@ import { useAuthStore } from '@/store/auth';
 import { canAccounting } from '@/lib/permissions';
 import { vatLabel } from '@/lib/settlement-terms';
 import nova from '@/components/nova/nova.module.css';
+import StatusPill from '@/components/ui/StatusPill';
 
 const { Title, Text } = Typography;
 
@@ -306,9 +307,9 @@ export default function PartnerDetailPage() {
                 title={
                     <Space>
                         <Text strong style={{ fontSize: 16 }}>Данные контрагента</Text>
-                        {partner.isCustomer && <Tag color="blue">Заказчик</Tag>}
-                        {partner.isCarrier && <Tag color="green">Перевозчик</Tag>}
-                        {!isExternal && <Tag color="cyan">В системе</Tag>}
+                        {partner.isCustomer && <span className={nova.chip}>Заказчик</span>}
+                        {partner.isCarrier && <span className={nova.chip}>Перевозчик</span>}
+                        {!isExternal && <span className={nova.chip}>В системе</span>}
                     </Space>
                 }
                 extra={
@@ -354,7 +355,7 @@ export default function PartnerDetailPage() {
             dataIndex: 'status',
             key: 'status',
             render: (status: string) => (
-                <Tag color={statusColors[status]}>{statusLabels[status] || status}</Tag>
+                <StatusPill status={status} />
             )
         },
         {
@@ -415,8 +416,8 @@ export default function PartnerDetailPage() {
                 return (
                     <Space direction="vertical" size={0}>
                         <Text>{record.vehicleModel || 'Без модели'}</Text>
-                        <Tag color="blue">{record.vehiclePlate}</Tag>
-                        {record.trailerNumber && <Tag color="cyan">Прицеп: {record.trailerNumber}</Tag>}
+                        <span className={nova.chip}>{record.vehiclePlate}</span>
+                        {record.trailerNumber && <span className={nova.chip}>Прицеп: {record.trailerNumber}</span>}
                     </Space>
                 );
             }
@@ -425,7 +426,7 @@ export default function PartnerDetailPage() {
             title: 'Тип кузова',
             dataIndex: 'vehicleType',
             key: 'vehicleType',
-            render: (text: string) => text ? <Tag>{text}</Tag> : '—'
+            render: (text: string) => text ? <span className={nova.chip}>{text}</span> : '—'
         },
         {
             title: 'Действия',

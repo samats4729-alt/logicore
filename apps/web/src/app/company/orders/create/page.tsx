@@ -1294,7 +1294,7 @@ export default function CreateOrderPage() {
                                 alignItems: 'center'
                             }}>
                                 <span>Чистая маржа: <strong style={{ color: margin >= 0 ? '#059669' : '#dc2626', fontSize: 15 }}>{margin.toLocaleString('ru-RU')} ₸</strong></span>
-                                <Tag color={margin >= 0 ? 'green' : 'red'}>{marginPercent}%</Tag>
+                                <span className={`${nova.chip} ${margin >= 0 ? '' : nova.chipNeg}`}>{marginPercent}%</span>
                             </div>
                         );
                     }

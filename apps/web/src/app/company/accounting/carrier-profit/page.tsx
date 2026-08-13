@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 dayjs.extend(quarterOfYear);
 
 const { RangePicker } = DatePicker;
@@ -48,7 +49,9 @@ export default function CarrierProfitPage() {
         { title: 'Выручка', dataIndex: 'revenue', key: 'revenue', width: 150, align: 'right' as const, render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}</span> },
         { title: 'Оплата перевозчику', dataIndex: 'cost', key: 'cost', width: 170, align: 'right' as const, render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums', color: '#dc2626' }}>{money(v)}</span> },
         { title: 'Маржа', dataIndex: 'margin', key: 'margin', width: 150, align: 'right' as const, render: (v: number) => <strong style={{ fontVariantNumeric: 'tabular-nums', color: v >= 0 ? '#16a34a' : '#dc2626' }}>{money(v)}</strong> },
-        { title: '%', dataIndex: 'marginPct', key: 'pct', width: 80, align: 'right' as const, render: (v: number) => <Tag color={v >= 0 ? 'green' : 'red'} style={{ margin: 0 }}>{v}%</Tag> },
+        { title: '%', dataIndex: 'marginPct', key: 'pct', width: 80, align: 'right' as const, render: (v: number) => (
+            <span className={`${nova.chip} ${v >= 0 ? '' : nova.chipNeg}`}>{v}%</span>
+        ) },
     ];
 
     return (
