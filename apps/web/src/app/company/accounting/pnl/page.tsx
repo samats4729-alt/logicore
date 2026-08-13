@@ -249,7 +249,7 @@ export default function PnLReportPage() {
                 {report && (
                     <div className="lc2-metrics">
                         <div className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <div className="lc2-mic">
                                 <WalletOutlined />
                             </div>
                             <div>
@@ -259,7 +259,7 @@ export default function PnLReportPage() {
                             </div>
                         </div>
                         <div className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: '#f1f2f5', color: '#5f6672' }}>
+                            <div className="lc2-mic">
                                 <FallOutlined />
                             </div>
                             <div>

@@ -287,7 +287,7 @@ export default function CashflowReportPage() {
                 {report && (
                     <div className="lc2-metrics">
                         <div className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            <div className="lc2-mic">
                                 <WalletOutlined />
                             </div>
                             <div>
@@ -297,7 +297,7 @@ export default function CashflowReportPage() {
                             </div>
                         </div>
                         <div className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                            <div className="lc2-mic">
                                 <ArrowUpOutlined />
                             </div>
                             <div>
@@ -307,7 +307,7 @@ export default function CashflowReportPage() {
                             </div>
                         </div>
                         <div className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc3545' }}>
+                            <div className="lc2-mic">
                                 <ArrowDownOutlined />
                             </div>
                             <div>
@@ -327,7 +327,7 @@ export default function CashflowReportPage() {
                             </div>
                         </div>
                         <div className="lc2-metric">
-                            <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
+                            <div className="lc2-mic">
                                 <WalletOutlined />
                             </div>
                             <div>

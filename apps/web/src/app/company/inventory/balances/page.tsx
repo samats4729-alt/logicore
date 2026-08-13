@@ -60,7 +60,7 @@ export default function StockBalancesPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#eef2ff', color: '#4f46e5' }}><DatabaseOutlined /></div>
+                        <div className="lc2-mic"><DatabaseOutlined /></div>
                         <div><div className="lc2-mlabel">Стоимость остатков</div><div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(totalValue)}</div><div className="lc2-msub">{rows.length} позиций</div></div>
                     </div>
                 </div>

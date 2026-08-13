@@ -100,7 +100,7 @@ export default function OrderNumberingPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#eef2ff', color: '#4f46e5' }}><NumberOutlined /></div>
+                        <div className="lc2-mic"><NumberOutlined /></div>
                         <div>
                             <div className="lc2-mlabel">Следующий номер</div>
                             <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', fontSize: 22 }}>{preview(nextNumber)}</div>

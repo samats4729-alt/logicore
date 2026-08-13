@@ -104,7 +104,7 @@ export default function CompanyWarehousePage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                        <div className="lc2-mic">
                             <CarOutlined />
                         </div>
                         <div>
@@ -116,7 +116,7 @@ export default function CompanyWarehousePage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#fff3e0', color: '#e67e22' }}>
+                        <div className="lc2-mic">
                             <ClockCircleOutlined />
                         </div>
                         <div>

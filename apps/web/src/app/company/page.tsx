@@ -383,13 +383,18 @@ export default function CompanyDashboard() {
                         ) : (
                             <div className={styles.cardBody}>
                                 <div className={dash.debtRow}>
+                                    {/* Долг не бывает хорошим или плохим сам по
+                                        себе: и «нам должны», и «мы должны» —
+                                        просто суммы. Цвет остался у сальдо: по
+                                        нему видно, в плюсе компания или в минусе.
+                                        Так же теперь во «Взаиморасчётах». */}
                                     <div className={dash.debtBox}>
                                         <span className={styles.tileLabel}>Нам должны</span>
-                                        <b className={styles.valuePos}>{fmt(debtTotals.unpaidTheyOweUs)} ₸</b>
+                                        <b>{fmt(debtTotals.unpaidTheyOweUs)} ₸</b>
                                     </div>
                                     <div className={dash.debtBox}>
                                         <span className={styles.tileLabel}>Мы должны</span>
-                                        <b className={styles.valueNeg}>{fmt(debtTotals.unpaidWeOweThem)} ₸</b>
+                                        <b>{fmt(debtTotals.unpaidWeOweThem)} ₸</b>
                                     </div>
                                     <div className={dash.debtBox}>
                                         <span className={styles.tileLabel}>Сальдо</span>
@@ -411,7 +416,7 @@ export default function CompanyDashboard() {
                                                 onClick={() => router.push('/company/accounting/counterparty-report')}
                                             >
                                                 <span className={dash.rowName}>{d.counterparty.name}</span>
-                                                <span className={`${dash.rowValue} ${styles.valuePos}`}>{fmt(d.unpaidTheyOweUs)} ₸</span>
+                                                <span className={dash.rowValue}>{fmt(d.unpaidTheyOweUs)} ₸</span>
                                             </button>
                                         ))}
                                     </>

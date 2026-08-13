@@ -122,7 +122,7 @@ export default function AccountBalancesPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                        <div className="lc2-mic">
                             <WalletOutlined />
                         </div>
                         <div>
@@ -133,7 +133,7 @@ export default function AccountBalancesPage() {
                     </div>
                     {byCurrency.filter((row) => row.currency !== 'KZT').map((row) => (
                         <div className="lc2-metric" key={row.currency}>
-                            <div className="lc2-mic" style={{ background: '#fef3c7', color: '#b45309' }}>
+                            <div className="lc2-mic">
                                 <BankOutlined />
                             </div>
                             <div>

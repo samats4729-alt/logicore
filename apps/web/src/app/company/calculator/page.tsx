@@ -32,7 +32,7 @@ export default function CalculatorPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                        <div className="lc2-mic">
                             <DollarOutlined />
                         </div>
                         <div>
@@ -43,7 +43,7 @@ export default function CalculatorPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
+                        <div className="lc2-mic">
                             <PercentageOutlined />
                         </div>
                         <div>
@@ -57,7 +57,7 @@ export default function CalculatorPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#fff7e6', color: '#fa8c16' }}>
+                        <div className="lc2-mic">
                             <CarOutlined />
                         </div>
                         <div>
@@ -71,7 +71,7 @@ export default function CalculatorPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc3545' }}>
+                        <div className="lc2-mic">
                             <FireOutlined />
                         </div>
                         <div>

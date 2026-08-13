@@ -27,6 +27,7 @@ import {
     routePointsLabel,
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
+import RecordLink from '@/components/ui/RecordLink';
 import Loader from '@/components/ui/Loader';
 
 const { RangePicker } = DatePicker;
@@ -186,9 +187,9 @@ export default function ActsJournalPage() {
             key: 'number',
             width: 150,
             render: (value: string, record: AccountingDocumentListItem) => (
-                <a onClick={() => router.push(`/company/accounting/acts/${record.id}`)} style={{ fontWeight: 600 }}>
+                <RecordLink onClick={() => router.push(`/company/accounting/acts/${record.id}`)}>
                     {value}
-                </a>
+                </RecordLink>
             ),
         },
         {

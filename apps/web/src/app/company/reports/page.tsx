@@ -567,9 +567,13 @@ export default function ReportsPage() {
                     <Table 
                         columns={[
                             { title: 'Период', dataIndex: 'month', key: 'month', render: (v: string) => <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span> },
-                            { title: 'Доходы', dataIndex: 'income', key: 'inc', align: 'right' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
-                            { title: 'Расходы', dataIndex: 'expense', key: 'exp', align: 'right' as const, render: (v: number) => <span style={{ color: '#ff4d4f', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
-                            { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 700, color: v >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{v >= 0 ? '+' : ''}{fmt(v)} ₸</span> },
+                            { title: 'Доходы', dataIndex: 'income', key: 'inc', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
+                            { title: 'Расходы', dataIndex: 'expense', key: 'exp', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
+                            { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => (
+                                <span className={v >= 0 ? styles.valuePos : styles.valueNeg} style={{ fontWeight: 700, fontSize: 13 }}>
+                                    {v >= 0 ? '+' : ''}{fmt(v)} ₸
+                                </span>
+                            ) },
                         ]} 
                         dataSource={pnlData} 
                         size="small" 
@@ -581,9 +585,13 @@ export default function ReportsPage() {
                     <Table 
                         columns={[
                             { title: 'Контрагент', dataIndex: 'name', key: 'name', render: (v: string) => <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span> },
-                            { title: 'Поступления', dataIndex: 'income', key: 'inc', align: 'right' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>+{fmt(v)} ₸</span> },
-                            { title: 'Выплаты', dataIndex: 'expense', key: 'exp', align: 'right' as const, render: (v: number) => <span style={{ color: '#ff4d4f', fontWeight: 600, fontSize: 13 }}>-{fmt(v)} ₸</span> },
-                            { title: 'Сальдо', dataIndex: 'balance', key: 'bal', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 700, color: v >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{v >= 0 ? '+' : ''}{fmt(v)} ₸</span> },
+                            { title: 'Поступления', dataIndex: 'income', key: 'inc', align: 'right' as const, render: (v: number) => <span className={styles.valuePos} style={{ fontWeight: 600, fontSize: 13 }}>+{fmt(v)} ₸</span> },
+                            { title: 'Выплаты', dataIndex: 'expense', key: 'exp', align: 'right' as const, render: (v: number) => <span className={styles.valueNeg} style={{ fontWeight: 600, fontSize: 13 }}>-{fmt(v)} ₸</span> },
+                            { title: 'Сальдо', dataIndex: 'balance', key: 'bal', align: 'right' as const, render: (v: number) => (
+                                <span className={v >= 0 ? styles.valuePos : styles.valueNeg} style={{ fontWeight: 700, fontSize: 13 }}>
+                                    {v >= 0 ? '+' : ''}{fmt(v)} ₸
+                                </span>
+                            ) },
                         ]} 
                         dataSource={cpData} 
                         size="small" 
@@ -594,11 +602,15 @@ export default function ReportsPage() {
                 {reportType === 'profitability' && (
                     <Table 
                         columns={[
-                            { title: 'Заявка', dataIndex: 'orderNumber', key: 'num', render: (v: string) => <span style={{ fontWeight: 700, color: '#1677ff', fontSize: 13 }}>{v}</span> },
+                            { title: 'Заявка', dataIndex: 'orderNumber', key: 'num', render: (v: string) => <span style={{ fontWeight: 700, fontSize: 13 }}>{v}</span> },
                             { title: 'Маршрут', dataIndex: 'route', key: 'route', ellipsis: true, render: (v: string) => <span style={{ fontSize: 13 }}>{v}</span> },
-                            { title: 'Ставка', dataIndex: 'revenue', key: 'rev', align: 'right' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
-                            { title: 'Затраты', dataIndex: 'cost', key: 'cost', align: 'right' as const, render: (v: number) => <span style={{ color: '#ff4d4f', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
-                            { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 700, color: v >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{v >= 0 ? '+' : ''}{fmt(v)} ₸</span> },
+                            { title: 'Ставка', dataIndex: 'revenue', key: 'rev', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
+                            { title: 'Затраты', dataIndex: 'cost', key: 'cost', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
+                            { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => (
+                                <span className={v >= 0 ? styles.valuePos : styles.valueNeg} style={{ fontWeight: 700, fontSize: 13 }}>
+                                    {v >= 0 ? '+' : ''}{fmt(v)} ₸
+                                </span>
+                            ) },
                             { title: '%', dataIndex: 'pct', key: 'pct', width: 70, align: 'center' as const, render: (v: number) => (
                                 <span className={`${styles.chip} ${v >= 0 ? '' : styles.chipNeg}`}>{v}%</span>
                             ) },
@@ -615,9 +627,13 @@ export default function ReportsPage() {
                             { title: 'Водитель', dataIndex: 'name', key: 'name', render: (v: string) => <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span> },
                             { title: 'ТС', dataIndex: 'vehicle', key: 'vehicle', render: (v: string) => <span style={{ fontSize: 13 }}>{v}</span> },
                             { title: 'Рейсов', dataIndex: 'orders', key: 'orders', align: 'center' as const, render: (v: number) => <span style={{ fontSize: 13 }}>{v}</span> },
-                            { title: 'Завершено', dataIndex: 'completed', key: 'completed', align: 'center' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>{v}</span> },
-                            { title: 'Выручка', dataIndex: 'revenue', key: 'rev', align: 'right' as const, render: (v: number) => <span style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
-                            { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 700, color: v >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{v >= 0 ? '+' : ''}{fmt(v)} ₸</span> },
+                            { title: 'Завершено', dataIndex: 'completed', key: 'completed', align: 'center' as const, render: (v: number) => <span style={{ fontWeight: 600, fontSize: 13 }}>{v}</span> },
+                            { title: 'Выручка', dataIndex: 'revenue', key: 'rev', align: 'right' as const, render: (v: number) => <span style={{ fontWeight: 600, fontSize: 13 }}>{fmt(v)} ₸</span> },
+                            { title: 'Маржа', dataIndex: 'margin', key: 'margin', align: 'right' as const, render: (v: number) => (
+                                <span className={v >= 0 ? styles.valuePos : styles.valueNeg} style={{ fontWeight: 700, fontSize: 13 }}>
+                                    {v >= 0 ? '+' : ''}{fmt(v)} ₸
+                                </span>
+                            ) },
                         ]} 
                         dataSource={driverData} 
                         size="small" 
@@ -628,34 +644,71 @@ export default function ReportsPage() {
                 {reportType === 'summary' && (
                     <Row gutter={[16, 16]}>
                         <Col xs={24} md={8}>
-                            <div className="lc-card" style={{ padding: 20 }}>
-                                <h4 style={{ fontWeight: 600, fontSize: 14, margin: '0 0 12px' }}>Заявки</h4>
-                                <Row gutter={[8, 8]}>
-                                    <Col span={12}><Statistic title="Всего" value={filteredOrders.length} valueStyle={{ fontSize: 16 }} /></Col>
-                                    <Col span={12}><Statistic title="Завершено" value={filteredOrders.filter(o => o.status === 'COMPLETED').length} valueStyle={{ color: '#52c41a', fontSize: 16 }} /></Col>
-                                    <Col span={12}><Statistic title="В работе" value={filteredOrders.filter(o => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length} valueStyle={{ color: '#1677ff', fontSize: 16 }} /></Col>
-                                    <Col span={12}><Statistic title="Отменено" value={filteredOrders.filter(o => o.status === 'CANCELLED').length} valueStyle={{ color: '#ff4d4f', fontSize: 16 }} /></Col>
-                                </Row>
-                            </div>
-                        </Col>
-                        <Col xs={24} md={8}>
-                            <div className="lc-card" style={{ padding: 20 }}>
-                                <h4 style={{ fontWeight: 600, fontSize: 14, margin: '0 0 12px' }}>Финансы</h4>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>Выручка</span><span style={{ fontWeight: 600, color: '#52c41a', fontSize: 13 }}>{fmt(totalIncome)} ₸</span></div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ color: 'var(--lc-text-ter)', fontSize: 13 }}>Затраты</span><span style={{ fontWeight: 600, color: '#ff4d4f', fontSize: 13 }}>{fmt(totalExpense)} ₸</span></div>
-                                <Divider style={{ margin: '12px 0' }} />
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ fontWeight: 600, fontSize: 13 }}>Маржа</span>
-                                    <span style={{ fontWeight: 600, color: totalIncome >= totalExpense ? '#52c41a' : '#ff4d4f', fontSize: 13 }}>{totalIncome >= totalExpense ? '+' : ''}{fmt(totalIncome - totalExpense)} ₸</span>
+                            <div className={styles.card}>
+                                <div className={styles.cardHead}>
+                                    <h4 className={styles.cardTitle}>Заявки</h4>
+                                </div>
+                                {/* Четыре счётчика были в четырёх цветах: зелёный,
+                                    синий, красный. Сколько заявок завершено — не
+                                    хорошая новость и не плохая, это просто число.
+                                    Отменённые оставлены красными: их считают, когда
+                                    разбираются, что пошло не так. */}
+                                <div className={styles.cardBody}>
+                                    <Row gutter={[8, 8]}>
+                                        <Col span={12}><Statistic title="Всего" value={filteredOrders.length} valueStyle={{ fontSize: 16 }} /></Col>
+                                        <Col span={12}><Statistic title="Завершено" value={filteredOrders.filter(o => o.status === 'COMPLETED').length} valueStyle={{ fontSize: 16 }} /></Col>
+                                        <Col span={12}><Statistic title="В работе" value={filteredOrders.filter(o => ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(o.status)).length} valueStyle={{ fontSize: 16 }} /></Col>
+                                        <Col span={12}>
+                                            <Statistic
+                                                title="Отменено"
+                                                value={filteredOrders.filter(o => o.status === 'CANCELLED').length}
+                                                valueStyle={{ fontSize: 16, color: 'var(--nova-neg)' }}
+                                            />
+                                        </Col>
+                                    </Row>
                                 </div>
                             </div>
                         </Col>
                         <Col xs={24} md={8}>
-                            <div className="lc-card" style={{ padding: 20 }}>
-                                <h4 style={{ fontWeight: 600, fontSize: 14, margin: '0 0 12px' }}>Автопарк</h4>
-                                <Statistic title="Всего водителей" value={drivers.length} valueStyle={{ fontSize: 16 }} />
-                                <div style={{ marginTop: 12 }}>
-                                    <Statistic title="Контрагентов" value={uniqueCounterparties} valueStyle={{ fontSize: 16 }} />
+                            <div className={styles.card}>
+                                <div className={styles.cardHead}>
+                                    <h4 className={styles.cardTitle}>Финансы</h4>
+                                </div>
+                                {/* Выручка и затраты — просто суммы: «0 ₸ затрат»
+                                    красным читалось как ошибка. Цвет остался у
+                                    итога: прибыль или убыток. */}
+                                <div className={styles.cardBody}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <span style={{ color: 'var(--nova-fg-3)', fontSize: 13 }}>Выручка</span>
+                                        <span style={{ fontWeight: 600, fontSize: 13 }}>{fmt(totalIncome)} ₸</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <span style={{ color: 'var(--nova-fg-3)', fontSize: 13 }}>Затраты</span>
+                                        <span style={{ fontWeight: 600, fontSize: 13 }}>{fmt(totalExpense)} ₸</span>
+                                    </div>
+                                    <Divider style={{ margin: '12px 0' }} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontWeight: 600, fontSize: 13 }}>Маржа</span>
+                                        <span
+                                            className={totalIncome >= totalExpense ? styles.valuePos : styles.valueNeg}
+                                            style={{ fontWeight: 600, fontSize: 13 }}
+                                        >
+                                            {totalIncome >= totalExpense ? '+' : ''}{fmt(totalIncome - totalExpense)} ₸
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Col>
+                        <Col xs={24} md={8}>
+                            <div className={styles.card}>
+                                <div className={styles.cardHead}>
+                                    <h4 className={styles.cardTitle}>Автопарк</h4>
+                                </div>
+                                <div className={styles.cardBody}>
+                                    <Statistic title="Всего водителей" value={drivers.length} valueStyle={{ fontSize: 16 }} />
+                                    <div style={{ marginTop: 12 }}>
+                                        <Statistic title="Контрагентов" value={uniqueCounterparties} valueStyle={{ fontSize: 16 }} />
+                                    </div>
                                 </div>
                             </div>
                         </Col>

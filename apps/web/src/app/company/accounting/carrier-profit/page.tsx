@@ -84,11 +84,11 @@ export default function CarrierProfitPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}><WalletOutlined /></div>
+                        <div className="lc2-mic"><WalletOutlined /></div>
                         <div><div className="lc2-mlabel">Выручка</div><div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(totals.revenue)}</div><div className="lc2-msub">{totals.orders} заявок</div></div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#16a34a' }}><BarChartOutlined /></div>
+                        <div className="lc2-mic"><BarChartOutlined /></div>
                         <div><div className="lc2-mlabel">Маржа</div><div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#16a34a' }}>{money(totals.margin)}</div><div className="lc2-msub">себестоимость {money(totals.cost)}</div></div>
                     </div>
                 </div>

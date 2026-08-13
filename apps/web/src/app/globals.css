@@ -67,9 +67,9 @@
 }
 
 [data-theme='dark'] {
-  --background: 220 22% 7%;         /* #0d0f14 */
-  --foreground: 228 30% 93%;        /* #e8eaf0 */
-  --card: 222 18% 11%;              /* #161920 */
+  --background: 60 2% 12%;          /* #20201f — тёплый серый, как --nova-bg */
+  --foreground: 40 16% 93%;         /* #f1f0ec */
+  --card: 60 2% 10%;                /* #1a1a19 */
   --card-foreground: 228 30% 93%;
   --primary: 48 15% 94%;            /* #f1f0ec — тот же, что --nova-primary */
   --primary-foreground: 223 24% 6%;
@@ -81,7 +81,7 @@
   --accent-foreground: 228 30% 93%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border: 220 14% 17%;            /* #262a33 */
+  --border: 60 3% 20%;              /* #343430 */
   --input: 220 14% 17%;
   --ring: 215 100% 60%;
 }
@@ -108,25 +108,31 @@
   --scrollbar-thumb-hover: #a8a8a8;
 }
 
+/* Тёмная тема была двумя разными: экраны на новых блоках брали тёплый серый
+   (#20201f), выбранный владельцем, а всё, что осталось на прежних классах
+   `--lc-*`, — холодный сине-чёрный (#0d0f14). На телефоне это особенно
+   заметно: пролистываешь кабинет, и фон меняет оттенок от экрана к экрану.
+   Теперь `--lc-*` в тёмной теме берут те же значения, что и `--nova-*`, и
+   палитра одна на весь продукт. */
 [data-theme='dark'] {
-  --lc-bg: #0d0f14;
-  --lc-card: #161920;
-  --lc-card-2: #1a1e26;
-  --lc-border: #262a33;
+  --lc-bg: #20201f;
+  --lc-card: #20201f;
+  --lc-card-2: #1a1a19;
+  --lc-border: #343430;
   --lc-border-soft: rgba(255, 255, 255, 0.08);
-  --lc-text: #e8eaf0;
-  --lc-text-sec: #9aa1ad;
-  --lc-text-ter: #6b7280;
-  --lc-hover: #1e222b;
-  --lc-header-bg: rgba(13, 15, 20, 0.85);
+  --lc-text: #f1f0ec;
+  --lc-text-sec: #b2b1aa;
+  --lc-text-ter: #8b8a83;
+  --lc-hover: #292927;
+  --lc-header-bg: rgba(32, 32, 31, 0.85);
   --lc-panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   --nav-line: rgba(255, 255, 255, 0.08);
-  --nav-sel-bg: #1d1d20;
+  --nav-sel-bg: #292927;
   --nav-sel-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
   /* Scrollbar */
-  --scrollbar-track: #0d0f14;
-  --scrollbar-thumb: #262a33;
-  --scrollbar-thumb-hover: #3a3f4d;
+  --scrollbar-track: #20201f;
+  --scrollbar-thumb: #343430;
+  --scrollbar-thumb-hover: #4a4a45;
 }
 
 /* Переключение темы происходит мгновенно, без переливания.
@@ -430,8 +436,8 @@ html[data-theme='dark'] body {
 
 /* Выбранные пункты */
 .ant-menu-horizontal > .ant-menu-item-selected {
-  background-color: #1677ff !important;
-  color: #ffffff !important;
+  background-color: var(--nova-primary) !important;
+  color: var(--nova-primary-fg) !important;
 }
 .ant-menu-horizontal > .ant-menu-item-selected:hover {
   background-color: #0958d9 !important;
@@ -440,7 +446,7 @@ html[data-theme='dark'] body {
 
 /* Подсвечивание родительских категорий при выборе их подпунктов */
 .ant-menu-horizontal > .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: #1677ff !important;
+  color: var(--nova-fg) !important;
   font-weight: 600 !important;
 }
 
@@ -612,7 +618,7 @@ a.mapboxgl-ctrl-logo,
   background: rgba(255, 255, 255, 0.03) !important;
   backdrop-filter: blur(16px) saturate(1.5) !important;
   -webkit-backdrop-filter: blur(16px) saturate(1.5) !important;
-  color: #1677ff !important;
+  color: var(--nova-fg) !important;
   box-shadow: 
     0 4px 12px rgba(0, 0, 0, 0.05),
     inset 0 1px 1px rgba(255, 255, 255, 0.2),
@@ -755,8 +761,8 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-nav-pop .ant-menu-item-selected {
-  background: #1677ff !important;
-  color: #ffffff !important;
+  background: var(--nova-primary) !important;
+  color: var(--nova-primary-fg) !important;
 }
 
 .lc-nav-pop .ant-menu-item-selected .anticon {
@@ -1023,8 +1029,8 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .lc-cta:hover:not(:disabled) {
-  background: #1677ff !important;
-  box-shadow: 0 6px 18px rgba(22, 119, 255, 0.35) !important;
+  background: var(--nova-primary) !important;
+  opacity: .92;
   transform: translateY(-1px);
 }
 
@@ -1113,9 +1119,9 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .ant-tabs-tab-active .ant-tag {
-  background: #eef4ff;
-  border-color: #c6dcff;
-  color: #1677ff;
+  background: var(--nova-surface-2);
+  border-color: var(--nova-border);
+  color: var(--nova-fg);
 }
 
 /* Segmented контролы — единый стиль с навигацией */
@@ -1274,11 +1280,11 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-page .ant-table-tbody > tr:hover > td:first-child {
-  border-left-color: #1677ff !important;
+  border-left-color: var(--nova-fg-3) !important;
 }
 
 .lc-page .ant-table-tbody > tr:hover .lc-ordernum {
-  color: #1677ff;
+  color: var(--nova-fg);
 }
 
 /* Пагинация */
@@ -1394,8 +1400,8 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-upload-tile:hover {
-  border-color: #1677ff;
-  background: #f6f9ff;
+  border-color: var(--nova-fg-3);
+  background: var(--nova-hover);
 }
 
 .lc-upload-preview {
@@ -1417,7 +1423,10 @@ a.mapboxgl-ctrl-logo,
 .lc-link {
   font-size: 12.5px;
   font-weight: 600;
-  color: #1677ff;
+  color: var(--nova-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--nova-border);
+  text-underline-offset: 3px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1518,9 +1527,9 @@ a.mapboxgl-ctrl-logo,
 
 /* Тёмная тема: тёмный приподнятый квадратик с объёмной тенью */
 [data-theme='dark'] .lc2-mic {
-  background: #232833 !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  color: #cdd2db !important;
+  background: var(--nova-surface-2) !important;
+  border-color: var(--nova-border) !important;
+  color: var(--nova-fg-2) !important;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
 }
 
@@ -1590,6 +1599,14 @@ a.mapboxgl-ctrl-logo,
   border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
+  /* Цвет статуса приходит парой переменных: --sp для светлой темы,
+     --sp-dark для тёмной. Без второй точка статуса в тёмной теме
+     превращалась в почти чёрное пятно. */
+  background: var(--sp, var(--nova-fg-3));
+}
+
+[data-theme='dark'] .lc2-tick i {
+  background: var(--sp-dark, var(--nova-fg-3));
 }
 
 @keyframes lc2Ticker {
@@ -1711,9 +1728,9 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc2-f-step.active i {
-  border-color: #1677ff;
-  background: #1677ff;
-  box-shadow: 0 0 0 4px rgba(22, 119, 255, 0.15);
+  border-color: var(--nova-primary);
+  background: var(--nova-primary);
+  box-shadow: 0 0 0 4px var(--nova-hover);
 }
 
 .lc2-f-step b {
@@ -1843,8 +1860,9 @@ a.mapboxgl-ctrl-logo,
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: #1677ff;
-  color: #fff;
+  background: var(--nova-surface-2);
+  border: 1px solid var(--nova-border);
+  color: var(--nova-fg-2);
   font-weight: 700;
   font-size: 13px;
   display: inline-flex;
@@ -2249,8 +2267,8 @@ a.mapboxgl-ctrl-logo,
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(145deg, #007aff, #5856d6);
-  color: #fff;
+  background: var(--nova-primary);
+  color: var(--nova-primary-fg);
   font-weight: 600;
   font-size: 12px;
   display: inline-flex;
@@ -2320,7 +2338,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .lc-nav-pop .ant-menu-item:hover .anticon {
-  color: #1677ff !important;
+  color: var(--nova-fg) !important;
 }
 
 .lc-nav-pop .ant-menu-item-selected {
@@ -2393,10 +2411,9 @@ a.mapboxgl-ctrl-logo,
   line-height: 1.55;
   white-space: pre-wrap;
   border-radius: 14px;
-  background: #1677ff !important;
-  color: #ffffff !important;
+  background: var(--nova-primary) !important;
+  color: var(--nova-primary-fg) !important;
   border: none !important;
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.2) !important;
 }
 
 .ai-msg-assistant {
@@ -2457,12 +2474,12 @@ a.mapboxgl-ctrl-logo,
 }
 
 .ai-input:focus {
-  border-color: #1677ff !important;
+  border-color: var(--nova-fg-3) !important;
   box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15) !important;
 }
 
 .ai-send-btn {
-  background: #1677ff !important;
+  background: var(--nova-primary) !important;
   border: none !important;
   color: #ffffff !important;
   box-shadow: 0 2px 6px rgba(22, 119, 255, 0.3) !important;
@@ -2481,7 +2498,7 @@ a.mapboxgl-ctrl-logo,
 .ai-spot-ring {
   position: fixed;
   border-radius: 12px;
-  border: 2px solid #1677ff;
+  border: 2px solid var(--nova-primary);
   box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.25), 0 0 20px 5px rgba(22, 119, 255, 0.4);
   pointer-events: none;
   z-index: 1500;
@@ -2549,7 +2566,7 @@ a.mapboxgl-ctrl-logo,
 }
 
 .ai-spot-btn-primary {
-  background: #1677ff;
+  background: var(--nova-primary);
   border: none;
   color: #ffffff;
   border-radius: 10px;
