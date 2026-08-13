@@ -770,10 +770,13 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 <Space size={8} wrap style={{ flexShrink: 0, paddingTop: 4 }}>
                     {editable && (
                         <>
-                            <Button type="primary" loading={saving} onClick={() => post(true)}>
+                            {/* Якоря для ИИ-гида: проведение и отправка — те
+                                самые действия с ценой ошибки, до которых он
+                                обязан уметь довести, а не бросить на журнале. */}
+                            <Button type="primary" loading={saving} onClick={() => post(true)} data-guide="doc-post-close">
                                 Провести и закрыть
                             </Button>
-                            <Button icon={<CheckOutlined />} loading={saving} onClick={() => post(false)}>
+                            <Button icon={<CheckOutlined />} loading={saving} onClick={() => post(false)} data-guide="doc-post">
                                 Провести
                             </Button>
                             <Tooltip title={dirty ? 'Есть несохранённые правки' : undefined}>
@@ -865,7 +868,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                             ],
                         }}
                     >
-                        <Button icon={<MoreOutlined />} />
+                        <Button icon={<MoreOutlined />} data-guide="doc-more" />
                     </Dropdown>
                 </Space>
             </div>

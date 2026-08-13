@@ -105,7 +105,27 @@ describe('карта интерфейса ИИ-гида не разошлась 
         },
     };
 
+    /**
+     * Якоря, собранные из номера шага. Проверять «есть ли в файле '1'»
+     * бессмысленно, поэтому сверяем иначе: шаблон на месте, а номер не
+     * выходит за число шагов мастера. Иначе гид уверенно поведёт на
+     * четвёртый шаг там, где их три.
+     */
+    const WIZARD = {
+        file: 'app/company/orders/create/page.tsx',
+        pattern: 'data-guide={`wizard-step-',
+    };
+
     it.each(guideAnchors)('якорь data-guide="%s" есть в разметке', (anchor) => {
+        if (anchor.startsWith('wizard-step-')) {
+            const source = fs.readFileSync(path.join(WEB_SRC, WIZARD.file), 'utf8');
+            expect(source).toContain(WIZARD.pattern);
+            const steps = source.match(/const steps = \[([\s\S]*?)\];/)?.[1] ?? '';
+            const total = (steps.match(/\{\s*title:/g) || []).length;
+            expect(total).toBeGreaterThan(Number(anchor.slice('wizard-step-'.length)));
+            return;
+        }
+
         const prefix = Object.keys(COMPUTED).find((p) => anchor.startsWith(p));
 
         if (prefix) {
