@@ -243,17 +243,25 @@ export default function TripScreen() {
                                 <Text style={[styles.pointAddress, { color: colors.textSecondary }]}>{point.location.address}</Text>
 
                                 <View style={styles.pointActions}>
-                                    <TouchableOpacity
-                                        style={[styles.pointButton, { backgroundColor: isDark ? colors.hover : '#e6f4ff' }]}
-                                        onPress={() => showNavigationOptions(
-                                            point.location.latitude,
-                                            point.location.longitude,
-                                            point.location.address,
-                                        )}
-                                    >
-                                        <Ionicons name="navigate" size={15} color={BRAND.primary} />
-                                        <Text style={styles.pointButtonText}>Навигатор</Text>
-                                    </TouchableOpacity>
+                                    {/* Кнопка навигатора — только когда у точки
+                                        есть координаты. Адрес заводится и без
+                                        них, когда геокодер молчит; навигатор в
+                                        этот момент увёл бы водителя в никуда,
+                                        а сам адрес на экране остаётся. */}
+                                    {typeof point.location.latitude === 'number'
+                                        && typeof point.location.longitude === 'number' && (
+                                        <TouchableOpacity
+                                            style={[styles.pointButton, { backgroundColor: isDark ? colors.hover : '#e6f4ff' }]}
+                                            onPress={() => showNavigationOptions(
+                                                point.location.latitude,
+                                                point.location.longitude,
+                                                point.location.address,
+                                            )}
+                                        >
+                                            <Ionicons name="navigate" size={15} color={BRAND.primary} />
+                                            <Text style={styles.pointButtonText}>Навигатор</Text>
+                                        </TouchableOpacity>
+                                    )}
                                     {!!point.location.contactPhone && (
                                         <TouchableOpacity
                                             style={[styles.pointButton, { backgroundColor: isDark ? colors.hover : '#e7f8ef' }]}

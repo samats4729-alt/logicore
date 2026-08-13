@@ -19,6 +19,17 @@ const truckModelSource = require('../../assets/low_poly_truck.glb');
 // Resolve asset URI for Mapbox
 const truckModelUri = Image.resolveAssetSource(truckModelSource).uri;
 
+/**
+ * Есть ли у точки маршрута место на карте.
+ *
+ * Адрес заводится и без координат — когда геокодер молчит, иначе рейс не
+ * оформить вовсе. Точку допишут позже, а до тех пор её нельзя ни поставить
+ * маркером, ни включить в линию маршрута: Mapbox получит `null` вместо
+ * числа, и карта у водителя останется пустой.
+ */
+const hasPoint = (p: any) =>
+    typeof p?.location?.latitude === 'number' && typeof p?.location?.longitude === 'number';
+
 export default function MapScreen() {
     const { currentOrder, mapTheme } = useStore();
     const cameraRef = useRef<Mapbox.Camera>(null);
@@ -83,7 +94,7 @@ export default function MapScreen() {
 
         const points = [];
         if (currentOrder.routePoints) {
-            currentOrder.routePoints.forEach(p => {
+            currentOrder.routePoints.filter(hasPoint).forEach(p => {
                 points.push([p.location.longitude, p.location.latitude]);
             });
         }
@@ -127,7 +138,8 @@ export default function MapScreen() {
     };
 
     // Prepare Route Line
-    const routeCoordinates = currentOrder?.routePoints?.map(p => [p.location.longitude, p.location.latitude]) || [];
+    const routeCoordinates = currentOrder?.routePoints?.filter(hasPoint)
+        .map(p => [p.location.longitude, p.location.latitude]) || [];
 
     // Маршрут по дорогам через Mapbox Directions (фолбэк — прямые линии между точками)
     const [roadRoute, setRoadRoute] = useState<number[][] | null>(null);
@@ -236,6 +248,10 @@ export default function MapScreen() {
 
                 {/* Route Markers — фирменные пилюли */}
                 {currentOrder?.routePoints?.map((point, index) => {
+                    // Отсеиваем здесь, а не фильтром до `map`: иначе у
+                    // оставшихся точек съедет нумерация, и водитель увидит
+                    // выгрузку под номером погрузки.
+                    if (!hasPoint(point)) return null;
                     const isDelivery = point.pointType === 'DELIVERY';
                     const label = isDelivery ? 'Выгрузка' : (point.pointType === 'PICKUP' ? 'Погрузка' : 'Догруз');
                     return (
