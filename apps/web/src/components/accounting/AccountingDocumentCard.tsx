@@ -47,6 +47,8 @@ import {
 import { toast } from 'sonner';
 import { VAT_RATES } from '@/lib/tax';
 import Loader from '@/components/ui/Loader';
+import nova from '@/components/nova/nova.module.css';
+import styles from './accounting-document-card.module.css';
 
 /**
  * Сумма со знаком валюты документа.
@@ -530,7 +532,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
 
     if (notFound || !document) {
         return (
-            <div className="lc-page" style={{ maxWidth: 720, margin: '0 auto' }}>
+            <div className={nova.page} style={{ maxWidth: 720 }}>
                 <Alert
                     type="error"
                     showIcon
@@ -554,11 +556,14 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const own = outgoing ? issuer : recipient;
     const other = outgoing ? recipient : issuer;
 
-    const statusColor = document.status === 'POSTED'
-        ? token.colorSuccess
+    // Плашка вместо цветного слова: «Черновик» оранжевым текстом рядом с
+    // номером читался как ошибка. Цвет остался у того, что требует внимания
+    // (черновик ещё не проведён) и у отменённого.
+    const statusChip = document.status === 'DRAFT'
+        ? nova.chipWarn
         : document.status === 'CANCELLED'
-            ? token.colorTextDisabled
-            : token.colorWarning;
+            ? nova.chipNeg
+            : '';
 
     const lineColumns = [
         {
@@ -581,12 +586,13 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 }
                 return (
                     <div>
-                        <a
-                            style={{ fontSize: 12, fontWeight: 500 }}
+                        <button
+                            type="button"
+                            className={styles.orderLink}
                             onClick={() => router.push(`/company/orders/${record.orderId}`)}
                         >
                             Заявка {record.orderNumber}
-                        </a>
+                        </button>
                         {record.orderDetails && (
                             <div style={{ fontSize: 11, color: token.colorTextSecondary, lineHeight: 1.35 }}>
                                 {record.orderDetails}
@@ -739,23 +745,22 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     );
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1180, margin: '0 auto' }}>
-            <div className="lc2-hero" style={{ alignItems: 'flex-start' }}>
+        <div className={nova.page} style={{ maxWidth: 1180 }}>
+            <div className={nova.hero} style={{ alignItems: 'flex-start' }}>
                 <div>
-                    <Button
-                        type="link"
-                        icon={<ArrowLeftOutlined />}
+                    <button
+                        type="button"
+                        className={styles.back}
                         onClick={() => router.push(kind.journalPath)}
-                        style={{ padding: 0, color: 'var(--lc-text-ter)', marginBottom: 4 }}
                     >
-                        {kind.journalLabel}
-                    </Button>
-                    <div className="lc-eyebrow">
+                        <ArrowLeftOutlined /> {kind.journalLabel}
+                    </button>
+                    <div className={nova.eyebrow}>
                         {kind.eyebrow(outgoing)}
                     </div>
-                    <h1 className="lc2-title" style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                    <h1 className={nova.title} style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
                         № {document.number}
-                        <span style={{ fontSize: 13, fontWeight: 500, color: statusColor }}>
+                        <span className={`${nova.chip}${statusChip ? ` ${statusChip}` : ''}`}>
                             {ACCOUNTING_DOCUMENT_STATUS_LABELS[document.status]}
                         </span>
                     </h1>
@@ -903,7 +908,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             )}
 
             {/* ===== Шапка документа ===== */}
-            <div className="lc-card" style={{ padding: 20, marginBottom: 14 }}>
+            <div className={`${nova.card} ${styles.pad}`}>
                 <div
                     style={{
                         display: 'grid',
@@ -1023,7 +1028,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             </div>
 
             {/* ===== Табличная часть ===== */}
-            <div className="lc-card" style={{ padding: 20 }}>
+            <div className={`${nova.card} ${styles.pad}`}>
                 <Table
                     columns={lineColumns}
                     dataSource={lines}
@@ -1034,24 +1039,13 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 />
 
                 {editable && (
-                    <Space size={4} style={{ marginTop: 8 }}>
-                        <Button
-                            type="link"
-                            size="small"
-                            icon={<PlusOutlined />}
-                            onClick={openPicker}
-                            style={{ paddingLeft: 0 }}
-                        >
-                            Добавить заявки
-                        </Button>
-                        <Button
-                            type="link"
-                            size="small"
-                            icon={<PlusOutlined />}
-                            onClick={addLine}
-                        >
-                            Добавить услугу
-                        </Button>
+                    <Space size={8} style={{ marginTop: 10 }}>
+                        <button type="button" className={styles.addLine} onClick={openPicker}>
+                            <PlusOutlined /> Добавить заявки
+                        </button>
+                        <button type="button" className={styles.addLine} onClick={addLine}>
+                            <PlusOutlined /> Добавить услугу
+                        </button>
                     </Space>
                 )}
 
