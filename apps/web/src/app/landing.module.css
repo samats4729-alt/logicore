@@ -494,6 +494,107 @@
     opacity: .9;
 }
 
+/* ===== Тариф =====
+
+   Цена приходит с сервера, а не написана здесь: владелец платформы меняет её
+   в админке, и страницу ради этого не пересобирают. Пока идёт тестирование,
+   сервер отдаёт ноль — и блок честно говорит, что это временно. */
+
+.tariffHead {
+    text-align: center;
+}
+
+.tariffHead p {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.tariff {
+    max-width: 420px;
+    margin: 0 auto;
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
+    padding: 26px 24px;
+    text-align: center;
+}
+
+.tariffBadge {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface-2);
+    color: var(--nova-fg-2);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.tariffPrice {
+    margin-top: 14px;
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: -0.045em;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+    line-height: 1.05;
+}
+
+.tariffPer {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    margin-top: 4px;
+}
+
+.tariffList {
+    list-style: none;
+    padding: 0;
+    margin: 18px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    text-align: left;
+}
+
+.tariffList li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--nova-fg-2);
+}
+
+.tariffBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 40px;
+    margin-top: 20px;
+    padding: 0 20px;
+    border-radius: 11px;
+    border: 0;
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font: 650 14px/1 Inter, sans-serif;
+    cursor: pointer;
+}
+
+.tariffBtn:hover {
+    opacity: .9;
+}
+
+.tariffNote {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--nova-fg-3);
+    margin-top: 12px;
+}
+
 /* ===== Подвал ===== */
 
 .foot {

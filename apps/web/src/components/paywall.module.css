@@ -1,0 +1,84 @@
+/* Экран «Подписка не активна».
+
+   Был написан подложками и цветами прямо в разметке — синий замок #1677ff,
+   зелёные галочки, `lc-card`. Теперь это наши токены: экран, на котором
+   человек решает платить или нет, не должен выглядеть чужим. */
+
+.wrap {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 40px 16px 48px;
+    text-align: center;
+}
+
+.icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    margin: 0 auto 16px;
+    display: grid;
+    place-items: center;
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    box-shadow: var(--nova-shadow);
+    color: var(--nova-fg-2);
+}
+
+.title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--nova-fg);
+    margin: 0;
+}
+
+.lead {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--nova-fg-3);
+    margin: 8px auto 0;
+    max-width: 440px;
+}
+
+.card {
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
+    padding: 24px 22px;
+    margin-top: 22px;
+}
+
+.price {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
+
+.priceSub {
+    font-size: 12px;
+    color: var(--nova-fg-3);
+    margin-top: 2px;
+}
+
+.note {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--nova-fg-2);
+    margin: 14px auto 0;
+    max-width: 380px;
+}
+
+.buy {
+    margin-top: 16px;
+}
+
+.foot {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 18px;
+}

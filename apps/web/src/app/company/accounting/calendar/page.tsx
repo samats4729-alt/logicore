@@ -8,6 +8,7 @@ import {
     AlertCircle, CalendarDays, FileText, Clock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { MONTHS_GEN } from '@/lib/ru-date';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -50,10 +51,6 @@ const WEEKDAYS_SHORT = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 const MONTHS = [
     'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
     'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
-];
-const MONTHS_GEN = [
-    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
 ];
 const MONTHS_ABBR = [
     'янв', 'фев', 'мар', 'апр', 'мая', 'июн',

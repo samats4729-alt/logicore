@@ -27,6 +27,20 @@ export class BillingController {
         return this.billingService.getActivePlans();
     }
 
+    @Post('requests')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Запросить счёт на подписку' })
+    async createRequest(@Request() req: any, @Body() body: { months: number; comment?: string }) {
+        const request = await this.billingService.createRequest(req.user.companyId, req.user, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'subscription',
+            entityId: request.id,
+            entityLabel: `Запрос на подписку: ${request.months} мес`,
+            details: { months: request.months, amount: request.amount },
+        });
+        return request;
+    }
+
     // ==================== Админ платформы ====================
 
     @Get('admin/settings')
@@ -38,13 +52,65 @@ export class BillingController {
 
     @Put('admin/settings')
     @Roles(UserRole.ADMIN)
-    @ApiOperation({ summary: 'Включить/выключить биллинг, пробный период' })
-    async updateSettings(@Request() req: any, @Body() body: { enabled?: boolean; trialDays?: number }) {
+    @ApiOperation({ summary: 'Цена тарифа, сроки и рубильник оплаты' })
+    async updateSettings(@Request() req: any, @Body() body: {
+        enabled?: boolean;
+        trialDays?: number;
+        graceDays?: number;
+        priceMonthly?: number;
+    }) {
         const result = await this.billingService.updateSettings(body);
         await this.auditService.log({
             user: req.user, action: 'SETTINGS', entity: 'billing',
-            entityLabel: result.enabled ? 'Биллинг включён' : 'Биллинг выключен',
-            details: { enabled: result.enabled, trialDays: result.trialDays, trialsCreated: result.trialsCreated },
+            entityLabel: result.enabled ? 'Оплата включена' : 'Оплата выключена',
+            details: {
+                enabled: result.enabled,
+                trialDays: result.trialDays,
+                graceDays: result.graceDays,
+                priceMonthly: body.priceMonthly ?? null,
+                graceGranted: result.graceGranted,
+            },
+        });
+        return result;
+    }
+
+    @Get('admin/tariff')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Текущая цена основного тарифа' })
+    async getTariff() {
+        return this.billingService.getTariff();
+    }
+
+    @Get('admin/requests')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Запросы компаний на подписку' })
+    async listRequests() {
+        return this.billingService.listRequests();
+    }
+
+    @Post('admin/requests/:id/approve')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Оплата получена: продлить подписку и закрыть запрос' })
+    async approveRequest(@Param('id') id: string, @Request() req: any, @Body() body: { note?: string }) {
+        const result = await this.billingService.approveRequest(id, body?.note);
+        await this.auditService.log({
+            companyId: result.companyId, user: req.user, action: 'UPDATE', entity: 'subscription',
+            entityId: result.id,
+            entityLabel: `Подписка продлена на ${result.months} мес по запросу`,
+            details: { months: result.months, amount: result.amount, note: body?.note ?? null },
+        });
+        return result;
+    }
+
+    @Post('admin/requests/:id/reject')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Отказать по запросу на подписку' })
+    async rejectRequest(@Param('id') id: string, @Request() req: any, @Body() body: { note?: string }) {
+        const result = await this.billingService.rejectRequest(id, body?.note);
+        await this.auditService.log({
+            companyId: result.companyId, user: req.user, action: 'UPDATE', entity: 'subscription',
+            entityId: result.id, entityLabel: 'Отказ по запросу на подписку',
+            details: { months: result.months, note: body?.note ?? null },
         });
         return result;
     }

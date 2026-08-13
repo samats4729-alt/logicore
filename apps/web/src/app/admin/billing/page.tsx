@@ -3,14 +3,16 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, Popconfirm, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { CreditCard, Layers, ToggleLeft } from 'lucide-react';
+import { CreditCard, Inbox, Layers, Wallet } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
+import styles from './billing.module.css';
 
 const STATUS_LABELS: Record<string, string> = {
     TRIAL: 'Пробный период',
+    GRACE: 'Дни на оплату',
     ACTIVE: 'Оплачена',
     PAST_DUE: 'Просрочена',
     CANCELLED: 'Отменена',
@@ -20,6 +22,14 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_CHIP: Record<string, string> = {
     PAST_DUE: 'neg',
 };
+
+const REQUEST_LABELS: Record<string, string> = {
+    PENDING: 'ждёт ответа',
+    APPROVED: 'продлено',
+    REJECTED: 'отказ',
+};
+
+const money = (value: number) => value.toLocaleString('ru-RU');
 
 interface Plan {
     id: string;
@@ -34,12 +44,37 @@ interface Plan {
     _count?: { subscriptions: number };
 }
 
+interface Settings {
+    enabled: boolean;
+    trialDays: number;
+    graceDays: number;
+}
+
+interface SubscriptionRequest {
+    id: string;
+    months: number;
+    amount: number;
+    status: string;
+    requesterName?: string | null;
+    comment?: string | null;
+    decisionNote?: string | null;
+    createdAt: string;
+    company: { id: string; name: string; bin?: string | null };
+}
+
 export default function AdminBillingPage() {
-    const [settings, setSettings] = useState<{ enabled: boolean; trialDays: number } | null>(null);
+    const [settings, setSettings] = useState<Settings | null>(null);
     const [savingSettings, setSavingSettings] = useState(false);
     const [plans, setPlans] = useState<Plan[]>([]);
     const [subs, setSubs] = useState<any[]>([]);
+    const [requests, setRequests] = useState<SubscriptionRequest[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Черновик формы тарифа: сумма и сроки правятся вместе и сохраняются
+    // одним действием — иначе владелец включит оплату с прежней ценой.
+    const [draft, setDraft] = useState<{ priceMonthly: number; trialDays: number; graceDays: number }>({
+        priceMonthly: 0, trialDays: 14, graceDays: 3,
+    });
 
     const [planModalOpen, setPlanModalOpen] = useState(false);
     const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -49,19 +84,34 @@ export default function AdminBillingPage() {
     const [editingCompany, setEditingCompany] = useState<any>(null);
     const [subForm] = Form.useForm();
 
+    const [decision, setDecision] = useState<{ request: SubscriptionRequest; approve: boolean } | null>(null);
+    const [decisionNote, setDecisionNote] = useState('');
+    const [deciding, setDeciding] = useState(false);
+
     const loadAll = async () => {
         setLoading(true);
         try {
-            const [settingsRes, plansRes, subsRes] = await Promise.all([
+            const [settingsRes, tariffRes, plansRes, subsRes, requestsRes] = await Promise.all([
                 api.get('/billing/admin/settings'),
+                api.get('/billing/admin/tariff'),
                 api.get('/billing/admin/plans'),
                 api.get('/billing/admin/subscriptions'),
+                api.get('/billing/admin/requests'),
             ]);
             setSettings(settingsRes.data);
             setPlans(plansRes.data || []);
             setSubs(subsRes.data || []);
+            setRequests(requestsRes.data || []);
+            setDraft({
+                // Пока оплата выключена, тариф отдаёт ноль — цену для формы
+                // берём из самого плана, иначе сохранение обнулило бы её.
+                priceMonthly: (plansRes.data || []).find((p: Plan) => p.isActive)?.priceMonthly
+                    ?? tariffRes.data?.priceMonthly ?? 0,
+                trialDays: settingsRes.data?.trialDays ?? 14,
+                graceDays: settingsRes.data?.graceDays ?? 3,
+            });
         } catch {
-            toast.error('Ошибка загрузки данных биллинга');
+            toast.error('Не удалось загрузить тариф и подписки');
         } finally {
             setLoading(false);
         }
@@ -71,46 +121,72 @@ export default function AdminBillingPage() {
 
     // ==================== Настройки ====================
 
-    const handleToggleBilling = async (enabled: boolean) => {
-        const apply = async () => {
-            setSavingSettings(true);
-            try {
-                const res = await api.put('/billing/admin/settings', { enabled });
-                setSettings({ enabled: res.data.enabled, trialDays: res.data.trialDays });
-                if (enabled && res.data.trialsCreated > 0) {
-                    toast.success(`Биллинг включён. Пробный период выдан ${res.data.trialsCreated} компаниям.`);
-                } else {
-                    toast.success(enabled ? 'Биллинг включён' : 'Биллинг выключен — все ограничения сняты');
-                }
-                loadAll();
-            } catch (e: any) {
-                toast.error(e.response?.data?.message || 'Ошибка сохранения');
-            } finally {
-                setSavingSettings(false);
+    /** Сохранить тариф; `enabled` передаётся только когда рубильник трогают. */
+    const saveTariff = async (enabled?: boolean) => {
+        setSavingSettings(true);
+        try {
+            const res = await api.put('/billing/admin/settings', { ...draft, enabled });
+            setSettings({ enabled: res.data.enabled, trialDays: res.data.trialDays, graceDays: res.data.graceDays });
+            if (res.data.graceGranted > 0) {
+                toast.success(`Оплата включена. ${res.data.graceGranted} компаниям дано ${res.data.graceDays} дн. на оплату.`);
+            } else if (enabled === false) {
+                toast.success('Оплата выключена — ограничения сняты со всех');
+            } else {
+                toast.success('Тариф сохранён');
             }
-        };
-
-        if (enabled) {
-            Modal.confirm({
-                title: 'Включить биллинг?',
-                content: `Все компании без подписки получат пробный период ${settings?.trialDays ?? 14} дней. После его окончания доступ закроется до оплаты. Выключить можно в любой момент.`,
-                okText: 'Включить',
-                cancelText: 'Отмена',
-                onOk: apply,
-            });
-        } else {
-            apply();
+            loadAll();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось сохранить тариф');
+        } finally {
+            setSavingSettings(false);
         }
     };
 
-    const handleTrialDaysChange = async (trialDays: number | null) => {
-        if (!trialDays) return;
+    const handleEnable = () => {
+        if (!draft.priceMonthly) {
+            toast.error('Сначала назначьте цену — включать оплату с нулём не с чем');
+            return;
+        }
+        Modal.confirm({
+            title: 'Включить оплату?',
+            content: `Цена ${money(draft.priceMonthly)} ₸ в месяц появится на лендинге и в кабинетах. `
+                + `Компании, которые работают сейчас, получат ${draft.graceDays} дн. на оплату, `
+                + `новые — пробный период ${draft.trialDays} дн. Выключить можно в любой момент.`,
+            okText: 'Включить оплату',
+            cancelText: 'Отмена',
+            onOk: () => saveTariff(true),
+        });
+    };
+
+    const handleDisable = () => {
+        Modal.confirm({
+            title: 'Выключить оплату?',
+            content: 'Платформа снова станет бесплатной для всех, на лендинге вместо цены будет «идёт тестирование». '
+                + 'Подписки компаний сохранятся.',
+            okText: 'Выключить',
+            cancelText: 'Отмена',
+            onOk: () => saveTariff(false),
+        });
+    };
+
+    // ==================== Запросы на подписку ====================
+
+    const submitDecision = async () => {
+        if (!decision) return;
+        setDeciding(true);
         try {
-            const res = await api.put('/billing/admin/settings', { trialDays });
-            setSettings({ enabled: res.data.enabled, trialDays: res.data.trialDays });
-            toast.success('Длительность пробного периода сохранена');
+            const path = decision.approve ? 'approve' : 'reject';
+            await api.post(`/billing/admin/requests/${decision.request.id}/${path}`, { note: decisionNote });
+            toast.success(decision.approve
+                ? `Подписка продлена на ${decision.request.months} мес`
+                : 'Запрос отклонён');
+            setDecision(null);
+            setDecisionNote('');
+            loadAll();
         } catch (e: any) {
-            toast.error(e.response?.data?.message || 'Ошибка сохранения');
+            toast.error(e.response?.data?.message || 'Не удалось ответить на запрос');
+        } finally {
+            setDeciding(false);
         }
     };
 
@@ -190,6 +266,8 @@ export default function AdminBillingPage() {
         }
     };
 
+    const pendingRequests = requests.filter(r => r.status === 'PENDING');
+
     // ==================== Колонки таблиц ====================
 
     const planColumns = [
@@ -233,7 +311,9 @@ export default function AdminBillingPage() {
             render: (_: any, r: any) => {
                 const s = r.subscription;
                 if (!s) return '—';
-                const d = s.status === 'TRIAL' ? s.trialEndsAt : s.periodEnd;
+                // Бесплатный доступ — пробный период и дни на оплату — живёт
+                // в trialEndsAt; оплаченный в periodEnd.
+                const d = s.status === 'TRIAL' || s.status === 'GRACE' ? s.trialEndsAt : s.periodEnd;
                 return d ? dayjs(d).format('DD.MM.YYYY') : '—';
             },
         },
@@ -249,50 +329,170 @@ export default function AdminBillingPage() {
             <div className={nova.hero}>
                 <div>
                     <div className={nova.eyebrow}>Платформа</div>
-                    <h1 className={nova.title}>Биллинг</h1>
+                    <h1 className={nova.title}>Тариф и подписки</h1>
                     <p className={nova.subtitle}>
-                        Подписки компаний, тарифы и общий рубильник: пока он выключен, платформа
-                        работает бесплатно для всех.
+                        {settings?.enabled
+                            ? 'Цена месяца, сроки, запросы на покупку и подписки компаний.'
+                            : 'Цена месяца, сроки и подписки компаний. Пока оплата выключена, платформа работает бесплатно для всех.'}
                     </p>
                 </div>
             </div>
 
             <section className={nova.card}>
                 <div className={nova.cardHead}>
-                    <ToggleLeft size={14} />
-                    <h2 className={nova.cardTitle}>Как работает платформа</h2>
+                    <Wallet size={14} />
+                    <h2 className={nova.cardTitle}>Тариф</h2>
                     <span className={`${nova.chip}${settings?.enabled ? ` ${nova.chipWarn}` : ''}`}>
-                        {settings?.enabled ? 'биллинг включён' : 'бесплатно для всех'}
+                        {settings?.enabled ? 'оплата включена' : 'идёт тестирование'}
                     </span>
                 </div>
                 <div className={nova.cardBody}>
-                    <Space size="large" wrap>
-                        <Space>
-                            <Switch
-                                checked={settings?.enabled ?? false}
-                                loading={savingSettings}
-                                onChange={handleToggleBilling}
-                            />
-                            <b style={{ fontSize: 13 }}>
-                                {settings?.enabled ? 'Биллинг включён' : 'Биллинг выключен'}
-                            </b>
-                        </Space>
-                        <Space>
-                            <span style={{ fontSize: 13 }}>Пробный период, дней:</span>
+                    <div className={styles.form}>
+                        <label className={styles.field}>
+                            <span className={styles.fieldLabel}>Цена, ₸ в месяц</span>
                             <InputNumber
-                                min={1} max={365}
-                                value={settings?.trialDays}
-                                onChange={handleTrialDaysChange}
-                                style={{ width: 80 }}
+                                min={0} step={1000} style={{ width: 150 }}
+                                value={draft.priceMonthly}
+                                formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
+                                parser={(v) => Number((v || '').replace(/\s/g, '')) as 0}
+                                onChange={(v) => setDraft(d => ({ ...d, priceMonthly: v ?? 0 }))}
                             />
-                        </Space>
-                    </Space>
-                    <div className={nova.itemDesc} style={{ marginTop: 12, whiteSpace: 'normal' }}>
-                        {settings?.enabled
-                            ? 'Компании без действующей подписки или пробного периода в кабинет не попадают.'
-                            : 'Ограничения и баннеры не показываются никому.'}
+                        </label>
+                        <label className={styles.field}>
+                            <span className={styles.fieldLabel}>Пробный период, дней</span>
+                            <InputNumber
+                                min={1} max={365} style={{ width: 100 }}
+                                value={draft.trialDays}
+                                onChange={(v) => setDraft(d => ({ ...d, trialDays: v ?? 14 }))}
+                            />
+                        </label>
+                        <label className={styles.field}>
+                            <span className={styles.fieldLabel}>Дней на оплату</span>
+                            <InputNumber
+                                min={1} max={90} style={{ width: 100 }}
+                                value={draft.graceDays}
+                                onChange={(v) => setDraft(d => ({ ...d, graceDays: v ?? 3 }))}
+                            />
+                        </label>
+
+                        <div className={styles.formActions}>
+                            {settings?.enabled ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        className={`${nova.action} ${nova.actionPrimary}`}
+                                        disabled={savingSettings}
+                                        onClick={() => saveTariff()}
+                                    >
+                                        Сохранить
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`${nova.action} ${nova.actionDanger}`}
+                                        disabled={savingSettings}
+                                        onClick={handleDisable}
+                                    >
+                                        Выключить оплату
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button
+                                        type="button"
+                                        className={nova.action}
+                                        disabled={savingSettings}
+                                        onClick={() => saveTariff()}
+                                    >
+                                        Сохранить
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`${nova.action} ${nova.actionPrimary}`}
+                                        disabled={savingSettings}
+                                        onClick={handleEnable}
+                                    >
+                                        Включить оплату
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className={styles.explain}>
+                        {settings?.enabled ? (
+                            <>
+                                На лендинге и в кабинетах — {money(draft.priceMonthly)} ₸ в месяц.
+                                Компания без действующей подписки в кабинет не попадает; данные её
+                                сохраняются и открываются сразу после продления. Выключить оплату
+                                можно в любой момент — ограничения снимутся со всех.
+                            </>
+                        ) : (
+                            <>
+                                Сейчас на лендинге и в кабинетах написано «Бесплатно, на время
+                                тестирования» — какая бы сумма ни стояла в поле выше. Когда нажмёте «Включить оплату»,
+                                цена появится сразу везде, компании, которые уже работают, получат{' '}
+                                {draft.graceDays} дн. на оплату, а новые — пробный период {draft.trialDays} дн.
+                                Оплаченное вперёд не сгорает.
+                            </>
+                        )}
                     </div>
                 </div>
+            </section>
+
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <Inbox size={14} />
+                    <h2 className={nova.cardTitle}>Запросы на подписку</h2>
+                    {pendingRequests.length > 0 && <span className={nova.cardCount}>{pendingRequests.length}</span>}
+                </div>
+                {requests.length === 0 ? (
+                    <div className={nova.empty}>
+                        {loading ? 'Загружаем…' : 'Запросов нет — компании ещё не просили счёт'}
+                    </div>
+                ) : (
+                    <div className={nova.cardBody}>
+                        {requests.map((r) => (
+                            <div key={r.id} className={styles.request}>
+                                <div className={styles.requestWho}>
+                                    <div className={styles.requestName}>{r.company.name}</div>
+                                    <div className={styles.requestMeta}>
+                                        {r.company.bin ? `БИН ${r.company.bin}` : 'БИН не указан'}
+                                        {r.requesterName ? ` · ${r.requesterName}` : ''}
+                                        {' · '}{dayjs(r.createdAt).format('DD.MM.YYYY HH:mm')}
+                                    </div>
+                                    {r.comment && <div className={styles.requestMeta}>{r.comment}</div>}
+                                    {r.decisionNote && <div className={styles.requestMeta}>{r.decisionNote}</div>}
+                                </div>
+                                <div className={styles.requestSum}>
+                                    {money(r.amount)} ₸
+                                    <div className={styles.requestSumSub}>{r.months} мес</div>
+                                </div>
+                                {r.status === 'PENDING' ? (
+                                    <div className={styles.requestActions}>
+                                        <button
+                                            type="button"
+                                            className={`${nova.action} ${nova.actionPrimary}`}
+                                            onClick={() => { setDecision({ request: r, approve: true }); setDecisionNote(''); }}
+                                        >
+                                            Продлить и закрыть
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={nova.action}
+                                            onClick={() => { setDecision({ request: r, approve: false }); setDecisionNote(''); }}
+                                        >
+                                            Отказать
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <span className={`${nova.chip}${r.status === 'REJECTED' ? ` ${nova.chipNeg}` : ''}`}>
+                                        {REQUEST_LABELS[r.status] || r.status}
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </section>
 
             <section className={nova.card}>
@@ -300,6 +500,7 @@ export default function AdminBillingPage() {
                     <Layers size={14} />
                     <h2 className={nova.cardTitle}>Тарифные планы</h2>
                     {plans.length > 0 && <span className={nova.cardCount}>{plans.length}</span>}
+                    <span className={nova.chip}>цена — из «Тарифа» сверху</span>
                     <button
                         type="button"
                         className={`${nova.action} ${nova.actionPrimary}`}
@@ -315,7 +516,7 @@ export default function AdminBillingPage() {
                     loading={loading}
                     size="small"
                     pagination={false}
-                    locale={{ emptyText: 'Планов нет — пока биллинг выключен, они и не нужны' }}
+                    locale={{ emptyText: 'Отдельных планов нет — цена задаётся в «Тарифе» сверху' }}
                 />
             </section>
 
@@ -374,6 +575,32 @@ export default function AdminBillingPage() {
                         </Form.Item>
                     </Space>
                 </Form>
+            </Modal>
+
+            {/* ===== Modal: ответ на запрос ===== */}
+            <Modal
+                title={decision?.approve ? 'Продлить подписку' : 'Отказать по запросу'}
+                open={!!decision}
+                onCancel={() => setDecision(null)}
+                onOk={submitDecision}
+                okText={decision?.approve ? 'Продлить и закрыть' : 'Отказать'}
+                cancelText="Отмена"
+                confirmLoading={deciding}
+            >
+                {decision && (
+                    <>
+                        <div className={nova.itemDesc} style={{ whiteSpace: 'normal', marginBottom: 12 }}>
+                            {decision.approve
+                                ? `${decision.request.company.name} оплатила ${money(decision.request.amount)} ₸ — подписка продлится на ${decision.request.months} мес от текущего конца периода.`
+                                : `Запрос ${decision.request.company.name} на ${decision.request.months} мес будет закрыт без продления.`}
+                        </div>
+                        <Input
+                            placeholder={decision.approve ? 'Счёт №123 от 01.07.2026' : 'Причина отказа'}
+                            value={decisionNote}
+                            onChange={(e) => setDecisionNote(e.target.value)}
+                        />
+                    </>
+                )}
             </Modal>
 
             {/* ===== Modal: подписка компании ===== */}

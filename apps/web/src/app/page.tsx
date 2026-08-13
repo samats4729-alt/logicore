@@ -16,6 +16,7 @@ import {
     Truck,
     Users,
 } from 'lucide-react';
+import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/components/ThemeProvider';
 import AssemblyStage from '@/components/landing/AssemblyStage';
@@ -83,14 +84,38 @@ const AUDIENCES = [
     },
 ];
 
+/** Что входит в тариф, пока владелец не завёл свой список в админке. */
+const TARIFF_FEATURES = [
+    'Заявки, документы и печатные формы',
+    'Счета, акты и взаиморасчёты',
+    'Мониторинг транспорта на карте',
+    'Сотрудники и организации без ограничения по числу',
+];
+
+interface Tariff {
+    paid: boolean;
+    priceMonthly: number;
+    trialDays: number;
+    features: string[];
+}
+
 export default function HomePage() {
     const router = useRouter();
     const { isAuthenticated, user } = useAuthStore();
     const { theme, setTheme } = useTheme();
     const [hydrated, setHydrated] = useState(false);
+    const [tariff, setTariff] = useState<Tariff | null>(null);
 
     useEffect(() => {
         setHydrated(true);
+    }, []);
+
+    // Цена приходит с сервера: владелец меняет её в админке, и страница
+    // показывает новую сумму без пересборки.
+    useEffect(() => {
+        api.get('/public/billing/tariff')
+            .then((res) => setTariff(res.data))
+            .catch(() => { });
     }, []);
 
     useEffect(() => {
@@ -123,6 +148,7 @@ export default function HomePage() {
                         <a className={styles.link} href="#возможности">Возможности</a>
                         <a className={styles.link} href="#рейс">Мониторинг</a>
                         <a className={styles.link} href="#кому">Кому подходит</a>
+                        <a className={styles.link} href="#тариф">Тариф</a>
                     </nav>
 
                     <div className={styles.headRight}>
@@ -248,6 +274,52 @@ export default function HomePage() {
                                 </ul>
                             </div>
                         ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ===== Тариф ===== */}
+            <section className={styles.section} id="тариф">
+                <div className={styles.band}>
+                    <div className={`${styles.sectionHead} ${styles.tariffHead}`}>
+                        <div className={styles.eyebrow}>Тариф</div>
+                        <h2 className={styles.sectionTitle}>Один тариф без ограничений по функциям</h2>
+                        <p className={styles.sectionLead}>
+                            Все разделы доступны сразу: заявки, документы, взаиморасчёты и мониторинг.
+                            Отдельной платы за модули нет.
+                        </p>
+                    </div>
+
+                    <div className={styles.tariff}>
+                        <span className={styles.tariffBadge}>
+                            {tariff?.paid ? `${tariff.trialDays} дней бесплатно` : 'идёт тестирование'}
+                        </span>
+                        {/* Пока цены нет, крупно стоит слово, а не ноль:
+                            «0 ₸» на витрине читается как «продукт ничего не
+                            стоит», а сказать надо другое — платить пока не за
+                            что, потому что идёт тестирование. */}
+                        <div className={styles.tariffPrice}>
+                            {tariff?.paid ? `${tariff.priceMonthly.toLocaleString('ru-RU')} ₸` : 'Бесплатно'}
+                        </div>
+                        <div className={styles.tariffPer}>
+                            {tariff?.paid ? 'в месяц за компанию' : 'на время тестирования'}
+                        </div>
+
+                        <ul className={styles.tariffList}>
+                            {(tariff?.features?.length ? tariff.features : TARIFF_FEATURES).map((f) => (
+                                <li key={f}><Check size={14} className={styles.tick} />{f}</li>
+                            ))}
+                        </ul>
+
+                        <button type="button" className={styles.tariffBtn} onClick={() => router.push('/register')}>
+                            {tariff?.paid ? `Попробовать ${tariff.trialDays} дней` : 'Зарегистрировать компанию'}
+                        </button>
+
+                        <div className={styles.tariffNote}>
+                            {tariff?.paid
+                                ? 'Оплата по счёту на вашу компанию. Продлевать можно заранее — оплаченные дни не сгорают.'
+                                : 'О переходе на платный тариф предупредим заранее.'}
+                        </div>
                     </div>
                 </div>
             </section>

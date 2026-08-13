@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth';
 import { STATUS_LABELS } from '@/components/ui/StatusPill';
 import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
 import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
+import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
 import dayjs from 'dayjs';
 import styles from '@/components/nova/nova.module.css';
 import dash from './dashboard.module.css';
@@ -317,6 +318,11 @@ export default function CompanyDashboard() {
                     </>
                 )}
             </div>
+
+            {/* ===== ТАРИФ =====
+                Только руководителю: платит он, и запрос на счёт сервер
+                принимает тоже от него. */}
+            {isOwner && <SubscriptionCard />}
 
             {/* ===== АКТИВНОСТЬ (только администратор компании) ===== */}
             {isOwner && show('activity') && (

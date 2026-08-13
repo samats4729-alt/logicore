@@ -1,0 +1,33 @@
+/* Окно покупки подписки. */
+
+.hint {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--nova-fg-3);
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--nova-border);
+    font-size: 13px;
+}
+
+.totalValue {
+    font-size: 19px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
