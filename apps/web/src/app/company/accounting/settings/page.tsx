@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import nova from '@/components/nova/nova.module.css';
 import Loader from '@/components/ui/Loader';
 
 const { Text } = Typography;
@@ -285,7 +286,7 @@ export default function FinanceSettingsPage() {
             key: 'name',
             render: (val: string, r: ServiceItem) => (
                 <Text style={{ fontSize: 13, color: r.isActive ? undefined : token.colorTextDescription }}>
-                    {val}{r.isDefault && <Tag color="green" style={{ marginLeft: 8 }}>по умолчанию</Tag>}
+                    {val}{r.isDefault && <span className={nova.chip} style={{ marginLeft: 8 }}>по умолчанию</span>}
                 </Text>
             )
         },
@@ -317,7 +318,8 @@ export default function FinanceSettingsPage() {
             key: 'kind',
             width: 150,
             render: (val: 'CASH' | 'BANK') => (
-                val === 'CASH' ? <Tag color="orange">Касса</Tag> : <Tag color="blue">Расчетный счет</Tag>
+                // Касса и расчётный счёт — просто вид счёта, а не состояние.
+                <span className={nova.chip}>{val === 'CASH' ? 'Касса' : 'Расчётный счёт'}</span>
             )
         },
         {
@@ -327,7 +329,7 @@ export default function FinanceSettingsPage() {
             width: 100,
             render: (val: string) => (
                 val && val !== 'KZT'
-                    ? <Tag color="gold">{val}</Tag>
+                    ? <span className={nova.chip}>{val}</span>
                     : <Text type="secondary">₸ тенге</Text>
             ),
         },
@@ -356,7 +358,7 @@ export default function FinanceSettingsPage() {
             dataIndex: 'isDefault',
             key: 'default',
             width: 130,
-            render: (val: boolean) => val ? <Tag color="green">Да</Tag> : <Text type="secondary">—</Text>
+            render: (val: boolean) => val ? <span className={nova.chip}>Да</span> : <Text type="secondary">—</Text>
         },
         {
             title: '',
@@ -386,7 +388,9 @@ export default function FinanceSettingsPage() {
             width: 190,
             render: (val: CostType | null | undefined, r: FinanceCategory) => (
                 r.direction === 'OUT'
-                    ? (val ? <Tag color={COST_TYPE_COLORS[val]}>{COST_TYPE_LABELS[val]}</Tag> : <Tag color="warning">не задан</Tag>)
+                    ? (val
+                        ? <span className={nova.chip}>{COST_TYPE_LABELS[val]}</span>
+                        : <span className={`${nova.chip} ${nova.chipWarn}`}>не задан</span>)
                     : <Text type="secondary">—</Text>
             )
         },
@@ -395,7 +399,9 @@ export default function FinanceSettingsPage() {
             dataIndex: 'isSystem',
             key: 'system',
             width: 150,
-            render: (val: boolean) => val ? <Tag color="default">Системная</Tag> : <Tag color="cyan">Пользовательская</Tag>
+            render: (val: boolean) => (
+                <span className={nova.chip}>{val ? 'Системная' : 'Пользовательская'}</span>
+            )
         },
         {
             title: 'Статус',
