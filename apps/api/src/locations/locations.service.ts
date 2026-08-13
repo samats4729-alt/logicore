@@ -3,6 +3,52 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { PartnershipStatus } from '@prisma/client';
 
+/** Пустое значение координаты — это отсутствие точки, а не ноль. */
+export function numberOrNull(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Строка адреса из частей.
+ *
+ * Печатается в договоре-заявке и доверенности, поэтому собирается по порядку
+ * «страна, область, город, улица, дом» и без пустых мест: у половины адресов
+ * области нет, а «Казахстан, , Алматы» в документе выглядит браком.
+ *
+ * Готовая строка, если её прислали, важнее собранной: адрес мог прийти из
+ * подсказки геокодера целиком, и разбирать его обратно незачем.
+ */
+export function composeAddress(
+    address: string | undefined | null,
+    parts: { country?: string; region?: string; city?: string; street?: string; house?: string },
+): string {
+    if (address && address.trim()) return address.trim();
+    const street = [parts.street, parts.house].map((p) => p?.trim()).filter(Boolean).join(' ');
+    return [parts.country, parts.region, parts.city, street]
+        .map((p) => p?.trim())
+        .filter(Boolean)
+        .join(', ');
+}
+
+/** Что записать в координаты: точку человека, точку геокодера или пусто. */
+export function coordinateFields(
+    latitude: unknown,
+    longitude: unknown,
+    manual?: boolean,
+): { latitude: number | null; longitude: number | null; coordinatesManual: boolean } {
+    const lat = numberOrNull(latitude);
+    const lng = numberOrNull(longitude);
+    // Одна координата без второй — это не точка, а половина ошибки.
+    const hasPoint = lat !== null && lng !== null;
+    return {
+        latitude: hasPoint ? lat : null,
+        longitude: hasPoint ? lng : null,
+        coordinatesManual: hasPoint ? Boolean(manual) : false,
+    };
+}
+
 @Injectable()
 export class LocationsService {
     constructor(private prisma: PrismaService, private redis: RedisService) { }
@@ -45,9 +91,14 @@ export class LocationsService {
 
     async create(data: {
         name: string;
-        address: string;
-        latitude: number;
-        longitude: number;
+        address?: string;
+        latitude?: number | null;
+        longitude?: number | null;
+        coordinatesManual?: boolean;
+        country?: string;
+        region?: string;
+        street?: string;
+        house?: string;
         contactName?: string;
         contactPhone?: string;
         notes?: string;
@@ -61,17 +112,22 @@ export class LocationsService {
         try {
             // Explicitly select fields to avoid passing unknown args (like countryId, regionId) to Prisma
             const {
-                name, address, latitude, longitude,
+                name, address, latitude, longitude, coordinatesManual,
+                country, region, street, house,
                 contactName, contactPhone, notes, createdById,
                 city, cityId, companyId, emails
             } = data as any;
 
+            const parts = { country, region, city, street, house };
             const location = await this.prisma.location.create({
                 data: {
                     name,
-                    address,
-                    latitude: Number(latitude),
-                    longitude: Number(longitude),
+                    address: composeAddress(address, parts),
+                    ...coordinateFields(latitude, longitude, coordinatesManual),
+                    country: country || null,
+                    region: region || null,
+                    street: street || null,
+                    house: house || null,
                     contactName,
                     contactPhone,
                     notes,
@@ -242,8 +298,13 @@ export class LocationsService {
     async update(id: string, data: Partial<{
         name: string;
         address: string;
-        latitude: number;
-        longitude: number;
+        latitude: number | null;
+        longitude: number | null;
+        coordinatesManual: boolean;
+        country: string | null;
+        region: string | null;
+        street: string | null;
+        house: string | null;
         contactName: string;
         contactPhone: string;
         notes: string;
@@ -273,7 +334,8 @@ export class LocationsService {
 
         try {
             const {
-                name, address, latitude, longitude,
+                name, address, latitude, longitude, coordinatesManual,
+                country, region, street, house,
                 contactName, contactPhone, notes,
                 city, cityId, companyId, emails
             } = data as any;
@@ -281,8 +343,18 @@ export class LocationsService {
             const updateData: any = {};
             if (name !== undefined) updateData.name = name;
             if (address !== undefined) updateData.address = address;
-            if (latitude !== undefined) updateData.latitude = Number(latitude);
-            if (longitude !== undefined) updateData.longitude = Number(longitude);
+            if (country !== undefined) updateData.country = country || null;
+            if (region !== undefined) updateData.region = region || null;
+            if (street !== undefined) updateData.street = street || null;
+            if (house !== undefined) updateData.house = house || null;
+            // Пустые координаты — это «убрать точку», а не «не менять»: человек
+            // мог стереть ошибочную. Number(null) даёт ноль, то есть точку в
+            // Гвинейском заливе, поэтому пустое приводим к null явно.
+            if (latitude !== undefined) updateData.latitude = numberOrNull(latitude);
+            if (longitude !== undefined) updateData.longitude = numberOrNull(longitude);
+            if (coordinatesManual !== undefined) updateData.coordinatesManual = Boolean(coordinatesManual);
+            // Поставили точку руками — прежняя неудача поиска больше не в счёт.
+            if (numberOrNull(latitude) !== null) updateData.geocodeFailedAt = null;
             if (contactName !== undefined) updateData.contactName = contactName;
             if (contactPhone !== undefined) updateData.contactPhone = contactPhone;
             if (notes !== undefined) updateData.notes = notes;

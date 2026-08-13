@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateLocationDto {
@@ -6,17 +6,47 @@ export class CreateLocationDto {
     @IsString()
     name: string;
 
-    @ApiProperty({ description: 'Адрес' })
+    @ApiPropertyOptional({ description: 'Адрес одной строкой. Если не прислали — собирается из частей' })
+    @IsOptional()
     @IsString()
-    address: string;
+    address?: string;
 
-    @ApiProperty({ description: 'Широта' })
+    /* Координаты необязательны: при недоступном геокодере взять их неоткуда,
+       а завести адрес всё равно надо. */
+    @ApiPropertyOptional({ description: 'Широта' })
+    @IsOptional()
     @IsNumber()
-    latitude: number;
+    latitude?: number | null;
 
-    @ApiProperty({ description: 'Долгота' })
+    @ApiPropertyOptional({ description: 'Долгота' })
+    @IsOptional()
     @IsNumber()
-    longitude: number;
+    longitude?: number | null;
+
+    @ApiPropertyOptional({ description: 'Точку поставил человек — дозапись её не трогает' })
+    @IsOptional()
+    @IsBoolean()
+    coordinatesManual?: boolean;
+
+    @ApiPropertyOptional({ description: 'Страна' })
+    @IsOptional()
+    @IsString()
+    country?: string;
+
+    @ApiPropertyOptional({ description: 'Область' })
+    @IsOptional()
+    @IsString()
+    region?: string;
+
+    @ApiPropertyOptional({ description: 'Улица' })
+    @IsOptional()
+    @IsString()
+    street?: string;
+
+    @ApiPropertyOptional({ description: 'Дом' })
+    @IsOptional()
+    @IsString()
+    house?: string;
 
     @ApiPropertyOptional({ description: 'Контактное лицо' })
     @IsOptional()
@@ -65,15 +95,40 @@ export class UpdateLocationDto {
     @IsString()
     address?: string;
 
-    @ApiPropertyOptional({ description: 'Широта' })
+    @ApiPropertyOptional({ description: 'Широта. Пустая — точку убрали' })
     @IsOptional()
     @IsNumber()
-    latitude?: number;
+    latitude?: number | null;
 
-    @ApiPropertyOptional({ description: 'Долгота' })
+    @ApiPropertyOptional({ description: 'Долгота. Пустая — точку убрали' })
     @IsOptional()
     @IsNumber()
-    longitude?: number;
+    longitude?: number | null;
+
+    @ApiPropertyOptional({ description: 'Точку поставил человек — дозапись её не трогает' })
+    @IsOptional()
+    @IsBoolean()
+    coordinatesManual?: boolean;
+
+    @ApiPropertyOptional({ description: 'Страна' })
+    @IsOptional()
+    @IsString()
+    country?: string | null;
+
+    @ApiPropertyOptional({ description: 'Область' })
+    @IsOptional()
+    @IsString()
+    region?: string | null;
+
+    @ApiPropertyOptional({ description: 'Улица' })
+    @IsOptional()
+    @IsString()
+    street?: string | null;
+
+    @ApiPropertyOptional({ description: 'Дом' })
+    @IsOptional()
+    @IsString()
+    house?: string | null;
 
     @ApiPropertyOptional({ description: 'Контактное лицо' })
     @IsOptional()

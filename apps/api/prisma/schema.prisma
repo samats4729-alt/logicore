@@ -502,16 +502,45 @@ model Session {
 }
 
 model Location {
-  id           String   @id @default(cuid())
-  name         String // Название точки
-  address      String
-  latitude     Float
-  longitude    Float
+  id      String @id @default(cuid())
+  name    String // Название точки
+  address String // Полный адрес одной строкой — он печатается в документах
+
+  /// Координаты. Необязательны намеренно.
+  ///
+  /// Раньше без них адрес не сохранялся, а взять их было неоткуда, кроме
+  /// геокодера. Кончились запросы к нему или он недоступен — и новый адрес
+  /// завести нельзя, значит нельзя оформить рейс. Теперь адрес живёт и без
+  /// точки: на карте его не видно и километры не считаются, но работа идёт.
+  latitude  Float?
+  longitude Float?
+
+  /// Точку поставил человек руками на карте.
+  ///
+  /// Такие координаты дозапись не трогает: человек знает, где въезд на склад,
+  /// а геокодер поставит точку на середину улицы.
+  coordinatesManual Boolean @default(false)
+
+  /// Когда последний раз искали координаты и не нашли. Нужно, чтобы список
+  /// «адреса без координат» отличал «ещё не искали» от «искали, не нашлось».
+  geocodeFailedAt DateTime?
+
+  /// Части адреса, как их ввёл человек.
+  ///
+  /// Раньше адрес был одной строкой из подсказки геокодера. Без подсказок
+  /// вводить было нечего — и незачем: система всё равно не понимала, где
+  /// город, а где улица. Теперь части вводятся руками и из них же собирается
+  /// строка адреса.
+  country String?
+  region  String?
+  street  String?
+  house   String?
+
   contactName  String?
   contactPhone String?
-  city         String? // <-- Added city field
+  city         String? // Город текстом — справочник только подсказывает
   cityId       String?
-  cityRecord   City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  cityRecord   City?   @relation(fields: [cityId], references: [id], onDelete: SetNull)
   notes        String?
   emails       String? // Контактные email-адреса
   companyId    String? // ID привязанного контрагента
