@@ -507,6 +507,7 @@ export default function PartnersPage() {
                     icon={<PlusOutlined />}
                     onClick={openCreate}
                     className="lc-cta"
+                    data-guide="partner-create"
                 >
                     Добавить контрагента
                 </Button>

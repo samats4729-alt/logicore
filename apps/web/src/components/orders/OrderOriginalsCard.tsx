@@ -58,7 +58,9 @@ function OriginalsRow({ side, title, sideKey, busy, picking, setPicking, save }:
 }) {
     const marked = dateLabel(side.originalsAt);
     return (
-        <div className={nova.item}>
+        // Якорь для ИИ-гида: отметку об оригиналах спрашивают чаще всего, а
+        // лежит она не на виду — во вкладке «Документы» рейса.
+        <div className={nova.item} data-guide={`originals-${sideKey}`}>
             <span className={nova.itemIcon}>
                 {marked ? <FileCheck2 size={14} /> : <FileClock size={14} />}
             </span>

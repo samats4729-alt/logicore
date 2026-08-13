@@ -2494,29 +2494,94 @@ a.mapboxgl-ctrl-logo,
 
 /* ==========================================
    AI GUIDE — SPOTLIGHT HIGHLIGHT
+
+   Подсветка шага — единственное место, где в кабинете допущен яркий цвет.
+   Она живёт секунды и должна поймать взгляд на чужом экране, среди
+   двух десятков кнопок; спокойная рамка тут проигрывает — прежняя,
+   синяя с пульсацией, терялась на плитках и таблицах.
+
+   Свет бежит по кругу: угол конического градиента крутится, а не сама
+   рамка — вращать элемент значило бы гонять на каждом кадре большой
+   размытый слой. Угол объявлен через @property, иначе анимировать его
+   нельзя: браузер без поддержки покажет тот же градиент неподвижным, и
+   подсветка от этого не пропадёт.
    ========================================== */
+@property --ai-spot-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
 .ai-spot-ring {
   position: fixed;
   border-radius: 12px;
-  border: 2px solid var(--nova-primary);
-  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.25), 0 0 20px 5px rgba(22, 119, 255, 0.4);
   pointer-events: none;
   z-index: 1500;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: top .3s cubic-bezier(0.16, 1, 0.3, 1), left .3s cubic-bezier(0.16, 1, 0.3, 1),
+    width .3s cubic-bezier(0.16, 1, 0.3, 1), height .3s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity .2s ease;
 }
 
+/* Кольцо. Градиент рисуется по всей площади, а маска оставляет от него
+   только рамку в два пикселя — так свет идёт ровно по краю элемента,
+   какого бы тот ни был размера. */
+.ai-spot-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  /* Два слоя: сверху бежит свет, снизу лежит ровное кольцо. Без основы
+     подсветка исчезала, когда яркий участок градиента уходил на другую
+     сторону, — человек переставал понимать, что ему показывают. */
+  background:
+    conic-gradient(
+      from var(--ai-spot-angle),
+      transparent 0%,
+      #402fb5 10%,
+      transparent 26%,
+      transparent 50%,
+      #cf30aa 60%,
+      transparent 76%
+    ),
+    linear-gradient(rgba(64, 47, 181, .55), rgba(64, 47, 181, .55));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: aiSpotSweep 4s linear infinite;
+}
+
+/* Свечение — тот же бегущий свет, размытый и растянутый наружу. */
 .ai-spot-ring::after {
   content: '';
   position: absolute;
-  inset: -5px;
-  border-radius: 15px;
-  border: 2px solid rgba(22, 119, 255, 0.5);
-  animation: aiSpotPulse 1.5s ease-out infinite;
+  inset: -16px;
+  border-radius: 26px;
+  background: conic-gradient(
+    from var(--ai-spot-angle),
+    transparent 0%,
+    #402fb5 10%,
+    transparent 30%,
+    transparent 50%,
+    #cf30aa 60%,
+    transparent 80%
+  );
+  filter: blur(18px);
+  opacity: .45;
+  animation: aiSpotSweep 4s linear infinite;
 }
 
-@keyframes aiSpotPulse {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(1.12); opacity: 0; }
+@keyframes aiSpotSweep {
+  to { --ai-spot-angle: 360deg; }
+}
+
+/* Кому движение мешает — тому ровное свечение без бега. */
+@media (prefers-reduced-motion: reduce) {
+  .ai-spot-ring::before,
+  .ai-spot-ring::after {
+    animation: none;
+  }
 }
 
 .ai-spot-tip {
@@ -2528,7 +2593,7 @@ a.mapboxgl-ctrl-logo,
   border-radius: 16px;
   font-size: 13.5px;
   line-height: 1.55;
-  border: 1px solid rgba(22, 119, 255, 0.35);
+  border: 1px solid rgba(64, 47, 181, 0.35);
   box-shadow: 0 16px 48px -12px rgba(16, 24, 40, 0.22);
   animation: aiTipIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   transition: top 0.3s cubic-bezier(0.16, 1, 0.3, 1), left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -2542,8 +2607,8 @@ a.mapboxgl-ctrl-logo,
   width: 12px;
   height: 12px;
   background: var(--lc-card);
-  border-left: 1px solid rgba(22, 119, 255, 0.35);
-  border-top: 1px solid rgba(22, 119, 255, 0.35);
+  border-left: 1px solid rgba(64, 47, 181, 0.35);
+  border-top: 1px solid rgba(64, 47, 181, 0.35);
   transform: rotate(45deg);
 }
 
@@ -2574,7 +2639,6 @@ a.mapboxgl-ctrl-logo,
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.3);
   transition: all 0.2s ease;
 }
 

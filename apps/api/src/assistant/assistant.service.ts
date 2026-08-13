@@ -1,9 +1,17 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { buildSupportTicketMessage } from '../telegram/support-ticket-message';
-import { PLATFORM_KNOWLEDGE, describeUser } from './platform-knowledge';
+import { PLATFORM_KNOWLEDGE, describeUser, FULL_ACCESS_ROLES } from './platform-knowledge';
+
+/** Статусы, при которых рейс считается идущим прямо сейчас. */
+const IN_WORK_STATUSES: OrderStatus[] = [
+    OrderStatus.ASSIGNED, OrderStatus.EN_ROUTE_PICKUP, OrderStatus.AT_PICKUP,
+    OrderStatus.LOADING, OrderStatus.IN_TRANSIT, OrderStatus.AT_DELIVERY,
+    OrderStatus.UNLOADING,
+];
 
 /**
  * Сколько накопившихся обращений досылать при запуске за один раз.
@@ -23,73 +31,132 @@ interface ChatMessage {
 // уверенно вести пользователя в никуда (так уже случилось с /company/accounting
 // и несуществующими меню finance_group/transport_group).
 export const ROUTES = `
-- /company — Дашборд (общая сводка)
-- /company/orders — Все заявки
-- /company/orders/create — Создание заявки
-- /company/tracking — GPS / мониторинг
-- /company/warehouse — Склад
-- /company/finance — Финансы: страница-хаб со ссылками на все операции, отчёты и справочники
-- /company/accounting/registry — Реестр заявок
-- /company/accounting/operations — Операции (движение денег)
-- /company/accounting/cash-in — Поступления
-- /company/accounting/cash-out — Списания
-- /company/accounting/cashflow — ДДС
-- /company/accounting/pnl — Прибыли и убытки
-- /company/accounting/counterparty-report — Взаиморасчёты
-- /company/accounting/reconciliation-act — Акт сверки
-- /company/accounting/invoices — Счета
-- /company/accounting/acts — Акты выполненных работ
+Верхнее меню — пять пунктов и аватар. Всё остальное лежит на страницах-хабах.
+
+Прямо из меню:
+- /company — Дашборд: сводка по компании, плитка «Тариф», задолженность, последние события
+- /company/orders — Заявки: журнал всех рейсов
+- /company/orders/create — Создание заявки (мастер по шагам)
+- /company/requests — Запросы: хаб, куда приходят запросы на расчёт от заказчиков
+- /company/tracking — Карта и GPS: где сейчас транспорт
+- /company/warehouse — Очередь на погрузку
+- /company/finance — «Деньги»: хаб со списком всего денежного
+- /company/reports — «Отчёты»: хаб со списком отчётов
+- /company/cabinet — «Кабинет»: хаб со справочниками и настройками компании
+
+Хаб «Деньги» (/company/finance) — оттуда открывается:
+- /company/accounting/incoming — Входящие документы: счета и акты, присланные контрагентами; принять или отклонить
+- /company/accounting/invoices — Счета: покупателям и от поставщиков
+- /company/accounting/invoices/create — Создание счёта
+- /company/accounting/acts — Акты выполненных работ по заявкам
+- /company/accounting/act-of-work — Акт выполненных работ: сводный по периоду
+- /company/accounting/transport-documents — Доверенности и договоры-заявки: печать документов по рейсам
+- /company/accounting/cash-in — Приход денег: заказчик оплатил
+- /company/accounting/cash-out — Расход денег: оплатили перевозчику или за топливо
+- /company/accounting/operations — Все операции: вся история движения денег
+- /company/accounting/calendar — Платёжный календарь: что и когда движется по деньгам
+- /company/accounting/planned — Планируемые платежи: что предстоит заплатить и получить
+- /company/accounting/counterparty-report — Взаиморасчёты: кто кому должен, просрочка, сверка
+- /company/accounting/reconciliation-act — Акт сверки с контрагентом
 - /company/accounting/balances — Остатки по кассам и счетам
-- /company/accounting/planned — Плановые платежи
-- /company/accounting/expenses-by-category — Расходы по статьям
-- /company/accounting/carrier-profit — Прибыль по перевозчикам
-- /company/accounting/settings — Настройки бухгалтерии
-- /company/payroll — Зарплата сотрудников
+- /company/accounting/opening-balances — Ввод начальных остатков при запуске учёта
+- /company/inventory/receipts — Поступление материалов: купили масло, шины, запчасти
+- /company/inventory/writeoffs — Списание материалов: залили в машину, поставили на ремонт
+- /company/inventory/balances — Остатки материалов
+- /company/inventory/transfers — Перемещение материалов между складами
+- /company/payroll — Зарплата: начисления и выплаты сотрудникам
 - /company/my-salary — Моя зарплата
-- /company/reports — Отчёты
-- /company/calculator — Калькулятор
-- /company/cabinet — Кабинет: страница-хаб со ссылками на справочники компании
+
+Хаб «Отчёты» (/company/reports) — оттуда открывается:
+- /company/accounting/pnl — Прибыли и убытки
+- /company/accounting/cashflow — Движение денежных средств
+- /company/accounting/registry — Реестр заявок
+- /company/accounting/carrier-profit — Прибыль по перевозчикам
+- /company/accounting/expenses-by-category — Расходы по статьям
+
+Хаб «Запросы» (/company/requests) — оттуда открывается:
+- /company/calculator — Калькулятор стоимости перевозки
+
+Хаб «Кабинет» (/company/cabinet) — оттуда открывается:
 - /company/partners — Контрагенты
 - /company/contracts — Договоры
+- /company/locations — Адреса и склады
 - /company/vehicles — Автопарк
-- /company/users — Сотрудники
-- /company/locations — Адреса
-- /company/documents — Документы
+- /company/users — Сотрудники (там же права доступа и водители)
+- /company/documents — Документы компании
 - /company/audit — Журнал действий
-- /company/profile — Профиль пользователя
-- /company/settings — Настройки компании
+- /company/profile — Мой профиль и смена пароля
+- /company/settings — Организации и реквизиты
+- /company/inventory/nomenclature — Номенклатура материалов
+- /company/inventory/warehouses — Склады хранения
+- /company/accounting/settings — Настройки бухгалтерии: статьи доходов и расходов, наименования услуг, счета и кассы
+- /company/accounting/payment-conditions — Условия оплаты
+- /company/accounting/payment-forms — Формы оплаты
+- /company/accounting/ownership-types — Формы собственности
+- /company/accounting/banks — Банки
+- /company/accounting/currencies — Курсы валют
+- /company/accounting/revaluation — Переоценка валютных остатков
+- /company/accounting/order-numbering — Нумерация заявок
+- /company/accounting/document-numbering — Нумерация счетов
+
+Отдельно:
+- /company/onboarding — первые шаги после регистрации компании
 `;
 
 export const SELECTORS = `
-Меню (верхний уровень, видно всегда):
-- Дашборд: [data-menu-id$='-/company']
-- Заявки (сразу открывает список заявок, группы нет): [data-menu-id$='-/company/orders']
-- Меню «Мониторинг» (выпадающее): [data-menu-id$='-monitoring_group']
-- Финансы (открывает страницу-хаб, НЕ выпадающее меню): [data-menu-id$='-/company/finance']
-- Кабинет (открывает страницу-хаб, НЕ выпадающее меню): [data-menu-id$='-/company/cabinet']
-- Меню профиля (аватар справа вверху): [data-guide='profile']
+Верхнее меню (названия — ровно те, что видит человек на экране):
+- «Дашборд»: [data-menu-id$='-/company']
+- «Заявки» — сразу открывает журнал рейсов, без промежуточного меню: [data-menu-id$='-/company/orders']
+- «Запросы» — хаб запросов на расчёт: [data-menu-id$='-/company/requests']
+- «Мониторинг» — единственное выпадающее меню: [data-menu-id$='-monitoring_group']
+- «Деньги» — хаб, НЕ выпадающее меню: [data-menu-id$='-/company/finance']
+- «Отчёты» — хаб, НЕ выпадающее меню: [data-menu-id$='-/company/reports']
+- «Кабинет» — хаб, НЕ выпадающее меню: [data-menu-id$='-/company/cabinet']
+- Аватар справа вверху (меню профиля): [data-guide='profile']
 
-Подпункты меню «Мониторинг» (видны только после его открытия):
-- GPS / Мониторинг: [data-menu-id$='-/company/tracking']
-- Склад: [data-menu-id$='-/company/warehouse']
+Подпункты «Мониторинга» (видны только после клика по нему):
+- «Карта и GPS»: [data-menu-id$='-/company/tracking']
+- «Очередь на погрузку»: [data-menu-id$='-/company/warehouse']
 
-Подпункты меню профиля (видны только после его открытия):
-- Настройки: [data-menu-id$='-/company/settings']
+Подпункты меню профиля (видны только после клика по аватару):
+- «Настройки»: [data-menu-id$='-/company/settings']
 
-ВАЖНО про финансы и справочники: отдельных пунктов меню у них нет. Путь всегда
-такой: сначала клик по «Финансы» или «Кабинет» в верхнем меню, затем нужная
-ссылка на открывшейся странице-хабе.
-- Через «Финансы»: реестр заявок, операции, поступления, списания, ДДС,
-  прибыли и убытки, взаиморасчёты, акт сверки, счета, акты, остатки,
-  плановые платежи, расходы по статьям, прибыль по перевозчикам, склад ТМЦ,
-  зарплата, отчёты, калькулятор, настройки бухгалтерии.
-- Через «Кабинет»: сотрудники, контрагенты, договоры, автопарк, адреса,
-  документы, журнал действий, профиль, настройки компании.
+ВАЖНО про хабы. «Деньги», «Отчёты», «Запросы» и «Кабинет» — это не выпадающие
+меню, а страницы со списком разделов. Отдельных пунктов меню у самих разделов
+нет. Путь всегда один: клик по хабу в верхнем меню, потом нужная ссылка на
+открывшейся странице. Селекторов у ссылок хаба нет — назови раздел словами
+ровно так, как он подписан на странице.
+- «Деньги»: входящие документы, счета, акты, доверенности и договоры-заявки,
+  приход и расход денег, все операции, платёжный календарь, планируемые платежи,
+  взаиморасчёты, остатки по кассам, начальные остатки, материалы (поступление,
+  списание, остатки, перемещение), зарплата.
+- «Отчёты»: прибыли и убытки, движение денежных средств, реестр заявок,
+  прибыль по перевозчикам, расходы по статьям.
+- «Запросы»: калькулятор стоимости.
+- «Кабинет»: контрагенты, договоры, адреса, автопарк, сотрудники и права,
+  документы, журнал действий, профиль, организации и реквизиты, номенклатура и
+  склады, справочники бухгалтерии (условия и формы оплаты, формы собственности,
+  банки, курсы валют, переоценка, нумерация заявок и счетов), настройки
+  бухгалтерии со статьями доходов и расходов и счетами-кассами.
 
 Кнопки на страницах:
-- «Создать заявку» (на странице /company/orders): [data-guide='orders-create']
+- «Создать заявку» (на /company/orders): [data-guide='orders-create']
+- «Добавить контрагента» (на /company/partners): [data-guide='partner-create']
+- «Выставить счёт» (на /company/accounting/invoices): [data-guide='invoice-create']
+- «Пригласить» сотрудника или «Добавить водителя» (на /company/users): [data-guide='user-invite']
 - Глобальный поиск (в шапке): [data-guide='global-search']
 - Центр уведомлений (колокольчик в шапке): [data-guide='notifications']
+
+Вкладки карточки рейса /company/orders/НОМЕР (открывается кликом по строке в
+журнале заявок):
+- «Основная информация»: [data-guide='tab-details']
+- «Финансы» — НДС, сроки оплаты, платежи по рейсу: [data-guide='tab-finances']
+- «Документы» — договор-заявка, доверенность, отметки об оригиналах: [data-guide='tab-documents']
+- «История» — кто и что менял по рейсу: [data-guide='tab-history']
+
+Отметка о получении оригиналов накладных (во вкладке «Документы» рейса):
+- строка «Получили от перевозчика»: [data-guide='originals-carrier']
+- строка «Заказчик получил оригиналы»: [data-guide='originals-customer']
 `;
 
 const SYSTEM_PROMPT = `Ты — встроенный пошаговый ИИ-гид платформы LogiCore (SaaS для логистики: заявки, трекинг, финансы, документы). Ты заменяешь страницу помощи и проводишь пользователя по интерфейсу шаг за шагом.
@@ -117,8 +184,9 @@ ${SELECTORS}
 - Каждый шаг = один клик пользователя. say — короткая команда (что нажать).
 - Используй ТОЛЬКО селекторы из списка выше.
 - Выпадающее меню только одно — «Мониторинг». Чтобы попасть в его подпункт, сначала добавь шаг с открытием самого меню, затем шаг с подпунктом. Для «Настроек» родитель — меню профиля [data-guide='profile'].
-- «Финансы» и «Кабинет» — не меню, а страницы-хабы: шаг с кликом по ним открывает страницу, дальше пользователь переходит по ссылке на ней. Отдельных селекторов у этих ссылок нет, поэтому просто назови нужный раздел словами.
+- «Деньги», «Отчёты», «Запросы» и «Кабинет» — не меню, а страницы-хабы: шаг с кликом по ним открывает страницу, дальше пользователь переходит по ссылке на ней. Отдельных селекторов у этих ссылок нет, поэтому последним шагом назови раздел словами, как он подписан на хабе.
 - Заявки открываются одним кликом по пилюле, без промежуточного меню.
+- Называй пункты меню ровно так, как они подписаны: «Деньги», а не «Финансы»; «Карта и GPS», а не «GPS»; «Очередь на погрузку», а не «Склад».
 - Учитывай текущую страницу пользователя: если он уже там, где нужно, не добавляй лишние шаги навигации.
 - Если задача не требует навигации — steps можно не добавлять.
 
@@ -220,10 +288,77 @@ export class AssistantService implements OnApplicationBootstrap {
      * владельца, и завсклада в разделы, куда второго не пускают. Человек
      * доходил до отказа и решал, что сломалась платформа.
      */
+    /**
+     * Что гид видит про компанию собеседника.
+     *
+     * До сих пор — ничего: на «сколько мне должен Магнум» он отвечал «это на
+     * экране Взаиморасчёты», и человек шёл смотреть сам. Половина вопросов к
+     * помощнику именно такая.
+     *
+     * Отбор идёт по тем же правам, что и сам кабинет. Деньги видит только
+     * тот, кому открыта бухгалтерия: иначе гид рассказал бы завскладу про
+     * долги компании, хотя ни на один экран с ними его не пускают.
+     */
+    private async buildCabinetSnapshot(
+        companyId: string,
+        user: { role?: string; permissions?: string[] },
+    ): Promise<string> {
+        const seesMoney = FULL_ACCESS_ROLES.includes(user.role || '')
+            || (user.permissions || []).includes('accounting');
+
+        const participation = [
+            { customerCompanyId: companyId },
+            { forwarderId: companyId },
+            { partnerId: companyId },
+            { subForwarderId: companyId },
+        ];
+
+        const [company, active, pending, problem, recent] = await Promise.all([
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }),
+            this.prisma.order.count({ where: { OR: participation, status: { in: IN_WORK_STATUSES } } }),
+            this.prisma.order.count({ where: { OR: participation, status: 'PENDING' } }),
+            this.prisma.order.count({ where: { OR: participation, status: 'PROBLEM' } }),
+            this.prisma.order.findMany({
+                where: { OR: participation },
+                orderBy: { createdAt: 'desc' },
+                take: 5,
+                select: { orderNumber: true, status: true },
+            }),
+        ]);
+
+        const lines = [
+            `Компания: ${company?.name ?? 'без названия'}.`,
+            `Рейсов в работе: ${active}. Ждут назначения: ${pending}. С проблемой: ${problem}.`,
+            recent.length
+                ? `Последние рейсы: ${recent.map((o) => `${o.orderNumber} (${o.status})`).join(', ')}.`
+                : 'Рейсов пока нет.',
+        ];
+
+        if (!seesMoney) {
+            lines.push('Деньги этому человеку закрыты — про суммы и долги не отвечай, скажи, что раздел ему не открыт.');
+            return lines.join('\n');
+        }
+
+        // Неоплаченный счёт — тот, у которого остался долг. Отдельного поля
+        // «оплачен» нет: платежи разносятся частями, и правда живёт в остатке.
+        const unpaid = { type: 'PAYMENT_INVOICE' as const, status: 'POSTED' as const, balanceDue: { gt: 0 } };
+        const [unpaidOut, unpaidIn] = await Promise.all([
+            this.prisma.accountingDocument.count({ where: { companyId, direction: 'OUTGOING', ...unpaid } }),
+            this.prisma.accountingDocument.count({ where: { companyId, direction: 'INCOMING', ...unpaid } }),
+        ]);
+
+        lines.push(
+            `Неоплаченных счетов: нам не заплатили по ${unpaidOut}, мы не заплатили по ${unpaidIn}.`,
+            'Точные суммы долгов по контрагентам — во «Взаиморасчётах»: если спрашивают конкретную цифру, доведи туда.',
+        );
+        return lines.join('\n');
+    }
+
     async chat(
         messages: ChatMessage[],
         context?: string,
         user?: { role?: string; permissions?: string[] },
+        companyId?: string,
     ): Promise<{ reply: string }> {
         const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
         if (!apiKey) {
@@ -242,8 +377,24 @@ export class AssistantService implements OnApplicationBootstrap {
         }
 
         const updatesBlock = await this.getPublishedUpdatesBlock();
+
+        // Данные подтягиваем, только если компания известна: помощник открыт и
+        // тому, кто ещё не подключил организацию.
+        let dataBlock = '';
+        if (companyId) {
+            try {
+                dataBlock = `\n\n=== Данные компании собеседника ===\n`
+                    + `${await this.buildCabinetSnapshot(companyId, user || {})}`;
+            } catch (e) {
+                // Не ответить из-за упавшего запроса к базе хуже, чем ответить
+                // без цифр: на «как создать заявку» данные и не нужны.
+                this.logger.warn(`Сводка для гида не собралась: ${(e as Error).message}`);
+            }
+        }
+
         const systemContent = `${SYSTEM_PROMPT}${updatesBlock}`
             + `\n\n=== Кто спрашивает ===\n${describeUser(user)}`
+            + dataBlock
             + `\n\nТекущая страница пользователя: ${context || 'неизвестно'}`;
 
         try {

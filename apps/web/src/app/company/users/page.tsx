@@ -1740,6 +1740,7 @@ export default function CompanyUsersPage() {
                         type="button"
                         className={`${nova.action} ${nova.actionPrimary}`}
                         onClick={() => handleOpenUnifiedModal()}
+                        data-guide="user-invite"
                     >
                         {activeSegment === 'drivers' ? 'Добавить водителя' : 'Пригласить'}
                     </button>

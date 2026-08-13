@@ -22,10 +22,14 @@ export class AssistantController {
         // Роль и права берём из токена, а не из тела запроса: иначе достаточно
         // подменить их в запросе, чтобы гид рассказал про разделы, к которым
         // человека не пускают.
-        return this.assistantService.chat(body?.messages || [], body?.context, {
-            role: req.user?.role,
-            permissions: req.user?.permissions,
-        });
+        // Компанию тоже берём из токена, а не из тела: иначе достаточно
+        // прислать чужой идентификатор, чтобы гид пересказал чужие рейсы.
+        return this.assistantService.chat(
+            body?.messages || [],
+            body?.context,
+            { role: req.user?.role, permissions: req.user?.permissions },
+            req.user?.companyId,
+        );
     }
 
     // ==================== SUPPORT ====================
