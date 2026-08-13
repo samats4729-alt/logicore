@@ -1,0 +1,63 @@
+/* Карточка бухгалтерского документа: счёт и акт.
+ *
+ * Экран стоял на прежнем поколении наших классов, а переходы внутри него
+ * были синими ссылками antd. Синий в кабинете помечает ссылку наружу;
+ * «Заявка ЗК-2607» и «Добавить услугу» — работа на том же месте. */
+
+.pad {
+    padding: 20px;
+}
+
+/* «Журнал счетов» над заголовком — путь назад, а не действие. */
+.back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    margin-bottom: 4px;
+    border: 0;
+    background: transparent;
+    color: var(--nova-fg-3);
+    font: 500 12px/1 Inter, sans-serif;
+    cursor: pointer;
+}
+
+.back:hover {
+    color: var(--nova-fg);
+}
+
+.orderLink {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--nova-fg);
+    font: 500 12px/1.3 Inter, sans-serif;
+    text-align: left;
+    text-decoration: underline;
+    text-decoration-color: var(--nova-border);
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.orderLink:hover {
+    text-decoration-color: var(--nova-fg-3);
+}
+
+.addLine {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 11px;
+    border: 1px dashed var(--nova-border);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--nova-fg-2);
+    font: 500 12px/1 Inter, sans-serif;
+    cursor: pointer;
+}
+
+.addLine:hover {
+    background: var(--nova-hover);
+    color: var(--nova-fg);
+}

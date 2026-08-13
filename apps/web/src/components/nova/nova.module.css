@@ -178,6 +178,10 @@
     margin-bottom: 14px;
 }
 
+.tiles5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .tiles6 {
     grid-template-columns: repeat(6, minmax(0, 1fr));
 }
@@ -397,6 +401,7 @@
 
 @media (max-width: 1200px) {
     .tiles,
+    .tiles5,
     .tiles6 {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -412,6 +417,7 @@
     }
 
     .tiles,
+    .tiles5,
     .tiles6 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }

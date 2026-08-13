@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Skeleton } from 'antd';
+import { Skeleton } from 'antd';
 import {
     AccountingDocumentListItem,
     OrderChainDocumentType,
     accountingDocumentHref,
     fetchAccountingDocuments,
 } from '@/lib/accounting-documents';
+import { Route } from 'lucide-react';
 import StatusPill from '@/components/ui/StatusPill';
+import nova from '@/components/nova/nova.module.css';
+import styles from './order-document-chain.module.css';
 import { toast } from 'sonner';
 
 const money = (value: number) =>
@@ -78,32 +81,34 @@ export default function OrderDocumentChain({
     const documentStep = (type: OrderChainDocumentType) => {
         const document = active(type);
         return (
-            <div className="lc-card" style={cardStyle}>
+            <div className={nova.tile} style={cardStyle}>
                 <div style={stepHeadStyle}>
-                    <span style={stepTitleStyle}>{STEP_TITLES[type]}</span>
+                    <span className={nova.tileLabel}>{STEP_TITLES[type]}</span>
                     {document && <StatusPill status={document.status} />}
                 </div>
                 {document ? (
                     <>
-                        <a
+                        <button
+                            type="button"
+                            className={styles.docLink}
                             onClick={() => router.push(accountingDocumentHref({ id: document.id, type }))}
-                            style={linkStyle}
                         >
                             {document.number}
-                        </a>
-                        <div style={amountStyle}>{money(document.total)}</div>
+                        </button>
+                        <div className={styles.amount}>{money(document.total)}</div>
                     </>
                 ) : (
                     <>
-                        <div style={emptyStyle}>Не выставлен</div>
-                        <Button
-                            size="small"
+                        <div className={nova.tileSub}>Не выставлен</div>
+                        <button
+                            type="button"
+                            className={nova.action}
+                            style={{ marginTop: 8, height: 28 }}
+                            disabled={creating === type}
                             onClick={() => onCreate(type)}
-                            loading={creating === type}
-                            style={{ marginTop: 8 }}
                         >
-                            Создать
-                        </Button>
+                            {creating === type ? 'Создаём…' : 'Создать'}
+                        </button>
                     </>
                 )}
             </div>
@@ -112,22 +117,28 @@ export default function OrderDocumentChain({
 
     if (loading) {
         return (
-            <div className="lc-card" style={{ padding: 16, marginBottom: 16 }}>
-                <Skeleton active paragraph={{ rows: 2 }} />
-            </div>
+            <section className={nova.card}>
+                <div className={nova.cardBody}>
+                    <Skeleton active paragraph={{ rows: 2 }} />
+                </div>
+            </section>
         );
     }
 
     return (
-        <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Документы по рейсу</div>
+        <section className={nova.card}>
+            <div className={nova.cardHead}>
+                <Route size={14} />
+                <h3 className={nova.cardTitle}>Документы по рейсу</h3>
+            </div>
+            <div className={nova.cardBody}>
             <div style={chainStyle}>
-                <div className="lc-card" style={cardStyle}>
+                <div className={nova.tile} style={cardStyle}>
                     <div style={stepHeadStyle}>
-                        <span style={stepTitleStyle}>Рейс</span>
+                        <span className={nova.tileLabel}>Рейс</span>
                         <StatusPill status={orderStatus} />
                     </div>
-                    <div style={linkStyle}>{orderNumber}</div>
+                    <div className={styles.docNumber}>{orderNumber}</div>
                 </div>
 
                 <span style={arrowStyle}>→</span>
@@ -136,30 +147,31 @@ export default function OrderDocumentChain({
                 {documentStep('SERVICE_ACT')}
                 <span style={arrowStyle}>→</span>
 
-                <div className="lc-card" style={cardStyle}>
+                <div className={nova.tile} style={cardStyle}>
                     <div style={stepHeadStyle}>
-                        <span style={stepTitleStyle}>Оплата</span>
+                        <span className={nova.tileLabel}>Оплата</span>
                     </div>
                     {invoice ? (
                         <>
-                            <div style={amountStyle}>{money(invoice.amountPaid)}</div>
-                            <div style={emptyStyle}>
+                            <div className={styles.amount}>{money(invoice.amountPaid)}</div>
+                            <div className={nova.tileSub}>
                                 {invoice.balanceDue > 0
                                     ? `остаток ${money(invoice.balanceDue)}`
                                     : 'счёт закрыт'}
                             </div>
                         </>
                     ) : (
-                        <div style={emptyStyle}>Ждёт счёта</div>
+                        <div className={nova.tileSub}>Ждёт счёта</div>
                     )}
                 </div>
             </div>
             {(invoice?.status === 'DRAFT' || act?.status === 'DRAFT') && (
-                <div style={{ ...emptyStyle, marginTop: 8 }}>
+                <div className={nova.itemDesc} style={{ marginTop: 10, whiteSpace: 'normal' }}>
                     Черновик не проведён — контрагенту такой документ не отдан.
                 </div>
             )}
-        </div>
+            </div>
+        </section>
     );
 }
 
@@ -184,27 +196,7 @@ const stepHeadStyle: React.CSSProperties = {
     marginBottom: 6,
 };
 
-const stepTitleStyle: React.CSSProperties = {
-    fontSize: 12,
-    color: '#5f6672',
-};
-
-const linkStyle: React.CSSProperties = {
-    fontWeight: 600,
-    display: 'block',
-};
-
-const amountStyle: React.CSSProperties = {
-    fontWeight: 700,
-    fontVariantNumeric: 'tabular-nums',
-};
-
-const emptyStyle: React.CSSProperties = {
-    fontSize: 12,
-    color: '#8c8c8c',
-};
-
 const arrowStyle: React.CSSProperties = {
     alignSelf: 'center',
-    color: '#c4c8ce',
+    color: 'var(--nova-fg-3)',
 };
