@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { api, Location } from '@/lib/api';
 import LocationForm from '@/components/ui/LocationForm';
+import MissingCoordinates from '@/components/locations/MissingCoordinates';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 
@@ -18,6 +19,7 @@ export default function CompanyLocationsPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingLocation, setEditingLocation] = useState<Location | null>(null);
     const [addForCompanyId, setAddForCompanyId] = useState<string | undefined>(undefined);
+    const [locationsVersion, setLocationsVersion] = useState(0);
     const [form] = Form.useForm();
 
     // Навигация: «Общие адреса» ↔ «Контрагенты» (внутри проваливаемся в контрагента)
@@ -33,6 +35,9 @@ export default function CompanyLocationsPage() {
         try {
             const response = await api.get('/locations');
             setLocations(response.data);
+            // Полосе «без точки на карте» пора пересчитать своё: адрес могли
+            // только что завести без координат или, наоборот, дать ему точку.
+            setLocationsVersion(v => v + 1);
         } catch (error) {
             toast.error('Ошибка загрузки адресов');
         } finally {
@@ -116,6 +121,13 @@ export default function CompanyLocationsPage() {
         setEditingLocation(record);
         setAddForCompanyId(undefined);
         setModalOpen(true);
+    };
+
+    /* Адрес из полосы «без точки на карте». Открываем карточку целиком:
+       там карта, и то, что не узнал геокодер, можно отметить руками. */
+    const openById = (id: string) => {
+        const found = locations.find(l => l.id === id);
+        if (found) handleEditClick(found);
     };
 
     const handleDelete = async (id: string) => {
@@ -337,6 +349,10 @@ export default function CompanyLocationsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Адреса без точки на карте: с ними не построится маршрут, а
+                заметить это иначе можно только когда рейс уже нужен. */}
+            <MissingCoordinates onOpen={openById} onFound={fetchLocations} reloadKey={locationsVersion} />
 
             {/* ===== CONTENT CARD ===== */}
             <div className="lc-card" style={{ padding: 20 }}>

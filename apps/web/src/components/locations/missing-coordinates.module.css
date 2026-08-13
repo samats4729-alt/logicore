@@ -1,0 +1,182 @@
+/* Полоса «адреса без точки на карте» над списком адресов.
+
+   Тон спокойный: отсутствие координат — не ошибка человека, а состояние
+   адреса, которое чаще всего пройдёт само. Рамка тёплая, чтобы полосу
+   заметили, но без красного: ничего не сломано и никуда не делось. */
+
+.box {
+    background: var(--nova-surface);
+    border: 1px solid color-mix(in srgb, var(--nova-warn) 40%, var(--nova-border));
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 13px 16px;
+}
+
+.icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: var(--nova-warn-soft);
+    color: var(--nova-warn);
+    font-size: 16px;
+}
+
+.text {
+    flex: 1;
+    min-width: 240px;
+}
+
+.title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--nova-fg);
+    font-variant-numeric: tabular-nums;
+}
+
+.sub {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--nova-fg-3);
+    margin-top: 2px;
+    max-width: 74ch;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Главное действие — тёмное. Синий на страницах кабинета оставлен ссылкам. */
+.primary {
+    height: 32px;
+    padding: 0 14px;
+    border: 1px solid var(--nova-primary);
+    border-radius: 9px;
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+    transition: opacity .15s ease;
+}
+
+.primary:hover:not(:disabled) {
+    opacity: .88;
+}
+
+.primary:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+.toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--nova-border);
+    border-radius: 9px;
+    background: var(--nova-surface);
+    color: var(--nova-fg-2);
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+
+.toggle:hover {
+    background: var(--nova-hover);
+    border-color: var(--nova-fg-3);
+}
+
+.toggle :global(.anticon) {
+    font-size: 9px;
+}
+
+.list {
+    border-top: 1px solid var(--nova-border-2);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Строка списка — кнопка: адрес открывается в карточке, где есть карта.
+   Это единственный способ дать точку тому, что геокодер не узнал. */
+.item {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 16px;
+    border: 0;
+    border-bottom: 1px solid var(--nova-border-2);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background .15s ease;
+}
+
+.item:last-child {
+    border-bottom: 0;
+}
+
+.item:hover {
+    background: var(--nova-hover);
+}
+
+.itemName {
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--nova-fg);
+    flex-shrink: 0;
+}
+
+.itemAddress {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--nova-fg-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.itemMark {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--nova-warn-soft);
+    color: var(--nova-warn);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.more {
+    padding: 9px 16px;
+    font-size: 12px;
+    color: var(--nova-fg-3);
+}
+
+@media (max-width: 640px) {
+    .actions {
+        width: 100%;
+    }
+
+    .primary {
+        flex: 1;
+    }
+}
