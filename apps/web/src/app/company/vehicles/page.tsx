@@ -278,7 +278,7 @@ export default function VehiclesPage() {
                 if (record.driverName) {
                     return (
                         <Space size={8}>
-                            <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                            <span className="lc2-avatar lc2-avatar-sm" style={{ background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
                                 {getInitials(record.driverName) || 'ВД'}
                             </span>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -367,7 +367,7 @@ export default function VehiclesPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                        <div className="lc2-mic">
                             <CarOutlined />
                         </div>
                         <div>
@@ -379,7 +379,7 @@ export default function VehiclesPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                        <div className="lc2-mic">
                             <CarOutlined />
                         </div>
                         <div>

@@ -380,7 +380,7 @@ export default function AllOperationsPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#16a34a' }}><ArrowDownOutlined /></div>
+                        <div className="lc2-mic"><ArrowDownOutlined /></div>
                         <div>
                             <div className="lc2-mlabel">Поступления</div>
                             <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#16a34a' }}>{money(totalIn)}</div>
@@ -388,7 +388,7 @@ export default function AllOperationsPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc2626' }}><ArrowUpOutlined /></div>
+                        <div className="lc2-mic"><ArrowUpOutlined /></div>
                         <div>
                             <div className="lc2-mlabel">Списания</div>
                             <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#dc2626' }}>{money(totalOut)}</div>
@@ -396,7 +396,7 @@ export default function AllOperationsPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}><SwapOutlined /></div>
+                        <div className="lc2-mic"><SwapOutlined /></div>
                         <div>
                             <div className="lc2-mlabel">Сальдо</div>
                             <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: balance >= 0 ? '#16a34a' : '#dc2626' }}>{money(balance)}</div>

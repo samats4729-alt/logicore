@@ -77,7 +77,7 @@ export default function ExpensesByCategoryPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc2626' }}><ArrowUpOutlined /></div>
+                        <div className="lc2-mic"><ArrowUpOutlined /></div>
                         <div><div className="lc2-mlabel">Всего расходов</div><div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: '#dc2626' }}>{money(total)}</div><div className="lc2-msub">за период</div></div>
                     </div>
                 </div>

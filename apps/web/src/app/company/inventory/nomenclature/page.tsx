@@ -79,7 +79,7 @@ export default function NomenclaturePage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#eef2ff', color: '#4f46e5' }}><AppstoreOutlined /></div>
+                        <div className="lc2-mic"><AppstoreOutlined /></div>
                         <div><div className="lc2-mlabel">Позиций</div><div className="lc2-mvalue">{items.filter(i => i.isActive).length}</div><div className="lc2-msub">активных</div></div>
                     </div>
                 </div>

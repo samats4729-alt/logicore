@@ -306,7 +306,7 @@ export default function CompanyLocationsPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#f1f2f5', color: '#5f6672' }}>
+                        <div className="lc2-mic">
                             <GlobalOutlined />
                         </div>
                         <div>
@@ -316,7 +316,7 @@ export default function CompanyLocationsPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                        <div className="lc2-mic">
                             <EnvironmentOutlined />
                         </div>
                         <div>
@@ -326,7 +326,7 @@ export default function CompanyLocationsPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                        <div className="lc2-mic">
                             <UserOutlined />
                         </div>
                         <div>
@@ -387,7 +387,7 @@ export default function CompanyLocationsPage() {
                                         className="lc-addr-folder"
                                         onClick={() => { setSelectedPartnerId(g.id); setSearchText(''); }}
                                     >
-                                        <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                                        <span className="lc2-avatar lc2-avatar-sm" style={{ background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
                                             {getInitials(g.name) || 'КГ'}
                                         </span>
                                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -410,7 +410,7 @@ export default function CompanyLocationsPage() {
                                 Все контрагенты
                             </Button>
                             <Space size={8}>
-                                <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                                <span className="lc2-avatar lc2-avatar-sm" style={{ background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)' }}>
                                     {getInitials(selectedPartner.name) || 'КГ'}
                                 </span>
                                 <strong style={{ fontSize: 15 }}>{selectedPartner.name}</strong>

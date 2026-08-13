@@ -435,7 +435,7 @@ export default function CompanyContractsPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                        <div className="lc2-mic">
                             <FileTextOutlined />
                         </div>
                         <div>
@@ -447,7 +447,7 @@ export default function CompanyContractsPage() {
                         </div>
                     </div>
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
+                        <div className="lc2-mic">
                             <CheckCircleOutlined />
                         </div>
                         <div>

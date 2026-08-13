@@ -73,7 +73,7 @@ export default function WarehousesPage() {
                 </div>
                 <div className="lc2-metrics">
                     <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#eef2ff', color: '#4f46e5' }}><HomeOutlined /></div>
+                        <div className="lc2-mic"><HomeOutlined /></div>
                         <div><div className="lc2-mlabel">Складов</div><div className="lc2-mvalue">{items.filter(i => i.isActive).length}</div><div className="lc2-msub">активных</div></div>
                     </div>
                 </div>

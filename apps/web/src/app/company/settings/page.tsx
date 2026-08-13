@@ -285,7 +285,7 @@ export default function SettingsPage() {
                                                             }}
                                                         >
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                                                                <span className="lc2-avatar lc2-avatar-sm" style={{ background: '#e0f2fe', color: '#0369a1', flexShrink: 0 }}>
+                                                                <span className="lc2-avatar lc2-avatar-sm" style={{ background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
                                                                     {(c.name || 'О').slice(0, 2).toUpperCase()}
                                                                 </span>
                                                                 <div style={{ minWidth: 0 }}>

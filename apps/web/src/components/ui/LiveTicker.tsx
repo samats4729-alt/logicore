@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { api } from '@/lib/api';
-import { STATUS_LABELS, STATUS_PILL } from './StatusPill';
+import { STATUS_LABELS, statusTone } from './StatusPill';
 
 // --- Типы ---
 export interface TickerItem {
     num: string;
     text: string;
-    color: string;
+    /** Цвет статуса парой переменных: своё значение для светлой и тёмной темы. */
+    tone: React.CSSProperties;
 }
 
 interface OrderEvent {
@@ -23,7 +24,9 @@ export function buildEventTickerItems(events: OrderEvent[]): TickerItem[] {
     return (events || []).map((e) => ({
         num: e.orderNumber,
         text: `${STATUS_LABELS[e.status] || e.status}`,
-        color: (STATUS_PILL[e.status] || STATUS_PILL.DRAFT).fg,
+        // Через statusTone, а не напрямую: в тёмной теме исходные цвета
+        // статусов превращаются в почти чёрные точки.
+        tone: statusTone(e.status),
     }));
 }
 
@@ -71,7 +74,7 @@ export function LiveEventTicker({ fallback = [] }: { fallback?: TickerItem[] }) 
             <div className="lc2-ticker-track">
                 {shown.map((t, i) => (
                     <span className="lc2-tick" key={i}>
-                        <i style={{ background: t.color }} />
+                        <i style={t.tone} />
                         <b>{t.num}</b>
                         <span>{t.text}</span>
                     </span>
