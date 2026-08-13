@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
 import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 import Loader from '@/components/ui/Loader';
+import nova from '@/components/nova/nova.module.css';
 
 const { Title, Text } = Typography;
 
@@ -127,10 +128,7 @@ export default function CounterpartyReportPage() {
             'Экспедитор': 'Мы экспедитор',
             'Суб-экспедитор': 'Мы суб-экспедитор',
         };
-        return {
-            label: labels[ourRole] || ourRole,
-            color: token.colorPrimary,
-        };
+        return { label: labels[ourRole] || ourRole };
     };
     const [data, setData] = useState<{ counterparties: CounterpartyEntry[]; totals: Totals } | null>(null);
     const [loading, setLoading] = useState(true);
@@ -306,9 +304,10 @@ export default function CounterpartyReportPage() {
         {
             title: 'Направление', key: 'direction', width: 120,
             render: (_: any, r: OrderItem) => (
-                <Tag color={r.direction === 'theyOwe' ? 'green' : 'orange'} style={{ fontSize: 11, margin: 0 }}>
+                // Направление долга не хорошее и не плохое — это сторона.
+                <span className={nova.chip}>
                     {r.direction === 'theyOwe' ? 'Нам должны' : 'Мы должны'}
-                </Tag>
+                </span>
             ),
         },
         {
@@ -333,7 +332,7 @@ export default function CounterpartyReportPage() {
                     )}
                 </div>
             ) : (
-                <Tag style={{ fontSize: 11, margin: 0 }}>не выставлен</Tag>
+                <span className={nova.chip}>не выставлен</span>
             )),
         },
         {
@@ -343,13 +342,15 @@ export default function CounterpartyReportPage() {
                 // был только флаг «да/нет». Показываем сколько пришло и
                 // сколько осталось.
                 const state = r.paymentState ?? (r.isPaid ? 'PAID' : 'UNPAID');
+                // Цветом — то, что требует действия: частичная оплата, долг,
+                // просрочка. Закрытый счёт внимания не просит.
                 if (state === 'PAID') {
-                    return <Tag color="green" style={{ fontSize: 11, margin: 0 }}><CheckCircleOutlined /> Оплачено</Tag>;
+                    return <span className={nova.chip}>Оплачено</span>;
                 }
                 if (state === 'PARTIAL') {
                     return (
                         <div>
-                            <Tag color="gold" style={{ fontSize: 11, margin: 0 }}>Частично</Tag>
+                            <span className={`${nova.chip} ${nova.chipWarn}`}>Частично</span>
                             <div style={{ fontSize: 10, color: token.colorTextSecondary, marginTop: 2 }}>
                                 пришло {fmt(r.paidAmount || 0)}, осталось {fmt(r.remaining || 0)}
                             </div>
@@ -357,8 +358,8 @@ export default function CounterpartyReportPage() {
                     );
                 }
                 return r.isOverdue
-                    ? <Tag color="red" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Просрочено</Tag>
-                    : <Tag color="orange" style={{ fontSize: 11, margin: 0 }}><CloseCircleOutlined /> Не оплачено</Tag>;
+                    ? <span className={`${nova.chip} ${nova.chipNeg}`}>Просрочено</span>
+                    : <span className={`${nova.chip} ${nova.chipWarn}`}>Не оплачено</span>;
             },
         },
     ];
@@ -403,61 +404,40 @@ export default function CounterpartyReportPage() {
                         onClick={handleExportExcel}
                         loading={exporting}
                         className="lc-cta"
-                        style={{
-                            borderColor: token.colorSuccess,
-                            color: token.colorSuccess,
-                            fontWeight: 600,
-                            boxShadow: `0 2px 4px ${token.colorSuccess}20`,
-                        }}
                     >
                         Экспорт в Excel
                     </Button>
                 </div>
-                <div className="lc2-metrics">
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6ffed', color: '#28a745' }}>
-                            <ArrowUpOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Нам должны</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {fmt(filteredTotals.unpaidTheyOweUs)} ₸
-                            </div>
-                            <div className="lc2-msub">
-                                {filteredTotals.overdueTheyOweUs > 0
-                                    ? <span style={{ color: '#dc3545', fontWeight: 600 }}>просрочено: {fmt(filteredTotals.overdueTheyOweUs)} ₸</span>
-                                    : <>всего: {fmt(filteredTotals.totalTheyOweUs)} ₸</>}
-                            </div>
+                {/* Плитки одинаковые, цвет — только у просрочки и у баланса:
+                    первое требует звонка, второе показывает, в плюсе мы или в
+                    минусе. Раньше каждая плитка носила свой кружок со стрелкой
+                    в своём цвете, и три цвета ничего не выделяли. */}
+                <div className={nova.tiles} style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                    <div className={nova.tile}>
+                        <div className={nova.tileLabel}>Нам должны</div>
+                        <div className={nova.tileValue}>{fmt(filteredTotals.unpaidTheyOweUs)} ₸</div>
+                        <div className={nova.tileSub}>
+                            {filteredTotals.overdueTheyOweUs > 0
+                                ? <span className={nova.valueNeg}>просрочено: {fmt(filteredTotals.overdueTheyOweUs)} ₸</span>
+                                : <>всего: {fmt(filteredTotals.totalTheyOweUs)} ₸</>}
                         </div>
                     </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#ffeef0', color: '#dc3545' }}>
-                            <ArrowDownOutlined />
-                        </div>
-                        <div>
-                            <div className="lc2-mlabel">Мы должны</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                {fmt(filteredTotals.unpaidWeOweThem)} ₸
-                            </div>
-                            <div className="lc2-msub">
-                                {filteredTotals.overdueWeOweThem > 0
-                                    ? <span style={{ color: '#dc3545', fontWeight: 600 }}>просрочено: {fmt(filteredTotals.overdueWeOweThem)} ₸</span>
-                                    : <>всего: {fmt(filteredTotals.totalWeOweThem)} ₸</>}
-                            </div>
+                    <div className={nova.tile}>
+                        <div className={nova.tileLabel}>Мы должны</div>
+                        <div className={nova.tileValue}>{fmt(filteredTotals.unpaidWeOweThem)} ₸</div>
+                        <div className={nova.tileSub}>
+                            {filteredTotals.overdueWeOweThem > 0
+                                ? <span className={nova.valueNeg}>просрочено: {fmt(filteredTotals.overdueWeOweThem)} ₸</span>
+                                : <>всего: {fmt(filteredTotals.totalWeOweThem)} ₸</>}
                         </div>
                     </div>
-                    <div className="lc2-metric">
-                        <div className="lc2-mic" style={{ background: '#e6f7ff', color: '#1890ff' }}>
-                            <SwapOutlined />
+                    <div className={nova.tile}>
+                        <div className={nova.tileLabel}>Баланс</div>
+                        <div className={`${nova.tileValue} ${filteredTotals.balance >= 0 ? nova.valuePos : nova.valueNeg}`}>
+                            {filteredTotals.balance >= 0 ? '+' : ''}{fmt(filteredTotals.balance)} ₸
                         </div>
-                        <div>
-                            <div className="lc2-mlabel">Баланс</div>
-                            <div className="lc2-mvalue" style={{ fontVariantNumeric: 'tabular-nums', color: filteredTotals.balance >= 0 ? '#28a745' : '#dc3545' }}>
-                                {filteredTotals.balance >= 0 ? '+' : ''}{fmt(filteredTotals.balance)} ₸
-                            </div>
-                            <div className="lc2-msub">
-                                {filtered.length} контрагент{filtered.length === 1 ? '' : filtered.length < 5 ? 'а' : 'ов'}
-                            </div>
+                        <div className={nova.tileSub}>
+                            {filtered.length} контрагент{filtered.length === 1 ? '' : filtered.length < 5 ? 'а' : 'ов'}
                         </div>
                     </div>
                 </div>
@@ -561,7 +541,7 @@ export default function CounterpartyReportPage() {
 
                                 {/* Company name + role */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                                    <span className="lc2-avatar lc2-avatar-sm" style={{ background: cp.ourRole === 'Заказчик' ? '#e0f2fe' : '#f1f2f5', color: cp.ourRole === 'Заказчик' ? '#0369a1' : '#5f6672', flexShrink: 0 }}>
+                                    <span className="lc2-avatar lc2-avatar-sm" style={{ background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
                                         {getInitials(cp.counterparty.name) || 'КГ'}
                                     </span>
                                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -569,13 +549,11 @@ export default function CounterpartyReportPage() {
                                             <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' }}>
                                                 {cp.counterparty.name}
                                             </Text>
-                                            <Tag color="processing" style={{ fontSize: 10, margin: 0, padding: '0 6px', lineHeight: '16px' }}>
-                                                {roleInfo.label}
-                                            </Tag>
+                                            <span className={nova.chip}>{roleInfo.label}</span>
                                             {(cp.overdueTheyOweUs > 0 || cp.overdueWeOweThem > 0) && (
-                                                <Tag color="error" style={{ fontSize: 10, margin: 0, padding: '0 6px', lineHeight: '16px' }}>
+                                                <span className={`${nova.chip} ${nova.chipNeg}`}>
                                                     Просрочено {fmt(cp.overdueTheyOweUs + cp.overdueWeOweThem)} ₸
-                                                </Tag>
+                                                </span>
                                             )}
                                         </div>
                                         <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
@@ -589,23 +567,24 @@ export default function CounterpartyReportPage() {
                                     {cp.unpaidTheyOweUs > 0 && (
                                         <div style={{ textAlign: 'right' }}>
                                             <div style={{ fontSize: 10, color: token.colorTextSecondary, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Нам должны</div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: token.colorSuccess }}>{fmt(cp.unpaidTheyOweUs)} ₸</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700 }}>{fmt(cp.unpaidTheyOweUs)} ₸</div>
                                         </div>
                                     )}
                                     {cp.unpaidWeOweThem > 0 && (
                                         <div style={{ textAlign: 'right' }}>
                                             <div style={{ fontSize: 10, color: token.colorTextSecondary, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Мы должны</div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: token.colorError }}>{fmt(cp.unpaidWeOweThem)} ₸</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700 }}>{fmt(cp.unpaidWeOweThem)} ₸</div>
                                         </div>
                                     )}
                                     {cp.unpaidTheyOweUs === 0 && cp.unpaidWeOweThem === 0 && (
-                                        <Tag color="green" style={{ fontSize: 11, margin: 0 }}>
-                                            Всё оплачено
-                                        </Tag>
+                                        <span className={nova.chip}>Всё оплачено</span>
                                     )}
                                     <div style={{ textAlign: 'right', borderLeft: `1px solid ${token.colorBorderSecondary}`, paddingLeft: 16 }}>
                                         <div style={{ fontSize: 10, color: token.colorTextSecondary, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Баланс</div>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: cp.balance >= 0 ? token.colorSuccess : token.colorError }}>
+                                        <div
+                                            className={cp.balance >= 0 ? nova.valuePos : nova.valueNeg}
+                                            style={{ fontSize: 14, fontWeight: 700 }}
+                                        >
                                             {cp.balance >= 0 ? '+' : ''}{fmt(cp.balance)} ₸
                                         </div>
                                     </div>
@@ -618,7 +597,7 @@ export default function CounterpartyReportPage() {
                                             e.stopPropagation();
                                             window.open(`/company/accounting/reconciliation-act?cp=${cp.counterparty.id}`, '_blank');
                                         }}
-                                        style={{ marginLeft: 8, color: token.colorPrimary, borderRadius: 6 }}
+                                        style={{ marginLeft: 8, borderRadius: 6 }}
                                         title="Акт сверки"
                                     />
                                     {/* Share button */}
@@ -630,7 +609,7 @@ export default function CounterpartyReportPage() {
                                             e.stopPropagation();
                                             handleShare(cp.counterparty.id, cp.ourRole, cp.counterparty.name);
                                         }}
-                                        style={{ color: token.colorPrimary, borderRadius: 6 }}
+                                        style={{ borderRadius: 6 }}
                                         title="Поделиться отчётом"
                                     />
                                 </div>
@@ -736,9 +715,7 @@ export default function CounterpartyReportPage() {
                             <Descriptions column={1} size="small" bordered labelStyle={{ width: 160, fontSize: 13 }} contentStyle={{ fontSize: 13 }}>
                                 <Descriptions.Item label="Маршрут">{route}</Descriptions.Item>
                                 <Descriptions.Item label="Статус рейса">
-                                    <Tag color={statusColors[o.status] || 'default'}>
-                                        {statusLabels[o.status] || o.status}
-                                    </Tag>
+                                    <StatusPill status={o.status} />
                                 </Descriptions.Item>
                                 <Descriptions.Item label="Груз">{o.cargoDescription || '—'}</Descriptions.Item>
                                 <Descriptions.Item label="Дата создания">{dayjs(o.createdAt).format('DD.MM.YYYY HH:mm')}</Descriptions.Item>
@@ -746,27 +723,21 @@ export default function CounterpartyReportPage() {
 
                             <div style={{ marginTop: 12 }}>
                                 <Title level={5} style={{ borderBottom: `1px solid ${token.colorBorderSecondary}`, paddingBottom: 8, marginBottom: 12 }}>
-                                    <DollarOutlined style={{ marginRight: 8, color: token.colorPrimary }} /> Финансы
+                                    <DollarOutlined style={{ marginRight: 8 }} /> Финансы
                                 </Title>
-                                <Card
-                                    size="small"
-                                    style={{
-                                        background: o.direction === 'theyOwe' ? token.colorSuccessBg : token.colorErrorBg,
-                                        border: `1px solid ${o.direction === 'theyOwe' ? token.colorSuccessBorder : token.colorErrorBorder}`,
-                                    }}
-                                >
+                                <Card size="small">
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
                                             <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
                                                 {o.direction === 'theyOwe' ? 'Нам должны' : 'Мы должны'}
                                             </div>
-                                            <div style={{ fontSize: 24, fontWeight: 700, color: o.direction === 'theyOwe' ? token.colorSuccess : token.colorError }}>
+                                            <div style={{ fontSize: 24, fontWeight: 700 }}>
                                                 {fmt(o.amount)} ₸
                                             </div>
                                         </div>
-                                        <Tag color={o.isPaid ? 'green' : 'red'} style={{ fontSize: 13 }}>
+                                        <span className={`${nova.chip}${o.isPaid ? '' : ` ${nova.chipWarn}`}`}>
                                             {o.isPaid ? 'Оплачено' : 'Не оплачено'}
-                                        </Tag>
+                                        </span>
                                     </div>
                                     {o.isPaid && o.paidAt && (
                                         <div style={{ fontSize: 11, color: token.colorSuccess, marginTop: 4 }}>
