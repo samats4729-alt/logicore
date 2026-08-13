@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, List, Modal, Form, Select, Popconfirm, Checkbox } from 'antd';
+import nova from '@/components/nova/nova.module.css';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
     CheckCircleOutlined, CloseCircleOutlined, ShopOutlined,
@@ -248,14 +249,22 @@ export default function PartnersPage() {
             key: 'name',
             render: (text: string, record: any) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span className="lc2-avatar lc2-avatar-sm" style={{ background: record.isCarrier ? '#e6ffed' : '#e0f2fe', color: record.isCarrier ? '#28a745' : '#0369a1', flexShrink: 0 }}>
+                    <span
+                        className="lc2-avatar lc2-avatar-sm"
+                        style={{
+                            background: 'var(--nova-surface-2)',
+                            color: 'var(--nova-fg-2)',
+                            border: '1px solid var(--nova-border)',
+                            flexShrink: 0,
+                        }}
+                    >
                         {getInitials(text) || 'КГ'}
                     </span>
                     <div>
                         <div style={{ fontWeight: 600 }}>{text}</div>
                         <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-                            {record.isCustomer && <Tag color="blue" style={{ fontSize: '10px', lineHeight: '14px', margin: 0 }}>Заказчик</Tag>}
-                            {record.isCarrier && <Tag color="green" style={{ fontSize: '10px', lineHeight: '14px', margin: 0 }}>Перевозчик</Tag>}
+                            {record.isCustomer && <span className={nova.chip}>Заказчик</span>}
+                            {record.isCarrier && <span className={nova.chip}>Перевозчик</span>}
                         </div>
                     </div>
                 </div>
@@ -283,11 +292,10 @@ export default function PartnersPage() {
             title: 'Статус',
             key: 'status',
             render: (_: any, record: any) => (
-                record.isExternal ? (
-                    <Tag color="default">Офлайн</Tag>
-                ) : (
-                    <Tag color="green">В системе</Tag>
-                )
+                // «В системе» значит, что контрагент работает на платформе и
+                // документы уходят ему в кабинет. Это состояние, а не оценка,
+                // поэтому цветом не выделяется.
+                <span className={nova.chip}>{record.isExternal ? 'Офлайн' : 'В системе'}</span>
             )
         },
         {
@@ -306,19 +314,29 @@ export default function PartnersPage() {
             key: 'actions',
             render: (_: any, record: any) => (
                 record.isExternal ? (
-                    <Space>
-                        <Button type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); openEdit(record); }}>
-                            Изменить
-                        </Button>
+                    <Space size={6}>
+                        <button
+                            type="button"
+                            className={nova.action}
+                            style={{ height: 28 }}
+                            onClick={(e) => { e.stopPropagation(); openEdit(record); }}
+                        >
+                            <EditOutlined /> Изменить
+                        </button>
                         <Popconfirm
                             title="Удалить контрагента?"
                             onConfirm={() => handleDelete(record.id)}
                             okText="Да"
                             cancelText="Нет"
                         >
-                            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>
-                                Удалить
-                            </Button>
+                            <button
+                                type="button"
+                                className={`${nova.action} ${nova.actionDanger}`}
+                                style={{ height: 28 }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <DeleteOutlined /> Удалить
+                            </button>
                         </Popconfirm>
                     </Space>
                 ) : null
@@ -399,9 +417,9 @@ export default function PartnersPage() {
                                 </Space>
 
                                 {company.partnershipStatus === 'ACCEPTED' ? (
-                                    <Tag color="green" icon={<CheckCircleOutlined />}>Ваш контрагент</Tag>
+                                    <span className={nova.chip}>Ваш контрагент</span>
                                 ) : company.partnershipStatus === 'PENDING' ? (
-                                    <Tag color="orange">Запрос отправлен</Tag>
+                                    <span className={`${nova.chip} ${nova.chipWarn}`}>Запрос отправлен</span>
                                 ) : (
                                     <Button
                                         type="primary"
@@ -567,7 +585,7 @@ export default function PartnersPage() {
                                                         title={item.recipient.name}
                                                         description={`Запрос отправлен. Дата: ${new Date(item.createdAt).toLocaleDateString()}`}
                                                     />
-                                                    <Tag color="orange">Ожидает подтверждения</Tag>
+                                                    <span className={`${nova.chip} ${nova.chipWarn}`}>Ожидает подтверждения</span>
                                                 </List.Item>
                                             )}
                                         />
