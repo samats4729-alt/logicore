@@ -50,7 +50,9 @@ export default function SubscriptionCard() {
     let urgent = false;
 
     if (!status.enabled) {
-        value = '0 ₸ в месяц';
+        // Те же слова, что на лендинге: человек читает про тариф в двух
+        // местах, и в обоих ему должны сказать одно и то же.
+        value = 'Бесплатно';
         sub = 'на время тестирования · доступ открыт';
     } else if (status.request) {
         value = 'Запрос отправлен';

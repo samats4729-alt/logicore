@@ -21,13 +21,14 @@ test('лендинг называет цену и объясняет, почем
     await tariff.scrollIntoViewIfNeeded();
 
     await expect(tariff.getByText('идёт тестирование')).toBeVisible();
-    await expect(tariff.getByText('0 ₸')).toBeVisible();
-    await expect(tariff.getByText(/этапе тестирования/)).toBeVisible();
+    await expect(tariff.getByText('Бесплатно')).toBeVisible();
+    await expect(tariff.getByText('на время тестирования')).toBeVisible();
+    await expect(tariff.getByText(/предупредим заранее/)).toBeVisible();
 });
 
 test('на главной кабинета видно, что доступ открыт', async ({ page }) => {
     await login(page);
 
-    await expect(page.getByText('0 ₸ в месяц')).toBeVisible();
+    await expect(page.getByText('Бесплатно', { exact: true })).toBeVisible();
     await expect(page.getByText('на время тестирования · доступ открыт')).toBeVisible();
 });

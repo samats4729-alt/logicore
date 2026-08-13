@@ -294,10 +294,16 @@ export default function HomePage() {
                         <span className={styles.tariffBadge}>
                             {tariff?.paid ? `${tariff.trialDays} дней бесплатно` : 'идёт тестирование'}
                         </span>
+                        {/* Пока цены нет, крупно стоит слово, а не ноль:
+                            «0 ₸» на витрине читается как «продукт ничего не
+                            стоит», а сказать надо другое — платить пока не за
+                            что, потому что идёт тестирование. */}
                         <div className={styles.tariffPrice}>
-                            {(tariff?.priceMonthly ?? 0).toLocaleString('ru-RU')} ₸
+                            {tariff?.paid ? `${tariff.priceMonthly.toLocaleString('ru-RU')} ₸` : 'Бесплатно'}
                         </div>
-                        <div className={styles.tariffPer}>в месяц за компанию</div>
+                        <div className={styles.tariffPer}>
+                            {tariff?.paid ? 'в месяц за компанию' : 'на время тестирования'}
+                        </div>
 
                         <ul className={styles.tariffList}>
                             {(tariff?.features?.length ? tariff.features : TARIFF_FEATURES).map((f) => (
@@ -312,7 +318,7 @@ export default function HomePage() {
                         <div className={styles.tariffNote}>
                             {tariff?.paid
                                 ? 'Оплата по счёту на вашу компанию. Продлевать можно заранее — оплаченные дни не сгорают.'
-                                : 'Платформа на этапе тестирования, поэтому работа в ней пока бесплатна. О переходе на платный тариф предупредим заранее.'}
+                                : 'О переходе на платный тариф предупредим заранее.'}
                         </div>
                     </div>
                 </div>
