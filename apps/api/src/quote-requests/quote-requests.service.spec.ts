@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ContractsService } from '../contracts/contracts.service';
 import { OrdersService } from '../orders/orders.service';
+import { CitiesService } from '../cities/cities.service';
 import { QuoteRequestsService } from './quote-requests.service';
 
 /**
@@ -37,12 +38,22 @@ describe('Запросы на расчёт: сервис', () => {
             create: jest.fn().mockResolvedValue({ id: 'рейс-1', orderNumber: '000000042' }),
             ...over.orders,
         };
+        const cities: any = {
+            // По умолчанию город узнаётся: справочник в этих тестах не главное.
+            resolve: jest.fn(async (name?: string | null, id?: string | null) => ({
+                id: id ?? (name ? 'город' : null),
+                name: name ?? 'Город',
+                key: (name || 'город').toLowerCase(),
+            })),
+            ...over.cities,
+        };
         const service = new QuoteRequestsService(
             prisma as unknown as PrismaService,
             contracts as unknown as ContractsService,
             orders as unknown as OrdersService,
+            cities as unknown as CitiesService,
         );
-        return { service, prisma, contracts, orders };
+        return { service, prisma, contracts, orders, cities };
     };
 
     describe('изоляция компаний', () => {
@@ -85,6 +96,125 @@ describe('Запросы на расчёт: сервис', () => {
 
             const where = prisma.quoteRequest.findMany.mock.calls[0][0].where;
             expect(where.AND).toContainEqual({ companyId: 'наша-компания' });
+        });
+    });
+
+    /**
+     * Главная жалоба клиента платформы: один и тот же завод заведён двумя
+     * карточками — «Шымкент пиво» и «Шымкентский пивзавод». Менеджер выбрал
+     * одну, а история лежит под другой, и панель написала «запросов не
+     * было» при полной папке.
+     */
+    describe('память по направлению', () => {
+        const прошлое = (over: any = {}) => ({
+            id: 'з1', requestNumber: 'ЗПР-00001', createdAt: new Date('2026-08-01T10:00:00Z'),
+            customerPrice: 130_000, carrierCost: 100_000, cargoWeight: 20_000, cargoVolume: 86,
+            palletCount: null, cargoType: 'тент', status: 'REJECTED', rejectionReason: 'дорого',
+            customerCompanyId: 'клиент', customerCompany: { id: 'клиент', name: 'Шымкент пиво' },
+            ...over,
+        });
+
+        it('ищется по направлению, а карточка клиента — уже второй разрез', async () => {
+            const { service, prisma } = создать();
+
+            await service.memory('наша-компания', {
+                customerCompanyId: 'клиент',
+                originCityName: 'Шымкент',
+                destinationCityName: 'Алматы',
+            });
+
+            // В отборе клиента нет: иначе история второй карточки не нашлась
+            // бы никогда.
+            const where = prisma.quoteRequest.findMany.mock.calls[0][0].where;
+            expect(JSON.stringify(where)).not.toContain('customerCompanyId');
+        });
+
+        it('история другой карточки видна отдельным блоком', async () => {
+            const { service } = создать({
+                prisma: {
+                    quoteRequest: {
+                        findMany: jest.fn().mockResolvedValue([
+                            прошлое({ customerCompanyId: 'пивзавод', customerCompany: { name: 'Шымкентский пивзавод' } }),
+                        ]),
+                        count: jest.fn().mockResolvedValue(0),
+                        findFirst: jest.fn().mockResolvedValue(null),
+                        findUnique: jest.fn().mockResolvedValue(null),
+                        update: jest.fn(), create: jest.fn(),
+                    },
+                },
+            });
+
+            const result = await service.memory('наша-компания', {
+                customerCompanyId: 'пиво',
+                originCityName: 'Шымкент',
+                destinationCityName: 'Алматы',
+            });
+
+            // У выбранной карточки истории нет — и это правда.
+            expect(result.last).toBeNull();
+            // Но по направлению она есть, и её видно.
+            expect(result.others.count).toBe(1);
+            expect(result.others.items[0].customerName).toBe('Шымкентский пивзавод');
+        });
+
+        it('чужая цена не выдаётся за цену этого клиента', async () => {
+            // Разделение не косметическое: у другого клиента бывает годовой
+            // тариф и другие условия. Смешать — однажды назвать чужую цену.
+            const { service } = создать({
+                prisma: {
+                    quoteRequest: {
+                        findMany: jest.fn().mockResolvedValue([
+                            прошлое({ id: 'свой', customerPrice: 130_000 }),
+                            прошлое({ id: 'чужой', customerCompanyId: 'другой', customerPrice: 90_000 }),
+                        ]),
+                        count: jest.fn().mockResolvedValue(0),
+                        findFirst: jest.fn().mockResolvedValue(null),
+                        findUnique: jest.fn().mockResolvedValue(null),
+                        update: jest.fn(), create: jest.fn(),
+                    },
+                },
+            });
+
+            const result = await service.memory('наша-компания', {
+                customerCompanyId: 'клиент',
+                originCityName: 'Шымкент',
+                destinationCityName: 'Алматы',
+            });
+
+            expect(result.range?.customerFrom).toBe(130_000);
+            expect(result.items).toHaveLength(1);
+            expect(result.others.range?.customerFrom).toBe(90_000);
+        });
+
+        it('без названного маршрута история не показывается вовсе', async () => {
+            // Пустой отбор означал бы «вся история компании» — менеджер
+            // пошёл бы по ложному следу.
+            const { service, prisma } = создать({
+                cities: { resolve: jest.fn().mockResolvedValue({ id: null, name: null, key: null }) },
+            });
+
+            const result = await service.memory('наша-компания', { customerCompanyId: 'клиент' });
+
+            expect(prisma.quoteRequest.findMany).not.toHaveBeenCalled();
+            expect(result.last).toBeNull();
+            expect(result.others.count).toBe(0);
+        });
+
+        it('старые запросы находятся по ссылке на справочник, новые — по ключу', async () => {
+            // До перехода на текст у запросов есть только ссылка на город.
+            // Потерять их историю нельзя.
+            const { service, prisma } = создать();
+
+            await service.memory('наша-компания', {
+                customerCompanyId: 'клиент',
+                originCityName: 'Шымкент',
+                destinationCityName: 'Алматы',
+            });
+
+            const where = prisma.quoteRequest.findMany.mock.calls[0][0].where;
+            expect(where.AND).toContainEqual({
+                OR: [{ originCityKey: 'шымкент' }, { originCityId: 'город' }],
+            });
         });
     });
 
@@ -251,17 +381,40 @@ describe('Запросы на расчёт: сервис', () => {
             ).rejects.toBeInstanceOf(BadRequestException);
         });
 
-        it('несуществующий город отклоняется понятной причиной', async () => {
-            const { service, prisma } = создать();
-            prisma.city.findUnique.mockResolvedValueOnce(null);
+        it('города, которого нет в справочнике, достаточно текстом', async () => {
+            // Ровно на этом сорвалась компания: Мынарала нет в справочнике,
+            // потому что справочник наполняется геокодером, — и запрос не
+            // заводился вовсе.
+            const { service, prisma, cities } = создать({
+                cities: {
+                    resolve: jest.fn(async (name?: string | null) => ({
+                        id: null, name: name ?? null, key: (name || '').toLowerCase(),
+                    })),
+                },
+            });
+
+            await service.create('наша-компания', 'я', {
+                customerCompanyId: 'клиент',
+                originCityName: 'Мынарал',
+                destinationCityName: 'Алматы',
+            });
+
+            expect(cities.resolve).toHaveBeenCalled();
+            expect(prisma.quoteRequest.create.mock.calls[0][0].data).toMatchObject({
+                originCityId: null,
+                originCityName: 'Мынарал',
+                originCityKey: 'мынарал',
+            });
+        });
+
+        it('совсем без маршрута запрос не заводится', async () => {
+            // Запрос без городов не с чем сравнивать и нечего искать — от
+            // него нет пользы ни менеджеру, ни памяти по направлению.
+            const { service } = создать();
 
             await expect(
-                service.create('наша-компания', 'я', {
-                    customerCompanyId: 'клиент',
-                    originCityId: 'нет-такого',
-                    destinationCityId: 'г2',
-                }),
-            ).rejects.toThrow('Город погрузки не найден');
+                service.create('наша-компания', 'я', { customerCompanyId: 'клиент' }),
+            ).rejects.toThrow('Укажите город погрузки');
         });
 
         it('запрос с ценой сразу считается взятым в работу', async () => {

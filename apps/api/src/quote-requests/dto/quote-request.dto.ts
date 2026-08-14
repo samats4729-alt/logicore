@@ -9,15 +9,25 @@ export class CreateQuoteRequestDto {
     @IsNotEmpty({ message: 'Укажите клиента: запрос всегда чей-то' })
     customerCompanyId: string;
 
-    @ApiProperty({ description: 'Город погрузки' })
+    @ApiProperty({ description: 'Город погрузки — как написал человек' })
     @IsString()
-    @IsNotEmpty({ message: 'Укажите город погрузки' })
-    originCityId: string;
+    @IsOptional()
+    originCityName?: string;
 
-    @ApiProperty({ description: 'Город выгрузки' })
+    @ApiProperty({ required: false, description: 'Город погрузки из справочника, если выбрали подсказку' })
     @IsString()
-    @IsNotEmpty({ message: 'Укажите город выгрузки' })
-    destinationCityId: string;
+    @IsOptional()
+    originCityId?: string;
+
+    @ApiProperty({ description: 'Город выгрузки — как написал человек' })
+    @IsString()
+    @IsOptional()
+    destinationCityName?: string;
+
+    @ApiProperty({ required: false, description: 'Город выгрузки из справочника' })
+    @IsString()
+    @IsOptional()
+    destinationCityId?: string;
 
     @ApiProperty({ required: false, description: 'Адрес погрузки из справочника' })
     @IsString()
@@ -106,18 +116,6 @@ export class UpdateQuoteRequestDto extends CreateQuoteRequestDto {
     @IsNotEmpty()
     @IsOptional()
     declare customerCompanyId: string;
-
-    @ApiProperty({ required: false })
-    @IsString()
-    @IsNotEmpty()
-    @IsOptional()
-    declare originCityId: string;
-
-    @ApiProperty({ required: false })
-    @IsString()
-    @IsNotEmpty()
-    @IsOptional()
-    declare destinationCityId: string;
 }
 
 export class RejectQuoteRequestDto {
@@ -162,13 +160,21 @@ export class QuoteMemoryQueryDto {
     @IsNotEmpty({ message: 'Укажите клиента' })
     customerCompanyId: string;
 
+    @IsOptional()
     @IsString()
-    @IsNotEmpty({ message: 'Укажите город погрузки' })
-    originCityId: string;
+    originCityName?: string;
 
+    @IsOptional()
     @IsString()
-    @IsNotEmpty({ message: 'Укажите город выгрузки' })
-    destinationCityId: string;
+    originCityId?: string;
+
+    @IsOptional()
+    @IsString()
+    destinationCityName?: string;
+
+    @IsOptional()
+    @IsString()
+    destinationCityId?: string;
 
     @IsOptional()
     @IsString()

@@ -1,4 +1,4 @@
-import { buildQuoteMemory, humanAgo, PastQuote } from './quote-memory';
+import { buildDirectionMemory, buildQuoteMemory, humanAgo, PastQuote } from './quote-memory';
 
 /**
  * Проверяется главное требование владельца: система показывает факты и не
@@ -205,6 +205,38 @@ describe('Память по запросам клиента', () => {
         });
     });
 
+    it('показывает несколько прошлых случаев, а не только последний', () => {
+        // Клиент платформы просил именно вариантов: у соседних запросов
+        // другой тоннаж и другая цена, и по одному выбирать не из чего.
+        const m = buildQuoteMemory(
+            [
+                запрос({ id: 'з1', cargoWeight: 20_000, customerPrice: 130_000 }),
+                запрос({ id: 'з2', cargoWeight: 5_000, customerPrice: 86_000, createdAt: new Date('2026-07-20T10:00:00Z') }),
+                запрос({ id: 'з3', cargoWeight: 22_000, customerPrice: 141_000, createdAt: new Date('2026-07-10T10:00:00Z') }),
+            ],
+            { cargoWeight: 20_000 },
+            СЕЙЧАС,
+        );
+
+        expect(m.items.map((i) => i.id)).toEqual(['з1', 'з2', 'з3']);
+    });
+
+    it('запрос без ответа клиента показан, но выводов из него не делается', () => {
+        // «Предлагали 130 000, клиент пока молчит» — это ровно то, чего не
+        // хватало менеджеру, который заводит второй такой же. Но сказать
+        // «прошло» или «не прошло» тут нельзя: ответа ещё нет.
+        const m = buildQuoteMemory(
+            [запрос({ status: 'IN_PROGRESS', rejectionReason: null })],
+            { cargoWeight: 20_000 },
+            СЕЙЧАС,
+        );
+
+        expect(m.items).toHaveLength(1);
+        expect(m.last).toBeNull();
+        expect(m.note).toBeNull();
+        expect(m.range?.customerFrom).toBe(130_000);
+    });
+
     it('вилка не разваливается, когда закупку не записали', () => {
         const m = buildQuoteMemory(
             [запрос({ carrierCost: null })],
@@ -227,5 +259,59 @@ describe('Сколько времени прошло', () => {
         expect(humanAgo(new Date('2026-07-24T09:00:00Z'), СЕЙЧАС)).toBe('5 дней назад');
         expect(humanAgo(new Date('2026-07-08T09:00:00Z'), СЕЙЧАС)).toBe('21 день назад');
         expect(humanAgo(new Date('2026-07-17T09:00:00Z'), СЕЙЧАС)).toBe('12 дней назад');
+    });
+});
+
+/**
+ * Направление вообще — то, что видно по другим клиентам.
+ *
+ * Показывается отдельным блоком: цена другого клиента не равна цене этого,
+ * но и прятать её нельзя — ровно из-за этого менеджер видел «данных нет»
+ * там, где по маршруту уже возили.
+ */
+describe('Память по направлению', () => {
+    const запрос = (over: Partial<PastQuote> = {}): PastQuote => ({
+        id: 'з1',
+        requestNumber: 'ЗПР-00001',
+        createdAt: new Date('2026-07-27T10:00:00Z'),
+        customerPrice: 130_000,
+        carrierCost: 100_000,
+        cargoWeight: 20_000,
+        cargoVolume: 86,
+        cargoType: 'тент',
+        status: 'REJECTED',
+        rejectionReason: 'дорого',
+        ...over,
+    });
+
+    it('пустое направление молчит', () => {
+        const d = buildDirectionMemory([]);
+
+        expect(d).toEqual({ count: 0, range: null, items: [] });
+    });
+
+    it('считает вилку и показывает случаи от свежих к старым', () => {
+        const d = buildDirectionMemory([
+            запрос({ id: 'старый', customerPrice: 120_000, createdAt: new Date('2026-07-01T10:00:00Z') }),
+            запрос({ id: 'свежий', customerPrice: 160_000, createdAt: new Date('2026-07-25T10:00:00Z') }),
+        ]);
+
+        expect(d.count).toBe(2);
+        expect(d.range).toMatchObject({ customerFrom: 120_000, customerTo: 160_000 });
+        expect(d.items.map((i) => i.id)).toEqual(['свежий', 'старый']);
+    });
+
+    it('запросы без названной цены в вилку не идут', () => {
+        // Цены не было — сравнивать не с чем, а count с ними врал бы.
+        const d = buildDirectionMemory([запрос({ customerPrice: null }), запрос({ id: 'з2' })]);
+
+        expect(d.count).toBe(1);
+    });
+
+    it('список не растёт бесконечно', () => {
+        const many = Array.from({ length: 12 }, (_, i) => запрос({ id: `з${i}` }));
+
+        expect(buildDirectionMemory(many).items.length).toBeLessThanOrEqual(5);
+        expect(buildDirectionMemory(many).count).toBe(12);
     });
 });

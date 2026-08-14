@@ -1519,10 +1519,25 @@ model QuoteRequest {
   customerCompanyId String
   customerCompany   Company @relation("CustomerQuoteRequests", fields: [customerCompanyId], references: [id])
 
-  originCityId      String
-  originCity        City   @relation("OriginQuoteRequests", fields: [originCityId], references: [id])
-  destinationCityId String
-  destinationCity   City   @relation("DestinationQuoteRequests", fields: [destinationCityId], references: [id])
+  /// Города маршрута.
+  ///
+  /// Пишутся текстом, справочник только подсказывает. Из-за выбора строго
+  /// из списка компания не смогла завести запрос на Мынарал: посёлка нет в
+  /// справочнике, потому что справочник наполняется геокодером.
+  ///
+  /// Поэтому полей три на каждый конец. `...CityName` — как написал
+  /// человек, это и показывается. `...CityId` — ссылка на справочник, если
+  /// город удалось узнать: по ней работают годовые тарифы и подстановка в
+  /// заявку. `...CityKey` — приведённое написание, по нему сходится память
+  /// по направлению: «Шымкент», «г. Шымкент» и «Чимкент» дают один ключ.
+  originCityId      String?
+  originCity        City?   @relation("OriginQuoteRequests", fields: [originCityId], references: [id])
+  originCityName    String?
+  originCityKey     String?
+  destinationCityId String?
+  destinationCity   City?   @relation("DestinationQuoteRequests", fields: [destinationCityId], references: [id])
+  destinationCityName String?
+  destinationCityKey  String?
 
   /// Точные адреса погрузки и выгрузки, если клиент их уже назвал.
   ///
@@ -1596,6 +1611,9 @@ model QuoteRequest {
   @@index([companyId, status])
   @@index([customerCompanyId, originCityId, destinationCityId])
   @@index([companyId, originCityId, destinationCityId])
+  /// Память по направлению ищет именно так: направление всей компании,
+  /// клиент — уже потом, вторым разрезом.
+  @@index([companyId, originCityKey, destinationCityKey])
   @@index([createdAt])
 }
 

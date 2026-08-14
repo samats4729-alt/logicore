@@ -3,9 +3,10 @@ import { Prisma, QuoteRequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPaginationParams, PaginationQueryDto } from '../common/dto/pagination.dto';
 import { palletLinesFromQuote } from '../common/utils/pallets';
-import { buildQuoteMemory, PastQuote, QuoteMemory } from './quote-memory';
+import { buildDirectionMemory, buildQuoteMemory, DirectionMemory, PastQuote, QuoteMemory } from './quote-memory';
 import { ContractsService } from '../contracts/contracts.service';
 import { OrdersService } from '../orders/orders.service';
+import { CitiesService } from '../cities/cities.service';
 
 /** Поля, которые нужны, чтобы показать запрос в списке и в карточке. */
 const QUOTE_INCLUDE = {
@@ -25,6 +26,7 @@ export class QuoteRequestsService {
         private prisma: PrismaService,
         private contracts: ContractsService,
         private orders: OrdersService,
+        private cities: CitiesService,
     ) { }
 
     /**
@@ -53,6 +55,10 @@ export class QuoteRequestsService {
                     { cargoDescription: like },
                     { natureOfCargo: like },
                     { customerCompany: { name: like } },
+                    // И по названию текстом: у города из свободного ввода
+                    // связи со справочником нет, а искать по нему надо.
+                    { originCityName: like },
+                    { destinationCityName: like },
                     { originCity: { name: like } },
                     { destinationCity: { name: like } },
                 ],
@@ -88,14 +94,19 @@ export class QuoteRequestsService {
         await this.assertRouteBelongsToUs(companyId, dto);
 
         const requestNumber = await this.generateNumber(companyId);
+        const [origin, destination] = await this.resolveRoute(dto);
 
         return this.prisma.quoteRequest.create({
             data: {
                 requestNumber,
                 companyId,
                 customerCompanyId: dto.customerCompanyId,
-                originCityId: dto.originCityId,
-                destinationCityId: dto.destinationCityId,
+                originCityId: origin.id,
+                originCityName: origin.name,
+                originCityKey: origin.key,
+                destinationCityId: destination.id,
+                destinationCityName: destination.name,
+                destinationCityKey: destination.key,
                 originLocationId: dto.originLocationId || null,
                 destinationLocationId: dto.destinationLocationId || null,
                 originAddress: dto.originAddress || null,
@@ -135,8 +146,21 @@ export class QuoteRequestsService {
         const data: Prisma.QuoteRequestUpdateInput = {};
 
         if (dto.customerCompanyId) data.customerCompany = { connect: { id: dto.customerCompanyId } };
-        if (dto.originCityId) data.originCity = { connect: { id: dto.originCityId } };
-        if (dto.destinationCityId) data.destinationCity = { connect: { id: dto.destinationCityId } };
+
+        // Города правим только когда их прислали. Разбор идёт заново: человек
+        // мог стереть подсказку и дописать название руками.
+        if (dto.originCityName !== undefined || dto.originCityId !== undefined) {
+            const origin = await this.cities.resolve(dto.originCityName, dto.originCityId);
+            data.originCity = origin.id ? { connect: { id: origin.id } } : { disconnect: true };
+            data.originCityName = origin.name;
+            data.originCityKey = origin.key;
+        }
+        if (dto.destinationCityName !== undefined || dto.destinationCityId !== undefined) {
+            const destination = await this.cities.resolve(dto.destinationCityName, dto.destinationCityId);
+            data.destinationCity = destination.id ? { connect: { id: destination.id } } : { disconnect: true };
+            data.destinationCityName = destination.name;
+            data.destinationCityKey = destination.key;
+        }
 
         assignIfPresent(dto, data, 'originAddress');
         assignIfPresent(dto, data, 'destinationAddress');
@@ -337,21 +361,46 @@ export class QuoteRequestsService {
     }
 
     /**
-     * Что мы уже предлагали этому клиенту на этом маршруте.
+     * Что уже возили по этому направлению.
      *
-     * Считается до сохранения: менеджеру это нужно ровно в тот момент,
-     * когда он назначает цену, а не после.
+     * Считается до сохранения: менеджеру это нужно ровно в тот момент, когда
+     * он назначает цену, а не после.
+     *
+     * Ищем по направлению всей компании, а клиент — второй разрез. Раньше
+     * отбор шёл сразу по паре «карточка клиента + пара городов», и один
+     * живой клиент, заведённый дважды («Шымкент пиво» и «Шымкентский
+     * пивзавод»), прятал собственную историю от самого себя: менеджер видел
+     * «запросов не было» при полной папке. Показываем оба разреза, но
+     * порознь — чужая цена не должна выглядеть ценой этого клиента.
      */
     async memory(
         companyId: string,
         query: QuoteMemoryQuery,
-    ): Promise<QuoteMemory & { history: any[]; annualTariff: any }> {
+    ): Promise<QuoteMemory & { others: DirectionMemory; history: any[]; annualTariff: any }> {
+        const empty = {
+            ...buildQuoteMemory([], {}),
+            others: buildDirectionMemory([]),
+            history: [] as any[],
+            annualTariff: null as any,
+        };
+
+        const [origin, destination] = await Promise.all([
+            this.cities.resolve(query.originCityName, query.originCityId),
+            this.cities.resolve(query.destinationCityName, query.destinationCityId),
+        ]);
+
+        const originMatch = this.cityMatch('origin', origin);
+        const destinationMatch = this.cityMatch('destination', destination);
+        // Направление не названо — сравнивать не с чем. Пустой отбор здесь
+        // означал бы «вся история компании» и увёл бы менеджера по ложному
+        // следу.
+        if (!originMatch || !destinationMatch) return empty;
+
         const where: Prisma.QuoteRequestWhereInput = {
             AND: [
                 { companyId },
-                { customerCompanyId: query.customerCompanyId },
-                { originCityId: query.originCityId },
-                { destinationCityId: query.destinationCityId },
+                originMatch,
+                destinationMatch,
                 ...(query.excludeId ? [{ id: { not: query.excludeId } }] : []),
             ],
         };
@@ -362,23 +411,26 @@ export class QuoteRequestsService {
             this.prisma.quoteRequest.findMany({
                 where,
                 orderBy: { createdAt: 'desc' },
-                take: 20,
+                take: 60,
                 include: QUOTE_INCLUDE,
             }),
-            this.contracts
-                .lookupTariffForOurClient(
-                    companyId,
-                    query.customerCompanyId,
-                    query.originCityId,
-                    query.destinationCityId,
-                    query.cargoType,
-                )
-                .catch((e) => {
-                    // Тариф — подсказка, а не условие работы: без неё запрос
-                    // всё равно заводится, поэтому падать здесь нельзя.
-                    this.logger.warn(`Не удалось найти годовой тариф: ${e.message}`);
-                    return null;
-                }),
+            // Тариф живёт на справочнике: без узнанных городов искать нечего.
+            origin.id && destination.id
+                ? this.contracts
+                    .lookupTariffForOurClient(
+                        companyId,
+                        query.customerCompanyId,
+                        origin.id,
+                        destination.id,
+                        query.cargoType,
+                    )
+                    .catch((e) => {
+                        // Тариф — подсказка, а не условие работы: без неё запрос
+                        // всё равно заводится, поэтому падать здесь нельзя.
+                        this.logger.warn(`Не удалось найти годовой тариф: ${e.message}`);
+                        return null;
+                    })
+                : null,
         ]);
 
         const past: PastQuote[] = history.map((h) => ({
@@ -389,34 +441,77 @@ export class QuoteRequestsService {
             carrierCost: h.carrierCost ? Number(h.carrierCost) : null,
             cargoWeight: h.cargoWeight,
             cargoVolume: h.cargoVolume,
+            palletCount: h.palletCount,
             cargoType: h.cargoType,
             status: h.status,
             rejectionReason: h.rejectionReason,
-        }));
+            customerName: h.customerCompany?.name ?? null,
+            customerCompanyId: h.customerCompanyId,
+        } as PastQuote & { customerCompanyId: string }));
 
-        const memory = buildQuoteMemory(past, {
+        const own = past.filter((p: any) => p.customerCompanyId === query.customerCompanyId);
+        const others = past.filter((p: any) => p.customerCompanyId !== query.customerCompanyId);
+
+        const memory = buildQuoteMemory(own, {
             cargoWeight: query.cargoWeight,
             cargoVolume: query.cargoVolume,
             cargoType: query.cargoType,
         });
 
-        return { ...memory, history, annualTariff };
+        return {
+            ...memory,
+            others: buildDirectionMemory(others),
+            history: history.filter((h) => h.customerCompanyId === query.customerCompanyId),
+            annualTariff,
+        };
     }
 
     /**
-     * Маршрут и клиент должны существовать. Иначе Prisma отдаст ошибку связи,
-     * а человек увидит невнятное «Internal server error» вместо причины.
+     * Отбор по одному концу маршрута.
+     *
+     * По ключу и, если город узнан, ещё и по ссылке на справочник. Второе —
+     * ради запросов, заведённых до перехода на текст: ключа у них нет, а
+     * ссылка есть, и терять их историю нельзя.
+     */
+    private cityMatch(
+        side: 'origin' | 'destination',
+        city: { id: string | null; key: string | null },
+    ): Prisma.QuoteRequestWhereInput | null {
+        const or: Prisma.QuoteRequestWhereInput[] = [];
+        if (city.key) or.push({ [`${side}CityKey`]: city.key } as Prisma.QuoteRequestWhereInput);
+        if (city.id) or.push({ [`${side}CityId`]: city.id } as Prisma.QuoteRequestWhereInput);
+        return or.length ? { OR: or } : null;
+    }
+
+    /** Разобрать оба конца маршрута разом. */
+    private resolveRoute(dto: CreateQuoteRequestData) {
+        return Promise.all([
+            this.cities.resolve(dto.originCityName, dto.originCityId),
+            this.cities.resolve(dto.destinationCityName, dto.destinationCityId),
+        ]);
+    }
+
+    /**
+     * Клиент должен существовать, маршрут — быть названным.
+     *
+     * Городов в справочнике больше не требуем: посёлка вроде Мынарала там
+     * может не быть вовсе, и запрос из-за этого не заводился. Но совсем без
+     * маршрута запрос бессмысленный — по нему нечего искать и не с чем
+     * сравнивать.
      */
     private async assertRouteBelongsToUs(companyId: string, dto: CreateQuoteRequestData) {
-        const [customer, origin, destination] = await Promise.all([
-            this.prisma.company.findUnique({ where: { id: dto.customerCompanyId }, select: { id: true } }),
-            this.prisma.city.findUnique({ where: { id: dto.originCityId }, select: { id: true } }),
-            this.prisma.city.findUnique({ where: { id: dto.destinationCityId }, select: { id: true } }),
-        ]);
+        const customer = await this.prisma.company.findUnique({
+            where: { id: dto.customerCompanyId },
+            select: { id: true },
+        });
 
         if (!customer) throw new BadRequestException('Клиент не найден');
-        if (!origin) throw new BadRequestException('Город погрузки не найден');
-        if (!destination) throw new BadRequestException('Город выгрузки не найден');
+        if (!dto.originCityName?.trim() && !dto.originCityId) {
+            throw new BadRequestException('Укажите город погрузки');
+        }
+        if (!dto.destinationCityName?.trim() && !dto.destinationCityId) {
+            throw new BadRequestException('Укажите город выгрузки');
+        }
         if (dto.customerCompanyId === companyId) {
             throw new BadRequestException('Запрос нельзя завести на собственную организацию');
         }
@@ -465,8 +560,12 @@ function assignIfPresent<K extends keyof CreateQuoteRequestData>(
 
 export interface CreateQuoteRequestData {
     customerCompanyId: string;
-    originCityId: string;
-    destinationCityId: string;
+    /** Город как написали. Главное поле маршрута: справочник знает не всё. */
+    originCityName?: string | null;
+    /** Ссылка на справочник, если выбрали из подсказки. */
+    originCityId?: string | null;
+    destinationCityName?: string | null;
+    destinationCityId?: string | null;
     originLocationId?: string | null;
     destinationLocationId?: string | null;
     originAddress?: string | null;
@@ -494,8 +593,10 @@ export interface QuoteRequestsQuery extends PaginationQueryDto {
 
 export interface QuoteMemoryQuery {
     customerCompanyId: string;
-    originCityId: string;
-    destinationCityId: string;
+    originCityName?: string | null;
+    originCityId?: string | null;
+    destinationCityName?: string | null;
+    destinationCityId?: string | null;
     cargoType?: string;
     cargoWeight?: number;
     cargoVolume?: number;

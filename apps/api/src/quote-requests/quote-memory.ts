@@ -31,9 +31,13 @@ export interface PastQuote {
     carrierCost: number | null;
     cargoWeight: number | null;
     cargoVolume: number | null;
+    /** Сколько паллет: половина запросов приходит именно в них. */
+    palletCount?: number | null;
     cargoType: string | null;
     status: 'NEW' | 'IN_PROGRESS' | 'APPROVED' | 'REJECTED';
     rejectionReason: string | null;
+    /** Чей это был запрос. Нужно в списке по направлению: там клиенты разные. */
+    customerName?: string | null;
 }
 
 /** Условия нового запроса — с чем сравниваем. */
@@ -41,6 +45,15 @@ export interface CurrentQuote {
     cargoWeight?: number | null;
     cargoVolume?: number | null;
     cargoType?: string | null;
+}
+
+/** Вилка цен: от и до, и по скольким случаям она собрана. */
+export interface PriceRange {
+    customerFrom: number;
+    customerTo: number;
+    carrierFrom: number | null;
+    carrierTo: number | null;
+    count: number;
 }
 
 export interface QuoteMemory {
@@ -56,13 +69,23 @@ export interface QuoteMemory {
      */
     note: string | null;
     /** Вилка по маршруту у этого клиента: от и до. */
-    range: {
-        customerFrom: number;
-        customerTo: number;
-        carrierFrom: number | null;
-        carrierTo: number | null;
-        count: number;
-    } | null;
+    range: PriceRange | null;
+    /**
+     * Несколько прошлых случаев целиком, а не только последний.
+     *
+     * Раньше на экране был один — последний завершённый. Клиент платформы
+     * просил показывать варианты: «была такая заявка, тоннаж 20, цена такая,
+     * но не согласовали». Один случай на это не отвечает: у соседних
+     * запросов другой тоннаж и другая цена, и выбирать не из чего.
+     */
+    items: PastQuote[];
+}
+
+/** Что было по этому направлению у остальных клиентов. */
+export interface DirectionMemory {
+    count: number;
+    range: PriceRange | null;
+    items: PastQuote[];
 }
 
 /**
@@ -99,19 +122,61 @@ export function humanAgo(from: Date, now: Date = new Date()): string {
     return `${days} ${tail} назад`;
 }
 
+/** Сколько прошлых случаев показываем. Больше — уже не подсказка, а отчёт. */
+const ITEMS_LIMIT = 5;
+
+/** Названная цена — уже факт, даже если клиент ещё не ответил. */
+function priced(past: PastQuote[]): PastQuote[] {
+    return past
+        .filter((p) => p.customerPrice != null)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+function priceRange(list: PastQuote[]): PriceRange | null {
+    if (list.length === 0) return null;
+    const customerPrices = list.map((p) => p.customerPrice as number);
+    const carrierCosts = list.map((p) => p.carrierCost).filter((c): c is number => c != null);
+    return {
+        customerFrom: Math.min(...customerPrices),
+        customerTo: Math.max(...customerPrices),
+        carrierFrom: carrierCosts.length ? Math.min(...carrierCosts) : null,
+        carrierTo: carrierCosts.length ? Math.max(...carrierCosts) : null,
+        count: list.length,
+    };
+}
+
+/**
+ * Что было по этому направлению у остальных клиентов.
+ *
+ * Отдельным блоком, а не общей кучей с историей этого клиента. Причина
+ * простая: цена другого клиента — не цена этого. У него бывает годовой
+ * тариф, другой объём, другие условия оплаты. Смешать — значит однажды
+ * назвать чужую цену как свою и не заметить.
+ */
+export function buildDirectionMemory(past: PastQuote[], limit = ITEMS_LIMIT): DirectionMemory {
+    const list = priced(past);
+    return { count: list.length, range: priceRange(list), items: list.slice(0, limit) };
+}
+
 export function buildQuoteMemory(
     past: PastQuote[],
     current: CurrentQuote,
     now: Date = new Date(),
 ): QuoteMemory {
-    // В расчёт идут только случаи с названной ценой и известным исходом.
-    // Незакрытый запрос ничему не учит: клиент по нему ещё не ответил.
-    const decided = past
-        .filter((p) => p.customerPrice != null && (p.status === 'APPROVED' || p.status === 'REJECTED'))
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    // Список вариантов — по всем, где названа цена. Незакрытый запрос тоже
+    // показываем: «предлагали 130 000, клиент пока молчит» — это ровно то,
+    // чего не хватало менеджеру, который заводит второй такой же.
+    const items = priced(past).slice(0, ITEMS_LIMIT);
+
+    // А вот вывод об исходе делаем только по завершённым: пока клиент не
+    // ответил, «прошло» или «не прошло» сказать не о чем.
+    const decided = priced(past).filter((p) => p.status === 'APPROVED' || p.status === 'REJECTED');
 
     if (decided.length === 0) {
-        return { last: null, sameConditions: false, differences: [], note: null, range: null };
+        return {
+            last: null, sameConditions: false, differences: [], note: null,
+            range: priceRange(priced(past)), items,
+        };
     }
 
     const last = decided[0];
@@ -135,17 +200,14 @@ export function buildQuoteMemory(
     }
     const sameConditions = differences.length === 0;
 
-    const customerPrices = decided.map((p) => p.customerPrice as number);
-    const carrierCosts = decided.map((p) => p.carrierCost).filter((c): c is number => c != null);
-    const range = {
-        customerFrom: Math.min(...customerPrices),
-        customerTo: Math.max(...customerPrices),
-        carrierFrom: carrierCosts.length ? Math.min(...carrierCosts) : null,
-        carrierTo: carrierCosts.length ? Math.max(...carrierCosts) : null,
-        count: decided.length,
+    return {
+        last,
+        sameConditions,
+        differences,
+        note: buildNote(last, sameConditions, differences),
+        range: priceRange(priced(past)),
+        items,
     };
-
-    return { last, sameConditions, differences, note: buildNote(last, sameConditions, differences), range };
 }
 
 /**
