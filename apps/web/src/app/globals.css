@@ -62,7 +62,10 @@
   --destructive-foreground: 0 0% 100%;
   --border: 228 12% 92%;            /* #e7e8ec */
   --input: 228 12% 92%;
-  --ring: 215 100% 54%;
+  /* Обводка фокуса. Была синей — а синий в кабинете значит ссылку, и
+     обведённое поле читалось как нажимаемое. Берём цвет текста, как у
+     главной кнопки. */
+  --ring: 223 24% 6%;
   --radius: 0.75rem;
 }
 
@@ -70,20 +73,23 @@
   --background: 60 2% 12%;          /* #20201f — тёплый серый, как --nova-bg */
   --foreground: 40 16% 93%;         /* #f1f0ec */
   --card: 60 2% 10%;                /* #1a1a19 */
-  --card-foreground: 228 30% 93%;
+  --card-foreground: 40 16% 93%;
   --primary: 48 15% 94%;            /* #f1f0ec — тот же, что --nova-primary */
   --primary-foreground: 223 24% 6%;
-  --secondary: 222 16% 14%;
-  --secondary-foreground: 228 30% 93%;
-  --muted: 222 16% 14%;
-  --muted-foreground: 218 11% 64%;  /* #9aa1ad */
-  --accent: 222 16% 14%;
-  --accent-foreground: 228 30% 93%;
+  /* Подложки были синеватыми (оттенок 222) посреди тёплой темы: сегментные
+     переключатели и подсветка строк отдавали в синь рядом с нашими
+     карточками. Оттенок тот же, что у фона кабинета. */
+  --secondary: 60 3% 16%;
+  --secondary-foreground: 40 16% 93%;
+  --muted: 60 3% 16%;
+  --muted-foreground: 48 5% 65%;    /* #a9a8a1 */
+  --accent: 60 3% 16%;
+  --accent-foreground: 40 16% 93%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
   --border: 60 3% 20%;              /* #343430 */
-  --input: 220 14% 17%;
-  --ring: 215 100% 60%;
+  --input: 60 3% 16%;
+  --ring: 40 16% 93%;
 }
 
 :root {

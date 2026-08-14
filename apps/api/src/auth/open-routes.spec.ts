@@ -88,6 +88,7 @@ const ANY_LOGGED_IN_ROUTES: Record<string, string> = {
     'GeoController.reverse': 'адрес по координатам',
     'LocationsController.findAll': 'адреса и склады своей компании — отбор по компании внутри',
     'LocationsController.findOne': 'адрес своей компании — отбор по компании внутри',
+    'LocationsController.missingCoordinates': 'свои адреса без координат — отбор по компании внутри',
 
     // Вместо роли спрашивается право раздела: @RequirePermissions на классе.
     'DocumentsController.uploadFile': 'права раздела «Документы»',

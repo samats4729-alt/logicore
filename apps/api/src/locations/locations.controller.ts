@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { LocationsService } from './locations.service';
+import { LocationGeocodingService } from './location-geocoding.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
@@ -12,7 +13,11 @@ import { AuditService } from '../audit/audit.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class LocationsController {
-    constructor(private locationsService: LocationsService, private auditService: AuditService) { }
+    constructor(
+        private locationsService: LocationsService,
+        private geocoding: LocationGeocodingService,
+        private auditService: AuditService,
+    ) { }
 
     @Post()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
@@ -31,6 +36,29 @@ export class LocationsController {
     async findAll(@Query('search') search: string | undefined, @Request() req: any) {
         const companyId = req.user.role === 'ADMIN' ? undefined : req.user.companyId;
         return this.locationsService.findAll(search, companyId);
+    }
+
+    /* Объявлено до `:id`, иначе адрес «missing-coordinates» уедет в поиск
+       точки с таким идентификатором и вернёт «не найдено». */
+    @Get('missing-coordinates')
+    @ApiOperation({ summary: 'Адреса, которым не хватает координат' })
+    async missingCoordinates(@Request() req: any) {
+        const companyId = req.user.role === 'ADMIN' ? undefined : req.user.companyId;
+        const [counts, items] = await Promise.all([
+            this.geocoding.countMissing(companyId),
+            this.geocoding.listMissing(companyId),
+        ]);
+        return { ...counts, items };
+    }
+
+    @Post('geocode-missing')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Найти координаты для адресов, где их нет' })
+    async geocodeMissing(@Request() req: any) {
+        const companyId = req.user.role === 'ADMIN' ? undefined : req.user.companyId;
+        // force: человек нажал кнопку и ждёт — берём и те адреса, что фон
+        // отложил после неудачи.
+        return this.geocoding.sweep({ companyId, force: true });
     }
 
     @Get(':id')

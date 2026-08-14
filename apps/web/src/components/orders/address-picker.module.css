@@ -1,0 +1,252 @@
+/* Выбор адреса точки маршрута.
+
+   Окно было собрано на служебных классах shadcn — bg-background, bg-secondary,
+   ring-ring. В светлой теме это сходило за наше, а в тёмной панель оказалась
+   того же цвета, что затемнённый фон под ней: окна просто не было видно,
+   текст висел в воздухе. Поле поиска при этом обводилось синим, а синий у нас
+   значит ссылку.
+
+   Поэтому здесь наши токены, как на остальных экранах кабинета.
+
+   Класс продублирован (.panel.panel) намеренно: разметку рисует общий Dialog
+   со своими классами, и без повышенной силы правила зависели бы от того, что
+   попало в сборку последним. */
+
+.panel.panel {
+    max-width: 640px;
+    padding: 0;
+    gap: 0;
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: var(--nova-radius);
+    box-shadow: 0 24px 64px -24px rgba(16, 24, 40, .45);
+    color: var(--nova-fg);
+    overflow: hidden;
+}
+
+.head.head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--nova-border);
+    text-align: left;
+}
+
+.title.title {
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--nova-fg);
+}
+
+.search {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--nova-border);
+}
+
+.field {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.field svg {
+    position: absolute;
+    left: 10px;
+    color: var(--nova-fg-3);
+    pointer-events: none;
+}
+
+.input {
+    width: 100%;
+    height: 36px;
+    padding: 0 12px 0 32px;
+    font-size: 13px;
+    color: var(--nova-fg);
+    background: var(--nova-surface-2);
+    border: 1px solid var(--nova-border);
+    border-radius: 10px;
+    outline: none;
+}
+
+.input::placeholder {
+    color: var(--nova-fg-3);
+}
+
+/* Фокус — тёмной рамкой, а не синей: синий в кабинете значит ссылку. */
+.input:focus {
+    border-color: var(--nova-fg-3);
+    box-shadow: 0 0 0 3px var(--nova-hover);
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+/* Те же пилюли, что у вкладок и верхнего меню. */
+.chip {
+    height: 26px;
+    padding: 0 11px;
+    border-radius: 999px;
+    border: 1px solid var(--nova-border);
+    background: var(--nova-surface);
+    color: var(--nova-fg-2);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+}
+
+.chip:hover {
+    background: var(--nova-hover);
+    color: var(--nova-fg);
+}
+
+.chipActive,
+.chipActive:hover {
+    background: var(--nova-primary);
+    border-color: var(--nova-primary);
+    color: var(--nova-primary-fg);
+}
+
+.list {
+    max-height: 46vh;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.group + .group {
+    border-top: 1px solid var(--nova-border);
+    margin-top: 6px;
+    padding-top: 6px;
+}
+
+.groupLabel {
+    padding: 6px 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+}
+
+.option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background .12s ease;
+}
+
+.option:hover {
+    background: var(--nova-hover);
+}
+
+.optionActive {
+    background: var(--nova-hover);
+}
+
+.tick {
+    margin-top: 2px;
+    flex-shrink: 0;
+    color: var(--nova-fg);
+    opacity: 0;
+}
+
+.tickOn {
+    opacity: 1;
+}
+
+/* Название крупнее и темнее подписи: в тёмной теме было наоборот — адрес
+   читался ярче склада, к которому относится. */
+.optionName {
+    display: block;
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--nova-fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.optionAddress {
+    display: block;
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.empty {
+    padding: 32px 12px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.foot {
+    padding: 12px 16px;
+    border-top: 1px solid var(--nova-border);
+}
+
+/* Кнопка-поле на самом шаге маршрута: раньше была без рамки и в тёмной
+   теме сливалась с карточкой. */
+.trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    font-size: 13px;
+    text-align: left;
+    color: var(--nova-fg);
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+
+.trigger:hover {
+    background: var(--nova-hover);
+}
+
+.triggerEmpty {
+    color: var(--nova-fg-3);
+}
+
+.triggerIcon {
+    flex-shrink: 0;
+    color: var(--nova-fg-3);
+}
+
+.triggerText {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.clear {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    color: var(--nova-fg-3);
+}
+
+.clear:hover {
+    background: var(--nova-hover);
+    color: var(--nova-fg);
+}

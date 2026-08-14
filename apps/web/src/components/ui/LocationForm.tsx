@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Form, Input, Row, Col, Select, Typography, Button, FormInstance, Radio } from 'antd';
+import { AutoComplete, Form, Input, Row, Col, Select, Typography, Button, FormInstance, Radio } from 'antd';
 import { EnvironmentOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api, Location, Country, City, GeoProviderHierarchy } from '@/lib/api';
 import dynamic from 'next/dynamic';
@@ -58,6 +58,9 @@ export default function LocationForm({
     const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
     const [companiesLoading, setCompaniesLoading] = useState(false);
     const [isFetchingAddress, setIsFetchingAddress] = useState(false);
+    /* Точку выбрал человек, а не подсказка геокодера. Такие координаты
+       фоновая дозапись не перебивает: человек знает, где въезд на склад. */
+    const [pointIsManual, setPointIsManual] = useState(false);
 
     useEffect(() => {
         if (showCompanySelect) {
@@ -78,8 +81,16 @@ export default function LocationForm({
                 contactName: editingLocation.contactName,
                 contactPhone: editingLocation.contactPhone,
                 emails: editingLocation.emails ? editingLocation.emails.split(',').map((e: string) => e.trim()).filter(Boolean) : [],
-                companyId: editingLocation.companyId || undefined
+                companyId: editingLocation.companyId || undefined,
+                // Части адреса, введённые руками, — иначе при правке они
+                // пропадали бы из формы и затирались пустыми.
+                country: (editingLocation as any).country || editingLocation.cityRecord?.country?.name || undefined,
+                region: (editingLocation as any).region || undefined,
+                street: (editingLocation as any).street || undefined,
+                house: (editingLocation as any).house || undefined,
+                city: editingLocation.city || undefined,
             });
+            setPointIsManual(Boolean((editingLocation as any).coordinatesManual));
 
             setCity(editingLocation.city || undefined);
             setSelectedCityId(editingLocation.cityId || undefined);
@@ -257,6 +268,7 @@ export default function LocationForm({
     const handleMapSelect = async (latitude: number, longitude: number, pickedName?: string) => {
         setLat(latitude);
         setLng(longitude);
+        setPointIsManual(true);
         form.setFieldsValue({ latitude, longitude });
 
         if (pickedName) {
@@ -321,8 +333,12 @@ export default function LocationForm({
 
     return (
         <Form form={form} layout="vertical" onFinish={(values) => {
-            if (!lat || !lng) {
-                toast.error('Укажите адрес или точку на карте');
+            // Координаты больше не обязательны. Раньше здесь стоял отказ, и
+            // при недоступном геокодере адрес завести было нельзя вовсе —
+            // значит нельзя оформить рейс. Теперь точка появится сама, когда
+            // геокодер снова ответит.
+            if (!values.city && !addressValue) {
+                toast.error('Укажите хотя бы город или адрес');
                 return;
             }
             let finalCompanyId = values.companyId;
@@ -340,10 +356,16 @@ export default function LocationForm({
             void onFinish({
                 ...rest,
                 companyId: finalCompanyId,
-                address: addressValue,
-                latitude: lat,
-                longitude: lng,
-                city: city || null,
+                address: addressValue || undefined,
+                latitude: lat ?? null,
+                longitude: lng ?? null,
+                // Точку выбрал человек — дозапись её не тронет.
+                coordinatesManual: pointIsManual,
+                country: values.country || null,
+                region: values.region || null,
+                street: values.street || null,
+                house: values.house || null,
+                city: values.city || city || null,
                 cityId: selectedCityId || null,
             });
         }}>
@@ -359,54 +381,72 @@ export default function LocationForm({
 
                     <Row gutter={12}>
                         <Col span={10}>
-                            <Form.Item label="Страна">
-                                <Select
+                            {/* Страна — обычное поле с подсказками, а не выбор
+                                из списка. Перевозки бывают не только по
+                                Казахстану, а список знает только то, что
+                                когда-то вернул геокодер. */}
+                            <Form.Item name="country" label="Страна">
+                                <AutoComplete
                                     size="large"
-                                    placeholder="Страна"
-                                    value={selectedCountryId}
-                                    onChange={(v) => {
-                                        setSelectedCountryId(v);
+                                    placeholder="Казахстан"
+                                    options={countries.map(c => ({ value: c.name, id: c.id }))}
+                                    filterOption={(input, option) =>
+                                        String(option?.value || '').toLowerCase().includes(input.toLowerCase())}
+                                    onSelect={(_value, option: any) => {
+                                        setSelectedCountryId(option?.id);
                                         setSelectedCityId(undefined);
                                         setCity(undefined);
                                         setCityOptions([]);
                                         setCityFocus(undefined);
                                     }}
-                                    showSearch
-                                    optionFilterProp="children"
-                                >
-                                    {countries.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
-                                </Select>
+                                    onChange={(value) => {
+                                        // Написали своё — привязка к справочнику
+                                        // теряется, и это нормально.
+                                        if (!countries.some(c => c.name === value)) setSelectedCountryId(undefined);
+                                    }}
+                                />
                             </Form.Item>
                         </Col>
                         <Col span={14}>
-                            <Form.Item label="Город">
-                                <Select
+                            {/* Город тоже пишется свободно. Из-за выбора только
+                                из списка компания не смогла завести Мынарал:
+                                его не знал геокодер, значит не было и в
+                                справочнике. Справочник теперь подсказывает, а
+                                не ограничивает. */}
+                            <Form.Item
+                                name="city"
+                                label="Город или посёлок"
+                                help="Нет в подсказках — впишите как есть"
+                            >
+                                <AutoComplete
                                     size="large"
                                     placeholder="Начните вводить город"
-                                    value={selectedCityId}
-                                    onChange={handleCitySelect}
                                     onSearch={searchCities}
-                                    showSearch
                                     filterOption={false}
-                                    loading={cityLoading}
                                     notFoundContent={cityLoading ? <Loader size="small" /> : null}
-                                >
-                                    {cityOptions.map(c => (
-                                        <Option key={c.id} value={c.id}>
-                                            {c.name}{(c as any).region?.name ? `, ${(c as any).region.name}` : ''}
-                                        </Option>
-                                    ))}
-                                </Select>
+                                    options={cityOptions.map(c => ({
+                                        value: c.name,
+                                        id: c.id,
+                                        label: `${c.name}${(c as any).region?.name ? `, ${(c as any).region.name}` : ''}`,
+                                    }))}
+                                    onSelect={(value, option: any) => {
+                                        setCity(String(value));
+                                        if (option?.id) handleCitySelect(option.id);
+                                    }}
+                                    onChange={(value) => {
+                                        setCity(value ? String(value) : undefined);
+                                        if (!cityOptions.some(c => c.name === value)) setSelectedCityId(undefined);
+                                    }}
+                                />
                             </Form.Item>
                         </Col>
                     </Row>
 
+                    {/* Быстрый путь: подсказка геокодера заполняет всё разом.
+                        Работает, пока к нему есть запросы. */}
                     <Form.Item
-                        label="Адрес улицы"
-                        required
-                        help={city
-                            ? `Поиск улицы в городе: ${city}`
-                            : 'Введите полный адрес — страна, регион и город определятся автоматически'}
+                        label="Найти адрес подсказкой"
+                        help={city ? `Поиск улицы в городе: ${city}` : 'Если подсказок нет — заполните поля ниже руками'}
                     >
                         <AddressAutocomplete
                             value={addressValue}
@@ -421,6 +461,30 @@ export default function LocationForm({
                         />
                     </Form.Item>
 
+                    {/* Ручной ввод. Он же — единственный путь, когда геокодер
+                        молчит: кончились запросы, нет ключа, нет сети. Раньше
+                        в этот момент адрес завести было нельзя вовсе. */}
+                    <Row gutter={12}>
+                        <Col span={12}>
+                            <Form.Item name="street" label="Улица">
+                                <Input size="large" placeholder="Сатпаева" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="house" label="Дом">
+                                <Input size="large" placeholder="90/1" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Form.Item name="region" label="Область или район" help="Если нужно уточнить — например для посёлка">
+                        <Input size="large" placeholder="Жамбылская область" />
+                    </Form.Item>
+
+                    {/* Отсутствие координат — не ошибка человека, а состояние
+                        адреса, поэтому строка спокойная и объясняет, что будет
+                        дальше. Цвета из наших токенов: зелёный с белым текстом
+                        был записан прямо здесь и в тёмной теме светился. */}
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -429,14 +493,14 @@ export default function LocationForm({
                         borderRadius: 10,
                         marginBottom: 16,
                         fontSize: 13,
-                        fontWeight: 500,
-                        background: (lat && lng) ? '#ecfdf5' : 'var(--lc-card-2)',
-                        border: `1px solid ${(lat && lng) ? '#a7f3d0' : 'var(--lc-border)'}`,
-                        color: (lat && lng) ? '#059669' : 'var(--lc-text-ter)',
+                        lineHeight: 1.45,
+                        background: 'var(--nova-surface-2)',
+                        border: '1px solid var(--nova-border)',
+                        color: 'var(--nova-fg-2)',
                     }}>
                         {(lat && lng)
-                            ? <><CheckCircleOutlined /> Точка на карте определена</>
-                            : <><EnvironmentOutlined /> Выберите адрес или укажите точку на карте</>}
+                            ? <><CheckCircleOutlined /> Точка на карте есть — маршрут построится</>
+                            : <><EnvironmentOutlined /> Координат пока нет. Адрес сохранится, а точку найдём, когда геокодер ответит — или укажите её на карте сами</>}
                     </div>
 
                     { (customerCompany?.id || carrierCompany?.id) ? (

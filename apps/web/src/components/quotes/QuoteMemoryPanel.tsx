@@ -4,29 +4,37 @@ import { AlertTriangle, CheckCircle2, FileSignature, History } from 'lucide-reac
 import { QUOTE_REQUEST_STATUS_LABELS } from '@/lib/vocabulary';
 import { cn } from '@/lib/utils';
 
+export interface QuoteCase {
+    id: string;
+    requestNumber: string;
+    createdAt: string;
+    customerPrice: number | null;
+    carrierCost: number | null;
+    cargoWeight: number | null;
+    cargoVolume: number | null;
+    palletCount?: number | null;
+    cargoType: string | null;
+    status: string;
+    rejectionReason: string | null;
+    /** Чей был запрос — показывается в блоке про других клиентов. */
+    customerName?: string | null;
+}
+
+export interface PriceRange {
+    customerFrom: number;
+    customerTo: number;
+    carrierFrom: number | null;
+    carrierTo: number | null;
+    count: number;
+}
+
 export interface QuoteMemory {
-    last: {
-        id: string;
-        requestNumber: string;
-        createdAt: string;
-        customerPrice: number | null;
-        carrierCost: number | null;
-        cargoWeight: number | null;
-        cargoVolume: number | null;
-        cargoType: string | null;
-        status: string;
-        rejectionReason: string | null;
-    } | null;
+    last: QuoteCase | null;
     sameConditions: boolean;
     differences: string[];
     note: string | null;
-    range: {
-        customerFrom: number;
-        customerTo: number;
-        carrierFrom: number | null;
-        carrierTo: number | null;
-        count: number;
-    } | null;
+    /** Что уже возили по этому направлению — по всем клиентам одним списком. */
+    direction: { count: number; range: PriceRange | null; items: QuoteCase[] };
     annualTariff: {
         price: string | number;
         vehicleType: string | null;
@@ -51,7 +59,15 @@ function daysAgo(iso: string): string {
 }
 
 /**
- * Что мы уже предлагали этому клиенту на этом маршруте.
+ * Что уже возили по этому направлению.
+ *
+ * Сверху — вывод по выбранному клиенту: что ему предлагали, чем кончилось,
+ * что изменилось в условиях. Ниже — список по направлению целиком, по всем
+ * клиентам, с именем клиента в каждой строке.
+ *
+ * Список общий, потому что отбор по карточке клиента прятал главное: у
+ * одного клиента по маршруту запрос был, менеджер завёл новый на другого —
+ * и увидел «данных нет», хотя направление то же самое.
  *
  * Панель намеренно ничего не решает за менеджера и не подставляет сумму в
  * поле цены. Она только напоминает: вот что было, вот чем кончилось, вот
@@ -72,13 +88,14 @@ export function QuoteMemoryPanel({ memory, loading }: { memory: QuoteMemory | nu
 
     if (!memory) return null;
 
-    const { last, note, range, annualTariff, sameConditions, differences } = memory;
+    const { last, note, direction, annualTariff, sameConditions, differences } = memory;
     const rejected = last?.status === 'REJECTED';
+    const count = direction?.count || 0;
 
-    if (!last && !annualTariff) {
+    if (!last && !annualTariff && count === 0) {
         return (
             <div className="rounded-2xl bg-muted/40 px-4 py-3 text-[12px] text-muted-foreground">
-                По этому клиенту и маршруту запросов ещё не было — сравнивать не с чем.
+                По этому направлению запросов ещё не было — сравнивать не с чем.
             </div>
         );
     }
@@ -159,25 +176,109 @@ export function QuoteMemoryPanel({ memory, loading }: { memory: QuoteMemory | nu
                 </div>
             )}
 
-            {range && range.count > 1 && (
-                <div className="flex items-start gap-2 rounded-2xl bg-muted/40 px-4 py-2.5 text-[12px]">
-                    <History className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
-                    <div>
-                        <span className="text-muted-foreground">По этому маршруту всего {range.count}: клиенту давали </span>
-                        <b className="tabular-nums">{money(range.customerFrom)}</b>
-                        <span className="text-muted-foreground"> — </span>
-                        <b className="tabular-nums">{money(range.customerTo)}</b>
-                        {range.carrierFrom != null && (
-                            <>
-                                <span className="text-muted-foreground">, машину брали </span>
-                                <b className="tabular-nums">{money(range.carrierFrom)}</b>
-                                <span className="text-muted-foreground"> — </span>
-                                <b className="tabular-nums">{money(range.carrierTo)}</b>
-                            </>
-                        )}
-                    </div>
-                </div>
+            {/* Один список на направление, по всем клиентам. Чей был запрос
+                — написано в строке. Раньше история отбиралась по карточке
+                клиента, и запрос соседнего по тому же маршруту не показывался
+                вовсе: менеджер видел «данных нет» там, где уже возили. */}
+            {count > 0 && (
+                <CaseList
+                    title={`По этому направлению: ${count} ${caseWord(count)}`}
+                    range={direction.range}
+                    items={direction.items}
+                />
             )}
+        </div>
+    );
+}
+
+function caseWord(n: number): string {
+    const m10 = n % 10;
+    const m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return 'запрос';
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return 'запроса';
+    return 'запросов';
+}
+
+/**
+ * Список прошлых случаев с вилкой цен над ним.
+ *
+ * Закупочная цена стоит рядом с ценой клиенту не для полноты: без неё
+ * «130 000 не прошло» ничего не значит — может, машина тогда стоила 128.
+ */
+function CaseList({
+    title, range, items,
+}: {
+    title: string;
+    range: PriceRange | null;
+    items: QuoteCase[];
+}) {
+    return (
+        <div className="rounded-2xl bg-muted/40 px-4 py-2.5">
+            <div className="flex items-start gap-2 text-[12px]">
+                <History className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
+                <div>
+                    <span className="font-medium">{title}</span>
+                    {range && (
+                        <>
+                            <span className="text-muted-foreground">: клиенту давали </span>
+                            <b className="tabular-nums">{money(range.customerFrom)}</b>
+                            {range.customerTo !== range.customerFrom && (
+                                <>
+                                    <span className="text-muted-foreground"> — </span>
+                                    <b className="tabular-nums">{money(range.customerTo)}</b>
+                                </>
+                            )}
+                            {range.carrierFrom != null && (
+                                <>
+                                    <span className="text-muted-foreground">, машину брали </span>
+                                    <b className="tabular-nums">{money(range.carrierFrom)}</b>
+                                    {range.carrierTo !== range.carrierFrom && (
+                                        <>
+                                            <span className="text-muted-foreground"> — </span>
+                                            <b className="tabular-nums">{money(range.carrierTo)}</b>
+                                        </>
+                                    )}
+                                </>
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+
+            <ul className="mt-1.5 flex flex-col divide-y divide-border/60 border-t border-border/60">
+                {items.map((item) => (
+                    <li key={item.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5 text-[11.5px]">
+                        <span className="text-muted-foreground">{daysAgo(item.createdAt)}</span>
+                        {item.customerName && <span className="font-medium">{item.customerName}</span>}
+                        <span className="text-muted-foreground">
+                            {[tons(item.cargoWeight), item.cargoVolume ? `${item.cargoVolume} м³` : null,
+                                item.palletCount ? `${item.palletCount} палл.` : null, item.cargoType]
+                                .filter(Boolean).join(' · ') || 'условия не записаны'}
+                        </span>
+                        <span className="ml-auto flex items-baseline gap-3">
+                            {item.carrierCost != null && (
+                                <span className="text-muted-foreground tabular-nums">
+                                    закупка {money(item.carrierCost)}
+                                </span>
+                            )}
+                            <b className="tabular-nums">{money(item.customerPrice)}</b>
+                            <span className={cn(
+                                'rounded-full px-2 py-0.5 text-[10.5px]',
+                                item.status === 'APPROVED'
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : item.status === 'REJECTED'
+                                        ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
+                                        : 'bg-muted text-muted-foreground',
+                            )}>
+                                {QUOTE_REQUEST_STATUS_LABELS[item.status] || item.status}
+                            </span>
+                        </span>
+                        {item.rejectionReason && (
+                            <span className="w-full text-muted-foreground">Причина: {item.rejectionReason}</span>
+                        )}
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 }

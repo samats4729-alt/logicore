@@ -644,8 +644,12 @@ export default function CreateOrderPage() {
                 const res = await api.post('/locations', {
                     name: `${loc.city}, ${loc.address}`,
                     address: `${loc.city}, ${loc.address}`,
-                    latitude: loc.latitude ?? 0,
-                    longitude: loc.longitude ?? 0,
+                    // Пусто, а не ноль: (0, 0) — это точка в океане у берегов
+                    // Африки. Такой адрес выглядел бы найденным, в дозапись
+                    // координат не попадал, а на карте тянул бы маршрут через
+                    // половину мира.
+                    latitude: loc.latitude ?? null,
+                    longitude: loc.longitude ?? null,
                     city: loc.city || ''
                 });
                 return res.data.id;
