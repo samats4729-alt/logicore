@@ -28,6 +28,16 @@ const tons = (kg: number | null) => (kg == null ? '—' : `${(kg / 1000).toLocal
 const date = (iso: string) => new Date(iso).toLocaleDateString('ru-RU');
 
 /**
+ * Маршрут строкой.
+ *
+ * Название берём то, что написал человек, а справочник — запасной вариант:
+ * у города, вписанного руками, связи со справочником нет вовсе, и запрос
+ * на Мынарал показывал бы стрелку без концов.
+ */
+const routeOf = (r: any) =>
+    `${r?.originCityName || r?.originCity?.name || '—'} → ${r?.destinationCityName || r?.destinationCity?.name || '—'}`;
+
+/**
  * Паллеты одной строкой: «2 европаллета».
  *
  * Количество без вида не говорит, влезет ли груз: европаллет и
@@ -159,8 +169,10 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
         setFormInitial({
             id: r.id,
             customerCompanyId: r.customerCompanyId,
-            originCityId: r.originCityId,
-            destinationCityId: r.destinationCityId,
+            originCityId: r.originCityId || '',
+            originCityName: r.originCityName || r.originCity?.name || '',
+            destinationCityId: r.destinationCityId || '',
+            destinationCityName: r.destinationCityName || r.destinationCity?.name || '',
             originAddress: r.originAddress || '',
             destinationAddress: r.destinationAddress || '',
             readyDate: r.readyDate ? String(r.readyDate).slice(0, 10) : '',
@@ -262,7 +274,7 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
                                     <Td className="font-medium">{r.requestNumber}</Td>
                                     <Td className="text-muted-foreground">{date(r.createdAt)}</Td>
                                     {!customerCompanyId && <Td className="max-w-[220px] truncate">{r.customerCompany?.name}</Td>}
-                                    <Td>{r.originCity?.name} → {r.destinationCity?.name}</Td>
+                                    <Td>{routeOf(r)}</Td>
                                     <Td className="text-muted-foreground">
                                         {[tons(r.cargoWeight), r.cargoVolume ? `${r.cargoVolume} м³` : null, palletsText(r), r.cargoType]
                                             .filter((v) => v && v !== '—').join(' · ') || '—'}
@@ -312,7 +324,7 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
 
                             <dl className="grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
                                 <Row label="Клиент" value={detail.customerCompany?.name} />
-                                <Row label="Маршрут" value={`${detail.originCity?.name} → ${detail.destinationCity?.name}`} />
+                                <Row label="Маршрут" value={routeOf(detail)} />
                                 <Row label="Адрес погрузки" value={detail.originLocation?.address || detail.originAddress} />
                                 <Row label="Адрес выгрузки" value={detail.destinationLocation?.address || detail.destinationAddress} />
                                 <Row label="Груз готов" value={detail.readyDate ? date(detail.readyDate) : null} />

@@ -68,20 +68,19 @@ export interface QuoteMemory {
      * разошлись, предупреждает об этом. Суммы не назначает.
      */
     note: string | null;
-    /** Вилка по маршруту у этого клиента: от и до. */
-    range: PriceRange | null;
-    /**
-     * Несколько прошлых случаев целиком, а не только последний.
-     *
-     * Раньше на экране был один — последний завершённый. Клиент платформы
-     * просил показывать варианты: «была такая заявка, тоннаж 20, цена такая,
-     * но не согласовали». Один случай на это не отвечает: у соседних
-     * запросов другой тоннаж и другая цена, и выбирать не из чего.
-     */
-    items: PastQuote[];
 }
 
-/** Что было по этому направлению у остальных клиентов. */
+/**
+ * Что уже возили по этому направлению — по всем клиентам одним списком.
+ *
+ * Раньше история отбиралась по паре «карточка клиента + маршрут», и это
+ * было главной жалобой: у «Шымкент пиво» по маршруту запрос был, менеджер
+ * выбрал «Шымкентский пивзавод» — и увидел пусто, хотя направление то же.
+ * Теперь список один на направление, а чей был запрос, написано в строке.
+ *
+ * И не один случай, а несколько: у соседних запросов другой тоннаж и
+ * другая цена, по одному выбирать не из чего.
+ */
 export interface DirectionMemory {
     count: number;
     range: PriceRange | null;
@@ -145,14 +144,7 @@ function priceRange(list: PastQuote[]): PriceRange | null {
     };
 }
 
-/**
- * Что было по этому направлению у остальных клиентов.
- *
- * Отдельным блоком, а не общей кучей с историей этого клиента. Причина
- * простая: цена другого клиента — не цена этого. У него бывает годовой
- * тариф, другой объём, другие условия оплаты. Смешать — значит однажды
- * назвать чужую цену как свою и не заметить.
- */
+/** Список случаев по направлению и вилка цен по ним. */
 export function buildDirectionMemory(past: PastQuote[], limit = ITEMS_LIMIT): DirectionMemory {
     const list = priced(past);
     return { count: list.length, range: priceRange(list), items: list.slice(0, limit) };
@@ -163,20 +155,12 @@ export function buildQuoteMemory(
     current: CurrentQuote,
     now: Date = new Date(),
 ): QuoteMemory {
-    // Список вариантов — по всем, где названа цена. Незакрытый запрос тоже
-    // показываем: «предлагали 130 000, клиент пока молчит» — это ровно то,
-    // чего не хватало менеджеру, который заводит второй такой же.
-    const items = priced(past).slice(0, ITEMS_LIMIT);
-
-    // А вот вывод об исходе делаем только по завершённым: пока клиент не
-    // ответил, «прошло» или «не прошло» сказать не о чем.
+    // Вывод об исходе делаем только по завершённым: пока клиент не ответил,
+    // «прошло» или «не прошло» сказать не о чем.
     const decided = priced(past).filter((p) => p.status === 'APPROVED' || p.status === 'REJECTED');
 
     if (decided.length === 0) {
-        return {
-            last: null, sameConditions: false, differences: [], note: null,
-            range: priceRange(priced(past)), items,
-        };
+        return { last: null, sameConditions: false, differences: [], note: null };
     }
 
     const last = decided[0];
@@ -200,14 +184,7 @@ export function buildQuoteMemory(
     }
     const sameConditions = differences.length === 0;
 
-    return {
-        last,
-        sameConditions,
-        differences,
-        note: buildNote(last, sameConditions, differences),
-        range: priceRange(priced(past)),
-        items,
-    };
+    return { last, sameConditions, differences, note: buildNote(last, sameConditions, differences) };
 }
 
 /**

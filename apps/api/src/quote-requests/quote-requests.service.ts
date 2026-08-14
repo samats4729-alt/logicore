@@ -366,20 +366,19 @@ export class QuoteRequestsService {
      * Считается до сохранения: менеджеру это нужно ровно в тот момент, когда
      * он назначает цену, а не после.
      *
-     * Ищем по направлению всей компании, а клиент — второй разрез. Раньше
-     * отбор шёл сразу по паре «карточка клиента + пара городов», и один
-     * живой клиент, заведённый дважды («Шымкент пиво» и «Шымкентский
-     * пивзавод»), прятал собственную историю от самого себя: менеджер видел
-     * «запросов не было» при полной папке. Показываем оба разреза, но
-     * порознь — чужая цена не должна выглядеть ценой этого клиента.
+     * Ищем по направлению всей компании. Раньше отбор шёл сразу по паре
+     * «карточка клиента + пара городов»: у «Шымкент пиво» по маршруту запрос
+     * был, менеджер выбрал «Шымкентский пивзавод» — и увидел «запросов не
+     * было», хотя направление то же самое. Список теперь один на
+     * направление, чей был запрос — написано в строке.
      */
     async memory(
         companyId: string,
         query: QuoteMemoryQuery,
-    ): Promise<QuoteMemory & { others: DirectionMemory; history: any[]; annualTariff: any }> {
+    ): Promise<QuoteMemory & { direction: DirectionMemory; history: any[]; annualTariff: any }> {
         const empty = {
             ...buildQuoteMemory([], {}),
-            others: buildDirectionMemory([]),
+            direction: buildDirectionMemory([]),
             history: [] as any[],
             annualTariff: null as any,
         };
@@ -449,9 +448,9 @@ export class QuoteRequestsService {
             customerCompanyId: h.customerCompanyId,
         } as PastQuote & { customerCompanyId: string }));
 
+        // Вывод об исходе — про этого клиента: «эта цена у него не прошла».
+        // Список случаев — про направление целиком, по всем клиентам.
         const own = past.filter((p: any) => p.customerCompanyId === query.customerCompanyId);
-        const others = past.filter((p: any) => p.customerCompanyId !== query.customerCompanyId);
-
         const memory = buildQuoteMemory(own, {
             cargoWeight: query.cargoWeight,
             cargoVolume: query.cargoVolume,
@@ -460,8 +459,8 @@ export class QuoteRequestsService {
 
         return {
             ...memory,
-            others: buildDirectionMemory(others),
-            history: history.filter((h) => h.customerCompanyId === query.customerCompanyId),
+            direction: buildDirectionMemory(past),
+            history,
             annualTariff,
         };
     }

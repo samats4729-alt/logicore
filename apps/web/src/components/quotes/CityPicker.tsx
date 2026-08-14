@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Globe, Loader2, Search, X } from 'lucide-react';
+import { Check, ChevronDown, Globe, Loader2, PenLine, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -33,23 +33,29 @@ interface GeoItem {
 }
 
 /**
- * Выбор города: сначала свой справочник, потом 2ГИС.
+ * Выбор города: свой справочник, 2ГИС, а если нигде нет — как написали.
  *
- * Вручную города никто вводить не должен — их пишут по-разному
- * («Шымкент», «Чимкент», «шымкент»), и справочник расползается за неделю.
- * Поэтому здесь два источника сразу: уже заведённые города находятся
- * мгновенно, а чего в справочнике нет — ищется в 2ГИС и заводится по
- * выбору, вместе со страной и областью.
+ * Три источника, и третий появился не от хорошей жизни. Сначала выбор был
+ * только из справочника: считалось, что иначе города разойдутся написанием
+ * («Шымкент», «Чимкент», «шымкент») и справочник расползётся за неделю. На
+ * деле расползлось другое: компания не смогла завести запрос на Мынарал —
+ * посёлка нет в справочнике, потому что справочник наполняется тем же
+ * геокодером, который его не знает. Запрос не завёлся вовсе.
  *
- * Так справочник наполняется сам по мере работы, а не заранее и не руками.
- * Тот же механизм давно работает в форме адреса — здесь он переиспользован,
- * а не написан заново.
+ * Поэтому написанное вручную теперь принимается. Расхождение написаний
+ * лечится не запретом, а приведением к одному ключу на сервере: «Шымкент»
+ * и «Чимкент» встают в одну историю.
+ *
+ * Порядок остался прежним: справочник отвечает мгновенно, 2ГИС дозаводит
+ * недостающее вместе со страной и областью, и только если не нашлось ни
+ * там ни там — остаётся текст.
  */
 export function CityPicker({
     title,
     placeholder,
     known,
     valueId,
+    valueName,
     onSelect,
     onImported,
 }: {
@@ -58,7 +64,9 @@ export function CityPicker({
     /** Города, которые уже есть в справочнике. */
     known: CityOption[];
     valueId?: string | null;
-    onSelect: (id: string | null) => void;
+    /** Название, если города нет в справочнике и его вписали руками. */
+    valueName?: string | null;
+    onSelect: (city: { id: string | null; name: string }) => void;
     /** Город завели из 2ГИС — обновить справочник у родителя. */
     onImported?: (city: CityOption) => void;
 }) {
@@ -144,7 +152,7 @@ export function CityPicker({
                 hint: [region?.name, country?.name].filter(Boolean).join(', ') || null,
             };
             onImported?.(option);
-            onSelect(city.id);
+            onSelect({ id: city.id, name: city.name });
             toast.success(`${city.name} добавлен в справочник`);
             setOpen(false);
         } catch (e: any) {
@@ -162,15 +170,15 @@ export function CityPicker({
                 className={cn(
                     'flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-input bg-background px-3 text-left text-[13px]',
                     'hover:border-foreground/30',
-                    !selected && 'text-muted-foreground',
+                    !selected && !valueName && 'text-muted-foreground',
                 )}
             >
-                <span className="truncate">{selected ? selected.name : placeholder}</span>
+                <span className="truncate">{selected?.name || valueName || placeholder}</span>
                 <span className="flex shrink-0 items-center gap-1">
-                    {selected && (
+                    {(selected || valueName) && (
                         <X
                             className="h-3.5 w-3.5 opacity-50 hover:opacity-100"
-                            onClick={(e) => { e.stopPropagation(); onSelect(null); }}
+                            onClick={(e) => { e.stopPropagation(); onSelect({ id: null, name: '' }); }}
                         />
                     )}
                     <ChevronDown className="h-3.5 w-3.5 opacity-50" />
@@ -202,7 +210,7 @@ export function CityPicker({
                                     <li key={c.id}>
                                         <button
                                             type="button"
-                                            onClick={() => { onSelect(c.id); setOpen(false); }}
+                                            onClick={() => { onSelect({ id: c.id, name: c.name }); setOpen(false); }}
                                             className={cn(
                                                 'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left hover:bg-muted',
                                                 c.id === valueId && 'bg-muted',
@@ -253,6 +261,32 @@ export function CityPicker({
                             </>
                         )}
 
+                        {/* Написанное руками. Показывается всегда, когда в поиске
+                            есть текст: список подсказок может быть неполным, а
+                            человек уже знает, как называется его посёлок. */}
+                        {query.trim().length >= 2 && (
+                            <>
+                                <p className="mt-3 px-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                    Нет в списках
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => { onSelect({ id: null, name: query.trim() }); setOpen(false); }}
+                                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-muted"
+                                >
+                                    <PenLine className="h-4 w-4 shrink-0 opacity-40" />
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-[13px] font-medium">
+                                            Оставить как написано: «{query.trim()}»
+                                        </span>
+                                        <span className="block truncate text-[11px] text-muted-foreground">
+                                            Маршрут запомнится, история по нему будет собираться
+                                        </span>
+                                    </span>
+                                </button>
+                            </>
+                        )}
+
                         {local.length === 0 && newFrom2gis.length === 0 && (
                             <p className="px-1 py-6 text-center text-[13px] text-muted-foreground">
                                 {query.trim().length < 2
@@ -260,8 +294,8 @@ export function CityPicker({
                                     : searching
                                         ? 'Ищем…'
                                         : geoConfigured === false
-                                            ? 'В справочнике такого города нет, а поиск по 2ГИС не подключён — обратитесь к администратору платформы.'
-                                            : `Ничего не нашлось по запросу «${query}»`}
+                                            ? 'В справочнике города нет, а поиск по 2ГИС не подключён. Впишите название — этого достаточно.'
+                                            : `В справочниках ничего не нашлось по запросу «${query}»`}
                             </p>
                         )}
                     </div>

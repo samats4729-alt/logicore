@@ -18,7 +18,11 @@ import { QuoteMemory, QuoteMemoryPanel } from './QuoteMemoryPanel';
 export interface QuoteFormValues {
     id?: string;
     customerCompanyId: string;
+    /** Город как написали. Главное поле маршрута: справочник знает не всё. */
+    originCityName: string;
+    /** Ссылка на справочник, если город удалось выбрать из подсказок. */
     originCityId: string;
+    destinationCityName: string;
     destinationCityId: string;
     originAddress: string;
     destinationAddress: string;
@@ -39,7 +43,8 @@ export interface QuoteFormValues {
 }
 
 const EMPTY: QuoteFormValues = {
-    customerCompanyId: '', originCityId: '', destinationCityId: '',
+    customerCompanyId: '', originCityName: '', originCityId: '',
+    destinationCityName: '', destinationCityId: '',
     originAddress: '', destinationAddress: '', readyDate: '',
     natureOfCargo: '', cargoDescription: '', cargoType: '',
     cargoWeightTons: '', cargoVolume: '', palletKind: '', palletCount: '',
@@ -106,8 +111,8 @@ export function QuoteFormDialog({
     // затирать свежий — на выборе заявок этим уже обжигались.
     useEffect(() => {
         if (!open) return;
-        const { customerCompanyId, originCityId, destinationCityId } = values;
-        if (!customerCompanyId || !originCityId || !destinationCityId) {
+        const { customerCompanyId, originCityName, originCityId, destinationCityName, destinationCityId } = values;
+        if (!customerCompanyId || !(originCityName || originCityId) || !(destinationCityName || destinationCityId)) {
             setMemory(null);
             return;
         }
@@ -117,8 +122,10 @@ export function QuoteFormDialog({
         const timer = setTimeout(() => {
             api.post('/quote-requests/memory', {
                 customerCompanyId,
-                originCityId,
-                destinationCityId,
+                originCityName: originCityName || undefined,
+                originCityId: originCityId || undefined,
+                destinationCityName: destinationCityName || undefined,
+                destinationCityId: destinationCityId || undefined,
                 cargoType: values.cargoType || undefined,
                 cargoWeight: tonsToKg(values.cargoWeightTons),
                 cargoVolume: num(values.cargoVolume),
@@ -137,18 +144,21 @@ export function QuoteFormDialog({
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [open, values.customerCompanyId, values.originCityId, values.destinationCityId,
+    }, [open, values.customerCompanyId, values.originCityName, values.originCityId,
+        values.destinationCityName, values.destinationCityId,
         values.cargoType, values.cargoWeightTons, values.cargoVolume, values.id]);
 
     const save = async () => {
         if (!values.customerCompanyId) return toast.warning('Выберите клиента');
-        if (!values.originCityId) return toast.warning('Выберите город погрузки');
-        if (!values.destinationCityId) return toast.warning('Выберите город выгрузки');
+        if (!values.originCityName && !values.originCityId) return toast.warning('Укажите город погрузки');
+        if (!values.destinationCityName && !values.destinationCityId) return toast.warning('Укажите город выгрузки');
 
         const body = {
             customerCompanyId: values.customerCompanyId,
-            originCityId: values.originCityId,
-            destinationCityId: values.destinationCityId,
+            originCityName: values.originCityName || undefined,
+            originCityId: values.originCityId || undefined,
+            destinationCityName: values.destinationCityName || undefined,
+            destinationCityId: values.destinationCityId || undefined,
             originAddress: values.originAddress || undefined,
             destinationAddress: values.destinationAddress || undefined,
             readyDate: values.readyDate ? new Date(values.readyDate).toISOString() : undefined,
@@ -227,7 +237,10 @@ export function QuoteFormDialog({
                                 placeholder="Откуда"
                                 known={cities}
                                 valueId={values.originCityId}
-                                onSelect={(id) => set('originCityId', id || '')}
+                                valueName={values.originCityName}
+                                onSelect={(city) => setValues((v) => ({
+                                    ...v, originCityId: city.id || '', originCityName: city.name,
+                                }))}
                                 onImported={onCityImported}
                             />
                         </Field>
@@ -237,7 +250,10 @@ export function QuoteFormDialog({
                                 placeholder="Куда"
                                 known={cities}
                                 valueId={values.destinationCityId}
-                                onSelect={(id) => set('destinationCityId', id || '')}
+                                valueName={values.destinationCityName}
+                                onSelect={(city) => setValues((v) => ({
+                                    ...v, destinationCityId: city.id || '', destinationCityName: city.name,
+                                }))}
                                 onImported={onCityImported}
                             />
                         </Field>

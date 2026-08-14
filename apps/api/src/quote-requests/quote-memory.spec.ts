@@ -31,7 +31,6 @@ describe('Память по запросам клиента', () => {
 
         expect(m.last).toBeNull();
         expect(m.note).toBeNull();
-        expect(m.range).toBeNull();
     });
 
     it('цену не назначает ни при каком исходе', () => {
@@ -185,67 +184,17 @@ describe('Память по запросам клиента', () => {
         expect(m.note).toBeNull();
     });
 
-    it('показывает вилку по маршруту: и клиенту, и закупку', () => {
-        const m = buildQuoteMemory(
-            [
-                запрос({ id: 'з1', customerPrice: 130_000, carrierCost: 100_000 }),
-                запрос({ id: 'з2', customerPrice: 125_000, carrierCost: 92_000, status: 'APPROVED' }),
-                запрос({ id: 'з3', customerPrice: 140_000, carrierCost: 110_000 }),
-            ],
-            { cargoWeight: 20_000 },
-            СЕЙЧАС,
-        );
-
-        expect(m.range).toEqual({
-            customerFrom: 125_000,
-            customerTo: 140_000,
-            carrierFrom: 92_000,
-            carrierTo: 110_000,
-            count: 3,
-        });
-    });
-
-    it('показывает несколько прошлых случаев, а не только последний', () => {
-        // Клиент платформы просил именно вариантов: у соседних запросов
-        // другой тоннаж и другая цена, и по одному выбирать не из чего.
-        const m = buildQuoteMemory(
-            [
-                запрос({ id: 'з1', cargoWeight: 20_000, customerPrice: 130_000 }),
-                запрос({ id: 'з2', cargoWeight: 5_000, customerPrice: 86_000, createdAt: new Date('2026-07-20T10:00:00Z') }),
-                запрос({ id: 'з3', cargoWeight: 22_000, customerPrice: 141_000, createdAt: new Date('2026-07-10T10:00:00Z') }),
-            ],
-            { cargoWeight: 20_000 },
-            СЕЙЧАС,
-        );
-
-        expect(m.items.map((i) => i.id)).toEqual(['з1', 'з2', 'з3']);
-    });
-
-    it('запрос без ответа клиента показан, но выводов из него не делается', () => {
-        // «Предлагали 130 000, клиент пока молчит» — это ровно то, чего не
-        // хватало менеджеру, который заводит второй такой же. Но сказать
-        // «прошло» или «не прошло» тут нельзя: ответа ещё нет.
+    it('запрос без ответа клиента выводов не даёт', () => {
+        // Сказать «прошло» или «не прошло» тут нельзя: ответа ещё нет. Сам
+        // случай при этом виден в списке по направлению.
         const m = buildQuoteMemory(
             [запрос({ status: 'IN_PROGRESS', rejectionReason: null })],
             { cargoWeight: 20_000 },
             СЕЙЧАС,
         );
 
-        expect(m.items).toHaveLength(1);
         expect(m.last).toBeNull();
         expect(m.note).toBeNull();
-        expect(m.range?.customerFrom).toBe(130_000);
-    });
-
-    it('вилка не разваливается, когда закупку не записали', () => {
-        const m = buildQuoteMemory(
-            [запрос({ carrierCost: null })],
-            { cargoWeight: 20_000 },
-            СЕЙЧАС,
-        );
-
-        expect(m.range?.carrierFrom).toBeNull();
-        expect(m.range?.customerFrom).toBe(130_000);
     });
 });
 
@@ -288,6 +237,22 @@ describe('Память по направлению', () => {
         const d = buildDirectionMemory([]);
 
         expect(d).toEqual({ count: 0, range: null, items: [] });
+    });
+
+    it('вилка не разваливается, когда закупку не записали', () => {
+        const d = buildDirectionMemory([запрос({ carrierCost: null })]);
+
+        expect(d.range?.carrierFrom).toBeNull();
+        expect(d.range?.customerFrom).toBe(130_000);
+    });
+
+    it('незакрытый запрос с ценой в списке есть', () => {
+        // «Предлагали 130 000, клиент пока молчит» — это ровно то, чего не
+        // хватало менеджеру, который заводит второй такой же.
+        const d = buildDirectionMemory([запрос({ status: 'IN_PROGRESS', rejectionReason: null })]);
+
+        expect(d.items).toHaveLength(1);
+        expect(d.range?.customerFrom).toBe(130_000);
     });
 
     it('считает вилку и показывает случаи от свежих к старым', () => {
