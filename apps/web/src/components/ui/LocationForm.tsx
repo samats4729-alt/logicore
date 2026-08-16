@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AutoComplete, Form, Input, Row, Col, Select, Typography, Button, FormInstance, Radio } from 'antd';
-import { EnvironmentOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { EnvironmentOutlined, CheckCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import { api, Location, Country, City, GeoProviderHierarchy } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import AddressAutocomplete from './AddressAutocomplete';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import { composeAddressPreview, tidyAddressPart, type AddressPartKind } from '@/lib/address';
 
 const MapPicker = dynamic(() => import('./MapPicker'), {
     ssr: false,
@@ -16,6 +17,31 @@ const MapPicker = dynamic(() => import('./MapPicker'), {
 
 const { Text } = Typography;
 const { Option } = Select;
+
+/**
+ * Разделить строку подсказки на улицу и дом.
+ *
+ * 2ГИС отдаёт их вместе: «Сатпаева, 90/1», «улица Мамедова, 2». Дом —
+ * последний кусок, начинающийся с цифры; остальное улица. Тип улицы
+ * («проспект», «улица») не трогаем: «проспект Абая» и «улица Абая» в одном
+ * городе — разные улицы.
+ */
+export function splitStreetHouse(line?: string | null): { street?: string; house?: string } {
+    const value = (line || '').trim();
+    if (!value) return {};
+
+    const parts = value.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1 && /^\d/.test(parts[parts.length - 1])) {
+        return { street: parts.slice(0, -1).join(', '), house: parts[parts.length - 1] };
+    }
+
+    // Без запятой: «Сатпаева 90/1» — дом отделён пробелом.
+    const match = value.match(/^(.*\S)\s+(\d\S*)$/);
+    if (match) return { street: match[1], house: match[2] };
+    return { street: value };
+}
+
+
 
 export interface LocationFormProps {
     form: FormInstance;
@@ -61,12 +87,23 @@ export default function LocationForm({
     /* Точку выбрал человек, а не подсказка геокодера. Такие координаты
        фоновая дозапись не перебивает: человек знает, где въезд на склад. */
     const [pointIsManual, setPointIsManual] = useState(false);
+    /* Работает ли поиск адресов. `null` — ещё не знаем. Спрашиваем один раз
+       при открытии формы: ответ лежит в кэше сервера неделю, так что
+       оплаченных запросов это почти не стоит, зато человек видит правду, а
+       не пустой поиск без объяснения. */
+    const [geoReady, setGeoReady] = useState<boolean | null>(null);
 
     useEffect(() => {
         if (showCompanySelect) {
             fetchCompanies();
         }
     }, [showCompanySelect]);
+
+    useEffect(() => {
+        api.get('/geo/suggest', { params: { q: 'Алматы' } })
+            .then((res) => setGeoReady(res.data?.configured !== false))
+            .catch(() => setGeoReady(false));
+    }, []);
 
     useEffect(() => {
         if (editingLocation) {
@@ -121,6 +158,20 @@ export default function LocationForm({
             form.setFieldsValue({ bindingType: 'none' });
         }
     }, [editingLocation, defaultCompanyId]);
+
+    /**
+     * Уходим из поля — приводим написанное в порядок.
+     *
+     * Сразу, на глазах: человек видит «Мамедова» вместо «МАМЕДОВА» и
+     * понимает, что именно сохранится. Сервер сделает то же самое при
+     * записи — это подстраховка, а не дубль ради дубля.
+     */
+    const tidyField = (name: AddressPartKind) => () => {
+        const was = form.getFieldValue(name);
+        const now = tidyAddressPart(was, name);
+        if (now !== (was || '')) form.setFieldsValue({ [name]: now || undefined });
+        if (name === 'city') setCity(now || undefined);
+    };
 
     const fetchCompanies = async () => {
         setCompaniesLoading(true);
@@ -250,11 +301,26 @@ export default function LocationForm({
         latitude: number,
         longitude: number,
         geography?: GeoProviderHierarchy,
+        streetLine?: string,
     ) => {
         setAddressValue(address);
         setLat(latitude);
         setLng(longitude);
+        setPointIsManual(false);
         form.setFieldsValue({ address, latitude, longitude });
+
+        // Подсказка заполняет поля, а не оставляет всё одной строкой.
+        // Раньше страна, область, улица и дом оставались пустыми — и когда
+        // геокодер отваливался, искать адрес заново было не по чему, а в
+        // документ уходила строка, которую человек уже не мог поправить.
+        const { street, house } = splitStreetHouse(streetLine || address);
+        form.setFieldsValue({
+            country: geography?.country?.name || form.getFieldValue('country') || undefined,
+            region: geography?.region?.name || form.getFieldValue('region') || undefined,
+            city: geography?.city?.name || form.getFieldValue('city') || undefined,
+            street: street || undefined,
+            house: house || undefined,
+        });
 
         if (geography?.city?.name) setCity(geography.city.name);
         const importedCity = await importProviderGeography(geography, latitude, longitude);
@@ -379,6 +445,39 @@ export default function LocationForm({
                         <Input placeholder="Склад №1" size="large" />
                     </Form.Item>
 
+                    {/* Быстрый путь — сверху: одна подсказка заполняет все поля
+                        ниже. Когда геокодер молчит, поле не показываем вовсе:
+                        пустой поиск без объяснения выглядит поломкой, а поля
+                        под ним работают и без него. */}
+                    {geoReady !== false ? (
+                        <Form.Item
+                            label="Найти адрес"
+                            help={city ? `Ищем в городе: ${city}. Поля ниже заполнятся сами` : 'Заполнит поля ниже'}
+                        >
+                            <AddressAutocomplete
+                                value={addressValue}
+                                onChange={(val) => {
+                                    setAddressValue(val);
+                                    form.setFieldsValue({ address: val });
+                                }}
+                                onSelect={handleAddressSelect}
+                                city={city}
+                                proximity={cityFocus}
+                                placeholder={city ? 'Улица и дом, напр.: Сатпаева 90/1' : 'Например: Алматы, Сатпаева 90/1'}
+                            />
+                        </Form.Item>
+                    ) : (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '10px 14px', borderRadius: 10, marginBottom: 16,
+                            fontSize: 13, lineHeight: 1.45,
+                            background: 'var(--nova-surface-2)', border: '1px solid var(--nova-border)',
+                            color: 'var(--nova-fg-2)',
+                        }}>
+                            <SearchOutlined /> Поиск адреса сейчас выключен. Заполните поля ниже — точку найдём, когда он заработает
+                        </div>
+                    )}
+
                     <Row gutter={12}>
                         <Col span={10}>
                             {/* Страна — обычное поле с подсказками, а не выбор
@@ -404,10 +503,23 @@ export default function LocationForm({
                                         // теряется, и это нормально.
                                         if (!countries.some(c => c.name === value)) setSelectedCountryId(undefined);
                                     }}
+                                    onBlur={tidyField('country')}
                                 />
                             </Form.Item>
                         </Col>
                         <Col span={14}>
+                            {/* Область — рядом со страной: адрес читается
+                                сверху вниз, от крупного к мелкому. Раньше она
+                                стояла ниже улицы, и заполняли её в последнюю
+                                очередь или не заполняли вовсе. */}
+                            <Form.Item name="region" label="Область или район">
+                                <Input size="large" placeholder="Туркестанская область" onBlur={tidyField('region')} />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={12}>
+                        <Col span={24}>
                             {/* Город тоже пишется свободно. Из-за выбора только
                                 из списка компания не смогла завести Мынарал:
                                 его не знал геокодер, значит не было и в
@@ -437,29 +549,11 @@ export default function LocationForm({
                                         setCity(value ? String(value) : undefined);
                                         if (!cityOptions.some(c => c.name === value)) setSelectedCityId(undefined);
                                     }}
+                                    onBlur={tidyField('city')}
                                 />
                             </Form.Item>
                         </Col>
                     </Row>
-
-                    {/* Быстрый путь: подсказка геокодера заполняет всё разом.
-                        Работает, пока к нему есть запросы. */}
-                    <Form.Item
-                        label="Найти адрес подсказкой"
-                        help={city ? `Поиск улицы в городе: ${city}` : 'Если подсказок нет — заполните поля ниже руками'}
-                    >
-                        <AddressAutocomplete
-                            value={addressValue}
-                            onChange={(val) => {
-                                setAddressValue(val);
-                                form.setFieldsValue({ address: val });
-                            }}
-                            onSelect={handleAddressSelect}
-                            city={city}
-                            proximity={cityFocus}
-                            placeholder={city ? 'Улица и дом, напр.: Сатпаева 90/1' : 'Например: Алматы, Казахстан, Сатпаева 90/1'}
-                        />
-                    </Form.Item>
 
                     {/* Ручной ввод. Он же — единственный путь, когда геокодер
                         молчит: кончились запросы, нет ключа, нет сети. Раньше
@@ -467,18 +561,35 @@ export default function LocationForm({
                     <Row gutter={12}>
                         <Col span={12}>
                             <Form.Item name="street" label="Улица">
-                                <Input size="large" placeholder="Сатпаева" />
+                                <Input size="large" placeholder="Сатпаева" onBlur={tidyField('street')} />
                             </Form.Item>
                         </Col>
                         <Col span={12}>
                             <Form.Item name="house" label="Дом">
-                                <Input size="large" placeholder="90/1" />
+                                <Input size="large" placeholder="90/1" onBlur={tidyField('house')} />
                             </Form.Item>
                         </Col>
                     </Row>
 
-                    <Form.Item name="region" label="Область или район" help="Если нужно уточнить — например для посёлка">
-                        <Input size="large" placeholder="Жамбылская область" />
+                    {/* Как адрес попадёт в документы. Показываем до сохранения:
+                        человек видит результат, а не догадывается о нём — и
+                        сразу замечает, если поля разъехались. */}
+                    <Form.Item noStyle shouldUpdate>
+                        {() => {
+                            const preview = composeAddressPreview(form.getFieldsValue(), addressValue);
+                            if (!preview) return null;
+                            return (
+                                <div style={{
+                                    padding: '9px 14px', borderRadius: 10, marginBottom: 16,
+                                    background: 'var(--nova-surface-2)', border: '1px solid var(--nova-border)',
+                                }}>
+                                    <div style={{ fontSize: 11, color: 'var(--nova-fg-3)', marginBottom: 2 }}>
+                                        В документах и в списке будет так
+                                    </div>
+                                    <div style={{ fontSize: 13, color: 'var(--nova-fg)' }}>{preview}</div>
+                                </div>
+                            );
+                        }}
                     </Form.Item>
 
                     {/* Отсутствие координат — не ошибка человека, а состояние
