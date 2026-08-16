@@ -17,7 +17,21 @@ interface DgisAddressFeature {
 interface AddressAutocompleteProps {
     value?: string;
     onChange?: (value: string) => void;
-    onSelect?: (address: string, lat: number, lng: number, geography?: GeoProviderHierarchy) => void;
+    /**
+     * Выбрали подсказку.
+     *
+     * `streetLine` — улица с домом отдельной строкой («Сатпаева, 90/1»).
+     * Нужна, чтобы форма заполнила поля «Улица» и «Дом», а не оставила всё
+     * одной строкой: по частям потом ищется адрес, когда геокодер снова
+     * ответит, и по ним же собирается адрес для документов.
+     */
+    onSelect?: (
+        address: string,
+        lat: number,
+        lng: number,
+        geography?: GeoProviderHierarchy,
+        streetLine?: string,
+    ) => void;
     placeholder?: string;
     size?: 'small' | 'middle' | 'large';
     proximity?: { lat: number; lng: number };
@@ -138,7 +152,7 @@ export default function AddressAutocomplete({
         const formattedAddress = feature.place_name;
 
         onChange?.(formattedAddress);
-        onSelect?.(formattedAddress, lat, lng, feature.geography);
+        onSelect?.(formattedAddress, lat, lng, feature.geography, feature.text);
     };
 
     return (

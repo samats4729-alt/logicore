@@ -1,4 +1,4 @@
-import { composeAddress, coordinateFields, numberOrNull } from './locations.service';
+import { composeAddress, coordinateFields, numberOrNull, tidyAddressPart } from './locations.service';
 
 /**
  * Адрес без координат.
@@ -88,5 +88,61 @@ describe('Адрес точки', () => {
                 latitude: 43.23, longitude: 76.9,
             });
         });
+    });
+});
+
+/**
+ * Порядок в частях адреса.
+ *
+ * Адрес печатается в договоре-заявке и доверенности, а ещё по нему потом
+ * ищет геокодер. «МАМЕДОВА» и «г.Шардара» портят и то и другое: в документе
+ * это выглядит неряшливо, а для поиска «Шардара» и «г. Шардара» — разные
+ * строки.
+ */
+describe('Порядок в частях адреса', () => {
+    it('капс приводится к обычному виду', () => {
+        expect(tidyAddressPart('МАМЕДОВА', 'street')).toBe('Мамедова');
+        expect(tidyAddressPart('АЛМА-АТА', 'city')).toBe('Алма-Ата');
+    });
+
+    it('короткие сокращения не трогает', () => {
+        // «АЗС» и «ТЭЦ» — так и пишут, это не крик.
+        expect(tidyAddressPart('АЗС', 'street')).toBe('АЗС');
+        expect(tidyAddressPart('ТЭЦ-3', 'street')).toBe('ТЭЦ-3');
+    });
+
+    it('приставку города снимает — с точкой и без', () => {
+        expect(tidyAddressPart('г.Шардара', 'city')).toBe('Шардара');
+        expect(tidyAddressPart('г. Шардара', 'city')).toBe('Шардара');
+        expect(tidyAddressPart('пос Мынарал', 'city')).toBe('Мынарал');
+    });
+
+    it('у улицы тип не трогает', () => {
+        // «проспект Абая» и «улица Абая» в одном городе — разные улицы.
+        expect(tidyAddressPart('проспект Абая', 'street')).toBe('проспект Абая');
+        expect(tidyAddressPart('улица Сатпаева', 'street')).toBe('улица Сатпаева');
+    });
+
+    it('лишние пробелы и запятые убирает', () => {
+        expect(tidyAddressPart('  Мамедова ,', 'street')).toBe('Мамедова');
+        expect(tidyAddressPart('дом  2 ', 'house')).toBe('2');
+        expect(tidyAddressPart('   ', 'city')).toBeNull();
+    });
+
+    it('улица названа — строка собирается из полей, а не из поиска', () => {
+        // Раньше готовая строка была главнее, и «Мамедова 2» в адрес не
+        // попадала вовсе: в документ уходило то, что осталось в поиске.
+        const address = composeAddress('Шардара', {
+            country: 'Казахстан', region: 'Туркестанская область',
+            city: 'Шардара', street: 'МАМЕДОВА', house: '2',
+        });
+
+        expect(address).toBe('Казахстан, Туркестанская область, Шардара, Мамедова 2');
+    });
+
+    it('улицы нет — готовая строка остаётся как есть', () => {
+        // Так адрес приходит из быстрого ввода прямо в заявке.
+        expect(composeAddress('г. Астана, ул. Бруно, 10', { city: 'Астана' }))
+            .toBe('г. Астана, ул. Бруно, 10');
     });
 });

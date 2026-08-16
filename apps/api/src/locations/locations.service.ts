@@ -10,6 +10,59 @@ export function numberOrNull(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
+/** Приставки, которые ничего не добавляют к названию места. */
+/* Длинные впереди коротких: иначе «г» срабатывает раньше «город». */
+const CITY_PREFIXES = ['город', 'станция', 'посёлок', 'поселок', 'село', 'қала', 'гор', 'пос', 'аул', 'ст', 'қ', 'г', 'п', 'с'];
+const HOUSE_PREFIXES = ['здание', 'дом', 'зд', 'д'];
+
+/**
+ * Привести часть адреса в порядок.
+ *
+ * Люди пишут как придётся: «МАМЕДОВА», «г.Шардара», «  дом 2 ». В договоре
+ * это выглядит неряшливо, а в поиске мешает: «Шардара» и «г. Шардара» —
+ * для геокодера разные строки.
+ *
+ * Правки только безопасные. Приставку снимаем у города и дома — она
+ * никогда не бывает частью имени. У улицы не трогаем ничего: «проспект
+ * Абая» и «улица Абая» в одном городе — разные улицы, и выкинуть слово
+ * значит перепутать адрес. Заглавные приводим к обычному виду, только
+ * если слово написано капсом целиком и длиннее трёх букв: «АЗС» и «ТЭЦ»
+ * остаются как есть.
+ */
+export function tidyAddressPart(
+    value: string | null | undefined,
+    kind: 'country' | 'region' | 'city' | 'street' | 'house' = 'city',
+): string | null {
+    if (value === null || value === undefined) return null;
+
+    let result = String(value).replace(/\s+/g, ' ').trim();
+    result = result.replace(/^[.,;\s]+|[.,;\s]+$/g, '').trim();
+    if (!result) return null;
+
+    const prefixes = kind === 'house' ? HOUSE_PREFIXES : kind === 'city' ? CITY_PREFIXES : [];
+    for (const prefix of prefixes) {
+        // Отделитель обязателен — точка или пробел. Без него «д» откусывало
+        // первую букву у «дом 2» и оставляло «ом 2»: приставка обязана быть
+        // отдельным словом, а не началом другого.
+        const match = new RegExp(`^${prefix}(?:\\.\\s*|\\s+)(?=\\S)`, 'i').exec(result);
+        if (match && match[0].length < result.length) {
+            result = result.slice(match[0].length).trim();
+            break;
+        }
+    }
+
+    if (kind !== 'house') result = fixShouting(result);
+    return result || null;
+}
+
+/** «МАМЕДОВА» → «Мамедова», «АЗС» и «ТЭЦ-3» не трогаем. */
+function fixShouting(value: string): string {
+    if (/\p{Ll}/u.test(value)) return value;
+    const letters = value.replace(/[^\p{L}]/gu, '');
+    if (letters.length < 4) return value;
+    return value.replace(/\p{L}+/gu, (word) => word[0] + word.slice(1).toLowerCase());
+}
+
 /**
  * Строка адреса из частей.
  *
@@ -17,19 +70,31 @@ export function numberOrNull(value: unknown): number | null {
  * «страна, область, город, улица, дом» и без пустых мест: у половины адресов
  * области нет, а «Казахстан, , Алматы» в документе выглядит браком.
  *
- * Готовая строка, если её прислали, важнее собранной: адрес мог прийти из
- * подсказки геокодера целиком, и разбирать его обратно незачем.
+ * Когда улица названа, строка собирается из полей — и результат один и тот
+ * же, нашёлся адрес подсказкой или его вписали руками. Раньше готовая
+ * строка всегда была главнее, и «Мамедова 2», введённая в поля, в адрес не
+ * попадала вовсе: в документ уходило то, что осталось в строке поиска.
+ *
+ * Готовая строка остаётся в ходу там, где полей нет: её присылают старые
+ * клиенты и быстрый ввод адреса прямо в заявке.
  */
 export function composeAddress(
     address: string | undefined | null,
     parts: { country?: string; region?: string; city?: string; street?: string; house?: string },
 ): string {
-    if (address && address.trim()) return address.trim();
-    const street = [parts.street, parts.house].map((p) => p?.trim()).filter(Boolean).join(' ');
-    return [parts.country, parts.region, parts.city, street]
-        .map((p) => p?.trim())
-        .filter(Boolean)
-        .join(', ');
+    const tidy = {
+        country: tidyAddressPart(parts.country, 'country'),
+        region: tidyAddressPart(parts.region, 'region'),
+        city: tidyAddressPart(parts.city, 'city'),
+        street: tidyAddressPart(parts.street, 'street'),
+        house: tidyAddressPart(parts.house, 'house'),
+    };
+    const ready = (address || '').trim();
+    if (ready && !tidy.street) return ready;
+
+    const street = [tidy.street, tidy.house].filter(Boolean).join(' ');
+    const composed = [tidy.country, tidy.region, tidy.city, street].filter(Boolean).join(', ');
+    return composed || ready;
 }
 
 /** Что записать в координаты: точку человека, точку геокодера или пусто. */
@@ -124,15 +189,15 @@ export class LocationsService {
                     name,
                     address: composeAddress(address, parts),
                     ...coordinateFields(latitude, longitude, coordinatesManual),
-                    country: country || null,
-                    region: region || null,
-                    street: street || null,
-                    house: house || null,
+                    country: tidyAddressPart(country, 'country'),
+                    region: tidyAddressPart(region, 'region'),
+                    street: tidyAddressPart(street, 'street'),
+                    house: tidyAddressPart(house, 'house'),
                     contactName,
                     contactPhone,
                     notes,
                     createdById,
-                    city: city || null,
+                    city: tidyAddressPart(city, 'city'),
                     cityId: cityId || null,
                     companyId: companyId || null,
                     emails: emails || null,
@@ -355,11 +420,32 @@ export class LocationsService {
 
             const updateData: any = {};
             if (name !== undefined) updateData.name = name;
-            if (address !== undefined) updateData.address = address;
-            if (country !== undefined) updateData.country = country || null;
-            if (region !== undefined) updateData.region = region || null;
-            if (street !== undefined) updateData.street = street || null;
-            if (house !== undefined) updateData.house = house || null;
+            if (country !== undefined) updateData.country = tidyAddressPart(country, 'country');
+            if (region !== undefined) updateData.region = tidyAddressPart(region, 'region');
+            if (street !== undefined) updateData.street = tidyAddressPart(street, 'street');
+            if (house !== undefined) updateData.house = tidyAddressPart(house, 'house');
+
+            // Строку адреса пересобираем, как только тронули хоть одну часть.
+            // Иначе правка улицы никуда не доходила: в документах и в списке
+            // оставался прежний адрес, и человек видел одно, а печаталось
+            // другое. Недостающие части берём из карточки — прислать могли
+            // только то, что меняли.
+            const touched = [address, country, region, city, street, house].some((v) => v !== undefined);
+            if (touched) {
+                const current = await this.prisma.location.findUnique({
+                    where: { id },
+                    select: { country: true, region: true, city: true, street: true, house: true },
+                });
+                const pick = (next: any, was: string | null | undefined) =>
+                    (next !== undefined ? next : was) || undefined;
+                updateData.address = composeAddress(address, {
+                    country: pick(country, current?.country),
+                    region: pick(region, current?.region),
+                    city: pick(city, current?.city),
+                    street: pick(street, current?.street),
+                    house: pick(house, current?.house),
+                });
+            }
             // Пустые координаты — это «убрать точку», а не «не менять»: человек
             // мог стереть ошибочную. Number(null) даёт ноль, то есть точку в
             // Гвинейском заливе, поэтому пустое приводим к null явно.
@@ -371,7 +457,7 @@ export class LocationsService {
             if (contactName !== undefined) updateData.contactName = contactName;
             if (contactPhone !== undefined) updateData.contactPhone = contactPhone;
             if (notes !== undefined) updateData.notes = notes;
-            if (city !== undefined) updateData.city = city || null;
+            if (city !== undefined) updateData.city = tidyAddressPart(city, 'city');
             if (cityId !== undefined) updateData.cityId = cityId || null;
             if (companyId !== undefined) updateData.companyId = companyId || null;
             if (emails !== undefined) updateData.emails = emails || null;

@@ -38,6 +38,13 @@ test.describe('Адреса без геокодера', () => {
         await fill(page, 'Улица', 'Центральная');
         await fill(page, 'Дом', '5');
 
+        // Написание причёсывается на глазах: в документ уйдёт «Мамедова»,
+        // а не «МАМЕДОВА», и человек видит это до сохранения.
+        await fill(page, 'Улица', 'МАМЕДОВА');
+        await form.getByLabel('Дом', { exact: true }).blur();
+        await expect(form.getByText(/В документах и в списке будет так/)).toBeVisible();
+        await expect(form.getByText(/Мынарал, Мамедова 5/)).toBeVisible();
+
         // Ни подсказки 2ГИС, ни клика по карте: точки у адреса нет.
         await expect(form.getByText(/Координат пока нет/)).toBeVisible();
 
@@ -88,4 +95,60 @@ test.describe('Адреса без геокодера', () => {
         await expect(page.locator('[data-sonner-toast]'))
             .toContainText('точки допишем, когда он снова заработает', { timeout: 15_000 });
     });
+});
+
+/**
+ * Тот же адрес, но геокодер отвечает.
+ *
+ * Ответ подменяется намеренно: ключ 2ГИС в проверках не живёт, а свойство
+ * проверять надо всегда. Раньше подсказка клала всё одной строкой, поля
+ * оставались пустыми — и когда запросы кончались, искать адрес заново было
+ * не по чему. Теперь она заполняет поля, и они же идут в поиск потом.
+ */
+test('подсказка заполняет поля, а не одну строку', async ({ page }) => {
+    await page.route('**/geo/suggest**', (route) => route.fulfill({
+        json: {
+            configured: true,
+            items: [{
+                id: '1', name: 'Мамедова, 2',
+                full_name: 'Шардара, Мамедова, 2',
+                address_name: 'Мамедова, 2',
+                point: { lat: 41.2545, lon: 67.9705 },
+                geography: {
+                    provider: '2gis',
+                    country: { code: 'KZ', name: 'Казахстан' },
+                    region: { name: 'Туркестанская область' },
+                    city: { name: 'Шардара' },
+                },
+            }],
+        },
+    }));
+    await page.route('**/cities/import-from-provider', (route) => route.fulfill({
+        json: {
+            country: { id: 'c-1', name: 'Казахстан', code: 'KZ' },
+            region: { id: 'r-1', name: 'Туркестанская область' },
+            city: { id: 'g-1', name: 'Шардара', latitude: 41.25, longitude: 67.97 },
+        },
+    }));
+
+    await login(page);
+    await page.goto('/company/locations');
+    await page.getByRole('button', { name: 'Добавить новый адрес' }).click();
+
+    const form = page.getByRole('dialog');
+    await fill(page, 'Название точки', 'E2E подсказка');
+    // У поля поиска нет имени в форме, поэтому целимся по подсказке ввода.
+    await form.getByPlaceholder(/Сатпаева 90\/1/).fill('Мамедова');
+    // Берём видимый пункт списка: у Ant рядом лежит скрытый двойник для
+    // экранных читалок, и клик по нему не проходит.
+    await page.locator('.ant-select-item-option:visible').first().click();
+
+    // Всё разошлось по своим полям — по ним потом и ищется адрес.
+    await expect(form.getByLabel('Страна', { exact: true })).toHaveValue('Казахстан');
+    await expect(form.getByLabel('Область или район', { exact: true })).toHaveValue('Туркестанская область');
+    await expect(form.getByLabel('Город или посёлок', { exact: true })).toHaveValue('Шардара');
+    await expect(form.getByLabel('Улица', { exact: true })).toHaveValue('Мамедова');
+    await expect(form.getByLabel('Дом', { exact: true })).toHaveValue('2');
+
+    await expect(form.getByText(/Точка на карте есть/)).toBeVisible();
 });
