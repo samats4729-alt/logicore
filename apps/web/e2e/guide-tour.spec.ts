@@ -51,8 +51,15 @@ test('гид доводит по шагам, и подсказка не закр
     await field.fill('Как создать заявку?');
     await field.press('Enter');
 
-    const start = page.getByRole('button', { name: /Показать|Провести|Шаг|Начать/i }).first();
-    if (await start.count()) await start.click();
+    // Маршрут начинается только по этой кнопке — ждём её появления, а не
+    // проверяем наличие сразу. `count()` не ждёт: ответ помощника прилетает
+    // мгновением позже, в этот момент кнопок ноль, и раньше тест молча шёл
+    // дальше. Тур при этом не запускался вовсе, а падал первый шаг —
+    // «подсветка не встала», через двадцать секунд и совсем не там, где
+    // причина. Ровно так CI и краснел, пока локально успевало отрисоваться.
+    const start = page.getByRole('button', { name: 'Показать по шагам' }).first();
+    await expect(start).toBeVisible({ timeout: 20_000 });
+    await start.click();
 
     for (const step of ROUTE) {
         await expect.poll(() => ringOn(page, step.selector), {
