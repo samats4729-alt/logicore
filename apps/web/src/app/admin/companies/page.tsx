@@ -24,6 +24,15 @@ const STATUS_VIEW: Record<string, { label: string; chip?: 'warn' | 'neg' }> = {
     REJECTED: { label: 'Отклонена', chip: 'neg' },
 };
 
+/**
+ * Взять название в кавычки, если их там ещё нет.
+ *
+ * Названия в базе хранятся как в учредительных документах — вместе с
+ * кавычками: «ТОО «Ромашка»». Внешние кавычки поверх них давали
+ * «ТОО «Ромашка»» в двойной обёртке.
+ */
+const quoted = (name: string) => (name.includes('«') ? name : `«${name}»`);
+
 const STATUS_TABS = [
     { value: 'PENDING', label: 'На проверке' },
     { value: 'VERIFIED', label: 'Подтверждённые' },
@@ -117,7 +126,7 @@ export default function AdminCompaniesPage() {
 
     const approve = async (company: ReviewCompany) => {
         Modal.confirm({
-            title: `Подтвердить «${company.name}»?`,
+            title: `Подтвердить ${quoted(company.name)}?`,
             content: 'Организация получит доступ к заявкам и бухгалтерии.',
             okText: 'Подтвердить',
             cancelText: 'Отмена',
@@ -146,7 +155,7 @@ export default function AdminCompaniesPage() {
             .map((partner) => partner.ownerCompanyName || partner.name)
             .join(', ');
         Modal.confirm({
-            title: `Отдать «${company.name}» её рейсы в работе?`,
+            title: `Отдать ${quoted(company.name)} её рейсы в работе?`,
             content: (
                 <div style={{ fontSize: 13 }}>
                     <p>
@@ -192,7 +201,7 @@ export default function AdminCompaniesPage() {
         let reason = '';
         let block = false;
         Modal.confirm({
-            title: `Отклонить «${company.name}»?`,
+            title: `Отклонить ${quoted(company.name)}?`,
             width: 520,
             content: (
                 <div>
@@ -245,7 +254,7 @@ export default function AdminCompaniesPage() {
     /** Снять окончательный отказ: ошибиться здесь легко, обратный ход нужен. */
     const unblock = (company: ReviewCompany) => {
         Modal.confirm({
-            title: `Снять запрет с «${company.name}»?`,
+            title: `Снять запрет с ${quoted(company.name)}?`,
             content: 'Организация снова сможет приложить документы, подать заявку и вести учёт.',
             okText: 'Снять запрет',
             cancelText: 'Отмена',
@@ -363,7 +372,7 @@ export default function AdminCompaniesPage() {
                                             <Alert
                                                 type="error"
                                                 showIcon
-                                                message={`БИН ${record.bin} уже подтверждён у «${record.binVerifiedBy.name}»`}
+                                                message={`БИН ${record.bin} уже подтверждён у ${quoted(record.binVerifiedBy.name)}`}
                                                 description="Одна организация — один БИН. Если это та же фирма, работа идёт в её кабинете; эту заявку отклоните с причиной."
                                             />
                                         )}
@@ -383,7 +392,7 @@ export default function AdminCompaniesPage() {
                                                         </div>
                                                         {record.binOtherApplications.map((other) => (
                                                             <div key={other.id} style={{ fontSize: 12 }}>
-                                                                «{other.name}» — {STATUS_VIEW[other.verificationStatus]?.label
+                                                                {quoted(other.name)} — {STATUS_VIEW[other.verificationStatus]?.label
                                                                     || other.verificationStatus}
                                                                 {other.blocked && ', доступ закрыт'}
                                                                 {' · '}
@@ -497,7 +506,7 @@ export default function AdminCompaniesPage() {
                             {
                                 title: 'Статус',
                                 dataIndex: 'verificationStatus',
-                                width: 130,
+                                width: 190,
                                 render: (value: string, record: ReviewCompany) => (
                                     <div>
                                         <span className={`${nova.chip} ${
