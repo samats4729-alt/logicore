@@ -44,6 +44,8 @@ const STATUS_VIEW: Record<string, { label: string; color: string }> = {
 interface VerificationState {
     verificationStatus: string;
     rejectionReason: string | null;
+    /** Отказ окончательный: подавать заявку заново нельзя. */
+    verificationBlockedAt: string | null;
     canSubmit: boolean;
     missingDocuments: string[];
     documents: { id: string; type: string; fileName: string }[];
@@ -115,6 +117,10 @@ export default function CompanyOnboardingPage() {
     }
 
     const status = verification?.verificationStatus ?? 'DRAFT';
+    /* Обычный отказ — замечание, его исправляют. Этот — окончательный:
+       заявку признали чужой, и всё, что осталось на экране, должно вести
+       к поддержке, а не к повторной загрузке справок. */
+    const blocked = Boolean(verification?.verificationBlockedAt);
     const step = !company ? 0 : status === 'VERIFIED' ? 2 : 1;
 
     return (
@@ -219,13 +225,25 @@ export default function CompanyOnboardingPage() {
                             type="error"
                             showIcon
                             style={{ marginBottom: 16 }}
-                            message="Заявка отклонена"
+                            message={blocked ? 'Заявка отклонена окончательно' : 'Заявка отклонена'}
                             description={
                                 <>
-                                    {verification?.rejectionReason}
+                                    {verification?.rejectionReason
+                                        || (blocked ? 'Организация принадлежит не вам.' : null)}
                                     <div style={{ marginTop: 6, fontSize: 12 }}>
-                                        Исправьте замечание, замените документ и отправьте заявку заново.
+                                        {blocked
+                                            ? 'Подать документы заново нельзя. Если это ошибка, напишите в поддержку — решение пересматривает владелец платформы.'
+                                            : 'Исправьте замечание, замените документ и отправьте заявку заново.'}
                                     </div>
+                                    {blocked && (
+                                        <Button
+                                            size="small"
+                                            style={{ marginTop: 10 }}
+                                            onClick={() => router.push('/company/support')}
+                                        >
+                                            Написать в поддержку
+                                        </Button>
+                                    )}
                                 </>
                             }
                         />
@@ -264,7 +282,7 @@ export default function CompanyOnboardingPage() {
                                     <Upload
                                         showUploadList={false}
                                         accept=".pdf,.png,.jpg,.jpeg"
-                                        disabled={status === 'PENDING'}
+                                        disabled={status === 'PENDING' || blocked}
                                         customRequest={async ({ file, onSuccess, onError }) => {
                                             const data = new FormData();
                                             data.append('file', file as File);
@@ -285,7 +303,7 @@ export default function CompanyOnboardingPage() {
                                         <Button
                                             size="small"
                                             icon={attached ? <UploadOutlined /> : <InboxOutlined />}
-                                            disabled={status === 'PENDING'}
+                                            disabled={status === 'PENDING' || blocked}
                                         >
                                             {attached ? 'Заменить' : 'Загрузить'}
                                         </Button>
@@ -295,21 +313,25 @@ export default function CompanyOnboardingPage() {
                         })}
                     </Space>
 
-                    <Button
-                        type="primary"
-                        size="large"
-                        block
-                        style={{ marginTop: 18 }}
-                        loading={saving}
-                        disabled={!verification?.canSubmit}
-                        onClick={submit}
-                    >
-                        {status === 'PENDING' ? 'Заявка на проверке' : 'Отправить на проверку'}
-                    </Button>
-                    {!verification?.canSubmit && status !== 'PENDING' && (
-                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 8, textAlign: 'center' }}>
-                            Приложите все три документа, чтобы отправить заявку
-                        </div>
+                    {!blocked && (
+                        <>
+                            <Button
+                                type="primary"
+                                size="large"
+                                block
+                                style={{ marginTop: 18 }}
+                                loading={saving}
+                                disabled={!verification?.canSubmit}
+                                onClick={submit}
+                            >
+                                {status === 'PENDING' ? 'Заявка на проверке' : 'Отправить на проверку'}
+                            </Button>
+                            {!verification?.canSubmit && status !== 'PENDING' && (
+                                <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 8, textAlign: 'center' }}>
+                                    Приложите все три документа, чтобы отправить заявку
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}

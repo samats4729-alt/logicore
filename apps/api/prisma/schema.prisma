@@ -330,6 +330,15 @@ model Company {
   verifiedBy              User?                     @relation("VerifiedCompanies", fields: [verifiedById], references: [id], onDelete: SetNull)
   rejectionReason         String?
 
+  /// Отказ окончательный: заявку признали чужой.
+  ///
+  /// Обычный отказ — это замечание, после него документы прикладывают
+  /// заново. Но если человек зарегистрировал чужую фирму, «исправить»
+  /// ему нечего: он вернётся с тем же БИН завтра и послезавтра. Такой
+  /// отказ закрывает и повторную подачу, и работу в кабинете — иначе
+  /// он продолжит выставлять документы от имени чужой компании.
+  verificationBlockedAt   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
