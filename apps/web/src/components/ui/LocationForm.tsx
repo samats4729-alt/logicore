@@ -313,13 +313,22 @@ export default function LocationForm({
         // Раньше страна, область, улица и дом оставались пустыми — и когда
         // геокодер отваливался, искать адрес заново было не по чему, а в
         // документ уходила строка, которую человек уже не мог поправить.
-        const { street, house } = splitStreetHouse(streetLine || address);
+        //
+        // Улицу берём только из уличного адреса подсказки. Выбрали посёлок —
+        // улицы у него нет, и поле остаётся пустым: подставлять туда
+        // название самого посёлка («Улица: Шардара») хуже, чем пустота.
+        const picked = splitStreetHouse(streetLine);
+        const cityName = geography?.city?.name;
+        const street = picked.street && picked.street !== cityName ? picked.street : undefined;
+
         form.setFieldsValue({
             country: geography?.country?.name || form.getFieldValue('country') || undefined,
             region: geography?.region?.name || form.getFieldValue('region') || undefined,
-            city: geography?.city?.name || form.getFieldValue('city') || undefined,
-            street: street || undefined,
-            house: house || undefined,
+            city: cityName || form.getFieldValue('city') || undefined,
+            // Есть улица в подсказке — она главнее набранного. Нет —
+            // оставляем то, что человек уже вписал сам.
+            street: street || form.getFieldValue('street') || undefined,
+            house: street ? (picked.house || undefined) : form.getFieldValue('house') || undefined,
         });
 
         if (geography?.city?.name) setCity(geography.city.name);

@@ -104,7 +104,11 @@ export default function AddressAutocomplete({
                                 id: item.id,
                                 place_name: val,
                                 center: [item.point.lon, item.point.lat], // Lon, Lat
-                                text: item.address_name || item.name,
+                                // Только настоящий уличный адрес. У посёлка
+                                // его нет, и подставлять вместо него название
+                                // места нельзя: в поле «Улица» попадала
+                                // «Шардара» — сам посёлок вместо улицы.
+                                text: item.address_name,
                                 geography: item.geography,
                             },
                             label: (
