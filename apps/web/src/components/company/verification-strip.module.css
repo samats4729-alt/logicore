@@ -1,0 +1,91 @@
+/* Полоса «где мы в проверке» и отметка у названия компании.
+
+   Спокойные цвета: пока подтверждение ничего не запирает, красная полоса
+   врала бы о важности — и через неделю её перестали бы замечать вместе со
+   всеми остальными. */
+
+.strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--nova-surface);
+    border: 1px solid color-mix(in srgb, var(--nova-warn) 35%, var(--nova-border));
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
+    padding: 10px 14px;
+    margin-bottom: 14px;
+}
+
+.icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: 9px;
+    background: var(--nova-warn-soft);
+    color: var(--nova-warn);
+}
+
+.text {
+    flex: 1;
+    min-width: 220px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--nova-fg-2);
+}
+
+.text b {
+    color: var(--nova-fg);
+    font-weight: 600;
+}
+
+.action {
+    height: 30px;
+    padding: 0 13px;
+    border: 1px solid var(--nova-primary);
+    border-radius: 9px;
+    background: var(--nova-primary);
+    color: var(--nova-primary-fg);
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+    transition: opacity .15s ease;
+}
+
+.action:hover {
+    opacity: .88;
+}
+
+/* Отметка у названия компании. Подпись появляется по наведению: в шапке
+   каждый лишний символ отодвигает имя организации. */
+.badge,
+.badgeOk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: nowrap;
+    cursor: default;
+    vertical-align: middle;
+}
+
+.badge {
+    background: var(--nova-surface-2);
+    color: var(--nova-fg-3);
+}
+
+.badgeOk {
+    background: color-mix(in srgb, var(--nova-pos) 14%, transparent);
+    color: var(--nova-pos);
+}
+
+.badgeText {
+    font-size: 11px;
+}

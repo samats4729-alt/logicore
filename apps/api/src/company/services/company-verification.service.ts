@@ -11,6 +11,10 @@ import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3Service } from '../../s3/s3.service';
 
+/** Рубильник: требовать ли подтверждение организации для работы. */
+const SETTING_VERIFICATION_REQUIRED = 'verification_required';
+const REQUIRED_CACHE_TTL_MS = 60_000;
+
 /**
  * Пакет документов, которым в РК подтверждают компанию.
  *
@@ -33,6 +37,9 @@ export const VERIFICATION_DOCUMENT_LABELS: Record<string, string> = {
 
 @Injectable()
 export class CompanyVerificationService {
+    /** Рубильник спрашивают на каждом действии — держим ответ минуту. */
+    private requiredCache: { value: boolean; expiresAt: number } | null = null;
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly s3Service: S3Service,
@@ -413,7 +420,42 @@ export class CompanyVerificationService {
      * Пропуск к рабочим действиям. Вызывается гвардом перед созданием
      * заявок и бухгалтерских документов.
      */
+    /**
+     * Требуется ли подтверждение, чтобы работать.
+     *
+     * Владелец платформы решает сам. Сейчас выключено: люди должны иметь
+     * возможность вести учёт с первого дня, а проверка — догонять их. Когда
+     * компаний станет больше и проверка начнёт что-то значить, рубильник
+     * включается без правки кода.
+     */
+    async isVerificationRequired(): Promise<boolean> {
+        if (this.requiredCache && this.requiredCache.expiresAt > Date.now()) {
+            return this.requiredCache.value;
+        }
+        const row = await this.prisma.platformSetting.findUnique({
+            where: { key: SETTING_VERIFICATION_REQUIRED },
+        });
+        const value = row?.value === 'true';
+        this.requiredCache = { value, expiresAt: Date.now() + REQUIRED_CACHE_TTL_MS };
+        return value;
+    }
+
+    async setVerificationRequired(value: boolean) {
+        await this.prisma.platformSetting.upsert({
+            where: { key: SETTING_VERIFICATION_REQUIRED },
+            create: { key: SETTING_VERIFICATION_REQUIRED, value: String(value) },
+            update: { value: String(value) },
+        });
+        this.requiredCache = null;
+        return { required: value };
+    }
+
     async assertVerified(companyId: string) {
+        // Пока подтверждение не требуется, работают все. Проверка при этом
+        // никуда не девается: галочка у компании остаётся, её видно и ей
+        // верят — просто она не запирает дверь.
+        if (!(await this.isVerificationRequired())) return;
+
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },
             select: { verificationStatus: true, rejectionReason: true },

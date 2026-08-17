@@ -81,6 +81,10 @@ export class MyCompanyController {
                 select: { id: true, name: true, bin: true, type: true, directorName: true, address: true },
             }),
             verification: await this.verification.getStatus(req.user.companyId),
+            // Обязательно ли подтверждение прямо сейчас. Кабинет по этому
+            // полю решает, чем грозит его отсутствие: пока не обязательно —
+            // это отметка о доверии, а не запертая дверь.
+            verificationRequired: await this.verification.isVerificationRequired(),
         };
     }
 

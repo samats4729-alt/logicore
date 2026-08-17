@@ -77,7 +77,9 @@ test.describe('Поддержка', () => {
         // Новое письмо.
         await page.getByPlaceholder(/не печатается договор/).fill('Не приходит уведомление');
         await page.getByPlaceholder(/Что делали/).fill('Заявку подтвердили, а уведомление не пришло ни мне, ни бухгалтеру.');
-        await page.getByRole('button', { name: 'Отправить' }).click();
+        // Точное совпадение: на странице бывает и полоса о проверке
+        // организации со своей кнопкой.
+        await page.getByRole('button', { name: 'Отправить', exact: true }).click();
 
         await expect(page.locator('[data-sonner-toast]')).toContainText('Письмо отправлено', { timeout: 15_000 });
         expect(sent?.title).toBe('Не приходит уведомление');
@@ -93,7 +95,9 @@ test.describe('Поддержка', () => {
 
         await page.getByPlaceholder(/не печатается договор/).fill('Ошибка');
         await page.getByPlaceholder(/Что делали/).fill('не то');
-        await page.getByRole('button', { name: 'Отправить' }).click();
+        // Точное совпадение: на странице бывает и полоса о проверке
+        // организации со своей кнопкой.
+        await page.getByRole('button', { name: 'Отправить', exact: true }).click();
 
         await expect(page.locator('[data-sonner-toast]')).toContainText('подробнее');
     });
