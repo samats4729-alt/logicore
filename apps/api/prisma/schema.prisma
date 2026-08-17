@@ -887,6 +887,8 @@ model Order {
   incomes                   Income[]
   bonuses                   Bonus[]
   payments                  Payment[]
+  /// Доли платежей, разнесённых на эту заявку вместе с другими.
+  paymentShares             PaymentOrderShare[]
   financeOperations         FinanceOperation[]
   assignees                 OrderAssignee[]
   responsibles              OrderResponsible[]
@@ -1263,6 +1265,15 @@ model Payment {
   categoryId          String?
   category            FinanceCategory?              @relation("CategoryPayments", fields: [categoryId], references: [id], onDelete: SetNull)
   documentAllocations AccountingPaymentAllocation[]
+
+  /// По каким заявкам разошёлся этот платёж.
+  ///
+  /// Заполняется, когда одним поступлением закрывают сразу несколько
+  /// заявок — так платят заказчики: один перевод на два десятка рейсов.
+  /// Тогда `orderId` пуст, а доли лежат здесь: иначе пришлось бы резать
+  /// банковский платёж на два десятка записей, и выписка перестала бы
+  /// сходиться со списком платежей построчно.
+  orderShares         PaymentOrderShare[]
 
   /// Возврат денег по ранее принятому платежу (сторно).
   /// Хранится отдельным платежом обратного направления со ссылкой на
@@ -2118,6 +2129,34 @@ model AccountingDocumentOrder {
   createdAt  DateTime           @default(now())
 
   @@unique([documentId, orderId])
+  @@index([orderId])
+}
+
+/// Доля платежа, закрывающая конкретную заявку.
+///
+/// Один платёж — много заявок. Так работает бухгалтерия у заказчиков:
+/// приходит один перевод, и в нём сидят двадцать рейсов. До этого платёж
+/// умел ссылаться ровно на одну заявку, и закрыть двадцать можно было
+/// только двадцатью записями — выписка банка после этого не сходилась со
+/// списком платежей ни по одной строке.
+///
+/// Сумма доли — в валюте платежа; в тенге она пересчитана по курсу дня
+/// оплаты, зафиксированному в самом платеже, и потому не меняется задним
+/// числом вместе с курсом.
+model PaymentOrderShare {
+  id        String  @id @default(cuid())
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  amount     Decimal  @db.Decimal(20, 2)
+  /// Та же доля в учётной валюте — по курсу, записанному в платеже.
+  amountBase Decimal? @db.Decimal(20, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([paymentId, orderId])
   @@index([orderId])
 }
 

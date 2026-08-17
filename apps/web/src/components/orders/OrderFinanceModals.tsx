@@ -1,10 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { Alert, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import dayjs from 'dayjs';
-import { AllocationSuggestionItem, suggestAllocation } from '@/lib/accounting-documents';
+import {
+    AllocationSuggestionItem,
+    OpenOrderForPayment,
+    fetchOpenOrdersForPayment,
+    suggestAllocation,
+} from '@/lib/accounting-documents';
 import Loader from '@/components/ui/Loader';
 
 const { TextArea } = Input;
@@ -51,6 +56,13 @@ interface OrderFinanceModalsProps {
      */
     allocations: Record<string, number>;
     setAllocations: (allocations: Record<string, number>) => void;
+
+    /**
+     * Разнесение платежа по заявкам: заказчик платит одним переводом за
+     * два десятка рейсов. Уходит вместе с платежом, а не после него.
+     */
+    orderShares: Record<string, number>;
+    setOrderShares: (shares: Record<string, number>) => void;
 }
 
 /**
@@ -65,9 +77,12 @@ export default function OrderFinanceModals({
     expenseModalOpen, setExpenseModalOpen, expenseForm, expenseLoading, expenseCategories, handleAddExpense,
     paymentModalOpen, setPaymentModalOpen, paymentForm, paymentLoading, editingPayment, handleSavePayment,
     accounts, categories, partners, allocations, setAllocations,
+    orderShares, setOrderShares,
 }: OrderFinanceModalsProps) {
     const [openInvoices, setOpenInvoices] = useState<AllocationSuggestionItem[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
+    const [openOrders, setOpenOrders] = useState<OpenOrderForPayment[]>([]);
+    const [loadingOrders, setLoadingOrders] = useState(false);
 
     // Следим за суммой, направлением и контрагентом: от них зависит, какие
     // счета можно закрыть и сколько на них ляжет.
@@ -103,8 +118,73 @@ export default function OrderFinanceModals({
 
     useEffect(() => { loadSuggestion(); }, [loadSuggestion]);
 
+    /**
+     * Что за контрагентом числится по заявкам.
+     *
+     * Список не зависит от суммы: сумма как раз и складывается из
+     * отмеченных заявок, а не наоборот. Раньше бухгалтер вбивала её руками
+     * и по платежу нельзя было понять, какие рейсы закрыты.
+     */
+    const loadOpenOrders = useCallback(async () => {
+        if (!paymentModalOpen || !counterpartyId) {
+            setOpenOrders([]);
+            return;
+        }
+        try {
+            setLoadingOrders(true);
+            setOpenOrders(await fetchOpenOrdersForPayment({
+                counterpartyId,
+                direction: direction === 'OUT' ? 'OUT' : 'IN',
+            }));
+        } catch {
+            setOpenOrders([]);
+        } finally {
+            setLoadingOrders(false);
+        }
+    }, [paymentModalOpen, counterpartyId, direction]);
+
+    useEffect(() => { loadOpenOrders(); }, [loadOpenOrders]);
+
+    // Окно закрыли — отметки не должны всплыть в следующем платеже.
+    useEffect(() => {
+        if (!paymentModalOpen) setOrderShares({});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [paymentModalOpen]);
+
     const allocatedTotal = Object.values(allocations).reduce((sum, value) => sum + (value || 0), 0);
     const rest = Math.round(((Number(amount) || 0) - allocatedTotal) * 100) / 100;
+
+    const sharesTotal = Math.round(
+        Object.values(orderShares).reduce((sum, value) => sum + (value || 0), 0) * 100,
+    ) / 100;
+    const pickedOrders = Object.keys(orderShares).filter((id) => (orderShares[id] || 0) > 0);
+
+    /**
+     * Отметить или снять заявку.
+     *
+     * Сумма платежа пересчитывается сразу: бухгалтер отмечает рейсы, за
+     * которые пришли деньги, а не считает их в уме и печатает итог.
+     */
+    const toggleOrder = (order: OpenOrderForPayment, checked: boolean) => {
+        const next = { ...orderShares };
+        if (checked) next[order.orderId] = order.balance;
+        else delete next[order.orderId];
+        setOrderShares(next);
+
+        const total = Math.round(
+            Object.values(next).reduce((sum, value) => sum + (value || 0), 0) * 100,
+        ) / 100;
+        paymentForm.setFieldsValue({ amount: total > 0 ? total : undefined });
+    };
+
+    const setOrderAmount = (orderId: string, value: number) => {
+        const next = { ...orderShares, [orderId]: value };
+        setOrderShares(next);
+        const total = Math.round(
+            Object.values(next).reduce((sum, item) => sum + (item || 0), 0) * 100,
+        ) / 100;
+        paymentForm.setFieldsValue({ amount: total > 0 ? total : undefined });
+    };
 
     return (
         <>
@@ -205,6 +285,82 @@ export default function OrderFinanceModals({
                     <TextArea rows={2} placeholder="Примечание или детали платежа" />
                 </Form.Item>
 
+                {/* Подбор по заявкам.
+                    Заказчик присылает один перевод за два десятка рейсов.
+                    Раньше бухгалтер вбивала сумму руками, а какие именно
+                    заявки закрыты — не было видно ни в платеже, ни потом. */}
+                {loadingOrders ? (
+                    <div style={{ textAlign: 'center', padding: 12 }}><Loader size="small" /></div>
+                ) : openOrders.length > 0 && (
+                    <div style={{ marginTop: 4, marginBottom: 16 }}>
+                        <div style={{
+                            display: 'flex', justifyContent: 'space-between',
+                            alignItems: 'baseline', gap: 8, marginBottom: 6,
+                        }}>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>Подобрать по заявкам</div>
+                            {pickedOrders.length > 0 && (
+                                <div style={{ fontSize: 12, color: 'var(--lc-text-sec)' }}>
+                                    отмечено {pickedOrders.length} · {money(sharesTotal)}
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', marginBottom: 8 }}>
+                            Отметьте рейсы, за которые пришли деньги, — сумма платежа сложится сама.
+                            Долг по каждому можно поправить.
+                        </div>
+                        <div style={{
+                            maxHeight: 260, overflowY: 'auto', border: '1px solid var(--lc-border)',
+                            borderRadius: 10, padding: 8,
+                        }}>
+                            {openOrders.map((order) => {
+                                const checked = (orderShares[order.orderId] || 0) > 0;
+                                return (
+                                    <label
+                                        key={order.orderId}
+                                        style={{
+                                            display: 'flex', gap: 10, alignItems: 'center',
+                                            padding: '6px 4px', cursor: 'pointer',
+                                            borderBottom: '1px solid var(--lc-border-soft, transparent)',
+                                        }}
+                                    >
+                                        <Checkbox
+                                            checked={checked}
+                                            onChange={(e) => toggleOrder(order, e.target.checked)}
+                                        />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 600 }}>
+                                                {order.orderNumber}
+                                                {order.route && (
+                                                    <span style={{ fontWeight: 400, color: 'var(--lc-text-sec)' }}>
+                                                        {' · '}{order.route}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>
+                                                {dayjs(order.date).format('DD.MM.YYYY')}
+                                                {' · долг '}{money(order.balance)}
+                                                {order.paid > 0 && ` · оплачено ${money(order.paid)}`}
+                                                {order.dueDate && ` · до ${dayjs(order.dueDate).format('DD.MM.YYYY')}`}
+                                            </div>
+                                        </div>
+                                        {checked && (
+                                            <InputNumber
+                                                size="small"
+                                                min={0}
+                                                max={order.balance}
+                                                style={{ width: 120 }}
+                                                value={orderShares[order.orderId]}
+                                                onClick={(e) => e.preventDefault()}
+                                                onChange={(value) => setOrderAmount(order.orderId, Number(value) || 0)}
+                                            />
+                                        )}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {/* Разнесение по счетам: пока платёж не разнесён, видно
                     только что деньги пришли, но не какие счета закрыты. */}
                 {loadingInvoices ? (
@@ -228,6 +384,15 @@ export default function OrderFinanceModals({
                                         остаток {money(invoice.balanceDue)}
                                         {invoice.dueDate && ` · до ${dayjs(invoice.dueDate).format('DD.MM.YYYY')}`}
                                     </div>
+                                    {/* За какие рейсы этот счёт: по одному
+                                        номеру документа понять это нельзя. */}
+                                    {(invoice.orderNumbers ?? []).length > 0 && (
+                                        <div style={{ fontSize: 11, color: 'var(--lc-text-sec)' }}>
+                                            заявки: {(invoice.orderNumbers ?? []).slice(0, 6).join(', ')}
+                                            {(invoice.orderNumbers ?? []).length > 6
+                                                && ` и ещё ${(invoice.orderNumbers ?? []).length - 6}`}
+                                        </div>
+                                    )}
                                 </div>
                                 <InputNumber
                                     size="small"

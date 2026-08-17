@@ -48,9 +48,67 @@ export const ORDER_FINANCE_RELATIONS_SELECT = {
         where: { isDeleted: false },
         select: { direction: true, amount: true, companyId: true, currency: true, amountBase: true },
     },
+    // Доли платежей, которыми закрыли сразу несколько заявок. Один перевод
+    // заказчика на два десятка рейсов — обычное дело, и для расчёта оплаты
+    // такая доля ничем не отличается от отдельного платежа по заявке.
+    paymentShares: {
+        where: { payment: { isDeleted: false } },
+        select: {
+            amount: true,
+            amountBase: true,
+            payment: { select: { direction: true, companyId: true, currency: true } },
+        },
+    },
     incomes: { where: { isDeleted: false }, select: { category: true, amount: true, isDeleted: true } },
     expenses: { where: { isDeleted: false }, select: { category: true, amount: true, isDeleted: true } },
 } satisfies Prisma.OrderSelect;
+
+/** Выборка долей платежа по заявке — ровно то, что нужно расчёту. */
+export const PAYMENT_SHARE_SELECT = {
+    amount: true,
+    amountBase: true,
+    payment: { select: { direction: true, companyId: true, currency: true } },
+} satisfies Prisma.PaymentOrderShareSelect;
+
+/** Доли общих платежей в том же виде, в каком расчёт видит обычный платёж. */
+export function sharesAsPayments(shares: Array<{
+    amount: Prisma.Decimal | number;
+    amountBase?: Prisma.Decimal | number | null;
+    payment: { direction: PaymentDirection; companyId: string; currency?: string | null };
+}>) {
+    return shares.map((share) => ({
+        direction: share.payment.direction,
+        amount: share.amount,
+        companyId: share.payment.companyId,
+        currency: share.payment.currency,
+        amountBase: share.amountBase,
+    }));
+}
+
+/**
+ * Все оплаты заявки одним списком: собственные платежи и доли общих.
+ *
+ * Расчёту всё равно, пришли деньги отдельным платежом по этой заявке или
+ * долей общего перевода, — важны направление, сумма и чья это компания.
+ * Собирается здесь, в одном месте, чтобы ни один отчёт не забыл про доли:
+ * забывший показал бы заявку неоплаченной, хотя деньги пришли.
+ */
+export function orderFinancePayments(order: {
+    payments?: Array<{
+        direction: PaymentDirection;
+        amount: Prisma.Decimal | number;
+        companyId: string;
+        currency?: string | null;
+        amountBase?: Prisma.Decimal | number | null;
+    }>;
+    paymentShares?: Array<{
+        amount: Prisma.Decimal | number;
+        amountBase?: Prisma.Decimal | number | null;
+        payment: { direction: PaymentDirection; companyId: string; currency?: string | null };
+    }>;
+}) {
+    return [...(order.payments ?? []), ...sharesAsPayments(order.paymentShares ?? [])];
+}
 
 // Архитектурная заметка (см. аудит M-9): computeOrderFinance() и
 // PaymentsService.syncOrderPaymentFlags() выглядят как дублирование одной и

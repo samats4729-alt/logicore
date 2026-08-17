@@ -18,6 +18,9 @@ const invoice = (id: string, total: string, paid = '0', overrides: Record<string
     // Как в базе после миграции: тенговый счёт с курсом 1.
     currency: 'KZT',
     exchangeRate: new Prisma.Decimal(1),
+    // Заявки счёта: подсказка показывает их номера, чтобы по платежу было
+    // видно, за какие рейсы пришли деньги.
+    orders: [],
     ...overrides,
 });
 

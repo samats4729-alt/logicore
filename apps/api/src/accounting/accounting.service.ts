@@ -201,6 +201,14 @@ export class AccountingService {
         return this.paymentsService.getPaymentsByOrder(companyId, orderId);
     }
 
+    /** Неоплаченные заявки контрагента — для подбора в окне платежа. */
+    getOpenOrdersForPayment(
+        companyId: string,
+        params: { counterpartyId: string; direction: PaymentDirection },
+    ) {
+        return this.paymentsService.openOrders(companyId, params);
+    }
+
     async createPayment(companyId: string, userId: string, data: {
         orderId?: string;
         counterpartyId?: string;
@@ -211,6 +219,9 @@ export class AccountingService {
         note?: string;
         accountId?: string;
         categoryId?: string;
+        currency?: string;
+        /** Разнесение одного перевода сразу по нескольким заявкам. */
+        orderShares?: Array<{ orderId: string; amount: number }>;
     }) {
         return this.paymentsService.createPayment(companyId, userId, data);
     }

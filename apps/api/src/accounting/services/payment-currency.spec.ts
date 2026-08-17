@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { PaymentDirection, Prisma } from '@prisma/client';
 import { PaymentsService } from './payments.service';
+import { FinanceCalculatorService } from './finance-calculator.service';
 
 /**
  * Валюта платежа.
@@ -52,6 +53,7 @@ describe('Валюта платежа', () => {
             { processOrderTrigger: jest.fn() } as any,
             { release: jest.fn(), reduce: jest.fn() } as any,
             currency as any,
+            new FinanceCalculatorService(),
         );
         return { service, prisma, currency, created };
     };

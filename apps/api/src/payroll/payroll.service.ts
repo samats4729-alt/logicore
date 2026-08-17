@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { FinanceCalculatorService } from '../accounting/services/finance-calculator.service';
+import {
+    FinanceCalculatorService,
+    PAYMENT_SHARE_SELECT,
+    sharesAsPayments,
+} from '../accounting/services/finance-calculator.service';
 import { D, Money, ZERO, money, roundMoney, toNum } from '../common/utils/money';
 import { kzCurrentMonth } from '../common/utils/business-date';
 
@@ -91,9 +95,15 @@ export class PayrollService {
                 base = D(order.customerPrice);
             } else if (scheme.percentBase === 'MARGIN') {
                 // Собрать входные данные так же, как getFinancialRegistry
-                const [payments, incomes, expenses] = await Promise.all([
+                const [payments, shares, incomes, expenses] = await Promise.all([
                     this.prisma.payment.findMany({
                         where: { orderId, isDeleted: false },
+                    }),
+                    // Доли общих платежей считаются оплатой так же, как
+                    // отдельный платёж по заявке.
+                    this.prisma.paymentOrderShare.findMany({
+                        where: { orderId, payment: { isDeleted: false } },
+                        select: PAYMENT_SHARE_SELECT,
                     }),
                     this.prisma.income.findMany({
                         where: { orderId, companyId: managerCompanyId, isDeleted: false },
@@ -105,7 +115,7 @@ export class PayrollService {
 
                 const fin = this.calculator.computeOrderFinance({
                     order,
-                    payments,
+                    payments: [...payments, ...sharesAsPayments(shares)],
                     incomes,
                     expenses,
                     companyId: managerCompanyId,

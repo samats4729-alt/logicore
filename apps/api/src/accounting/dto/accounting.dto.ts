@@ -1,6 +1,9 @@
 import { AccountKind, PaymentDirection, PaymentMethod } from '@prisma/client';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
+import { Type } from 'class-transformer';
 import {
+    ArrayMaxSize,
+    IsArray,
     IsBoolean,
     IsDateString,
     IsEnum,
@@ -12,6 +15,7 @@ import {
     Max,
     MaxLength,
     Min,
+    ValidateNested,
 } from 'class-validator';
 
 const MAX_MONEY_AMOUNT = 1_000_000_000_000_000;
@@ -144,7 +148,33 @@ export class UpdateManualEntryDto {
     accountId?: string;
 }
 
+/** Доля платежа по одной заявке. */
+export class PaymentOrderShareDto {
+    @IsString()
+    @IsNotEmpty()
+    orderId!: string;
+
+    @IsNumber({ allowInfinity: false, allowNaN: false })
+    @Min(0.01)
+    @Max(MAX_MONEY_AMOUNT)
+    amount!: number;
+}
+
 export class CreatePaymentDto {
+    /**
+     * По каким заявкам разошёлся платёж.
+     *
+     * Заказчик присылает один перевод за два десятка рейсов: бухгалтер
+     * отмечает их разом, а не заводит двадцать платежей. Вместе с `orderId`
+     * не используется — иначе одна заявка была бы оплачена дважды.
+     */
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(200)
+    @ValidateNested({ each: true })
+    @Type(() => PaymentOrderShareDto)
+    orderShares?: PaymentOrderShareDto[];
+
     @IsOptional()
     @IsString()
     @IsNotEmpty()

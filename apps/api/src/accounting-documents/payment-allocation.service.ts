@@ -93,6 +93,9 @@ export class PaymentAllocationService {
                 number: document.number,
                 documentDate: document.documentDate,
                 dueDate: document.dueDate,
+                orderNumbers: document.orders
+                    .map((link) => link.order?.orderNumber)
+                    .filter((number): number is string => !!number),
                 // Валюта счёта: долг по нему остаётся в своей валюте, и в
                 // подсказке нельзя показывать долларовый остаток под знаком ₸.
                 currency: document.currency,
@@ -394,6 +397,13 @@ export class PaymentAllocationService {
                 currency: true,
                 total: true,
                 amountPaid: true,
+                // Какие заявки закрывает этот счёт. Без них в окне платежа
+                // видно только номер счёта, и понять, за какие рейсы пришли
+                // деньги, было нельзя — а спрашивают об этом именно так.
+                orders: {
+                    select: { order: { select: { id: true, orderNumber: true } } },
+                    take: 30,
+                },
             },
             // Раньше срок — раньше гасим; без срока идём по дате документа.
             orderBy: [{ dueDate: 'asc' }, { documentDate: 'asc' }],
