@@ -152,3 +152,55 @@ test('подсказка заполняет поля, а не одну стро�
 
     await expect(form.getByText(/Точка на карте есть/)).toBeVisible();
 });
+
+/**
+ * Выбрали посёлок, а не улицу в нём.
+ *
+ * Так и случилось у владельца на Шардаре: в «Страну» подставилась Россия —
+ * её брали из языка ответа, — а в «Улицу» название самого посёлка. Поля
+ * были заполнены, и поэтому неправду никто не заметил.
+ */
+test('у посёлка не выдумывается ни улица, ни чужая страна', async ({ page }) => {
+    await page.route('**/geo/suggest**', (route) => route.fulfill({
+        json: {
+            configured: true,
+            items: [{
+                id: '95707', name: 'Шардара',
+                full_name: 'Казахстан, Туркестанская область, Шардара',
+                // Улицы у посёлка нет — значит и поля «Улица» быть не должно.
+                address_name: undefined,
+                point: { lat: 41.2545, lon: 67.9705 },
+                geography: {
+                    provider: '2gis',
+                    country: { code: 'KZ', name: 'Казахстан' },
+                    region: { name: 'Туркестанская область' },
+                    city: { name: 'Шардара' },
+                },
+            }],
+        },
+    }));
+    await page.route('**/cities/import-from-provider', (route) => route.fulfill({
+        json: {
+            country: { id: 'c-1', name: 'Казахстан', code: 'KZ' },
+            region: { id: 'r-1', name: 'Туркестанская область' },
+            city: { id: 'g-1', name: 'Шардара', latitude: 41.25, longitude: 67.97 },
+        },
+    }));
+
+    await login(page);
+    await page.goto('/company/locations');
+    await page.getByRole('button', { name: 'Добавить новый адрес' }).click();
+
+    const form = page.getByRole('dialog');
+    await fill(page, 'Название точки', 'E2E посёлок');
+    await form.getByPlaceholder(/Сатпаева 90\/1/).fill('Шардара');
+    await page.locator('.ant-select-item-option:visible').first().click();
+
+    await expect(form.getByLabel('Страна', { exact: true })).toHaveValue('Казахстан');
+    await expect(form.getByLabel('Город или посёлок', { exact: true })).toHaveValue('Шардара');
+    // Пустое поле честнее, чем посёлок в графе «Улица».
+    await expect(form.getByLabel('Улица', { exact: true })).toHaveValue('');
+    await expect(form.getByLabel('Дом', { exact: true })).toHaveValue('');
+    // Берём последнее совпадение: та же строка попадает и в подсказку поиска.
+    await expect(form.getByText('Казахстан, Туркестанская область, Шардара').last()).toBeVisible();
+});
