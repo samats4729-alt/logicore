@@ -143,8 +143,6 @@ export default function AssistantWidget() {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [ticketSending, setTicketSending] = useState(false);
-    const [hasNewUpdates, setHasNewUpdates] = useState(false);
-    const [newUpdates, setNewUpdates] = useState<any[]>([]);
 
     const [tourActive, setTourActive] = useState(false);
     const [tipText, setTipText] = useState('');
@@ -281,95 +279,16 @@ export default function AssistantWidget() {
         setTourActive(false);
     };
 
-    useEffect(() => {
-        const fetchPublishedUpdates = async () => {
-            try {
-                const res = await api.get('/assistant/updates/published');
-                const publishedList = res.data || [];
-                if (publishedList.length > 0) {
-                    const latest = publishedList[0];
-                    const stored = localStorage.getItem('lc_last_read_update_id');
-                    if (stored !== latest.id) {
-                        setHasNewUpdates(true);
-                        setNewUpdates(publishedList);
-                    }
-                }
-            } catch (err) {
-                console.error('Failed to fetch published updates', err);
-            }
-        };
-        fetchPublishedUpdates();
-    }, []);
-
-    const handleOpen = () => {
-        setOpen(true);
-        if (hasNewUpdates && newUpdates.length > 0) {
-            localStorage.setItem('lc_last_read_update_id', newUpdates[0].id);
-            setHasNewUpdates(false);
-            window.dispatchEvent(new Event('logicore:updates-read'));
-            const updatesText = "У нас вышли новые обновления на платформе!\n\n" +
-                newUpdates.map((u: any) => `**${u.title}**\n${u.description}`).join('\n\n');
-            setMessages(prev => [
-                prev[0],
-                { role: 'assistant', content: updatesText },
-                ...prev.slice(1)
-            ]);
-        }
-    };
-
-    const handleOpenUpdates = async () => {
-        setOpen(true);
-        if (hasNewUpdates && newUpdates.length > 0) {
-            localStorage.setItem('lc_last_read_update_id', newUpdates[0].id);
-            setHasNewUpdates(false);
-            window.dispatchEvent(new Event('logicore:updates-read'));
-            const updatesText = "У нас вышли новые обновления на платформе!\n\n" +
-                newUpdates.map((u: any) => `**${u.title}**\n${u.description}`).join('\n\n');
-            setMessages(prev => [
-                prev[0],
-                { role: 'assistant', content: updatesText },
-                ...prev.slice(1)
-            ]);
-        } else {
-            try {
-                const res = await api.get('/assistant/updates/published');
-                const list = res.data || [];
-                if (list.length > 0) {
-                    const updatesText = "Вот недавние обновления платформы:\n\n" +
-                        list.map((u: any) => `**${u.title}**\n${u.description}`).join('\n\n');
-                    setMessages(prev => {
-                        const alreadyShown = prev.some(m => m.content.includes("недавние обновления платформы"));
-                        if (alreadyShown) return prev;
-                        return [
-                            ...prev,
-                            { role: 'assistant', content: updatesText }
-                        ];
-                    });
-                } else {
-                    setMessages(prev => [
-                        ...prev,
-                        { role: 'assistant', content: "У нас пока нет опубликованных обновлений." }
-                    ]);
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        }
-    };
+    /* Помощник больше не рассказывает про нововведения: для них есть своя
+       страница «Что нового». Вываливать их в чат при каждом открытии значило
+       отодвигать вопрос человека вниз тем, что он уже читал. */
+    const handleOpen = () => setOpen(true);
 
     useEffect(() => {
-        const onOpenUpdates = () => {
-            handleOpenUpdates();
-        };
-        window.addEventListener('logicore:open-updates', onOpenUpdates);
         const onOpenAssistant = () => handleOpen();
         window.addEventListener('logicore:open-assistant', onOpenAssistant);
-        return () => {
-            window.removeEventListener('logicore:open-updates', onOpenUpdates);
-            window.removeEventListener('logicore:open-assistant', onOpenAssistant);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hasNewUpdates, newUpdates]);
+        return () => window.removeEventListener('logicore:open-assistant', onOpenAssistant);
+    }, []);
 
     const sendPrompt = async (text: string) => {
         if (!text || loading) return;
@@ -541,12 +460,6 @@ export default function AssistantWidget() {
                         ))}
                         {mode === 'guide' && messages.length === 1 && !loading && (
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, marginBottom: 8 }}>
-                                <button
-                                    onClick={() => sendPrompt('Что нового на платформе?')}
-                                    className="ai-prompt-btn"
-                                >
-                                    Что нового?
-                                </button>
                                 <button
                                     onClick={() => sendPrompt('Как создать заявку?')}
                                     className="ai-prompt-btn"

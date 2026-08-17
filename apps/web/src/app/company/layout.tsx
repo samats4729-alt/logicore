@@ -28,6 +28,7 @@ import {
     CalculatorOutlined,
     BarChartOutlined,
     NotificationOutlined,
+    CustomerServiceOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
@@ -305,9 +306,15 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         )}
                     </div>
                 ),
-                onClick: () => {
-                    window.dispatchEvent(new Event('logicore:open-updates'));
-                }
+                // Своя страница, а не окно помощника: список нововведений
+                // читают целиком и возвращаются к нему.
+                onClick: () => router.push('/company/updates')
+            },
+            {
+                key: 'support',
+                icon: <CustomerServiceOutlined />,
+                label: 'Поддержка',
+                onClick: () => router.push('/company/support'),
             },
             {
                 type: 'divider' as const,

@@ -87,6 +87,8 @@ export const ROUTES = `
 - /company/audit — Журнал действий
 - /company/profile — Мой профиль и смена пароля
 - /company/settings — Организации и реквизиты
+- /company/updates — «Что нового»: что поменялось в платформе. Открывается из меню под именем человека
+- /company/support — «Поддержка»: письмо владельцу платформы и ответ на него. Там же все прошлые обращения компании
 - /company/inventory/nomenclature — Номенклатура материалов
 - /company/inventory/warehouses — Склады хранения
 - /company/accounting/settings — Настройки бухгалтерии: статьи доходов и расходов, наименования услуг, счета и кассы
@@ -724,10 +726,67 @@ export class AssistantService implements OnApplicationBootstrap {
         });
     }
 
-    async updateTicketStatus(id: string, status: string) {
+    /**
+     * Обращения своей компании — со всеми ответами.
+     *
+     * Отбор строго по `companyId`: список открыт каждому вошедшему, и
+     * чужие письма в него попасть не должны. Переписку с помощником
+     * (`transcript`) не отдаём — она бывает длинной и на экране не нужна.
+     */
+    async listCompanyTickets(companyId: string) {
+        if (!companyId) return [];
+        return this.prisma.supportTicket.findMany({
+            where: { companyId },
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+            select: {
+                id: true, title: true, category: true, severity: true,
+                description: true, orders: true, status: true,
+                answer: true, answeredAt: true,
+                userName: true, createdAt: true, updatedAt: true,
+            },
+        });
+    }
+
+    /**
+     * Свежие ответы поддержки — для колокольчика.
+     *
+     * Отдельно от полного списка: колокольчик опрашивается часто, а письма
+     * с описаниями тяжёлые. Здесь только то, что нужно строке уведомления.
+     */
+    async listAnsweredTickets(companyId: string, take = 5) {
+        if (!companyId) return [];
+        return this.prisma.supportTicket.findMany({
+            where: { companyId, answeredAt: { not: null } },
+            orderBy: { answeredAt: 'desc' },
+            take,
+            select: { id: true, title: true, answeredAt: true },
+        });
+    }
+
+    /**
+     * Решение по обращению: статус, ответ или и то и другое.
+     *
+     * Ответ — то, ради чего человек писал. Появился ответ, а статус не
+     * назвали — обращение считается решённым: держать отвеченное письмо в
+     * «новых» значит показывать компании, что им никто не занимался.
+     */
+    async updateTicket(
+        id: string,
+        data: { status?: string; answer?: string },
+        answeredById?: string,
+    ) {
         const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
         if (!ticket) throw new NotFoundException('Тикет не найден');
-        return this.prisma.supportTicket.update({ where: { id }, data: { status } });
+
+        const answer = data.answer?.trim();
+        return this.prisma.supportTicket.update({
+            where: { id },
+            data: {
+                ...(data.status ? { status: data.status } : answer ? { status: 'DONE' } : {}),
+                ...(answer ? { answer, answeredAt: new Date(), answeredById: answeredById || null } : {}),
+            },
+        });
     }
 
     // ==================== PLATFORM UPDATES (нововведения) ====================

@@ -42,6 +42,8 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     'AssistantController.supportChat': 'обращение в поддержку',
     'AssistantController.createTicket': 'обращение в поддержку',
     'AssistantController.publishedUpdates': 'что нового — запрашивает обёртка кабинета',
+    'AssistantController.myTickets': 'свои обращения: без организации список пуст, отбор внутри',
+    'AssistantController.myAnswers': 'ответы поддержки: без организации список пуст, отбор внутри',
 };
 
 /**
