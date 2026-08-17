@@ -724,10 +724,51 @@ export class AssistantService implements OnApplicationBootstrap {
         });
     }
 
-    async updateTicketStatus(id: string, status: string) {
+    /**
+     * Обращения своей компании — со всеми ответами.
+     *
+     * Отбор строго по `companyId`: список открыт каждому вошедшему, и
+     * чужие письма в него попасть не должны. Переписку с помощником
+     * (`transcript`) не отдаём — она бывает длинной и на экране не нужна.
+     */
+    async listCompanyTickets(companyId: string) {
+        if (!companyId) return [];
+        return this.prisma.supportTicket.findMany({
+            where: { companyId },
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+            select: {
+                id: true, title: true, category: true, severity: true,
+                description: true, orders: true, status: true,
+                answer: true, answeredAt: true,
+                userName: true, createdAt: true, updatedAt: true,
+            },
+        });
+    }
+
+    /**
+     * Решение по обращению: статус, ответ или и то и другое.
+     *
+     * Ответ — то, ради чего человек писал. Появился ответ, а статус не
+     * назвали — обращение считается решённым: держать отвеченное письмо в
+     * «новых» значит показывать компании, что им никто не занимался.
+     */
+    async updateTicket(
+        id: string,
+        data: { status?: string; answer?: string },
+        answeredById?: string,
+    ) {
         const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
         if (!ticket) throw new NotFoundException('Тикет не найден');
-        return this.prisma.supportTicket.update({ where: { id }, data: { status } });
+
+        const answer = data.answer?.trim();
+        return this.prisma.supportTicket.update({
+            where: { id },
+            data: {
+                ...(data.status ? { status: data.status } : answer ? { status: 'DONE' } : {}),
+                ...(answer ? { answer, answeredAt: new Date(), answeredById: answeredById || null } : {}),
+            },
+        });
     }
 
     // ==================== PLATFORM UPDATES (нововведения) ====================

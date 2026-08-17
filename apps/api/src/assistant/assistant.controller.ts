@@ -72,11 +72,22 @@ export class AssistantController {
         return this.assistantService.listTickets(status);
     }
 
+    /** Свои обращения: что писала компания и что ей ответили. */
+    @Get('support/my')
+    @AllowWithoutCompany()
+    async myTickets(@Request() req: any) {
+        return this.assistantService.listCompanyTickets(req.user.companyId);
+    }
+
     @Patch('support/tickets/:id')
     @UseGuards(RolesGuard)
     @Roles(UserRole.ADMIN)
-    async updateTicketStatus(@Param('id') id: string, @Body() body: { status: string }) {
-        return this.assistantService.updateTicketStatus(id, body?.status);
+    async updateTicket(
+        @Param('id') id: string,
+        @Body() body: { status?: string; answer?: string },
+        @Request() req: any,
+    ) {
+        return this.assistantService.updateTicket(id, body || {}, req.user?.sub);
     }
 
     /** Сколько обращений ещё ни разу не уходило в телеграм. */

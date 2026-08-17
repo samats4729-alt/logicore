@@ -2270,6 +2270,17 @@ model SupportTicket {
   details     Json? // структура: process / where / expected / actual
   transcript  Json? // диалог пользователя с ассистентом
   status      String   @default("NEW") // NEW | IN_PROGRESS | DONE | REJECTED
+
+  /// Ответ поддержки — тот, что видит компания у себя.
+  ///
+  /// Без него обращение было дорогой в один конец: письмо уходило в
+  /// телеграм владельцу, а человек на другом конце видел только «принято»
+  /// и не знал, чем всё кончилось.
+  answer     String?
+  answeredAt DateTime?
+  /// Кто ответил — чтобы через месяц было к кому вернуться с вопросом.
+  answeredById String?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
