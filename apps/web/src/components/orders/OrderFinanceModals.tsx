@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { Alert, Button as AntButton, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import dayjs from 'dayjs';
 import {
@@ -11,6 +11,8 @@ import {
     suggestAllocation,
 } from '@/lib/accounting-documents';
 import Loader from '@/components/ui/Loader';
+import { OrderPaymentPicker } from './OrderPaymentPicker';
+import styles from './order-finance-modals.module.css';
 
 const { TextArea } = Input;
 
@@ -83,6 +85,8 @@ export default function OrderFinanceModals({
     const [loadingInvoices, setLoadingInvoices] = useState(false);
     const [openOrders, setOpenOrders] = useState<OpenOrderForPayment[]>([]);
     const [loadingOrders, setLoadingOrders] = useState(false);
+    const [ordersError, setOrdersError] = useState<string | null>(null);
+    const [pickerOpen, setPickerOpen] = useState(false);
 
     // Следим за суммой, направлением и контрагентом: от них зависит, какие
     // счета можно закрыть и сколько на них ляжет.
@@ -132,12 +136,14 @@ export default function OrderFinanceModals({
         }
         try {
             setLoadingOrders(true);
+            setOrdersError(null);
             setOpenOrders(await fetchOpenOrdersForPayment({
                 counterpartyId,
                 direction: direction === 'OUT' ? 'OUT' : 'IN',
             }));
         } catch {
             setOpenOrders([]);
+            setOrdersError('Не удалось получить список неоплаченных рейсов');
         } finally {
             setLoadingOrders(false);
         }
@@ -160,30 +166,22 @@ export default function OrderFinanceModals({
     const pickedOrders = Object.keys(orderShares).filter((id) => (orderShares[id] || 0) > 0);
 
     /**
-     * Отметить или снять заявку.
+     * Принять выбор из окна подбора.
      *
-     * Сумма платежа пересчитывается сразу: бухгалтер отмечает рейсы, за
-     * которые пришли деньги, а не считает их в уме и печатает итог.
+     * Сумма платежа складывается из отмеченных рейсов: бухгалтер отмечает
+     * то, за что пришли деньги, а не считает итог в уме и печатает его.
      */
-    const toggleOrder = (order: OpenOrderForPayment, checked: boolean) => {
-        const next = { ...orderShares };
-        if (checked) next[order.orderId] = order.balance;
-        else delete next[order.orderId];
-        setOrderShares(next);
+    const applyPickedOrders = (picked: Record<string, number>) => {
+        const cleaned: Record<string, number> = {};
+        for (const [orderId, value] of Object.entries(picked)) {
+            if ((value || 0) > 0) cleaned[orderId] = value;
+        }
+        setOrderShares(cleaned);
 
         const total = Math.round(
-            Object.values(next).reduce((sum, value) => sum + (value || 0), 0) * 100,
+            Object.values(cleaned).reduce((sum, value) => sum + (value || 0), 0) * 100,
         ) / 100;
-        paymentForm.setFieldsValue({ amount: total > 0 ? total : undefined });
-    };
-
-    const setOrderAmount = (orderId: string, value: number) => {
-        const next = { ...orderShares, [orderId]: value };
-        setOrderShares(next);
-        const total = Math.round(
-            Object.values(next).reduce((sum, item) => sum + (item || 0), 0) * 100,
-        ) / 100;
-        paymentForm.setFieldsValue({ amount: total > 0 ? total : undefined });
+        if (total > 0) paymentForm.setFieldsValue({ amount: total });
     };
 
     return (
@@ -286,78 +284,37 @@ export default function OrderFinanceModals({
                 </Form.Item>
 
                 {/* Подбор по заявкам.
-                    Заказчик присылает один перевод за два десятка рейсов.
-                    Раньше бухгалтер вбивала сумму руками, а какие именно
-                    заявки закрыты — не было видно ни в платеже, ни потом. */}
-                {loadingOrders ? (
-                    <div style={{ textAlign: 'center', padding: 12 }}><Loader size="small" /></div>
-                ) : openOrders.length > 0 && (
-                    <div style={{ marginTop: 4, marginBottom: 16 }}>
-                        <div style={{
-                            display: 'flex', justifyContent: 'space-between',
-                            alignItems: 'baseline', gap: 8, marginBottom: 6,
-                        }}>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>Подобрать по заявкам</div>
-                            {pickedOrders.length > 0 && (
-                                <div style={{ fontSize: 12, color: 'var(--lc-text-sec)' }}>
-                                    отмечено {pickedOrders.length} · {money(sharesTotal)}
-                                </div>
-                            )}
+
+                    Список живёт в своём окне: заказчик присылает один
+                    перевод за два десятка рейсов, и отмечать их в узкой
+                    полосе под формой было нечем — четыре строки с
+                    прокруткой и без поиска. Здесь остаётся только итог и
+                    кнопка. */}
+                {(openOrders.length > 0 || loadingOrders || pickedOrders.length > 0) && (
+                    <div className={styles.pickRow}>
+                        <div className={styles.pickText}>
+                            <div className={styles.pickTitle}>
+                                {pickedOrders.length > 0
+                                    ? `Отмечено заявок: ${pickedOrders.length} · ${money(sharesTotal)}`
+                                    : 'Платёж не привязан к заявкам'}
+                            </div>
+                            <div className={styles.pickHint}>
+                                {loadingOrders
+                                    ? 'Смотрим, что за контрагентом числится…'
+                                    : pickedOrders.length > 0
+                                        ? 'Сумма платежа сложена по отмеченным рейсам'
+                                        : `За контрагентом ${openOrders.length === 1
+                                            ? '1 неоплаченный рейс'
+                                            : `неоплаченных рейсов: ${openOrders.length}`}`}
+                            </div>
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', marginBottom: 8 }}>
-                            Отметьте рейсы, за которые пришли деньги, — сумма платежа сложится сама.
-                            Долг по каждому можно поправить.
-                        </div>
-                        <div style={{
-                            maxHeight: 260, overflowY: 'auto', border: '1px solid var(--lc-border)',
-                            borderRadius: 10, padding: 8,
-                        }}>
-                            {openOrders.map((order) => {
-                                const checked = (orderShares[order.orderId] || 0) > 0;
-                                return (
-                                    <label
-                                        key={order.orderId}
-                                        style={{
-                                            display: 'flex', gap: 10, alignItems: 'center',
-                                            padding: '6px 4px', cursor: 'pointer',
-                                            borderBottom: '1px solid var(--lc-border-soft, transparent)',
-                                        }}
-                                    >
-                                        <Checkbox
-                                            checked={checked}
-                                            onChange={(e) => toggleOrder(order, e.target.checked)}
-                                        />
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontSize: 12, fontWeight: 600 }}>
-                                                {order.orderNumber}
-                                                {order.route && (
-                                                    <span style={{ fontWeight: 400, color: 'var(--lc-text-sec)' }}>
-                                                        {' · '}{order.route}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>
-                                                {dayjs(order.date).format('DD.MM.YYYY')}
-                                                {' · долг '}{money(order.balance)}
-                                                {order.paid > 0 && ` · оплачено ${money(order.paid)}`}
-                                                {order.dueDate && ` · до ${dayjs(order.dueDate).format('DD.MM.YYYY')}`}
-                                            </div>
-                                        </div>
-                                        {checked && (
-                                            <InputNumber
-                                                size="small"
-                                                min={0}
-                                                max={order.balance}
-                                                style={{ width: 120 }}
-                                                value={orderShares[order.orderId]}
-                                                onClick={(e) => e.preventDefault()}
-                                                onChange={(value) => setOrderAmount(order.orderId, Number(value) || 0)}
-                                            />
-                                        )}
-                                    </label>
-                                );
-                            })}
-                        </div>
+                        <AntButton
+                            size="small"
+                            onClick={() => setPickerOpen(true)}
+                            disabled={loadingOrders || openOrders.length === 0}
+                        >
+                            {pickedOrders.length > 0 ? 'Изменить' : 'Подобрать заявки'}
+                        </AntButton>
                     </div>
                 )}
 
@@ -421,6 +378,18 @@ export default function OrderFinanceModals({
                 )}
             </Form>
         </Modal>
+
+        <OrderPaymentPicker
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            orders={openOrders}
+            loading={loadingOrders}
+            error={ordersError}
+            value={orderShares}
+            onApply={applyPickedOrders}
+            counterpartyName={partners.find((partner) => partner.id === counterpartyId)?.name}
+            direction={direction === 'OUT' ? 'OUT' : 'IN'}
+        />
         </>
     );
 }

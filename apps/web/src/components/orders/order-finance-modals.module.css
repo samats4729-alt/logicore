@@ -1,0 +1,33 @@
+/* Строка подбора заявок в окне платежа.
+
+   Сам список живёт в отдельном окне: здесь только итог и кнопка, иначе
+   форма платежа растягивается на два экрана. */
+
+.pickRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    background: var(--nova-surface-2);
+    border: 1px solid var(--nova-border);
+    border-radius: 10px;
+}
+
+.pickText {
+    min-width: 0;
+}
+
+.pickTitle {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nova-fg);
+}
+
+.pickHint {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--nova-fg-3);
+}
