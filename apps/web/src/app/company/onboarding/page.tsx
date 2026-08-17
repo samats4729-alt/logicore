@@ -123,8 +123,13 @@ export default function CompanyOnboardingPage() {
                 <div>
                     <div className="lc-eyebrow">Организация</div>
                     <h1 className="lc2-title">Подключение организации</h1>
-                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0' }}>
-                        Работа с заявками и документами открывается после подтверждения организации.
+                    {/* Раньше здесь стояло «работа открывается после
+                        подтверждения» — и это пугало зря: учёт можно вести
+                        сразу. Говорим, что делать по шагам и зачем. */}
+                    <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 0', maxWidth: 620 }}>
+                        Три шага: заполнить организацию, приложить документы, отправить на проверку.
+                        Вести учёт можно уже сейчас — подтверждение это отметка о доверии,
+                        её видят ваши контрагенты.
                     </p>
                 </div>
             </div>
@@ -134,9 +139,9 @@ export default function CompanyOnboardingPage() {
                 size="small"
                 style={{ marginBottom: 20 }}
                 items={[
-                    { title: 'Организация' },
-                    { title: 'Документы' },
-                    { title: 'Подтверждена', icon: <CheckCircleOutlined /> },
+                    { title: 'Организация', description: 'Название, БИН, вид деятельности' },
+                    { title: 'Документы', description: 'Справка, приказ, удостоверение' },
+                    { title: 'Подтверждена', description: 'Проверяем за рабочий день', icon: <CheckCircleOutlined /> },
                 ]}
             />
 

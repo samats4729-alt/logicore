@@ -20,6 +20,10 @@ const makeService = (overrides: Record<string, any> = {}) => {
             findMany: jest.fn().mockResolvedValue([]),
         },
         document: { findMany: jest.fn().mockResolvedValue([]) },
+        // Здесь проверяется само правило допуска, поэтому обязательность
+        // включена. Что правило можно выключить рубильником — отдельная
+        // проверка в `verification-switch.spec.ts`.
+        platformSetting: { findUnique: jest.fn().mockResolvedValue({ value: 'true' }) },
         ...overrides,
     };
     const s3: any = { isS3Enabled: jest.fn().mockReturnValue(false), uploadFile: jest.fn() };

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Request, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CompanyVerificationStatus, UserRole } from '@prisma/client';
@@ -37,6 +37,31 @@ export class CompanyVerificationController {
         private readonly verification: CompanyVerificationService,
         private readonly audit: AuditService,
     ) {}
+
+    /**
+     * Требовать ли подтверждение для работы.
+     *
+     * Объявлено до `:id/...`, иначе путь перехватывается параметром.
+     */
+    @Get('settings')
+    @ApiOperation({ summary: 'Требуется ли подтверждение организации' })
+    async getSettings() {
+        return { required: await this.verification.isVerificationRequired() };
+    }
+
+    @Put('settings')
+    @ApiOperation({ summary: 'Включить или выключить обязательное подтверждение' })
+    async setSettings(@Request() req: any, @Body() body: { required: boolean }) {
+        const result = await this.verification.setVerificationRequired(Boolean(body?.required));
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'platform',
+            entityId: 'verification_required',
+            entityLabel: result.required
+                ? 'Подтверждение организации стало обязательным'
+                : 'Подтверждение организации больше не обязательно',
+        });
+        return result;
+    }
 
     @Get()
     @ApiOperation({ summary: 'Организации на проверке' })

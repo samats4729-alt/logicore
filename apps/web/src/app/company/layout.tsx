@@ -36,6 +36,7 @@ import { Moon, Sun } from 'lucide-react';
 import { api } from '@/lib/api';
 import { shortenCompanyName } from '@/lib/company-helper';
 import NotificationBell from '@/components/ui/NotificationBell';
+import { VerificationStrip, VerificationBadge } from '@/components/company/VerificationStrip';
 import { useTheme } from '@/components/ThemeProvider';
 import AiButton from '@/components/ui/AiButton';
 import { LiveEventTicker } from '@/components/ui/LiveTicker';
@@ -83,8 +84,18 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     const [hydrated, setHydrated] = useState(false);
     const [hasNewUpdates, setHasNewUpdates] = useState(false);
     const [billingStatus, setBillingStatus] = useState<any>(null);
+    /* Состояние проверки организации. Нужно в двух местах разом: полоса с
+       шагами наверху и отметка о подтверждении рядом с именем компании. */
+    const [verification, setVerification] = useState<any>(null);
     const [auditEnabled, setAuditEnabled] = useState(false);
     const { theme, setTheme } = useTheme();
+
+    useEffect(() => {
+        if (!user?.companyId) return;
+        api.get('/my-company')
+            .then((res) => setVerification(res.data))
+            .catch(() => setVerification(null));
+    }, [user?.companyId]);
 
     useEffect(() => {
         const fetchPublishedUpdates = async () => {
@@ -561,6 +572,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                     </div>
                                     <div style={{ fontSize: 11, color: '#8a91a0', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         {ROLE_LABELS[user.role] || user.role}{user.company?.name ? ` · ${shortenCompanyName(user.company.name)}` : ''}
+                                        <VerificationBadge data={verification} />
                                     </div>
                                 </div>
                             )}
@@ -619,6 +631,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             ) : (
                                 <>
                                     {beta?.state === 'beta' && <BetaStrip section={beta} />}
+                                    {/* Где компания в проверке и что делать
+                                        дальше — первым же экраном, а не
+                                        когда человек сам дойдёт до
+                                        «Подключения организации». */}
+                                    <VerificationStrip data={verification} />
                                     {children}
                                 </>
                             )}

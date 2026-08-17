@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Descriptions, Input, Modal, Space, Table } from 'antd';
+import { Alert, Button, Descriptions, Input, Modal, Space, Switch, Table } from 'antd';
 import { CheckOutlined, CloseOutlined, FileTextOutlined } from '@ant-design/icons';
 import { ShieldCheck } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -57,6 +57,36 @@ interface ReviewCompany {
  */
 export default function AdminCompaniesPage() {
     const [status, setStatus] = useState('PENDING');
+    const [requireVerification, setRequireVerification] = useState(false);
+    const [savingRequirement, setSavingRequirement] = useState(false);
+
+    useEffect(() => {
+        api.get('/admin/company-verification/settings')
+            .then((res) => setRequireVerification(Boolean(res.data?.required)))
+            .catch(() => setRequireVerification(false));
+    }, []);
+
+    /**
+     * Включить или выключить обязательность подтверждения.
+     *
+     * Действие тихое, но с последствиями для всех сразу: включённое
+     * подтверждение закрывает заявки и документы каждой непроверенной
+     * компании. Поэтому говорим словами, что именно произошло.
+     */
+    const setRequirement = async (value: boolean) => {
+        setSavingRequirement(true);
+        try {
+            await api.put('/admin/company-verification/settings', { required: value });
+            setRequireVerification(value);
+            toast.success(value
+                ? 'Теперь без подтверждения заявки и документы недоступны'
+                : 'Работать можно и без подтверждения');
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Не удалось сохранить');
+        } finally {
+            setSavingRequirement(false);
+        }
+    };
     const [rows, setRows] = useState<ReviewCompany[]>([]);
     const [loading, setLoading] = useState(true);
     const [acting, setActing] = useState<string | null>(null);
@@ -194,6 +224,27 @@ export default function AdminCompaniesPage() {
                         БИН в Казахстане — публичные данные, поэтому его ввод ничего не доказывает.
                         Сверьте справку о регистрации, приказ о руководителе и удостоверение личности.
                     </p>
+                </div>
+                {/* Рубильник обязательности. Сейчас выключен: компания ведёт
+                    учёт с первого дня, а проверка догоняет её. Когда решите
+                    иначе — включается здесь, без правки кода. */}
+                <div className={nova.heroActions}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--nova-fg-2)' }}>
+                        <Switch
+                            size="small"
+                            checked={requireVerification}
+                            loading={savingRequirement}
+                            onChange={setRequirement}
+                        />
+                        <span>
+                            Без подтверждения работать нельзя
+                            <span style={{ display: 'block', fontSize: 11, color: 'var(--nova-fg-3)' }}>
+                                {requireVerification
+                                    ? 'Заявки и документы закрыты до проверки'
+                                    : 'Сейчас работают все, проверка — отметка о доверии'}
+                            </span>
+                        </span>
+                    </label>
                 </div>
             </div>
 

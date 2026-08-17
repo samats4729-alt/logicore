@@ -25,7 +25,12 @@ describe('CompanyVerifiedGuard', () => {
 
     const buildGuard = (companyDelegate: { findUnique: jest.Mock }) => {
         const service = new CompanyVerificationService(
-            { company: companyDelegate } as any,
+            {
+                company: companyDelegate,
+                // Гвард проверяется в режиме, когда подтверждение обязательно:
+                // выключенный рубильник — отдельная проверка.
+                platformSetting: { findUnique: jest.fn().mockResolvedValue({ value: 'true' }) },
+            } as any,
             {} as any,
         );
         return new CompanyVerifiedGuard(new Reflector(), service);
