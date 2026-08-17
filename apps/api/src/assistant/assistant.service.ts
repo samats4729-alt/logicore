@@ -87,6 +87,8 @@ export const ROUTES = `
 - /company/audit — Журнал действий
 - /company/profile — Мой профиль и смена пароля
 - /company/settings — Организации и реквизиты
+- /company/updates — «Что нового»: что поменялось в платформе. Открывается из меню под именем человека
+- /company/support — «Поддержка»: письмо владельцу платформы и ответ на него. Там же все прошлые обращения компании
 - /company/inventory/nomenclature — Номенклатура материалов
 - /company/inventory/warehouses — Склады хранения
 - /company/accounting/settings — Настройки бухгалтерии: статьи доходов и расходов, наименования услуг, счета и кассы
@@ -743,6 +745,22 @@ export class AssistantService implements OnApplicationBootstrap {
                 answer: true, answeredAt: true,
                 userName: true, createdAt: true, updatedAt: true,
             },
+        });
+    }
+
+    /**
+     * Свежие ответы поддержки — для колокольчика.
+     *
+     * Отдельно от полного списка: колокольчик опрашивается часто, а письма
+     * с описаниями тяжёлые. Здесь только то, что нужно строке уведомления.
+     */
+    async listAnsweredTickets(companyId: string, take = 5) {
+        if (!companyId) return [];
+        return this.prisma.supportTicket.findMany({
+            where: { companyId, answeredAt: { not: null } },
+            orderBy: { answeredAt: 'desc' },
+            take,
+            select: { id: true, title: true, answeredAt: true },
         });
     }
 

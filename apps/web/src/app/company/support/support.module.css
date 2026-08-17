@@ -1,0 +1,109 @@
+/* Поддержка: слева письмо, справа переписка.
+
+   Два столбца, а не два экрана: человек пишет второе письмо, глядя на
+   ответ по первому, — так меньше повторов об одном и том же. */
+
+.columns {
+    display: grid;
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 4px 2px 2px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    flex: 1;
+}
+
+.label {
+    font-size: 12px;
+    color: var(--nova-fg-3);
+}
+
+.row {
+    display: flex;
+    gap: 12px;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 2px 2px;
+}
+
+.ticket {
+    border: 1px solid var(--nova-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--nova-surface);
+}
+
+.ticketHead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.ticketTitle {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    min-width: 0;
+}
+
+.meta {
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+    margin-top: 2px;
+}
+
+.text {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--nova-fg-2);
+    margin: 8px 0 0;
+    white-space: pre-line;
+}
+
+/* Ответ отделён полосой слева: в потоке одинакового текста иначе не видно,
+   где кончается своё письмо и начинается чужой ответ. */
+.answer {
+    margin-top: 10px;
+    padding: 8px 0 2px 12px;
+    border-left: 2px solid var(--nova-accent);
+}
+
+.answerLabel {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--nova-accent);
+}
+
+.answer .text {
+    margin-top: 4px;
+    color: var(--nova-fg);
+}
+
+.waiting {
+    margin-top: 10px;
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+}
+
+@media (max-width: 1000px) {
+    .columns {
+        grid-template-columns: 1fr;
+    }
+}

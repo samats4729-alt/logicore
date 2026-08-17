@@ -79,6 +79,13 @@ export class AssistantController {
         return this.assistantService.listCompanyTickets(req.user.companyId);
     }
 
+    /** Свежие ответы поддержки — для колокольчика. */
+    @Get('support/my/answers')
+    @AllowWithoutCompany()
+    async myAnswers(@Request() req: any) {
+        return this.assistantService.listAnsweredTickets(req.user.companyId);
+    }
+
     @Patch('support/tickets/:id')
     @UseGuards(RolesGuard)
     @Roles(UserRole.ADMIN)

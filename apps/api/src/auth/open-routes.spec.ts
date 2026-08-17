@@ -79,6 +79,7 @@ const ANY_LOGGED_IN_ROUTES: Record<string, string> = {
     'AssistantController.createTicket': 'обращение в поддержку',
     'AssistantController.publishedUpdates': 'что нового в платформе',
     'AssistantController.myTickets': 'свои обращения в поддержку — отбор по компании внутри',
+    'AssistantController.myAnswers': 'ответы поддержки своей компании — отбор по компании внутри',
 
     // Справочники: одинаковы для всех и не содержат ничего про компанию.
     'CargoTypesController.findAll': 'справочник видов груза',

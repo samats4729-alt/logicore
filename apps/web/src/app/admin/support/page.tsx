@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Select, Space, Button, Tooltip } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { Table, Select, Space, Button, Tooltip, Modal, Input } from 'antd';
+import { SendOutlined, MessageOutlined } from '@ant-design/icons';
 import { Headset } from 'lucide-react';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
@@ -36,6 +36,9 @@ export default function AdminSupportPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [answering, setAnswering] = useState<any | null>(null);
+    const [answerText, setAnswerText] = useState('');
+    const [sending, setSending] = useState(false);
     const [resending, setResending] = useState(false);
 
     const load = async () => {
@@ -53,6 +56,32 @@ export default function AdminSupportPage() {
     useEffect(() => {
         load();
     }, []);
+
+    /**
+     * Ответ компании.
+     *
+     * Он и есть смысл раздела: письмо без ответа человек на другом конце
+     * видит как «отправлено в никуда». Статус при этом ставится сам —
+     * отвеченное обращение не должно оставаться в новых.
+     */
+    const sendAnswer = async () => {
+        if (!answering) return;
+        const answer = answerText.trim();
+        if (answer.length < 2) { toast.warning('Напишите ответ'); return; }
+
+        setSending(true);
+        try {
+            const res = await api.patch(`/assistant/support/tickets/${answering.id}`, { answer });
+            setTickets((prev) => prev.map((t) => (t.id === answering.id ? { ...t, ...res.data } : t)));
+            toast.success('Ответ отправлен — компания увидит его у себя');
+            setAnswering(null);
+            setAnswerText('');
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Не удалось отправить ответ');
+        } finally {
+            setSending(false);
+        }
+    };
 
     const updateStatus = async (id: string, status: string) => {
         try {
@@ -174,6 +203,21 @@ export default function AdminSupportPage() {
                     onChange={(v) => updateStatus(r.id, v)}
                     options={Object.entries(STATUS_META).map(([value, meta]) => ({ value, label: meta.label }))}
                 />
+            ),
+        },
+        {
+            title: 'Ответ',
+            key: 'answer',
+            width: 130,
+            render: (_: any, r: any) => (
+                <Button
+                    size="small"
+                    type={r.answer ? 'text' : 'default'}
+                    icon={<MessageOutlined />}
+                    onClick={() => { setAnswering(r); setAnswerText(r.answer || ''); }}
+                >
+                    {r.answer ? 'Изменить' : 'Ответить'}
+                </Button>
             ),
         },
         {
@@ -308,6 +352,42 @@ export default function AdminSupportPage() {
                 }}
                 />
             </section>
+
+            {/* Ответ компании. Показываем рядом само письмо: отвечать, не
+                видя вопроса, — верный способ ответить не на то. */}
+            <Modal
+                open={!!answering}
+                onCancel={() => setAnswering(null)}
+                onOk={sendAnswer}
+                okText="Отправить ответ"
+                cancelText="Отмена"
+                confirmLoading={sending}
+                title={answering?.title}
+                width={640}
+            >
+                {answering && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ fontSize: 12, color: 'var(--nova-fg-3)' }}>
+                            {answering.companyName} · {answering.userName}
+                        </div>
+                        <div style={{
+                            fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-line',
+                            background: 'var(--nova-surface-2)', border: '1px solid var(--nova-border)',
+                            borderRadius: 10, padding: '10px 12px', color: 'var(--nova-fg-2)',
+                            maxHeight: 240, overflowY: 'auto',
+                        }}>
+                            {answering.description}
+                        </div>
+                        <Input.TextArea
+                            value={answerText}
+                            onChange={(e) => setAnswerText(e.target.value)}
+                            placeholder="Что сделали или что нужно сделать человеку"
+                            autoSize={{ minRows: 5, maxRows: 12 }}
+                            maxLength={4000}
+                        />
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 }

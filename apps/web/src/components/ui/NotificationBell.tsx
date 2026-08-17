@@ -13,24 +13,35 @@ interface OrderEvent {
 interface PendingItem {
     id: string; orderNumber: string; pendingStatus: string; pendingStatusAt: string | null;
 }
+interface SupportAnswer {
+    id: string; title: string; answeredAt: string | null;
+}
+
+/** Метка «эти ответы поддержки уже видели». */
+const LS_ANSWERS_KEY = 'lc_notif_last_answer_seen';
 
 const LS_KEY = 'lc_notif_last_seen';
 
 function usePolledData() {
     const [events, setEvents] = useState<OrderEvent[]>([]);
     const [pending, setPending] = useState<PendingItem[]>([]);
+    const [answers, setAnswers] = useState<SupportAnswer[]>([]);
     const [loading, setLoading] = useState(true);
     const mountedRef = useRef(true);
 
     const fetchAll = useCallback(async () => {
         try {
-            const [evRes, pendRes] = await Promise.all([
+            const [evRes, pendRes, ansRes] = await Promise.all([
                 api.get('/company/orders/events', { params: { limit: 15 } }),
                 api.get('/company/orders/pending-confirmations'),
+                // Ответ поддержки — событие того же рода: человек ждал и
+                // должен узнать сразу, а не открывать раздел наугад.
+                api.get('/assistant/support/my/answers').catch(() => ({ data: [] })),
             ]);
             if (mountedRef.current) {
                 setEvents(evRes.data);
                 setPending(pendRes.data);
+                setAnswers(ansRes.data || []);
                 setLoading(false);
             }
         } catch {
@@ -45,14 +56,21 @@ function usePolledData() {
         return () => { mountedRef.current = false; clearInterval(timer); };
     }, [fetchAll]);
 
-    return { events, pending, loading };
+    return { events, pending, answers, loading };
 }
 
 export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boolean }) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const { events, pending, loading } = usePolledData();
+    const { events, pending, answers, loading } = usePolledData();
+
+    /* Новые ответы поддержки — те, что появились после последнего открытия
+       колокольчика. Метка местная: сервер про «прочитано» ничего не знает,
+       да ему и незачем. */
+    const [answersSeenAt, setAnswersSeenAt] = useState<string>('');
+    useEffect(() => { setAnswersSeenAt(localStorage.getItem(LS_ANSWERS_KEY) || ''); }, []);
+    const freshAnswers = answers.filter((a) => a.answeredAt && a.answeredAt > answersSeenAt);
 
     // lastSeen из localStorage
     const [lastSeen, setLastSeen] = useState<string | null>(null);
@@ -68,7 +86,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
     // Новые события (новее lastSeen)
     const newEventCount = lastSeen ? events.filter(e => e.changedAt > lastSeen).length : events.length;
     const hasPending = pending.length > 0;
-    const showDot = hasNewUpdates || hasPending || newEventCount > 0;
+    const showDot = hasNewUpdates || hasPending || newEventCount > 0 || freshAnswers.length > 0;
 
     // При открытии — отметить прочитанным
     useEffect(() => {
@@ -91,11 +109,6 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
         if (e.key === 'Escape') setOpen(false);
     };
 
-    const handleOpenUpdates = () => {
-        window.dispatchEvent(new Event('logicore:open-updates'));
-        setOpen(false);
-    };
-
     return (
         <div ref={containerRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <button
@@ -103,7 +116,15 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                 className="lc2-iconbtn"
                 aria-label="Уведомления"
                 data-guide="notifications"
-                onClick={() => { markSeen(); setOpen(!open); }}
+                onClick={() => {
+                    markSeen();
+                    const latest = answers[0]?.answeredAt;
+                    if (latest) {
+                        localStorage.setItem(LS_ANSWERS_KEY, latest);
+                        setAnswersSeenAt(latest);
+                    }
+                    setOpen(!open);
+                }}
             >
                 <BellOutlined />
                 {showDot && <span className="lc2-dot" />}
@@ -122,22 +143,35 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                         padding: 12,
                     }}
                 >
-                    {/* Строка «Что нового?» */}
-                    <div
-                        onClick={handleOpenUpdates}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 8, padding: '10px 8px',
-                            cursor: 'pointer', borderRadius: 8, marginBottom: 8,
-                            background: hasNewUpdates ? 'var(--nova-warn-soft)' : 'transparent',
-                            transition: 'background 0.12s',
-                        }}
-                    >
-                        <NotificationOutlined style={{ color: hasNewUpdates ? 'var(--nova-warn)' : 'var(--nova-fg-2)', fontSize: 16 }} />
-                        <span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>Что нового?</span>
-                        {hasNewUpdates && (
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--nova-neg)', flexShrink: 0 }} />
-                        )}
-                    </div>
+                    {/* Ответы поддержки: человек писал и ждёт. */}
+                    {answers.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--nova-fg-3)', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
+                                Поддержка ответила
+                            </div>
+                            {answers.slice(0, 3).map((a) => (
+                                <div
+                                    key={a.id}
+                                    onClick={() => { router.push('/company/support'); setOpen(false); }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                                        cursor: 'pointer', borderRadius: 8, transition: 'background 0.12s',
+                                    }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--nova-hover)')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                    <span style={{ fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {a.title}
+                                    </span>
+                                    {a.answeredAt && (
+                                        <span style={{ fontSize: 11, color: 'var(--nova-fg-3)', whiteSpace: 'nowrap' }}>
+                                            {dayjs(a.answeredAt).format('DD.MM HH:mm')}
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Ожидающие подтверждения */}
                     {hasPending && (
