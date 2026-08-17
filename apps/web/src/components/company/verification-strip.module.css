@@ -17,6 +17,18 @@
     margin-bottom: 14px;
 }
 
+/* Единственное состояние, которое действительно запирает дверь, — только
+   ему и позволено быть красным. */
+.stripStop {
+    border-color: color-mix(in srgb, var(--nova-neg) 45%, var(--nova-border));
+    background: color-mix(in srgb, var(--nova-neg) 5%, var(--nova-surface));
+}
+
+.iconStop {
+    background: var(--nova-neg-soft);
+    color: var(--nova-neg);
+}
+
 .icon {
     display: flex;
     align-items: center;

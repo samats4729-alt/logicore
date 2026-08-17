@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Put, Query, Request, Res, UseGuards
 import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CompanyVerificationStatus, UserRole } from '@prisma/client';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { AuditService } from '../audit/audit.service';
@@ -13,6 +13,16 @@ class RejectCompanyDto {
     @IsNotEmpty()
     @MaxLength(1000)
     reason!: string;
+
+    /**
+     * Отказ окончательный: заявку признали чужой.
+     *
+     * По умолчанию выключено — обычный отказ должен оставлять настоящей
+     * компании возможность исправиться.
+     */
+    @IsOptional()
+    @IsBoolean()
+    block?: boolean;
 }
 
 class ReviewQueueQueryDto {
@@ -118,17 +128,41 @@ export class CompanyVerificationController {
     }
 
     @Post(':id/reject')
-    @ApiOperation({ summary: 'Отклонить организацию с причиной' })
+    @ApiOperation({
+        summary: 'Отклонить организацию с причиной',
+        description: 'С block=true отказ окончательный: закрывает повторную подачу и работу в кабинете.',
+    })
     async reject(@Request() req: any, @Param('id') id: string, @Body() dto: RejectCompanyDto) {
-        const company = await this.verification.reject(id, req.user.sub, dto.reason);
+        const blocked = Boolean(dto.block);
+        const company = await this.verification.reject(id, req.user.sub, dto.reason, blocked);
         await this.audit.log({
             companyId: id,
             user: req.user,
             action: 'STATUS',
             entity: 'company',
             entityId: id,
-            entityLabel: `Организация отклонена: ${company.name}`,
-            details: { reason: company.rejectionReason },
+            entityLabel: blocked
+                ? `Организация отклонена окончательно, доступ закрыт: ${company.name}`
+                : `Организация отклонена: ${company.name}`,
+            details: { reason: company.rejectionReason, blocked },
+        });
+        return company;
+    }
+
+    @Post(':id/unblock')
+    @ApiOperation({
+        summary: 'Снять окончательный отказ',
+        description: 'Организация снова может приложить документы и подать заявку.',
+    })
+    async unblock(@Request() req: any, @Param('id') id: string) {
+        const company = await this.verification.unblock(id);
+        await this.audit.log({
+            companyId: id,
+            user: req.user,
+            action: 'STATUS',
+            entity: 'company',
+            entityId: id,
+            entityLabel: `Запрет снят, организация может подать заявку заново: ${company.name}`,
         });
         return company;
     }

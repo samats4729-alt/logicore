@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Descriptions, Input, Modal, Space, Switch, Table } from 'antd';
+import { Alert, Button, Checkbox, Descriptions, Input, Modal, Space, Switch, Table } from 'antd';
 import { CheckOutlined, CloseOutlined, FileTextOutlined } from '@ant-design/icons';
 import { ShieldCheck } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -41,10 +41,20 @@ interface ReviewCompany {
     verificationStatus: string;
     verificationSubmittedAt: string | null;
     rejectionReason: string | null;
+    /** Отказ окончательный: подача и работа закрыты. */
+    verificationBlockedAt: string | null;
     createdAt: string;
     documents: { id: string; type: string; fileName: string; fileUrl: string }[];
     /** Организация с этим же БИН уже подтверждена — эту подтвердить нельзя. */
     binVerifiedBy: { id: string; name: string } | null;
+    /** Другие заявки на тот же БИН: одна из них — не та компания. */
+    binOtherApplications: {
+        id: string;
+        name: string;
+        verificationStatus: string;
+        blocked: boolean;
+        submittedAt: string;
+    }[];
     /** У кого этот БИН уже заведён как контрагент. */
     binKnownAsPartner: { id: string; name: string; ownerCompanyName: string | null }[];
 }
@@ -169,10 +179,21 @@ export default function AdminCompaniesPage() {
         });
     };
 
+    /**
+     * Отклонить заявку.
+     *
+     * Два разных отказа под одной кнопкой. Обычный — замечание: человек
+     * исправляет документ и подаёт заново. Окончательный — для случая, когда
+     * фирму зарегистрировал не её владелец: исправлять нечего, и без запрета
+     * он вернётся с тем же БИН завтра, а до тех пор продолжит выставлять
+     * счета от чужого имени.
+     */
     const reject = (company: ReviewCompany) => {
         let reason = '';
+        let block = false;
         Modal.confirm({
             title: `Отклонить «${company.name}»?`,
+            width: 520,
             content: (
                 <div>
                     <p style={{ fontSize: 13, color: 'var(--nova-fg-3)' }}>
@@ -183,6 +204,17 @@ export default function AdminCompaniesPage() {
                         placeholder="Например: приказ о назначении без подписи"
                         onChange={(e) => { reason = e.target.value; }}
                     />
+                    <label style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'flex-start' }}>
+                        <Checkbox onChange={(e) => { block = e.target.checked; }} />
+                        <span style={{ fontSize: 12.5 }}>
+                            Запретить повторную подачу и закрыть кабинет
+                            <span style={{ display: 'block', fontSize: 11.5, color: 'var(--nova-fg-3)' }}>
+                                Для чужих регистраций: организация больше не сможет ни отправить
+                                документы, ни создавать заявки и бухгалтерию. Настоящему владельцу
+                                этот БИН остаётся свободен. Запрет снимается здесь же.
+                            </span>
+                        </span>
+                    </label>
                 </div>
             ),
             okText: 'Отклонить',
@@ -197,9 +229,34 @@ export default function AdminCompaniesPage() {
                 try {
                     await api.post(`/admin/company-verification/${company.id}/reject`, {
                         reason: reason.trim(),
+                        block,
                     });
-                    toast.success('Организация отклонена');
+                    toast.success(block
+                        ? 'Заявка отклонена, доступ закрыт'
+                        : 'Организация отклонена');
                     await load();
+                } finally {
+                    setActing(null);
+                }
+            },
+        });
+    };
+
+    /** Снять окончательный отказ: ошибиться здесь легко, обратный ход нужен. */
+    const unblock = (company: ReviewCompany) => {
+        Modal.confirm({
+            title: `Снять запрет с «${company.name}»?`,
+            content: 'Организация снова сможет приложить документы, подать заявку и вести учёт.',
+            okText: 'Снять запрет',
+            cancelText: 'Отмена',
+            onOk: async () => {
+                setActing(company.id);
+                try {
+                    await api.post(`/admin/company-verification/${company.id}/unblock`);
+                    toast.success('Запрет снят');
+                    await load();
+                } catch (e: any) {
+                    toast.error(e.response?.data?.message || 'Не удалось снять запрет');
                 } finally {
                     setActing(null);
                 }
@@ -310,6 +367,57 @@ export default function AdminCompaniesPage() {
                                                 description="Одна организация — один БИН. Если это та же фирма, работа идёт в её кабинете; эту заявку отклоните с причиной."
                                             />
                                         )}
+                                        {record.binOtherApplications.length > 0 && (
+                                            <Alert
+                                                type="warning"
+                                                showIcon
+                                                message={`На этот БИН есть ещё ${record.binOtherApplications.length === 1
+                                                    ? 'одна заявка'
+                                                    : `заявок: ${record.binOtherApplications.length}`}`}
+                                                description={
+                                                    <div>
+                                                        <div style={{ marginBottom: 6 }}>
+                                                            Одну и ту же фирму заявляют дважды: настоящий владелец
+                                                            здесь только один. Сверьте удостоверение личности с
+                                                            приказом о назначении, прежде чем подтверждать.
+                                                        </div>
+                                                        {record.binOtherApplications.map((other) => (
+                                                            <div key={other.id} style={{ fontSize: 12 }}>
+                                                                «{other.name}» — {STATUS_VIEW[other.verificationStatus]?.label
+                                                                    || other.verificationStatus}
+                                                                {other.blocked && ', доступ закрыт'}
+                                                                {' · '}
+                                                                {dayjs(other.submittedAt).format('DD.MM.YYYY')}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                }
+                                            />
+                                        )}
+                                        {record.verificationBlockedAt && (
+                                            <Alert
+                                                type="error"
+                                                showIcon
+                                                message="Отказ окончательный — доступ закрыт"
+                                                description={
+                                                    <div>
+                                                        <div>
+                                                            Заявку признали чужой {dayjs(record.verificationBlockedAt)
+                                                                .format('DD.MM.YYYY')}: подать документы заново и вести
+                                                            учёт эта организация не может.
+                                                        </div>
+                                                        <Button
+                                                            size="small"
+                                                            style={{ marginTop: 8 }}
+                                                            loading={acting === record.id}
+                                                            onClick={() => unblock(record)}
+                                                        >
+                                                            Снять запрет
+                                                        </Button>
+                                                    </div>
+                                                }
+                                            />
+                                        )}
                                         {record.binKnownAsPartner.length > 0 && (
                                             <Alert
                                                 type="info"
@@ -398,6 +506,11 @@ export default function AdminCompaniesPage() {
                                         }`}>
                                             {STATUS_VIEW[value]?.label || value}
                                         </span>
+                                        {record.verificationBlockedAt && (
+                                            <div style={{ fontSize: 11, color: 'var(--nova-neg)', marginTop: 4, fontWeight: 600 }}>
+                                                Доступ закрыт
+                                            </div>
+                                        )}
                                         {record.rejectionReason && (
                                             <div style={{ fontSize: 11, color: 'var(--nova-fg-3)', marginTop: 4 }}>
                                                 {record.rejectionReason}
@@ -422,12 +535,14 @@ export default function AdminCompaniesPage() {
                                         >
                                             Подтвердить
                                         </Button>
+                                        {/* Уже отклонённую можно отклонить ещё раз — чтобы
+                                            дописать запрет, если стало ясно, что фирма чужая. */}
                                         <Button
                                             danger
                                             size="small"
                                             icon={<CloseOutlined />}
                                             loading={acting === record.id}
-                                            disabled={record.verificationStatus === 'REJECTED'}
+                                            disabled={Boolean(record.verificationBlockedAt)}
                                             onClick={() => reject(record)}
                                         >
                                             Отклонить

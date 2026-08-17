@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BadgeCheck, ShieldQuestion } from 'lucide-react';
+import { BadgeCheck, ShieldAlert, ShieldQuestion } from 'lucide-react';
 import { toast } from 'sonner';
 import styles from './verification-strip.module.css';
 
@@ -53,6 +53,29 @@ export function VerificationStrip({ data }: Props) {
     }, [status, verifiedAt]);
 
     if (!data || status === 'VERIFIED') return null;
+
+    /* Отказ окончательный: фирму заявил не её владелец. Здесь тон другой —
+       это единственное состояние, где полоса говорит о закрытой двери, и
+       молчать об этом нельзя: человек иначе будет жать «Отправить» и не
+       понимать, почему ничего не происходит. Кнопки нет намеренно —
+       следующий шаг не в кабинете, а у поддержки. */
+    if (data?.verification?.verificationBlockedAt) {
+        return (
+            <div className={`${styles.strip} ${styles.stripStop}`}>
+                <span className={`${styles.icon} ${styles.iconStop}`}><ShieldAlert size={15} /></span>
+                <div className={styles.text}>
+                    <b>Заявка отклонена окончательно.</b>{' '}
+                    {data?.verification?.rejectionReason
+                        || 'Организация принадлежит не вам.'}{' '}
+                    Создавать заявки и документы нельзя. Если это ошибка — напишите в
+                    поддержку, решение пересматривает владелец платформы.
+                </div>
+                <button type="button" className={styles.action} onClick={() => router.push('/company/support')}>
+                    Написать в поддержку
+                </button>
+            </div>
+        );
+    }
 
     // Организации нет вовсе — самый первый шаг.
     if (status === 'NONE') {

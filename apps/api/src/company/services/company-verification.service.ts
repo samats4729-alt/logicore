@@ -63,12 +63,17 @@ export class CompanyVerificationService {
         }
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },
-            select: { id: true, verificationStatus: true },
+            select: {
+                id: true, verificationStatus: true,
+                verificationBlockedAt: true, rejectionReason: true,
+            },
         });
         if (!company) throw new NotFoundException('Организация не найдена');
         if (company.verificationStatus === CompanyVerificationStatus.VERIFIED) {
             throw new ConflictException('Организация уже подтверждена');
         }
+        // Заявку признали чужой — новые сканы не нужны никому.
+        this.assertNotBlocked(company.verificationBlockedAt, company.rejectionReason);
 
         const safeName = file.originalname.replace(/[^\w.\-]+/g, '_').slice(-80);
         const relativePath = `uploads/verification/${companyId}_${type}_${Date.now()}_${safeName}`;
@@ -113,6 +118,7 @@ export class CompanyVerificationService {
                 verificationSubmittedAt: true,
                 verifiedAt: true,
                 rejectionReason: true,
+                verificationBlockedAt: true,
             },
         });
         if (!company) throw new NotFoundException('Организация не найдена');
@@ -129,6 +135,7 @@ export class CompanyVerificationService {
             documents,
             missingDocuments: REQUIRED_VERIFICATION_DOCUMENTS.filter((type) => !attached.has(type)),
             canSubmit: this.canSubmit(company.verificationStatus)
+                && !company.verificationBlockedAt
                 && REQUIRED_VERIFICATION_DOCUMENTS.every((type) => attached.has(type)),
         };
     }
@@ -142,9 +149,13 @@ export class CompanyVerificationService {
     async submit(companyId: string) {
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },
-            select: { id: true, verificationStatus: true },
+            select: {
+                id: true, verificationStatus: true,
+                verificationBlockedAt: true, rejectionReason: true,
+            },
         });
         if (!company) throw new NotFoundException('Организация не найдена');
+        this.assertNotBlocked(company.verificationBlockedAt, company.rejectionReason);
         if (!this.canSubmit(company.verificationStatus)) {
             throw new ConflictException(
                 company.verificationStatus === CompanyVerificationStatus.PENDING
@@ -208,9 +219,10 @@ export class CompanyVerificationService {
      * Очередь проверки в админке платформы.
      *
      * К каждой заявке добавляется, что ещё известно про её БИН: подтверждена
-     * ли уже организация с таким номером и не заведён ли он у кого-то как
-     * контрагент. Без этого решение принималось вслепую — совпадение
-     * всплывало только отказом в момент нажатия «Подтвердить».
+     * ли уже организация с таким номером, лежат ли рядом другие заявки на
+     * него же и не заведён ли он у кого-то как контрагент. Без этого решение
+     * принималось вслепую — совпадение всплывало только отказом в момент
+     * нажатия «Подтвердить».
      */
     async listForReview(status?: CompanyVerificationStatus) {
         const where: Prisma.CompanyWhereInput = {
@@ -230,6 +242,7 @@ export class CompanyVerificationService {
                 verificationSubmittedAt: true,
                 verifiedAt: true,
                 rejectionReason: true,
+                verificationBlockedAt: true,
                 createdAt: true,
                 documents: {
                     where: { type: { in: REQUIRED_VERIFICATION_DOCUMENTS } },
@@ -243,39 +256,59 @@ export class CompanyVerificationService {
 
         const bins = companies.map((company) => company.bin).filter((bin): bin is string => !!bin);
         if (bins.length === 0) {
-            return companies.map((company) => ({ ...company, binVerifiedBy: null, binKnownAsPartner: [] }));
+            return companies.map((company) => ({
+                ...company, binVerifiedBy: null, binOtherApplications: [], binKnownAsPartner: [],
+            }));
         }
 
+        // Соседи по БИН ищутся без оглядки на текущую страницу: две заявки на
+        // один номер часто лежат в очереди рядом, и если исключить всё, что
+        // уже показано, они друг друга не увидят — а это ровно тот случай,
+        // ради которого подсказка и нужна. Своя строка отбрасывается ниже,
+        // поимённо.
         const sameBin = await this.prisma.company.findMany({
-            where: {
-                bin: { in: bins },
-                id: { notIn: companies.map((company) => company.id) },
-            },
+            where: { bin: { in: bins } },
             select: {
                 id: true,
                 name: true,
                 bin: true,
                 isExternal: true,
                 verificationStatus: true,
+                verificationBlockedAt: true,
+                verificationSubmittedAt: true,
+                createdAt: true,
                 createdByCompany: { select: { id: true, name: true } },
             },
         });
 
-        return companies.map((company) => ({
-            ...company,
-            // Организация с этим БИН уже работает — подтвердить вторую нельзя.
-            binVerifiedBy: sameBin.find((other) => other.bin === company.bin
-                && !other.isExternal
-                && other.verificationStatus === CompanyVerificationStatus.VERIFIED) ?? null,
-            // Этот БИН уже заведён у кого-то как контрагент.
-            binKnownAsPartner: sameBin
-                .filter((other) => other.bin === company.bin && other.isExternal)
-                .map((other) => ({
-                    id: other.id,
-                    name: other.name,
-                    ownerCompanyName: other.createdByCompany?.name ?? null,
-                })),
-        }));
+        return companies.map((company) => {
+            const others = sameBin.filter((other) => other.bin === company.bin && other.id !== company.id);
+            return {
+                ...company,
+                // Организация с этим БИН уже работает — подтвердить вторую нельзя.
+                binVerifiedBy: others.find((other) => !other.isExternal
+                    && other.verificationStatus === CompanyVerificationStatus.VERIFIED) ?? null,
+                // Другие заявки на тот же БИН: одна из них — не та компания.
+                binOtherApplications: others
+                    .filter((other) => !other.isExternal
+                        && other.verificationStatus !== CompanyVerificationStatus.VERIFIED)
+                    .map((other) => ({
+                        id: other.id,
+                        name: other.name,
+                        verificationStatus: other.verificationStatus,
+                        blocked: Boolean(other.verificationBlockedAt),
+                        submittedAt: other.verificationSubmittedAt ?? other.createdAt,
+                    })),
+                // Этот БИН уже заведён у кого-то как контрагент.
+                binKnownAsPartner: others
+                    .filter((other) => other.isExternal)
+                    .map((other) => ({
+                        id: other.id,
+                        name: other.name,
+                        ownerCompanyName: other.createdByCompany?.name ?? null,
+                    })),
+            };
+        });
     }
 
     /** Решение владельца платформы: подтвердить компанию. */
@@ -322,6 +355,9 @@ export class CompanyVerificationService {
                 verifiedAt: new Date(),
                 verifiedById: reviewerId,
                 rejectionReason: null,
+                // Подтверждение отменяет прежний запрет: владелец посмотрел
+                // документы ещё раз и решил иначе.
+                verificationBlockedAt: null,
             },
             select: { id: true, name: true, verificationStatus: true, verifiedAt: true },
         });
@@ -393,8 +429,16 @@ export class CompanyVerificationService {
         };
     }
 
-    /** Решение владельца платформы: отклонить с причиной. */
-    async reject(companyId: string, reviewerId: string, reason: string) {
+    /**
+     * Решение владельца платформы: отклонить с причиной.
+     *
+     * Обычный отказ — это замечание: документы прикладывают заново и подают
+     * ещё раз, иначе исправить придирку было бы нечем. Но когда фирму
+     * зарегистрировал не её владелец, исправлять нечего — он вернётся с тем
+     * же БИН завтра. На этот случай отказ помечается окончательным: он
+     * закрывает и повторную подачу, и работу в кабинете.
+     */
+    async reject(companyId: string, reviewerId: string, reason: string, block = false) {
         if (!reason?.trim()) {
             throw new BadRequestException('Укажите причину отказа — она видна заявителю');
         }
@@ -411,8 +455,38 @@ export class CompanyVerificationService {
                 rejectionReason: reason.trim(),
                 verifiedById: reviewerId,
                 verifiedAt: null,
+                // Отказ без галочки снимает прежний запрет: владелец
+                // пересмотрел решение и оставил обычное замечание.
+                verificationBlockedAt: block ? new Date() : null,
             },
-            select: { id: true, name: true, verificationStatus: true, rejectionReason: true },
+            select: {
+                id: true, name: true, verificationStatus: true,
+                rejectionReason: true, verificationBlockedAt: true,
+            },
+        });
+    }
+
+    /**
+     * Снять окончательный отказ.
+     *
+     * Ошибиться здесь легко — БИН публичен, а по документам не всегда видно
+     * с первого раза, кто настоящий владелец. Без обратного хода такая
+     * ошибка стоила бы компании кабинета навсегда.
+     */
+    async unblock(companyId: string) {
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { id: true, verificationBlockedAt: true },
+        });
+        if (!company) throw new NotFoundException('Организация не найдена');
+        if (!company.verificationBlockedAt) {
+            throw new ConflictException('У этой организации нет запрета');
+        }
+
+        return this.prisma.company.update({
+            where: { id: companyId },
+            data: { verificationBlockedAt: null },
+            select: { id: true, name: true, verificationStatus: true, verificationBlockedAt: true },
         });
     }
 
@@ -451,22 +525,41 @@ export class CompanyVerificationService {
     }
 
     async assertVerified(companyId: string) {
+        const company = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: {
+                verificationStatus: true, rejectionReason: true, verificationBlockedAt: true,
+            },
+        });
+        if (!company) throw new NotFoundException('Организация не найдена');
+
+        // Окончательный отказ закрывает работу независимо от рубильника.
+        // Рубильник — про то, ждать ли проверку перед началом работы; здесь
+        // проверка уже прошла и решила, что фирма заявителю не принадлежит.
+        // Оставить ему выписку счетов от чужого имени значило бы отменить
+        // собственное решение.
+        this.assertNotBlocked(company.verificationBlockedAt, company.rejectionReason);
+
         // Пока подтверждение не требуется, работают все. Проверка при этом
         // никуда не девается: галочка у компании остаётся, её видно и ей
         // верят — просто она не запирает дверь.
         if (!(await this.isVerificationRequired())) return;
 
-        const company = await this.prisma.company.findUnique({
-            where: { id: companyId },
-            select: { verificationStatus: true, rejectionReason: true },
-        });
-        if (!company) throw new NotFoundException('Организация не найдена');
         if (company.verificationStatus === CompanyVerificationStatus.VERIFIED) return;
 
         throw new ForbiddenException(
             company.verificationStatus === CompanyVerificationStatus.REJECTED
                 ? `Организация не подтверждена: ${company.rejectionReason ?? 'заявка отклонена'}`
                 : 'Организация ещё не подтверждена. Приложите документы и дождитесь проверки',
+        );
+    }
+
+    /** Единый текст запрета: человек должен понять, что делать дальше. */
+    private assertNotBlocked(blockedAt: Date | null | undefined, reason?: string | null) {
+        if (!blockedAt) return;
+        throw new ForbiddenException(
+            `Заявка на эту организацию отклонена окончательно: ${reason?.trim() || 'организация принадлежит не вам'}. `
+            + 'Если это ошибка, напишите в поддержку — решение пересматривает владелец платформы.',
         );
     }
 
