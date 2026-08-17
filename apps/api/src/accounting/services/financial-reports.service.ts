@@ -1850,6 +1850,7 @@ export class FinancialReportsService {
                 id: true,
                 orderId: true,
                 status: true,
+                kind: true,
                 fileName: true,
                 claimedAmount: true,
                 claimedDate: true,

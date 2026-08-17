@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Typography, Table, Tag, Empty, Button, Modal, Form, Input, DatePicker, Tooltip, Alert, Checkbox } from 'antd';
+import { Typography, Table, Tag, Empty, Button, Modal, Form, Input, DatePicker, Tooltip, Alert, Checkbox, Select } from 'antd';
 import {
     CheckCircleFilled,
     ClockCircleFilled,
@@ -69,6 +69,14 @@ const PAYMENT_VIEW: Record<string, { label: string; color: string; icon: any }> 
     PARTIAL: { label: 'Частично', color: C.amber, icon: <ClockCircleFilled /> },
     UNPAID: { label: 'Не оплачено', color: C.textTer, icon: <MinusCircleFilled /> },
 };
+
+/** Что контрагент может приложить к расчётам. */
+const DOCUMENT_KINDS = [
+    { value: 'TTN', label: 'Накладная' },
+    { value: 'INVOICE', label: 'Счёт' },
+    { value: 'ACT', label: 'Акт' },
+    { value: 'OTHER', label: 'Прочее' },
+];
 
 const DOC_STATUS: Record<string, { label: string; color: string }> = {
     DRAFT: { label: 'Черновик', color: 'default' },
@@ -149,6 +157,22 @@ export default function SharedReportPage() {
     const [form] = Form.useForm();
     const isNarrow = useIsNarrow();
 
+    /** Суммы, которые контрагент назвал сам: ключ — рейс, значение — строка. */
+    const [ownAmounts, setOwnAmounts] = useState<Record<string, string>>({});
+    /** Файлы, приложенные к счёту до отправки. */
+    const [invoiceFiles, setInvoiceFiles] = useState<{ file: File; type: string }[]>([]);
+    const [withdrawing, setWithdrawing] = useState<string | null>(null);
+
+    /** К каким сделкам прикладываем документ прямо сейчас. */
+    const [docOrders, setDocOrders] = useState<any[] | null>(null);
+    const [docFile, setDocFile] = useState<File | null>(null);
+    const [docType, setDocType] = useState('TTN');
+    const [uploadingDoc, setUploadingDoc] = useState(false);
+
+    const [receiptOrder, setReceiptOrder] = useState<any>(null);
+    const [submittingReceipt, setSubmittingReceipt] = useState(false);
+    const [receiptForm] = Form.useForm();
+
     const [proofOrder, setProofOrder] = useState<any>(null);
     const [proofFile, setProofFile] = useState<File | null>(null);
     const [submittingProof, setSubmittingProof] = useState(false);
@@ -184,33 +208,153 @@ export default function SharedReportPage() {
     const billableOrders = useMemo(() => orders.filter((o: any) => o.direction === 'weOwe'), [orders]);
     const receivableOrders = useMemo(() => orders.filter((o: any) => o.direction === 'theyOwe'), [orders]);
 
+    /** Сумма по рейсу: названная контрагентом, иначе наша. */
+    const amountOf = (order: any) => {
+        const own = (ownAmounts[order.id] || '').replace(/[\s ]/g, '').replace(',', '.');
+        if (own && /^\d+(\.\d{1,2})?$/.test(own)) return Number(own);
+        return order.amount || 0;
+    };
+
     const selectedTotal = useMemo(
         () => billableOrders
             .filter((o: any) => selectedRowKeys.includes(o.id))
-            .reduce((sum: number, o: any) => sum + (o.amount || 0), 0),
-        [billableOrders, selectedRowKeys],
+            .reduce((sum: number, o: any) => sum + amountOf(o), 0),
+        [billableOrders, selectedRowKeys, ownAmounts],
+    );
+
+    /** По каким рейсам названная сумма расходится с нашей. */
+    const disagreements = useMemo(
+        () => billableOrders
+            .filter((o: any) => selectedRowKeys.includes(o.id))
+            .filter((o: any) => Math.round(amountOf(o)) !== Math.round(o.amount || 0)),
+        [billableOrders, selectedRowKeys, ownAmounts],
     );
 
     const handleSubmitInvoice = async (values: any) => {
         try {
             setSubmittingInvoice(true);
+            // Свои суммы уходят только по отмеченным рейсам и только там,
+            // где их действительно вписали: пустое поле означает согласие
+            // с нашей цифрой, а не ноль.
+            const amounts = selectedRowKeys
+                .filter((id) => (ownAmounts[id] || '').trim())
+                .map((id) => ({ orderId: id, amount: ownAmounts[id].trim() }));
+
             const res = await axios.post(`${API_URL}/public/accounting-documents/from-shared-report/${token}`, {
                 orderIds: selectedRowKeys,
+                amounts: amounts.length ? amounts : undefined,
                 externalNumber: values.externalNumber || undefined,
                 externalDate: values.externalDate ? values.externalDate.format('YYYY-MM-DD') : undefined,
                 dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : undefined,
                 note: values.note || undefined,
             });
+
+            // Файлы отправляются после счёта: если счёт не прошёл, грузить
+            // документы некуда, а показывать «часть отправилась» — худший
+            // из возможных ответов.
+            for (const attachment of invoiceFiles) {
+                const payload = new FormData();
+                payload.append('file', attachment.file);
+                payload.append('type', attachment.type);
+                payload.append('orderIds', selectedRowKeys.join(','));
+                try {
+                    await axios.post(`${API_URL}/public/shared-report/${token}/documents`, payload);
+                } catch {
+                    toast.warning(`Не удалось приложить «${attachment.file.name}» — пришлите его отдельно`);
+                }
+            }
+
             toast.success(`Счёт ${res.data.number} отправлен на проверку`);
             setModalOpen(false);
             form.resetFields();
             setSelectedRowKeys([]);
+            setOwnAmounts({});
+            setInvoiceFiles([]);
             await loadReport();
         } catch (e: any) {
             const detail = e.response?.data?.message;
             toast.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось выставить счёт');
         } finally {
             setSubmittingInvoice(false);
+        }
+    };
+
+    /**
+     * Отозвать свой счёт, пока бухгалтерия его не тронула.
+     *
+     * Без этого человек, ошибившийся суммой или отметивший не те рейсы,
+     * оказывался заперт: рейсы из счёта больше не выбирались, а отменить
+     * документ он не мог — оставалось звонить отправителю отчёта.
+     */
+    const withdrawInvoice = async (order: any) => {
+        setWithdrawing(order.id);
+        try {
+            await axios.post(
+                `${API_URL}/public/accounting-documents/from-shared-report/${token}/${order.invoice.id}/withdraw`,
+            );
+            toast.success(`Счёт ${order.invoice.number} отозван — рейсы снова можно отметить`);
+            await loadReport();
+        } catch (e: any) {
+            const detail = e.response?.data?.message;
+            toast.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось отозвать счёт');
+        } finally {
+            setWithdrawing(null);
+        }
+    };
+
+    /**
+     * Приложить документ к сделкам.
+     *
+     * Файл ложится в документы каждой указанной заявки — туда же, куда его
+     * положил бы сотрудник отправителя. Раньше накладную и свой счёт
+     * приходилось слать почтой или в мессенджере, то есть мимо платформы,
+     * и в споре об оплате предъявить было нечего.
+     */
+    const uploadDocuments = async () => {
+        if (!docFile || !docOrders?.length) {
+            toast.error('Выберите файл');
+            return;
+        }
+        setUploadingDoc(true);
+        try {
+            const payload = new FormData();
+            payload.append('file', docFile);
+            payload.append('type', docType);
+            payload.append('orderIds', docOrders.map((o) => o.id).join(','));
+            const res = await axios.post(`${API_URL}/public/shared-report/${token}/documents`, payload);
+            toast.success(res.data?.message || 'Документ приложен');
+            setDocOrders(null);
+            setDocFile(null);
+            await loadReport();
+        } catch (e: any) {
+            const detail = e.response?.data?.message;
+            toast.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось приложить документ');
+        } finally {
+            setUploadingDoc(false);
+        }
+    };
+
+    /** Сколько к вам на самом деле пришло — заявление получателя денег. */
+    const handleSubmitReceipt = async (values: any) => {
+        try {
+            setSubmittingReceipt(true);
+            const payload = new FormData();
+            payload.append('orderId', receiptOrder.id);
+            payload.append('kind', 'RECEIPT');
+            payload.append('claimedAmount', String(values.claimedAmount ?? ''));
+            if (values.claimedDate) payload.append('claimedDate', values.claimedDate.format('YYYY-MM-DD'));
+            if (values.note) payload.append('note', values.note);
+
+            await axios.post(`${API_URL}/public/payment-proofs/${token}`, payload);
+            toast.success('Замечание отправлено бухгалтерии');
+            setReceiptOrder(null);
+            receiptForm.resetFields();
+            await loadReport();
+        } catch (e: any) {
+            const detail = e.response?.data?.message;
+            toast.error(Array.isArray(detail) ? detail[0] : detail || 'Не удалось отправить замечание');
+        } finally {
+            setSubmittingReceipt(false);
         }
     };
 
@@ -260,6 +404,25 @@ export default function SharedReportPage() {
         return { latest, view, count: proofs.length };
     };
 
+    /**
+     * Почему по рейсу нельзя выставить счёт.
+     *
+     * Пустая строка означает «можно». Молчаливо серая галочка — худший
+     * вариант из возможных: человек считает, что сломалась страница, и
+     * идёт звонить, вместо того чтобы прочитать одну строку.
+     */
+    const blockedReason = (row: any): string => {
+        if (row.invoice) {
+            const view = docStatusView(row.invoice.status, true);
+            return `Счёт ${row.invoice.number} уже выставлен — ${view.label.toLowerCase()}`;
+        }
+        if (row.paymentState === 'PAID') return 'Рейс оплачен полностью — выставлять нечего';
+        return '';
+    };
+
+    /** Счёт по рейсу ещё черновик — значит, его можно отозвать. */
+    const canWithdraw = (row: any) => Boolean(row.invoice) && row.invoice.status === 'DRAFT';
+
     const orderColumns = (opts: { owedToReader: boolean }) => [
         {
             title: 'Заявка',
@@ -308,14 +471,46 @@ export default function SharedReportPage() {
             title: 'Сумма',
             dataIndex: 'amount',
             key: 'amount',
-            width: 130,
+            width: opts.owedToReader ? 170 : 130,
             align: 'right' as const,
             sorter: (a: any, b: any) => (a.amount || 0) - (b.amount || 0),
-            render: (v: number) => (
-                <span style={{ fontWeight: 600, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
-                    {v ? money(v) : '—'}
-                </span>
-            ),
+            render: (v: number, r: any) => {
+                // По своим рейсам сумму можно назвать самому: у нас записана
+                // цена из заявки, а в жизни бывает простой, догруз и
+                // перевес. Наша цифра при этом не меняется — расхождение
+                // увидит бухгалтер и решит сам.
+                if (opts.owedToReader && !blockedReason(r)) {
+                    const own = ownAmounts[r.id] ?? '';
+                    const changed = own.trim() && Math.round(amountOf(r)) !== Math.round(v || 0);
+                    return (
+                        <div>
+                            <Input
+                                size="small"
+                                inputMode="decimal"
+                                maxLength={15}
+                                value={own || (v ? String(Math.round(v)) : '')}
+                                suffix="₸"
+                                style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                                onChange={(e) => setOwnAmounts({ ...ownAmounts, [r.id]: e.target.value })}
+                            />
+                            {changed ? (
+                                <div style={{ fontSize: 11, color: C.amber, marginTop: 3 }}>
+                                    у нас {money(v)}
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: 11, color: C.textTer, marginTop: 3 }}>
+                                    можно исправить
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
+                return (
+                    <span style={{ fontWeight: 600, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
+                        {v ? money(v) : '—'}
+                    </span>
+                );
+            },
         },
         {
             title: 'Счёт',
@@ -325,7 +520,9 @@ export default function SharedReportPage() {
                 if (!r.invoice) {
                     return (
                         <span style={{ color: C.textTer, fontSize: 13 }}>
-                            {opts.owedToReader ? 'Не выставлен' : '—'}
+                            {opts.owedToReader
+                                ? (r.paymentState === 'PAID' ? 'Рейс оплачен' : 'Не выставлен')
+                                : '—'}
                         </span>
                     );
                 }
@@ -336,6 +533,19 @@ export default function SharedReportPage() {
                         <Tag color={view.color} style={{ borderRadius: 6, marginTop: 2, fontSize: 11, lineHeight: '18px' }}>
                             {view.label}
                         </Tag>
+                        {/* Пока счёт не приняли в работу, ошибку можно
+                            исправить самому — не звонком, а кнопкой. */}
+                        {opts.owedToReader && canWithdraw(r) && (
+                            <Button
+                                type="link"
+                                size="small"
+                                loading={withdrawing === r.id}
+                                style={{ padding: 0, height: 'auto', fontSize: 12, display: 'block' }}
+                                onClick={() => withdrawInvoice(r)}
+                            >
+                                Отозвать счёт
+                            </Button>
+                        )}
                     </div>
                 );
             },
@@ -360,9 +570,42 @@ export default function SharedReportPage() {
                         {r.paymentState === 'UNPAID' && r.isOverdue && (
                             <div style={{ fontSize: 12, color: C.red }}>Просрочен</div>
                         )}
+                        {/* Деньги идут читателю: только он знает, сколько
+                            дошло. Раньше сказать об этом было негде. */}
+                        {opts.owedToReader && r.paymentState !== 'UNPAID' && (
+                            <Button
+                                type="link"
+                                size="small"
+                                style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                                onClick={() => {
+                                    setReceiptOrder(r);
+                                    receiptForm.setFieldsValue({
+                                        claimedAmount: r.paidAmount ? String(Math.round(r.paidAmount)) : undefined,
+                                        claimedDate: dayjs(),
+                                    });
+                                }}
+                            >
+                                Пришло не столько?
+                            </Button>
+                        )}
                     </div>
                 );
             },
+        },
+        {
+            title: 'Документы',
+            key: 'files',
+            width: 150,
+            render: (_: any, r: any) => (
+                <Button
+                    size="small"
+                    icon={<PaperClipOutlined />}
+                    style={{ borderRadius: 8 }}
+                    onClick={() => setDocOrders([r])}
+                >
+                    Приложить
+                </Button>
+            ),
         },
         // Чек прикладывают там, где платит читатель страницы.
         ...(opts.owedToReader ? [] : [{
@@ -414,7 +657,8 @@ export default function SharedReportPage() {
     /** Тот же рейс, что и строка таблицы, но для телефона. */
     const OrderCard = ({ row, selectable }: { row: any; selectable?: boolean }) => {
         const pay = PAYMENT_VIEW[row.paymentState] || PAYMENT_VIEW.UNPAID;
-        const disabled = !!row.invoice || row.paymentState === 'PAID';
+        const reason = blockedReason(row);
+        const disabled = Boolean(reason);
         const checked = selectedRowKeys.includes(row.id);
         const invoiceView = row.invoice ? docStatusView(row.invoice.status, !!selectable) : null;
 
@@ -426,16 +670,18 @@ export default function SharedReportPage() {
             }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     {selectable && (
-                        <Checkbox
-                            checked={checked}
-                            disabled={disabled}
-                            style={{ marginTop: 2 }}
-                            onChange={(e) => setSelectedRowKeys(
-                                e.target.checked
-                                    ? [...selectedRowKeys, row.id]
-                                    : selectedRowKeys.filter((k) => k !== row.id),
-                            )}
-                        />
+                        <Tooltip title={reason || undefined}>
+                            <Checkbox
+                                checked={checked}
+                                disabled={disabled}
+                                style={{ marginTop: 2 }}
+                                onChange={(e) => setSelectedRowKeys(
+                                    e.target.checked
+                                        ? [...selectedRowKeys, row.id]
+                                        : selectedRowKeys.filter((k) => k !== row.id),
+                                )}
+                            />
+                        </Tooltip>
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -558,7 +804,13 @@ export default function SharedReportPage() {
                 {rows.length === 0 ? (
                     <Empty
                         image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description={<span style={{ color: C.textTer }}>Нет сделок в этой части расчётов</span>}
+                        description={(
+                            <span style={{ color: C.textTer }}>
+                                {selectable
+                                    ? 'Здесь появятся рейсы, за которые платит отправитель отчёта. Сейчас таких нет — по всем расчётам платите вы.'
+                                    : 'Здесь появятся рейсы, за которые платите вы. Сейчас таких нет.'}
+                            </span>
+                        )}
                         style={{ margin: '24px 0' }}
                     />
                 ) : isNarrow ? (
@@ -594,9 +846,18 @@ export default function SharedReportPage() {
                             onChange: (keys: any[]) => setSelectedRowKeys(keys),
                             getCheckboxProps: (record: any) => ({
                                 // Уже выставленный счёт второй раз не выставляют.
-                                disabled: !!record.invoice || record.paymentState === 'PAID',
+                                disabled: Boolean(blockedReason(record)),
                                 name: record.orderNumber,
                             }),
+                            renderCell: (checked: boolean, record: any, _index: number, node: React.ReactNode) => {
+                                const reason = blockedReason(record);
+                                // Серая галочка без объяснения читается как
+                                // поломка страницы: человек тычет в неё и
+                                // идёт звонить. Причина висит прямо на ней.
+                                return reason
+                                    ? <Tooltip title={reason}><span>{node}</span></Tooltip>
+                                    : node;
+                            },
                         } : undefined}
                         columns={columns}
                         dataSource={rows}
@@ -633,9 +894,12 @@ export default function SharedReportPage() {
                                             </div>
                                         </div>
                                     </Table.Summary.Cell>
-                                    {/* У раздела с чеками колонок на одну больше —
-                                        иначе итог уезжает под чужой заголовок. */}
-                                    {!selectable && <Table.Summary.Cell index={4} />}
+                                    {/* Хвостовые колонки: «Документы» есть всегда,
+                                        «Чек об оплате» — только там, где платит
+                                        читатель. Без этих ячеек полоса итога
+                                        обрывается посреди таблицы. */}
+                                    <Table.Summary.Cell index={4} />
+                                    {!selectable && <Table.Summary.Cell index={5} />}
                                 </Table.Summary.Row>
                             </Table.Summary>
                         )}
@@ -710,6 +974,25 @@ export default function SharedReportPage() {
 
     return (
         <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column' }}>
+            {/* Галочку должно быть видно.
+                Ant рисует её тонкой светлой рамкой, и на белой таблице
+                рабочая галочка выглядела ровно как выключенная — человек
+                решал, что выбрать нельзя ничего, и шёл звонить. Здесь
+                рабочая заметно темнее, а недоступная — явно залита серым. */}
+            <style>{`
+                .ant-checkbox-inner {
+                    border-color: #9aa1ae !important;
+                    border-width: 1.5px !important;
+                }
+                .ant-checkbox-wrapper:hover .ant-checkbox-inner,
+                .ant-checkbox:hover .ant-checkbox-inner {
+                    border-color: ${C.blue} !important;
+                }
+                .ant-checkbox-disabled .ant-checkbox-inner {
+                    border-color: #e2e4e9 !important;
+                    background: #f2f3f5 !important;
+                }
+            `}</style>
             <header style={{
                 background: 'rgba(246, 247, 249, 0.88)', backdropFilter: 'blur(12px)',
                 borderBottom: `1px solid ${C.border}`, padding: '14px 20px',
@@ -790,24 +1073,41 @@ export default function SharedReportPage() {
 
                 <OrdersSection
                     title="Сделки, по которым платят вам"
-                    subtitle="Отметьте выполненные рейсы и выставьте счёт — он сразу попадёт в бухгалтерию отправителя."
+                    subtitle="Отметьте выполненные рейсы, при необходимости поправьте суммы и выставьте счёт — он сразу попадёт в бухгалтерию отправителя."
                     rows={billableOrders}
                     selectable
                     extra={
-                        <Button
-                            type="primary"
-                            size="large"
-                            disabled={selectedRowKeys.length === 0}
-                            style={{ borderRadius: 12, fontWeight: 600 }}
-                            onClick={() => {
-                                form.setFieldsValue({ externalDate: dayjs() });
-                                setModalOpen(true);
-                            }}
-                        >
-                            {selectedRowKeys.length > 0
-                                ? `Выставить счёт на ${money(selectedTotal)}`
-                                : 'Выставить счёт'}
-                        </Button>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <Button
+                                size="large"
+                                icon={<PaperClipOutlined />}
+                                disabled={selectedRowKeys.length === 0}
+                                style={{ borderRadius: 12 }}
+                                onClick={() => setDocOrders(
+                                    billableOrders.filter((o: any) => selectedRowKeys.includes(o.id)),
+                                )}
+                            >
+                                Приложить документы
+                            </Button>
+                            <Tooltip title={selectedRowKeys.length === 0
+                                ? 'Сначала отметьте рейсы, за которые просите оплату'
+                                : undefined}>
+                                <Button
+                                    type="primary"
+                                    size="large"
+                                    disabled={selectedRowKeys.length === 0}
+                                    style={{ borderRadius: 12, fontWeight: 600 }}
+                                    onClick={() => {
+                                        form.setFieldsValue({ externalDate: dayjs() });
+                                        setModalOpen(true);
+                                    }}
+                                >
+                                    {selectedRowKeys.length > 0
+                                        ? `Выставить счёт на ${money(selectedTotal)}`
+                                        : 'Выставить счёт'}
+                                </Button>
+                            </Tooltip>
+                        </div>
                     }
                 />
 
@@ -1061,6 +1361,171 @@ export default function SharedReportPage() {
                             placeholder="Условия оплаты, реквизиты, любая важная информация"
                             rows={3}
                             maxLength={1000}
+                            showCount
+                        />
+                    </Form.Item>
+                </Form>
+
+                {/* Пакет документов к счёту: свой счёт, накладные, акт.
+                    Каждый файл ложится в документы всех отмеченных рейсов —
+                    там его и ищет бухгалтерия отправителя. */}
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                        Документы к счёту
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textTer, marginBottom: 10 }}>
+                        Свой счёт, накладные, акт. Лягут в документы отмеченных рейсов.
+                        PDF или фото, до 10 МБ.
+                    </div>
+                    <input
+                        type="file"
+                        multiple
+                        accept="application/pdf,image/jpeg,image/png,image/heic,image/webp"
+                        onChange={(e) => setInvoiceFiles([
+                            ...invoiceFiles,
+                            ...Array.from(e.target.files ?? []).map((file) => ({ file, type: 'INVOICE' })),
+                        ])}
+                        style={{
+                            width: '100%', padding: 10, borderRadius: 10,
+                            border: `1px dashed ${C.border}`, background: '#fafbfc',
+                        }}
+                    />
+                    {invoiceFiles.map((attachment, index) => (
+                        <div
+                            key={`${attachment.file.name}-${index}`}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                marginTop: 8, fontSize: 12.5,
+                            }}
+                        >
+                            <PaperClipOutlined style={{ color: C.textTer }} />
+                            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {attachment.file.name}
+                            </span>
+                            <Select
+                                size="small"
+                                value={attachment.type}
+                                style={{ width: 130 }}
+                                options={DOCUMENT_KINDS}
+                                onChange={(value) => setInvoiceFiles(invoiceFiles.map((item, i) => (
+                                    i === index ? { ...item, type: value } : item
+                                )))}
+                            />
+                            <Button
+                                type="link"
+                                size="small"
+                                style={{ padding: 0, height: 'auto' }}
+                                onClick={() => setInvoiceFiles(invoiceFiles.filter((_, i) => i !== index))}
+                            >
+                                Убрать
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+            </Modal>
+
+            {/* Документ к сделкам — отдельно от счёта: накладную присылают и
+                тогда, когда счёт уже выставлен. */}
+            <Modal
+                title={<span style={{ fontWeight: 700, fontSize: 16 }}>Приложить документ</span>}
+                open={!!docOrders}
+                onCancel={() => { setDocOrders(null); setDocFile(null); }}
+                onOk={uploadDocuments}
+                confirmLoading={uploadingDoc}
+                okText="Приложить"
+                cancelText="Отмена"
+                okButtonProps={{ style: { borderRadius: 10, fontWeight: 600 } }}
+                cancelButtonProps={{ style: { borderRadius: 10 } }}
+                width={520}
+            >
+                {docOrders && (
+                    <div style={{ background: '#f4f5f7', borderRadius: 14, padding: '14px 16px', margin: '16px 0 18px' }}>
+                        <div style={{ fontSize: 13, color: C.textSec }}>
+                            {docOrders.length === 1
+                                ? `Заявка №${docOrders[0].orderNumber} · ${getRoute(docOrders[0])}`
+                                : `Отмеченных сделок: ${docOrders.length}`}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.textTer, marginTop: 4 }}>
+                            Файл появится в документах {docOrders.length === 1 ? 'этой заявки' : 'каждой из них'}.
+                        </div>
+                    </div>
+                )}
+
+                <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 13, marginBottom: 6 }}>Что это за документ</div>
+                    <Select
+                        value={docType}
+                        onChange={setDocType}
+                        style={{ width: '100%' }}
+                        options={DOCUMENT_KINDS}
+                    />
+                </div>
+
+                <div style={{ fontSize: 13, marginBottom: 6 }}>Файл</div>
+                <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/heic,image/webp"
+                    onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                    style={{
+                        width: '100%', padding: 10, borderRadius: 10,
+                        border: `1px dashed ${C.border}`, background: '#fafbfc',
+                    }}
+                />
+                <div style={{ fontSize: 12, color: C.textTer, marginTop: 6 }}>
+                    PDF или фото, до 10 МБ
+                </div>
+            </Modal>
+
+            {/* Сколько на самом деле пришло: спорит получатель денег. */}
+            <Modal
+                title={<span style={{ fontWeight: 700, fontSize: 16 }}>Сколько к вам пришло</span>}
+                open={!!receiptOrder}
+                onCancel={() => { setReceiptOrder(null); receiptForm.resetFields(); }}
+                onOk={() => receiptForm.submit()}
+                confirmLoading={submittingReceipt}
+                okText="Отправить"
+                cancelText="Отмена"
+                okButtonProps={{ style: { borderRadius: 10, fontWeight: 600 } }}
+                cancelButtonProps={{ style: { borderRadius: 10 } }}
+                width={520}
+            >
+                {receiptOrder && (
+                    <div style={{ background: '#f4f5f7', borderRadius: 14, padding: '14px 16px', margin: '16px 0 18px' }}>
+                        <div style={{ fontSize: 13, color: C.textSec }}>
+                            Заявка №{receiptOrder.orderNumber} · {getRoute(receiptOrder)}
+                        </div>
+                        <div style={{ fontSize: 14, color: C.text, marginTop: 4 }}>
+                            У отправителя записано: <b>{money(receiptOrder.paidAmount || 0)}</b> из {money(receiptOrder.amount)}
+                        </div>
+                    </div>
+                )}
+
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ borderRadius: 12, marginBottom: 18 }}
+                    message="Это замечание, а не исправление"
+                    description="Сумма у отправителя сама не изменится. Бухгалтер сверит её с банковской выпиской и поправит, если ошибка на его стороне."
+                />
+
+                <Form form={receiptForm} layout="vertical" onFinish={handleSubmitReceipt} requiredMark={false}>
+                    <Form.Item
+                        name="claimedAmount"
+                        label="Сколько пришло на самом деле"
+                        rules={[{ required: true, message: 'Укажите сумму' }]}
+                    >
+                        <Input suffix="₸" inputMode="decimal" maxLength={30} />
+                    </Form.Item>
+
+                    <Form.Item name="claimedDate" label="Дата поступления">
+                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                    </Form.Item>
+
+                    <Form.Item name="note" label="Комментарий">
+                        <Input.TextArea
+                            placeholder="Например: пришло двумя платежами, второй не дошёл"
+                            rows={2}
+                            maxLength={500}
                             showCount
                         />
                     </Form.Item>

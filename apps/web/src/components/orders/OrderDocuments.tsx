@@ -86,6 +86,8 @@ interface OrderFile {
     createdAt: string;
     uploadedById?: string;
     uploadedBy?: { firstName?: string; lastName?: string };
+    /** Файл прислал контрагент по ссылке на отчёт — человека-автора нет. */
+    uploadedByCounterparty?: { name?: string } | null;
 }
 
 const KIND_TITLE: Record<OrderDocKind, string> = {
@@ -741,7 +743,9 @@ export default function OrderDocuments({
                                     </span>
                                     <span className={styles.docMeta}>
                                         {when(row.createdAt)}
-                                        {row.uploadedBy && ` · ${row.uploadedBy.lastName || ''} ${row.uploadedBy.firstName || ''}`.trimEnd()}
+                                        {row.uploadedByCounterparty
+                                            ? ` · прислал ${row.uploadedByCounterparty.name}`
+                                            : row.uploadedBy && ` · ${row.uploadedBy.lastName || ''} ${row.uploadedBy.firstName || ''}`.trimEnd()}
                                         {fileSize(row.fileSize) && ` · ${fileSize(row.fileSize)}`}
                                     </span>
                                 </span>
