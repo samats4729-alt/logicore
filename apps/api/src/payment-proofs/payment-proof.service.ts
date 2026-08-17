@@ -1,11 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { PaymentProofStatus, Prisma } from '@prisma/client';
+import { PaymentProofKind, PaymentProofStatus, Prisma } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { SharedReportLinkService } from '../accounting/services/shared-report-link.service';
-import { counterpartyIsPayer } from '../common/utils/settlement';
+import { counterpartyIsExecutor, counterpartyIsPayer } from '../common/utils/settlement';
 import { toNumOrNull } from '../common/utils/money';
 import { SubmitPaymentProofDto } from './dto/submit-payment-proof.dto';
 
@@ -46,11 +46,19 @@ export class PaymentProofService {
         const link = await this.shareLinks.resolve(token);
         const { companyId, counterpartyId } = link;
 
-        if (!file) throw new BadRequestException('Приложите файл чека');
-        if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        // Две формы одного разговора о деньгах. Плательщик доказывает, что
+        // перевёл, — без платёжки его слово ничего не стоит. Получатель
+        // сообщает, сколько к нему пришло, и доказывать ему нечем: выписка
+        // у него своя, а спорный факт — как раз сумма.
+        const kind = dto.kind === 'RECEIPT' ? PaymentProofKind.RECEIPT : PaymentProofKind.PAYMENT;
+
+        if (kind === PaymentProofKind.PAYMENT && !file) {
+            throw new BadRequestException('Приложите файл чека');
+        }
+        if (file && !ALLOWED_MIME_TYPES.includes(file.mimetype)) {
             throw new BadRequestException('Подойдёт PDF или изображение (JPG, PNG, HEIC, WebP)');
         }
-        if (file.size > MAX_FILE_SIZE) {
+        if (file && file.size > MAX_FILE_SIZE) {
             throw new BadRequestException('Файл больше 10 МБ');
         }
         if (!dto.orderId) throw new BadRequestException('Укажите, по какой сделке платёж');
@@ -68,21 +76,37 @@ export class PaymentProofService {
         });
         if (!order) throw new NotFoundException('Сделка не найдена');
 
-        // Чек прикладывают к своему долгу. Сделки, где платим мы, и чужие
-        // сделки сюда не относятся — иначе по ссылке можно было бы
+        // Заявление делают только в свою сторону. Плательщик — там, где
+        // платит он; получатель — там, где деньги идут ему. Чужие сделки не
+        // проходят ни в ту, ни в другую: иначе по ссылке можно было бы
         // засорять чужие взаиморасчёты.
-        if (!counterpartyIsPayer(order, companyId, counterpartyId)) {
+        const allowed = kind === PaymentProofKind.PAYMENT
+            ? counterpartyIsPayer(order, companyId, counterpartyId)
+            : counterpartyIsExecutor(order, companyId, counterpartyId);
+        if (!allowed) {
             throw new BadRequestException(
-                `По сделке №${order.orderNumber} платёж идёт не от вас`,
+                kind === PaymentProofKind.PAYMENT
+                    ? `По сделке №${order.orderNumber} платёж идёт не от вас`
+                    : `По сделке №${order.orderNumber} деньги идут не вам`,
             );
         }
 
         const claimedAmount = this.parseAmount(dto.claimedAmount);
         const claimedDate = this.parseDate(dto.claimedDate);
 
-        const ext = path.extname(file.originalname) || '';
-        const key = `uploads/payment-proofs/proof_${order.id}_${Date.now()}${ext}`;
-        await this.storeFile(key, file);
+        // Замечание без суммы — это «что-то не так» без единой подробности:
+        // бухгалтер потратит день на то, что отправитель знал сразу.
+        if (kind === PaymentProofKind.RECEIPT && !claimedAmount) {
+            throw new BadRequestException('Укажите сумму, которая к вам пришла');
+        }
+
+        let stored: { key: string; name: string; size: number; mime: string } | null = null;
+        if (file) {
+            const ext = path.extname(file.originalname) || '';
+            const key = `uploads/payment-proofs/proof_${order.id}_${Date.now()}${ext}`;
+            await this.storeFile(key, file);
+            stored = { key, name: file.originalname, size: file.size, mime: file.mimetype };
+        }
 
         const proof = await this.prisma.orderPaymentProof.create({
             data: {
@@ -90,10 +114,11 @@ export class PaymentProofService {
                 companyId,
                 counterpartyId,
                 sharedReportLinkId: link.id,
-                fileName: file.originalname,
-                fileUrl: key,
-                fileSize: file.size,
-                mimeType: file.mimetype,
+                kind,
+                fileName: stored?.name ?? null,
+                fileUrl: stored?.key ?? null,
+                fileSize: stored?.size ?? null,
+                mimeType: stored?.mime ?? null,
                 claimedAmount,
                 claimedDate,
                 note: dto.note?.trim() || null,
@@ -101,14 +126,17 @@ export class PaymentProofService {
                 // может прислать себе уже подтверждённый чек.
                 status: PaymentProofStatus.PENDING,
             },
-            select: { id: true, status: true, createdAt: true },
+            select: { id: true, status: true, kind: true, createdAt: true },
         });
 
         return {
             id: proof.id,
             status: proof.status,
+            kind: proof.kind,
             orderNumber: order.orderNumber,
-            message: 'Чек отправлен на проверку',
+            message: kind === PaymentProofKind.PAYMENT
+                ? 'Чек отправлен на проверку'
+                : 'Замечание по оплате отправлено бухгалтерии',
         };
     }
 
@@ -125,6 +153,7 @@ export class PaymentProofService {
             select: {
                 id: true,
                 status: true,
+                kind: true,
                 fileName: true,
                 fileSize: true,
                 mimeType: true,
@@ -196,10 +225,16 @@ export class PaymentProofService {
     /** Файл чека для просмотра сотрудником своей организации. */
     async file(companyId: string, id: string) {
         const proof = await this.mine(companyId, id);
+        // У замечания получателя файла нет вовсе: он называет сумму, а
+        // выписка остаётся у него. Молчаливая отдача пустого ответа
+        // выглядела бы как потерянный файл.
+        if (!proof.fileUrl) {
+            throw new NotFoundException('К этому заявлению файл не приложен');
+        }
         return {
             fileUrl: proof.fileUrl,
-            fileName: proof.fileName,
-            mimeType: proof.mimeType,
+            fileName: proof.fileName ?? 'file',
+            mimeType: proof.mimeType ?? 'application/octet-stream',
         };
     }
 

@@ -37,6 +37,19 @@ export class PublicAccountingDocumentController {
         return this.sharedReportInvoices.createFromSharedReport(token, dto);
     }
 
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @Post('from-shared-report/:token/:documentId/withdraw')
+    @ApiOperation({
+        summary: 'Контрагент отзывает свой счёт',
+        description: 'Только пока счёт черновик и по нему не разнесены платежи.',
+    })
+    async withdrawFromSharedReport(
+        @Param('token') token: string,
+        @Param('documentId') documentId: string,
+    ) {
+        return this.sharedReportInvoices.withdrawFromSharedReport(token, documentId);
+    }
+
     @Throttle({ default: { limit: 20, ttl: 60000 } })
     @Get(':token')
     @ApiOperation({ summary: 'Просмотр документа по публичной ссылке' })

@@ -36,6 +36,8 @@ interface DocumentRow {
     driverPlate: string | null;
     customer: string | null;
     uploadedBy: { firstName: string | null; lastName: string | null } | null;
+    /** Прислал контрагент по ссылке на отчёт. */
+    uploadedByCounterparty: { name: string } | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -266,7 +268,11 @@ export default function DocumentsPage() {
                                                     <div className="text-xs text-muted-foreground">{fileSize(row.fileSize)}</div>
                                                 </td>
                                                 <td className="px-4 py-3 align-top">
-                                                    <div>{personName(row.uploadedBy)}</div>
+                                                    <div>
+                                                        {row.uploadedByCounterparty
+                                                            ? `${row.uploadedByCounterparty.name} · по ссылке`
+                                                            : personName(row.uploadedBy)}
+                                                    </div>
                                                     <div className="text-xs text-muted-foreground">{date(row.createdAt)}</div>
                                                 </td>
                                                 <td className="px-4 py-3 align-top">

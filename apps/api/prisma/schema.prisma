@@ -397,6 +397,7 @@ model Company {
   userCompanyRelations            UserCompanyRelation[]
   affiliations                    Affiliation[]                 @relation("CompanyAffiliations")
   documents                       Document[]
+  documentsSentByLink             Document[]                    @relation("DocumentsFromCounterparty")
   subscription                    CompanySubscription?
   subscriptionRequests            SubscriptionRequest[]
   orderResponsibilities           OrderResponsible[]            @relation("CompanyOrderResponsibilities")
@@ -964,8 +965,18 @@ model Document {
   orderId String?
   order   Order?  @relation(fields: [orderId], references: [id])
 
-  uploadedById String
-  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+  /// Кто приложил файл из кабинета.
+  ///
+  /// Необязательно: файл может прийти от контрагента по публичной ссылке
+  /// на отчёт — учётной записи у него нет вовсе. Тогда автор записан ниже,
+  /// организацией, и подписывать такой файл именем случайного нашего
+  /// сотрудника было бы враньём в документообороте.
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id])
+
+  /// Файл прислал контрагент по ссылке на отчёт.
+  uploadedByCounterpartyId String?
+  uploadedByCounterparty   Company? @relation("DocumentsFromCounterparty", fields: [uploadedByCounterpartyId], references: [id], onDelete: SetNull)
 
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
@@ -1714,6 +1725,9 @@ model SharedReportLink {
   createdBy   User     @relation("CreatedSharedReports", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
 
+  /// Счета, выставленные контрагентом по этой ссылке.
+  invoices AccountingDocument[] @relation("SharedReportInvoices")
+
   @@index([companyId, createdAt])
   @@index([companyId, counterpartyId])
 }
@@ -1940,6 +1954,16 @@ model AccountingDocument {
   // для подстановки счёта по умолчанию в следующих документах.
   bankAccountId    String?
   bankAccount      FinanceAccount?             @relation("AccountingDocumentBankAccount", fields: [bankAccountId], references: [id], onDelete: SetNull)
+
+  /// Счёт выставлен контрагентом по публичной ссылке на отчёт.
+  ///
+  /// Нужно, чтобы отличить его от черновика, который завёл наш бухгалтер
+  /// руками. Отозвать свой счёт контрагент вправе, чужой — нет, а по
+  /// одному лишь совпадению контрагента и статуса эти два случая
+  /// неразличимы.
+  sharedReportLinkId String?
+  sharedReportLink   SharedReportLink? @relation("SharedReportInvoices", fields: [sharedReportLinkId], references: [id], onDelete: SetNull)
+
   currency         String                      @default("KZT") @db.VarChar(3)
 
   /// Курс валюты документа к учётной валюте — ЗАФИКСИРОВАННЫЙ.
@@ -2501,6 +2525,20 @@ enum PaymentProofStatus {
   REJECTED
 }
 
+/// С какой стороны пришло заявление о деньгах.
+///
+/// Обе стороны расчётов могут ошибиться, и спорят они о разном. Плательщик
+/// заявляет «я перевёл» и прикладывает платёжку. Получатель заявляет «мне
+/// пришло не столько, сколько у вас записано» — и прикладывать ему нечего,
+/// выписка у него своя. Одна очередь на бухгалтера, но два разных смысла,
+/// и путать их в отчётах нельзя.
+enum PaymentProofKind {
+  /// «Я заплатил» — от того, кто переводил деньги.
+  PAYMENT
+  /// «Мне пришло столько» — от того, кто их получал.
+  RECEIPT
+}
+
 /// Чек об оплате, присланный контрагентом по ссылке на отчёт.
 ///
 /// Это ЗАЯВЛЕНИЕ стороны, а не факт поступления денег. Поэтому чек не
@@ -2523,10 +2561,15 @@ model OrderPaymentProof {
   /// По какой ссылке пришёл — чтобы было видно происхождение.
   sharedReportLinkId String?
 
-  fileName String
-  fileUrl  String
-  fileSize Int
-  mimeType String
+  /// С какой стороны заявление: «я заплатил» или «мне пришло столько».
+  kind PaymentProofKind @default(PAYMENT)
+
+  /// Файл. Обязателен для платежа и не нужен получателю: у того своя
+  /// выписка, а прикладывать ему нечего — он только называет сумму.
+  fileName String?
+  fileUrl  String?
+  fileSize Int?
+  mimeType String?
 
   /// Сумма и дата со слов отправителя. Проверяются, а не принимаются на веру.
   claimedAmount Decimal?  @db.Decimal(20, 2)

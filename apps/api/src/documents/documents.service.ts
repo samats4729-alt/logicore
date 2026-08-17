@@ -171,6 +171,7 @@ export class DocumentsService {
                 createdAt: true,
                 orderId: true,
                 uploadedBy: { select: { firstName: true, lastName: true } },
+                uploadedByCounterparty: { select: { name: true } },
                 order: {
                     select: {
                         orderNumber: true,
@@ -207,6 +208,7 @@ export class DocumentsService {
                 driverPlate: document.order?.assignedDriverPlate ?? null,
                 customer: document.order?.customerCompany?.name ?? null,
                 uploadedBy: document.uploadedBy,
+                uploadedByCounterparty: document.uploadedByCounterparty,
             };
         });
     }
@@ -221,7 +223,13 @@ export class DocumentsService {
         }
         return this.prisma.document.findMany({
             where: { orderId },
-            include: { uploadedBy: { select: { id: true, firstName: true, lastName: true } } },
+            include: {
+                uploadedBy: { select: { id: true, firstName: true, lastName: true } },
+                // Файл мог прийти от контрагента по ссылке на отчёт: тогда
+                // человека-автора нет вовсе, и подписать документ надо
+                // организацией — иначе в списке он выглядит ничейным.
+                uploadedByCounterparty: { select: { id: true, name: true } },
+            },
             orderBy: { createdAt: 'desc' },
         });
     }
@@ -262,8 +270,12 @@ export class DocumentsService {
                     throw new ForbiddenException('Нет доступа к документу');
                 }
             } else {
-                // Документ без заявки — проверяем, что загрузивший принадлежит той же компании
-                if (doc.uploadedBy?.companyId !== user.companyId) {
+                // Документ без заявки — проверяем, что загрузивший принадлежит
+                // той же компании. У файла от контрагента человека-автора нет
+                // вовсе, и тогда принадлежность решает поле компании: без
+                // этого запасного пути такой документ стал бы недоступен всем.
+                const owner = doc.uploadedBy?.companyId ?? doc.companyId;
+                if (!owner || owner !== user.companyId) {
                     throw new ForbiddenException('Нет доступа к документу');
                 }
             }

@@ -131,6 +131,15 @@ export class AccountingReconciliationLineDto {
 }
 
 export class CreateAccountingDocumentDto {
+    /**
+     * Счёт пришёл от контрагента по публичной ссылке на отчёт.
+     *
+     * Полем управляет только сервер: в теле запроса из кабинета его нет и
+     * быть не должно — иначе свой же черновик можно было бы выдать за
+     * чужой и лишить себя права его удалить.
+     */
+    sharedReportLinkId?: string;
+
     @IsEnum(AccountingDocumentType)
     type!: AccountingDocumentType;
 

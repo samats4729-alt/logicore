@@ -48,6 +48,12 @@ const PUBLIC_ROUTES: Record<string, string> = {
     'MonitoringController.health': 'проверка живости для Railway',
     'MonitoringController.reportClientError': 'ошибки браузера — их шлёт и разлогиненная страница',
     'PublicPaymentProofController.submit': 'чек по ссылке от контрагента',
+    'PublicAccountingDocumentController.withdrawFromSharedReport':
+        'контрагент отзывает свой же счёт, пока его не приняли в работу',
+    'PublicSharedReportDocumentController.upload':
+        'накладная и счёт от контрагента по ссылке — учётной записи у него нет',
+    'PublicSharedReportDocumentController.list': 'что контрагент уже прислал по этой ссылке',
+    'PublicSharedReportDocumentController.read': 'открыть свой же присланный файл',
     'PublicBillingController.getTariff': 'цена тарифа для лендинга — её смотрят до регистрации',
 };
 

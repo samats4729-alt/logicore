@@ -404,6 +404,7 @@ export class AccountingDocumentsService {
                     customerMaterialsInfo: dto.customerMaterialsInfo?.trim() || null,
                     appendixInfo: dto.appendixInfo?.trim() || null,
                     note: dto.note?.trim() || null,
+                    sharedReportLinkId: dto.sharedReportLinkId ?? null,
                     createdById: userId,
                     lines: lineCalculation
                         ? { create: lineCalculation.lines }
