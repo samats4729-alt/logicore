@@ -28,7 +28,7 @@ interface Props {
 const STATE: Record<string, { title: string; action?: string }> = {
     DRAFT: {
         title: 'Организация ещё не отправлена на проверку',
-        action: 'Заполнить и отправить',
+        action: 'Заполнить организацию',
     },
     PENDING: { title: 'Организация на проверке — обычно это занимает один рабочий день' },
     REJECTED: { title: 'Проверка не пройдена', action: 'Посмотреть причину' },
