@@ -31,3 +31,55 @@
     font-size: 12px;
     color: var(--nova-fg-3);
 }
+
+/* Реквизиты платежа в сетке: в одну колонку они растягивали документ на
+   два экрана, и таблица подбора уезжала за нижний край. */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0 12px;
+}
+
+.grid :global(.ant-form-item) {
+    margin-bottom: 10px;
+}
+
+.wide {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Итог подбора под таблицей: сумма платежа и отмеченное должны сходиться,
+   и расхождение видно до нажатия «Провести». */
+.summary {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--nova-surface-2);
+    border: 1px solid var(--nova-border);
+    border-radius: 10px;
+}
+
+.summaryLabel {
+    font-size: 12.5px;
+    color: var(--nova-fg-2);
+}
+
+.summaryMoney {
+    font-size: 19px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: var(--nova-fg);
+}
+
+.summaryWarn {
+    font-size: 12px;
+    color: var(--nova-warn);
+}

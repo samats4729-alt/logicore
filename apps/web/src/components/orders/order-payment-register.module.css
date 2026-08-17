@@ -1,0 +1,308 @@
+/* Реестр подбора заявок внутри документа платежа.
+
+   Таблица, а не список карточек: бухгалтер сравнивает колонки взглядом,
+   и для этого цифры должны стоять друг под другом. Токены наши
+   (--nova-*) — окно платежа ещё на Ant Design, и служебные цвета shadcn
+   в нём выглядят чужими. */
+
+.block {
+    margin-top: 4px;
+    border: 1px solid var(--nova-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--nova-surface);
+}
+
+.head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    background: var(--nova-surface-2);
+    border-bottom: 1px solid var(--nova-border);
+}
+
+.eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+}
+
+.headHint {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--nova-fg-2);
+}
+
+.tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.field {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.field svg {
+    position: absolute;
+    left: 9px;
+    color: var(--nova-fg-3);
+    pointer-events: none;
+}
+
+.input {
+    width: 190px;
+    height: 28px;
+    padding: 0 10px 0 28px;
+    font-size: 12.5px;
+    color: var(--nova-fg);
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: 8px;
+    outline: none;
+}
+
+.input:focus {
+    border-color: var(--nova-fg-3);
+}
+
+.chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.chip {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+    color: var(--nova-fg-2);
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.chipOn {
+    background: var(--nova-primary);
+    border-color: var(--nova-primary);
+    color: var(--nova-primary-fg);
+}
+
+/* Прокрутка внутри своего контейнера: страница по горизонтали не едет. */
+.tableWrap {
+    max-height: 360px;
+    overflow: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 7px 10px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+    background: var(--nova-surface);
+    border-bottom: 1px solid var(--nova-border);
+    white-space: nowrap;
+}
+
+.table tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--nova-border);
+    color: var(--nova-fg);
+    vertical-align: middle;
+}
+
+.row:hover td {
+    background: var(--nova-surface-2);
+}
+
+.rowOn td {
+    background: color-mix(in srgb, var(--nova-primary) 6%, var(--nova-surface));
+}
+
+.thPick {
+    width: 34px;
+    padding-right: 0 !important;
+}
+
+.pickCell {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* Своя галочка: preflight у Tailwind выключен ради экранов на Ant Design,
+   и у голого input остаются стили браузера. */
+.box {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    border: 1.5px solid var(--nova-fg-3);
+    border-radius: 4px;
+    background: var(--nova-surface);
+    cursor: pointer;
+    position: relative;
+}
+
+.box:checked {
+    background: var(--nova-primary);
+    border-color: var(--nova-primary);
+}
+
+.box:checked::after {
+    content: '';
+    position: absolute;
+    left: 4.5px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--nova-primary-fg);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.box:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.cellOrder {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.cellRoute {
+    color: var(--nova-fg-2);
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.thDate {
+    width: 110px;
+    font-size: 12.5px;
+    white-space: nowrap;
+}
+
+/* Числа вправо и моноширинными цифрами: иначе разряды скачут. */
+.thMoney {
+    width: 120px;
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.muted {
+    color: var(--nova-fg-3);
+}
+
+/* Просрочка обозначена и цветом, и словом. */
+.overdue {
+    color: var(--nova-neg);
+}
+
+.overdueMark {
+    font-size: 11px;
+    color: var(--nova-neg);
+}
+
+.amount {
+    width: 108px;
+    height: 28px;
+    padding: 0 8px;
+    text-align: right;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: 7px;
+    outline: none;
+}
+
+.amount:focus {
+    border-color: var(--nova-primary);
+}
+
+/* Итоговая строка отличается фоном и начертанием. */
+.total td {
+    position: sticky;
+    bottom: 0;
+    padding: 8px 10px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    background: var(--nova-surface-2);
+    border-top: 1px solid var(--nova-border);
+}
+
+.state {
+    padding: 26px 16px !important;
+    text-align: center;
+}
+
+.stateIcon {
+    color: var(--nova-warn);
+    margin-bottom: 4px;
+}
+
+.stateTitle {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nova-fg);
+}
+
+.stateHint {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--nova-fg-3);
+}
+
+.skeletonRow td {
+    padding: 8px 10px;
+}
+
+.skeleton {
+    display: block;
+    height: 16px;
+    border-radius: 6px;
+    background: linear-gradient(90deg,
+        var(--nova-surface-2) 25%,
+        color-mix(in srgb, var(--nova-surface-2) 55%, var(--nova-surface)) 37%,
+        var(--nova-surface-2) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; }
+}
