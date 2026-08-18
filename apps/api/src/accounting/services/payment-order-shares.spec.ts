@@ -72,6 +72,15 @@ describe('Платёж, разнесённый по заявкам', () => {
             order: {
                 findUnique: jest.fn().mockResolvedValue(null),
                 count: jest.fn(async ({ where }: any) => options.knownOrders ?? where.id.in.length),
+                // Стороны каждого разнесённого рейса: по ним сверяется
+                // направление платежа. Заказчик платит нам — поступление.
+                findMany: jest.fn(async ({ where }: any) => where.id.in.map((id: string) => ({
+                    orderNumber: id,
+                    customerCompanyId: 'заказчик',
+                    forwarderId: COMPANY,
+                    partnerId: null,
+                    subForwarderId: null,
+                }))),
             },
             financeAccount: { findFirst: jest.fn().mockResolvedValue({ id: 'сч-1', currency: 'KZT' }) },
             financeCategory: { findFirst: jest.fn().mockResolvedValue({ id: 'ст-1' }) },

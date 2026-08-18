@@ -224,6 +224,18 @@ export class CreatePaymentDto {
 }
 
 export class UpdatePaymentDto {
+    /**
+     * Направление можно исправить, не удаляя платёж.
+     *
+     * Записать оплату не в ту сторону легко, а исправить было нечем:
+     * поле в форме гасло, и оставалось удалить строку и завести заново.
+     * Бухгалтер при этом теряет и дату проводки, и примечание, и связь с
+     * выпиской — то есть чинит одну ошибку, заводя вторую.
+     */
+    @IsOptional()
+    @IsEnum(PaymentDirection)
+    direction?: PaymentDirection;
+
     @IsOptional()
     @IsNumber({ allowInfinity: false, allowNaN: false })
     @Min(0.01)

@@ -586,20 +586,40 @@ export default function OrderDetailPage() {
 
     // =================== UNIFIED PAYMENT HANDLERS ===================
 
-    const handleAddPaymentClick = () => {
+    /**
+     * Кому платим по этому рейсу: субподрядчик, а если его нет — партнёр.
+     * Водителю-физлицу карточки контрагента нет, и поле остаётся пустым.
+     */
+    const executorCounterpartyId: string | undefined =
+        data?.order?.subForwarderId || data?.order?.partnerId || undefined;
+
+    /**
+     * Форма открывается уже под нужную сторону.
+     *
+     * Раньше кнопка была одна и всегда открывала «Поступление» с заказчиком
+     * и его долгом в сумме. Бухгалтер, записывая оплату перевозчику, меняла
+     * контрагента и сумму, а направление оставалось прежним — и деньги
+     * ложились не в ту сторону: перевозчику «Не оплачено», а долг заказчика
+     * закрыт суммой, которой он не платил.
+     */
+    const handleAddPaymentClick = (direction: 'IN' | 'OUT' = 'IN') => {
         setEditingPayment(null);
         paymentForm.resetFields();
         setOrderShares({});
-        // Сумма подставляется остатком долга по этой заявке. Бухгалтер
-        // набирала её руками, глядя в соседнюю карточку, — а долг известен
-        // и так. Поправить, конечно, можно: платят и частями.
-        const debt = Number(data?.summary?.customerDebt ?? 0);
+        // Сумма подставляется остатком долга той стороны, по которой платим.
+        // Бухгалтер набирала её руками, глядя в соседнюю карточку, — а долг
+        // известен и так. Поправить, конечно, можно: платят и частями.
+        const debt = Number(
+            (direction === 'IN' ? data?.summary?.customerDebt : data?.summary?.executorDebt) ?? 0,
+        );
         paymentForm.setFieldsValue({
-            direction: 'IN',
+            direction,
             amount: debt > 0 ? Math.round(debt * 100) / 100 : undefined,
             date: dayjs(),
             method: 'BANK',
-            counterpartyId: data?.order?.customerCompanyId || undefined,
+            counterpartyId: direction === 'IN'
+                ? (data?.order?.customerCompanyId || undefined)
+                : executorCounterpartyId,
         });
         loadFinanceSettings();
         setPaymentModalOpen(true);
@@ -1286,14 +1306,38 @@ export default function OrderDetailPage() {
             title: 'Направление',
             dataIndex: 'direction',
             key: 'direction',
-            width: 120,
-            render: (dir: string) => (
-                dir === 'IN' ? (
-                    <span className={`${nova.chip} ${nova.valuePos}`}>Поступление</span>
-                ) : (
-                    <span className={`${nova.chip} ${nova.valueNeg}`}>Расход</span>
-                )
-            ),
+            width: 150,
+            render: (dir: string, r: any) => {
+                /**
+                 * Записанные не в ту сторону платежи видно прямо в списке.
+                 *
+                 * Новые такими уже не заводятся — сторону проверяет сервер.
+                 * Но те, что успели записать раньше, лежат молча: строка
+                 * есть, сумма верная, а оплата не зачтена. Найти их иначе
+                 * можно только сверкой глазами.
+                 */
+                const wrongSide = r.counterpartyId
+                    && executorCounterpartyId
+                    && r.counterpartyId === executorCounterpartyId
+                    && dir === 'IN'
+                    && !r.refundOfId;
+                return (
+                    <>
+                        {dir === 'IN' ? (
+                            <span className={`${nova.chip} ${nova.valuePos}`}>Поступление</span>
+                        ) : (
+                            <span className={`${nova.chip} ${nova.valueNeg}`}>Расход</span>
+                        )}
+                        {wrongSide && (
+                            <Tooltip title="Этот контрагент по заявке — перевозчик, платим ему мы. Скорее всего, направление должно быть «Расход» — исправьте карандашом, удалять платёж не нужно.">
+                                <span className={`${nova.chip} ${nova.valueNeg}`} style={{ marginLeft: 6 }}>
+                                    не та сторона
+                                </span>
+                            </Tooltip>
+                        )}
+                    </>
+                );
+            },
         },
         {
             title: 'Сумма ₸',
@@ -1928,9 +1972,18 @@ export default function OrderDetailPage() {
                                         <Wallet size={14} />
                                         <h3 className={nova.cardTitle}>Платежи по заявке</h3>
                                         {payments.length > 0 && <span className={nova.cardCount}>{payments.length}</span>}
+                                        {/* Две кнопки вместо одной: одна кнопка «Зарегистрировать
+                                            платёж» всегда открывала форму под оплату от заказчика,
+                                            и оплату перевозчику записывали поступлением. Теперь
+                                            сторону выбирают до формы, а не в ней. */}
                                         {canEditFinance && (
-                                            <button type="button" className={nova.action} onClick={handleAddPaymentClick}>
-                                                <Plus className="h-3.5 w-3.5" /> Зарегистрировать платёж
+                                            <button type="button" className={nova.action} onClick={() => handleAddPaymentClick('IN')}>
+                                                <Plus className="h-3.5 w-3.5" /> Оплата от заказчика
+                                            </button>
+                                        )}
+                                        {canEditFinance && executorCounterpartyId && (
+                                            <button type="button" className={nova.action} onClick={() => handleAddPaymentClick('OUT')}>
+                                                <Plus className="h-3.5 w-3.5" /> Оплата перевозчику
                                             </button>
                                         )}
                                     </div>
