@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { PaymentDirection, PaymentMethod, Prisma } from '@prisma/client';
 import { PaymentsService } from './payments.service';
+import { FinanceCalculatorService } from './finance-calculator.service';
 
 const COMPANY = 'company-1';
 const PAYMENT = 'payment-1';
@@ -18,6 +19,8 @@ const sourcePayment = (overrides: Record<string, unknown> = {}) => ({
     refundOfId: null,
     isDeleted: false,
     refunds: [],
+    // Доли по заявкам: в базовом платеже их нет, тесты про них задают свои.
+    orderShares: [],
     ...overrides,
 });
 
@@ -33,6 +36,11 @@ function buildService(payment: any) {
         },
         order: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
         orderChangeLog: { create: jest.fn() },
+        paymentOrderShare: {
+            findMany: jest.fn().mockResolvedValue([]),
+            update: jest.fn(),
+            delete: jest.fn(),
+        },
     };
     const prisma: any = {
         payment: { findFirst: jest.fn().mockResolvedValue(payment) },
@@ -50,6 +58,7 @@ function buildService(payment: any) {
         { recalcForPayment: jest.fn() } as any,
         allocations as any,
         { toBase: jest.fn().mockResolvedValue(null) } as any,
+        new FinanceCalculatorService(),
     );
     // Пересчёт флагов заявки проверяется отдельно в payments.service.spec
     (service as any).syncOrderPaymentFlagsWithin = jest.fn().mockResolvedValue(false);
@@ -173,6 +182,7 @@ describe('PaymentsService — возврат платежа', () => {
                 order: { findUnique: jest.fn().mockResolvedValue(null) },
                 $transaction: jest.fn(async (fn: any) => fn({
                     payment: { update: jest.fn(async () => ({ id: PAYMENT, orderId: null })) },
+                    paymentOrderShare: { findMany: jest.fn().mockResolvedValue([]) },
                     orderChangeLog: { create: jest.fn() },
                 })),
             };
@@ -183,6 +193,7 @@ describe('PaymentsService — возврат платежа', () => {
                 { recalcForPayment: jest.fn() } as any,
                 { reduce: jest.fn(), release: jest.fn() } as any,
                 { toBase: jest.fn().mockResolvedValue(null) } as any,
+                new FinanceCalculatorService(),
             );
             return { service, prisma };
         };

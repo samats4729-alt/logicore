@@ -298,6 +298,27 @@ export class AccountingController {
         return this.accountingService.getPayments(req.user.companyId, query);
     }
 
+    @Get('payments/open-orders')
+    @Roles(...FINANCE_VIEW_ROLES)
+    @ApiOperation({
+        summary: 'Неоплаченные заявки контрагента',
+        description: 'Подбор для платежа: номер, маршрут, срок и остаток по каждой заявке.',
+    })
+    async getOpenOrders(
+        @Request() req: any,
+        @Query() query: { counterpartyId?: string; direction?: PaymentDirection },
+    ) {
+        if (!query?.counterpartyId) {
+            throw new BadRequestException('Укажите контрагента');
+        }
+        return this.accountingService.getOpenOrdersForPayment(req.user.companyId, {
+            counterpartyId: query.counterpartyId,
+            direction: query.direction === PaymentDirection.OUT
+                ? PaymentDirection.OUT
+                : PaymentDirection.IN,
+        });
+    }
+
     @Get('payments/order/:orderId')
     @Roles(...FINANCE_VIEW_ROLES)
     @RequirePermissions('accounting', 'orders')

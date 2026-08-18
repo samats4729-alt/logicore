@@ -1,11 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { Alert, Button as AntButton, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import dayjs from 'dayjs';
-import { AllocationSuggestionItem, suggestAllocation } from '@/lib/accounting-documents';
+import {
+    AllocationSuggestionItem,
+    OpenOrderForPayment,
+    fetchOpenOrdersForPayment,
+    suggestAllocation,
+} from '@/lib/accounting-documents';
 import Loader from '@/components/ui/Loader';
+import { OrderPaymentRegister } from './OrderPaymentRegister';
+import styles from './order-finance-modals.module.css';
 
 const { TextArea } = Input;
 
@@ -51,6 +58,13 @@ interface OrderFinanceModalsProps {
      */
     allocations: Record<string, number>;
     setAllocations: (allocations: Record<string, number>) => void;
+
+    /**
+     * Разнесение платежа по заявкам: заказчик платит одним переводом за
+     * два десятка рейсов. Уходит вместе с платежом, а не после него.
+     */
+    orderShares: Record<string, number>;
+    setOrderShares: (shares: Record<string, number>) => void;
 }
 
 /**
@@ -65,9 +79,13 @@ export default function OrderFinanceModals({
     expenseModalOpen, setExpenseModalOpen, expenseForm, expenseLoading, expenseCategories, handleAddExpense,
     paymentModalOpen, setPaymentModalOpen, paymentForm, paymentLoading, editingPayment, handleSavePayment,
     accounts, categories, partners, allocations, setAllocations,
+    orderShares, setOrderShares,
 }: OrderFinanceModalsProps) {
     const [openInvoices, setOpenInvoices] = useState<AllocationSuggestionItem[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
+    const [openOrders, setOpenOrders] = useState<OpenOrderForPayment[]>([]);
+    const [loadingOrders, setLoadingOrders] = useState(false);
+    const [ordersError, setOrdersError] = useState<string | null>(null);
 
     // Следим за суммой, направлением и контрагентом: от них зависит, какие
     // счета можно закрыть и сколько на них ляжет.
@@ -103,8 +121,76 @@ export default function OrderFinanceModals({
 
     useEffect(() => { loadSuggestion(); }, [loadSuggestion]);
 
+    /**
+     * Что за контрагентом числится по заявкам.
+     *
+     * Список не зависит от суммы: сумма как раз и складывается из
+     * отмеченных заявок, а не наоборот. Раньше бухгалтер вбивала её руками
+     * и по платежу нельзя было понять, какие рейсы закрыты.
+     */
+    const loadOpenOrders = useCallback(async () => {
+        if (!paymentModalOpen || !counterpartyId) {
+            setOpenOrders([]);
+            return;
+        }
+        try {
+            setLoadingOrders(true);
+            setOrdersError(null);
+            setOpenOrders(await fetchOpenOrdersForPayment({
+                counterpartyId,
+                direction: direction === 'OUT' ? 'OUT' : 'IN',
+            }));
+        } catch {
+            setOpenOrders([]);
+            setOrdersError('Не удалось получить список неоплаченных рейсов');
+        } finally {
+            setLoadingOrders(false);
+        }
+    }, [paymentModalOpen, counterpartyId, direction]);
+
+    useEffect(() => { loadOpenOrders(); }, [loadOpenOrders]);
+
+    // Окно закрыли — отметки не должны всплыть в следующем платеже.
+    useEffect(() => {
+        if (!paymentModalOpen) setOrderShares({});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [paymentModalOpen]);
+
     const allocatedTotal = Object.values(allocations).reduce((sum, value) => sum + (value || 0), 0);
     const rest = Math.round(((Number(amount) || 0) - allocatedTotal) * 100) / 100;
+
+    const sharesTotal = Math.round(
+        Object.values(orderShares).reduce((sum, value) => sum + (value || 0), 0) * 100,
+    ) / 100;
+    const pickedOrders = Object.keys(orderShares).filter((id) => (orderShares[id] || 0) > 0);
+
+    /**
+     * Показывать ли реестр подбора.
+     *
+     * Без контрагента и без долгов подбирать нечего, и окно остаётся
+     * узкой формой, как было: широкий пустой документ ради одной строки —
+     * та же несерьёзность, только наоборот.
+     */
+    const hasRegister = loadingOrders || openOrders.length > 0 || pickedOrders.length > 0;
+
+    /**
+     * Принять выбор из окна подбора.
+     *
+     * Сумма платежа складывается из отмеченных рейсов: бухгалтер отмечает
+     * то, за что пришли деньги, а не считает итог в уме и печатает его.
+     */
+    const applyPickedOrders = (picked: Record<string, number>) => {
+        const cleaned: Record<string, number> = {};
+        for (const [orderId, value] of Object.entries(picked)) {
+            if ((value || 0) > 0) cleaned[orderId] = value;
+        }
+        setOrderShares(cleaned);
+
+        const total = Math.round(
+            Object.values(cleaned).reduce((sum, value) => sum + (value || 0), 0) * 100,
+        ) / 100;
+        if (total > 0) paymentForm.setFieldsValue({ amount: total });
+    };
 
     return (
         <>
@@ -130,128 +216,118 @@ export default function OrderFinanceModals({
         </Modal>
 
         {/* =================== UNIFIED PAYMENT MODAL =================== */}
+        {/*
+            Один документ, а не два окна друг на друге.
+
+            Подбор заявок сначала жил в отдельном окне поверх этого: половина
+            формы платежа торчала из-под него, и связь между ними читалась
+            плохо. В бухгалтерской программе, от которой приходят люди, это
+            один документ — реквизиты сверху, строки подбора в теле, итог
+            внизу. Здесь так же.
+        */}
         <Modal
-            title={editingPayment ? "Редактировать платёж" : "Зарегистрировать платёж"}
+            title={editingPayment ? 'Редактировать платёж' : 'Регистрация платежа'}
             open={paymentModalOpen}
             onCancel={() => setPaymentModalOpen(false)}
             onOk={() => paymentForm.submit()}
-            okText={editingPayment ? "Сохранить" : "Добавить"}
+            okText={editingPayment ? 'Сохранить' : 'Провести платёж'}
             cancelText="Отмена"
             confirmLoading={paymentLoading}
+            width={hasRegister ? 1080 : 520}
             destroyOnClose
         >
             <Form form={paymentForm} layout="vertical" onFinish={handleSavePayment}>
-                <Form.Item name="direction" label="Направление платежа" rules={[{ required: true }]}>
-                    <Select disabled={!!editingPayment}>
-                        <Select.Option value="IN">Поступление (IN)</Select.Option>
-                        <Select.Option value="OUT">Расход (OUT)</Select.Option>
-                    </Select>
-                </Form.Item>
+                <div className={hasRegister ? styles.grid : undefined}>
+                    <Form.Item name="direction" label="Направление платежа" rules={[{ required: true }]}>
+                        <Select disabled={!!editingPayment}>
+                            <Select.Option value="IN">Поступление</Select.Option>
+                            <Select.Option value="OUT">Расход</Select.Option>
+                        </Select>
+                    </Form.Item>
 
-                <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>
-                    <InputNumber min={0.01} style={{ width: '100%' }} placeholder="0" />
-                </Form.Item>
+                    <Form.Item name="amount" label="Сумма (₸)" rules={[{ required: true, message: 'Укажите сумму' }]}>
+                        <InputNumber min={0.01} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
 
-                <Form.Item name="date" label="Дата платежа" rules={[{ required: true }]}>
-                    <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
-                </Form.Item>
+                    <Form.Item name="date" label="Дата платежа" rules={[{ required: true }]}>
+                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                    </Form.Item>
 
-                <Form.Item name="method" label="Способ оплаты" rules={[{ required: true }]}>
-                    <Select>
-                        <Select.Option value="BANK">Безналичный (Банк)</Select.Option>
-                        <Select.Option value="CASH">Наличные</Select.Option>
-                        <Select.Option value="CARD">Карта</Select.Option>
-                        <Select.Option value="OTHER">Другой способ</Select.Option>
-                    </Select>
-                </Form.Item>
+                    <Form.Item name="method" label="Способ оплаты" rules={[{ required: true }]}>
+                        <Select>
+                            <Select.Option value="BANK">Безналичный (Банк)</Select.Option>
+                            <Select.Option value="CASH">Наличные</Select.Option>
+                            <Select.Option value="CARD">Карта</Select.Option>
+                            <Select.Option value="OTHER">Другой способ</Select.Option>
+                        </Select>
+                    </Form.Item>
 
-                <Form.Item name="accountId" label="Счёт / Касса">
-                    <Select placeholder="По умолчанию" allowClear>
-                        {accounts.map(acc => (
-                            <Select.Option key={acc.id} value={acc.id}>
-                                {acc.name} ({acc.kind === 'CASH' ? 'Касса' : 'Банк'})
-                            </Select.Option>
-                        ))}
-                    </Select>
-                </Form.Item>
+                    <Form.Item name="accountId" label="Счёт / Касса">
+                        <Select placeholder="По умолчанию" allowClear>
+                            {accounts.map(acc => (
+                                <Select.Option key={acc.id} value={acc.id}>
+                                    {acc.name} ({acc.kind === 'CASH' ? 'Касса' : 'Банк'})
+                                </Select.Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
 
-                <Form.Item noStyle dependencies={['direction']}>
-                    {({ getFieldValue }) => {
-                        const dir = getFieldValue('direction') || 'IN';
-                        const filteredCats = categories.filter(c => c.direction === dir && c.isActive);
-                        return (
-                            <Form.Item name="categoryId" label="Статья расходов/доходов">
-                                <Select placeholder="По умолчанию" allowClear>
-                                    {filteredCats.map(cat => (
-                                        <Select.Option key={cat.id} value={cat.id}>
-                                            {cat.name}
-                                        </Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        );
-                    }}
-                </Form.Item>
+                    <Form.Item noStyle dependencies={['direction']}>
+                        {({ getFieldValue }) => {
+                            const dir = getFieldValue('direction') || 'IN';
+                            const filteredCats = categories.filter(c => c.direction === dir && c.isActive);
+                            return (
+                                <Form.Item name="categoryId" label="Статья расходов/доходов">
+                                    <Select placeholder="По умолчанию" allowClear>
+                                        {filteredCats.map(cat => (
+                                            <Select.Option key={cat.id} value={cat.id}>
+                                                {cat.name}
+                                            </Select.Option>
+                                        ))}
+                                    </Select>
+                                </Form.Item>
+                            );
+                        }}
+                    </Form.Item>
 
-                <Form.Item name="counterpartyId" label="Контрагент">
-                    <Select placeholder="Выберите контрагента" allowClear>
-                        {partners.map(p => (
-                            <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
-                        ))}
-                    </Select>
-                </Form.Item>
+                    <Form.Item name="counterpartyId" label="Контрагент">
+                        <Select placeholder="Выберите контрагента" allowClear showSearch optionFilterProp="children">
+                            {partners.map(p => (
+                                <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
 
-                <Form.Item name="note" label="Примечание">
-                    <TextArea rows={2} placeholder="Примечание или детали платежа" />
-                </Form.Item>
+                    <Form.Item name="note" label="Примечание" className={hasRegister ? styles.wide : undefined}>
+                        <TextArea rows={hasRegister ? 1 : 2} placeholder="Номер платёжного поручения, назначение платежа" />
+                    </Form.Item>
+                </div>
 
-                {/* Разнесение по счетам: пока платёж не разнесён, видно
-                    только что деньги пришли, но не какие счета закрыты. */}
-                {loadingInvoices ? (
-                    <div style={{ textAlign: 'center', padding: 12 }}><Loader size="small" /></div>
-                ) : openInvoices.length > 0 && (
-                    <div style={{ marginTop: 4 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                            Разнести по счетам
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', marginBottom: 8 }}>
-                            Предложено по сроку оплаты — сначала самые ранние. Суммы можно поправить.
-                        </div>
-                        {openInvoices.map((invoice) => (
-                            <div
-                                key={invoice.documentId}
-                                style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}
-                            >
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 500 }}>{invoice.number}</div>
-                                    <div style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>
-                                        остаток {money(invoice.balanceDue)}
-                                        {invoice.dueDate && ` · до ${dayjs(invoice.dueDate).format('DD.MM.YYYY')}`}
-                                    </div>
-                                </div>
-                                <InputNumber
-                                    size="small"
-                                    min={0}
-                                    max={invoice.balanceDue}
-                                    style={{ width: 130 }}
-                                    value={allocations[invoice.documentId] ?? 0}
-                                    onChange={(value) => setAllocations({
-                                        ...allocations,
-                                        [invoice.documentId]: Number(value) || 0,
-                                    })}
-                                />
-                            </div>
-                        ))}
-                        {rest !== 0 && (
-                            <Alert
-                                type={rest < 0 ? 'error' : 'info'}
-                                showIcon
-                                style={{ marginTop: 8 }}
-                                message={rest < 0
-                                    ? `Разнесено больше платежа на ${money(-rest)}`
-                                    : `Не разнесено: ${money(rest)} — останется авансом`}
-                            />
-                        )}
+                {/* Реестр подбора: заказчик присылает один перевод за два
+                    десятка рейсов, и отмечать их надо помногу. */}
+                {hasRegister && (
+                    <OrderPaymentRegister
+                        orders={openOrders}
+                        loading={loadingOrders}
+                        error={ordersError}
+                        value={orderShares}
+                        onChange={applyPickedOrders}
+                        direction={direction === 'OUT' ? 'OUT' : 'IN'}
+                    />
+                )}
+
+                {/* Итог отмеченного стоит строкой в самой таблице, поэтому
+                    здесь — только расхождение с суммой платежа: заметить его
+                    надо до нажатия «Провести», а не после. */}
+                {hasRegister && pickedOrders.length > 0
+                    && Math.abs((Number(amount) || 0) - sharesTotal) > 0.009 && (
+                    <div className={styles.summary}>
+                        <span className={styles.summaryWarn}>
+                            Отмечено на {money(sharesTotal)}, а сумма платежа — {money(Number(amount) || 0)}.
+                            {(Number(amount) || 0) > sharesTotal
+                                ? ' Разница останется авансом.'
+                                : ' Разнесено больше платежа — платёж не пройдёт.'}
+                        </span>
                     </div>
                 )}
             </Form>

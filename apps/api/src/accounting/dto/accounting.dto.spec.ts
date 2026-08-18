@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { PaymentDirection } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';

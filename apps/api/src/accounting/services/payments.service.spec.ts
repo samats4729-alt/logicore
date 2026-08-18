@@ -1,5 +1,6 @@
 import { PaymentDirection } from '@prisma/client';
 import { PaymentsService } from './payments.service';
+import { FinanceCalculatorService } from './finance-calculator.service';
 
 /**
  * Проверяем не арифметику (она покрыта finance-calculator), а транзакционность:
@@ -26,6 +27,12 @@ describe('PaymentsService atomicity', () => {
                     };
                 }),
                 findMany: jest.fn().mockResolvedValue([{ amount: 1000 }]),
+            },
+            // Доли общих платежей: в этом сценарии их нет, но канонический
+            // расчёт спрашивает про них всегда.
+            paymentOrderShare: {
+                findMany: jest.fn().mockResolvedValue([]),
+                createMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             order: {
                 findUnique: jest.fn().mockResolvedValue({
@@ -100,6 +107,7 @@ describe('PaymentsService atomicity', () => {
             // Тенговый платёж курса не спрашивает — заглушка на случай, если
             // однажды спросит.
             { toBase: jest.fn().mockResolvedValue(null) } as any,
+            new FinanceCalculatorService(),
         );
 
         return { service, prisma, tx, payrollService, calls };

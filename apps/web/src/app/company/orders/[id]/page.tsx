@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Typography, Tag, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, DatePicker, Space, Divider, Popconfirm, Upload, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
 import {
@@ -135,6 +135,9 @@ export default function OrderDetailPage() {
     const mayAccount = canAccounting(user);
     /** Разнесение платежа по счетам — суммы редактируются в окне платежа. */
     const [allocations, setAllocations] = useState<Record<string, number>>({});
+    /** Отмеченные заявки: один перевод закрывает сразу несколько рейсов. */
+    const [orderShares, setOrderShares] = useState<Record<string, number>>({});
+
 
     // Unified payment states & role checks
     const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
@@ -173,6 +176,25 @@ export default function OrderDetailPage() {
     const [vehiclesLoading, setVehiclesLoading] = useState(false);
     const [partners, setPartners] = useState<Partner[]>([]);
     const [partnersLoading, setPartnersLoading] = useState(false);
+
+    /**
+     * Контрагенты для окна платежа — вместе со сторонами самой заявки.
+     *
+     * Справочник контрагентов и стороны рейса — разные списки, и компания
+     * из заявки может в справочник не попасть. Тогда список выбора не знал
+     * её названия и показывал вместо него внутренний идентификатор.
+     */
+    const paymentPartners = useMemo(() => {
+        const order = data?.order;
+        const sides = [
+            { id: order?.customerCompanyId || order?.customerCompany?.id, name: order?.customerCompany?.name },
+            { id: order?.subForwarderId || order?.subForwarder?.id, name: order?.subForwarder?.name },
+            { id: order?.forwarderId || order?.forwarder?.id, name: order?.forwarder?.name },
+        ].filter((side): side is { id: string; name: string } => Boolean(side.id && side.name));
+
+        const known = new Set(partners.map((partner: any) => partner.id));
+        return [...partners, ...sides.filter((side) => !known.has(side.id))];
+    }, [partners, data?.order]);
     const [forwarders, setForwarders] = useState<{ id: string; name: string }[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
     const [cargoCategories, setCargoCategories] = useState<any[]>([]);
@@ -567,8 +589,14 @@ export default function OrderDetailPage() {
     const handleAddPaymentClick = () => {
         setEditingPayment(null);
         paymentForm.resetFields();
+        setOrderShares({});
+        // Сумма подставляется остатком долга по этой заявке. Бухгалтер
+        // набирала её руками, глядя в соседнюю карточку, — а долг известен
+        // и так. Поправить, конечно, можно: платят и частями.
+        const debt = Number(data?.summary?.customerDebt ?? 0);
         paymentForm.setFieldsValue({
             direction: 'IN',
+            amount: debt > 0 ? Math.round(debt * 100) / 100 : undefined,
             date: dayjs(),
             method: 'BANK',
             counterpartyId: data?.order?.customerCompanyId || undefined,
@@ -597,10 +625,20 @@ export default function OrderDetailPage() {
     const handleSavePayment = async (values: any) => {
         setPaymentLoading(true);
         try {
+            // Отмеченные заявки уходят вместе с платежом. Когда их
+            // выбрали, платёж перестаёт быть платежом «этой» заявки: он
+            // общий, и его доли перечислены поимённо. Иначе текущая заявка
+            // была бы оплачена дважды — целиком и своей долей.
+            const shares = Object.entries(orderShares)
+                .filter(([, amount]) => Number(amount) > 0)
+                .map(([shareOrderId, amount]) => ({ orderId: shareOrderId, amount: Number(amount) }));
+
             const payload = {
                 ...values,
                 date: values.date.toISOString(),
-                orderId,
+                ...(shares.length
+                    ? { orderShares: shares }
+                    : { orderId }),
             };
             const saved = editingPayment
                 ? (await api.put(`/accounting/payments/${editingPayment.id}`, payload)).data
@@ -622,6 +660,7 @@ export default function OrderDetailPage() {
             }
 
             setAllocations({});
+            setOrderShares({});
             setPaymentModalOpen(false);
             fetchData();
             // Платёж разнесён по счетам — «Оплата» в цепочке документов устарела
@@ -2086,9 +2125,11 @@ export default function OrderDetailPage() {
                 handleSavePayment={handleSavePayment}
                 accounts={accounts}
                 categories={categories}
-                partners={partners}
+                partners={paymentPartners}
                 allocations={allocations}
                 setAllocations={setAllocations}
+                orderShares={orderShares}
+                setOrderShares={setOrderShares}
             />
 
             {/* =================== QUICK PARTNER MODAL =================== */}

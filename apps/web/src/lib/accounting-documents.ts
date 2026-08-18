@@ -576,6 +576,8 @@ export interface AllocationSuggestionItem {
     amountPaid: number;
     balanceDue: number;
     suggestedAmount: number;
+    /** За какие рейсы выставлен счёт — иначе видно только его номер. */
+    orderNumbers?: string[];
 }
 
 export interface AllocationSuggestion {
@@ -590,6 +592,32 @@ export async function suggestAllocation(params: {
     amount: string;
 }): Promise<AllocationSuggestion> {
     const res = await api.get('/accounting-documents/allocation-suggestion', { params });
+    return res.data;
+}
+
+/** Неоплаченная заявка контрагента — строка подбора в окне платежа. */
+export interface OpenOrderForPayment {
+    orderId: string;
+    orderNumber: string;
+    date: string;
+    dueDate: string | null;
+    route: string | null;
+    amount: number;
+    paid: number;
+    balance: number;
+}
+
+/**
+ * Что за контрагентом числится по заявкам.
+ *
+ * Заказчик платит одним переводом за два десятка рейсов: бухгалтер
+ * отмечает нужные, и сумма складывается сама.
+ */
+export async function fetchOpenOrdersForPayment(params: {
+    counterpartyId: string;
+    direction: 'IN' | 'OUT';
+}): Promise<OpenOrderForPayment[]> {
+    const res = await api.get('/accounting/payments/open-orders', { params });
     return res.data;
 }
 

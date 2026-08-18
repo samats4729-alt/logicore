@@ -2,7 +2,14 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
-import { FinanceCalculatorService, ORDER_FINANCE_RELATIONS_SELECT, ORDER_FINANCE_SELECT } from './finance-calculator.service';
+import {
+    FinanceCalculatorService,
+    ORDER_FINANCE_RELATIONS_SELECT,
+    ORDER_FINANCE_SELECT,
+    PAYMENT_SHARE_SELECT,
+    orderFinancePayments,
+    sharesAsPayments,
+} from './finance-calculator.service';
 import { PeriodClosingService } from './period-closing.service';
 import { v4 as uuidv4 } from 'uuid';
 import { PaymentDirection, PaymentMethod, Prisma, AccountKind, StockMoveType, AccountingDocumentStatus, AccountingDocumentType, AccountingDocumentDirection } from '@prisma/client';
@@ -147,11 +154,18 @@ export class FinancialReportsService {
 
         // Платежи всего заказа нужны калькулятору (оплата заказчика/суб-экспедитора
         // определяется по платежам экспедитора); на экран отдаём только свои.
-        const [allPayments, incomes, expenses] = await Promise.all([
+        const [allPayments, shares, incomes, expenses] = await Promise.all([
             this.prisma.payment.findMany({
                 where: { orderId, isDeleted: false },
                 orderBy: { date: 'desc' },
                 include: { counterparty: { select: { name: true } } },
+            }),
+            // Доли общих платежей: одним переводом заказчик закрывает сразу
+            // несколько рейсов, и без них карточка показала бы заявку
+            // неоплаченной при пришедших деньгах.
+            this.prisma.paymentOrderShare.findMany({
+                where: { orderId, payment: { isDeleted: false } },
+                select: PAYMENT_SHARE_SELECT,
             }),
             this.prisma.income.findMany({
                 where: { orderId, companyId },
@@ -169,7 +183,7 @@ export class FinancialReportsService {
 
         const fin = this.calculator.computeOrderFinance({
             order,
-            payments: allPayments,
+            payments: [...allPayments, ...sharesAsPayments(shares)],
             incomes,
             expenses,
             companyId,
@@ -412,7 +426,7 @@ export class FinancialReportsService {
             const isCustomer = order.customerCompanyId === companyId;
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,
@@ -641,7 +655,7 @@ export class FinancialReportsService {
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,
@@ -719,7 +733,7 @@ export class FinancialReportsService {
         const rows = orders.map(order => {
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,
@@ -794,7 +808,7 @@ export class FinancialReportsService {
         const rows = orders.map(order => {
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,
@@ -852,7 +866,7 @@ export class FinancialReportsService {
         const rows = orders.map(order => {
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,
@@ -1017,7 +1031,7 @@ export class FinancialReportsService {
 
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,
@@ -1372,7 +1386,7 @@ export class FinancialReportsService {
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,
@@ -1546,7 +1560,7 @@ export class FinancialReportsService {
         const map = new Map<string, { carrier: string; orders: number; revenue: Money; cost: Money; margin: Money }>();
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
-                order, payments: order.payments, incomes: order.incomes, expenses: order.expenses, companyId,
+                order, payments: orderFinancePayments(order), incomes: order.incomes, expenses: order.expenses, companyId,
             });
             const carrier = order.subForwarder?.name
                 || order.assignedDriverName
@@ -2022,7 +2036,7 @@ export class FinancialReportsService {
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,
@@ -2474,7 +2488,7 @@ export class FinancialReportsService {
         for (const order of orders) {
             const fin = this.calculator.computeOrderFinance({
                 order,
-                payments: order.payments,
+                payments: orderFinancePayments(order),
                 incomes: order.incomes,
                 expenses: order.expenses,
                 companyId,

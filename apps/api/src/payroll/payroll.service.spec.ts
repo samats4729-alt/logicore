@@ -28,6 +28,9 @@ function makePrismaMock() {
             findUnique: jest.fn(),
         },
         payment: { findMany: jest.fn() },
+        // Доли общих платежей: расчёт маржи спрашивает про них наравне
+        // с обычными платежами по заявке.
+        paymentOrderShare: { findMany: jest.fn().mockResolvedValue([]) },
         income: { findMany: jest.fn() },
         expense: { findMany: jest.fn() },
     };

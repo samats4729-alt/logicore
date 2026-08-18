@@ -3,7 +3,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PeriodClosingService } from './period-closing.service';
 import { PaymentAllocationService } from '../../accounting-documents/payment-allocation.service';
 import { FinancialSettingsService } from './financial-settings.service';
-import { PaymentDirection, PaymentMethod, AccountKind, Payment, Prisma } from '@prisma/client';
+import { PaymentDirection, PaymentMethod, AccountKind, OrderStatus, Payment, Prisma } from '@prisma/client';
+import {
+    FinanceCalculatorService,
+    ORDER_FINANCE_RELATIONS_SELECT,
+    ORDER_FINANCE_SELECT,
+    orderFinancePayments,
+} from './finance-calculator.service';
 import { D, Money, ZERO, roundMoney, sumOf, toNum } from '../../common/utils/money';
 import { PayrollService } from '../../payroll/payroll.service';
 import { CurrencyService } from '../../currency/currency.service';
@@ -78,6 +84,7 @@ export class PaymentsService {
         private payrollService: PayrollService,
         private allocations: PaymentAllocationService,
         private currency: CurrencyService,
+        private calculator: FinanceCalculatorService,
     ) { }
 
     // ==================== EXPENSES (manual) ====================
@@ -356,6 +363,96 @@ export class PaymentsService {
         };
     }
 
+    /**
+     * Неоплаченные заявки контрагента — «подобрать по заявкам».
+     *
+     * Заказчик платит одним переводом за два десятка рейсов, и до этого
+     * бухгалтеру приходилось вбивать сумму руками, а какие именно заявки
+     * закрыты — не было видно нигде. Здесь список того, что за этим
+     * контрагентом числится, с остатком по каждой заявке: отметил нужные —
+     * сумма сложилась сама.
+     *
+     * Порядок — от самых старых: их и оплачивают первыми.
+     */
+    async openOrders(
+        companyId: string,
+        params: { counterpartyId: string; direction: PaymentDirection },
+    ) {
+        const { counterpartyId, direction } = params;
+        const weReceive = direction === PaymentDirection.IN;
+
+        // Стороны сделки: деньги идут нам — контрагент заказчик у нашего
+        // рейса либо экспедитор, а везём мы. Деньги идут от нас — наоборот.
+        const sides: Prisma.OrderWhereInput = weReceive
+            ? {
+                OR: [
+                    { customerCompanyId: counterpartyId, OR: [{ forwarderId: companyId }, { partnerId: companyId }] },
+                    { subForwarderId: companyId, OR: [{ forwarderId: counterpartyId }, { partnerId: counterpartyId }] },
+                ],
+            }
+            : {
+                OR: [
+                    { subForwarderId: counterpartyId, OR: [{ forwarderId: companyId }, { partnerId: companyId }] },
+                    { customerCompanyId: companyId, OR: [{ forwarderId: counterpartyId }, { partnerId: counterpartyId }] },
+                ],
+            };
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                ...sides,
+                status: { notIn: [OrderStatus.DRAFT, OrderStatus.CANCELLED] },
+            },
+            orderBy: [{ completedAt: 'asc' }, { createdAt: 'asc' }],
+            take: 500,
+            select: {
+                id: true,
+                orderNumber: true,
+                createdAt: true,
+                completedAt: true,
+                status: true,
+                customerPaymentDate: true,
+                driverPaymentDate: true,
+                routePoints: {
+                    orderBy: { sequence: 'asc' },
+                    select: { pointType: true, location: { select: { city: true, address: true } } },
+                },
+                ...ORDER_FINANCE_SELECT,
+                ...ORDER_FINANCE_RELATIONS_SELECT,
+            },
+        });
+
+        const rows = orders.map((order) => {
+            const fin = this.calculator.computeOrderFinance({
+                order,
+                payments: orderFinancePayments(order),
+                incomes: order.incomes,
+                expenses: order.expenses,
+                companyId,
+            });
+            const amount = weReceive ? D(fin.revenue) : D(fin.executorCost);
+            const paid = weReceive ? D(fin.paidIn) : D(fin.paidOut);
+            const balance = roundMoney(amount.minus(paid));
+
+            const cities = order.routePoints
+                .map((point) => point.location?.city || point.location?.address)
+                .filter(Boolean);
+            return {
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                date: order.completedAt ?? order.createdAt,
+                dueDate: weReceive ? order.customerPaymentDate : order.driverPaymentDate,
+                route: cities.length ? `${cities[0]} → ${cities[cities.length - 1]}` : null,
+                amount: toNum(amount),
+                paid: toNum(paid),
+                balance: toNum(balance),
+            };
+        });
+
+        // Закрытые заявки в подборе не нужны: список читают глазами, и
+        // полсотни оплаченных строк прячут те три, ради которых открывали.
+        return rows.filter((row) => row.balance > 0.009);
+    }
+
     async createPayment(companyId: string, userId: string, data: {
         orderId?: string;
         counterpartyId?: string;
@@ -367,6 +464,14 @@ export class PaymentsService {
         accountId?: string;
         categoryId?: string;
         currency?: string;
+        /**
+         * По каким заявкам разошёлся платёж.
+         *
+         * Так платят заказчики: один перевод на два десятка рейсов. Когда
+         * доли указаны, `orderId` не заполняется — иначе та заявка была бы
+         * оплачена дважды: и целиком платежом, и своей долей.
+         */
+        orderShares?: Array<{ orderId: string; amount: number }>;
     }) {
         await this.financialSettingsService.ensureCompanyFinanceSettings(companyId);
         const amt = roundMoney(data.amount);
@@ -401,6 +506,45 @@ export class PaymentsService {
             }
         }
 
+        // Доли по заявкам: суммы проверяются здесь, до записи денег.
+        const shares = (data.orderShares ?? [])
+            .map((share) => ({ orderId: share.orderId, amount: roundMoney(share.amount) }))
+            .filter((share) => share.amount.gt(0));
+        if (shares.length) {
+            if (data.orderId) {
+                throw new BadRequestException(
+                    'Платёж разносится либо на одну заявку, либо на несколько — но не на то и другое сразу',
+                );
+            }
+            const uniqueOrders = new Set(shares.map((share) => share.orderId));
+            if (uniqueOrders.size !== shares.length) {
+                throw new BadRequestException('Одна и та же заявка указана дважды');
+            }
+            const known = await this.prisma.order.count({
+                where: {
+                    id: { in: [...uniqueOrders] },
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                    ],
+                },
+            });
+            if (known !== uniqueOrders.size) {
+                throw new BadRequestException('Среди выбранных заявок есть чужие');
+            }
+            const sharesTotal = shares.reduce((sum, share) => sum.plus(share.amount), ZERO);
+            if (sharesTotal.gt(amt)) {
+                // Имя `money` здесь занято переменной с курсом платежа,
+                // поэтому суммы форматируются на месте.
+                throw new BadRequestException(
+                    `Разнесено ${sharesTotal.toFixed(2)} ₸ — больше самого платежа`
+                    + ` на ${sharesTotal.minus(amt).toFixed(2)} ₸`,
+                );
+            }
+        }
+
         const currency = (data.currency || '').toUpperCase() || null;
 
         if (!accountId) {
@@ -432,7 +576,7 @@ export class PaymentsService {
         // Платёж, пересчёт флагов заявки и запись в журнал — одна транзакция.
         // Раньше это были три независимые операции: падение между ними
         // оставляло деньги записанными, а «оплачено» на заявке — старым.
-        const { payment, customerPaidBecameTrue } = await this.prisma.$transaction(async (tx) => {
+        const { payment, customerPaidBecameTrue, sharedOrders } = await this.prisma.$transaction(async (tx) => {
             const created = await tx.payment.create({
                 data: {
                     companyId,
@@ -457,6 +601,8 @@ export class PaymentsService {
             });
 
             let becameTrue = false;
+            const paidOrders: string[] = [];
+
             if (created.orderId) {
                 becameTrue = await this.syncOrderPaymentFlagsWithin(tx, created.orderId);
                 await tx.orderChangeLog.create({
@@ -469,11 +615,50 @@ export class PaymentsService {
                 });
             }
 
-            return { payment: created, customerPaidBecameTrue: becameTrue };
+            if (shares.length) {
+                // Доля в тенге считается по курсу самого платежа: тот же
+                // курс, по которому пересчитана его полная сумма. Свой курс
+                // на дату у каждой доли развёл бы их с платежом на копейки,
+                // и сумма долей перестала бы сходиться с переводом.
+                const perUnitBase = money.amountBase && !D(amt).isZero()
+                    ? D(money.amountBase).div(D(amt))
+                    : null;
+
+                await tx.paymentOrderShare.createMany({
+                    data: shares.map((share) => ({
+                        paymentId: created.id,
+                        orderId: share.orderId,
+                        amount: share.amount,
+                        amountBase: perUnitBase ? roundMoney(share.amount.times(perUnitBase)) : null,
+                    })),
+                });
+
+                for (const share of shares) {
+                    const orderBecameTrue = await this.syncOrderPaymentFlagsWithin(tx, share.orderId);
+                    if (orderBecameTrue) paidOrders.push(share.orderId);
+                    await tx.orderChangeLog.create({
+                        data: {
+                            orderId: share.orderId,
+                            userId,
+                            action: 'payment_added',
+                            details: `Разнесена оплата: ${created.direction === 'IN' ? 'Поступление' : 'Расход'}`
+                                + ` на сумму ${share.amount} ₸ из общего платежа`
+                                + ` на ${created.amount} ₸ (${created.note || 'без примечания'}).`,
+                        },
+                    });
+                }
+            }
+
+            return { payment: created, customerPaidBecameTrue: becameTrue, sharedOrders: paidOrders };
         }, { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS });
 
         if (payment.orderId) {
             await this.runCustomerPaidTrigger(payment.orderId, customerPaidBecameTrue);
+        }
+        // Триггеры по разнесённым заявкам — после коммита и по одной: каждая
+        // из них могла именно сейчас стать оплаченной.
+        for (const orderId of sharedOrders) {
+            await this.runCustomerPaidTrigger(orderId, true);
         }
 
         return payment;
@@ -498,7 +683,10 @@ export class PaymentsService {
     }) {
         const source = await this.prisma.payment.findFirst({
             where: { id: paymentId, companyId, isDeleted: false },
-            include: { refunds: { where: { isDeleted: false }, select: { amount: true } } },
+            include: {
+                refunds: { where: { isDeleted: false }, select: { amount: true } },
+                orderShares: { select: { id: true, orderId: true, amount: true, amountBase: true } },
+            },
         });
         if (!source) throw new NotFoundException('Платеж не найден');
         if (source.refundOfId) {
@@ -575,6 +763,43 @@ export class PaymentsService {
                         details: `Возврат платежа на сумму ${created.amount} ₸ (${created.note}).`,
                     },
                 });
+            }
+
+            // Возврат уменьшает доли по заявкам пропорционально: деньги
+            // вернулись со всего платежа сразу, и выбирать, какой рейс
+            // «разоплатить» первым, было бы решением за бухгалтера. При
+            // полном возврате доли снимаются целиком.
+            if (source.orderShares.length) {
+                const paidBefore = D(source.amount).minus(already);
+                const keepRatio = paidBefore.gt(0)
+                    ? paidBefore.minus(amount).div(paidBefore)
+                    : ZERO;
+                for (const share of source.orderShares) {
+                    const left = keepRatio.lte(0) ? ZERO : roundMoney(D(share.amount).times(keepRatio));
+                    if (left.lte(0)) {
+                        await tx.paymentOrderShare.delete({ where: { id: share.id } });
+                    } else {
+                        await tx.paymentOrderShare.update({
+                            where: { id: share.id },
+                            data: {
+                                amount: left,
+                                amountBase: share.amountBase
+                                    ? roundMoney(D(share.amountBase).times(keepRatio))
+                                    : null,
+                            },
+                        });
+                    }
+                    await this.syncOrderPaymentFlagsWithin(tx, share.orderId);
+                    await tx.orderChangeLog.create({
+                        data: {
+                            orderId: share.orderId,
+                            userId,
+                            action: 'payment_refunded',
+                            details: `Возврат общего платежа: доля по этой заявке уменьшена`
+                                + ` до ${left.toFixed(2)} ₸.`,
+                        },
+                    });
+                }
             }
 
             return { refund: created, customerPaidBecameTrue: becameTrue };
@@ -680,7 +905,10 @@ export class PaymentsService {
     async deletePayment(companyId: string, paymentId: string, userId: string) {
         const payment = await this.prisma.payment.findFirst({
             where: { id: paymentId, companyId, isDeleted: false },
-            include: { refunds: { where: { isDeleted: false }, select: { id: true } } },
+            include: {
+                refunds: { where: { isDeleted: false }, select: { id: true } },
+                orderShares: { select: { orderId: true } },
+            },
         });
         if (!payment) throw new NotFoundException('Платеж не найден');
 
@@ -709,6 +937,22 @@ export class PaymentsService {
                         action: 'payment_deleted',
                         details: `Удален платеж: ${row.direction === 'IN' ? 'Поступление' : 'Расход'} на сумму ${row.amount} ₸ (${row.note || 'без примечания'}).`
                     }
+                });
+            }
+
+            // Заявки, закрытые долями этого платежа, снова становятся
+            // неоплаченными: выборка долей отбрасывает удалённые платежи, но
+            // сохранённый флаг «оплачено» сам себя не пересчитает.
+            for (const share of payment.orderShares) {
+                await this.syncOrderPaymentFlagsWithin(tx, share.orderId);
+                await tx.orderChangeLog.create({
+                    data: {
+                        orderId: share.orderId,
+                        userId,
+                        action: 'payment_deleted',
+                        details: `Удалён общий платёж, которым была разнесена оплата по этой заявке`
+                            + ` (${row.note || 'без примечания'}).`,
+                    },
                 });
             }
 
@@ -771,15 +1015,48 @@ export class PaymentsService {
 
         const forwarderCompanyId = order.forwarderId || order.partnerId || order.responsibleManager?.companyId || order.customerCompanyId || null;
 
+        // Оплаты заявки — свои платежи и доли общих. Один перевод заказчика
+        // закрывает сразу несколько рейсов, и доля по этой заявке для
+        // канонического флага ничем не отличается от отдельного платежа:
+        // забыть про неё значит держать оплаченную заявку в долгах.
+        const paymentsOfOrder = async (direction: PaymentDirection) => {
+            const [own, shares] = await Promise.all([
+                tx.payment.findMany({
+                    where: {
+                        orderId,
+                        direction,
+                        isDeleted: false,
+                        ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
+                    },
+                }),
+                tx.paymentOrderShare.findMany({
+                    where: {
+                        orderId,
+                        payment: {
+                            direction,
+                            isDeleted: false,
+                            ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
+                        },
+                    },
+                    select: {
+                        amount: true,
+                        amountBase: true,
+                        payment: { select: { currency: true } },
+                    },
+                }),
+            ]);
+            return [
+                ...own,
+                ...shares.map((share) => ({
+                    amount: share.amount,
+                    amountBase: share.amountBase,
+                    currency: share.payment.currency,
+                })),
+            ];
+        };
+
         // Sync Customer Paid Flag
-        const customerPayments = await tx.payment.findMany({
-            where: {
-                orderId,
-                direction: PaymentDirection.IN,
-                isDeleted: false,
-                ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
-            },
-        });
+        const customerPayments = await paymentsOfOrder(PaymentDirection.IN);
         // Суммы складываются в Decimal: обходной moneyGte здесь больше не нужен,
         // сравнение точное и «недоплаты в 0.00000000001» не возникает.
         //
@@ -794,14 +1071,7 @@ export class PaymentsService {
         const customerPaidBecameTrue = !order.isCustomerPaid && isCustomerPaid;
 
         // Sync Driver / Sub-forwarder Paid Flag
-        const executorPayments = await tx.payment.findMany({
-            where: {
-                orderId,
-                direction: PaymentDirection.OUT,
-                isDeleted: false,
-                ...(forwarderCompanyId && { companyId: forwarderCompanyId }),
-            },
-        });
+        const executorPayments = await paymentsOfOrder(PaymentDirection.OUT);
         const paidOut = sumOf(executorPayments, (p) => paymentInBase(p));
 
         let isDriverPaid = false;
