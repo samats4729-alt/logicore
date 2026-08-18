@@ -164,11 +164,48 @@ export class UsersService {
         return users.map((user) => withoutSecrets(user));
     }
 
-    async findById(id: string) {
-        return withoutSecrets(await this.prisma.user.findUnique({
+    /**
+     * Кого этому человеку вообще можно показывать.
+     *
+     * Своих сотрудников — да. Людей из карточки контрагента, которую завела
+     * наша же компания, — тоже: это её справочник. Всех остальных — нет.
+     *
+     * Правило то же, что у фото профиля: там проверка стояла, а у карточки
+     * сотрудника не было никакой, и по одному запросу отдавались имя,
+     * телефон, почта, роль и компания любого человека на платформе.
+     */
+    private async assertCanSeeUser(
+        targetCompanyId: string | null,
+        requester: { sub: string; role: string; companyId?: string },
+        targetUserId: string,
+    ) {
+        if (requester.role === 'ADMIN' || targetUserId === requester.sub) return;
+
+        if (requester.companyId && targetCompanyId === requester.companyId) return;
+
+        if (requester.companyId && targetCompanyId) {
+            const targetCompany = await this.prisma.company.findUnique({
+                where: { id: targetCompanyId },
+                select: { isExternal: true, createdByCompanyId: true },
+            });
+            if (targetCompany?.isExternal && targetCompany.createdByCompanyId === requester.companyId) {
+                return;
+            }
+        }
+
+        throw new ForbiddenException('Нет доступа к этому сотруднику');
+    }
+
+    async findById(id: string, requester?: { sub: string; role: string; companyId?: string }) {
+        const user = await this.prisma.user.findUnique({
             where: { id },
             include: { company: true },
-        }) as any);
+        });
+        if (!user) throw new NotFoundException('Пользователь не найден');
+        if (requester) {
+            await this.assertCanSeeUser(user.companyId, requester, id);
+        }
+        return withoutSecrets(user as any);
     }
 
     /**
