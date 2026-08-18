@@ -164,3 +164,40 @@ export function hideCustomerPrice<T extends { customerPrice?: unknown }>(order: 
     (order as any).customerPrice = null;
     return order;
 }
+
+/**
+ * Полное правило для водителя — и в списке рейсов, и в карточке.
+ *
+ * В списке цену заказчика убирали, а в карточке нет: она отдавала и её, и
+ * ставку перевозчика, то есть весь заработок компании на этом рейсе.
+ * Водитель — самая слабая учётная запись из тех, у кого есть вход: он
+ * часто наёмный и меняется чаще всех.
+ *
+ * Ставка субподрядчика скрыта наравне с ценой заказчика. Кто бы ни возил —
+ * наш водитель или водитель нанятой фирмы, — разница между этой ставкой и
+ * его собственной оплатой есть чей-то заработок, и это не его сведения.
+ * Своя оплата (`driverCost`) остаётся: за неё он и работает.
+ */
+export function maskForDriver<T extends ExecutorCostFields & { customerPrice?: unknown }>(
+    order: T,
+): T {
+    hideCustomerPrice(order as any);
+    const masked = order as any;
+    masked.subForwarderPrice = null;
+    masked.subForwarderId = null;
+    masked.subForwarder = null;
+    masked.partner = null;
+    masked.partnerId = null;
+    masked.isSubForwarderPaid = false;
+    masked.subForwarderPaidAt = null;
+    // Условия расчётов сторон — та же чувствительность, что и суммы.
+    masked.hasVat = null;
+    masked.vatRate = null;
+    masked.executorHasVat = null;
+    masked.executorVatRate = null;
+    masked.customerPaymentDays = null;
+    masked.customerPaymentFrom = null;
+    masked.carrierPaymentDays = null;
+    masked.carrierPaymentFrom = null;
+    return order;
+}

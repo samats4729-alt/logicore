@@ -10,7 +10,7 @@ import { PeriodClosingService } from '../accounting/services/period-closing.serv
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
 import { kzStartOfToday, kzTodayString } from '../common/utils/business-date';
-import { hideCustomerPrice, maskForCustomer } from './order-visibility';
+import { maskForCustomer, maskForDriver } from './order-visibility';
 import { OrderSettlementsService } from './order-settlements.service';
 
 const STATUS_CHAIN = [
@@ -538,6 +538,20 @@ export class OrdersService {
             const isOwner = order.customerId === userId;
             const isDriver = order.driverId === userId;
             const isManager = order.responsibleManagerId === userId;
+
+            /**
+             * Водителю — только его собственные рейсы.
+             *
+             * Он состоит в компании, и общая проверка «рейс нашей фирмы»
+             * открывала ему все её заявки разом: и те, куда его не
+             * назначали, и вместе с ними цену заказчика и ставку
+             * перевозчика. Смена статуса это уже учитывала («водитель
+             * меняет статус только своих заявок»), а чтение — нет.
+             */
+            if (userContext.role === 'DRIVER' && !isDriver) {
+                throw new ForbiddenException('Этот рейс назначен не вам');
+            }
+
             const isCompanyOrder = companyId && (
                 order.customerCompanyId === companyId ||
                 order.forwarderId === companyId ||
@@ -552,6 +566,10 @@ export class OrdersService {
             // экспедитора/партнёра) — только свою цену. Правило одно на всю
             // выдачу заявок и лежит в order-visibility.
             maskForCustomer(order as any, companyId);
+
+            // Водителю — своя оплата и ничего про чужие деньги. В списке
+            // рейсов это делалось, в карточке — нет.
+            if (userContext.role === 'DRIVER') maskForDriver(order as any);
         }
 
         // Почты у точек маршрута подменяем на список этой компании. Справочник
@@ -1417,8 +1435,11 @@ export class OrdersService {
         });
         // Водителю платит перевозчик или экспедитор. Сколько за тот же рейс
         // платит грузовладелец — не его сведения, а в списке рейсов эта
-        // сумма приезжала вместе со всем остальным.
-        return orders.map((order) => hideCustomerPrice(order as any));
+        // сумма приезжала вместе со всем остальным. Правило то же, что в
+        // карточке: одно на обе выдачи, иначе они снова разойдутся —
+        // сначала из списка убрали цену заказчика, а ставка перевозчика
+        // осталась и там, и там.
+        return orders.map((order) => maskForDriver(order as any));
     }
 
     /**
