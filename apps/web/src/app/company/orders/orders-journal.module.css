@@ -403,3 +403,13 @@
         order: 4;
     }
 }
+
+/* Выгрузка в Excel — действие над списком, живёт в его же полосе
+   управления, слева от счётчика отобранного. */
+.exportBtn {
+    margin-left: 12px;
+    height: 28px;
+    gap: 6px;
+    font-size: 12.5px;
+    white-space: nowrap;
+}

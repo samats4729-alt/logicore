@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
+import { OrdersExportService } from './orders-export.service';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
 import { OrderDocumentsService } from './order-documents.service';
@@ -34,6 +35,7 @@ export class OrdersController {
         private emailService: EmailService,
         private prisma: PrismaService,
         private billingService: BillingService,
+        private ordersExport: OrdersExportService,
         private auditService: AuditService,
     ) { }
 
@@ -134,6 +136,33 @@ export class OrdersController {
         const companyId = req?.user?.role === 'ADMIN' ? undefined : req?.user?.companyId;
         const { status, customerId, driverId, search, ...pagination } = query;
         return this.ordersService.findAll({ status, customerId, driverId, companyId, search }, pagination);
+    }
+
+    @Post('export')
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER,
+        UserRole.LOGISTICIAN, UserRole.ACCOUNTANT,
+    )
+    @ApiOperation({
+        summary: 'Выгрузить журнал заявок в Excel',
+        description: 'Выгружаются только перечисленные заявки — ровно то, что отобрано на экране.',
+    })
+    async exportOrders(
+        @Request() req: any,
+        @Body() body: { orderIds?: string[] },
+        @Res() res: Response,
+    ) {
+        const buffer = await this.ordersExport.exportOrders(
+            req.user.companyId,
+            body?.orderIds ?? [],
+        );
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': `attachment; filename="orders_${new Date().toISOString().slice(0, 10)}.xlsx"`,
+            'Content-Length': String(buffer.length),
+            'Cache-Control': 'private, no-store',
+        });
+        res.end(buffer);
     }
 
     @Get('my')

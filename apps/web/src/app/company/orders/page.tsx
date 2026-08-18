@@ -10,7 +10,7 @@ import {
     CloseCircleOutlined,
     ExclamationCircleOutlined,
 } from '@ant-design/icons';
-import { ArrowUpDown, ChevronRight, Eraser, FileText, Mail, Pencil, Plus, Search, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react';
+import { ArrowUpDown, ChevronRight, Download, Eraser, FileText, Loader2, Mail, Pencil, Plus, Search, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
 import journal from './orders-journal.module.css';
@@ -730,6 +730,45 @@ export default function CompanyOrdersPage() {
     const isArchive = activeTab === 'archive';
     const totalCount = isArchive ? totalArchiveOrders : totalOrders;
     const shownCount = isArchive ? visibleArchiveOrders.length : visibleOrders.length;
+
+    /**
+     * Выгрузить в Excel то, что сейчас отобрано.
+     *
+     * Список уходит на сервер поимённо: отбор живёт в браузере, и повторять
+     * его условия на сервере значило бы завести вторую правду — рано или
+     * поздно файл разошёлся бы с тем, что человек видит на экране.
+     */
+    const [exporting, setExporting] = useState(false);
+    const handleExport = async () => {
+        const rows = isArchive ? visibleArchiveOrders : visibleOrders;
+        if (!rows.length) {
+            toast.warning('Нечего выгружать: в списке нет заявок');
+            return;
+        }
+        setExporting(true);
+        try {
+            const res = await api.post(
+                '/orders/export',
+                { orderIds: rows.map((row: any) => row.id) },
+                { responseType: 'blob' },
+            );
+            const url = window.URL.createObjectURL(new Blob([res.data], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Заявки_${dayjs().format('YYYY-MM-DD')}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.success(`Выгружено заявок: ${rows.length}`);
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Не удалось выгрузить в Excel');
+        } finally {
+            setExporting(false);
+        }
+    };
     const isNarrowed = activeFilterCount > 0 || query.trim().length > 0;
 
     const clearAllFilters = () => {
@@ -1183,12 +1222,30 @@ export default function CompanyOrdersPage() {
                 );
             },
         },
+        /* Правка прямо из строки.
+           Изменить ставку можно было и раньше, но путь был неочевидный:
+           щёлкнуть по строке, дождаться боковой панели и найти там
+           «Редактировать заявку». Бухгалтер этого не нашла и решила, что
+           править нечем. Карандаш стоит там, где его ищут. */
         {
-            title: '', key: 'actions', width: 50, fixed: 'right' as const,
+            title: '', key: 'actions', width: 80, fixed: 'right' as const,
             render: (_: any, r: Order) => (
-                <Tooltip title="Открыть заявку">
-                    <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
-                </Tooltip>
+                <div style={{ display: 'flex', gap: 2 }}>
+                    <Tooltip title="Изменить заявку и суммы">
+                        <Button
+                            variant="link"
+                            size="sm"
+                            aria-label="Изменить заявку и суммы"
+                            className="h-7 w-7 px-0"
+                            onClick={(e) => { e.stopPropagation(); openEditModal(r); }}
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                    </Tooltip>
+                    <Tooltip title="Открыть заявку">
+                        <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
+                    </Tooltip>
+                </div>
             ),
         },
     ];
@@ -1389,6 +1446,20 @@ export default function CompanyOrdersPage() {
                             <>Всего {totalCount}</>
                         )}
                     </span>
+                    {/* Выгрузка стоит рядом со счётчиком отобранного: это
+                        действие над списком, а не над страницей. */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className={journal.exportBtn}
+                        disabled={exporting || shownCount === 0}
+                        onClick={handleExport}
+                    >
+                        {exporting
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Download className="h-4 w-4" />}
+                        Выгрузить в Excel
+                    </Button>
                 </div>
 
                 {filtersOpen && (
