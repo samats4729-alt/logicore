@@ -238,10 +238,19 @@ export default function OrderFinanceModals({
         >
             <Form form={paymentForm} layout="vertical" onFinish={handleSavePayment}>
                 <div className={hasRegister ? styles.grid : undefined}>
-                    <Form.Item name="direction" label="Направление платежа" rules={[{ required: true }]}>
-                        <Select disabled={!!editingPayment}>
-                            <Select.Option value="IN">Поступление</Select.Option>
-                            <Select.Option value="OUT">Расход</Select.Option>
+                    {/* Направление правится и у записанного платежа. Раньше поле
+                        гасло, и ошибку в стороне можно было исправить только
+                        удалив строку и заведя её заново — с потерей даты
+                        проводки, примечания и связи с выпиской. */}
+                    <Form.Item
+                        name="direction"
+                        label="Направление платежа"
+                        rules={[{ required: true }]}
+                        extra={editingPayment ? 'Записали не в ту сторону — переставьте здесь' : undefined}
+                    >
+                        <Select>
+                            <Select.Option value="IN">Поступление — деньги пришли нам</Select.Option>
+                            <Select.Option value="OUT">Расход — мы заплатили</Select.Option>
                         </Select>
                     </Form.Item>
 

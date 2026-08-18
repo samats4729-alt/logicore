@@ -14,6 +14,7 @@ import { D, Money, ZERO, roundMoney, sumOf, toNum } from '../../common/utils/mon
 import { PayrollService } from '../../payroll/payroll.service';
 import { CurrencyService } from '../../currency/currency.service';
 import { paymentInBase } from './exchange-difference';
+import { counterpartyIsExecutor, counterpartyIsPayer } from '../../common/utils/settlement';
 
 /** Учётная валюта: в ней ведутся отчёты и итоги по компании. */
 const BASE_CURRENCY = 'KZT';
@@ -453,6 +454,67 @@ export class PaymentsService {
         return rows.filter((row) => row.balance > 0.009);
     }
 
+    /**
+     * Направление платежа против стороны контрагента по этому рейсу.
+     *
+     * Бухгалтер открывает заявку, жмёт «Зарегистрировать платёж» и заводит
+     * оплату перевозчику. Форма при этом заполнена под оплату от заказчика,
+     * и направление нужно переставить руками. Не переставила — деньги легли
+     * не в ту сторону: у перевозчика по-прежнему «Не оплачено», а долг
+     * заказчика закрылся суммой, которой он не платил.
+     *
+     * Ошибка тихая, и это главное в ней: строка в списке платежей есть,
+     * сумма верная, контрагент верный — кажется, что записано. Разбираться,
+     * почему «оплаты не вижу», приходится потом и вручную.
+     *
+     * Поэтому сторона проверяется здесь, а не в форме: в кассе то же окно и
+     * та же ошибка. Кто по рейсу исполнитель — тому платим мы, кто
+     * плательщик — тот платит нам.
+     *
+     * Возврат сюда не попадает: он проводится своей ручкой и идёт в
+     * обратную сторону намеренно.
+     */
+    private async assertDirectionMatchesSide(
+        companyId: string,
+        counterpartyId: string | null,
+        direction: PaymentDirection,
+        orderIds: string[],
+    ) {
+        const ids = [...new Set(orderIds.filter(Boolean))];
+        if (!counterpartyId || !ids.length) return;
+
+        const orders = await this.prisma.order.findMany({
+            where: { id: { in: ids } },
+            select: {
+                orderNumber: true,
+                customerCompanyId: true,
+                forwarderId: true,
+                partnerId: true,
+                subForwarderId: true,
+            },
+        });
+
+        const refundHint = 'Если это возврат — оформите его кнопкой «Вернуть» у исходного платежа.';
+
+        for (const order of orders) {
+            if (direction === PaymentDirection.IN
+                && counterpartyIsExecutor(order, companyId, counterpartyId)) {
+                throw new BadRequestException(
+                    `По заявке №${order.orderNumber} этот контрагент — исполнитель: платим ему мы.`
+                    + ' Поставьте направление «Расход», иначе оплата ему не зачтётся,'
+                    + ` а долг заказчика закроется чужой суммой. ${refundHint}`,
+                );
+            }
+            if (direction === PaymentDirection.OUT
+                && counterpartyIsPayer(order, companyId, counterpartyId)) {
+                throw new BadRequestException(
+                    `По заявке №${order.orderNumber} этот контрагент — плательщик: деньги идут нам.`
+                    + ` Поставьте направление «Поступление». ${refundHint}`,
+                );
+            }
+        }
+    }
+
     async createPayment(companyId: string, userId: string, data: {
         orderId?: string;
         counterpartyId?: string;
@@ -544,6 +606,15 @@ export class PaymentsService {
                 );
             }
         }
+
+        // Сторона проверяется до записи денег: неверное направление дешевле
+        // не пустить, чем потом искать по журналу, какая из строк лишняя.
+        await this.assertDirectionMatchesSide(
+            companyId,
+            counterpartyId,
+            data.direction,
+            data.orderId ? [data.orderId] : shares.map((share) => share.orderId),
+        );
 
         const currency = (data.currency || '').toUpperCase() || null;
 
@@ -822,6 +893,7 @@ export class PaymentsService {
     }
 
     async updatePayment(companyId: string, paymentId: string, userId: string, data: {
+        direction?: PaymentDirection;
         amount?: number;
         date?: string;
         method?: PaymentMethod;
@@ -837,6 +909,24 @@ export class PaymentsService {
         });
         if (!payment) throw new NotFoundException('Платеж не найден');
 
+        // Направление возврата развернуть нельзя: возврат идёт против
+        // исходного платежа по своей природе, и перевернув его, мы получим
+        // два платежа в одну сторону вместо платежа и возврата.
+        if (data.direction && data.direction !== payment.direction) {
+            if (payment.refundOfId) {
+                throw new BadRequestException(
+                    'У возврата направление не меняется: он идёт обратно исходному платежу.'
+                    + ' Ошиблись — удалите возврат и оформите заново.',
+                );
+            }
+            if (payment.refunds.length) {
+                throw new BadRequestException(
+                    'Нельзя развернуть платёж, по которому оформлен возврат:'
+                    + ' возврат пойдёт в ту же сторону, что и сам платёж. Сначала удалите возврат.',
+                );
+            }
+        }
+
         // Сумма платежа с возвратом не меняется: возврат считается от неё, и
         // правка задним числом сделала бы возврат больше самого платежа.
         if (data.amount !== undefined && payment.refunds.length) {
@@ -851,6 +941,15 @@ export class PaymentsService {
         const amt = data.amount !== undefined ? roundMoney(data.amount) : payment.amount;
         const oldOrderId = payment.orderId;
 
+        // Проверяем то, чем платёж станет после правки, а не то, чем он был:
+        // переставить могли и направление, и контрагента, и саму заявку.
+        await this.assertDirectionMatchesSide(
+            companyId,
+            data.counterpartyId !== undefined ? (data.counterpartyId || null) : payment.counterpartyId,
+            data.direction ?? payment.direction,
+            [data.orderId !== undefined ? data.orderId : payment.orderId].filter(Boolean) as string[],
+        );
+
         // Смена привязки к заявке затрагивает две заявки сразу: прежнюю и новую.
         // Обе пересчитываются в одной транзакции с самим платежом, иначе при
         // сбое посередине одна из заявок останется с неверными флагами.
@@ -858,6 +957,7 @@ export class PaymentsService {
             const row = await tx.payment.update({
                 where: { id: paymentId },
                 data: {
+                    ...(data.direction && { direction: data.direction }),
                     ...(data.amount !== undefined && { amount: amt }),
                     ...(data.date && { date: new Date(data.date) }),
                     ...(data.method && { method: data.method }),

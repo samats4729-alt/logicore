@@ -73,7 +73,18 @@ describe('PaymentsService atomicity', () => {
                 calls.push('tx.commit');
                 return result;
             }),
-            order: { findUnique: jest.fn().mockResolvedValue(null) },
+            order: {
+                findUnique: jest.fn().mockResolvedValue(null),
+                // Стороны рейса: по ним сервис сверяет направление платежа.
+                // Здесь плательщик — заказчик, и поступление от него верно.
+                findMany: jest.fn().mockResolvedValue([{
+                    orderNumber: '1',
+                    customerCompanyId: 'customer-1',
+                    forwarderId: 'company-1',
+                    partnerId: null,
+                    subForwarderId: null,
+                }]),
+            },
             financeAccount: { findFirst: jest.fn().mockResolvedValue({ id: 'acc-1', name: 'Расчетный счет', currency: 'KZT' }) },
             financeCategory: { findFirst: jest.fn().mockResolvedValue({ id: 'cat-1' }) },
             // Ловушка: если сервис случайно запишет мимо транзакции — тест упадёт.
