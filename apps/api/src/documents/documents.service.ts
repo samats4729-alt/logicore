@@ -23,13 +23,38 @@ export class DocumentsService {
     }, user?: { sub: string; role: string; companyId?: string }) {
         // Проверка: если документ привязан к заявке, компания должна быть участником
         if (data.orderId && user && user.role !== 'ADMIN') {
-            await this.checkOrderAccess(data.orderId, user.companyId);
+            await this.checkOrderAccess(data.orderId, user.companyId, user);
         }
         return this.prisma.document.create({ data });
     }
 
     /** Проверка, что компания — участник заявки */
-    private async checkOrderAccess(orderId: string, companyId?: string) {
+    /**
+     * Водителю — документы только его рейсов.
+     *
+     * Он состоит в компании, и проверка «рейс нашей фирмы» открывала ему
+     * весь её архив: договоры, счета, акты и накладные по всем заявкам, с
+     * возможностью скачать любой файл. То же самое, что было в карточке
+     * рейса, только здесь утекают уже подписанные документы.
+     */
+    private isDriver(role?: string): boolean {
+        return role === 'DRIVER';
+    }
+
+    private async checkOrderAccess(
+        orderId: string,
+        companyId?: string,
+        user?: { sub: string; role: string },
+    ) {
+        if (this.isDriver(user?.role)) {
+            const own = await this.prisma.order.findFirst({
+                where: { id: orderId, driverId: user!.sub },
+                select: { id: true },
+            });
+            if (!own) throw new ForbiddenException('Этот рейс назначен не вам');
+            return;
+        }
+
         if (!companyId) throw new ForbiddenException('Нет доступа к заявке');
         const order = await this.prisma.order.findFirst({
             where: {
@@ -56,7 +81,7 @@ export class DocumentsService {
 
         // Проверка доступа к заявке
         if (user && user.role !== 'ADMIN') {
-            await this.checkOrderAccess(orderId, user.companyId);
+            await this.checkOrderAccess(orderId, user.companyId, user);
         }
         
         const ext = path.extname(file.originalname);
@@ -106,9 +131,15 @@ export class DocumentsService {
         // у него нет, и отбор по компании оборачивался для него отказом —
         // раздел «Документы» в админке всегда показывал «Нет документов».
         // Флаг ставится только из маршрута под `@Roles(ADMIN)`.
-        options: { allCompanies?: boolean } = {},
+        options: { allCompanies?: boolean; user?: { sub: string; role: string } } = {},
     ) {
         if (!companyId && !options.allCompanies) throw new ForbiddenException('Нет доступа к документам');
+
+        // Журнал водителя — его собственные рейсы. Иначе он листает весь
+        // архив компании: договоры, счета, акты по всем заявкам подряд.
+        const driverScope = this.isDriver(options.user?.role)
+            ? [{ order: { driverId: options.user!.sub } }]
+            : null;
 
         const search = (query.search || '').trim();
         const like = { contains: search, mode: 'insensitive' as const };
@@ -131,7 +162,7 @@ export class DocumentsService {
             ],
         };
         // Для администратора платформы ограничения по компании нет.
-        const scope = options.allCompanies ? [] : [access];
+        const scope = driverScope ?? (options.allCompanies ? [] : [access]);
         // Ищем по тому, что человек помнит: номер рейса, имя файла, город,
         // водитель, заказчик.
         const matches = {
@@ -219,7 +250,7 @@ export class DocumentsService {
     async findByOrder(orderId: string, user?: { sub: string; role: string; companyId?: string }) {
         // Проверка доступа к заявке
         if (user && user.role !== 'ADMIN') {
-            await this.checkOrderAccess(orderId, user.companyId);
+            await this.checkOrderAccess(orderId, user.companyId, user);
         }
         return this.prisma.document.findMany({
             where: { orderId },
@@ -247,6 +278,7 @@ export class DocumentsService {
                         customerCompanyId: true,
                         forwarderId: true,
                         partnerId: true,
+                        driverId: true,
                         responsibleManager: { select: { companyId: true } },
                     },
                 },
@@ -260,6 +292,16 @@ export class DocumentsService {
 
         // Проверка доступа
         if (user && user.role !== 'ADMIN') {
+            // Водитель — только по своим рейсам. Документа без рейса он не
+            // видит вовсе: там уставные бумаги компании и прочее, что к
+            // перевозке отношения не имеет.
+            if (this.isDriver(user.role)) {
+                if (!doc.order || doc.order.driverId !== user.sub) {
+                    throw new ForbiddenException('Нет доступа к документу');
+                }
+                return doc;
+            }
+
             if (doc.order) {
                 // Документ привязан к заявке — проверяем участие компании
                 const isParticipant = doc.order.customerCompanyId === user.companyId
