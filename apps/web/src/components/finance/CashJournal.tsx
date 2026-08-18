@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, InputNumber, Modal, Form, Divider, App, Tooltip } from 'antd';
 import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { fetchCounterparties } from '@/lib/counterparties';
 import OrderSelect from '@/components/orders/OrderSelect';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -17,7 +18,6 @@ const { RangePicker } = DatePicker;
 interface Account { id: string; name: string; kind: string; isDefault: boolean; isActive?: boolean; currency?: string }
 interface Category { id: string; name: string; direction: 'IN' | 'OUT'; costType?: string | null; isActive: boolean }
 interface Partner { id: string; name: string; isCustomer?: boolean; isCarrier?: boolean }
-interface OrderLite { id: string; orderNumber: string }
 interface PaymentRow {
     id: string;
     date: string;
@@ -64,7 +64,6 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [partners, setPartners] = useState<Partner[]>([]);
-    const [orders, setOrders] = useState<OrderLite[]>([]);
 
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
@@ -84,19 +83,24 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
     const fetchAll = async () => {
         setLoading(true);
         try {
-            const [payRes, accRes, catRes, partRes, ordRes] = await Promise.all([
+            // Заявки здесь не запрашиваются: поле «Заявка» ищет по всей базе
+            // само, а первые триста рейсов грузились в пустоту.
+            const [payRes, accRes, catRes] = await Promise.all([
                 api.get('/accounting/payments', { params: { direction } }),
                 api.get('/accounting/finance-accounts'),
                 api.get('/accounting/finance-categories'),
-                api.get('/partners'),
-                api.get('/orders', { params: { limit: 300 } }),
             ]);
-            setRows(payRes.data || []);
+            const payments: PaymentRow[] = payRes.data || [];
+            setRows(payments);
             setAccounts((accRes.data || []).filter((a: Account) => a.isActive !== false));
             setCategories((catRes.data || []).filter((c: Category) => c.isActive !== false && c.direction === direction));
-            setPartners((partRes.data || []).filter((p: Partner) => p && p.id));
-            const list = ordRes.data?.data || ordRes.data || [];
-            setOrders(list.map((o: any) => ({ id: o.id, orderNumber: o.orderNumber })));
+            // Контрагенты уже проведённых платежей идут в список отдельно:
+            // без них у старого документа вместо названия остаётся код.
+            setPartners(await fetchCounterparties(payments.map((row) => (
+                row.counterpartyId
+                    ? { id: row.counterpartyId, name: row.counterparty?.name || '' }
+                    : null
+            ))));
         } catch {
             toast.error('Не удалось загрузить данные');
         } finally {
