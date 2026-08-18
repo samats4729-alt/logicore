@@ -905,9 +905,47 @@ export class PaymentsService {
     }) {
         const payment = await this.prisma.payment.findFirst({
             where: { id: paymentId, companyId, isDeleted: false },
-            include: { refunds: { where: { isDeleted: false }, select: { id: true } } },
+            include: {
+                refunds: { where: { isDeleted: false }, select: { id: true } },
+                orderShares: { select: { orderId: true, amount: true } },
+            },
         });
         if (!payment) throw new NotFoundException('Платеж не найден');
+
+        /**
+         * Правка не должна разрушать разнесение по заявкам.
+         *
+         * Доли живут отдельными записями и правкой платежа не трогаются. От
+         * этого платёж, разнесённый на двадцать рейсов, можно было ужать до
+         * рубля — доли оставались прежними, и в отчёте по каждой заявке
+         * висела оплата, которой нет. Один тенге закрывал шестьсот тысяч
+         * долга.
+         *
+         * Та же дыра с другой стороны: правкой ставился `orderId` на платёж
+         * с долями — сочетание, которое при создании запрещено, потому что
+         * заявка оказывается оплачена дважды.
+         */
+        if (payment.orderShares.length) {
+            if (data.orderId) {
+                throw new BadRequestException(
+                    'Этот платёж уже разнесён по нескольким заявкам —'
+                    + ' привязать его ещё и целиком к одной нельзя,'
+                    + ' иначе она окажется оплачена дважды.',
+                );
+            }
+            if (data.amount !== undefined) {
+                const sharesTotal = sumOf(payment.orderShares, (share) => share.amount);
+                const next = roundMoney(data.amount);
+                if (sharesTotal.gt(next)) {
+                    throw new BadRequestException(
+                        `Платёж разнесён по заявкам на ${sharesTotal.toFixed(2)} ₸,`
+                        + ` а сумма меняется на ${next.toFixed(2)} ₸.`
+                        + ' Сначала измените разнесение, иначе по заявкам останется'
+                        + ' оплата, которой нет.',
+                    );
+                }
+            }
+        }
 
         // Направление возврата развернуть нельзя: возврат идёт против
         // исходного платежа по своей природе, и перевернув его, мы получим
@@ -941,6 +979,26 @@ export class PaymentsService {
         const amt = data.amount !== undefined ? roundMoney(data.amount) : payment.amount;
         const oldOrderId = payment.orderId;
 
+        /**
+         * Сумма в учётной валюте пересчитывается вместе с самой суммой.
+         *
+         * Она хранится отдельной колонкой, и правка её не касалась: у
+         * долларового платежа, исправленного с тысячи на десять, в тенге
+         * оставалась прежняя тысяча. Отчёты считают именно по ней, поэтому
+         * ошибку не видно ни в журнале, ни в карточке — только в итогах.
+         *
+         * Курс берётся на дату платежа, как и при заведении: правят описку в
+         * сумме, а не переносят платёж на сегодня.
+         */
+        const rebased = data.amount !== undefined && (payment.currency || BASE_CURRENCY) !== BASE_CURRENCY
+            ? await this.resolvePaymentMoney(companyId, {
+                amount: amt,
+                currency: payment.currency,
+                date: (data.date ? new Date(data.date) : payment.date).toISOString(),
+                accountId: data.accountId !== undefined ? (data.accountId || null) : payment.accountId,
+            })
+            : null;
+
         // Проверяем то, чем платёж станет после правки, а не то, чем он был:
         // переставить могли и направление, и контрагента, и саму заявку.
         await this.assertDirectionMatchesSide(
@@ -959,6 +1017,13 @@ export class PaymentsService {
                 data: {
                     ...(data.direction && { direction: data.direction }),
                     ...(data.amount !== undefined && { amount: amt }),
+                    // Тенговому платежу пересчёт не нужен: там это то же число.
+                    ...(data.amount !== undefined && !rebased && { amountBase: amt }),
+                    ...(rebased && {
+                        amountBase: rebased.amountBase,
+                        exchangeRate: rebased.rate,
+                        exchangeRateDate: rebased.rateDate,
+                    }),
                     ...(data.date && { date: new Date(data.date) }),
                     ...(data.method && { method: data.method }),
                     ...(data.note !== undefined && { note: data.note || null }),

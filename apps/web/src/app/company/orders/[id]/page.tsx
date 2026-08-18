@@ -1343,12 +1343,22 @@ export default function OrderDetailPage() {
             title: 'Сумма ₸',
             dataIndex: 'amount',
             key: 'amount',
-            width: 120,
+            width: 150,
             align: 'right' as const,
             render: (a: number, r: any) => (
-                <Text strong style={{ color: r.direction === 'IN' ? '#389e0d' : '#cf1322' }}>
-                    {fmt(a)}
-                </Text>
+                <>
+                    <Text strong style={{ color: r.direction === 'IN' ? '#389e0d' : '#cf1322' }}>
+                        {fmt(a)}
+                    </Text>
+                    {/* Доля общего платежа: по этой заявке пришло столько, а
+                        сам перевод больше. Без подписи цифра выглядит как
+                        отдельный платёж, и итог с выпиской не сходится. */}
+                    {r.isShare && (
+                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)', lineHeight: 1.3 }}>
+                            часть платежа на {fmt(r.paymentTotal)}
+                        </div>
+                    )}
+                </>
             ),
         },
         {
@@ -1397,16 +1407,36 @@ export default function OrderDetailPage() {
             title: '',
             key: 'actions',
             width: 100,
-            render: (_: any, r: any) => (
-                canEditFinance && (
+            render: (_: any, r: any) => {
+                if (!canEditFinance) return null;
+                // Доля правится и удаляется только вместе со всем платежом:
+                // он закрывает и другие рейсы, и трогать его из одной заявки
+                // значило бы менять чужие расчёты вслепую.
+                if (r.isShare) {
+                    return (
+                        <Tooltip title="Это часть общего платежа по нескольким заявкам. Правится он целиком — в разделе «Деньги».">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7"
+                                onClick={() => router.push(r.direction === 'IN'
+                                    ? '/company/accounting/cash-in'
+                                    : '/company/accounting/cash-out')}
+                            >
+                                Открыть платёж
+                            </Button>
+                        </Tooltip>
+                    );
+                }
+                return (
                     <Space size={4}>
                         <Button variant="outline" size="icon" aria-label="Изменить платёж" className="h-7 w-7" onClick={() => handleEditPaymentClick(r)}><Pencil className="h-3.5 w-3.5" /></Button>
                         <Popconfirm title="Удалить платёж?" onConfirm={() => handleDeletePayment(r.id)} okText="Да" cancelText="Нет">
                             <Button variant="outline" size="icon" aria-label="Удалить платёж" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
                         </Popconfirm>
                     </Space>
-                )
-            ),
+                );
+            },
         },
     ];
 
