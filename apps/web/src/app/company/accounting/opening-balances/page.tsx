@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Tabs, Table, Button, Typography, Modal, Form, InputNumber, DatePicker, Input, Tag } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, BankOutlined, InboxOutlined, CarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { fetchCounterparties } from '@/lib/counterparties';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
@@ -57,13 +58,13 @@ export default function OpeningBalancesPage() {
     const fetchAll = async () => {
         setLoading(true);
         try {
-            const [accRes, partRes, openRes] = await Promise.all([
+            const [accRes, partners, openRes] = await Promise.all([
                 api.get('/accounting/account-balances'),
-                api.get('/partners'),
+                fetchCounterparties(),
                 api.get('/accounting/counterparty-openings'),
             ]);
             setAccounts(accRes.data?.accounts || []);
-            setPartners((partRes.data || []).filter((p: Partner) => p && p.id));
+            setPartners(partners);
             setOpenings(openRes.data || []);
         } catch {
             toast.error('Не удалось загрузить остатки');

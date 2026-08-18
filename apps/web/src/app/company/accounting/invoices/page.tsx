@@ -11,6 +11,7 @@ import {
     SearchOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { fetchCounterparties } from '@/lib/counterparties';
 import { useAuthStore } from '@/store/auth';
 import dayjs, { Dayjs } from 'dayjs';
 import {
@@ -105,10 +106,8 @@ export default function InvoicesRegistryPage() {
     }, []);
 
     useEffect(() => {
-        api.get('/partners')
-            .then((res) => setCounterparties(
-                (res.data || []).map((p: any) => ({ id: p.id, name: p.name || 'Без названия' })),
-            ))
+        fetchCounterparties()
+            .then(setCounterparties)
             .catch(() => setCounterparties([]));
     }, []);
 
