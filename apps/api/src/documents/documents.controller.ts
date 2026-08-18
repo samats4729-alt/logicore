@@ -119,7 +119,7 @@ export class DocumentsController {
             from,
             to,
             search: search?.slice(0, 100),
-        });
+        }, { user: req.user });
     }
 
     // Объявлено до `:id`, иначе путь съедается параметром.
