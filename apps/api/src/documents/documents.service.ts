@@ -4,6 +4,7 @@ import { DocumentType } from '@prisma/client';
 import { S3Service } from '../s3/s3.service';
 import * as path from 'path';
 import * as fs from 'fs';
+import { assertAllowedUpload } from './allowed-files';
 
 @Injectable()
 export class DocumentsService {
@@ -79,10 +80,12 @@ export class DocumentsService {
     async uploadFile(orderId: string, userId: string, type: DocumentType, file: Express.Multer.File, user?: { sub: string; role: string; companyId?: string }) {
         if (!file) throw new NotFoundException('Файл не найден');
 
-        // Проверка доступа к заявке
+        // Сначала право, потом сам файл: разбирать вложение того, кому сюда
+        // нельзя, незачем.
         if (user && user.role !== 'ADMIN') {
             await this.checkOrderAccess(orderId, user.companyId, user);
         }
+        assertAllowedUpload(file);
         
         const ext = path.extname(file.originalname);
         const filename = `doc_${orderId}_${Date.now()}${ext}`;
