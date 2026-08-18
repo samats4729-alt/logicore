@@ -17,6 +17,7 @@ import {
     MAX_FILE_SIZE,
     SharedReportDocumentService,
 } from './shared-report-document.service';
+import { fileResponseHeaders } from './allowed-files';
 
 /**
  * Документы, которые контрагент прикладывает по ссылке на отчёт.
@@ -75,11 +76,10 @@ export class PublicSharedReportDocumentController {
         @Res() res: Response,
     ) {
         const file = await this.documents.readFromSharedReport(token, documentId);
-        res.set({
-            'Content-Type': file.mimeType || 'application/octet-stream',
-            'Content-Disposition': `inline; filename="document_${documentId}"`,
-            'Cache-Control': 'private, no-store',
-        });
+        // Те же заголовки, что и в кабинете: вложением и без права угадывать
+        // тип. Здесь список разрешённых типов на входе есть, но правило
+        // раздачи должно быть одно — иначе однажды разойдётся и это.
+        res.set(fileResponseHeaders(file.fileName, file.mimeType));
         file.stream.pipe(res);
     }
 }

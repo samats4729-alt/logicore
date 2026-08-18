@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { randomBytes } from 'crypto';
+import { assertAllowedUpload } from '../documents/allowed-files';
 import { OrderStatus, DocumentType } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -195,6 +196,10 @@ export class DriverService {
 
     async uploadTtn(token: string, file: Express.Multer.File) {
         if (!file) throw new BadRequestException('Файл не найден');
+        // Ссылку пересылают в мессенджере, и попасть она может кому угодно.
+        // Без проверки типа сюда грузился обычный `.html`, который потом
+        // исполнялся у того, кто открывал «накладную».
+        assertAllowedUpload(file);
         const order = await this.prisma.order.findFirst({
             where: { driverToken: token },
             select: { id: true, driverId: true, responsibleManagerId: true, customerId: true },

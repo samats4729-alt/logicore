@@ -11,6 +11,7 @@ import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole, DocumentType } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { fileResponseHeaders, MAX_UPLOAD_SIZE } from './allowed-files';
 
 /** Как называть вид документа в журнале действий, чтобы читалось по-человечески. */
 const DOCUMENT_KIND_LABELS: Record<string, string> = {
@@ -43,7 +44,7 @@ export class DocumentsController {
 
     @Post('upload/:orderId')
     @UseInterceptors(FileInterceptor('file', {
-        limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+        limits: { fileSize: MAX_UPLOAD_SIZE },
     }))
     @ApiOperation({ summary: 'Загрузить файл документа для заявки' })
     @ApiConsumes('multipart/form-data')
@@ -183,16 +184,28 @@ export class DocumentsController {
     async downloadFile(@Param('id') id: string, @Res() res: Response, @Request() req: any) {
         const doc = await this.documentsService.findById(id, req.user);
 
+        /**
+         * Файл отдаётся вложением и без права угадывать тип.
+         *
+         * Раньше `sendFile` подставлял тип по расширению, а пометки
+         * «сохранить» не было вовсе. Приложенный `.html` открывался
+         * страницей на домене нашего API — там, где лежит куки сессии, —
+         * и чужой скрипт работал от имени того, кто открыл «накладную».
+         *
+         * Проверка типа при загрузке уже стоит, но одной её мало: тип
+         * приходит от отправителя, а старые файлы лежат какие есть.
+         */
+        res.set(fileResponseHeaders(doc.fileName, doc.mimeType));
+
         if (this.s3Service.isS3Enabled()) {
             try {
-                const { stream, mimeType } = await this.s3Service.downloadFile(doc.fileUrl);
-                res.setHeader('Content-Type', mimeType || doc.mimeType || 'application/octet-stream');
+                const { stream } = await this.s3Service.downloadFile(doc.fileUrl);
                 return stream.pipe(res);
             } catch (error) {
                 // Fallback to local file if S3 download fails
                 const absolutePath = path.join(process.cwd(), doc.fileUrl);
                 if (fs.existsSync(absolutePath)) {
-                    return res.sendFile(absolutePath);
+                    return fs.createReadStream(absolutePath).pipe(res);
                 }
                 return res.status(404).json({ message: 'Файл не найден в S3 и локально' });
             }
@@ -201,7 +214,7 @@ export class DocumentsController {
             if (!fs.existsSync(absolutePath)) {
                 return res.status(404).json({ message: 'Файл не найден' });
             }
-            return res.sendFile(absolutePath);
+            return fs.createReadStream(absolutePath).pipe(res);
         }
     }
 
