@@ -9,6 +9,7 @@ import {
     orderFinancePayments,
 } from '../accounting/services/finance-calculator.service';
 import { toNum } from '../common/utils/money';
+import { isCustomerOnly, maskForCustomer } from './order-visibility';
 
 /** Столько строк выгружают глазами; больше — это уже вопрос к отчётам. */
 const MAX_ROWS = 5000;
@@ -45,6 +46,12 @@ const date = (value?: Date | null) =>
  *
  * Суммы считает тот же калькулятор, что и карточка заявки: своя формула
  * здесь дала бы третью правду о марже.
+ *
+ * И по той же причине выгрузка обязана спрашивать `order-visibility`: файл
+ * уезжает на диск и дальше живёт сам по себе — переслать его проще, чем
+ * пересказать экран. Заказчик, у которого свой рейс есть и в списке, и в
+ * выгрузке, в файле не должен получить того, чего ему не показывает
+ * карточка: ни имени субподрядчика, ни его ставки, ни нашей маржи.
  */
 @Injectable()
 export class OrdersExportService {
@@ -107,7 +114,19 @@ export class OrdersExportService {
                     },
                 },
                 accountingDocuments: {
-                    select: { document: { select: { number: true, type: true, status: true } } },
+                    select: {
+                        document: {
+                            select: {
+                                number: true,
+                                type: true,
+                                status: true,
+                                // По рейсу счетов бывает два: наш заказчику и
+                                // перевозчика нам. Стороны видят каждый свой.
+                                companyId: true,
+                                counterpartyId: true,
+                            },
+                        },
+                    },
                 },
                 ...ORDER_FINANCE_SELECT,
                 ...ORDER_FINANCE_RELATIONS_SELECT,
@@ -115,6 +134,19 @@ export class OrdersExportService {
         });
 
         const rows = orders.map((order) => {
+            // Кто в этом рейсе только заказчик — не увидит нашу сторону
+            // сделки. Маска ставится до расчёта: калькулятор не должен
+            // считать по цифрам, которых спрашивающему видеть нельзя.
+            const customerOnly = isCustomerOnly(order, companyId);
+            maskForCustomer(order as any, companyId);
+            if (customerOnly) {
+                // Маска обнуляет `subForwarderId`, но не саму связь: в
+                // карточке её просто не запрашивают. Здесь запрашивают —
+                // значит, здесь и убираем, иначе имя субподрядчика уедет
+                // в файл колонкой «Перевозчик».
+                (order as any).subForwarder = null;
+            }
+
             const finance = this.calculator.computeOrderFinance({
                 order,
                 payments: orderFinancePayments(order),
@@ -122,6 +154,36 @@ export class OrdersExportService {
                 expenses: order.expenses,
                 companyId,
             });
+
+            /**
+             * Деньги — со стороны того, кто выгружает.
+             *
+             * Для заказчика расчёт возвращает его платёж нам как
+             * «себестоимость», выручку нулём, а маржу — отрицательной
+             * разницей. На экране этого не видно: там ему показывают его
+             * ставку и прочерк вместо ставки перевозчика. В файле такие
+             * цифры читались бы как убыток, которого не было, поэтому
+             * колонки нашей стороны у заказчика пустые.
+             */
+            const money = customerOnly
+                ? {
+                    revenue: toNum(finance.executorCost),
+                    paidIn: toNum(finance.paidOut),
+                    customerDebt: toNum(finance.executorDebt),
+                    executorCost: '',
+                    paidOut: '',
+                    executorDebt: '',
+                    margin: '',
+                }
+                : {
+                    revenue: toNum(finance.revenue),
+                    paidIn: toNum(finance.paidIn),
+                    customerDebt: toNum(finance.customerDebt),
+                    executorCost: toNum(finance.executorCost),
+                    paidOut: toNum(finance.paidOut),
+                    executorDebt: toNum(finance.executorDebt),
+                    margin: toNum(finance.margin),
+                };
 
             const points = order.routePoints;
             const pickup = points.find((point) => point.pointType === 'PICKUP');
@@ -136,9 +198,14 @@ export class OrdersExportService {
                 || order.assignedDriverName
                 || (order.driver ? `${order.driver.lastName ?? ''} ${order.driver.firstName ?? ''}`.trim() : '');
 
+            // Счёт берётся тот, что касается спрашивающего: либо мы его
+            // выставили, либо он выставлен нам. Чужой номер — тоже сведения
+            // о сделке, к которой человек отношения не имеет.
             const invoice = order.accountingDocuments
                 .map((link) => link.document)
-                .find((document) => document?.type === 'PAYMENT_INVOICE' && document.status !== 'CANCELLED');
+                .find((document) => document?.type === 'PAYMENT_INVOICE'
+                    && document.status !== 'CANCELLED'
+                    && (document.companyId === companyId || document.counterpartyId === companyId));
 
             return {
                 '№ заявки': order.orderNumber,
@@ -160,13 +227,13 @@ export class OrdersExportService {
                     : '',
                 // Суммы — в тенге по курсу заявки: складывать доллары с
                 // тенге в одной колонке нельзя, а Excel этого не заметит.
-                'Ставка заказчика': toNum(finance.revenue),
-                'Оплачено заказчиком': toNum(finance.paidIn),
-                'Долг заказчика': toNum(finance.customerDebt),
-                'Ставка перевозчика': toNum(finance.executorCost),
-                'Оплачено перевозчику': toNum(finance.paidOut),
-                'Долг перевозчику': toNum(finance.executorDebt),
-                'Маржа': toNum(finance.margin),
+                'Ставка заказчика': money.revenue,
+                'Оплачено заказчиком': money.paidIn,
+                'Долг заказчика': money.customerDebt,
+                'Ставка перевозчика': money.executorCost,
+                'Оплачено перевозчику': money.paidOut,
+                'Долг перевозчику': money.executorDebt,
+                'Маржа': money.margin,
                 'Счёт': invoice?.number || '',
                 'Срок оплаты заказчиком': date(order.customerPaymentDate),
                 'Срок оплаты перевозчику': date(order.driverPaymentDate),
