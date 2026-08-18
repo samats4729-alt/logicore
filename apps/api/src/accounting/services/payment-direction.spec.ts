@@ -79,6 +79,9 @@ describe('Направление платежа и сторона контраг
                     accountId: 'сч-1',
                     refundOfId: null,
                     refunds: [],
+                    // Разнесения по заявкам здесь нет: тесты про доли лежат
+                    // в payment-edit-shares.
+                    orderShares: [],
                 }),
             },
             financeAccount: { findFirst: jest.fn().mockResolvedValue({ id: 'сч-1', currency: 'KZT' }) },
@@ -175,7 +178,7 @@ describe('Направление платежа и сторона контраг
         const { service } = build({
             id: 'п-1', companyId: МЫ, direction: PaymentDirection.OUT,
             amount: D(240_000), date: new Date('2026-08-17'), orderId: 'р-1',
-            counterpartyId: ПЕРЕВОЗЧИК, refundOfId: null, refunds: [],
+            counterpartyId: ПЕРЕВОЗЧИК, refundOfId: null, refunds: [], orderShares: [],
         });
 
         await expect(service.updatePayment(МЫ, 'п-1', 'бухгалтер', {
@@ -189,7 +192,7 @@ describe('Направление платежа и сторона контраг
         const { service } = build({
             id: 'в-1', companyId: МЫ, direction: PaymentDirection.OUT,
             amount: D(50_000), date: new Date('2026-08-17'), orderId: 'р-1',
-            counterpartyId: ЗАКАЗЧИК, refundOfId: 'п-0', refunds: [],
+            counterpartyId: ЗАКАЗЧИК, refundOfId: 'п-0', refunds: [], orderShares: [],
         });
 
         await expect(service.updatePayment(МЫ, 'в-1', 'бухгалтер', {
@@ -201,7 +204,7 @@ describe('Направление платежа и сторона контраг
         const { service } = build({
             id: 'п-1', companyId: МЫ, direction: PaymentDirection.OUT,
             amount: D(240_000), date: new Date('2026-08-17'), orderId: 'р-1',
-            counterpartyId: ПЕРЕВОЗЧИК, refundOfId: null, refunds: [{ id: 'в-1' }],
+            counterpartyId: ПЕРЕВОЗЧИК, refundOfId: null, refunds: [{ id: 'в-1' }], orderShares: [],
         });
 
         await expect(service.updatePayment(МЫ, 'п-1', 'бухгалтер', {

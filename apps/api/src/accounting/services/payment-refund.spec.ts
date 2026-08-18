@@ -173,6 +173,9 @@ describe('PaymentsService — возврат платежа', () => {
                 date: new Date('2026-07-10T00:00:00.000Z'),
                 isDeleted: false,
                 refunds: [{ id: 'refund-1' }],
+                // Разнесения по заявкам у этого платежа нет — правка суммы
+                // упирается в возврат, а не в доли.
+                orderShares: [],
             };
             const prisma: any = {
                 payment: {

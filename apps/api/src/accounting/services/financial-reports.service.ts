@@ -165,7 +165,23 @@ export class FinancialReportsService {
             // неоплаченной при пришедших деньгах.
             this.prisma.paymentOrderShare.findMany({
                 where: { orderId, payment: { isDeleted: false } },
-                select: PAYMENT_SHARE_SELECT,
+                select: {
+                    ...PAYMENT_SHARE_SELECT,
+                    // Сам платёж — чтобы показать его в списке по заявке.
+                    // Считать оплату он и так помогал, а в списке его не
+                    // было: заявка числилась оплаченной, а платежей по ней
+                    // «нет». Первый вопрос бухгалтера — «а где деньги».
+                    payment: {
+                        select: {
+                            id: true, direction: true, companyId: true, currency: true,
+                            date: true, amount: true, method: true, note: true,
+                            accountId: true, categoryId: true, counterpartyId: true,
+                            account: { select: { id: true, name: true, currency: true } },
+                            category: { select: { id: true, name: true } },
+                            counterparty: { select: { name: true } },
+                        },
+                    },
+                },
             }),
             this.prisma.income.findMany({
                 where: { orderId, companyId },
@@ -179,7 +195,31 @@ export class FinancialReportsService {
                 }),
         ]);
 
-        const payments = allPayments.filter(p => p.companyId === companyId);
+        /**
+         * Список платежей по рейсу: свои прямые плюс доли общих.
+         *
+         * Общий перевод на два десятка рейсов не привязан ни к одному из
+         * них, поэтому в списке его не было вовсе. Заявка показывалась
+         * оплаченной, а в «Платежах по заявке» — пусто.
+         *
+         * У доли показывается её сумма, а не весь перевод: по этой заявке
+         * пришло именно столько. Полная сумма подписана рядом, чтобы было
+         * видно, откуда доля.
+         */
+        const payments = [
+            ...allPayments.filter((p) => p.companyId === companyId),
+            ...shares
+                .filter((share) => share.payment.companyId === companyId)
+                .map((share) => ({
+                    ...share.payment,
+                    amount: share.amount,
+                    orderId,
+                    // Признак для экрана: строку нельзя править как обычную,
+                    // она часть общего документа.
+                    isShare: true,
+                    paymentTotal: share.payment.amount,
+                })),
+        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         const fin = this.calculator.computeOrderFinance({
             order,
