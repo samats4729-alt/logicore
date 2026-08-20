@@ -149,12 +149,13 @@ export class OrdersController {
     })
     async exportOrders(
         @Request() req: any,
-        @Body() body: { orderIds?: string[] },
+        @Body() body: { orderIds?: string[]; columns?: string[] },
         @Res() res: Response,
     ) {
         const buffer = await this.ordersExport.exportOrders(
             req.user.companyId,
             body?.orderIds ?? [],
+            body?.columns,
         );
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

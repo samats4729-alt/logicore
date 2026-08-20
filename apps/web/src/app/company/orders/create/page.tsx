@@ -1,6 +1,6 @@
 'use client';
 // Trigger redeployment
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { Typography, Form, Input, InputNumber, Select, DatePicker, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox } from 'antd';
@@ -77,7 +77,28 @@ export default function CreateOrderPage() {
 
     // Data
     const [locations, setLocations] = useState<Location[]>([]);
-    const [partners, setPartners] = useState<Partner[]>([]);
+    const [fetchedPartners, setFetchedPartners] = useState<Partner[]>([]);
+    /**
+     * Стороны загруженной заявки — отдельно от справочника.
+     *
+     * В списке выбора только партнёрства платформы и справочник
+     * контрагентов. Компания, с которой рейс уже сделан, может не оказаться
+     * ни там, ни там — например, приглашение на платформе так и не приняли.
+     * Тогда её id не находился в списке, поле оставалось пустым, а форма
+     * отвечала «Укажите заказчика» по заявке, где он есть.
+     *
+     * Список именно вычисляемый, а не досбор в состоянии: справочник
+     * догружается сам по себе и раньше затирал дособранное, а правка
+     * успевала спросить про заказчика по неполному списку и решить, что
+     * его нет.
+     */
+    const [orderParties, setOrderParties] = useState<Partner[]>([]);
+    const partners = useMemo<Partner[]>(() => {
+        if (!orderParties.length) return fetchedPartners;
+        const known = new Set(fetchedPartners.map((p) => p.id));
+        const add = orderParties.filter((p) => !known.has(p.id));
+        return add.length ? [...fetchedPartners, ...add] : fetchedPartners;
+    }, [fetchedPartners, orderParties]);
     const [cargoCategories, setCargoCategories] = useState<any[]>([]);
     const [profileComplete, setProfileComplete] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -266,13 +287,26 @@ export default function CreateOrderPage() {
             .catch(() => { });
     }, [user]);
 
-    // Дублирование заявки: /company/orders/create?from=<orderId> — копируем все данные, кроме даты
+    /**
+     * Одна форма на заведение, дублирование и правку.
+     *
+     * `?from=<id>` — скопировать данные в новую заявку, `?edit=<id>` —
+     * править существующую. Отдельного окна правки больше нет: оно было
+     * второй формой той же заявки, с урезанным набором полей и вопросом
+     * «Ваша роль в этой сделке», которого у существующего рейса быть не
+     * может — роль там уже сыграна. Две формы неизбежно расходились, и
+     * правка отставала от заведения.
+     */
     const duplicateLoadedRef = useRef(false);
     const [pendingParties, setPendingParties] = useState<{ customer?: string; carrier?: string } | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingNumber, setEditingNumber] = useState<string>('');
 
     useEffect(() => {
         if (duplicateLoadedRef.current) return;
-        const fromId = new URLSearchParams(window.location.search).get('from');
+        const params = new URLSearchParams(window.location.search);
+        const editId = params.get('edit');
+        const fromId = editId || params.get('from');
         if (!fromId) return;
         duplicateLoadedRef.current = true;
 
@@ -335,11 +369,36 @@ export default function CreateOrderPage() {
                 } else if (o.forwarderId) {
                     carrier = myIds.has(o.forwarderId) ? MY_COMPANY_VALUE : o.forwarderId;
                 }
+                // Стороны самой заявки — в список выбора (см. `orderParties`).
+                setOrderParties([o.customerCompany, o.subForwarder, o.partner, o.forwarder]
+                    .filter((c: any) => c?.id && c?.name)
+                    .map((c: any) => ({
+                        id: c.id,
+                        name: c.name,
+                        isExternal: !!c.isExternal,
+                        isCustomer: true,
+                        isCarrier: true,
+                    })) as Partner[]);
+
                 setPendingParties({ customer, carrier });
 
-                toast.success(`Скопированы данные заявки ${o.orderNumber}. Проверьте и укажите дату погрузки.`);
+                if (editId) {
+                    setEditingId(editId);
+                    setEditingNumber(o.orderNumber || '');
+                    // При дублировании дату намеренно не переносят — рейс
+                    // новый. При правке она часть заявки и должна стоять.
+                    const pickup = (o.routePoints || []).find((rp: any) => rp.pointType === 'PICKUP');
+                    if (pickup?.expectedDate) {
+                        form.setFieldsValue({ pickupDate: dayjs(pickup.expectedDate) });
+                    }
+                    if (o.driverId) setSelectedDriverId(o.driverId);
+                } else {
+                    toast.success(`Скопированы данные заявки ${o.orderNumber}. Проверьте и укажите дату погрузки.`);
+                }
             } catch {
-                toast.error('Не удалось загрузить заявку для дублирования');
+                toast.error(editId
+                    ? 'Не удалось загрузить заявку для правки'
+                    : 'Не удалось загрузить заявку для дублирования');
             }
         })();
     }, []);
@@ -408,7 +467,7 @@ export default function CreateOrderPage() {
                 carrierPaymentFrom: e.carrierPaymentFrom ?? null,
             }));
             const combined = [...partnersList, ...externalList];
-            setPartners(combined);
+            setFetchedPartners(combined);
             if (profileRes.data?.name) {
                 setMyCompanyName(profileRes.data.name);
             }
@@ -755,11 +814,20 @@ export default function CreateOrderPage() {
                 }
             }
 
-            await api.post('/orders', orderData);
-            toast.success('Заявка создана!');
-            router.push('/company/orders');
+            if (editingId) {
+                // Правка идёт тем же набором полей, что и заведение: одна
+                // форма — один состав заявки.
+                await api.put(`/orders/${editingId}`, orderData);
+                toast.success('Заявка сохранена');
+                router.push(`/company/orders/${editingId}`);
+            } else {
+                await api.post('/orders', orderData);
+                toast.success('Заявка создана!');
+                router.push('/company/orders');
+            }
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Ошибка создания заявки');
+            toast.error(error.response?.data?.message
+                || (editingId ? 'Не удалось сохранить заявку' : 'Ошибка создания заявки'));
         } finally {
             setSubmitting(false);
         }
@@ -912,7 +980,15 @@ export default function CreateOrderPage() {
                     <Form.Item
                         name="natureOfCargo"
                         label="Характер груза"
-                        rules={[{ required: true, message: 'Выберите из списка или впишите свой вариант' }]}
+                        /**
+                         * У новой заявки характер груза спрашиваем, у правки —
+                         * нет. Поле появилось позже самих заявок, на сервере
+                         * оно необязательное, и ни в одной заведённой заявке
+                         * его нет. Требовать его при правке значило бы: чтобы
+                         * поправить ставку, придумай задним числом характер
+                         * груза, которого никто не спрашивал.
+                         */
+                        rules={editingId ? [] : [{ required: true, message: 'Выберите из списка или впишите свой вариант' }]}
                     >
                         <AutoComplete
                             placeholder="Выберите или впишите свой вариант..."
@@ -1483,7 +1559,9 @@ export default function CreateOrderPage() {
             <div className="lc2-hero">
                 <div>
                     <div className="lc-eyebrow">Заявки</div>
-                    <h1 className="lc2-title">Новая заявка</h1>
+                    <h1 className="lc2-title">
+                        {editingId ? `Правка заявки ${editingNumber}`.trim() : 'Новая заявка'}
+                    </h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Шаг {currentStep + 1} из {steps.length} · {steps[currentStep].title}
                     </p>
@@ -1502,7 +1580,7 @@ export default function CreateOrderPage() {
                 }}>
                     <ExclamationCircleOutlined style={{ color: 'var(--nova-fg-3)' }} />
                     <span>
-                        Заявку можно создать сейчас, но для формирования документов (доверенности, счета)
+                        {editingId ? 'Заявку можно сохранить сейчас' : 'Заявку можно создать сейчас'}, но для формирования документов (доверенности, счета)
                         заполните <a onClick={() => router.push('/company/settings')} style={{ fontWeight: 600 }}>профиль компании</a>
                     </span>
                 </div>
@@ -1566,7 +1644,7 @@ export default function CreateOrderPage() {
                             data-guide="wizard-submit"
                         >
                             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                            Создать заявку
+                            {editingId ? 'Сохранить заявку' : 'Создать заявку'}
                         </Button>
                     )}
                 </div>

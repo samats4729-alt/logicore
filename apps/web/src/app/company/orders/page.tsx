@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Table, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, InputNumber, Row, Col, DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
 import dayjs from 'dayjs';
+
+const { RangePicker } = DatePicker;
 import {
     CheckCircleOutlined,
     EnvironmentOutlined, FlagOutlined, SearchOutlined,
@@ -23,6 +25,7 @@ import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import AssignDriverModal from '@/components/AssignDriverModal';
 import OrdersMobileList from '@/components/OrdersMobileList';
+import { ExportColumnsDialog } from '@/components/orders/ExportColumnsDialog';
 import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -183,7 +186,6 @@ export default function CompanyOrdersPage() {
     const [statusModalOpen, setStatusModalOpen] = useState(false);
     const [statusLoading, setStatusLoading] = useState(false);
     const [form] = Form.useForm();
-    const [editForm] = Form.useForm();
     const [statusForm] = Form.useForm();
 
     // Share Power of Attorney modal
@@ -292,7 +294,6 @@ export default function CompanyOrdersPage() {
 
     // Create / Edit order
     const [createModalOpen, setCreateModalOpen] = useState(false);
-    const [editModalOpen, setEditModalOpen] = useState(false);
     const [createForm] = Form.useForm();
     const [locations, setLocations] = useState<Location[]>([]);
     const [cargoCategories, setCargoCategories] = useState<any[]>([]);
@@ -308,7 +309,6 @@ export default function CompanyOrdersPage() {
     const [showCustomerField, setShowCustomerField] = useState(false);
     const [showForwarderField, setShowForwarderField] = useState(true);
     const [creatorRole, setCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
-    const [editCreatorRole, setEditCreatorRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
 
     const handleCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
         setCreatorRole(role);
@@ -324,19 +324,6 @@ export default function CompanyOrdersPage() {
         }
     };
 
-    const handleEditCreatorRoleChange = (role: 'CUSTOMER' | 'FORWARDER') => {
-        setEditCreatorRole(role);
-        setIsMarketplace(false);
-        if (role === 'CUSTOMER') {
-            setShowCustomerField(false);
-            setShowForwarderField(true);
-            editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
-        } else if (role === 'FORWARDER') {
-            setShowCustomerField(true);
-            setShowForwarderField(false);
-            editForm.setFieldsValue({ customerCompanyId: null, forwarderId: null, driverCost: null });
-        }
-    };
 
     // Quick add partner
     const [quickPartnerModalOpen, setQuickPartnerModalOpen] = useState(false);
@@ -368,8 +355,6 @@ export default function CompanyOrdersPage() {
     const createForwarderId = Form.useWatch('forwarderId', createForm);
 
     // Watches for edit form
-    const editCustomerCompanyId = Form.useWatch('customerCompanyId', editForm);
-    const editForwarderId = Form.useWatch('forwarderId', editForm);
 
     // Function to group and recommend locations based on selected customer and carrier/executor
     const getLocationOptions = (customerCompanyId?: string, executorCompanyId?: string) => {
@@ -515,6 +500,11 @@ export default function CompanyOrdersPage() {
     const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
     const [filterFrom, setFilterFrom] = useState<string | undefined>(undefined);
     const [filterTo, setFilterTo] = useState<string | undefined>(undefined);
+    // Период: по какой дате и с какой по какую. Отдельно от «Откуда/Куда» —
+    // те фильтры про города, несмотря на похожие имена.
+    const [periodField, setPeriodField] = useState<'pickup' | 'created'>('pickup');
+    const [periodFrom, setPeriodFrom] = useState<dayjs.Dayjs | null>(null);
+    const [periodTo, setPeriodTo] = useState<dayjs.Dayjs | null>(null);
     const [filterSumMin, setFilterSumMin] = useState<number | undefined>(undefined);
     const [filterSumMax, setFilterSumMax] = useState<number | undefined>(undefined);
     const [query, setQuery] = useState('');
@@ -623,6 +613,31 @@ export default function CompanyOrdersPage() {
     }, [archiveOrders]);
 
     // =================== FILTERED DATA ===================
+
+    /**
+     * Отбор по периоду.
+     *
+     * Дат у рейса две, и они про разное: когда заявку завели и когда машина
+     * грузилась. Бухгалтер закрывает месяц по второй, логист ищет свежие
+     * заявки по первой — поэтому какую считать, выбирается рядом, а не
+     * решено за них. По умолчанию погрузка: ею живёт работа.
+     *
+     * Рейс без даты погрузки в отбор по ней не попадает — и это честно:
+     * молча подставлять вместо неё дату создания значило бы показать в
+     * августе рейс, который никто в августе не грузил.
+     */
+    const inPeriod = useCallback((o: Order) => {
+        if (!periodFrom && !periodTo) return true;
+        const raw = periodField === 'pickup'
+            ? (o.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate
+            : o.createdAt;
+        if (!raw) return false;
+        const day = dayjs(raw);
+        if (periodFrom && day.isBefore(periodFrom, 'day')) return false;
+        if (periodTo && day.isAfter(periodTo, 'day')) return false;
+        return true;
+    }, [periodFrom, periodTo, periodField]);
+
     const filteredOrders = useMemo(() => {
         return orders.filter(o => {
             if (o.status === 'CANCELLED') return false;
@@ -644,9 +659,10 @@ export default function CompanyOrdersPage() {
             }
             if (filterSumMin !== undefined && (o.customerPrice || 0) < filterSumMin) return false;
             if (filterSumMax !== undefined && (o.customerPrice || 0) > filterSumMax) return false;
+            if (!inPeriod(o)) return false;
             return true;
         });
-    }, [orders, filterCompany, filterForwarder, filterExpeditor, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
+    }, [orders, filterCompany, filterForwarder, filterExpeditor, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax, inPeriod]);
 
     const filteredArchiveOrders = useMemo(() => {
         return archiveOrders.filter(o => {
@@ -663,11 +679,12 @@ export default function CompanyOrdersPage() {
             }
             if (filterSumMin !== undefined && (o.customerPrice || 0) < filterSumMin) return false;
             if (filterSumMax !== undefined && (o.customerPrice || 0) > filterSumMax) return false;
+            if (!inPeriod(o)) return false;
             return true;
         });
-    }, [archiveOrders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax]);
+    }, [archiveOrders, filterCompany, filterDriver, filterStatus, filterFrom, filterTo, filterSumMin, filterSumMax, inPeriod]);
 
-    const hasActiveFilters = filterCompany || filterForwarder || filterExpeditor || filterDriver || filterStatus || filterFrom || filterTo || filterSumMin !== undefined || filterSumMax !== undefined;
+    const hasActiveFilters = filterCompany || filterForwarder || filterExpeditor || filterDriver || filterStatus || filterFrom || filterTo || filterSumMin !== undefined || filterSumMax !== undefined || !!periodFrom || !!periodTo;
 
     const clearFilters = () => {
         setFilterCompany(undefined);
@@ -679,6 +696,8 @@ export default function CompanyOrdersPage() {
         setFilterTo(undefined);
         setFilterSumMin(undefined);
         setFilterSumMax(undefined);
+        setPeriodFrom(null);
+        setPeriodTo(null);
     };
 
     useEffect(() => {
@@ -725,6 +744,7 @@ export default function CompanyOrdersPage() {
         filterFrom, filterTo,
         filterSumMin !== undefined ? 'min' : undefined,
         filterSumMax !== undefined ? 'max' : undefined,
+        periodFrom || periodTo ? 'период' : undefined,
     ].filter(Boolean).length;
 
     const isArchive = activeTab === 'archive';
@@ -739,7 +759,18 @@ export default function CompanyOrdersPage() {
      * поздно файл разошёлся бы с тем, что человек видит на экране.
      */
     const [exporting, setExporting] = useState(false);
-    const handleExport = async () => {
+    const [exportOpen, setExportOpen] = useState(false);
+    /** Кнопка открывает выбор колонок: файл собирается по нему. */
+    const openExport = () => {
+        const rows = isArchive ? visibleArchiveOrders : visibleOrders;
+        if (!rows.length) {
+            toast.warning('Нечего выгружать: в списке нет заявок');
+            return;
+        }
+        setExportOpen(true);
+    };
+
+    const handleExport = async (columns: string[]) => {
         const rows = isArchive ? visibleArchiveOrders : visibleOrders;
         if (!rows.length) {
             toast.warning('Нечего выгружать: в списке нет заявок');
@@ -749,7 +780,7 @@ export default function CompanyOrdersPage() {
         try {
             const res = await api.post(
                 '/orders/export',
-                { orderIds: rows.map((row: any) => row.id) },
+                { orderIds: rows.map((row: any) => row.id), columns },
                 { responseType: 'blob' },
             );
             const url = window.URL.createObjectURL(new Blob([res.data], {
@@ -763,6 +794,9 @@ export default function CompanyOrdersPage() {
             link.parentNode?.removeChild(link);
             window.URL.revokeObjectURL(url);
             toast.success(`Выгружено заявок: ${rows.length}`);
+            // Закрываем только когда файл ушёл: после отказа окно остаётся
+            // с уже отмеченными колонками, чтобы не собирать отбор заново.
+            setExportOpen(false);
         } catch (e: any) {
             toast.error(e?.response?.data?.message || 'Не удалось выгрузить в Excel');
         } finally {
@@ -832,123 +866,7 @@ export default function CompanyOrdersPage() {
 
     const showOrderDetail = (order: Order) => { setSelectedOrder(order); setDetailDrawerOpen(true); };
 
-    const openEditModal = (order: Order) => {
-        setSelectedOrder(order);
-        const hasExternalCustomer = !!(order.customerCompanyId && order.customerCompanyId !== user?.companyId);
-        
-        let currentRole: 'CUSTOMER' | 'FORWARDER' = 'CUSTOMER';
-        if (hasExternalCustomer) {
-            currentRole = 'FORWARDER';
-        } else {
-            currentRole = 'CUSTOMER';
-        }
-        setEditCreatorRole(currentRole);
 
-        const isFwdAssigned = !!(order.forwarderId && order.forwarderId !== user?.companyId) || !!order.subForwarderId;
-        const isMkt = !order.forwarderId && (!!order.driverCost || order.status === 'PENDING');
-
-        setShowCustomerField(hasExternalCustomer);
-        if (currentRole === 'CUSTOMER' && !isFwdAssigned && !isMkt) {
-            setShowForwarderField(true);
-            setIsMarketplace(false);
-        } else {
-            setShowForwarderField(isFwdAssigned);
-            setIsMarketplace(isMkt);
-        }
-        editForm.setFieldsValue({
-            cargoDescription: order.cargoDescription,
-            cargoWeight: order.cargoWeight,
-            cargoVolume: order.cargoVolume,
-            cargoType: order.cargoType,
-            natureOfCargo: order.natureOfCargo,
-            requirements: order.requirements,
-            customerPrice: order.customerPrice,
-            customerPriceType: order.customerPriceType || 'FIXED',
-            driverCost: order.driverCost || order.subForwarderPrice,
-            pickupDate: (order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate ? dayjs((order.routePoints?.find(p => p.pointType === 'PICKUP') as any)?.expectedDate) : undefined,
-            forwarderId: order.subForwarderId || (order.forwarderId !== user?.companyId ? order.forwarderId : undefined),
-            customerCompanyId: order.customerCompanyId || order.customerCompany?.id || undefined,
-        });
-        if (order.routePoints && order.routePoints.length > 0) {
-             setRoutePointsState(order.routePoints.map(p => ({
-                 id: p.location.id,
-                 city: p.location.city || '',
-                 address: p.location.address,
-                 pointType: p.pointType
-             })));
-        } else {
-             setRoutePointsState([
-                 { city: '', address: '', pointType: 'PICKUP' },
-                 { city: '', address: '', pointType: 'DELIVERY' }
-             ]);
-        }
-        const fwdId = order.subForwarderId || order.forwarderId || order.forwarder?.id;
-        const fwdName = order.subForwarder?.name || order.forwarder?.name;
-        if (fwdId && fwdName && !forwarders.some(f => f.id === fwdId)) {
-            setForwarders(prev => [...prev, { id: fwdId, name: fwdName }]);
-        }
-        setEditModalOpen(true);
-    };
-
-    const handleEditOrder = async (values: any) => {
-        if (!selectedOrder) return;
-        try {
-            const getLocId = async (loc: LocationState) => {
-                if (loc.id) return loc.id;
-                const res = await api.post('/locations', { name: `${loc.city}, ${loc.address}`, address: `${loc.city}, ${loc.address}`, latitude: 0, longitude: 0, city: loc.city || '' });
-                return res.data.id;
-            };
-            const updateData: any = { ...values };
-            const routePoints = [];
-            for (let i = 0; i < routePointsState.length; i++) {
-                const p = routePointsState[i];
-                if (!p.city && !p.address && !p.id) continue;
-                const locId = await getLocId(p);
-                routePoints.push({
-                    locationId: locId,
-                    pointType: p.pointType,
-                    sequence: routePoints.length + 1,
-                    expectedDate: p.pointType === 'PICKUP' ? values.pickupDate : undefined
-                });
-            }
-            
-            delete updateData.pickupDate;
-            delete updateData.isMarketplace;
-            if (routePoints.length > 0) {
-                updateData.routePoints = routePoints;
-            }
-
-            if (editCreatorRole === 'CUSTOMER') {
-                updateData.customerCompanyId = user?.companyId;
-                if (!showForwarderField) {
-                    updateData.forwarderId = null;
-                    if (!isMarketplace) {
-                        updateData.driverCost = null;
-                    }
-                }
-            } else { // FORWARDER
-                if (!showForwarderField) {
-                    updateData.forwarderId = user?.companyId;
-                    updateData.driverCost = null;
-                    updateData.subForwarderId = null;
-                    updateData.subForwarderPrice = null;
-                } else {
-                    updateData.forwarderId = user?.companyId;
-                    updateData.subForwarderId = values.forwarderId;
-                    updateData.subForwarderPrice = values.driverCost;
-                    updateData.driverCost = null;
-                }
-            }
-
-            await api.put(`/orders/${selectedOrder.id}`, updateData);
-            toast.success('Заявка обновлена');
-            mutateAll();
-            setEditModalOpen(false);
-            setDetailDrawerOpen(false);
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Ошибка обновления');
-        }
-    };
 
     const openAssignModal = (order: Order) => {
         setSelectedOrder(order);
@@ -1237,7 +1155,10 @@ export default function CompanyOrdersPage() {
                             size="sm"
                             aria-label="Изменить заявку и суммы"
                             className="h-7 w-7 px-0"
-                            onClick={(e) => { e.stopPropagation(); openEditModal(r); }}
+                            /* Правка — той же формой, что и заведение: отдельное
+                               окно было второй формой той же заявки и отставало
+                               от неё полями. */
+                            onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/create?edit=${r.id}`); }}
                         >
                             <Pencil className="h-4 w-4" />
                         </Button>
@@ -1453,7 +1374,7 @@ export default function CompanyOrdersPage() {
                         size="sm"
                         className={journal.exportBtn}
                         disabled={exporting || shownCount === 0}
-                        onClick={handleExport}
+                        onClick={openExport}
                     >
                         {exporting
                             ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -1519,6 +1440,26 @@ export default function CompanyOrdersPage() {
                         >
                             {(isArchive ? uniqueArchiveToCities : uniqueToCities).map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
                         </Select>
+                        {/* Период. Какую дату считать — рядом, а не решено за
+                            человека: бухгалтер закрывает месяц по погрузке,
+                            логист ищет свежие заявки по дате заведения. */}
+                        <Select
+                            size="small" style={{ width: 128 }}
+                            value={periodField} onChange={setPeriodField}
+                            aria-label="По какой дате отбирать"
+                        >
+                            <Select.Option value="pickup">По погрузке</Select.Option>
+                            <Select.Option value="created">По заведению</Select.Option>
+                        </Select>
+                        <RangePicker
+                            size="small" style={{ width: 220 }} format="DD.MM.YYYY"
+                            placeholder={['Дата с', 'Дата по']}
+                            value={periodFrom || periodTo ? [periodFrom, periodTo] as any : null}
+                            onChange={(range) => {
+                                setPeriodFrom(range?.[0] ?? null);
+                                setPeriodTo(range?.[1] ?? null);
+                            }}
+                        />
                         <InputNumber
                             size="small" placeholder="Сумма от" style={{ width: 100 }}
                             value={filterSumMin} onChange={v => setFilterSumMin(v ?? undefined)}
@@ -1549,7 +1490,7 @@ export default function CompanyOrdersPage() {
                                 pagination={{
                                     current: archivePage,
                                     pageSize: archivePageSize,
-                                    total: totalArchiveOrders,
+                                    total: isNarrowed ? visibleArchiveOrders.length : totalArchiveOrders,
                                     onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
                                 }}
                             />
@@ -1590,7 +1531,11 @@ export default function CompanyOrdersPage() {
                                 pagination={{
                                     current: ordersPage,
                                     pageSize: ordersPageSize,
-                                    total: totalOrders,
+                                    /* Считаем то, что осталось после условий, а не
+                                       сколько заявок всего. Иначе под пустой
+                                       таблицей стоит «Показаны 1–8 из 8», и человек
+                                       решает, что список сломался. */
+                                    total: isNarrowed ? visibleOrders.length : totalOrders,
                                     onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
                                 }}
                             />
@@ -1826,7 +1771,11 @@ export default function CompanyOrdersPage() {
                                     </Button>
                                 </>
                             )}
-                            <Button variant="outline" className="mt-2 w-full" onClick={() => openEditModal(selectedOrder)}>
+                            <Button
+                                variant="outline"
+                                className="mt-2 w-full"
+                                onClick={() => router.push(`/company/orders/create?edit=${selectedOrder.id}`)}
+                            >
                                 <Pencil className="h-4 w-4" /> Редактировать заявку
                             </Button>
                             {getNextStatuses(selectedOrder.status).length > 0 && (
@@ -1888,251 +1837,6 @@ export default function CompanyOrdersPage() {
                 )}
             </Modal>
 
-            {/* ========== EDIT ORDER MODAL ========== */}
-            <Modal
-                title={`Редактировать заявку ${selectedOrder?.orderNumber || ''}`}
-                open={editModalOpen}
-                onCancel={() => setEditModalOpen(false)}
-                onOk={() => editForm.submit()}
-                okText="Сохранить"
-                cancelText="Отмена"
-                width={900}
-                style={{ top: 20 }}
-            >
-                <Form form={editForm} layout="vertical" onFinish={handleEditOrder}>
-                    <div style={{ marginBottom: 20, background: 'var(--lc-card-2)', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--lc-border)' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: 'var(--lc-text)' }}>Ваша роль в этой сделке:</div>
-                        <Radio.Group 
-                            value={editCreatorRole} 
-                            onChange={e => handleEditCreatorRoleChange(e.target.value)}
-                            optionType="button"
-                            buttonStyle="solid"
-                            style={{ width: '100%', display: 'flex' }}
-                        >
-                            <Radio.Button value="CUSTOMER" style={{ flex: 1, textAlign: 'center' }}>Заказчик</Radio.Button>
-                            <Radio.Button value="FORWARDER" style={{ flex: 1, textAlign: 'center' }}>Экспедитор</Radio.Button>
-                        </Radio.Group>
-                    </div>
-                    <Row gutter={24}>
-                        <Col span={12}>
-                            <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Маршрут</Title>
-                            <Form.Item name="pickupDate" label="Дата погрузки">
-                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
-                            </Form.Item>
-                            {routePointsState.map((pt, i) => (
-                                <div key={i} style={{ padding: '8px 12px', background: pt.pointType === 'DELIVERY' ? '#f6ffed' : '#f0f5ff', borderRadius: 8, marginBottom: 12 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                         <Select value={pt.pointType} onChange={val => { const newPts = [...routePointsState]; newPts[i].pointType = val; setRoutePointsState(newPts); }} size="small" style={{ width: 140, fontWeight: 600 }} variant="borderless">
-                                              <Select.Option value="PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Погрузка</Select.Option>
-                                              <Select.Option value="ADDITIONAL_PICKUP"><EnvironmentOutlined style={{ color: '#1890ff', marginRight: 4 }}/> Доп. погрузка</Select.Option>
-                                              <Select.Option value="DELIVERY"><FlagOutlined style={{ color: '#52c41a', marginRight: 4 }}/> Выгрузка</Select.Option>
-                                         </Select>
-                                         <Button variant="ghost" size="icon" aria-label="Убрать точку" className="h-7 w-7 text-destructive" onClick={() => { const newPts = [...routePointsState]; newPts.splice(i, 1); setRoutePointsState(newPts); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                                    </div>
-                                    <Select
-                                        placeholder="Выберите адрес" allowClear showSearch optionFilterProp="children" style={{ width: '100%' }}
-                                        value={pt.id || undefined}
-                                        onChange={(val) => {
-                                            const newPts = [...routePointsState];
-                                            if (!val) { newPts[i] = { ...newPts[i], city: '', address: '', id: undefined }; }
-                                            else {
-                                                const loc = locations.find(l => l.id === val);
-                                                if (loc) newPts[i] = { ...newPts[i], city: loc.city || '', address: loc.address, id: loc.id };
-                                            }
-                                            setRoutePointsState(newPts);
-                                        }}
-                                    >
-                                        {(() => {
-                                            const activeCustomerCompanyId = editCreatorRole === 'CUSTOMER' ? user?.companyId : editCustomerCompanyId;
-                                            const activeExecutorCompanyId = editCreatorRole === 'FORWARDER' 
-                                                ? (showForwarderField ? editForwarderId : user?.companyId) 
-                                                : (isMarketplace ? undefined : editForwarderId);
-                                            const groupedOptions = getLocationOptions(activeCustomerCompanyId || undefined, activeExecutorCompanyId || undefined);
-                                            return groupedOptions.map(group => (
-                                                <Select.OptGroup key={group.label} label={group.label}>
-                                                    {group.options.map(l => (
-                                                        <Select.Option key={l.id} value={l.id}>
-                                                            {l.name}, Казахстан{l.city ? `, ${l.city}` : ''}, {l.address}
-                                                        </Select.Option>
-                                                    ))}
-                                                </Select.OptGroup>
-                                            ));
-                                        })()}
-                                    </Select>
-                                </div>
-                            ))}
-                            <Button variant="outline" size="sm" className="mb-3 w-full border-dashed" onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])}>
-                                <Plus className="h-3.5 w-3.5" /> Добавить точку
-                            </Button>
-                        </Col>
-                        <Col span={12}>
-                            <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Груз</Title>
-                            <Row gutter={12}>
-                                <Col span={12}>
-                                    <Form.Item name="natureOfCargo" label="Характер груза">
-                                        <Select placeholder="Выберите..." showSearch optionFilterProp="children" allowClear>
-                                            {cargoCategories.map(cat => (
-                                                <Select.OptGroup key={cat.id} label={cat.name}>
-                                                    {cat.types.map((t: any) => <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>)}
-                                                </Select.OptGroup>
-                                            ))}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="cargoType" label="Тип кузова">
-                                        <Select 
-                                            placeholder="Тент, Реф..." 
-                                            allowClear
-                                            showSearch
-                                            optionFilterProp="children"
-                                            filterOption={(input, option) =>
-                                                (option?.children as unknown as string ?? '').toLowerCase().includes(input.toLowerCase())
-                                            }
-                                        >
-                                            {VEHICLE_TYPES.map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                            <Form.Item name="cargoDescription" label="Описание груза">
-                                <Input.TextArea rows={2} />
-                            </Form.Item>
-                            <Row gutter={12}>
-                                <Col span={12}><Form.Item name="cargoWeight" label="Вес (кг)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={12}><Form.Item name="cargoVolume" label="Объём (м³)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                            </Row>
-                            <Row gutter={12}>
-                                <Col span={12}><Form.Item name="customerPrice" label="Сумма ₸"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
-                                <Col span={12}>
-                                    <Form.Item name="customerPriceType" label="Тип оплаты">
-                                        <Select style={{ width: '100%' }}>
-                                            <Select.Option value="FIXED">За рейс (всего)</Select.Option>
-                                            <Select.Option value="PER_KM">За км</Select.Option>
-                                            <Select.Option value="PER_TON">За тонну</Select.Option>
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-
-                            {editCreatorRole === 'CUSTOMER' && (
-                                <Row style={{ marginBottom: 12 }}>
-                                    <Col span={12}>
-                                        <Checkbox 
-                                            checked={isMarketplace} 
-                                            onChange={e => {
-                                                const val = e.target.checked;
-                                                setIsMarketplace(val);
-                                                if (val) {
-                                                    setShowForwarderField(false);
-                                                    editForm.setFieldsValue({ forwarderId: null });
-                                                } else {
-                                                    setShowForwarderField(true);
-                                                    editForm.setFieldsValue({ driverCost: null });
-                                                }
-                                            }}
-                                        >
-                                            Отправить на биржу
-                                        </Checkbox>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Checkbox 
-                                            checked={showForwarderField} 
-                                            onChange={e => {
-                                                const val = e.target.checked;
-                                                setShowForwarderField(val);
-                                                if (val) {
-                                                    setIsMarketplace(false);
-                                                } else {
-                                                    setIsMarketplace(true);
-                                                    editForm.setFieldsValue({ forwarderId: null, driverCost: null });
-                                                }
-                                            }}
-                                        >
-                                            Назначить контрагента
-                                        </Checkbox>
-                                    </Col>
-                                </Row>
-                            )}
-
-                            {editCreatorRole === 'FORWARDER' && (
-                                <Row style={{ marginBottom: 12 }}>
-                                    <Col span={24}>
-                                        <Checkbox 
-                                            checked={showForwarderField} 
-                                            onChange={e => {
-                                                const val = e.target.checked;
-                                                setShowForwarderField(val);
-                                                if (!val) {
-                                                    editForm.setFieldsValue({ forwarderId: null, driverCost: null });
-                                                }
-                                            }}
-                                        >
-                                            Назначить исполнителя (субподряд)
-                                        </Checkbox>
-                                    </Col>
-                                </Row>
-                            )}
-
-                            {showCustomerField && (
-                                <Row gutter={12}>
-                                    <Col span={24}>
-                                        <Form.Item 
-                                            name="customerCompanyId" 
-                                            label="Заказчик" 
-                                            rules={[{ required: editCreatorRole === 'FORWARDER', message: 'Укажите компанию заказчика' }]}
-                                            style={{ marginBottom: 12 }}
-                                            help={
-                                                <Button variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => setQuickPartnerModalOpen(true)}>
-                                                    + Создать нового контрагента
-                                                </Button>
-                                            }
-                                        >
-                                            <Select placeholder="Выберите компанию заказчика" allowClear showSearch optionFilterProp="children">
-                                                {partners.filter(p => p.isCustomer !== false).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                                            </Select>
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                            )}
-
-                            {(showForwarderField || isMarketplace) && (
-                                <Row gutter={12}>
-                                    {!isMarketplace && (
-                                        <Col span={editCreatorRole === 'CUSTOMER' ? 24 : 12}>
-                                            <Form.Item 
-                                                name="forwarderId" 
-                                                label="Исполнитель" 
-                                                rules={[{ required: true, message: 'Выберите исполнителя' }]}
-                                                style={{ marginBottom: 12 }}
-                                                help={
-                                                    <Button variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => setQuickPartnerModalOpen(true)}>
-                                                        + Создать нового контрагента
-                                                    </Button>
-                                                }
-                                            >
-                                                <Select placeholder="Выберите компанию исполнителя" allowClear showSearch optionFilterProp="children">
-                                                    {forwarders.filter(f => f.isCarrier !== false).map(f => <Select.Option key={f.id} value={f.id}>{f.name}</Select.Option>)}
-                                                </Select>
-                                            </Form.Item>
-                                        </Col>
-                                    )}
-                                    {editCreatorRole !== 'CUSTOMER' && (
-                                        <Col span={isMarketplace ? 24 : 12}>
-                                            <Form.Item name="driverCost" label="Ставка перевозчику (₸)">
-                                                <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                                            </Form.Item>
-                                        </Col>
-                                    )}
-                                </Row>
-                            )}
-                            <Form.Item name="requirements" label="Доп. требования">
-                                <Input.TextArea rows={2} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                </Form>
-            </Modal>
 
             <Modal
                 title="Новый контрагент (офлайн)"
@@ -2175,6 +1879,13 @@ export default function CompanyOrdersPage() {
                     </Form.Item>
                 </Form>
             </Modal>
+        <ExportColumnsDialog
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+            count={(isArchive ? visibleArchiveOrders : visibleOrders).length}
+            exporting={exporting}
+            onExport={handleExport}
+        />
         </div>
     );
 }

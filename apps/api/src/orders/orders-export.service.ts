@@ -14,6 +14,46 @@ import { isCustomerOnly, maskForCustomer } from './order-visibility';
 /** Столько строк выгружают глазами; больше — это уже вопрос к отчётам. */
 const MAX_ROWS = 5000;
 
+/**
+ * Колонки выгрузки — в том порядке, в каком они идут в файле.
+ *
+ * Список нужен обеим сторонам: браузер по нему рисует галочки перед
+ * выгрузкой, сервер по нему же собирает лист. Держать два таких списка
+ * порознь значило бы однажды получить галочку без колонки или колонку без
+ * галочки.
+ *
+ * Порядок в файле задан здесь, а не тем, в каком порядке бухгалтер щёлкала
+ * галочки: файл должен выглядеть одинаково от раза к разу.
+ */
+export const EXPORT_COLUMNS = [
+    '№ заявки',
+    'Дата создания',
+    'Дата погрузки',
+    'Дата завершения',
+    'Статус',
+    'Заказчик',
+    'Перевозчик',
+    'Водитель',
+    'Транспорт',
+    'Откуда',
+    'Куда',
+    'Груз',
+    'Вес, кг',
+    'Менеджер',
+    'Ставка заказчика',
+    'Оплачено заказчиком',
+    'Долг заказчика',
+    'Ставка перевозчика',
+    'Оплачено перевозчику',
+    'Долг перевозчику',
+    'Маржа',
+    'Счёт',
+    'Срок оплаты заказчиком',
+    'Срок оплаты перевозчику',
+] as const;
+
+export type ExportColumn = (typeof EXPORT_COLUMNS)[number];
+
 const STATUS_RU: Record<string, string> = {
     DRAFT: 'Черновик',
     PENDING: 'Ожидает назначения',
@@ -60,7 +100,19 @@ export class OrdersExportService {
         private readonly calculator: FinanceCalculatorService,
     ) {}
 
-    async exportOrders(companyId: string, orderIds: string[]): Promise<Buffer> {
+    /**
+     * `columns` — что оставить в файле. Пусто или не передано — все.
+     *
+     * Бухгалтер сводит выписку и смотрит в пять колонок из двадцати
+     * четырёх; остальные она перед отправкой директору всё равно прячет
+     * руками. Заодно это способ не отдавать лишнего: выгрузила номера,
+     * даты и суммы заказчика — и отправила, не вычищая маржу.
+     */
+    async exportOrders(
+        companyId: string,
+        orderIds: string[],
+        columns?: string[],
+    ): Promise<Buffer> {
         const ids = [...new Set(orderIds ?? [])].filter(Boolean);
         if (!ids.length) {
             throw new BadRequestException('Нечего выгружать: в списке нет заявок');
@@ -139,13 +191,6 @@ export class OrdersExportService {
             // считать по цифрам, которых спрашивающему видеть нельзя.
             const customerOnly = isCustomerOnly(order, companyId);
             maskForCustomer(order as any, companyId);
-            if (customerOnly) {
-                // Маска обнуляет `subForwarderId`, но не саму связь: в
-                // карточке её просто не запрашивают. Здесь запрашивают —
-                // значит, здесь и убираем, иначе имя субподрядчика уедет
-                // в файл колонкой «Перевозчик».
-                (order as any).subForwarder = null;
-            }
 
             const finance = this.calculator.computeOrderFinance({
                 order,
@@ -240,11 +285,31 @@ export class OrdersExportService {
             };
         });
 
-        const sheet = XLSX.utils.json_to_sheet(rows);
+        /**
+         * Оставляем отмеченные колонки, порядок берём из `EXPORT_COLUMNS`.
+         *
+         * Незнакомое имя молча отбрасывается: список колонок приезжает из
+         * браузера, и падать из-за него — значит оставить человека без
+         * файла на ровном месте. А вот пустой отбор — это ошибка ввода, и
+         * молчать о нём нельзя: иначе получится файл из одних заголовков.
+         */
+        const wanted = (columns ?? []).filter((name) => (EXPORT_COLUMNS as readonly string[]).includes(name));
+        if (columns?.length && !wanted.length) {
+            throw new BadRequestException('Не выбрано ни одной колонки — отметьте хотя бы одну');
+        }
+        const kept: readonly string[] = wanted.length
+            ? EXPORT_COLUMNS.filter((name) => wanted.includes(name))
+            : EXPORT_COLUMNS;
+
+        const trimmed = rows.map((row) => Object.fromEntries(
+            kept.map((name) => [name, (row as Record<string, unknown>)[name]]),
+        ));
+
+        const sheet = XLSX.utils.json_to_sheet(trimmed, { header: kept as string[] });
 
         // Ширина колонок по содержимому: иначе Excel открывается сеткой из
         // «####», и первым делом человек тянет границы мышкой.
-        const widths = rows.reduce((acc, row) => {
+        const widths = trimmed.reduce((acc, row) => {
             Object.keys(row).forEach((key, index) => {
                 const value = String((row as any)[key] ?? '');
                 acc[index] = Math.max(acc[index] || 10, value.length, key.length);

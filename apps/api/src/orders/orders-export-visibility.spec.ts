@@ -155,3 +155,69 @@ describe('Выгрузка журнала заявок и правило вид�
         expect(строка['Счёт']).toBe('СЧ-ЗАКАЗЧИКУ');
     });
 });
+
+/**
+ * Выбор колонок перед выгрузкой.
+ *
+ * Бухгалтер сводит выписку и смотрит в пять колонок из двадцати четырёх;
+ * остальные она перед отправкой директору всё равно прячет руками. Заодно
+ * это способ не отдать лишнего: собрала номера, даты и суммы заказчика —
+ * и отправила, не вычищая маржу.
+ */
+describe('Колонки выгрузки', () => {
+    const рейс = {
+        id: 'р-1', orderNumber: 'ЗК-2607', status: 'COMPLETED',
+        createdAt: new Date('2026-08-01'), completedAt: null,
+        cargoDescription: 'Напитки', cargoWeight: null,
+        assignedDriverName: 'Иванов Иван', assignedDriverPlate: '123 ABC 01',
+        customerPaymentDate: null, driverPaymentDate: null,
+        customerCompany: { name: 'ТОО «Магнум»' }, subForwarder: null, partner: null,
+        forwarder: { name: 'ТОО «ЛогиКор»' }, driver: null, responsibleManager: null,
+        routePoints: [], accountingDocuments: [],
+        customerPrice: null, customerPriceBase: null, driverCost: null,
+        subForwarderPrice: null, subForwarderPriceBase: null, currency: 'KZT',
+        driverCostCurrency: null, subForwarderPriceCurrency: null, driverCostBase: null,
+        customerCompanyId: 'заказчик', forwarderId: 'мы', subForwarderId: null, partnerId: null,
+        vatRate: null, hasVat: false, executorVatRate: null, executorHasVat: false,
+        isCustomerPaid: false, isDriverPaid: false, isSubForwarderPaid: false,
+        payments: [], paymentShares: [], incomes: [], expenses: [],
+    };
+
+    const выгрузить = async (columns?: string[]) => {
+        const prisma: any = { order: { findMany: jest.fn().mockResolvedValue([{ ...рейс }]) } };
+        const service = new OrdersExportService(prisma, new FinanceCalculatorService());
+        const book = XLSX.read(await service.exportOrders('мы', ['р-1'], columns), { type: 'buffer' });
+        const строка = XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]])[0] as Record<string, any>;
+        return Object.keys(строка);
+    };
+
+    it('без отбора уходят все колонки', async () => {
+        expect(await выгрузить()).toHaveLength(24);
+    });
+
+    it('уходят только отмеченные', async () => {
+        expect(await выгрузить(['№ заявки', 'Заказчик'])).toEqual(['№ заявки', 'Заказчик']);
+    });
+
+    it('порядок в файле всегда один и тот же', async () => {
+        // Не тот, в каком щёлкали галочки: файл должен выглядеть одинаково
+        // от раза к разу, иначе его не сравнить с прошлым.
+        expect(await выгрузить(['Заказчик', '№ заявки'])).toEqual(['№ заявки', 'Заказчик']);
+    });
+
+    it('незнакомая колонка молча отбрасывается', async () => {
+        // Список приезжает из браузера; падать из-за него — значит оставить
+        // человека без файла на ровном месте.
+        expect(await выгрузить(['№ заявки', 'Придуманная'])).toEqual(['№ заявки']);
+    });
+
+    it('отбор из одних незнакомых — отказ словами', async () => {
+        // А вот пустой отбор молчать нельзя: получился бы файл из одних
+        // заголовков, и человек решил бы, что данные пропали.
+        const prisma: any = { order: { findMany: jest.fn().mockResolvedValue([{ ...рейс }]) } };
+        const service = new OrdersExportService(prisma, new FinanceCalculatorService());
+
+        await expect(service.exportOrders('мы', ['р-1'], ['Придуманная']))
+            .rejects.toThrow('Не выбрано ни одной колонки');
+    });
+});

@@ -68,6 +68,11 @@ export function hideExecutorCost<T extends ExecutorCostFields>(order: T): T {
     masked.isSubForwarderPaid = false;
     masked.subForwarderPaidAt = null;
     masked.partner = null;
+    // Не только id, но и сама связь: карточка её теперь запрашивает, чтобы
+    // показывать имя перевозчика вместо кода. Гасить один id было бы
+    // достаточно ровно до первой выборки с `include` — так и случилось в
+    // выгрузке, где имя субподрядчика уехало заказчику отдельной колонкой.
+    masked.subForwarder = null;
     masked.executorHasVat = null;
     masked.executorVatRate = null;
     masked.carrierPaymentDays = null;
