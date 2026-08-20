@@ -1,6 +1,6 @@
 'use client';
 // Trigger redeployment
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { Typography, Form, Input, InputNumber, Select, DatePicker, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox } from 'antd';
@@ -77,7 +77,28 @@ export default function CreateOrderPage() {
 
     // Data
     const [locations, setLocations] = useState<Location[]>([]);
-    const [partners, setPartners] = useState<Partner[]>([]);
+    const [fetchedPartners, setFetchedPartners] = useState<Partner[]>([]);
+    /**
+     * Стороны загруженной заявки — отдельно от справочника.
+     *
+     * В списке выбора только партнёрства платформы и справочник
+     * контрагентов. Компания, с которой рейс уже сделан, может не оказаться
+     * ни там, ни там — например, приглашение на платформе так и не приняли.
+     * Тогда её id не находился в списке, поле оставалось пустым, а форма
+     * отвечала «Укажите заказчика» по заявке, где он есть.
+     *
+     * Список именно вычисляемый, а не досбор в состоянии: справочник
+     * догружается сам по себе и раньше затирал дособранное, а правка
+     * успевала спросить про заказчика по неполному списку и решить, что
+     * его нет.
+     */
+    const [orderParties, setOrderParties] = useState<Partner[]>([]);
+    const partners = useMemo<Partner[]>(() => {
+        if (!orderParties.length) return fetchedPartners;
+        const known = new Set(fetchedPartners.map((p) => p.id));
+        const add = orderParties.filter((p) => !known.has(p.id));
+        return add.length ? [...fetchedPartners, ...add] : fetchedPartners;
+    }, [fetchedPartners, orderParties]);
     const [cargoCategories, setCargoCategories] = useState<any[]>([]);
     const [profileComplete, setProfileComplete] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -278,7 +299,6 @@ export default function CreateOrderPage() {
      */
     const duplicateLoadedRef = useRef(false);
     const [pendingParties, setPendingParties] = useState<{ customer?: string; carrier?: string } | null>(null);
-    const [orderParties, setOrderParties] = useState<any[]>([]);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editingNumber, setEditingNumber] = useState<string>('');
 
@@ -349,16 +369,7 @@ export default function CreateOrderPage() {
                 } else if (o.forwarderId) {
                     carrier = myIds.has(o.forwarderId) ? MY_COMPANY_VALUE : o.forwarderId;
                 }
-                /**
-                 * Стороны самой заявки — в список выбора.
-                 *
-                 * В нём только партнёрства платформы и справочник
-                 * контрагентов. Компания, с которой рейс уже сделан, может
-                 * не оказаться ни там, ни там — например, приглашение на
-                 * платформе так и не приняли, — и тогда её id не находился
-                 * в списке, поле оставалось пустым, а форма отвечала
-                 * «Укажите заказчика» по заявке, где он есть.
-                 */
+                // Стороны самой заявки — в список выбора (см. `orderParties`).
                 setOrderParties([o.customerCompany, o.subForwarder, o.partner, o.forwarder]
                     .filter((c: any) => c?.id && c?.name)
                     .map((c: any) => ({
@@ -367,7 +378,7 @@ export default function CreateOrderPage() {
                         isExternal: !!c.isExternal,
                         isCustomer: true,
                         isCarrier: true,
-                    })));
+                    })) as Partner[]);
 
                 setPendingParties({ customer, carrier });
 
@@ -391,16 +402,6 @@ export default function CreateOrderPage() {
             }
         })();
     }, []);
-
-    // Стороны загруженной заявки добавляем к списку, если их там нет.
-    useEffect(() => {
-        if (!orderParties.length) return;
-        setPartners((prev) => {
-            const known = new Set(prev.map((p: any) => p.id));
-            const add = orderParties.filter((p) => !known.has(p.id));
-            return add.length ? [...prev, ...add] : prev;
-        });
-    }, [orderParties, partners.length]);
 
     // Стороны применяем после загрузки списка контрагентов (иначе в селекте показался бы «сырой» id)
     useEffect(() => {
@@ -466,7 +467,7 @@ export default function CreateOrderPage() {
                 carrierPaymentFrom: e.carrierPaymentFrom ?? null,
             }));
             const combined = [...partnersList, ...externalList];
-            setPartners(combined);
+            setFetchedPartners(combined);
             if (profileRes.data?.name) {
                 setMyCompanyName(profileRes.data.name);
             }
@@ -979,7 +980,15 @@ export default function CreateOrderPage() {
                     <Form.Item
                         name="natureOfCargo"
                         label="Характер груза"
-                        rules={[{ required: true, message: 'Выберите из списка или впишите свой вариант' }]}
+                        /**
+                         * У новой заявки характер груза спрашиваем, у правки —
+                         * нет. Поле появилось позже самих заявок, на сервере
+                         * оно необязательное, и ни в одной заведённой заявке
+                         * его нет. Требовать его при правке значило бы: чтобы
+                         * поправить ставку, придумай задним числом характер
+                         * груза, которого никто не спрашивал.
+                         */
+                        rules={editingId ? [] : [{ required: true, message: 'Выберите из списка или впишите свой вариант' }]}
                     >
                         <AutoComplete
                             placeholder="Выберите или впишите свой вариант..."
@@ -1571,7 +1580,7 @@ export default function CreateOrderPage() {
                 }}>
                     <ExclamationCircleOutlined style={{ color: 'var(--nova-fg-3)' }} />
                     <span>
-                        Заявку можно создать сейчас, но для формирования документов (доверенности, счета)
+                        {editingId ? 'Заявку можно сохранить сейчас' : 'Заявку можно создать сейчас'}, но для формирования документов (доверенности, счета)
                         заполните <a onClick={() => router.push('/company/settings')} style={{ fontWeight: 600 }}>профиль компании</a>
                     </span>
                 </div>
