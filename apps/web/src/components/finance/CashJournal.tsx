@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
-import { money as formatMoney, currencySign } from '@/lib/money-format';
+import { money as formatMoney, currencySign, formatMoneyInput, parseMoneyInput } from '@/lib/money-format';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -44,8 +44,11 @@ const METHOD_OPTIONS = [
     { value: 'OTHER', label: 'Прочее' },
 ];
 const METHOD_LABELS: Record<string, string> = { BANK: 'Банк', CASH: 'Касса', CARD: 'Карта', OTHER: 'Прочее' };
-const moneyFmt = (v: any) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const moneyParse = (v: any) => (v || '').replace(/\s/g, '');
+const moneyFmt = formatMoneyInput;
+// antd описывает `parser` как возвращающий тип самого поля, хотя строку он
+// принимает и разбирает сам. Приведение здесь, а не в общем помощнике:
+// врать про тип на всё приложение ради одного пропа не стоит.
+const moneyParse = parseMoneyInput as (v?: string) => any;
 const money = (v: number, currency = 'KZT') => formatMoney(v, currency);
 
 export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) {
