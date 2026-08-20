@@ -5,6 +5,7 @@ import { Tabs, Table, Button, Typography, Modal, Form, InputNumber, DatePicker, 
 import { ArrowLeftOutlined, EditOutlined, BankOutlined, InboxOutlined, CarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { fetchCounterparties } from '@/lib/counterparties';
+import { formatMoneyInput, parseMoneyInput } from '@/lib/money-format';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
@@ -34,8 +35,10 @@ interface Opening {
     note: string | null;
 }
 
-const moneyFmt = (v: any) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const moneyParse = (v: any) => (v || '').replace(/\s/g, '');
+const moneyFmt = formatMoneyInput;
+// См. пояснение к такому же приведению в CashJournal: antd ждёт от
+// `parser` тип поля, хотя строку разбирает сам.
+const moneyParse = parseMoneyInput as (v?: string) => any;
 const money = (v: number) => (v || 0).toLocaleString('ru-RU') + ' ₸';
 
 export default function OpeningBalancesPage() {

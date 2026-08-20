@@ -56,7 +56,9 @@ describe('FinancialReportsService — акт сверки', () => {
 
         expect(result.rows).toHaveLength(1);
         expect(result.rows[0]).toMatchObject({ debit: 0, credit: 100, balance: -100 });
-        expect(result.period.end).toBe('2026-07-31T23:59:59.999Z');
+        // Наружу период уезжает календарной датой: мгновение браузер
+        // напечатал бы в своём поясе и показал соседние сутки.
+        expect(result.period.end).toBe('2026-07-31');
     });
 
     // T-03: акт сверки в 1С показывает рядом с операцией сам рейс — номер
@@ -244,5 +246,105 @@ describe('FinancialReportsService — акт сверки', () => {
         expect(entry).toBeDefined();
         expect(reconciliation.closingBalance).toBe(160000);
         expect(entry.balance).toBe(reconciliation.closingBalance);
+    });
+
+    /**
+     * Период акта — те же сутки, что выбрал бухгалтер.
+     *
+     * Выбранное «01.07 — 17.08» печаталось как «30.06 — 18.08»: страница
+     * отдавала местную полночь по UTC, сервер брал у неё UTC-сутки и уносил
+     * начало на день назад, а конец растягивал до 23:59:59 по UTC, который
+     * браузер печатал уже следующими сутками. Операции при этом отбирались
+     * за тот же сдвинутый период — это была не подпись, а сам отбор.
+     */
+    describe('период не сдвигается', () => {
+        const прайс = (даты: Date[]) => ({
+            company: {
+                findUnique: jest.fn(({ where }: any) => Promise.resolve({
+                    id: where.id, name: where.id, bin: '000000000000',
+                })),
+            },
+            order: { findMany: jest.fn().mockResolvedValue([]) },
+            payment: {
+                findMany: jest.fn().mockResolvedValue(даты.map((date, i) => ({
+                    id: `payment-${i}`,
+                    counterpartyId: COUNTERPARTY,
+                    orderId: null,
+                    direction: PaymentDirection.IN,
+                    amount: 100,
+                    date,
+                    order: null,
+                }))),
+            },
+            counterpartyOpeningBalance: { findUnique: jest.fn().mockResolvedValue(null) },
+            accountingDocument: { findMany: jest.fn().mockResolvedValue([]) },
+        });
+
+        it('отдаёт ровно выбранные даты, а не соседние сутки', async () => {
+            const service = makeService(прайс([]));
+            const result = await service.getReconciliationAct(COMPANY, COUNTERPARTY, {
+                startDate: '2026-07-01',
+                endDate: '2026-08-17',
+            });
+            expect(result.period).toEqual({ start: '2026-07-01', end: '2026-08-17' });
+        });
+
+        it('первый день периода входит в акт, а канун — нет', async () => {
+            const service = makeService(прайс([
+                new Date('2026-06-30T23:59:59.999Z'), // канун
+                new Date('2026-07-01T00:00:00.000Z'), // первый день
+            ]));
+            const result = await service.getReconciliationAct(COMPANY, COUNTERPARTY, {
+                startDate: '2026-07-01',
+                endDate: '2026-08-17',
+            });
+            // Канун ушёл в сальдо на начало, в строки попал только первый день
+            expect(result.rows).toHaveLength(1);
+            expect(result.openingBalance).toBe(-100);
+        });
+
+        it('последний день периода входит в акт, а следующий — нет', async () => {
+            const service = makeService(прайс([
+                new Date('2026-08-17T23:59:59.999Z'), // последний день
+                new Date('2026-08-18T00:00:00.000Z'), // за периодом
+            ]));
+            const result = await service.getReconciliationAct(COMPANY, COUNTERPARTY, {
+                startDate: '2026-07-01',
+                endDate: '2026-08-17',
+            });
+            expect(result.rows).toHaveLength(1);
+        });
+
+        /**
+         * Предпросмотр и официальный черновик обязаны считать одно и то же:
+         * раньше первый слал мгновение, второй — календарную дату, и они
+         * расходились на сутки.
+         */
+        it('готовая граница со временем больше не переносит начало на сутки назад', async () => {
+            const service = makeService(прайс([new Date('2026-07-01T02:00:00.000Z')]));
+            // Так период слала старая страница: местная полночь 01.07 в UTC+5
+            const мгновением = await service.getReconciliationAct(COMPANY, COUNTERPARTY, {
+                startDate: '2026-06-30T19:00:00.000Z',
+                endDate: '2026-08-17T18:59:59.999Z',
+            });
+            const датой = await service.getReconciliationAct(COMPANY, COUNTERPARTY, {
+                startDate: '2026-07-01',
+                endDate: '2026-08-17',
+            });
+            expect(мгновением.rows).toHaveLength(1);
+            expect(мгновением.rows.length).toBe(датой.rows.length);
+            expect(мгновением.closingBalance).toBe(датой.closingBalance);
+            // Показывается тот день, что и был выбран, а не предыдущий
+            expect(мгновением.period.start).toBe('2026-06-30');
+            expect(датой.period.start).toBe('2026-07-01');
+        });
+
+        it('несуществующий день отвергается, а не строит акт за чужой период', async () => {
+            const service = makeService(прайс([]));
+            await expect(service.getReconciliationAct(COMPANY, COUNTERPARTY, {
+                startDate: '2026-13-45',
+                endDate: '2026-08-17',
+            })).rejects.toThrow('Некорректная дата начала периода');
+        });
     });
 });

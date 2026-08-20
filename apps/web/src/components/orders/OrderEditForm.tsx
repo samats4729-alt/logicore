@@ -1,6 +1,6 @@
 'use client';
 
-import {  AutoComplete, Button, Col, DatePicker, Divider, Form, Input, InputNumber, Row, Select, Tag , Typography } from 'antd';
+import {  AutoComplete, Button, Col, DatePicker, Divider, Form, Input, InputNumber, Row, Select, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import { CheckCircleOutlined, DeleteOutlined, EnvironmentOutlined, FlagOutlined, InboxOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -8,6 +8,8 @@ import { prepareCompanyOptions } from '@/lib/company-helper';
 import { CargoComposition } from '@/components/orders/CargoComposition';
 import type { CargoState } from '@/lib/cargo';
 import CurrencySelect from '@/components/orders/CurrencySelect';
+import { MarginSummary } from '@/components/orders/MarginSummary';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import nova from '@/components/nova/nova.module.css';
 import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
 import type { OrderSettlements } from '@/lib/settlement-terms';
@@ -381,8 +383,8 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                             <Row gutter={12}>
                                 <Col span={24}>
                                     <Form.Item name="customerPrice" label={customerPriceLabel}>
-                                        <InputNumber
-                                            min={0} style={{ width: '100%' }} placeholder="0" size="large"
+                                        <MoneyInput
+                                            size="large"
                                             disabled={!canEditFinance}
                                             addonAfter={(
                                                 <Form.Item name="currency" noStyle initialValue="KZT">
@@ -400,8 +402,8 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                             <Row gutter={12}>
                                 <Col span={24}>
                                     <Form.Item name="driverCost" label={driverCostLabel}>
-                                        <InputNumber
-                                            min={0} style={{ width: '100%' }} placeholder="0" size="large"
+                                        <MoneyInput
+                                            size="large"
                                             disabled={!canEditFinance}
                                             addonAfter={(
                                                 <Form.Item name="driverCostCurrency" noStyle initialValue="KZT">
@@ -485,21 +487,15 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                     const marginPercent = cpNet > 0 ? Math.round((margin / cpNet) * 100) : 0;
 
                                     return (
-                                        <div style={{
-                                            padding: '10px 16px',
-                                            background: margin >= 0 ? '#ecfdf5' : '#fef2f2',
-                                            border: `1px solid ${margin >= 0 ? '#a7f3d0' : '#fca5a5'}`,
-                                            borderRadius: 10,
-                                            fontSize: 13,
-                                            fontWeight: 500,
-                                            marginTop: 12,
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center'
-                                        }}>
-                                            <span>Чистая маржа: <strong style={{ color: margin >= 0 ? '#059669' : '#dc2626', fontSize: 15 }}>{margin.toLocaleString('ru-RU')} ₸</strong></span>
-                                            <Tag color={margin >= 0 ? 'green' : 'red'}>{marginPercent}%</Tag>
-                                        </div>
+                                        <MarginSummary
+                                            customerLabel={customerPriceLabel}
+                                            customerNet={cpNet}
+                                            carrierLabel={driverCostLabel}
+                                            carrierNet={dcNet}
+                                            margin={margin}
+                                            marginPercent={marginPercent}
+                                            netOfVat={hasVat || executorHasVat}
+                                        />
                                     );
                                 }
                                 return null;

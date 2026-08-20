@@ -9,6 +9,8 @@ import {
     DeleteOutlined, SendOutlined, CheckCircleOutlined, ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { Button } from '@/components/ui/button';
+import { MoneyInput } from '@/components/ui/MoneyInput';
+import { MarginSummary } from '@/components/orders/MarginSummary';
 import { api, Location } from '@/lib/api';
 import { reportLoadFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -1253,10 +1255,7 @@ export default function CreateOrderPage() {
                     <>
                         <Col xs={24} md={8}>
                             <Form.Item name="customerPrice" label={customerPriceLabel}>
-                                <InputNumber
-                                    min={0}
-                                    style={{ width: '100%' }}
-                                    placeholder="0"
+                                <MoneyInput
                                     addonAfter={(
                                         <Form.Item name="currency" noStyle initialValue="KZT">
                                             <CurrencySelect />
@@ -1280,10 +1279,7 @@ export default function CreateOrderPage() {
                     <>
                         <Col xs={24} md={8}>
                             <Form.Item name="driverCost" label={driverCostLabel}>
-                                <InputNumber
-                                    min={0}
-                                    style={{ width: '100%' }}
-                                    placeholder="0"
+                                <MoneyInput
                                     addonAfter={(
                                         // Валюта перевозчика своя: рейс, где клиент платит
                                         // рублями, а перевозчик получает тенге, — обычное дело.
@@ -1361,21 +1357,15 @@ export default function CreateOrderPage() {
                         const marginPercent = cpNet > 0 ? Math.round((margin / cpNet) * 100) : 0;
 
                         return (
-                            <div style={{
-                                padding: '10px 16px',
-                                background: margin >= 0 ? '#ecfdf5' : '#fef2f2',
-                                border: `1px solid ${margin >= 0 ? '#a7f3d0' : '#fca5a5'}`,
-                                borderRadius: 10,
-                                fontSize: 13,
-                                fontWeight: 500,
-                                marginTop: 12,
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
-                                <span>Чистая маржа: <strong style={{ color: margin >= 0 ? '#059669' : '#dc2626', fontSize: 15 }}>{margin.toLocaleString('ru-RU')} ₸</strong></span>
-                                <span className={`${nova.chip} ${margin >= 0 ? '' : nova.chipNeg}`}>{marginPercent}%</span>
-                            </div>
+                            <MarginSummary
+                                customerLabel={customerPriceLabel}
+                                customerNet={cpNet}
+                                carrierLabel={driverCostLabel}
+                                carrierNet={dcNet}
+                                margin={margin}
+                                marginPercent={marginPercent}
+                                netOfVat={hasVat || executorHasVat}
+                            />
                         );
                     }
                     return null;

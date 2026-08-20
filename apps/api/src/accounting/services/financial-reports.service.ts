@@ -23,6 +23,7 @@ import * as XLSX from 'xlsx';
 import { SharedReportLinkService } from './shared-report-link.service';
 import { CurrencyRevaluationService } from './currency-revaluation.service';
 import { kzToday } from '../../common/utils/business-date';
+import { periodStart, periodEnd, calendarDay } from '../../common/utils/period';
 import { exchangeOutcome, paymentInBase } from './exchange-difference';
 
 /** Учётная валюта: в ней ведутся все итоги отчётов. */
@@ -1320,12 +1321,12 @@ export class FinancialReportsService {
         if (!company) throw new NotFoundException('Компания не найдена');
         if (!counterparty) throw new NotFoundException('Контрагент не найден');
 
-        const start = query.startDate ? new Date(query.startDate) : null;
-        const end = query.endDate ? new Date(query.endDate) : null;
-        if (start && Number.isNaN(start.getTime())) throw new BadRequestException('Некорректная дата начала периода');
-        if (end && Number.isNaN(end.getTime())) throw new BadRequestException('Некорректная дата окончания периода');
-        if (start) start.setUTCHours(0, 0, 0, 0);
-        if (end) end.setUTCHours(23, 59, 59, 999);
+        // Границы периода — из общего разбора: календарная дата
+        // разворачивается в свои же сутки, готовое время берётся как есть.
+        // Прежний `setUTCHours` считал сутки у присланного мгновения и на
+        // востоке от UTC уносил начало периода на день назад.
+        const start = periodStart(query.startDate);
+        const end = periodEnd(query.endDate);
         if (start && end && start > end) {
             throw new BadRequestException('Начало периода позже его окончания');
         }
@@ -1565,7 +1566,10 @@ export class FinancialReportsService {
         return {
             company,
             counterparty,
-            period: { start: start ? start.toISOString() : null, end: end ? end.toISOString() : null },
+            // Календарной датой, а не мгновением: мгновение браузер печатает
+            // в своём поясе и показывает соседние сутки — так конец периода
+            // и уезжал на день вперёд.
+            period: { start: calendarDay(start), end: calendarDay(end) },
             openingBalance,
             rows,
             totals: { debit: totalDebit, credit: totalCredit },
