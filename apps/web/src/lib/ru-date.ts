@@ -17,3 +17,16 @@ export const MONTHS_GEN = [
 export function dayMonth(date: Dayjs): string {
     return `${date.date()} ${MONTHS_GEN[date.month()]}`;
 }
+
+/**
+ * Календарная дата «2026-07-01» → «01.07.2026».
+ *
+ * Строкой, без разбора во времени. Разбор превращает дату в мгновение, а
+ * мгновение печатается в поясе браузера и показывает соседние сутки —
+ * именно так в акте сверки конец периода уезжал на день вперёд.
+ */
+export function calendarDate(value?: string | null): string | null {
+    if (!value) return null;
+    const сутки = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+    return сутки ? `${сутки[3]}.${сутки[2]}.${сутки[1]}` : null;
+}

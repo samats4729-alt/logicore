@@ -16,6 +16,7 @@ import {
 import type { AccountingDocumentDraft } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { amountToWordsKzt } from '@/lib/amountToWords';
+import { calendarDate } from '@/lib/ru-date';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
@@ -68,8 +69,13 @@ function ReconciliationActInner() {
         try {
             const q: any = {};
             if (range && range[0] && range[1]) {
-                q.startDate = range[0].startOf('day').toISOString();
-                q.endDate = range[1].endOf('day').toISOString();
+                // Календарной датой, как и официальный черновик ниже.
+                // `toISOString()` отдавал местную полночь по UTC, сервер
+                // считал у неё сутки и уносил начало периода на день назад —
+                // предпросмотр и черновик расходились и по датам, и по тому,
+                // какие операции попадали в акт.
+                q.startDate = range[0].format('YYYY-MM-DD');
+                q.endDate = range[1].format('YYYY-MM-DD');
             }
             const res = await api.get(`/accounting/reconciliation-act/${cpId}`, { params: q });
             setData(res.data);
@@ -206,7 +212,7 @@ function ReconciliationActInner() {
                 <div className="recon-doc lc-card" style={{ padding: 40 }}>
                     <h1 style={{ textAlign: 'center', fontSize: 20, fontWeight: 700, margin: '0 0 4px' }}>Акт сверки взаимных расчётов</h1>
                     <p style={{ textAlign: 'center', color: 'var(--lc-text-ter)', margin: '0 0 24px', fontSize: 13 }}>
-                        за период {data.period.start ? dayjs(data.period.start).format('DD.MM.YYYY') : 'начало'} — {data.period.end ? dayjs(data.period.end).format('DD.MM.YYYY') : 'сегодня'}
+                        за период {calendarDate(data.period.start) ?? 'начало'} — {calendarDate(data.period.end) ?? 'сегодня'}
                     </p>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, marginBottom: 20, fontSize: 13 }}>
