@@ -514,6 +514,12 @@ export class OrdersService {
                 driver: true,
                 recipient: true,
                 partner: true,
+                // Имена экспедитора и субподрядчика. Без них в карточке и в
+                // форме правки на месте стороны стоял внутренний код: id в
+                // заявке есть, а названия взять неоткуда. Заказчику эти
+                // связи всё равно не уедут — их гасит `maskForCustomer`.
+                forwarder: { select: { id: true, name: true, isExternal: true } },
+                subForwarder: { select: { id: true, name: true, isExternal: true } },
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
                 documents: true,
                 statusHistory: { orderBy: { changedAt: 'desc' } },
@@ -1074,14 +1080,34 @@ export class OrdersService {
         const order = await this.findById(orderId);
 
         if (user) {
+            /**
+             * Править рейс может компания, которая его ведёт, а не только тот,
+             * кто его завёл.
+             *
+             * Правило было про людей: создатель заявки или назначенный
+             * менеджер. От этого владелец компании, бухгалтер и любой
+             * логист, кроме одного, получали отказ на собственном рейсе —
+             * «У вас нет прав на редактирование этой заявки» по своей же
+             * заявке. Уехал в отпуск тот, кто заводил, — и рейс правится
+             * только через администратора платформы.
+             *
+             * Стороной считается та же четвёрка, что и во всей выдаче
+             * заявок: заказчик, экспедитор, партнёр, субподрядчик.
+             *
+             * Водитель сюда не попадает намеренно: он меняет статус своего
+             * рейса и прикладывает накладную, а условия сделки — не его.
+             */
             const isAdmin = user.role === 'ADMIN';
             const isCreator = order.customerId === user.id || order.responsibleManagerId === user.id;
-            const isRegisteredCustomerCompany = order.customerCompanyId &&
-                (order as any).customerCompany &&
-                !(order as any).customerCompany.isExternal &&
-                user.companyId === order.customerCompanyId;
+            const isOurCompanyOrder = user.role !== 'DRIVER' && !!user.companyId && (
+                order.customerCompanyId === user.companyId
+                || order.forwarderId === user.companyId
+                || order.partnerId === user.companyId
+                || order.subForwarderId === user.companyId
+                || (order as any).responsibleManager?.companyId === user.companyId
+            );
 
-            if (!isAdmin && !isCreator && !isRegisteredCustomerCompany) {
+            if (!isAdmin && !isCreator && !isOurCompanyOrder) {
                 throw new ForbiddenException('У вас нет прав на редактирование этой заявки');
             }
         }

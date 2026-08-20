@@ -266,13 +266,27 @@ export default function CreateOrderPage() {
             .catch(() => { });
     }, [user]);
 
-    // Дублирование заявки: /company/orders/create?from=<orderId> — копируем все данные, кроме даты
+    /**
+     * Одна форма на заведение, дублирование и правку.
+     *
+     * `?from=<id>` — скопировать данные в новую заявку, `?edit=<id>` —
+     * править существующую. Отдельного окна правки больше нет: оно было
+     * второй формой той же заявки, с урезанным набором полей и вопросом
+     * «Ваша роль в этой сделке», которого у существующего рейса быть не
+     * может — роль там уже сыграна. Две формы неизбежно расходились, и
+     * правка отставала от заведения.
+     */
     const duplicateLoadedRef = useRef(false);
     const [pendingParties, setPendingParties] = useState<{ customer?: string; carrier?: string } | null>(null);
+    const [orderParties, setOrderParties] = useState<any[]>([]);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingNumber, setEditingNumber] = useState<string>('');
 
     useEffect(() => {
         if (duplicateLoadedRef.current) return;
-        const fromId = new URLSearchParams(window.location.search).get('from');
+        const params = new URLSearchParams(window.location.search);
+        const editId = params.get('edit');
+        const fromId = editId || params.get('from');
         if (!fromId) return;
         duplicateLoadedRef.current = true;
 
@@ -335,14 +349,58 @@ export default function CreateOrderPage() {
                 } else if (o.forwarderId) {
                     carrier = myIds.has(o.forwarderId) ? MY_COMPANY_VALUE : o.forwarderId;
                 }
+                /**
+                 * Стороны самой заявки — в список выбора.
+                 *
+                 * В нём только партнёрства платформы и справочник
+                 * контрагентов. Компания, с которой рейс уже сделан, может
+                 * не оказаться ни там, ни там — например, приглашение на
+                 * платформе так и не приняли, — и тогда её id не находился
+                 * в списке, поле оставалось пустым, а форма отвечала
+                 * «Укажите заказчика» по заявке, где он есть.
+                 */
+                setOrderParties([o.customerCompany, o.subForwarder, o.partner, o.forwarder]
+                    .filter((c: any) => c?.id && c?.name)
+                    .map((c: any) => ({
+                        id: c.id,
+                        name: c.name,
+                        isExternal: !!c.isExternal,
+                        isCustomer: true,
+                        isCarrier: true,
+                    })));
+
                 setPendingParties({ customer, carrier });
 
-                toast.success(`Скопированы данные заявки ${o.orderNumber}. Проверьте и укажите дату погрузки.`);
+                if (editId) {
+                    setEditingId(editId);
+                    setEditingNumber(o.orderNumber || '');
+                    // При дублировании дату намеренно не переносят — рейс
+                    // новый. При правке она часть заявки и должна стоять.
+                    const pickup = (o.routePoints || []).find((rp: any) => rp.pointType === 'PICKUP');
+                    if (pickup?.expectedDate) {
+                        form.setFieldsValue({ pickupDate: dayjs(pickup.expectedDate) });
+                    }
+                    if (o.driverId) setSelectedDriverId(o.driverId);
+                } else {
+                    toast.success(`Скопированы данные заявки ${o.orderNumber}. Проверьте и укажите дату погрузки.`);
+                }
             } catch {
-                toast.error('Не удалось загрузить заявку для дублирования');
+                toast.error(editId
+                    ? 'Не удалось загрузить заявку для правки'
+                    : 'Не удалось загрузить заявку для дублирования');
             }
         })();
     }, []);
+
+    // Стороны загруженной заявки добавляем к списку, если их там нет.
+    useEffect(() => {
+        if (!orderParties.length) return;
+        setPartners((prev) => {
+            const known = new Set(prev.map((p: any) => p.id));
+            const add = orderParties.filter((p) => !known.has(p.id));
+            return add.length ? [...prev, ...add] : prev;
+        });
+    }, [orderParties, partners.length]);
 
     // Стороны применяем после загрузки списка контрагентов (иначе в селекте показался бы «сырой» id)
     useEffect(() => {
@@ -755,11 +813,20 @@ export default function CreateOrderPage() {
                 }
             }
 
-            await api.post('/orders', orderData);
-            toast.success('Заявка создана!');
-            router.push('/company/orders');
+            if (editingId) {
+                // Правка идёт тем же набором полей, что и заведение: одна
+                // форма — один состав заявки.
+                await api.put(`/orders/${editingId}`, orderData);
+                toast.success('Заявка сохранена');
+                router.push(`/company/orders/${editingId}`);
+            } else {
+                await api.post('/orders', orderData);
+                toast.success('Заявка создана!');
+                router.push('/company/orders');
+            }
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Ошибка создания заявки');
+            toast.error(error.response?.data?.message
+                || (editingId ? 'Не удалось сохранить заявку' : 'Ошибка создания заявки'));
         } finally {
             setSubmitting(false);
         }
@@ -1483,7 +1550,9 @@ export default function CreateOrderPage() {
             <div className="lc2-hero">
                 <div>
                     <div className="lc-eyebrow">Заявки</div>
-                    <h1 className="lc2-title">Новая заявка</h1>
+                    <h1 className="lc2-title">
+                        {editingId ? `Правка заявки ${editingNumber}`.trim() : 'Новая заявка'}
+                    </h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Шаг {currentStep + 1} из {steps.length} · {steps[currentStep].title}
                     </p>
@@ -1566,7 +1635,7 @@ export default function CreateOrderPage() {
                             data-guide="wizard-submit"
                         >
                             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                            Создать заявку
+                            {editingId ? 'Сохранить заявку' : 'Создать заявку'}
                         </Button>
                     )}
                 </div>
