@@ -1,0 +1,109 @@
+/**
+ * Выбор колонок таблицы.
+ *
+ * Журнал широкий, а смотрят в него по-разному: логисту нужны машина и
+ * водитель, бухгалтеру — номера и суммы. Прятать чужие колонки каждый раз
+ * заново не годится, поэтому выбор запоминается в браузере.
+ */
+
+.trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--nova-fg-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.panel {
+    min-width: 236px;
+    max-height: 340px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 8px 8px;
+    border-bottom: 1px solid var(--nova-border-2);
+    margin-bottom: 4px;
+}
+
+.title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--nova-fg);
+}
+
+.reset {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--nova-accent);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.reset:hover { opacity: .8; }
+.reset:disabled { color: var(--nova-fg-3); cursor: default; opacity: 1; }
+
+.item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--nova-fg);
+    cursor: pointer;
+    user-select: none;
+}
+
+.item:hover { background: var(--nova-hover); }
+
+/*
+ * Свой вид галочки: preflight у Tailwind выключен, и голый `input` остаётся
+ * с объёмной рамкой браузера — рядом с остальным она выглядит чужой.
+ */
+.box {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 15px;
+    height: 15px;
+    flex: none;
+    margin: 0;
+    border: 1px solid var(--nova-border);
+    border-radius: 4px;
+    background: var(--nova-surface);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+.box:checked {
+    background: var(--nova-primary);
+    border-color: var(--nova-primary);
+}
+
+.box:checked::after {
+    content: '';
+    width: 4px;
+    height: 8px;
+    margin-top: -2px;
+    border: solid var(--nova-primary-fg);
+    border-width: 0 1.6px 1.6px 0;
+    transform: rotate(45deg);
+}
+
+/* Последнюю оставшуюся колонку снять нельзя: пустая таблица бесполезна. */
+.item.locked { opacity: .5; cursor: default; }
+.item.locked .box { cursor: default; }

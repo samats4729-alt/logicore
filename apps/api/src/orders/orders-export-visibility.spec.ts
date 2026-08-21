@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { OrdersExportService, EXPORT_COLUMNS } from './orders-export.service';
+import { OrdersExportService, EXPORT_COLUMNS, CUSTOMER_REF_COLUMN } from './orders-export.service';
 import { FinanceCalculatorService } from '../accounting/services/finance-calculator.service';
 import { D } from '../common/utils/money';
 
@@ -221,5 +221,73 @@ describe('Колонки выгрузки', () => {
 
         await expect(service.exportOrders('мы', ['р-1'], ['Придуманная']))
             .rejects.toThrow('Не выбрано ни одной колонки');
+    });
+});
+
+/**
+ * Как подписана графа с номером заказчика.
+ *
+ * У одного клиента это «ID», у другого «Номер ТТН». Он сверяет наш файл со
+ * своим реестром и ищет там знакомое слово — своё, а не наше.
+ */
+describe('Название графы с номером заказчика', () => {
+    const рейс = (customerRefLabel: string | null, id = 'р-1') => ({
+        id, orderNumber: 'ЗК-2607', status: 'COMPLETED',
+        createdAt: new Date('2026-08-01'), completedAt: null,
+        cargoDescription: null, cargoWeight: null,
+        ttnNumber: '515492561', customerRefNumber: '36132',
+        assignedDriverName: null, assignedDriverPlate: null,
+        customerPaymentDate: null, driverPaymentDate: null,
+        customerCompany: { name: 'ТОО «Магнум»', customerRefLabel },
+        subForwarder: null, partner: null,
+        forwarder: { name: 'ТОО «ЛогиКор»' }, driver: null, responsibleManager: null,
+        routePoints: [], accountingDocuments: [],
+        customerPrice: null, customerPriceBase: null, driverCost: null,
+        subForwarderPrice: null, subForwarderPriceBase: null, currency: 'KZT',
+        driverCostCurrency: null, subForwarderPriceCurrency: null, driverCostBase: null,
+        customerCompanyId: 'заказчик', forwarderId: 'мы', subForwarderId: null, partnerId: null,
+        vatRate: null, hasVat: false, executorVatRate: null, executorHasVat: false,
+        isCustomerPaid: false, isDriverPaid: false, isSubForwarderPaid: false,
+        payments: [], paymentShares: [], incomes: [], expenses: [],
+    });
+
+    const лист = async (рейсы: any[]) => {
+        const prisma: any = { order: { findMany: jest.fn().mockResolvedValue(рейсы) } };
+        const service = new OrdersExportService(prisma, new FinanceCalculatorService());
+        const ids = рейсы.map((o) => o.id);
+        const book = XLSX.read(
+            await service.exportOrders('мы', ids, ['№ заявки', 'Номер ТТН', CUSTOMER_REF_COLUMN]),
+            { type: 'buffer' },
+        );
+        return XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]])[0] as Record<string, any>;
+    };
+
+    it('подписывает графу словом заказчика', async () => {
+        const строка = await лист([рейс('ID')]);
+
+        expect(Object.keys(строка)).toContain('ID');
+        expect(строка['ID']).toBe('36132');
+        expect(строка[CUSTOMER_REF_COLUMN]).toBeUndefined();
+    });
+
+    it('у нескольких заказчиков с разными словами — общее название', async () => {
+        // Заголовок в листе один на все строки: слово одного заказчика
+        // соврало бы про рейсы другого.
+        const строка = await лист([рейс('ID', 'р-1'), рейс('Номер заказа', 'р-2')]);
+
+        expect(строка[CUSTOMER_REF_COLUMN]).toBe('36132');
+        expect(Object.keys(строка)).not.toContain('ID');
+    });
+
+    it('заказчик своего слова не давал — графа общая', async () => {
+        const строка = await лист([рейс(null)]);
+
+        expect(строка[CUSTOMER_REF_COLUMN]).toBe('36132');
+    });
+
+    it('ТТН подписан всегда одинаково — это документ, а не название клиента', async () => {
+        const строка = await лист([рейс('ID')]);
+
+        expect(строка['Номер ТТН']).toBe('515492561');
     });
 });
