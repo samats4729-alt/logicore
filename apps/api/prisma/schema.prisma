@@ -118,6 +118,7 @@ model User {
   reviewedAccountingDocuments AccountingDocument[]  @relation("ReviewedAccountingDocuments")
   createdSharedReports  SharedReportLink[]    @relation("CreatedSharedReports")
   reviewedPaymentProofs OrderPaymentProof[]   @relation("ReviewedPaymentProofs")
+  reviewedCompletions   Order[]               @relation("ReviewedCompletions")
   email                 String?               @unique
   googleId              String?               @unique // Google OAuth ID
   phone                 String
@@ -879,6 +880,20 @@ model Order {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   completedAt DateTime?
+
+  /// Рейс закрыл сам водитель по своей ссылке — и это ещё надо проверить.
+  ///
+  /// Водитель нажимает «выгрузился» и прикладывает фото накладной, стоя на
+  /// выгрузке. Если фото нечитаемое, переснять его можно ровно пока он там:
+  /// уехал — возвращать некого. А в журнале такой рейс выглядел как любой
+  /// другой завершённый, и менеджер узнавал о нём, только открыв заявку.
+  ///
+  /// Пока `completionReviewedAt` пуст, строка в журнале помечена, и рейс
+  /// считается непроверенным.
+  driverCompletedAt      DateTime?
+  completionReviewedAt   DateTime?
+  completionReviewedById String?
+  completionReviewedBy   User?     @relation("ReviewedCompletions", fields: [completionReviewedById], references: [id], onDelete: SetNull)
 
   // Relations
   routePoints               OrderRoutePoint[]

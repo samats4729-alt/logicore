@@ -618,6 +618,17 @@ export class OrdersController {
         return updated;
     }
 
+    @Put(':id/completion-reviewed')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Менеджер проверил фото накладной по завершённому водителем рейсу' })
+    async markCompletionReviewed(@Param('id') id: string, @Request() req: any) {
+        return this.ordersService.markCompletionReviewed(id, {
+            id: req.user.sub,
+            role: req.user.role,
+            companyId: req.user.companyId,
+        });
+    }
+
     @Put(':id/status')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Обновить статус заявки' })
