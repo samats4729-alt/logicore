@@ -19,8 +19,9 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* Фон и рамку даёт сам `PopoverContent` — здесь только размеры. */
 .panel {
-    min-width: 236px;
+    min-width: 244px;
     max-height: 340px;
     overflow-y: auto;
     padding: 4px;

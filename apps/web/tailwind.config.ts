@@ -54,6 +54,19 @@ const config: Config = {
                     DEFAULT: 'hsl(var(--card))',
                     foreground: 'hsl(var(--card-foreground))',
                 },
+                /**
+                 * Всплывающие панели.
+                 *
+                 * Цвета не было ни здесь, ни в токенах, а базовый
+                 * `PopoverContent` из shadcn красится классом `bg-popover`.
+                 * Класса не существовало — панель выходила прозрачной, и
+                 * сквозь неё читалось то, что под ней. Поломка тихая:
+                 * разметка правильная, типы и сборка молчат.
+                 */
+                popover: {
+                    DEFAULT: 'hsl(var(--popover))',
+                    foreground: 'hsl(var(--popover-foreground))',
+                },
             },
             borderRadius: {
                 lg: 'var(--radius)',
