@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { MarginSummary } from '@/components/orders/MarginSummary';
+import { TransportNumbers } from '@/components/orders/TransportNumbers';
 import { api, Location } from '@/lib/api';
 import { reportLoadFailure } from '@/lib/load';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -213,10 +214,18 @@ export default function CreateOrderPage() {
 
 
     const isMeCustomer = selectedCustomer === MY_COMPANY_VALUE;
-    /** Как выбранный заказчик называет свой номер перевозки. Пусто — графы нет. */
+    /**
+     * Как выбранный заказчик называет свой номер перевозки.
+     *
+     * Пусто — графа так и называется «Номер у заказчика» и работает: раньше
+     * без этой настройки её просто не было, и о ней надо было догадаться.
+     */
     const customerRefLabel = isMeCustomer
         ? null
         : (partners.find(p => p.id === selectedCustomer) as any)?.customerRefLabel || null;
+    /** Переименовать графу можно только контрагенту из справочника — он наш. */
+    const selectedCustomerIsExternal = !isMeCustomer
+        && !!(partners.find(p => p.id === selectedCustomer) as any)?.isExternal;
     const isMeCarrier = selectedCarrier === MY_COMPANY_VALUE;
     const isMarketplace = selectedCarrier === MARKETPLACE_VALUE;
 
@@ -327,6 +336,8 @@ export default function CreateOrderPage() {
                 form.setFieldsValue({
                     natureOfCargo: o.natureOfCargo || undefined,
                     cargoDescription: o.cargoDescription || undefined,
+                    ttnNumber: o.ttnNumber || undefined,
+                    customerRefNumber: o.customerRefNumber || undefined,
                     cargoWeight: o.cargoWeight ?? undefined,
                     cargoVolume: o.cargoVolume ?? undefined,
                     cargoLength: o.cargoLength ?? undefined,
@@ -740,7 +751,10 @@ export default function CreateOrderPage() {
             const finalDriverCost = showDriverCostField ? values.driverCost : null;
 
             const orderData: any = {
-                customerRefNumber: customerRefLabel ? values.customerRefNumber || undefined : undefined,
+                // Оба номера — без условий: графа больше не зависит от того,
+                // заходил ли кто-то в карточку контрагента.
+                ttnNumber: values.ttnNumber || undefined,
+                customerRefNumber: values.customerRefNumber || undefined,
                 cargoDescription: values.cargoDescription,
                 natureOfCargo: values.natureOfCargo,
                 cargoWeight: values.cargoWeight,
@@ -1146,22 +1160,6 @@ export default function CreateOrderPage() {
                                 {partners.filter(p => p.isCustomer).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                             </Select.OptGroup>
                         </Select>
-                        {/*
-                          * Номер этой перевозки в системе заказчика. Графа
-                          * появляется только у тех заказчиков, кто такой номер
-                          * ведёт, и называется так, как называет её он сам —
-                          * см. карточку контрагента. Раньше его вписывали в
-                          * «Номер ТТН», и в одной графе оказывались настоящая
-                          * накладная и чужой идентификатор.
-                          */}
-                        {customerRefLabel && (
-                            <div style={{ marginTop: 10 }}>
-                                <div className="lc-wiz-lbl">{customerRefLabel}</div>
-                                <Form.Item name="customerRefNumber" noStyle>
-                                    <Input placeholder={`${customerRefLabel} у заказчика`} />
-                                </Form.Item>
-                            </div>
-                        )}
                     </div>
                 </Col>
                 <Col xs={24} md={12}>
@@ -1244,6 +1242,21 @@ export default function CreateOrderPage() {
                     </Text>
                 )}
             </div>
+
+            <Form.Item noStyle dependencies={['ttnNumber', 'customerRefNumber']}>
+                {({ getFieldValue }) => (
+                    <TransportNumbers
+                        ttnNumber={getFieldValue('ttnNumber')}
+                        refNumber={getFieldValue('customerRefNumber')}
+                        refLabel={customerRefLabel}
+                        counterpartyId={selectedCustomer && selectedCustomer !== MY_COMPANY_VALUE ? selectedCustomer : null}
+                        canRename={!!selectedCustomerIsExternal}
+                        onRenamed={(label) => setFetchedPartners((prev) => prev.map((p: any) => (
+                            p.id === selectedCustomer ? { ...p, customerRefLabel: label } : p
+                        )))}
+                    />
+                )}
+            </Form.Item>
 
             <div className="lc-wiz-head">
                 <div className="t">Ставки</div>

@@ -9,6 +9,7 @@ import { CargoComposition } from '@/components/orders/CargoComposition';
 import type { CargoState } from '@/lib/cargo';
 import CurrencySelect from '@/components/orders/CurrencySelect';
 import { MarginSummary } from '@/components/orders/MarginSummary';
+import { TransportNumbers } from '@/components/orders/TransportNumbers';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import nova from '@/components/nova/nova.module.css';
 import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
@@ -41,8 +42,17 @@ interface OrderEditFormProps {
     roleInfo: { text: string; color: string };
     setQuickPartnerModalOpen: (open: boolean) => void;
     setQuickPartnerTarget: (target: 'CUSTOMER' | 'CARRIER' | null) => void;
-    /** Как выбранный заказчик называет свой номер перевозки. Пусто — графы нет. */
+    /**
+     * Как выбранный заказчик называет свой номер перевозки.
+     *
+     * Пусто — графа называется «Номер у заказчика» и всё равно работает:
+     * раньше без этой настройки её просто не существовало.
+     */
     customerRefLabel?: string | null;
+    /** Кому переименовывать графу — только контрагенту из нашего справочника. */
+    customerRefCounterpartyId?: string | null;
+    customerRefCanRename?: boolean;
+    onCustomerRefLabelChange?: (label: string) => void;
 
     /** Справочники формы — грузятся при входе в режим правки */
     cargoCategories: any[];
@@ -90,6 +100,7 @@ export default function OrderEditForm(props: OrderEditFormProps) {
         selectedCustomer, setSelectedCustomer, selectedCarrier, setSelectedCarrier,
         getPartyOptions, myCompanyName, roleInfo,
         setQuickPartnerModalOpen, setQuickPartnerTarget, customerRefLabel,
+        customerRefCounterpartyId, customerRefCanRename, onCustomerRefLabelChange,
         settlements,
         cargoCategories,
         showCustomerPriceField, showDriverCostField, customerPriceLabel, driverCostLabel,
@@ -327,18 +338,25 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                 )}
                             />
                             {/*
-                              * Номер этой перевозки в системе заказчика. Графа
-                              * была только в мастере создания: узнали номер
-                              * позже или ошиблись — исправить нечем, а счёт без
-                              * него заказчик возвращает.
+                              * Номера рейса — тем же блоком, что и в мастере:
+                              * ТТН часто узнают уже на погрузке, а номер
+                              * заказчика — когда он пришлёт свою заявку. Не
+                              * было бы их здесь — исправить нечем, а счёт без
+                              * номера заказчик возвращает.
                               */}
-                            {customerRefLabel && (
-                                <div style={{ marginTop: 12 }}>
-                                    <Form.Item name="customerRefNumber" label={customerRefLabel} style={{ marginBottom: 0 }}>
-                                        <Input size="large" placeholder={`${customerRefLabel} у заказчика`} />
-                                    </Form.Item>
-                                </div>
-                            )}
+                            <Form.Item noStyle dependencies={['ttnNumber', 'customerRefNumber']}>
+                                {({ getFieldValue }) => (
+                                    <TransportNumbers
+                                        ttnNumber={getFieldValue('ttnNumber')}
+                                        refNumber={getFieldValue('customerRefNumber')}
+                                        refLabel={customerRefLabel}
+                                        counterpartyId={customerRefCounterpartyId}
+                                        canRename={!!customerRefCanRename}
+                                        onRenamed={onCustomerRefLabelChange}
+                                        disabled={!canEditFinance}
+                                    />
+                                )}
+                            </Form.Item>
                         </div>
 
                         <div style={{ marginBottom: 20 }}>

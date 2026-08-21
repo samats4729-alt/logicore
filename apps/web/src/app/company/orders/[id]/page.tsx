@@ -895,6 +895,7 @@ export default function OrderDetailPage() {
             driverPaymentCondition: order.driverPaymentCondition || undefined,
             driverPaymentForm: order.driverPaymentForm || undefined,
             customerRefNumber: (order as any).customerRefNumber || undefined,
+            ttnNumber: (order as any).ttnNumber || undefined,
         });
 
         if (order.routePoints && order.routePoints.length > 0) {
@@ -976,7 +977,11 @@ export default function OrderDetailPage() {
             const updateData: any = {
                 // Номер перевозки у заказчика: пустая строка стирает прежний,
                 // поэтому шлём null, а не undefined — иначе стереть было бы нечем.
-                customerRefNumber: customerRefLabel ? (values.customerRefNumber || null) : undefined,
+                // Оба номера — без условий: графа больше не зависит от того,
+                // заходил ли кто-то в карточку контрагента. null, а не
+                // undefined: стёртый номер должен стереться и в базе.
+                ttnNumber: values.ttnNumber || null,
+                customerRefNumber: values.customerRefNumber || null,
                 cargoDescription: values.cargoDescription,
                 natureOfCargo: values.natureOfCargo,
                 cargoWeight: values.cargoWeight,
@@ -1679,6 +1684,11 @@ export default function OrderDetailPage() {
                                     customerPriceLabel={customerPriceLabel}
                                     driverCostLabel={driverCostLabel}
                                     canEditFinance={canEditFinance}
+                                    customerRefCounterpartyId={selectedCustomer || null}
+                                    customerRefCanRename={!!(partners.find((p) => p.id === selectedCustomer) as any)?.isExternal}
+                                    onCustomerRefLabelChange={(label) => setPartners((prev) => prev.map((p: any) => (
+                                        p.id === selectedCustomer ? { ...p, customerRefLabel: label } : p
+                                    )))}
                                     setIsEditing={setIsEditing}
                                     cargo={cargoState}
                                     setCargo={setCargoState}
