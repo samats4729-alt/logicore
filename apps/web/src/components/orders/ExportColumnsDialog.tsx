@@ -20,7 +20,10 @@ import styles from './export-columns-dialog.module.css';
 const GROUPS: { title: string; columns: string[] }[] = [
     {
         title: 'Рейс',
-        columns: ['№ заявки', 'Статус', 'Груз', 'Вес, кг', 'Откуда', 'Куда'],
+        columns: [
+            '№ заявки', 'Номер ТТН', 'Номер у заказчика',
+            'Статус', 'Груз', 'Вес, кг', 'Откуда', 'Куда',
+        ],
     },
     {
         title: 'Даты',

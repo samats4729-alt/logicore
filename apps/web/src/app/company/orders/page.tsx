@@ -996,6 +996,31 @@ export default function CompanyOrdersPage() {
         }
     }] : [];
 
+    /**
+     * Номера, по которым заказчик находит рейс у себя: накладная и его
+     * собственный номер.
+     *
+     * Одной графой, а не двумя: журнал и так широкий, а номера читают
+     * вместе — бухгалтер сверяет по ним счёт, не открывая заявку. Пустых
+     * подписей в ячейке нет, поэтому у обычного рейса это просто прочерк.
+     */
+    const numbersColumn = {
+        title: 'Номера', key: 'transportNumbers', width: 116, ellipsis: true,
+        render: (_: any, r: Order) => {
+            const ttn = (r as any).ttnNumber?.trim();
+            const ref = (r as any).customerRefNumber?.trim();
+            if (!ttn && !ref) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
+            const полностью = [ttn && `ТТН ${ttn}`, ref && `№ заказчика ${ref}`].filter(Boolean).join(' · ');
+            return (
+                <Tooltip title={полностью}>
+                    <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', color: 'var(--nova-fg-2)' }}>
+                        {[ttn, ref].filter(Boolean).join(' · ')}
+                    </span>
+                </Tooltip>
+            );
+        },
+    };
+
     const columns = [
         {
             title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
@@ -1022,6 +1047,7 @@ export default function CompanyOrdersPage() {
             render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip>,
         },
         ...orgColumn,
+        numbersColumn,
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
             render: (d: string) => <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
@@ -1178,6 +1204,7 @@ export default function CompanyOrdersPage() {
         },
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, ellipsis: true, render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip> },
         ...orgColumn,
+        numbersColumn,
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
         {
             title: 'Дата погр.', key: 'pickupDate', width: 90,

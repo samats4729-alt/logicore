@@ -27,6 +27,11 @@ const MAX_ROWS = 5000;
  */
 export const EXPORT_COLUMNS = [
     '№ заявки',
+    // Номера, по которым заказчик находит этот рейс у себя. Стоят рядом с
+    // нашим номером: бухгалтер сверяет свою выгрузку с его реестром, и
+    // искать их в конце файла значит листать двадцать колонок вправо.
+    'Номер ТТН',
+    'Номер у заказчика',
     'Дата создания',
     'Дата погрузки',
     'Дата завершения',
@@ -142,6 +147,9 @@ export class OrdersExportService {
             select: {
                 id: true,
                 orderNumber: true,
+                // Номера рейса у заказчика: по ним он находит перевозку у себя.
+                ttnNumber: true,
+                customerRefNumber: true,
                 status: true,
                 createdAt: true,
                 completedAt: true,
@@ -254,6 +262,8 @@ export class OrdersExportService {
 
             return {
                 '№ заявки': order.orderNumber,
+                'Номер ТТН': order.ttnNumber || '',
+                'Номер у заказчика': order.customerRefNumber || '',
                 'Дата создания': date(order.createdAt),
                 'Дата погрузки': date(pickup?.expectedDate),
                 'Дата завершения': date(order.completedAt),

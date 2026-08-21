@@ -1,0 +1,98 @@
+/**
+ * Номера перевозки в заявке: ТТН и номер этого же рейса у заказчика.
+ *
+ * Свёрнуто по умолчанию. Номера нужны не каждому рейсу, а форма заведения и
+ * так длинная — два поля, которые обычно пустые, добавляли бы шум на всех
+ * заявках ради меньшинства. Поэтому на экране одна строка, а поля
+ * появляются по нажатию.
+ *
+ * Заполненные номера показываются прямо в свёрнутой строке: иначе, открыв
+ * заявку через неделю, пришлось бы разворачивать блок ради того, чтобы
+ * просто посмотреть номер.
+ */
+
+.root {
+    margin: 14px 0 4px;
+}
+
+.toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nova-fg-2);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    font-family: inherit;
+}
+
+.toggle:hover { color: var(--nova-fg); }
+
+.chev {
+    display: grid;
+    place-items: center;
+    width: 19px;
+    height: 19px;
+    flex: none;
+    border: 1px solid var(--nova-border);
+    border-radius: 6px;
+    background: var(--nova-surface-2);
+    color: var(--nova-fg-2);
+    font-size: 13px;
+    line-height: 1;
+}
+
+.sub {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--nova-fg-3);
+}
+
+/* Заполненное видно, не разворачивая. */
+.values {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    font-variant-numeric: tabular-nums;
+}
+
+.fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 11px;
+}
+
+@media (max-width: 620px) {
+    .fields { grid-template-columns: 1fr; }
+}
+
+.label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--nova-fg-2);
+    margin-bottom: 4px;
+}
+
+.rename {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--nova-accent);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.rename:hover { opacity: .8; }

@@ -1216,6 +1216,10 @@ export class AccountingDocumentsService {
                 // этого просит: свой счёт он сверяет именно по нему.
                 customerRefNumber: true,
                 customerCompany: { select: { customerRefLabel: true, customerRefPrintInvoice: true } },
+                // Накладная. В отличие от номера заказчика печатается всегда,
+                // когда заполнена: это документ рейса, а не особенность
+                // клиента, и по нему сверяют счёт с тем, что реально везли.
+                ttnNumber: true,
                 routePoints: {
                     orderBy: { sequence: 'asc' },
                     select: {
@@ -1265,8 +1269,12 @@ export class AccountingDocumentsService {
                 forwardingVat: forwarding && outgoing,
                 // Номер перевозки у заказчика — только если он просил
                 // печатать его в счёте.
+                // Заказчик своего названия графе не давал — печатаем общим.
+                // Иначе номер, который менеджер вписал в заявку, до счёта не
+                // доезжал бы ровно из-за той настройки, которую эта правка и
+                // убирает с дороги.
                 customerRefLabel: order.customerCompany?.customerRefPrintInvoice
-                    ? order.customerCompany.customerRefLabel
+                    ? (order.customerCompany.customerRefLabel?.trim() || 'Номер у заказчика')
                     : null,
                 driverVehicleModel: order.driver?.vehicleModel ?? null,
             };

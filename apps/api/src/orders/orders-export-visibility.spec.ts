@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { OrdersExportService } from './orders-export.service';
+import { OrdersExportService, EXPORT_COLUMNS } from './orders-export.service';
 import { FinanceCalculatorService } from '../accounting/services/finance-calculator.service';
 import { D } from '../common/utils/money';
 
@@ -192,7 +192,9 @@ describe('Колонки выгрузки', () => {
     };
 
     it('без отбора уходят все колонки', async () => {
-        expect(await выгрузить()).toHaveLength(24);
+        // Сверяемся со списком, а не с числом: иначе добавление колонки
+        // роняет тест, который про отбор, а не про их количество.
+        expect(await выгрузить()).toEqual([...EXPORT_COLUMNS]);
     });
 
     it('уходят только отмеченные', async () => {

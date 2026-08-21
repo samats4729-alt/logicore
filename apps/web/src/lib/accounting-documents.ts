@@ -448,6 +448,8 @@ export interface BillableOrder {
      */
     customerRefNumber: string | null;
     customerRefLabel: string | null;
+    /** Номер накладной. Печатается всегда, когда заполнен. */
+    ttnNumber: string | null;
     routePoints: AccountingDocumentRoutePoint[];
 }
 
@@ -747,6 +749,7 @@ export function orderInvoiceDetails(order: BillableOrder): string | null {
         order.customerRefLabel && order.customerRefNumber
             ? `${order.customerRefLabel}: ${order.customerRefNumber}`
             : null,
+        order.ttnNumber ? `ТТН: ${order.ttnNumber}` : null,
         unloadingDate ? `дата разгрузки: ${unloadingDate}` : null,
     ].filter(Boolean).join(', ') || null;
 }
