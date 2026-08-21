@@ -23,6 +23,7 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { IdentityService } from '../identity/identity.service';
 import { CompanyVerificationService } from './services/company-verification.service';
+import { TelegramAdminService } from '../telegram/telegram-admin.service';
 
 class CreateMyCompanyDto {
     @IsString()
@@ -69,6 +70,7 @@ export class MyCompanyController {
         private readonly identity: IdentityService,
         private readonly audit: AuditService,
         private readonly auth: AuthService,
+        private readonly telegramAdmin: TelegramAdminService,
     ) {}
 
     @Get()
@@ -210,6 +212,14 @@ export class MyCompanyController {
             entityId: req.user.companyId,
             entityLabel: 'Организация отправлена на проверку',
         });
+        // Владельцу — в телеграм, сразу с кнопками. Пока компания не
+        // подтверждена, она не может завести ни одной заявки: каждый час
+        // ожидания она просто сидит и смотрит на пустой кабинет.
+        //
+        // Не ждём отправки и не даём ей сорвать ответ: заявка на проверку
+        // уже сохранена, и недоступный мессенджер не повод показывать
+        // человеку ошибку.
+        void this.telegramAdmin.notifySubmitted(req.user.companyId);
         return result;
     }
 }
