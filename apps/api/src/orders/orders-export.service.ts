@@ -59,6 +59,14 @@ export const EXPORT_COLUMNS = [
 
 export type ExportColumn = (typeof EXPORT_COLUMNS)[number];
 
+/**
+ * Имя графы с номером заказчика — то, под которым её отмечают галочкой.
+ *
+ * В самом файле заголовок может смениться на слово заказчика («ID»), но
+ * ключ колонки остаётся этим: браузер присылает отбор именно им.
+ */
+export const CUSTOMER_REF_COLUMN = 'Номер у заказчика';
+
 const STATUS_RU: Record<string, string> = {
     DRAFT: 'Черновик',
     PENDING: 'Ожидает назначения',
@@ -159,7 +167,9 @@ export class OrdersExportService {
                 assignedDriverPlate: true,
                 customerPaymentDate: true,
                 driverPaymentDate: true,
-                customerCompany: { select: { name: true } },
+                // `customerRefLabel` — как этот заказчик называет свой номер
+                // перевозки. Этим словом подписывается графа в файле.
+                customerCompany: { select: { name: true, customerRefLabel: true } },
                 subForwarder: { select: { name: true } },
                 partner: { select: { name: true } },
                 forwarder: { select: { name: true } },
@@ -311,11 +321,29 @@ export class OrdersExportService {
             ? EXPORT_COLUMNS.filter((name) => wanted.includes(name))
             : EXPORT_COLUMNS;
 
+        /**
+         * Графу с номером заказчика подписываем его же словом.
+         *
+         * У одного клиента это «ID», у другого «Номер ТТН»: он сверяет файл
+         * со своим реестром и ищет там знакомое слово, а не наше.
+         *
+         * Только когда заказчик в файле один: заголовок в листе один на все
+         * строки, и при нескольких клиентах он врал бы про часть из них. В
+         * этом случае остаётся общее название.
+         */
+        const refLabels = new Set(
+            orders
+                .map((order) => order.customerCompany?.customerRefLabel?.trim())
+                .filter((label): label is string => !!label),
+        );
+        const refTitle = refLabels.size === 1 ? [...refLabels][0] : CUSTOMER_REF_COLUMN;
+        const heading = (name: string) => (name === CUSTOMER_REF_COLUMN ? refTitle : name);
+
         const trimmed = rows.map((row) => Object.fromEntries(
-            kept.map((name) => [name, (row as Record<string, unknown>)[name]]),
+            kept.map((name) => [heading(name), (row as Record<string, unknown>)[name]]),
         ));
 
-        const sheet = XLSX.utils.json_to_sheet(trimmed, { header: kept as string[] });
+        const sheet = XLSX.utils.json_to_sheet(trimmed, { header: kept.map(heading) });
 
         // Ширина колонок по содержимому: иначе Excel открывается сеткой из
         // «####», и первым делом человек тянет границы мышкой.

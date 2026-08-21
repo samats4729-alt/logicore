@@ -26,6 +26,8 @@ import { fetcher } from '@/lib/api';
 import AssignDriverModal from '@/components/AssignDriverModal';
 import OrdersMobileList from '@/components/OrdersMobileList';
 import { ExportColumnsDialog } from '@/components/orders/ExportColumnsDialog';
+import { TableColumnsButton } from '@/components/orders/TableColumnsButton';
+import { DEFAULT_REF_LABEL } from '@/components/orders/TransportNumbers';
 import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -174,6 +176,8 @@ export default function CompanyOrdersPage() {
     const [driversLoading, setDriversLoading] = useState(false);
     const [partners, setPartners] = useState<Partner[]>([]);
     const [partnersLoading, setPartnersLoading] = useState(false);
+    /** Скрытые колонки журнала — читаются из браузера при первой отрисовке. */
+    const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
     const [assignModalOpen, setAssignModalOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -456,6 +460,9 @@ export default function CompanyOrdersPage() {
                 isExternal: true,
                 isCustomer: !!e.isCustomer,
                 isCarrier: !!e.isCarrier,
+                // Как этот заказчик называет свой номер перевозки: этим же
+                // словом называется колонка в журнале и графа в выгрузке.
+                customerRefLabel: e.customerRefLabel ?? null,
             }));
             const ownCompany = profileRes.data ? [{ id: profileRes.data.id, name: `${profileRes.data.name} (Моя компания)`, isCustomer: true, isCarrier: true }] : [];
             const combined = [...ownCompany, ...partnersList, ...externalList];
@@ -752,6 +759,26 @@ export default function CompanyOrdersPage() {
     const shownCount = isArchive ? visibleArchiveOrders.length : visibleOrders.length;
 
     /**
+     * Как назвать колонку с номером заказчика.
+     *
+     * У каждого заказчика графа называется по-своему — «ID», «Номер ТТН»,
+     * «Номер заказа», — а заголовок в таблице один на все строки. Пока на
+     * экране рейсы одного заказчика, ставим его название: бухгалтер
+     * отбирает журнал по клиенту и хочет видеть его слово. Как только
+     * заказчиков несколько, возвращаем общее — иначе заголовок врал бы про
+     * часть строк.
+     */
+    const customerRefTitle = useMemo(() => {
+        const рейсы = isArchive ? visibleArchiveOrders : visibleOrders;
+        const названия = new Set(
+            рейсы
+                .map((o) => (partners.find((p: any) => p.id === o.customerCompanyId) as any)?.customerRefLabel?.trim())
+                .filter(Boolean) as string[],
+        );
+        return названия.size === 1 ? Array.from(названия)[0] : DEFAULT_REF_LABEL;
+    }, [isArchive, visibleOrders, visibleArchiveOrders, partners]);
+
+    /**
      * Выгрузить в Excel то, что сейчас отобрано.
      *
      * Список уходит на сервер поимённо: отбор живёт в браузере, и повторять
@@ -1004,22 +1031,36 @@ export default function CompanyOrdersPage() {
      * вместе — бухгалтер сверяет по ним счёт, не открывая заявку. Пустых
      * подписей в ячейке нет, поэтому у обычного рейса это просто прочерк.
      */
-    const numbersColumn = {
-        title: 'Номера', key: 'transportNumbers', width: 116, ellipsis: true,
-        render: (_: any, r: Order) => {
-            const ttn = (r as any).ttnNumber?.trim();
-            const ref = (r as any).customerRefNumber?.trim();
-            if (!ttn && !ref) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-            const полностью = [ttn && `ТТН ${ttn}`, ref && `№ заказчика ${ref}`].filter(Boolean).join(' · ');
-            return (
-                <Tooltip title={полностью}>
-                    <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', color: 'var(--nova-fg-2)' }}>
-                        {[ttn, ref].filter(Boolean).join(' · ')}
-                    </span>
-                </Tooltip>
-            );
-        },
+    const номер = (значение?: string | null) => {
+        const текст = значение?.trim();
+        if (!текст) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
+        return (
+            <Tooltip title={текст}>
+                <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', color: 'var(--nova-fg-2)' }}>
+                    {текст}
+                </span>
+            </Tooltip>
+        );
     };
+
+    const ttnColumn = {
+        title: 'ТТН', key: 'ttnNumber', width: 104, ellipsis: true,
+        render: (_: any, r: Order) => номер((r as any).ttnNumber),
+    };
+
+    const customerRefColumn = {
+        title: customerRefTitle, key: 'customerRefNumber', width: 104, ellipsis: true,
+        render: (_: any, r: Order) => номер((r as any).customerRefNumber),
+    };
+
+    /**
+     * Колонки, которые журнал показывает сейчас.
+     *
+     * Прячется по ключу, а не по месту в списке: колонки перетасовываются,
+     * а ключ у графы один. Статус и номер заявки скрыть нельзя — без них
+     * строку не узнать.
+     */
+    const applyHidden = (list: any[]) => list.filter((c) => !hiddenColumns.has(c.key));
 
     const columns = [
         {
@@ -1047,7 +1088,8 @@ export default function CompanyOrdersPage() {
             render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip>,
         },
         ...orgColumn,
-        numbersColumn,
+        ttnColumn,
+        customerRefColumn,
         {
             title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
             render: (d: string) => <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
@@ -1204,7 +1246,8 @@ export default function CompanyOrdersPage() {
         },
         { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, ellipsis: true, render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip> },
         ...orgColumn,
-        numbersColumn,
+        ttnColumn,
+        customerRefColumn,
         { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
         {
             title: 'Дата погр.', key: 'pickupDate', width: 90,
@@ -1275,6 +1318,27 @@ export default function CompanyOrdersPage() {
             </Tooltip>
         ) },
     ];
+
+    /**
+     * Что предложить в окне выбора колонок.
+     *
+     * Берём из той таблицы, что сейчас на экране: у архива свой набор, и
+     * показывать там графы текущих заявок значило бы предлагать спрятать
+     * то, чего и так нет.
+     */
+    const columnChoices = useMemo(() => {
+        const list = isArchive ? archiveColumns : columns;
+        return list
+            // Колонка действий без заголовка — прятать в списке нечего.
+            .filter((c: any) => typeof c.title === 'string' && c.title.trim())
+            .map((c: any) => ({
+                key: c.key as string,
+                title: c.title as string,
+                // Статус и номер держат строку узнаваемой: без них журнал
+                // превращается в набор цифр без принадлежности.
+                locked: c.key === 'status' || c.key === 'orderNumber',
+            }));
+    }, [isArchive, columns, archiveColumns]);
 
     // =================== RENDER ===================
 
@@ -1378,6 +1442,16 @@ export default function CompanyOrdersPage() {
                             <ArrowUpDown size={14} />
                         </button>
                     </Tooltip>
+
+                    {/* Рядом с фильтрами: и то и другое отвечает на вопрос
+                        «почему я вижу именно это». Фильтры решают, какие
+                        строки, колонки — какие графы. */}
+                    <TableColumnsButton
+                        storageKey="lc-orders-hidden-columns"
+                        choices={columnChoices}
+                        hidden={hiddenColumns}
+                        onChange={setHiddenColumns}
+                    />
 
                     {/* Отвечает на вопрос, ради которого раньше смотрели на ряд
                         плашек с условиями: почему в списке 10 строк, а не 37.
@@ -1523,7 +1597,7 @@ export default function CompanyOrdersPage() {
                             />
                         ) : (
                             <Table
-                                columns={archiveColumns}
+                                columns={applyHidden(archiveColumns)}
                                 dataSource={visibleArchiveOrders}
                                 rowKey="id"
                                 loading={archiveLoading}
@@ -1568,7 +1642,7 @@ export default function CompanyOrdersPage() {
                             />
                         ) : (
                             <Table
-                                columns={columns}
+                                columns={applyHidden(columns)}
                                 dataSource={visibleOrders}
                                 rowKey="id"
                                 loading={loading}
