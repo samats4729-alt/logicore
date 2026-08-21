@@ -18,6 +18,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { DEFAULT_CUSTOMER_REF_LABEL } from '../orders/customer-ref';
 import { CurrencyService } from '../currency/currency.service';
 import { PeriodClosingService } from '../accounting/services/period-closing.service';
 import type { FinancialReportsService } from '../accounting/services/financial-reports.service';
@@ -1274,7 +1275,7 @@ export class AccountingDocumentsService {
                 // доезжал бы ровно из-за той настройки, которую эта правка и
                 // убирает с дороги.
                 customerRefLabel: order.customerCompany?.customerRefPrintInvoice
-                    ? (order.customerCompany.customerRefLabel?.trim() || 'Номер у заказчика')
+                    ? (order.customerCompany.customerRefLabel?.trim() || DEFAULT_CUSTOMER_REF_LABEL)
                     : null,
                 driverVehicleModel: order.driver?.vehicleModel ?? null,
             };
