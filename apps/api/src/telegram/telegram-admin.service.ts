@@ -240,7 +240,14 @@ export class TelegramAdminService {
     private async sendDocuments(chatId: string, companyId: string): Promise<void> {
         const компании = await this.verification.listForReview(CompanyVerificationStatus.PENDING);
         const company = компании.find((c: any) => c.id === companyId);
-        const документы = company?.documents ?? [];
+        if (!company) {
+            // Кнопки живут в переписке вечно, а очередь меняется. Нажали на
+            // вчерашнее сообщение — надо сказать прямо, а не отвечать
+            // «документов нет»: это разные вещи и разные действия дальше.
+            await this.telegram.sendTo(chatId, 'Этой компании в очереди уже нет — решение по ней принято.');
+            return;
+        }
+        const документы = company.documents ?? [];
         if (!документы.length) {
             await this.telegram.sendTo(chatId, 'Документов не приложено.');
             return;
@@ -250,7 +257,7 @@ export class TelegramAdminService {
             try {
                 const файл = await this.verification.readDocument(doc.id);
                 const buffer = await streamToBuffer(файл.stream);
-                const подпись = [company?.name, doc.type].filter(Boolean).join(' · ');
+                const подпись = [company.name, doc.type].filter(Boolean).join(' · ');
                 await this.telegram.sendDocument(
                     chatId,
                     { buffer, name: файл.fileName || 'документ', mimeType: файл.mimeType || undefined },
