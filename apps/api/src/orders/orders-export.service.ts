@@ -10,9 +10,18 @@ import {
 } from '../accounting/services/finance-calculator.service';
 import { toNum } from '../common/utils/money';
 import { isCustomerOnly, maskForCustomer } from './order-visibility';
+import { DEFAULT_CUSTOMER_REF_LABEL } from './customer-ref';
 
 /** Столько строк выгружают глазами; больше — это уже вопрос к отчётам. */
 const MAX_ROWS = 5000;
+
+/**
+ * Имя графы с номером заказчика — то, под которым её отмечают галочкой.
+ *
+ * В самом файле заголовок сменится на слово заказчика, если он своё дал;
+ * ключ колонки остаётся этим — браузер присылает отбор именно им.
+ */
+export const CUSTOMER_REF_COLUMN = DEFAULT_CUSTOMER_REF_LABEL;
 
 /**
  * Колонки выгрузки — в том порядке, в каком они идут в файле.
@@ -31,7 +40,7 @@ export const EXPORT_COLUMNS = [
     // нашим номером: бухгалтер сверяет свою выгрузку с его реестром, и
     // искать их в конце файла значит листать двадцать колонок вправо.
     'Номер ТТН',
-    'Номер у заказчика',
+    CUSTOMER_REF_COLUMN,
     'Дата создания',
     'Дата погрузки',
     'Дата завершения',
@@ -58,14 +67,6 @@ export const EXPORT_COLUMNS = [
 ] as const;
 
 export type ExportColumn = (typeof EXPORT_COLUMNS)[number];
-
-/**
- * Имя графы с номером заказчика — то, под которым её отмечают галочкой.
- *
- * В самом файле заголовок может смениться на слово заказчика («ID»), но
- * ключ колонки остаётся этим: браузер присылает отбор именно им.
- */
-export const CUSTOMER_REF_COLUMN = 'Номер у заказчика';
 
 const STATUS_RU: Record<string, string> = {
     DRAFT: 'Черновик',
@@ -273,7 +274,7 @@ export class OrdersExportService {
             return {
                 '№ заявки': order.orderNumber,
                 'Номер ТТН': order.ttnNumber || '',
-                'Номер у заказчика': order.customerRefNumber || '',
+                [CUSTOMER_REF_COLUMN]: order.customerRefNumber || '',
                 'Дата создания': date(order.createdAt),
                 'Дата погрузки': date(pickup?.expectedDate),
                 'Дата завершения': date(order.completedAt),

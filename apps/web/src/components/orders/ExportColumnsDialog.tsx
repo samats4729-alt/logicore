@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { DEFAULT_REF_LABEL } from './TransportNumbers';
 import styles from './export-columns-dialog.module.css';
 
 /**
@@ -21,7 +22,7 @@ const GROUPS: { title: string; columns: string[] }[] = [
     {
         title: 'Рейс',
         columns: [
-            '№ заявки', 'Номер ТТН', 'Номер у заказчика',
+            '№ заявки', 'Номер ТТН', DEFAULT_REF_LABEL,
             'Статус', 'Груз', 'Вес, кг', 'Откуда', 'Куда',
         ],
     },
