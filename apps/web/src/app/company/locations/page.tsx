@@ -302,8 +302,9 @@ export default function CompanyLocationsPage() {
             ? `Поиск по адресам · ${selectedPartner.name}`
             : 'Поиск контрагента по названию...';
 
+    // Справочник адресов — список, значит по экрану, а не в колонку.
     return (
-        <div className="lc-page" style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div className="lc-page">
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>

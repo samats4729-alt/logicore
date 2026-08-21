@@ -88,8 +88,9 @@ export default function CompanyWarehousePage() {
     const waitingCount = queueItems.filter(i => !i.assignedAt).length;
     const loadingCount = queueItems.filter(i => i.startedAt && !i.completedAt).length;
 
+    // Склад — таблица остатков: по экрану, а не в колонку.
     return (
-        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+        <div className="lc-page">
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
