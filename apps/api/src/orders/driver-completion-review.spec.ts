@@ -84,6 +84,20 @@ describe('Завершил водитель — ждёт проверки', () =
             expect(data.driverCompletedAt).toBeUndefined();
         });
 
+        it('в рейсе есть вторая компания — накладную всё равно ждут сейчас', async () => {
+            // Завершение по такому рейсу становится запросом на подтверждение
+            // второй стороной: она ответит через час или завтра. Но фото
+            // накладной надо смотреть, пока водитель стоит на выгрузке.
+            const { service, prisma } = сервис(рейс());
+            prisma.company.findMany.mockResolvedValue([{ id: 'вторая-компания' }]);
+
+            await service.updateStatus(РЕЙС, OrderStatus.COMPLETED, 'Driver link', 'водитель-1', НАША, 'DRIVER');
+
+            const data = prisma.order.update.mock.calls[0][0].data;
+            expect(data.pendingStatus).toBe(OrderStatus.COMPLETED);
+            expect(data.driverCompletedAt).toBeInstanceOf(Date);
+        });
+
         it('рейс переоткрыли — прежняя проверка недействительна', async () => {
             const завершённый = рейс({
                 status: OrderStatus.COMPLETED,

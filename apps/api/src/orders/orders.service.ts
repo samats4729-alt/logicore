@@ -791,6 +791,19 @@ export class OrdersService {
                             pendingStatus: OrderStatus.COMPLETED,
                             pendingStatusById: initiatorCompanyId,
                             pendingStatusAt: new Date(),
+                            /**
+                             * Рейс закрыл водитель — накладную надо смотреть
+                             * сейчас, пока он стоит на выгрузке.
+                             *
+                             * Подтверждение второй компанией — дело отдельное
+                             * и небыстрое: она ответит через час или завтра.
+                             * Ждать её, чтобы показать менеджеру «проверьте
+                             * фото», значит показать ему это, когда водителя
+                             * уже нет.
+                             */
+                            ...(role === 'DRIVER'
+                                ? { driverCompletedAt: new Date(), completionReviewedAt: null, completionReviewedById: null }
+                                : {}),
                             statusHistory: {
                                 create: {
                                     status: order.status, // Оставляем текущий статус

@@ -28,6 +28,8 @@ import OrdersMobileList from '@/components/OrdersMobileList';
 import { ExportColumnsDialog } from '@/components/orders/ExportColumnsDialog';
 import { TableColumnsButton } from '@/components/orders/TableColumnsButton';
 import { DEFAULT_REF_LABEL } from '@/components/orders/TransportNumbers';
+import { needsCompletionReview } from '@/lib/completion-review';
+import { playAlertSound } from '@/lib/alert-sound';
 import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -113,6 +115,9 @@ interface Order {
     responsibleManager?: { firstName: string; lastName: string; };
     pendingStatus?: string;
     pendingStatusById?: string;
+    /** Рейс закрыл водитель — фото накладной ещё никто не смотрел. */
+    driverCompletedAt?: string | null;
+    completionReviewedAt?: string | null;
 }
 
 // ============================================================
@@ -151,9 +156,18 @@ export default function CompanyOrdersPage() {
     const [archivePageSize, setArchivePageSize] = useState(20);
 
     // Fetch all active orders with SWR (unified — no incoming/outgoing split)
+    /**
+     * Список сам перечитывается раз в минуту.
+     *
+     * Без этого журнал был мёртвой картинкой: водитель закрывал рейс, а
+     * менеджер, сидя на открытой странице, не узнавал об этом, пока не
+     * перезагрузит. Метка «проверьте ТТН» на такой странице бесполезна —
+     * она бы просто никогда не появилась вовремя.
+     */
     const { data: ordersData, isLoading: loading, error: ordersError, mutate: mutateOrders } = useSWR(
         `/company/orders?page=${ordersPage}&limit=${ordersPageSize}&type=active`,
-        fetcher
+        fetcher,
+        { refreshInterval: 60_000 },
     );
     const orders: Order[] = ordersData?.data || [];
     const totalOrders = ordersData?.total || 0;
@@ -178,6 +192,8 @@ export default function CompanyOrdersPage() {
     const [partnersLoading, setPartnersLoading] = useState(false);
     /** Скрытые колонки журнала — читаются из браузера при первой отрисовке. */
     const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+    /** Показывать только рейсы, ждущие проверки накладной. */
+    const [reviewOnly, setReviewOnly] = useState(false);
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
     const [assignModalOpen, setAssignModalOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -738,8 +754,13 @@ export default function CompanyOrdersPage() {
     };
 
     const visibleOrders = useMemo(
-        () => applyQueryAndSort(filteredOrders),
-        [filteredOrders, query, sortDesc],
+        () => {
+            const строки = applyQueryAndSort(filteredOrders);
+            // Отдельным шагом, а не в общем фильтре: это не признак заявки,
+            // а срочное «посмотрите вот эти» поверх любого другого отбора.
+            return reviewOnly ? строки.filter(needsCompletionReview) : строки;
+        },
+        [filteredOrders, query, sortDesc, reviewOnly],
     );
     const visibleArchiveOrders = useMemo(
         () => applyQueryAndSort(filteredArchiveOrders),
@@ -753,6 +774,43 @@ export default function CompanyOrdersPage() {
         filterSumMax !== undefined ? 'max' : undefined,
         periodFrom || periodTo ? 'период' : undefined,
     ].filter(Boolean).length;
+
+    /**
+     * Рейсы, закрытые водителем, которых ещё никто не смотрел.
+     *
+     * Считаем по всему загруженному списку, а не по отобранному на экране:
+     * фильтр по заказчику не должен прятать рейс, где водитель прямо сейчас
+     * стоит на выгрузке с нечитаемой накладной.
+     */
+    const awaitingReview = useMemo(() => orders.filter(needsCompletionReview), [orders]);
+
+    /**
+     * Звук — один раз на каждый новый непроверенный рейс.
+     *
+     * Не на каждую перечитку списка: рейс, который висит непроверенным
+     * полчаса, не должен пищать каждую минуту. Помним, о чём уже сообщили.
+     */
+    const оповещённые = useRef<Set<string> | null>(null);
+    useEffect(() => {
+        const сейчас = new Set(awaitingReview.map((o) => o.id));
+        // Первый список за сессию — только запоминаем: пищать при входе на
+        // страницу о том, что случилось вчера, незачем.
+        if (оповещённые.current === null) {
+            оповещённые.current = сейчас;
+            return;
+        }
+        const новые = awaitingReview.filter((o) => !оповещённые.current!.has(o.id));
+        оповещённые.current = сейчас;
+        if (!новые.length) return;
+
+        playAlertSound();
+        toast.warning(
+            новые.length === 1
+                ? `Водитель закрыл рейс ${новые[0].orderNumber} — проверьте фото накладной`
+                : `Водители закрыли рейсов: ${новые.length}. Проверьте фото накладных`,
+            { id: 'completion-review', duration: 10_000 },
+        );
+    }, [awaitingReview]);
 
     const isArchive = activeTab === 'archive';
     const totalCount = isArchive ? totalArchiveOrders : totalOrders;
@@ -1064,7 +1122,10 @@ export default function CompanyOrdersPage() {
 
     const columns = [
         {
-            title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
+            // 132, а не 110: рядом с плашкой статуса встают значки —
+            // подтверждение завершения и «проверьте накладную», — и в 110
+            // они обрезались по правому краю ячейки.
+            title: 'Статус', dataIndex: 'status', key: 'status', width: 132, fixed: 'left' as const,
             render: (s: string, r: Order) => (
                 <div>
                     <StatusPill status={s} />
@@ -1076,6 +1137,16 @@ export default function CompanyOrdersPage() {
                     {r.pendingStatus === 'COMPLETED' && r.pendingStatusById === user?.companyId && (
                         <Tooltip title="Вы запросили завершение, ожидаем подтверждения">
                             <ExclamationCircleOutlined style={{ color: '#1890ff', marginLeft: 4, fontSize: 13 }} />
+                        </Tooltip>
+                    )}
+                    {/* Рейс закрыл водитель, накладную никто не смотрел.
+                        Значком, а не подписью: в ячейку статуса вторая
+                        строка не влезает и обрезается. Громкий сигнал —
+                        полоса над списком, здесь достаточно пометить строку,
+                        чтобы её было видно после нажатия «показать их». */}
+                    {needsCompletionReview(r) && (
+                        <Tooltip title="Водитель закрыл рейс — проверьте фото накладной, пока он не уехал">
+                            <span className={journal.reviewMark}>!</span>
                         </Tooltip>
                     )}
                 </div>
@@ -1386,6 +1457,26 @@ export default function CompanyOrdersPage() {
                     onToggle={() => setFeaturedOpen(!featuredOpen)}
                 />
             </div>
+
+            {/* Рейсы, закрытые водителем и никем не просмотренные. Полоса
+                стоит над списком, а не меткой в строке: строку надо ещё
+                найти глазами, а водитель стоит на выгрузке считаные минуты.
+                Нажатие показывает только эти рейсы. */}
+            {awaitingReview.length > 0 && (
+                <button
+                    type="button"
+                    className={journal.reviewBanner}
+                    onClick={() => { setQuery(''); setActiveTab('all'); setReviewOnly((v) => !v); }}
+                >
+                    <span className={journal.reviewDot} />
+                    {awaitingReview.length === 1
+                        ? `Водитель закрыл рейс ${awaitingReview[0].orderNumber} — проверьте фото накладной`
+                        : `Водители закрыли рейсов: ${awaitingReview.length}. Проверьте фото накладных`}
+                    <span className={journal.reviewAction}>
+                        {reviewOnly ? 'показать все' : 'показать их'}
+                    </span>
+                </button>
+            )}
 
             {/* ===== КАРТОЧКА СПИСКА =====
                 Полоса управления живёт первой строкой внутри карточки, а не
