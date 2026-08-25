@@ -928,6 +928,8 @@ model Order {
   @@index([partnerId, status])
   @@index([responsibleManagerId])
   @@index([subForwarderId])
+  /// Журнал спрашивает «что ещё не проверено» на каждой отрисовке списка.
+  @@index([driverCompletedAt, completionReviewedAt])
 }
 
 model OrderRoutePoint {
