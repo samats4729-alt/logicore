@@ -10,7 +10,6 @@ import {
 import { MONTHS_GEN } from '@/lib/ru-date';
 import { cn } from '@/lib/utils';
 import {
-    DayBucket,
     fetchPlannedPayments,
     firstDayToShow,
     groupByDay,
@@ -23,7 +22,6 @@ import {
     PlannedTotals,
     shortMoney,
     WEEKDAYS_SHORT,
-    weekdayIndex,
 } from '@/lib/planned-payments';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
