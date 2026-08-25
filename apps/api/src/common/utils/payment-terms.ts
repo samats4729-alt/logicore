@@ -89,6 +89,21 @@ export function paymentTermsShort(
 }
 
 /**
+ * Дата без времени.
+ *
+ * Колонки `@db.Date` Prisma отдаёт полуночью UTC, а `DateTime` — настоящим
+ * моментом. Срок оплаты — это день, и сравнивать их можно только приведя к
+ * одному виду: иначе «выгрузка 20-го в 14:00» плюс ноль дней даёт 20-е
+ * в 14:00, и день оплаты зависит от часа выгрузки.
+ */
+export function asCalendarDay(value: Date | string | null | undefined): Date | null {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+/**
  * Плановая дата платежа.
  *
  * Дата приходит без времени (`@db.Date`-колонки Prisma отдаёт полуночью UTC),

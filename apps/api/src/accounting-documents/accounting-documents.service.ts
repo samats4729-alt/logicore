@@ -25,6 +25,7 @@ import type { FinancialReportsService } from '../accounting/services/financial-r
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
 import { OrderSettlementsService } from '../orders/order-settlements.service';
 import { toNum } from '../common/utils/money';
+import { invoiceDueDate, OrderPaymentTerms } from './invoice-due-date';
 import {
     AccountingDocumentListQueryDto,
     AccountingDocumentRegistryQueryDto,
@@ -345,6 +346,22 @@ export class AccountingDocumentsService {
             companyId, dto.currency ?? 'KZT', documentDate, documentTotal,
         );
 
+        /**
+         * Срок оплаты: свой, если его указали, иначе — из отсрочки по рейсам.
+         *
+         * Подставляется здесь, а не в форме выставления, потому что счёт
+         * создаётся четырьмя путями: форма, кнопка в карточке рейса, акт на
+         * основании счёта и счёт от контрагента по ссылке. Три из них дату
+         * не присылали вовсе, и графа оставалась пустой — а счёт без срока
+         * не попадает в платёжный календарь.
+         *
+         * Указанное человеком не трогаем: он мог договориться иначе, чем
+         * записано в карточке, и его слово здесь главнее.
+         */
+        const dueDate = dto.dueDate
+            ? new Date(dto.dueDate)
+            : (await this.dueDateFromOrders(dto, orderIds)).dueDate;
+
         const created = await this.prisma.$transaction(async (tx) => {
             const number = await this.nextNumber(
                 tx,
@@ -365,7 +382,7 @@ export class AccountingDocumentsService {
                     externalDate: dto.externalDate ? new Date(dto.externalDate) : null,
                     documentDate,
                     operationDate: dto.operationDate ? new Date(dto.operationDate) : null,
-                    dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+                    dueDate,
                     reportPeriodFrom: dto.reportPeriodFrom ? new Date(dto.reportPeriodFrom) : null,
                     reportPeriodTo: dto.reportPeriodTo ? new Date(dto.reportPeriodTo) : null,
                     contractId: dto.contractId || null,
@@ -1086,6 +1103,106 @@ export class AccountingDocumentsService {
 
     private utcDateString(value: Date) {
         return new Date(value).toISOString().slice(0, 10);
+    }
+
+    /**
+     * Срок оплаты по рейсам счёта — тот, о котором договорились в рейсе.
+     *
+     * Считается только для счёта на оплату: акт и сверка никого платить не
+     * обязывают, срока у них нет. Направление решает, чьи условия берём:
+     * исходящий счёт выставляем мы заказчику — работают условия заказчика;
+     * входящий выставил нам перевозчик — его.
+     *
+     * Отсрочка «от даты счёта» отсчитывается от даты самого документа. У
+     * входящего это дата контрагента (`externalDate`), а не день, когда мы
+     * завели документ у себя: перевозчик считает срок от своего числа. То же
+     * правило, что и в пересчёте плановых дат по рейсу.
+     */
+    private async dueDateFromOrders(
+        document: {
+            type: AccountingDocumentType;
+            direction: AccountingDocumentDirection;
+            documentDate?: string | Date | null;
+            externalDate?: string | Date | null;
+        },
+        orderIds: string[],
+    ) {
+        if (document.type !== AccountingDocumentType.PAYMENT_INVOICE || !orderIds.length) {
+            return { dueDate: null, dependsOn: null };
+        }
+
+        const outgoing = document.direction === AccountingDocumentDirection.OUTGOING;
+        const orders = await this.prisma.order.findMany({
+            where: { id: { in: orderIds } },
+            select: {
+                orderNumber: true,
+                customerPaymentDays: true,
+                customerPaymentFrom: true,
+                carrierPaymentDays: true,
+                carrierPaymentFrom: true,
+                customerOriginalsAt: true,
+                carrierOriginalsAt: true,
+                routePoints: {
+                    orderBy: { sequence: 'asc' },
+                    select: { pointType: true, expectedDate: true },
+                },
+            },
+        });
+
+        const terms: OrderPaymentTerms[] = orders.map((order) => ({
+            orderNumber: order.orderNumber,
+            days: outgoing ? order.customerPaymentDays : order.carrierPaymentDays,
+            from: outgoing ? order.customerPaymentFrom : order.carrierPaymentFrom,
+            originalsAt: outgoing ? order.customerOriginalsAt : order.carrierOriginalsAt,
+            // Выгрузка — последняя точка доставки в маршруте, как и в
+            // пересчёте сроков по рейсу.
+            unloadAt: [...order.routePoints].reverse()
+                .find((point) => point.pointType === 'DELIVERY')?.expectedDate ?? null,
+        }));
+
+        const anchorDate = outgoing
+            ? document.documentDate
+            : document.externalDate ?? document.documentDate;
+
+        return invoiceDueDate(anchorDate ?? null, terms);
+    }
+
+    /**
+     * Какой срок оплаты встанет в счёт — до того, как счёт создан.
+     *
+     * Форма выставления показывает дату сразу при подборе рейсов, а не после
+     * сохранения: пустая графа «Срок оплаты» и была жалобой. Считает всё
+     * равно сервер — на экране этих правил нет и быть не должно, иначе они
+     * разъедутся с теми, по которым дата ложится в базу.
+     */
+    async previewDueDate(
+        companyId: string,
+        query: {
+            type?: AccountingDocumentType;
+            direction: AccountingDocumentDirection;
+            counterpartyId: string;
+            documentDate?: string;
+            externalDate?: string;
+            orderIds?: string[];
+        },
+    ) {
+        const type = query.type ?? AccountingDocumentType.PAYMENT_INVOICE;
+        const orderIds = Array.from(new Set(query.orderIds ?? []));
+        if (!orderIds.length) return { dueDate: null, dependsOn: null };
+
+        // Те же права, что и при сохранении: подсказка не должна
+        // рассказывать про чужие рейсы.
+        await this.assertOrdersAccessible(
+            companyId,
+            { type, direction: query.direction, counterpartyId: query.counterpartyId },
+            orderIds,
+        );
+
+        const { dueDate, dependsOn } = await this.dueDateFromOrders(
+            { type, direction: query.direction, documentDate: query.documentDate, externalDate: query.externalDate },
+            orderIds,
+        );
+        return { dueDate: dueDate ? dueDate.toISOString().slice(0, 10) : null, dependsOn };
     }
 
     /**

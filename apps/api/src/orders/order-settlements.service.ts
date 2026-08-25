@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+    asCalendarDay as asDay,
     dueDateFrom,
     isInvoiceTiming,
     isPaymentAnchor,
@@ -76,13 +77,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * маршрута и счетов, которые лежат в базе полуночью UTC. Без приведения
  * «7 августа» из Алматы стало бы 6 августа, и вся отсрочка съехала бы на день.
  */
-const asDay = (value: Date | string | null | undefined): Date | null => {
-    if (!value) return null;
-    const date = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-};
-
 @Injectable()
 export class OrderSettlementsService {
     constructor(private readonly prisma: PrismaService) {}
