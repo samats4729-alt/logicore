@@ -53,3 +53,7 @@ output/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/e2e/.auth/
+
+# Обломки браузерных тестов, запущенных из корня, а не из apps/web.
+/test-results/
+/playwright-report/
