@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Check } from 'lucide-react';
 import PublicHeader from '@/components/public/PublicHeader';
+import PaymentMarks from '@/components/public/PaymentMarks';
 import styles from '@/components/public/public.module.css';
 
 interface AuthShellProps {
@@ -60,6 +61,7 @@ export default function AuthShell({ eyebrow, title, subtitle, points, cardWidth 
                         Продолжая, вы принимаете <a href="/terms">условия оферты</a>
                         {' '}и <a href="/privacy">политику конфиденциальности</a>
                     </div>
+                    <PaymentMarks />
                 </div>
             </div>
 
