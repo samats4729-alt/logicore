@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth';
 import { STATUS_LABELS } from '@/components/ui/StatusPill';
 import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
 import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
+import PaymentCalendarCard from '@/components/dashboard/PaymentCalendarCard';
 import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
 import dayjs from 'dayjs';
 import styles from '@/components/nova/nova.module.css';
@@ -87,6 +88,7 @@ const BLOCKS_LS_KEY = 'lc_dashboard_hidden_blocks';
 const ALL_BLOCKS = [
     { key: 'activity', label: 'Активность' },
     { key: 'debts', label: 'Задолженность' },
+    { key: 'paymentCalendar', label: 'Платёжный календарь' },
     { key: 'pendingWork', label: 'Требует оформления' },
     { key: 'events', label: 'Уведомления' },
 ];
@@ -372,6 +374,12 @@ export default function CompanyDashboard() {
                 {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ (только администратор компании) ===== */}
                 {isOwner && show('pendingWork') && <PendingWorkCard />}
                 {seesPaymentProofs && <PaymentProofsCard />}
+
+                {/* ===== ПЛАТЁЖНЫЙ КАЛЕНДАРЬ =====
+                    Кому видны деньги, тот и видит календарь: те же роли, что
+                    и у задолженности с очередью чеков. Менеджеру суммы по
+                    контрагентам не показываются нигде, и здесь тоже не место. */}
+                {seesPaymentProofs && show('paymentCalendar') && <PaymentCalendarCard />}
 
                 {/* ===== ЗАДОЛЖЕННОСТЬ (только администратор компании) ===== */}
                 {isOwner && show('debts') && debtsAvailable && (

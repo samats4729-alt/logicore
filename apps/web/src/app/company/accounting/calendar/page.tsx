@@ -7,59 +7,28 @@ import {
     ArrowLeft, ArrowDownLeft, ArrowUpRight, List, ChevronLeft, ChevronRight,
     AlertCircle, CalendarDays, FileText, Clock,
 } from 'lucide-react';
-import { api } from '@/lib/api';
 import { MONTHS_GEN } from '@/lib/ru-date';
 import { cn } from '@/lib/utils';
+import {
+    DayBucket,
+    fetchPlannedPayments,
+    firstDayToShow,
+    groupByDay,
+    IN_HEX,
+    MONTHS,
+    monthGrid,
+    moneyKzt,
+    OUT_HEX,
+    PlannedRow,
+    PlannedTotals,
+    shortMoney,
+    WEEKDAYS_SHORT,
+    weekdayIndex,
+} from '@/lib/planned-payments';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-/**
- * Строка приходит из `/accounting/planned-payments`. Обязательство создаёт
- * выставленный счёт, а не поля заявки, поэтому в строке есть и номер счёта,
- * и рейсы, к которым он привязан (их может быть несколько).
- */
-interface PlannedRow {
-    documentId: string;
-    invoiceNumber: string;
-    orderId: string | null;
-    orderNumber: string;
-    direction: 'IN' | 'OUT';
-    party: string;
-    amount: number;
-    dueDate: string | null;
-    /** Просрочку считает сервер — по календарю Казахстана, а не по часовому
-     *  поясу браузера. */
-    isOverdue: boolean;
-}
-
-interface PlannedTotals {
-    totalIn: number;
-    totalOut: number;
-    overdueIn: number;
-    overdueOut: number;
-}
-
-interface DayBucket {
-    in: number;
-    out: number;
-    items: PlannedRow[];
-    overdue: boolean;
-}
-
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const WEEKDAYS_SHORT = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
-const MONTHS = [
-    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
-];
-const MONTHS_ABBR = [
-    'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
-    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-];
-
-/** Приход и расход — единственные два цвета на экране. */
-const IN_HEX = '#16a34a';
-const OUT_HEX = '#dc2626';
 
 export default function PaymentCalendarPage() {
     const router = useRouter();
@@ -74,9 +43,9 @@ export default function PaymentCalendarPage() {
     const fetchPlanned = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/accounting/planned-payments');
-            setRows(res.data?.rows || []);
-            setTotals(res.data?.totals || null);
+            const { rows: полученные, totals: итоги } = await fetchPlannedPayments();
+            setRows(полученные);
+            setTotals(итоги);
         } catch {
             toast.error('Не удалось загрузить платёжный календарь');
         } finally {
@@ -84,27 +53,13 @@ export default function PaymentCalendarPage() {
         }
     };
 
-    const money = (v: number) => v.toLocaleString('ru-RU') + ' ₸';
-    const short = (v: number) => {
-        if (v >= 1_000_000) return (v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1).replace('.', ',') + ' млн';
-        if (v >= 1_000) return Math.round(v / 1_000) + ' тыс';
-        return String(v);
-    };
+    // Правила показа денег общие с плиткой на дашборде: разъедься они —
+    // один и тот же день показывал бы там и тут разное.
+    const money = moneyKzt;
+    const short = shortMoney;
 
     // Группировка по дню — счета без срока оплаты в календарь не попадают
-    const byDay = useMemo(() => {
-        const m = new Map<string, DayBucket>();
-        for (const r of rows) {
-            if (!r.dueDate) continue;
-            const key = dayjs(r.dueDate).format('YYYY-MM-DD');
-            const cur = m.get(key) || { in: 0, out: 0, items: [], overdue: false };
-            if (r.direction === 'IN') cur.in += r.amount; else cur.out += r.amount;
-            cur.items.push(r);
-            cur.overdue = cur.overdue || r.isOverdue;
-            m.set(key, cur);
-        }
-        return m;
-    }, [rows]);
+    const byDay = useMemo(() => groupByDay(rows), [rows]);
 
     /**
      * Если на сегодня платежей нет, открываем ближайший день, где они есть:
@@ -113,12 +68,8 @@ export default function PaymentCalendarPage() {
      */
     useEffect(() => {
         if (!rows.length) return;
-        const todayKey = dayjs().format('YYYY-MM-DD');
-        if (rows.some(r => r.dueDate && dayjs(r.dueDate).format('YYYY-MM-DD') === todayKey)) return;
-        const dated = rows.filter(r => r.dueDate).map(r => dayjs(r.dueDate as string));
-        const next = dated.filter(d => !d.isBefore(dayjs(), 'day')).sort((a, b) => a.valueOf() - b.valueOf())[0];
-        const target = next ?? dated.sort((a, b) => b.valueOf() - a.valueOf())[0];
-        if (target) { setSelected(target); setMonth(target.startOf('month')); }
+        const день = firstDayToShow(rows);
+        if (день) { setSelected(день); setMonth(день.startOf('month')); }
     }, [rows]);
 
     const noDate = useMemo(() => rows.filter(r => !r.dueDate), [rows]);
@@ -142,12 +93,7 @@ export default function PaymentCalendarPage() {
      * при перелистывании. Дни соседних месяцев показываем приглушённо —
      * без них последняя неделя выглядит обрубленной.
      */
-    const grid = useMemo(() => {
-        const first = month.startOf('month');
-        const offset = (first.day() + 6) % 7;
-        const start = first.subtract(offset, 'day');
-        return Array.from({ length: 42 }, (_, i) => start.add(i, 'day'));
-    }, [month]);
+    const grid = useMemo(() => monthGrid(month), [month]);
 
     /** Ближайшие платежи вперёд от сегодня — левая половина нижней полосы. */
     const upcoming = useMemo(() => rows
