@@ -1,0 +1,43 @@
+/*
+ * Значки платёжных систем под карточкой входа.
+ *
+ * Держатся тихо: это страница входа, а не оформление заказа. Задача —
+ * ответить на вопрос «чем платить», а не тянуть на себя внимание.
+ */
+
+.marks {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.label {
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+}
+
+/* Белая подложка обязательна: логотипы платёжных систем цветные и
+   рассчитаны на светлый фон, а в тёмной теме они иначе теряются. */
+.mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    min-width: 40px;
+    padding: 0 7px;
+    border: 1px solid var(--nova-border);
+    border-radius: 6px;
+    background: #fff;
+}
+
+.visa {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 13px;
+    font-style: italic;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    color: #1434cb;
+}

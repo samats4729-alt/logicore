@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { api, Location } from '@/lib/api';
 import { reportLoadFailure } from '@/lib/load';
+import { needsCompletionReview } from '@/lib/completion-review';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
@@ -812,6 +813,28 @@ export default function OrderDetailPage() {
 
     // =================== EDIT ORDER ===================
 
+    /**
+     * Менеджер посмотрел фото накладной и снял пометку с рейса.
+     *
+     * После этого строка в журнале перестаёт гореть. Пока не нажали —
+     * горит: переснять нечитаемое фото можно, только пока водитель стоит
+     * на выгрузке.
+     */
+    const [reviewSaving, setReviewSaving] = useState(false);
+    const confirmCompletionReviewed = async () => {
+        if (!order) return;
+        setReviewSaving(true);
+        try {
+            await api.put(`/orders/${order.id}/completion-reviewed`);
+            toast.success('Накладная проверена — пометка снята');
+            await fetchData();
+        } catch {
+            toast.error('Не удалось отметить проверку');
+        } finally {
+            setReviewSaving(false);
+        }
+    };
+
     const startEditing = () => {
         const order = data?.order;
         if (!order) return;
@@ -1519,6 +1542,21 @@ export default function OrderDetailPage() {
                     </div>
                 ) : (
                     <div className={nova.heroActions}>
+                        {/* Рейс закрыл водитель, и накладную никто не смотрел.
+                            Подтверждение — отдельное действие, а не факт
+                            открытия заявки: открыть можно мимоходом, а тут
+                            человек отвечает, что фото читается. */}
+                        {needsCompletionReview(order as any) && (
+                            <button
+                                type="button"
+                                className={`${nova.action} ${nova.actionWarn}`}
+                                disabled={reviewSaving}
+                                onClick={confirmCompletionReviewed}
+                            >
+                                <CheckCircle2 className="h-4 w-4" />
+                                {reviewSaving ? 'Сохраняю…' : 'Проверил ТТН'}
+                            </button>
+                        )}
                         <button type="button" className={nova.action} onClick={() => router.back()}>
                             <ArrowLeft className="h-4 w-4" /> К заявкам
                         </button>

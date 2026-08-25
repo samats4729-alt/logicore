@@ -100,6 +100,21 @@
     white-space: nowrap;
 }
 
+/* Действие, которого ждут прямо сейчас: проверить накладную, пока
+   водитель стоит на выгрузке. Заметнее прочих в шапке, но не красное —
+   рейс не сломан, его надо посмотреть. */
+.actionWarn {
+    border-color: var(--nova-warn);
+    background: var(--nova-warn-soft);
+    color: var(--nova-warn);
+    font-weight: 600;
+}
+
+.actionWarn:hover {
+    background: var(--nova-warn-soft);
+    filter: brightness(0.97);
+}
+
 .action:hover {
     background: var(--nova-hover);
 }

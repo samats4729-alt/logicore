@@ -356,6 +356,48 @@ export class BillableOrdersQueryDto {
     includeInProgress?: boolean;
 }
 
+/**
+ * «Какой срок оплаты встанет в счёт» — до того, как счёт создан.
+ *
+ * Нужен форме выставления: человек отмечает рейсы и сразу видит дату,
+ * посчитанную по отсрочке из этих рейсов. Считает сервер — теми же
+ * правилами, по которым дата потом ложится в базу.
+ */
+export class DueDatePreviewQueryDto {
+    @IsOptional()
+    @IsEnum(AccountingDocumentType)
+    type?: AccountingDocumentType;
+
+    @IsEnum(AccountingDocumentDirection)
+    direction!: AccountingDocumentDirection;
+
+    @IsString()
+    @IsNotEmpty()
+    counterpartyId!: string;
+
+    /** Дата счёта: от неё идёт отсрочка «от даты счёта». */
+    @IsOptional()
+    @IsDateString()
+    documentDate?: string;
+
+    /** Дата счёта контрагента — у входящего отсрочка идёт от неё. */
+    @IsOptional()
+    @IsDateString()
+    externalDate?: string;
+
+    /**
+     * Рейсы счёта. В строке запроса приходят через запятую: список короткий,
+     * а адрес читается глазами при разборе поломок.
+     */
+    @IsOptional()
+    @Transform(({ value }) => (typeof value === 'string'
+        ? value.split(',').map((id) => id.trim()).filter(Boolean)
+        : value))
+    @IsArray()
+    @IsString({ each: true })
+    orderIds?: string[];
+}
+
 export class SuggestAllocationQueryDto {
     @IsString()
     @IsNotEmpty()

@@ -30,6 +30,7 @@ import { BillingModule } from './billing/billing.module';
 import { AuditModule } from './audit/audit.module';
 import { CurrencyModule } from './currency/currency.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { TelegramAdminModule } from './telegram/telegram-admin.module';
 import { QuoteRequestsModule } from './quote-requests/quote-requests.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
@@ -86,6 +87,7 @@ import { ReportsModule } from './reports/reports.module';
         BillingModule,
         AuditModule,
         TelegramModule,
+        TelegramAdminModule,
         QuoteRequestsModule,
         MonitoringModule,
         GeoModule,

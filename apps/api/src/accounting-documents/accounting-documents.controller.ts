@@ -32,6 +32,7 @@ import {
     AccountingDocumentRegistryQueryDto,
     ApplyAllocationsDto,
     BillableOrdersQueryDto,
+    DueDatePreviewQueryDto,
     CancelAccountingDocumentDto,
     CreateAccountingDocumentDto,
     GenerateReconciliationDraftDto,
@@ -158,6 +159,17 @@ export class AccountingDocumentsController {
     })
     listBillableOrders(@Request() req: any, @Query() query: BillableOrdersQueryDto) {
         return this.documents.listBillableOrders(req.user.companyId, query);
+    }
+
+    // Тоже до `:id`, иначе путь съедается параметром.
+    @Get('due-date')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Срок оплаты, который встанет в счёт по этим заявкам',
+        description: 'Считается из отсрочки, записанной в рейсе. Пусто — вместе с причиной, почему.',
+    })
+    previewDueDate(@Request() req: any, @Query() query: DueDatePreviewQueryDto) {
+        return this.documents.previewDueDate(req.user.companyId, query);
     }
 
     // Тоже до `:id`, иначе путь съедается параметром.

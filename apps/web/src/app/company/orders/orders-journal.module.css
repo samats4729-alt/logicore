@@ -416,3 +416,82 @@
     font-size: 12.5px;
     white-space: nowrap;
 }
+
+/* ===== Рейс ждёт проверки накладной =====
+ *
+ * Водитель закрыл рейс и приложил фото накладной, стоя на выгрузке.
+ * Нечитаемое фото можно переснять ровно пока он там — поэтому метка
+ * заметная, а не бледная подсказка: её задача перебить ровный ряд
+ * одинаковых «Завершён».
+ *
+ * Цвет предупреждающий, не красный: рейс не сломан, его просто надо
+ * посмотреть. Красный в журнале уже означает долг.
+ */
+.reviewMark {
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    margin-left: 5px;
+    vertical-align: middle;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    background: var(--nova-warn);
+    color: var(--nova-surface);
+}
+
+/* Полоса над списком: водитель закрыл рейс, накладную никто не смотрел.
+ *
+ * Над таблицей, а не только меткой в строке: строку надо найти глазами
+ * среди двух десятков, а водитель стоит на выгрузке считаные минуты.
+ * Нажатие оставляет в списке только эти рейсы. */
+.reviewBanner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 10px 16px;
+    border: 1px solid var(--nova-warn);
+    border-radius: 12px;
+    background: var(--nova-warn-soft);
+    color: var(--nova-warn);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.reviewBanner:hover { filter: brightness(0.98); }
+
+/* Точка пульсирует: это единственное на экране, что требует человека
+   прямо сейчас. Тем, кто просил не мигать, движение отключено ниже. */
+.reviewDot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--nova-warn);
+    animation: reviewPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes reviewPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reviewDot { animation: none; }
+}
+
+.reviewAction {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    white-space: nowrap;
+}

@@ -1,0 +1,299 @@
+/*
+ * Компактный платёжный календарь для дашборда.
+ *
+ * Требование владельца — «чтобы помещалось»: месяц целиком, точки прихода и
+ * расхода на датах, платежи выбранного дня под сеткой. Всё это должно жить в
+ * плитке шириной 340 точек рядом с остальными карточками, поэтому клетка
+ * здесь маленькая и суммы в ней не пишутся — только точки. Суммы человек
+ * видит, ткнув в дату.
+ */
+
+/* Переход на полную страницу календаря — тем же видом, что и переходы из
+   соседних карточек дашборда. */
+.openLink {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 550;
+    color: var(--nova-accent);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.openLink:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 0 10px;
+}
+
+.month {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--nova-fg);
+    text-transform: capitalize;
+}
+
+.monthYear {
+    color: var(--nova-fg-3);
+    font-weight: 500;
+}
+
+.nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+/* Кнопки перелистывания. Preflight у Tailwind выключен, поэтому у голой
+   <button> остаются рамка и фон браузера — гасим их здесь. */
+.navBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--nova-fg-3);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.navBtn:hover {
+    background: var(--nova-surface-2);
+    color: var(--nova-fg);
+}
+
+.today {
+    height: 22px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    color: var(--nova-fg-2);
+    cursor: pointer;
+}
+
+.today:hover {
+    background: var(--nova-surface-2);
+    color: var(--nova-fg);
+}
+
+.weekdays,
+.grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.weekday {
+    padding: 3px 0;
+    text-align: center;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    color: var(--nova-fg-3);
+}
+
+.cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    /* Квадратная клетка при любой ширине плитки: высота считается от
+       ширины колонки, а не задаётся числом. */
+    aspect-ratio: 1;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    font: inherit;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.cell:hover {
+    background: var(--nova-surface-2);
+}
+
+/* День соседнего месяца: показываем, чтобы последняя неделя не выглядела
+   обрубленной, но приглушаем — он не про этот месяц. */
+.other {
+    color: var(--nova-fg-4, var(--nova-fg-3));
+    opacity: 0.45;
+}
+
+.selected,
+.selected:hover {
+    background: var(--nova-fg);
+    color: var(--nova-surface);
+}
+
+/* Сегодняшний день — обводкой внутрь, чтобы не сдвигать сетку. */
+.todayCell {
+    box-shadow: inset 0 0 0 1px var(--nova-border-strong, var(--nova-border));
+}
+
+/* Просрочка — тихой подложкой, а не красным числом: несколько красных
+   чисел в сетке кричат громче, чем стоит эта информация. */
+.overdue {
+    background: rgba(220, 38, 38, 0.09);
+}
+
+.dots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    height: 4px;
+}
+
+.dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+}
+
+/* ===== Платежи выбранного дня ===== */
+
+.day {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--nova-border-2);
+}
+
+.dayHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.dayDate {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--nova-fg);
+}
+
+.daySums {
+    display: flex;
+    gap: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    /* Дней с десятком платежей мало, но они бывают: плитка не должна
+       вырастать вдвое и выталкивать соседние карточки. */
+    max-height: 148px;
+    overflow-y: auto;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--nova-border-2);
+    border-radius: 10px;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.row:hover {
+    background: var(--nova-surface-2);
+}
+
+.rowBody {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.rowParty {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--nova-fg);
+}
+
+.rowInvoice {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10.5px;
+    color: var(--nova-fg-3);
+}
+
+.rowSum {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.empty {
+    padding: 12px 0;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+}
+
+/* Счета без срока оплаты: в календарь им встать некуда, но и молчать о них
+   нельзя — это деньги, которых человек не увидит ни в одном дне. */
+.noDate {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 8px;
+    padding: 7px 8px;
+    border: 1px solid var(--nova-border-2);
+    border-radius: 10px;
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    color: var(--nova-fg-2);
+    text-align: left;
+    cursor: pointer;
+}
+
+.noDate:hover {
+    background: var(--nova-surface-2);
+}

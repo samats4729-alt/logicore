@@ -20,6 +20,7 @@ import {
     createAccountingDocument,
     fetchBillableOrders,
     fetchCompanyBankAccounts,
+    fetchInvoiceDueDate,
     OrderLineDraft,
     orderToInvoiceLines,
     routePointsLabel,
@@ -95,6 +96,16 @@ export default function CreateInvoicePage() {
      */
     const [currency, setCurrency] = useState('KZT');
     const [dueDate, setDueDate] = useState<Dayjs | null>(null);
+    /**
+     * Срок оплаты вписали руками — больше его не пересчитываем.
+     *
+     * Отсрочка в карточке контрагента — договорённость по умолчанию, но по
+     * конкретному счёту могли условиться иначе. Слово человека здесь главнее
+     * справочника, и затирать его подстановкой нельзя.
+     */
+    const [dueDateEdited, setDueDateEdited] = useState(false);
+    /** Почему срока нет: «ждём оригиналы накладных» и подобное. */
+    const [dueDateHint, setDueDateHint] = useState<string | null>(null);
     const [bankAccountId, setBankAccountId] = useState<string | undefined>();
     const [note, setNote] = useState('');
     const [lines, setLines] = useState<DraftLine[]>([]);
@@ -139,7 +150,52 @@ export default function CreateInvoicePage() {
         setLines([]);
         setOrders([]);
         setPickedIds([]);
+        // Вместе со строками уходит и срок: он считался по прежним рейсам.
+        // Ручную правку тоже сбрасываем — она была про другого контрагента.
+        setDueDate(null);
+        setDueDateEdited(false);
+        setDueDateHint(null);
     }, [direction, counterpartyId]);
+
+    /** Рейсы, которые сейчас в строках счёта. */
+    const lineOrderIds = useMemo(
+        () => Array.from(new Set(lines.map((line) => line.orderId).filter((id): id is string => Boolean(id)))),
+        [lines],
+    );
+
+    /**
+     * Срок оплаты — из отсрочки, записанной в рейсе.
+     *
+     * До этого графа оставалась пустой: отсрочку заводили в заявке, а в счёт
+     * она не доходила, и счёт без срока не попадал в платёжный календарь.
+     * Пересчитывается при смене рейсов и дат, потому что отсрочка «от даты
+     * счёта» считается от той даты, что стоит в шапке.
+     */
+    useEffect(() => {
+        if (dueDateEdited) return;
+        if (!counterpartyId || !lineOrderIds.length) {
+            setDueDate(null);
+            setDueDateHint(null);
+            return;
+        }
+        let актуально = true;
+        fetchInvoiceDueDate({
+            direction,
+            counterpartyId,
+            orderIds: lineOrderIds,
+            documentDate: documentDate.format('YYYY-MM-DD'),
+            ...(externalDate ? { externalDate: externalDate.format('YYYY-MM-DD') } : {}),
+        })
+            .then((ответ) => {
+                if (!актуально) return;
+                setDueDate(ответ.dueDate ? dayjs(ответ.dueDate) : null);
+                setDueDateHint(ответ.dependsOn);
+            })
+            // Молчим намеренно: срок можно проставить руками, а всплывающее
+            // сообщение о неудавшейся подсказке только мешает выставлять счёт.
+            .catch(() => { if (актуально) setDueDateHint(null); });
+        return () => { актуально = false; };
+    }, [dueDateEdited, direction, counterpartyId, lineOrderIds, documentDate, externalDate]);
 
     const loadOrders = useCallback(async () => {
         if (!counterpartyId) return;
@@ -491,15 +547,40 @@ export default function CreateInvoicePage() {
                         />
                     ))}
 
+                    {/* Срок подставляется из отсрочки по отмеченным рейсам.
+                        Когда посчитать нельзя — вместо пустоты стоит причина:
+                        пустая графа без объяснения читается как поломка. */}
                     {headerField('Срок оплаты', (
-                        <DatePicker
-                            size="small"
-                            format="DD.MM.YYYY"
-                            placeholder="Не указан"
-                            style={{ width: 150 }}
-                            value={dueDate}
-                            onChange={setDueDate}
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <DatePicker
+                                size="small"
+                                format="DD.MM.YYYY"
+                                placeholder="Не указан"
+                                style={{ width: 150 }}
+                                value={dueDate}
+                                onChange={(value) => { setDueDate(value); setDueDateEdited(true); }}
+                            />
+                            {dueDate && !dueDateEdited && (
+                                <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                                    по отсрочке из заявки
+                                </span>
+                            )}
+                            {!dueDate && dueDateHint && (
+                                <span style={{ fontSize: 12, color: token.colorWarningText }}>
+                                    {dueDateHint}
+                                </span>
+                            )}
+                            {dueDateEdited && (
+                                <Button
+                                    type="link"
+                                    size="small"
+                                    style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                                    onClick={() => setDueDateEdited(false)}
+                                >
+                                    Вернуть по отсрочке
+                                </Button>
+                            )}
+                        </div>
                     ))}
 
                     {headerField('Банковский счёт', (

@@ -250,6 +250,40 @@ export async function createAccountingDocument(
     return res.data;
 }
 
+/** Срок оплаты по рейсам счёта — вместе с причиной, если посчитать нельзя. */
+export interface InvoiceDueDatePreview {
+    dueDate: string | null;
+    /** «ждём оригиналы накладных», «в рейсе не задана отсрочка». */
+    dependsOn: string | null;
+}
+
+/**
+ * Какой срок оплаты встанет в счёт по отмеченным рейсам.
+ *
+ * Считает сервер: отсрочка живёт в рейсе, точек отсчёта три, и повторять эти
+ * правила на экране нельзя — они разъедутся с теми, по которым дата ложится
+ * в базу. Экран только показывает ответ.
+ */
+export async function fetchInvoiceDueDate(params: {
+    direction: AccountingDocumentDirection;
+    counterpartyId: string;
+    orderIds: string[];
+    documentDate?: string;
+    externalDate?: string;
+}): Promise<InvoiceDueDatePreview> {
+    if (!params.orderIds.length) return { dueDate: null, dependsOn: null };
+    const res = await api.get('/accounting-documents/due-date', {
+        params: {
+            direction: params.direction,
+            counterpartyId: params.counterpartyId,
+            orderIds: params.orderIds.join(','),
+            ...(params.documentDate ? { documentDate: params.documentDate } : {}),
+            ...(params.externalDate ? { externalDate: params.externalDate } : {}),
+        },
+    });
+    return { dueDate: res.data?.dueDate ?? null, dependsOn: res.data?.dependsOn ?? null };
+}
+
 /** Виды документов, которые выставляются по рейсу и образуют его цепочку. */
 export type OrderChainDocumentType = Extract<
     AccountingDocumentType,

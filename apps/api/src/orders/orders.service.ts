@@ -791,6 +791,19 @@ export class OrdersService {
                             pendingStatus: OrderStatus.COMPLETED,
                             pendingStatusById: initiatorCompanyId,
                             pendingStatusAt: new Date(),
+                            /**
+                             * Рейс закрыл водитель — накладную надо смотреть
+                             * сейчас, пока он стоит на выгрузке.
+                             *
+                             * Подтверждение второй компанией — дело отдельное
+                             * и небыстрое: она ответит через час или завтра.
+                             * Ждать её, чтобы показать менеджеру «проверьте
+                             * фото», значит показать ему это, когда водителя
+                             * уже нет.
+                             */
+                            ...(role === 'DRIVER'
+                                ? { driverCompletedAt: new Date(), completionReviewedAt: null, completionReviewedById: null }
+                                : {}),
                             statusHistory: {
                                 create: {
                                     status: order.status, // Оставляем текущий статус
@@ -827,6 +840,20 @@ export class OrdersService {
                 completedAt: status === OrderStatus.COMPLETED
                     ? new Date()
                     : (order.status === OrderStatus.COMPLETED ? null : undefined),
+                /**
+                 * Рейс закрыл водитель — значит фото накладной ещё никто не
+                 * смотрел. Помечаем и ждём менеджера: переснять нечитаемое
+                 * фото можно, только пока водитель стоит на выгрузке.
+                 *
+                 * Менеджер закрыл рейс сам — он и так всё видел, метить
+                 * нечего. Рейс переоткрыли — прежняя проверка недействительна.
+                 */
+                ...(status === OrderStatus.COMPLETED && role === 'DRIVER'
+                    ? { driverCompletedAt: new Date(), completionReviewedAt: null, completionReviewedById: null }
+                    : {}),
+                ...(status !== OrderStatus.COMPLETED && order.status === OrderStatus.COMPLETED
+                    ? { driverCompletedAt: null, completionReviewedAt: null, completionReviewedById: null }
+                    : {}),
                 // Отмена заявки: сами платежи (Payment) не трогаем — это реальные деньги,
                 // их дальнейшая судьба (возврат/перенос) остаётся на решение бухгалтера.
                 // Но флаги «оплачено» сбрасываем, чтобы отменённая заявка не выглядела
@@ -1028,6 +1055,37 @@ export class OrdersService {
     /**
      * Обновление данных заявки (на любом этапе)
      */
+    /**
+     * Менеджер посмотрел фото накладной и снял пометку с рейса.
+     *
+     * Отдельным действием, а не «открыл заявку — значит проверил»: открыть
+     * можно мимоходом, а тут человек отвечает за то, что накладную видно и
+     * переснимать её не надо. Пока не нажал — строка в журнале помечена.
+     */
+    async markCompletionReviewed(orderId: string, user: { id: string; role?: string; companyId?: string | null }) {
+        const order = await this.findById(orderId);
+
+        const isAdmin = user.role === 'ADMIN';
+        const isOurCompanyOrder = user.role !== 'DRIVER' && !!user.companyId && (
+            order.customerCompanyId === user.companyId
+            || order.forwarderId === user.companyId
+            || order.partnerId === user.companyId
+            || order.subForwarderId === user.companyId
+            || (order as any).responsibleManager?.companyId === user.companyId
+        );
+        if (!isAdmin && !isOurCompanyOrder) {
+            throw new ForbiddenException('У вас нет прав на эту заявку');
+        }
+        if (!(order as any).driverCompletedAt) {
+            throw new BadRequestException('По этому рейсу проверять нечего: его закрыл не водитель');
+        }
+
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: { completionReviewedAt: new Date(), completionReviewedById: user.id },
+        });
+    }
+
     async update(orderId: string, data: {
         customerCompanyId?: string;
         cargoDescription?: string;

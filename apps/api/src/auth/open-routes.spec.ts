@@ -55,6 +55,9 @@ const PUBLIC_ROUTES: Record<string, string> = {
     'PublicSharedReportDocumentController.list': 'что контрагент уже прислал по этой ссылке',
     'PublicSharedReportDocumentController.read': 'открыть свой же присланный файл',
     'PublicBillingController.getTariff': 'цена тарифа для лендинга — её смотрят до регистрации',
+    'TelegramWebhookController.webhook':
+        'обновления от серверов Telegram — логина у них нет; вместо него пароль '
+        + 'в заголовке (TELEGRAM_WEBHOOK_SECRET) и белый список чатов внутри',
 };
 
 /** Требуют входа, но роль не ограничена — с указанием, почему так и должно быть. */
