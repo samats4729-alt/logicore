@@ -29,7 +29,6 @@ import { ExportColumnsDialog } from '@/components/orders/ExportColumnsDialog';
 import { TableColumnsButton } from '@/components/orders/TableColumnsButton';
 import { DEFAULT_REF_LABEL } from '@/components/orders/TransportNumbers';
 import { needsCompletionReview } from '@/lib/completion-review';
-import { playAlertSound } from '@/lib/alert-sound';
 import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -785,10 +784,14 @@ export default function CompanyOrdersPage() {
     const awaitingReview = useMemo(() => orders.filter(needsCompletionReview), [orders]);
 
     /**
-     * Звук — один раз на каждый новый непроверенный рейс.
+     * Сообщение — один раз на каждый новый непроверенный рейс.
      *
      * Не на каждую перечитку списка: рейс, который висит непроверенным
-     * полчаса, не должен пищать каждую минуту. Помним, о чём уже сообщили.
+     * полчаса, не должен напоминать о себе каждую минуту. Помним, о чём уже
+     * сообщили.
+     *
+     * Звука здесь намеренно нет (решение владельца от 25.08.2026): рейс
+     * видно меткой в строке и полосой над списком, и этого достаточно.
      */
     const оповещённые = useRef<Set<string> | null>(null);
     useEffect(() => {
@@ -803,7 +806,6 @@ export default function CompanyOrdersPage() {
         оповещённые.current = сейчас;
         if (!новые.length) return;
 
-        playAlertSound();
         toast.warning(
             новые.length === 1
                 ? `Водитель закрыл рейс ${новые[0].orderNumber} — проверьте фото накладной`
