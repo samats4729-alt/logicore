@@ -20,6 +20,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/components/ThemeProvider';
 import AssemblyStage from '@/components/landing/AssemblyStage';
+import PaymentMarks from '@/components/public/PaymentMarks';
 import styles from './landing.module.css';
 import Loader from '@/components/ui/Loader';
 
@@ -320,6 +321,12 @@ export default function HomePage() {
                                 ? 'Оплата по счёту на вашу компанию. Продлевать можно заранее — оплаченные дни не сгорают.'
                                 : 'О переходе на платный тариф предупредим заранее.'}
                         </div>
+
+                        {/* Значки карт стоят у цены, а не в подвале: вопрос
+                            «чем платить» возникает в ту секунду, когда человек
+                            смотрит на сумму, а не когда домотал до конца
+                            страницы. */}
+                        <PaymentMarks />
                     </div>
                 </div>
             </section>
