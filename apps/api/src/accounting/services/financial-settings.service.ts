@@ -594,7 +594,11 @@ export class FinancialSettingsService {
             { name: 'Bank CenterCredit', code: 'KCJBKZKX' },
             { name: 'Jusan Bank', code: 'TSESKZKA' },
             { name: 'Bereke Bank', code: 'BRKEKZKA' },
-            { name: 'Freedom Bank Kazakhstan', code: 'KSNBKZKA' },
+            // KSNV, а не KSNB: код достался банку от «Банка Kassa Nova», из
+            // которого он вырос. Опечатка в одну букву не видна глазом, но
+            // уезжает в счёт печатной формой — и платёж контрагента
+            // возвращается или зависает в банке.
+            { name: 'Freedom Bank Kazakhstan', code: 'KSNVKZKA' },
         ],
     };
 
