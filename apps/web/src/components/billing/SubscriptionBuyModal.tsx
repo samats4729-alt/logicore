@@ -44,12 +44,16 @@ export function daysWord(n: number): string {
 
 export default function SubscriptionBuyModal({
     open,
-    priceMonthly,
+    pricePerUser,
+    users,
     onClose,
     onSent,
 }: {
     open: boolean;
-    priceMonthly: number;
+    /** Цена за одного сотрудника в месяц. */
+    pricePerUser: number;
+    /** Сколько сотрудников оплачивается — водители не в счёт. */
+    users: number;
     onClose: () => void;
     onSent: () => void;
 }) {
@@ -107,10 +111,28 @@ export default function SubscriptionBuyModal({
                 />
             </div>
 
+            {/* Разбор суммы обязателен: цена зависит от числа сотрудников, и
+                без него итог выглядит взятым с потолка. Считаем ровно так же,
+                как сервер при выставлении счёта. */}
             <div className={styles.total}>
-                <span>К оплате за {monthsWord(months)}</span>
-                <b className={styles.totalValue}>{moneyShort(priceMonthly * months)}</b>
+                <span>
+                    К оплате за {monthsWord(months)}
+                    <span style={{ display: 'block', fontSize: 12, opacity: 0.65 }}>
+                        {moneyShort(pricePerUser)} × {users} {сотрудниковСловом(users)} × {monthsWord(months)}
+                    </span>
+                </span>
+                <b className={styles.totalValue}>{moneyShort(pricePerUser * users * months)}</b>
             </div>
         </Modal>
     );
+}
+
+/** «сотрудник» / «сотрудника» / «сотрудников». */
+export function сотрудниковСловом(n: number): string {
+    const хвост = n % 100;
+    const последняя = n % 10;
+    if (хвост > 10 && хвост < 20) return 'сотрудников';
+    if (последняя === 1) return 'сотрудник';
+    if (последняя >= 2 && последняя <= 4) return 'сотрудника';
+    return 'сотрудников';
 }

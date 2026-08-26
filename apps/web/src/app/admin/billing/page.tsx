@@ -7,6 +7,7 @@ import { CreditCard, Inbox, Layers, Wallet } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { сотрудниковСловом } from '@/components/billing/SubscriptionBuyModal';
 import nova from '@/components/nova/nova.module.css';
 import styles from './billing.module.css';
 
@@ -106,7 +107,7 @@ export default function AdminBillingPage() {
                 // Пока оплата выключена, тариф отдаёт ноль — цену для формы
                 // берём из самого плана, иначе сохранение обнулило бы её.
                 priceMonthly: (plansRes.data || []).find((p: Plan) => p.isActive)?.priceMonthly
-                    ?? tariffRes.data?.priceMonthly ?? 0,
+                    ?? tariffRes.data?.pricePerUser ?? 0,
                 trialDays: settingsRes.data?.trialDays ?? 14,
                 graceDays: settingsRes.data?.graceDays ?? 3,
             });
@@ -149,7 +150,7 @@ export default function AdminBillingPage() {
         }
         Modal.confirm({
             title: 'Включить оплату?',
-            content: `Цена ${money(draft.priceMonthly)} ₸ в месяц появится на лендинге и в кабинетах. `
+            content: `Цена ${money(draft.priceMonthly)} ₸ в месяц за каждого сотрудника появится на лендинге и в кабинетах. `
                 + `Компании, которые работают сейчас, получат ${draft.graceDays} дн. на оплату, `
                 + `новые — пробный период ${draft.trialDays} дн. Выключить можно в любой момент.`,
             okText: 'Включить оплату',
@@ -274,7 +275,7 @@ export default function AdminBillingPage() {
         { title: 'Название', dataIndex: 'name', key: 'name', render: (t: string, r: Plan) => (
             <b>{t}{!r.isActive && <span className={nova.chip} style={{ marginLeft: 8 }}>выключен</span>}</b>
         ) },
-        { title: 'Цена, ₸/мес', dataIndex: 'priceMonthly', key: 'price', render: (v: number) => <b>{v.toLocaleString('ru-RU')}</b> },
+        { title: 'Цена за сотрудника, ₸/мес', dataIndex: 'priceMonthly', key: 'price', render: (v: number) => <b>{v.toLocaleString('ru-RU')}</b> },
         { title: 'Сотрудники', dataIndex: 'maxUsers', key: 'maxUsers', render: (v: number | null) => v ?? '∞' },
         { title: 'Заявки/мес', dataIndex: 'maxOrdersPerMonth', key: 'maxOrders', render: (v: number | null) => v ?? '∞' },
         { title: 'Подписок', key: 'subs', render: (_: any, r: Plan) => r._count?.subscriptions ?? 0 },
@@ -292,7 +293,22 @@ export default function AdminBillingPage() {
     ];
 
     const subColumns = [
-        { title: 'Компания', key: 'name', render: (_: any, r: any) => <div><b>{r.name}</b><div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{r.bin || 'БИН не указан'} · {r._count?.users ?? 0} польз.</div></div> },
+        {
+            title: 'Компания', key: 'name',
+            render: (_: any, r: any) => (
+                <div>
+                    <b>{r.name}</b>
+                    {/* Число сотрудников — это и есть множитель цены, поэтому
+                        рядом сразу сумма месяца: иначе владелец считает её в
+                        уме и ошибается на водителях. Считает сервер — теми же
+                        правилами, по которым выставляет счёт. */}
+                    <div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>
+                        {r.bin || 'БИН не указан'} · {r.users} {сотрудниковСловом(r.users)}
+                        {' · '}{money(r.monthlyTotal)} ₸/мес
+                    </div>
+                </div>
+            ),
+        },
         {
             title: 'Статус', key: 'status',
             render: (_: any, r: any) => (
@@ -349,7 +365,7 @@ export default function AdminBillingPage() {
                 <div className={nova.cardBody}>
                     <div className={styles.form}>
                         <label className={styles.field}>
-                            <span className={styles.fieldLabel}>Цена, ₸ в месяц</span>
+                            <span className={styles.fieldLabel}>Цена за сотрудника, ₸ в месяц</span>
                             <InputNumber
                                 min={0} step={1000} style={{ width: 150 }}
                                 value={draft.priceMonthly}
@@ -421,7 +437,8 @@ export default function AdminBillingPage() {
                     <div className={styles.explain}>
                         {settings?.enabled ? (
                             <>
-                                На лендинге и в кабинетах — {money(draft.priceMonthly)} ₸ в месяц.
+                                На лендинге и в кабинетах — {money(draft.priceMonthly)} ₸ в месяц за каждого сотрудника;
+                                компания с тремя платит {money(draft.priceMonthly * 3)} ₸. Водители не считаются.
                                 Компания без действующей подписки в кабинет не попадает; данные её
                                 сохраняются и открываются сразу после продления. Выключить оплату
                                 можно в любой момент — ограничения снимутся со всех.
@@ -552,7 +569,7 @@ export default function AdminBillingPage() {
                     <Form.Item name="description" label="Короткое описание">
                         <Input placeholder="Для небольших команд" />
                     </Form.Item>
-                    <Form.Item name="priceMonthly" label="Цена, ₸ в месяц" rules={[{ required: true, message: 'Укажите цену' }]}>
+                    <Form.Item name="priceMonthly" label="Цена за сотрудника, ₸ в месяц" rules={[{ required: true, message: 'Укажите цену' }]}>
                         <InputNumber min={0} style={{ width: '100%' }} placeholder="50000" />
                     </Form.Item>
                     <Space size="middle" style={{ display: 'flex' }}>
@@ -617,7 +634,7 @@ export default function AdminBillingPage() {
                         <Select
                             allowClear
                             placeholder="Выберите план"
-                            options={plans.map(p => ({ value: p.id, label: `${p.name} — ${p.priceMonthly.toLocaleString('ru-RU')} ₸/мес` }))}
+                            options={plans.map(p => ({ value: p.id, label: `${p.name} — ${p.priceMonthly.toLocaleString('ru-RU')} ₸/мес за сотрудника` }))}
                         />
                     </Form.Item>
                     <Form.Item name="months" label="Продлить на, месяцев" extra="Заполни после оплаты счёта: статус станет «Оплачена», срок продлится от текущего конца периода.">

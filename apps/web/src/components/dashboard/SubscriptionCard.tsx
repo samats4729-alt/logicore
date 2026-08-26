@@ -23,7 +23,12 @@ export interface BillingStatus {
     status?: string | null;
     until?: string | null;
     daysLeft?: number | null;
-    priceMonthly?: number;
+    /** Цена за одного сотрудника в месяц. */
+    pricePerUser?: number;
+    /** Сколько сотрудников оплачивается — водители не в счёт. */
+    users?: number;
+    /** Сумма в месяц при нынешнем числе сотрудников: считает сервер. */
+    monthlyTotal?: number;
     request?: { id: string; months: number; amount: number; createdAt: string } | null;
 }
 
@@ -37,13 +42,27 @@ export default function SubscriptionCard() {
 
     if (!status) return null;
 
-    const price = status.priceMonthly ?? 0;
+    const perUser = status.pricePerUser ?? 0;
+    const users = status.users ?? 1;
+    // Сумму берём с сервера, а не перемножаем здесь: правило «кто считается
+    // сотрудником» живёт в одном месте, и экран его не повторяет.
+    const price = status.monthlyTotal ?? perUser * users;
     const until = status.until ? dayjs(status.until) : null;
     const left = status.daysLeft ?? null;
 
     // Слова разные не ради разнообразия: «пробный период» у новой компании и
     // «дни на оплату» у той, что работает год, — это разные новости, и путать
     // их нельзя.
+    /**
+     * Из чего сложилась сумма: «5 000 ₸ × 3 = 15 000 ₸».
+     *
+     * Без разбора цифра выглядит взятой с потолка, и первый же вопрос
+     * бухгалтера — «почему столько». Когда сотрудник один, разбирать нечего.
+     */
+    const вМесяц = users > 1
+        ? `${moneyShort(perUser)} × ${users} = ${moneyShort(price)} в месяц`
+        : `${moneyShort(price)} в месяц`;
+
     let value: string;
     let sub: string;
     let action: string | null = null;
@@ -59,24 +78,24 @@ export default function SubscriptionCard() {
         sub = `${monthsWord(status.request.months)} · ${moneyShort(status.request.amount)} · ждём счёт`;
     } else if (status.status === 'ACTIVE' && until) {
         value = `Оплачено до ${dayMonth(until)}`;
-        sub = `${moneyShort(price)} в месяц${left != null ? ` · осталось ${daysWord(left)}` : ''}`;
+        sub = `${вМесяц}${left != null ? ` · осталось ${daysWord(left)}` : ''}`;
         action = 'Продлить';
     } else if (status.status === 'ACTIVE') {
         value = 'Подписка активна';
         sub = 'бессрочно';
     } else if (status.status === 'GRACE' && until) {
         value = `Осталось ${daysWord(left ?? 0)}`;
-        sub = `${moneyShort(price)} в месяц · после ${dayMonth(until)} доступ закроется`;
+        sub = `${вМесяц} · после ${dayMonth(until)} доступ закроется`;
         action = 'Купить подписку';
         urgent = true;
     } else if (status.status === 'TRIAL' && until) {
         value = `Пробный период до ${dayMonth(until)}`;
-        sub = `${left != null ? `осталось ${daysWord(left)} · ` : ''}дальше ${moneyShort(price)} в месяц`;
+        sub = `${left != null ? `осталось ${daysWord(left)} · ` : ''}дальше ${вМесяц}`;
         action = 'Оформить';
         urgent = (left ?? 99) <= 3;
     } else {
         value = 'Подписка не активна';
-        sub = until ? `срок закончился ${dayMonth(until)}` : `${moneyShort(price)} в месяц`;
+        sub = until ? `срок закончился ${dayMonth(until)}` : вМесяц;
         action = 'Оформить';
         urgent = true;
     }
@@ -104,7 +123,8 @@ export default function SubscriptionCard() {
 
             <SubscriptionBuyModal
                 open={buyOpen}
-                priceMonthly={price}
+                pricePerUser={perUser}
+                users={users}
                 onClose={() => setBuyOpen(false)}
                 onSent={load}
             />

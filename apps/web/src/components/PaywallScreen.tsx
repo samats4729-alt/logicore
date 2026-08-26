@@ -6,7 +6,7 @@ import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
 import { dayMonth } from '@/lib/ru-date';
 import { moneyShort } from '@/lib/money-format';
-import SubscriptionBuyModal, { monthsWord } from '@/components/billing/SubscriptionBuyModal';
+import SubscriptionBuyModal, { monthsWord, сотрудниковСловом } from '@/components/billing/SubscriptionBuyModal';
 import type { BillingStatus } from '@/components/dashboard/SubscriptionCard';
 import nova from '@/components/nova/nova.module.css';
 import styles from './paywall.module.css';
@@ -23,7 +23,10 @@ export default function PaywallScreen({ status }: { status?: BillingStatus }) {
     const { logout } = useAuthStore();
     const [buyOpen, setBuyOpen] = useState(false);
 
-    const price = status?.priceMonthly ?? 0;
+    const perUser = status?.pricePerUser ?? 0;
+    const users = status?.users ?? 1;
+    // Сумму считает сервер: правило «кто считается сотрудником» одно на всех.
+    const price = status?.monthlyTotal ?? perUser * users;
     const until = status?.until ? dayjs(status.until) : null;
     const request = status?.request ?? null;
 
@@ -56,7 +59,14 @@ export default function PaywallScreen({ status }: { status?: BillingStatus }) {
                 ) : (
                     <>
                         <div className={styles.price}>{moneyShort(price)}</div>
-                        <div className={styles.priceSub}>в месяц</div>
+                        {/* Откуда сумма, видно сразу: человек уже упёрся в
+                            закрытый кабинет, и «почему столько» — последнее,
+                            с чем его тут стоит оставлять. */}
+                        <div className={styles.priceSub}>
+                            {users > 1
+                                ? `в месяц · ${moneyShort(perUser)} × ${users} ${сотрудниковСловом(users)}`
+                                : 'в месяц'}
+                        </div>
                         <div className={styles.note}>
                             Оплата по счёту на вашу компанию. Выберите срок — мы выставим счёт.
                         </div>
@@ -82,7 +92,8 @@ export default function PaywallScreen({ status }: { status?: BillingStatus }) {
 
             <SubscriptionBuyModal
                 open={buyOpen}
-                priceMonthly={price}
+                pricePerUser={perUser}
+                users={users}
                 onClose={() => setBuyOpen(false)}
                 onSent={() => window.location.reload()}
             />
