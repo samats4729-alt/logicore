@@ -98,7 +98,6 @@ export default function TermsPage() {
                 <li>ИИК: KZ47551A600019924193 (KZT)</li>
                 <li>Банк: АО «Фридом Банк Казахстан», БИК KSNVKZKA</li>
                 <li>Электронная почта: support@logicore.kz</li>
-                <li>Индивидуальный предприниматель: Садуов Самат Даулбаевич</li>
             </ul>
         </LegalPage>
     );
