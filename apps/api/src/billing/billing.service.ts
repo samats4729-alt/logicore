@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionStatus, SubscriptionRequestStatus } from '@prisma/client';
+import { SubscriptionStatus, SubscriptionRequestStatus, UserRole } from '@prisma/client';
 import { TelegramService } from '../telegram/telegram.service';
 import { addMonths, kzStartOfMonth } from '../common/utils/business-date';
 
@@ -22,6 +22,23 @@ const ACCESS_CACHE_TTL_MS = 60_000;
 
 /** Статусы, при которых кабинет открыт без оплаты — до даты в `trialEndsAt`. */
 const FREE_STATUSES: SubscriptionStatus[] = [SubscriptionStatus.TRIAL, SubscriptionStatus.GRACE];
+
+/**
+ * Кто считается платным пользователем — решение владельца от 26.08.2026.
+ *
+ * Платят за тех, кто работает в кабинете: директор, логист, экспедитор,
+ * бухгалтер, завскладом. Водители бесплатны: у них нет кабинета, только своя
+ * ссылка на рейс и приложение. Иначе у перевозчика с сорока водителями
+ * подписка выходила бы в двести тысяч — это уже другой продукт.
+ *
+ * Правило живёт здесь одно на всех: и цена в кабинете, и сумма в счёте, и
+ * подсказка на лендинге считаются им же. Разъедься они — компания увидит
+ * одну цифру на экране и другую в счёте.
+ */
+const BILLABLE_USERS_WHERE = {
+    role: { not: UserRole.DRIVER },
+    isActive: true,
+} as const;
 
 @Injectable()
 export class BillingService {
@@ -232,6 +249,24 @@ export class BillingService {
         });
     }
 
+    /**
+     * Сколько платных пользователей у компании прямо сейчас.
+     *
+     * Считается на лету, а не хранится: сотрудника заводят и увольняют в
+     * любой день, и запомненное число разошлось бы с правдой в тот же час.
+     * Отключённый сотрудник не считается — доступа у него нет, значит и
+     * платить за него не за что.
+     *
+     * Меньше одного не бывает: компания без единого сотрудника — это
+     * компания, в которую никто не может войти.
+     */
+    async countBillableUsers(companyId: string): Promise<number> {
+        const count = await this.prisma.user.count({
+            where: { companyId, ...BILLABLE_USERS_WHERE },
+        });
+        return Math.max(count, 1);
+    }
+
     /** Записать цену в основной тариф, заведя его, если тарифа ещё нет. */
     private async setTariffPrice(priceMonthly: number) {
         const plan = await this.getMainPlan();
@@ -250,6 +285,10 @@ export class BillingService {
      * Тариф для лендинга и кабинета. Открыт без авторизации: цену видят и те,
      * кто ещё не зарегистрировался.
      *
+     * Цена — **за одного пользователя в месяц**. Сумма компании получается
+     * умножением на число её сотрудников, и считает её сервер, а не экран:
+     * иначе на лендинге, в кабинете и в счёте цифры однажды разойдутся.
+     *
      * Пока оплата не включена, цена ноль — независимо от того, какая сумма
      * уже заведена в тарифе. Иначе на сайте висела бы цена, которую никто не
      * платит.
@@ -260,7 +299,7 @@ export class BillingService {
         return {
             paid: enabled,
             name: plan?.name ?? 'Стандарт',
-            priceMonthly: enabled ? (plan?.priceMonthly ?? 0) : 0,
+            pricePerUser: enabled ? (plan?.priceMonthly ?? 0) : 0,
             currency: plan?.currency ?? 'KZT',
             trialDays,
             features: plan?.features ?? [],
@@ -275,7 +314,7 @@ export class BillingService {
         }
 
         const allowed = await this.isCompanyAllowed(companyId);
-        const [sub, tariff, request] = await Promise.all([
+        const [sub, tariff, request, users] = await Promise.all([
             this.prisma.companySubscription.findUnique({
                 where: { companyId },
                 include: { plan: { select: { id: true, name: true, priceMonthly: true, currency: true } } },
@@ -286,11 +325,12 @@ export class BillingService {
                 orderBy: { createdAt: 'desc' },
                 select: { id: true, months: true, amount: true, createdAt: true },
             }),
+            this.countBillableUsers(companyId),
         ]);
 
         // Цена компании — из её плана, если он назначен: тариф мог подорожать
         // после того, как она оплатила.
-        const priceMonthly = sub?.plan?.priceMonthly ?? tariff.priceMonthly;
+        const pricePerUser = sub?.plan?.priceMonthly ?? tariff.pricePerUser;
         const until = sub && FREE_STATUSES.includes(sub.status) ? sub.trialEndsAt : sub?.periodEnd ?? null;
 
         return {
@@ -300,7 +340,11 @@ export class BillingService {
             trialEndsAt: sub?.trialEndsAt ?? null,
             periodEnd: sub?.periodEnd ?? null,
             plan: sub?.plan ?? null,
-            priceMonthly,
+            pricePerUser,
+            /** Сколько сотрудников оплачивается — без водителей. */
+            users,
+            /** Сумма в месяц при нынешнем числе сотрудников. */
+            monthlyTotal: pricePerUser * users,
             until,
             daysLeft: until ? Math.max(0, Math.ceil((until.getTime() - Date.now()) / DAY_MS)) : null,
             request,
@@ -435,22 +479,40 @@ export class BillingService {
 
     // ==================== Подписки компаний (админ) ====================
 
+    /**
+     * Список компаний с подписками — для страницы «Тариф и подписки».
+     *
+     * Число сотрудников и сумму месяца считает сервер, а не экран: владелец
+     * сверяет эту строку со счётом, который сам же и выставил, и разойдись
+     * они хоть на водителя — разбираться будет он.
+     */
     async getSubscriptionsOverview() {
-        const companies = await this.prisma.company.findMany({
-            where: { isExternal: false, isActive: true },
-            select: {
-                id: true,
-                name: true,
-                bin: true,
-                createdAt: true,
-                _count: { select: { users: true } },
-                subscription: {
-                    include: { plan: { select: { id: true, name: true, priceMonthly: true } } },
+        const [companies, tariff] = await Promise.all([
+            this.prisma.company.findMany({
+                where: { isExternal: false, isActive: true },
+                select: {
+                    id: true,
+                    name: true,
+                    bin: true,
+                    createdAt: true,
+                    _count: { select: { users: { where: BILLABLE_USERS_WHERE } } },
+                    subscription: {
+                        include: { plan: { select: { id: true, name: true, priceMonthly: true } } },
+                    },
                 },
-            },
-            orderBy: { createdAt: 'desc' },
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.getTariff(),
+        ]);
+
+        return companies.map((company) => {
+            // Те же два правила, что и при выставлении счёта: меньше одного
+            // сотрудника не бывает, а цена берётся из плана компании, если он
+            // назначен, — тариф мог подорожать после её оплаты.
+            const users = Math.max(company._count.users, 1);
+            const pricePerUser = company.subscription?.plan?.priceMonthly ?? tariff.pricePerUser;
+            return { ...company, users, pricePerUser, monthlyTotal: pricePerUser * users };
         });
-        return companies;
     }
 
     /**
@@ -523,6 +585,12 @@ export class BillingService {
      *
      * Сумма считается здесь, а не приходит из браузера: цену назначает
      * владелец платформы, и подставить свою компания не должна.
+     *
+     * Число сотрудников берётся на момент запроса и в сумму счёта уже не
+     * меняется. Наняли шестого человека через неделю после оплаты — этот
+     * месяц доработают вшестером по старой цене, а новая сумма встанет в
+     * следующий счёт. Считать иначе значит менять сумму уже выставленного
+     * счёта, а так не бывает.
      */
     async createRequest(
         companyId: string,
@@ -541,9 +609,10 @@ export class BillingService {
             throw new BadRequestException('Запрос уже отправлен — ждём счёт');
         }
 
-        const [company, plan] = await Promise.all([
+        const [company, plan, users] = await Promise.all([
             this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true, bin: true } }),
             this.getMainPlan(),
+            this.countBillableUsers(companyId),
         ]);
         if (!company) throw new NotFoundException('Компания не найдена');
 
@@ -561,7 +630,7 @@ export class BillingService {
             data: {
                 companyId,
                 months,
-                amount: (plan?.priceMonthly ?? 0) * months,
+                amount: (plan?.priceMonthly ?? 0) * users * months,
                 planId: plan?.id ?? null,
                 requestedById: user.id ?? null,
                 requesterName,
@@ -569,10 +638,13 @@ export class BillingService {
             },
         });
 
+        // Число сотрудников — в уведомлении, чтобы владелец видел, из чего
+        // сложилась сумма, и не пересчитывал её руками при выставлении счёта.
         await this.notifyOwner(
             'Запрос на подписку\n\n' +
             `${company.name}${company.bin ? ` · БИН ${company.bin}` : ''}\n` +
-            `${months} мес · ${request.amount.toLocaleString('ru-RU')} ₸\n` +
+            `${users} ${сотрудниковСловом(users)} × ${(plan?.priceMonthly ?? 0).toLocaleString('ru-RU')} ₸ × ${months} мес\n` +
+            `Итого: ${request.amount.toLocaleString('ru-RU')} ₸\n` +
             (requesterName ? `Отправил: ${requesterName}\n` : '') +
             (request.comment ? `\n${request.comment}` : ''),
         );
@@ -648,4 +720,14 @@ export class BillingService {
             this.logger.warn(`Не удалось отправить уведомление о подписке: ${error}`);
         }
     }
+}
+
+/** «сотрудник» / «сотрудника» / «сотрудников» — уведомление читает человек. */
+function сотрудниковСловом(count: number): string {
+    const хвост = count % 100;
+    const последняя = count % 10;
+    if (хвост > 10 && хвост < 20) return 'сотрудников';
+    if (последняя === 1) return 'сотрудник';
+    if (последняя >= 2 && последняя <= 4) return 'сотрудника';
+    return 'сотрудников';
 }

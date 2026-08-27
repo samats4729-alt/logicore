@@ -95,7 +95,8 @@ const TARIFF_FEATURES = [
 
 interface Tariff {
     paid: boolean;
-    priceMonthly: number;
+    /** Цена за одного пользователя в месяц: сумма растёт с числом сотрудников. */
+    pricePerUser: number;
     trialDays: number;
     features: string[];
 }
@@ -300,11 +301,20 @@ export default function HomePage() {
                             стоит», а сказать надо другое — платить пока не за
                             что, потому что идёт тестирование. */}
                         <div className={styles.tariffPrice}>
-                            {tariff?.paid ? `${tariff.priceMonthly.toLocaleString('ru-RU')} ₸` : 'Бесплатно'}
+                            {tariff?.paid ? `${tariff.pricePerUser.toLocaleString('ru-RU')} ₸` : 'Бесплатно'}
                         </div>
+                        {/* «За пользователя» — не мелким шрифтом внизу, а прямо
+                            под ценой: иначе человек посчитает в уме одну сумму,
+                            а в счёте увидит другую и решит, что его обманули. */}
                         <div className={styles.tariffPer}>
-                            {tariff?.paid ? 'в месяц за компанию' : 'на время тестирования'}
+                            {tariff?.paid ? 'в месяц за одного сотрудника' : 'на время тестирования'}
                         </div>
+                        {tariff?.paid && (
+                            <div className={styles.tariffPer} style={{ marginTop: 2 }}>
+                                трое в офисе — {(tariff.pricePerUser * 3).toLocaleString('ru-RU')} ₸ в месяц.
+                                Водители не считаются
+                            </div>
+                        )}
 
                         <ul className={styles.tariffList}>
                             {(tariff?.features?.length ? tariff.features : TARIFF_FEATURES).map((f) => (
@@ -318,7 +328,7 @@ export default function HomePage() {
 
                         <div className={styles.tariffNote}>
                             {tariff?.paid
-                                ? 'Оплата по счёту на вашу компанию. Продлевать можно заранее — оплаченные дни не сгорают.'
+                                ? 'Оплата картой или по счёту на вашу компанию. Продлевать можно заранее — оплаченные дни не сгорают.'
                                 : 'О переходе на платный тариф предупредим заранее.'}
                         </div>
 

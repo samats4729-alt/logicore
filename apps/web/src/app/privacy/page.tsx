@@ -6,7 +6,7 @@ export const metadata = {
 
 export default function PrivacyPage() {
     return (
-        <LegalPage eyebrow="(Документы)" title="Политика конфиденциальности" updated="14.07.2026">
+        <LegalPage eyebrow="(Документы)" title="Политика конфиденциальности" updated="26.08.2026">
             <h2>1. Общие положения</h2>
             <p>
                 Настоящая Политика конфиденциальности определяет порядок обработки и защиты

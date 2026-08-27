@@ -384,13 +384,13 @@ describe('Подписки компаний', () => {
             // пока никто не платит, — обещать цену, которой ещё нет.
             const { service } = build({ enabled: false, mainPlan: { priceMonthly: 25000, features: [] } });
 
-            expect(await service.getTariff()).toMatchObject({ paid: false, priceMonthly: 0 });
+            expect(await service.getTariff()).toMatchObject({ paid: false, pricePerUser: 0 });
         });
 
         it('после включения показывается назначенная сумма', async () => {
             const { service } = build({ enabled: true, mainPlan: { name: 'Стандарт', priceMonthly: 25000, features: [] } });
 
-            expect(await service.getTariff()).toMatchObject({ paid: true, priceMonthly: 25000 });
+            expect(await service.getTariff()).toMatchObject({ paid: true, pricePerUser: 25000 });
         });
 
         it('цена правится в админке, а не в коде', async () => {
@@ -780,6 +780,183 @@ describe('Подписки компаний', () => {
             const status: any = await service.getCompanyStatus(COMPANY);
             expect(status.request).toMatchObject({ months: 3, amount: 75000 });
             expect(status.daysLeft).toBe(2);
+        });
+    });
+});
+
+/**
+ * Цена за пользователя (решение владельца от 26.08.2026).
+ *
+ * Тариф считается не за компанию, а за каждого сотрудника в кабинете. Это
+ * деньги, и ошибка здесь тихая: на экране одна сумма, в счёте другая, а
+ * заметит её бухгалтер контрагента, а не мы.
+ */
+describe('Цена за пользователя', () => {
+    const COMPANY = 'c-1';
+
+    /** Отдельная сборка: нужен доступ к тому, чем считали сотрудников. */
+    const стенд = (options: { price?: number; users?: number; enabled?: boolean } = {}) => {
+        const settings = new Map<string, string>([['billing_enabled', String(options.enabled ?? true)]]);
+        const план = { id: 'plan-1', name: 'Стандарт', priceMonthly: options.price ?? 5000, currency: 'KZT', features: [] };
+        const prisma: any = {
+            platformSetting: {
+                findMany: jest.fn(async () => [...settings].map(([key, value]) => ({ key, value }))),
+                upsert: jest.fn(async () => ({})),
+            },
+            companySubscription: {
+                findUnique: jest.fn().mockResolvedValue(null),
+                create: jest.fn(async ({ data }: any) => ({ id: 'sub-new', ...data })),
+                createMany: jest.fn().mockResolvedValue({ count: 0 }),
+                update: jest.fn().mockResolvedValue({}),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+                upsert: jest.fn(async () => ({})),
+                count: jest.fn().mockResolvedValue(0),
+            },
+            company: {
+                findMany: jest.fn().mockResolvedValue([]),
+                findUnique: jest.fn().mockResolvedValue({ id: COMPANY, name: 'ТОО «Пример»', bin: '123456789012' }),
+            },
+            subscriptionPlan: { findFirst: jest.fn().mockResolvedValue(план) },
+            subscriptionRequest: {
+                findFirst: jest.fn().mockResolvedValue(null),
+                create: jest.fn(async ({ data }: any) => ({ id: 'req-1', ...data })),
+            },
+            user: {
+                count: jest.fn().mockResolvedValue(options.users ?? 1),
+                findUnique: jest.fn().mockResolvedValue(null),
+            },
+            order: { count: jest.fn().mockResolvedValue(0) },
+        };
+        const telegram: any = { send: jest.fn().mockResolvedValue(true) };
+        return { service: new BillingService(prisma, telegram), prisma, telegram };
+    };
+
+    describe('кого считаем', () => {
+        it('только тех, кто работает в кабинете, и только действующих', async () => {
+            // Водителей не считаем: у них нет кабинета. Иначе у перевозчика
+            // с сорока водителями подписка вышла бы в двести тысяч.
+            const { service, prisma } = стенд({ users: 3 });
+
+            await service.countBillableUsers(COMPANY);
+
+            expect(prisma.user.count).toHaveBeenCalledWith({
+                where: expect.objectContaining({
+                    companyId: COMPANY,
+                    isActive: true,
+                    role: { not: 'DRIVER' },
+                }),
+            });
+        });
+
+        it('меньше одного не бывает', async () => {
+            // Компания без единого сотрудника — это компания, в которую
+            // никто не может войти. Ноль в цене дал бы бесплатный доступ.
+            const { service } = стенд({ users: 0 });
+
+            expect(await service.countBillableUsers(COMPANY)).toBe(1);
+        });
+    });
+
+    describe('сумма в кабинете', () => {
+        it('умножается на число сотрудников', async () => {
+            const { service } = стенд({ price: 5000, users: 3 });
+
+            const status: any = await service.getCompanyStatus(COMPANY);
+
+            expect(status.pricePerUser).toBe(5000);
+            expect(status.users).toBe(3);
+            expect(status.monthlyTotal).toBe(15000);
+        });
+
+        it('один сотрудник — одна цена', async () => {
+            const { service } = стенд({ price: 5000, users: 1 });
+            const status: any = await service.getCompanyStatus(COMPANY);
+            expect(status.monthlyTotal).toBe(5000);
+        });
+    });
+
+    describe('сумма в счёте', () => {
+        it('считается так же, как показана в кабинете', async () => {
+            // Разъедься эти два расчёта — компания увидит одно на экране и
+            // другое в счёте, и виноватыми окажемся мы.
+            const { service } = стенд({ price: 5000, users: 4 });
+
+            const status: any = await service.getCompanyStatus(COMPANY);
+            const request: any = await service.createRequest(COMPANY, { id: 'u-1' }, { months: 3 });
+
+            expect(request.amount).toBe(status.monthlyTotal * 3);
+            expect(request.amount).toBe(60000);
+        });
+
+        it('в уведомлении владельцу видно, из чего сложилась сумма', async () => {
+            const { service, telegram } = стенд({ price: 5000, users: 2 });
+
+            await service.createRequest(COMPANY, { id: 'u-1', lastName: 'Сериков' }, { months: 1 });
+
+            const текст = telegram.send.mock.calls[0][0];
+            expect(текст).toContain('2 сотрудника');
+            // Числа сравниваем так же, как их пишет служба: в русской
+            // локали разряды разделяет неразрывный пробел, а не обычный.
+            expect(текст).toContain((5000).toLocaleString('ru-RU'));
+            expect(текст).toContain((10000).toLocaleString('ru-RU'));
+        });
+    });
+
+    describe('список компаний у владельца', () => {
+        it('водителей не считает', async () => {
+            // Владелец сверяет эту строку со счётом, который сам выставил.
+            // Посчитай тут всех подряд — у перевозчика с водителями список
+            // разойдётся со счётом, и разбираться будет он, а не мы.
+            const { service, prisma } = стенд();
+
+            await service.getSubscriptionsOverview();
+
+            const аргументы = prisma.company.findMany.mock.calls[0][0];
+            expect(аргументы.select._count.select.users).toMatchObject({
+                where: expect.objectContaining({ role: { not: 'DRIVER' }, isActive: true }),
+            });
+        });
+
+        it('сумма месяца считается по тем же правилам, что и счёт', async () => {
+            const { service, prisma } = стенд({ price: 5000 });
+            prisma.company.findMany.mockResolvedValue([
+                { id: 'c-1', name: 'С тремя', bin: null, createdAt: new Date(), _count: { users: 3 }, subscription: null },
+                // Компания без единого сотрудника: в счёте меньше одного не
+                // бывает, и в списке должно стоять то же самое.
+                { id: 'c-2', name: 'Пустая', bin: null, createdAt: new Date(), _count: { users: 0 }, subscription: null },
+            ]);
+
+            const [сТремя, пустая]: any = await service.getSubscriptionsOverview();
+
+            expect(сТремя).toMatchObject({ users: 3, monthlyTotal: 15000 });
+            expect(пустая).toMatchObject({ users: 1, monthlyTotal: 5000 });
+        });
+
+        it('у оплатившей компании берётся её цена, а не новая', async () => {
+            // Тариф мог подорожать после оплаты — в списке должна стоять та
+            // сумма, по которой компания живёт сейчас.
+            const { service, prisma } = стенд({ price: 9000 });
+            prisma.company.findMany.mockResolvedValue([{
+                id: 'c-1', name: 'Оплатила раньше', bin: null, createdAt: new Date(),
+                _count: { users: 2 },
+                subscription: { status: SubscriptionStatus.ACTIVE, plan: { id: 'p-old', name: 'Стандарт', priceMonthly: 5000 } },
+            }]);
+
+            const [компания]: any = await service.getSubscriptionsOverview();
+
+            expect(компания).toMatchObject({ pricePerUser: 5000, monthlyTotal: 10000 });
+        });
+    });
+
+    describe('пока оплата выключена', () => {
+        it('цена ноль, даже если тариф заведён', async () => {
+            // Иначе на витрине висит цена, которую никто не платит.
+            const { service } = стенд({ price: 5000, enabled: false });
+
+            const tariff = await service.getTariff();
+
+            expect(tariff.paid).toBe(false);
+            expect(tariff.pricePerUser).toBe(0);
         });
     });
 });
