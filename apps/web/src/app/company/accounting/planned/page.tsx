@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { ArrowLeft, CalendarDays, Download, FileWarning } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadCsv } from '@/lib/exportCsv';
+import { SETTLEMENT_SIDES } from '@/lib/vocabulary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -69,8 +70,8 @@ export default function PlannedPaymentsPage() {
 
     const filters: { key: 'all' | 'IN' | 'OUT'; label: string }[] = [
         { key: 'all', label: 'Все' },
-        { key: 'IN', label: 'Нам заплатят' },
-        { key: 'OUT', label: 'Платим мы' },
+        { key: 'IN', label: SETTLEMENT_SIDES.receivableShort },
+        { key: 'OUT', label: SETTLEMENT_SIDES.payableShort },
     ];
 
     const exportCsv = () => downloadCsv(
@@ -80,7 +81,7 @@ export default function PlannedPaymentsPage() {
             r.dueDate ? dayjs(r.dueDate).format('DD.MM.YYYY') : 'не указана',
             r.invoiceNumber,
             dayjs(r.issuedAt).format('DD.MM.YYYY'),
-            r.direction === 'IN' ? 'Нам должны' : 'Мы должны',
+            r.direction === 'IN' ? SETTLEMENT_SIDES.receivable : SETTLEMENT_SIDES.payable,
             r.orderNumber,
             r.party,
             r.amount,
@@ -115,7 +116,7 @@ export default function PlannedPaymentsPage() {
                 <div className="mb-5 grid gap-4 sm:grid-cols-3">
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardDescription>Нам должны заплатить</CardDescription>
+                            <CardDescription>{SETTLEMENT_SIDES.receivable}</CardDescription>
                             <CardTitle className="text-2xl tabular-nums text-emerald-600">{money(totals.totalIn)}</CardTitle>
                         </CardHeader>
                         <CardContent className="pt-0 text-xs text-muted-foreground">
@@ -126,7 +127,7 @@ export default function PlannedPaymentsPage() {
                     </Card>
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardDescription>Мы должны заплатить</CardDescription>
+                            <CardDescription>{SETTLEMENT_SIDES.payable}</CardDescription>
                             <CardTitle className="text-2xl tabular-nums text-destructive">{money(totals.totalOut)}</CardTitle>
                         </CardHeader>
                         <CardContent className="pt-0 text-xs text-muted-foreground">
@@ -161,17 +162,17 @@ export default function PlannedPaymentsPage() {
                                 Счёт не выставлен: {withoutInvoice.count}
                             </CardTitle>
                             <CardDescription className="text-amber-800">
-                                По этим сделкам есть долг, но счёта нет — значит, срок оплаты не начался
+                                По этим сделкам есть задолженность, но счёта нет — значит, срок оплаты не начался
                                 и ждать платежа не с чего.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0">
                             <div className="mb-3 flex flex-wrap gap-4 text-sm text-amber-900">
                                 {withoutInvoice.totalIn > 0 && (
-                                    <span>Нам должны: <b className="tabular-nums">{money(withoutInvoice.totalIn)}</b></span>
+                                    <span>{SETTLEMENT_SIDES.receivableShort}: <b className="tabular-nums">{money(withoutInvoice.totalIn)}</b></span>
                                 )}
                                 {withoutInvoice.totalOut > 0 && (
-                                    <span>Мы должны: <b className="tabular-nums">{money(withoutInvoice.totalOut)}</b></span>
+                                    <span>{SETTLEMENT_SIDES.payableShort}: <b className="tabular-nums">{money(withoutInvoice.totalOut)}</b></span>
                                 )}
                             </div>
                             <div className="flex flex-wrap gap-2">

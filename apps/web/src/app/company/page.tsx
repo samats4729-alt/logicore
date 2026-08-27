@@ -6,6 +6,7 @@ import { Dropdown, Checkbox } from 'antd';
 import { Activity, ArrowDown, ArrowRight, ArrowUp, Bell, Plus, Scale, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { SETTLEMENT_SIDES } from '@/lib/vocabulary';
 import { STATUS_LABELS } from '@/components/ui/StatusPill';
 import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
 import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
@@ -397,17 +398,17 @@ export default function CompanyDashboard() {
                         ) : (
                             <div className={styles.cardBody}>
                                 <div className={dash.debtRow}>
-                                    {/* Долг не бывает хорошим или плохим сам по
-                                        себе: и «нам должны», и «мы должны» —
-                                        просто суммы. Цвет остался у сальдо: по
-                                        нему видно, в плюсе компания или в минусе.
-                                        Так же теперь во «Взаиморасчётах». */}
+                                    {/* Задолженность не бывает хорошей или
+                                        плохой сама по себе: и дебиторская, и
+                                        кредиторская — просто суммы. Цвет остался
+                                        у сальдо: по нему видно, в плюсе компания
+                                        или в минусе. Так же во «Взаиморасчётах». */}
                                     <div className={dash.debtBox}>
-                                        <span className={styles.tileLabel}>Нам должны</span>
+                                        <span className={styles.tileLabel}>{SETTLEMENT_SIDES.receivableShort}</span>
                                         <b>{fmt(debtTotals.unpaidTheyOweUs)} ₸</b>
                                     </div>
                                     <div className={dash.debtBox}>
-                                        <span className={styles.tileLabel}>Мы должны</span>
+                                        <span className={styles.tileLabel}>{SETTLEMENT_SIDES.payableShort}</span>
                                         <b>{fmt(debtTotals.unpaidWeOweThem)} ₸</b>
                                     </div>
                                     <div className={dash.debtBox}>

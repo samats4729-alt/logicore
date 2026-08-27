@@ -11,7 +11,7 @@ import {
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import StatusPill from '@/components/ui/StatusPill';
-import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
+import { ORDER_STATUS_LABELS, SETTLEMENT_SIDES } from '@/lib/vocabulary';
 import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
 import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
@@ -306,7 +306,9 @@ export default function CounterpartyReportPage() {
             render: (_: any, r: OrderItem) => (
                 // Направление долга не хорошее и не плохое — это сторона.
                 <span className={nova.chip}>
-                    {r.direction === 'theyOwe' ? 'Нам должны' : 'Мы должны'}
+                    {r.direction === 'theyOwe'
+                        ? SETTLEMENT_SIDES.receivableShort
+                        : SETTLEMENT_SIDES.payableShort}
                 </span>
             ),
         },
@@ -385,8 +387,10 @@ export default function CounterpartyReportPage() {
                     <div className="lc-eyebrow">Финансы · Взаиморасчёты</div>
                     <h1 className="lc2-title">Взаиморасчёты</h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
-                        Кто кому должен: начальный долг + начислено − оплачено = текущий долг. Просроченные платежи выделены красным.
-                        Долги показаны в тенге: валютные рейсы пересчитаны по курсу на дату операции.
+                        Задолженность по каждому контрагенту: начальное сальдо + начислено − оплачено = текущее сальдо.
+                        Дебиторская — то, что нам предстоит получить, кредиторская — то, что предстоит заплатить.
+                        Просроченные платежи выделены красным. Суммы показаны в тенге: валютные рейсы пересчитаны
+                        по курсу на дату операции.
                     </p>
                     {!!data?.totals?.unconvertedCurrencies?.length && (
                         <div style={{
@@ -414,7 +418,7 @@ export default function CounterpartyReportPage() {
                     в своём цвете, и три цвета ничего не выделяли. */}
                 <div className={nova.tiles} style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
                     <div className={nova.tile}>
-                        <div className={nova.tileLabel}>Нам должны</div>
+                        <div className={nova.tileLabel}>{SETTLEMENT_SIDES.receivableShort}</div>
                         <div className={nova.tileValue}>{fmt(filteredTotals.unpaidTheyOweUs)} ₸</div>
                         <div className={nova.tileSub}>
                             {filteredTotals.overdueTheyOweUs > 0
@@ -423,7 +427,7 @@ export default function CounterpartyReportPage() {
                         </div>
                     </div>
                     <div className={nova.tile}>
-                        <div className={nova.tileLabel}>Мы должны</div>
+                        <div className={nova.tileLabel}>{SETTLEMENT_SIDES.payableShort}</div>
                         <div className={nova.tileValue}>{fmt(filteredTotals.unpaidWeOweThem)} ₸</div>
                         <div className={nova.tileSub}>
                             {filteredTotals.overdueWeOweThem > 0
@@ -481,8 +485,8 @@ export default function CounterpartyReportPage() {
                         style={{ width: 220 }}
                         options={[
                             { value: 'all', label: 'Все контрагенты' },
-                            { value: 'unpaid_them', label: 'Нам должны' },
-                            { value: 'unpaid_us', label: 'Мы должны' },
+                            { value: 'unpaid_them', label: SETTLEMENT_SIDES.receivable },
+                            { value: 'unpaid_us', label: SETTLEMENT_SIDES.payable },
                             { value: 'overdue', label: 'Просроченные' },
                             { value: 'settled', label: 'Все оплачено' },
                         ]}
@@ -566,13 +570,13 @@ export default function CounterpartyReportPage() {
                                 <div style={{ display: 'flex', gap: 20, flexShrink: 0, alignItems: 'center' }}>
                                     {cp.unpaidTheyOweUs > 0 && (
                                         <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Нам должны</div>
+                                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textTransform: 'uppercase', letterSpacing: '0.3px' }}>{SETTLEMENT_SIDES.receivableShort}</div>
                                             <div style={{ fontSize: 14, fontWeight: 700 }}>{fmt(cp.unpaidTheyOweUs)} ₸</div>
                                         </div>
                                     )}
                                     {cp.unpaidWeOweThem > 0 && (
                                         <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Мы должны</div>
+                                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textTransform: 'uppercase', letterSpacing: '0.3px' }}>{SETTLEMENT_SIDES.payableShort}</div>
                                             <div style={{ fontSize: 14, fontWeight: 700 }}>{fmt(cp.unpaidWeOweThem)} ₸</div>
                                         </div>
                                     )}
@@ -622,18 +626,18 @@ export default function CounterpartyReportPage() {
                                     <div style={{ display: 'flex', gap: 16, padding: '8px 16px', background: token.colorFillAlter, borderBottom: `1px solid ${token.colorBorderSecondary}`, flexWrap: 'wrap' }}>
                                         {(cp.openingReceivable > 0 || cp.openingPayable > 0) && (
                                             <div style={{ fontSize: 12 }}>
-                                                <span style={{ color: token.colorTextSecondary }}>Начальный долг: </span>
-                                                {cp.openingReceivable > 0 && <span style={{ fontWeight: 600, color: token.colorSuccess }}>нам {fmt(cp.openingReceivable)} ₸ </span>}
-                                                {cp.openingPayable > 0 && <span style={{ fontWeight: 600, color: token.colorError }}>мы {fmt(cp.openingPayable)} ₸</span>}
+                                                <span style={{ color: token.colorTextSecondary }}>Начальное сальдо: </span>
+                                                {cp.openingReceivable > 0 && <span style={{ fontWeight: 600, color: token.colorSuccess }}>дебет {fmt(cp.openingReceivable)} ₸ </span>}
+                                                {cp.openingPayable > 0 && <span style={{ fontWeight: 600, color: token.colorError }}>кредит {fmt(cp.openingPayable)} ₸</span>}
                                             </div>
                                         )}
                                         <div style={{ fontSize: 12 }}>
-                                            <span style={{ color: token.colorTextSecondary }}>Нам должны всего: </span>
+                                            <span style={{ color: token.colorTextSecondary }}>{SETTLEMENT_SIDES.receivableShort} всего: </span>
                                             <span style={{ fontWeight: 600, color: token.colorSuccess }}>{fmt(cp.theyOweUs)} ₸</span>
                                             <span style={{ color: token.colorTextSecondary }}> (оплачено: {fmt(cp.theyOweUsPaid)} ₸)</span>
                                         </div>
                                         <div style={{ fontSize: 12 }}>
-                                            <span style={{ color: token.colorTextSecondary }}>Мы должны всего: </span>
+                                            <span style={{ color: token.colorTextSecondary }}>{SETTLEMENT_SIDES.payableShort} всего: </span>
                                             <span style={{ fontWeight: 600, color: token.colorError }}>{fmt(cp.weOweThem)} ₸</span>
                                             <span style={{ color: token.colorTextSecondary }}> (оплачено: {fmt(cp.weOweThemPaid)} ₸)</span>
                                         </div>
@@ -729,7 +733,7 @@ export default function CounterpartyReportPage() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
                                             <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
-                                                {o.direction === 'theyOwe' ? 'Нам должны' : 'Мы должны'}
+                                                {o.direction === 'theyOwe' ? SETTLEMENT_SIDES.receivableShort : SETTLEMENT_SIDES.payableShort}
                                             </div>
                                             <div style={{ fontSize: 24, fontWeight: 700 }}>
                                                 {fmt(o.amount)} ₸

@@ -1047,14 +1047,18 @@ export default function SharedReportPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    {/* Стороны названы от лица читателя: он открыл ссылку,
+                        чтобы свериться со своим учётом, и «дебиторская» здесь
+                        значит его дебиторскую — то, что ему предстоит
+                        получить. Слова те же, что в его балансе. */}
                     <StatCard
-                        label="Вам должны"
+                        label="Ваша дебиторская задолженность"
                         value={money(totals.unpaidWeOweThem)}
                         hint={totals.weOweThem > 0 ? `Начислено за период: ${money(totals.weOweThem)}` : undefined}
                         color={totals.unpaidWeOweThem > 0 ? C.green : undefined}
                     />
                     <StatCard
-                        label="Вы должны"
+                        label="Ваша кредиторская задолженность"
                         value={money(totals.unpaidTheyOweUs)}
                         hint={totals.theyOweUs > 0 ? `Начислено за период: ${money(totals.theyOweUs)}` : undefined}
                         color={totals.unpaidTheyOweUs > 0 ? C.red : undefined}
