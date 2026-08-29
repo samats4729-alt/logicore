@@ -178,7 +178,7 @@ export default function FinanceHubPage() {
                 { label: 'Расход денег', href: '/company/accounting/cash-out', show: acc, icon: ArrowUpRight, desc: 'Оплатили перевозчику или за топливо', full: 'Журнал расходов: создать документ, выбрать статью, счёт, контрагента, заявку' },
                 { label: 'Все операции', href: '/company/accounting/operations', show: acc, icon: ArrowLeftRight, desc: 'Вся история денег в одном месте', full: 'Вся история денег в одном месте: приходы и расходы' },
                 { label: 'Платёжный календарь', href: '/company/accounting/calendar', show: acc, icon: CalendarDays, desc: 'Что и когда движется по деньгам', full: 'Приходы и оплаты по дням — что и когда движется по деньгам' },
-                { label: 'Планируемые платежи', href: '/company/accounting/planned', show: acc, icon: Clock, desc: 'Что предстоит заплатить и получить', full: 'Что предстоит: кто должен нам и кому должны мы — с плановой датой' },
+                { label: 'Планируемые платежи', href: '/company/accounting/planned', show: acc, icon: Clock, desc: 'Что предстоит заплатить и получить', full: 'Что предстоит: дебиторская и кредиторская задолженность с плановой датой' },
             ],
         },
         {

@@ -1265,9 +1265,9 @@ export class FinancialReportsService {
                 // начальное сальдо + дебет − кредит.
                 //
                 // Без обрезки по нулю, в отличие от unpaid* ниже: переплата
-                // должна уводить баланс в минус (мы должны вернуть), а в
-                // колонках «Нам должны»/«Мы должны» отрицательных сумм быть
-                // не может.
+                // должна уводить баланс в минус (её предстоит вернуть), а в
+                // колонках дебиторской и кредиторской задолженности
+                // отрицательных сумм быть не может.
                 balance: toNum(
                     entry.theyOweUs.minus(entry.theyOweUsPaid).plus(openingReceivable)
                         .minus(entry.weOweThem.minus(entry.weOweThemPaid)).minus(openingPayable),
@@ -1312,7 +1312,7 @@ export class FinancialReportsService {
     // ==================== АКТ СВЕРКИ ====================
 
     // Акт сверки взаимных расчётов с контрагентом.
-    // Сальдо в перспективе «они нам должны»: положительное = долг контрагента перед нами.
+    // Сальдо со стороны дебиторской задолженности: положительное = долг контрагента перед нами.
     async getReconciliationAct(companyId: string, counterpartyId: string, query: { startDate?: string; endDate?: string }) {
         const [company, counterparty] = await Promise.all([
             this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, bin: true } }),
@@ -2734,22 +2734,24 @@ export class FinancialReportsService {
         const report = await this.getCounterpartyReport(companyId);
 
         const rows = report.counterparties.map(item => {
-            let balanceText = 'В расчете';
-            if (item.balance > 0) balanceText = 'Они нам должны';
-            else if (item.balance < 0) balanceText = 'Мы им должны';
+            // Файл уходит контрагенту и его бухгалтеру — слова те же, что
+            // в акте сверки и в балансе, а не разговорные «нам должны».
+            let balanceText = 'Расчёты закрыты';
+            if (item.balance > 0) balanceText = 'Дебиторская задолженность';
+            else if (item.balance < 0) balanceText = 'Кредиторская задолженность';
 
             return {
                 'Контрагент': item.counterparty.name,
                 'Наша роль': item.ourRole,
                 'Всего сделок': item.totalOrders,
-                'Всего они нам должны (KZT)': item.theyOweUs,
-                'Оплачено ими нам (KZT)': item.theyOweUsPaid,
-                'Долг за ними (KZT)': item.unpaidTheyOweUs,
-                'Всего мы им должны (KZT)': item.weOweThem,
-                'Оплачено нами им (KZT)': item.weOweThemPaid,
-                'Долг за нами (KZT)': item.unpaidWeOweThem,
-                'Баланс взаиморасчетов (KZT)': item.balance,
-                'Статус': balanceText,
+                'Начислено к получению (KZT)': item.theyOweUs,
+                'Получено (KZT)': item.theyOweUsPaid,
+                'Дебиторская задолженность (KZT)': item.unpaidTheyOweUs,
+                'Начислено к оплате (KZT)': item.weOweThem,
+                'Оплачено (KZT)': item.weOweThemPaid,
+                'Кредиторская задолженность (KZT)': item.unpaidWeOweThem,
+                'Сальдо расчётов (KZT)': item.balance,
+                'Состояние расчётов': balanceText,
             };
         });
 

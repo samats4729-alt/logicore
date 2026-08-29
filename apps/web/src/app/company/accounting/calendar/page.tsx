@@ -8,6 +8,7 @@ import {
     AlertCircle, CalendarDays, FileText, Clock,
 } from 'lucide-react';
 import { MONTHS_GEN } from '@/lib/ru-date';
+import { SETTLEMENT_SIDES } from '@/lib/vocabulary';
 import { cn } from '@/lib/utils';
 import {
     fetchPlannedPayments,
@@ -129,8 +130,8 @@ export default function PaymentCalendarPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Money label="Нам должны" value={money(totalIn)} tone="in" />
-                    <Money label="Мы должны" value={money(totalOut)} tone="out" />
+                    <Money label={SETTLEMENT_SIDES.receivableShort} value={money(totalIn)} tone="in" />
+                    <Money label={SETTLEMENT_SIDES.payableShort} value={money(totalOut)} tone="out" />
                     {overdueTotal > 0 && <Money label="Просрочено" value={money(overdueTotal)} tone="out" alert />}
                     <Button
                         variant="outline"

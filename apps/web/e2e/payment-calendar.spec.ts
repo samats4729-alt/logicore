@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { login } from './helpers';
+import { SETTLEMENT_SIDES } from '@/lib/vocabulary';
 
 /**
  * Платёжный календарь на дашборде и срок оплаты в счёте.
@@ -61,7 +62,9 @@ test.describe('Платёжный календарь', () => {
 
         await expect(page).toHaveURL(/\/company\/accounting\/calendar/);
         await expect(page.getByRole('heading', { name: 'Платёжный календарь' })).toBeVisible();
-        await expect(page.getByText('Нам должны')).toBeVisible();
+        // Подпись берём из словаря: переименуют стороны расчётов — тест
+        // переедет вместе с ними, а не упадёт на устаревшем слове.
+        await expect(page.getByText(SETTLEMENT_SIDES.receivableShort).first()).toBeVisible();
     });
 });
 
