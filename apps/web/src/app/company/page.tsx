@@ -3,15 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dropdown, Checkbox } from 'antd';
-import { Activity, ArrowDown, ArrowRight, ArrowUp, Bell, Plus, Scale, Settings } from 'lucide-react';
+import { Activity, ArrowDown, ArrowRight, ArrowUp, Bell, Plus, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { SETTLEMENT_SIDES } from '@/lib/vocabulary';
 import { STATUS_LABELS } from '@/components/ui/StatusPill';
 import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
 import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
 import PaymentCalendarCard from '@/components/dashboard/PaymentCalendarCard';
 import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
+import EmployeeEarningsCard from '@/components/dashboard/EmployeeEarningsCard';
 import dayjs from 'dayjs';
 import styles from '@/components/nova/nova.module.css';
 import dash from './dashboard.module.css';
@@ -35,20 +35,6 @@ interface DashboardActivity {
     inWorkNow: number;
     pendingNow: number;
     problemNow: number;
-}
-
-interface DebtTotals {
-    unpaidTheyOweUs: number;
-    unpaidWeOweThem: number;
-    balance: number;
-    totalCounterparties: number;
-}
-
-interface DebtCounterparty {
-    counterparty: { id: string; name: string };
-    ourRole: string;
-    unpaidTheyOweUs: number;
-    unpaidWeOweThem: number;
 }
 
 interface OrderEvent {
@@ -88,7 +74,7 @@ function Delta({ cur, prevVal, money }: { cur: number; prevVal: number; money?: 
 const BLOCKS_LS_KEY = 'lc_dashboard_hidden_blocks';
 const ALL_BLOCKS = [
     { key: 'activity', label: 'Активность' },
-    { key: 'debts', label: 'Задолженность' },
+    { key: 'earnings', label: 'Заработок сотрудников' },
     { key: 'paymentCalendar', label: 'Платёжный календарь' },
     { key: 'pendingWork', label: 'Требует оформления' },
     { key: 'events', label: 'Уведомления' },
@@ -109,9 +95,6 @@ export default function CompanyDashboard() {
 
     const [activity, setActivity] = useState<DashboardActivity | null>(null);
     const [activityLoading, setActivityLoading] = useState(true);
-    const [debtTotals, setDebtTotals] = useState<DebtTotals | null>(null);
-    const [debtors, setDebtors] = useState<DebtCounterparty[]>([]);
-    const [debtsAvailable, setDebtsAvailable] = useState(true);
     const [events, setEvents] = useState<OrderEvent[]>([]);
     const [eventsLoading, setEventsLoading] = useState(true);
     const [payrollSummary, setPayrollSummary] = useState<{ total: number; hasScheme: boolean } | null>(null);
@@ -155,15 +138,6 @@ export default function CompanyDashboard() {
                 .then(res => setActivity(res.data))
                 .catch(() => { })
                 .finally(() => setActivityLoading(false));
-
-            // Дашборду нужны только итоги и топ должников. Список заявок по
-            // каждому контрагенту составляет почти весь объём ответа.
-            api.get('/accounting/counterparty-report?includeOrders=false')
-                .then(res => {
-                    setDebtTotals(res.data?.totals || null);
-                    setDebtors((res.data?.counterparties || []).filter((c: DebtCounterparty) => c.unpaidTheyOweUs > 0).slice(0, 3));
-                })
-                .catch(() => setDebtsAvailable(false));
         } else {
             // Сотрудник: только его заявки и его заработок
             const mine = isManager ? '&mine=true' : '';
@@ -382,64 +356,14 @@ export default function CompanyDashboard() {
                     контрагентам не показываются нигде, и здесь тоже не место. */}
                 {seesPaymentProofs && show('paymentCalendar') && <PaymentCalendarCard />}
 
-                {/* ===== ЗАДОЛЖЕННОСТЬ (только администратор компании) ===== */}
-                {isOwner && show('debts') && debtsAvailable && (
-                    <section className={styles.card}>
-                        <div className={styles.cardHead}>
-                            <Scale size={14} />
-                            <h2 className={styles.cardTitle}>Задолженность</h2>
-                            <button type="button" className={dash.headLink} onClick={() => router.push('/company/accounting/counterparty-report')}>
-                                Взаиморасчёты <ArrowRight size={12} />
-                            </button>
-                        </div>
+                {/* ===== ЗАРАБОТОК СОТРУДНИКОВ (администратор компании) =====
 
-                        {!debtTotals ? (
-                            <div className={styles.empty}><Loader /></div>
-                        ) : (
-                            <div className={styles.cardBody}>
-                                <div className={dash.debtRow}>
-                                    {/* Задолженность не бывает хорошей или
-                                        плохой сама по себе: и дебиторская, и
-                                        кредиторская — просто суммы. Цвет остался
-                                        у сальдо: по нему видно, в плюсе компания
-                                        или в минусе. Так же во «Взаиморасчётах». */}
-                                    <div className={dash.debtBox}>
-                                        <span className={styles.tileLabel}>{SETTLEMENT_SIDES.receivableShort}</span>
-                                        <b>{fmt(debtTotals.unpaidTheyOweUs)} ₸</b>
-                                    </div>
-                                    <div className={dash.debtBox}>
-                                        <span className={styles.tileLabel}>{SETTLEMENT_SIDES.payableShort}</span>
-                                        <b>{fmt(debtTotals.unpaidWeOweThem)} ₸</b>
-                                    </div>
-                                    <div className={dash.debtBox}>
-                                        <span className={styles.tileLabel}>Сальдо</span>
-                                        <b className={(debtTotals.unpaidTheyOweUs - debtTotals.unpaidWeOweThem) >= 0 ? styles.valuePos : styles.valueNeg}>
-                                            {(debtTotals.unpaidTheyOweUs - debtTotals.unpaidWeOweThem) >= 0 ? '+' : ''}
-                                            {fmt(debtTotals.unpaidTheyOweUs - debtTotals.unpaidWeOweThem)} ₸
-                                        </b>
-                                    </div>
-                                </div>
-
-                                {debtors.length > 0 && (
-                                    <>
-                                        <div className={dash.listLabel}>Крупнейшие дебиторы</div>
-                                        {debtors.map((d, i) => (
-                                            <button
-                                                type="button"
-                                                key={i}
-                                                className={dash.row}
-                                                onClick={() => router.push('/company/accounting/counterparty-report')}
-                                            >
-                                                <span className={dash.rowName}>{d.counterparty.name}</span>
-                                                <span className={dash.rowValue}>{fmt(d.unpaidTheyOweUs)} ₸</span>
-                                            </button>
-                                        ))}
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </section>
-                )}
+                    Здесь была задолженность. Она осталась целой страницей во
+                    «Взаиморасчётах» и плиткой в платёжном календаре, а на
+                    дашборде повторялась третий раз. Сколько компания должна
+                    своим — оклад, процент и премии — не было видно нигде,
+                    кроме страницы зарплат, куда заходят раз в месяц. */}
+                {isOwner && show('earnings') && <EmployeeEarningsCard />}
 
                 {/* ===== УВЕДОМЛЕНИЯ (видят все сотрудники) ===== */}
                 {(isOwner ? show('events') : true) && (

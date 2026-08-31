@@ -103,6 +103,126 @@
     gap: 2px;
 }
 
+/* Обёртка клетки — якорь для окошка наведения. Само окно висит под своей
+   датой, поэтому точкой отсчёта должна быть клетка, а не вся сетка. */
+.cellWrap {
+    position: relative;
+    min-width: 0;
+}
+
+.cellWrap > button {
+    width: 100%;
+}
+
+/* ===== Окошко под курсором: кому и за что платим в этот день =====
+
+   Наведение отвечает на вопрос без нажатия. Курсор идёт по неделе, и в
+   каждой дате с точкой человек читает состав платежей, не теряя календарь
+   из виду. */
+.hint {
+    position: absolute;
+    /* Прижимаем к низу той строки, над которой курсор: `grid-row` не
+       задаём — окно живёт в потоке сетки как её последний ребёнок, а
+       вертикаль берёт от клетки через `top`. */
+    top: 100%;
+    z-index: 20;
+    width: 288px;
+    margin-top: 4px;
+    padding: 8px 9px;
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: 10px;
+    box-shadow: var(--nova-shadow);
+    /* Курсор идёт к следующей дате, а не в окно: перехватывать его нельзя,
+       иначе подсказка мигает под собственным указателем. */
+    pointer-events: none;
+}
+
+/* Пятница, суббота и воскресенье: окно, выпущенное вправо, ушло бы за край
+   карточки, поэтому у правых колонок оно открывается влево. */
+.hintRight {
+    left: 0;
+}
+
+.hintLeft {
+    right: 0;
+}
+
+.hintHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--nova-border-2);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--nova-fg);
+}
+
+.hintSums {
+    display: flex;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+.hintRow {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 3px 0;
+}
+
+.hintParty {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--nova-fg);
+}
+
+.hintParty b {
+    font-weight: 550;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hintDoc {
+    font-size: 10px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hintAmount {
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.hintMore {
+    margin-top: 5px;
+    padding-top: 4px;
+    border-top: 1px solid var(--nova-border-2);
+    font-size: 10px;
+    color: var(--nova-fg-3);
+}
+
+/* На узком экране наведения нет, а место дороже: там работает нажатие,
+   и платежи показывает панель под сеткой. */
+@media (max-width: 640px) {
+    .hint {
+        display: none;
+    }
+}
+
 .weekday {
     padding: 3px 0;
     text-align: center;

@@ -1,0 +1,97 @@
+/* Заработок сотрудников за месяц — карточка на главной кабинета.
+
+   Строка читается парой: слева кто, справа сколько. Суммы прижаты вправо
+   и набраны табличными цифрами, чтобы разряды стояли друг под другом:
+   в сводке о деньгах взгляд идёт по столбцу, а не по строкам. */
+
+.rows {
+    display: flex;
+    flex-direction: column;
+}
+
+.row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--nova-border-2);
+}
+
+.row:last-child {
+    border-bottom: 0;
+}
+
+.who {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.name {
+    font-size: 12.5px;
+    font-weight: 550;
+    color: var(--nova-fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.role {
+    font-size: 11px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.money {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    flex-shrink: 0;
+}
+
+.total {
+    font-size: 13px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
+
+.parts {
+    font-size: 11px;
+    color: var(--nova-fg-3);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Итог по всем, включая тех, кто не поместился: иначе сумма пяти строк
+   не сходится с фондом за месяц, и это читается как ошибка. */
+.foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid var(--nova-border);
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+}
+
+.grand {
+    font-size: 13px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
+
+/* На узком экране подпись роли и разбор суммы съедают строку — прячем
+   второстепенное, оставляя имя и итог. */
+@media (max-width: 520px) {
+    .parts {
+        display: none;
+    }
+}
