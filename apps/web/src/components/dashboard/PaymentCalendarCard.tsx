@@ -64,6 +64,14 @@ export default function PaymentCalendarCard() {
         return () => { актуально = false; };
     }, []);
 
+    /**
+     * День под курсором. Наведение отвечает на вопрос «кому и за что» без
+     * нажатия: точка говорит, что в этот день что-то есть, а окошко — что
+     * именно. На телефоне наведения нет, и там остаётся нажатие: панель под
+     * сеткой показывает то же самое.
+     */
+    const [подсказка, setПодсказка] = useState<{ day: Dayjs; колонка: number } | null>(null);
+
     const byDay = useMemo(() => groupByDay(rows), [rows]);
     const grid = useMemo(() => monthGrid(month), [month]);
     const noDate = useMemo(() => rows.filter((row) => !row.dueDate), [rows]);
@@ -152,13 +160,25 @@ export default function PaymentCalendarCard() {
                                 const чужой = !день.isSame(month, 'month');
                                 const выбран = день.isSame(selected, 'day');
                                 return (
+                                    // Обёртка нужна окошку наведения: оно
+                                    // висит под своей датой, а не под сеткой.
+                                    <div key={key} className={card.cellWrap}>
                                     <button
                                         type="button"
-                                        key={key}
                                         onClick={() => { setSelected(день); if (чужой) setMonth(день.startOf('month')); }}
-                                        title={bucket ? [
-                                            bucket.in > 0 ? `придёт ${moneyKzt(bucket.in)}` : null,
-                                            bucket.out > 0 ? `уйдёт ${moneyKzt(bucket.out)}` : null,
+                                        onMouseEnter={() => bucket && setПодсказка({ day: день, колонка: weekdayIndex(день) })}
+                                        onMouseLeave={() => setПодсказка((p) => (p && p.day.isSame(день, 'day') ? null : p))}
+                                        onFocus={() => bucket && setПодсказка({ day: день, колонка: weekdayIndex(день) })}
+                                        onBlur={() => setПодсказка((p) => (p && p.day.isSame(день, 'day') ? null : p))}
+                                        /* В клетке стоит только число, и с
+                                           экрана она читается как «18» — без
+                                           единого намёка, что в этот день
+                                           уходит полтора миллиона. Цветные
+                                           точки незрячему не говорят ничего. */
+                                        aria-label={bucket ? [
+                                            `${день.date()} ${MONTHS_GEN[день.month()]}`,
+                                            bucket.in > 0 ? `поступит ${moneyKzt(bucket.in)}` : null,
+                                            bucket.out > 0 ? `платим ${moneyKzt(bucket.out)}` : null,
                                         ].filter(Boolean).join(', ') : undefined}
                                         className={[
                                             card.cell,
@@ -184,6 +204,14 @@ export default function PaymentCalendarCard() {
                                             )}
                                         </span>
                                     </button>
+                                    {подсказка?.day.isSame(день, 'day') && (
+                                        <DayHint
+                                            date={день}
+                                            bucket={bucket}
+                                            колонка={подсказка.колонка}
+                                        />
+                                    )}
+                                    </div>
                                 );
                             })}
                         </div>
@@ -217,6 +245,81 @@ function счётСловом(count: number): string {
     if (последняя === 1) return 'счёт';
     if (последняя >= 2 && последняя <= 4) return 'счёта';
     return 'счетов';
+}
+
+/**
+ * Окошко под курсором: кому и за что платим в этот день.
+ *
+ * Точка на дате отвечает только «что-то есть». Вопрос, который возникает
+ * следом, — «кому и сколько», и ради него не должно приходиться нажимать:
+ * человек ведёт курсор по неделе и читает.
+ *
+ * Прижимается к той стороне клетки, где есть место: у субботы и воскресенья
+ * окно, выпущенное вправо, ушло бы за край карточки.
+ */
+function DayHint({
+    date, bucket, колонка,
+}: {
+    date: Dayjs;
+    bucket?: DayBucket;
+    /** Номер дня недели с понедельника: по нему решаем, куда открывать. */
+    колонка: number;
+}) {
+    if (!bucket || !bucket.items.length) return null;
+
+    const влево = колонка >= 4;
+    const строки = bucket.items.slice(0, 4);
+    const скрыто = bucket.items.length - строки.length;
+
+    return (
+        <div
+            className={`${card.hint} ${влево ? card.hintLeft : card.hintRight}`}
+            role="tooltip"
+        >
+            <div className={card.hintHead}>
+                <span>{date.format('D')} {MONTHS_GEN[date.month()]}</span>
+                <span className={card.hintSums}>
+                    {bucket.in > 0 && <span style={{ color: IN_HEX }}>+{shortMoney(bucket.in)}</span>}
+                    {bucket.out > 0 && <span style={{ color: OUT_HEX }}>−{shortMoney(bucket.out)}</span>}
+                </span>
+            </div>
+
+            {строки.map((row) => (
+                <div key={row.documentId} className={card.hintRow}>
+                    <span
+                        className={card.dot}
+                        style={{ background: row.direction === 'IN' ? IN_HEX : OUT_HEX, flexShrink: 0 }}
+                    />
+                    <span className={card.hintParty}>
+                        {/* Кто платит или кому платим — первое, что нужно
+                            прочитать. Номер счёта уточняет, но не он главный. */}
+                        <b>{row.party || 'Контрагент не указан'}</b>
+                        <span className={card.hintDoc}>
+                            {/* Направление словом, а не значком: «платим» и
+                                «поступит» читаются с одного взгляда, а точка
+                                слева уже несёт цвет.
+                                Номер рейса сервер отдаёт прочерком, когда
+                                счёт ни к какому рейсу не привязан, — прочерк
+                                посреди строки выглядит как потерянные данные. */}
+                            {row.direction === 'IN' ? 'поступит' : 'платим'} · счёт {row.invoiceNumber}
+                            {row.orderNumber && row.orderNumber !== '—' ? ` · ${row.orderNumber}` : ''}
+                            {row.isOverdue ? ' · просрочено' : ''}
+                        </span>
+                    </span>
+                    <span
+                        className={card.hintAmount}
+                        style={{ color: row.direction === 'IN' ? IN_HEX : OUT_HEX }}
+                    >
+                        {row.direction === 'IN' ? '+' : '−'}{moneyKzt(row.amount)}
+                    </span>
+                </div>
+            ))}
+
+            {скрыто > 0 && (
+                <div className={card.hintMore}>и ещё {скрыто} {счётСловом(скрыто)} — нажмите на дату</div>
+            )}
+        </div>
+    );
 }
 
 /** Платежи выбранного дня: за чем именно человек ткнул в дату. */
