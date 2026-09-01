@@ -156,6 +156,13 @@ export class BillingController {
         return result;
     }
 
+    @Get('admin/payments')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Оплаты подписки картой' })
+    async listPayments() {
+        return this.cardPayments.listPayments();
+    }
+
     @Get('admin/plans')
     @Roles(UserRole.ADMIN)
     @ApiOperation({ summary: 'Все тарифные планы' })

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, Popconfirm, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { CreditCard, Inbox, Layers, Wallet } from 'lucide-react';
+import { BadgeCheck, CreditCard, Inbox, Layers, Wallet } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -29,6 +29,30 @@ const REQUEST_LABELS: Record<string, string> = {
     APPROVED: 'продлено',
     REJECTED: 'отказ',
 };
+
+/**
+ * Состояния оплаты картой словами владельца, а не протокола.
+ *
+ * «Ждём банк» вместо PENDING: пока платёж в этом состоянии, деньги ещё не
+ * подтверждены, и списка «неоплаченных» из них делать нельзя — человек мог
+ * просто закрыть страницу банка.
+ */
+const PAYMENT_LABELS: Record<string, string> = {
+    PENDING: 'ждём банк',
+    SUCCESS: 'оплачено',
+    FAILED: 'не прошло',
+};
+
+/**
+ * Цветом — только то, что требует действия.
+ *
+ * «Ждём банк» и «не прошло» цвета не получают: это обычный ход дел, и
+ * красить их значит приучить не смотреть на цвет вовсе.
+ */
+function чипПлатежа(p: { status: string; appliedAt?: string | null }): string {
+    if (p.status === 'SUCCESS' && !p.appliedAt) return ` ${nova.chipWarn}`;
+    return '';
+}
 
 const money = (value: number) => value.toLocaleString('ru-RU');
 
@@ -63,12 +87,28 @@ interface SubscriptionRequest {
     company: { id: string; name: string; bin?: string | null };
 }
 
+interface CardPayment {
+    id: string;
+    months: number;
+    amount: number;
+    users: number;
+    status: 'PENDING' | 'SUCCESS' | 'FAILED';
+    cardPan?: string | null;
+    failureDescription?: string | null;
+    paidAt?: string | null;
+    /** Проставлено — значит этим платежом подписку уже продлили. */
+    appliedAt?: string | null;
+    createdAt: string;
+    company: { id: string; name: string; bin?: string | null };
+}
+
 export default function AdminBillingPage() {
     const [settings, setSettings] = useState<Settings | null>(null);
     const [savingSettings, setSavingSettings] = useState(false);
     const [plans, setPlans] = useState<Plan[]>([]);
     const [subs, setSubs] = useState<any[]>([]);
     const [requests, setRequests] = useState<SubscriptionRequest[]>([]);
+    const [payments, setPayments] = useState<CardPayment[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Черновик формы тарифа: сумма и сроки правятся вместе и сохраняются
@@ -92,17 +132,22 @@ export default function AdminBillingPage() {
     const loadAll = async () => {
         setLoading(true);
         try {
-            const [settingsRes, tariffRes, plansRes, subsRes, requestsRes] = await Promise.all([
+            const [settingsRes, tariffRes, plansRes, subsRes, requestsRes, paymentsRes] = await Promise.all([
                 api.get('/billing/admin/settings'),
                 api.get('/billing/admin/tariff'),
                 api.get('/billing/admin/plans'),
                 api.get('/billing/admin/subscriptions'),
                 api.get('/billing/admin/requests'),
+                // Отдельно от остальных: api и web выкатываются двумя
+                // службами, и пока одна догоняет другую, отсутствие нового
+                // адреса не должно ронять всю страницу с ценой и подписками.
+                api.get('/billing/admin/payments').catch(() => ({ data: [] })),
             ]);
             setSettings(settingsRes.data);
             setPlans(plansRes.data || []);
             setSubs(subsRes.data || []);
             setRequests(requestsRes.data || []);
+            setPayments(paymentsRes.data || []);
             setDraft({
                 // Пока оплата выключена, тариф отдаёт ноль — цену для формы
                 // берём из самого плана, иначе сохранение обнулило бы её.
@@ -268,6 +313,13 @@ export default function AdminBillingPage() {
     };
 
     const pendingRequests = requests.filter(r => r.status === 'PENDING');
+
+    /**
+     * Платежи, за которыми нужно прийти руками: деньги пришли, а подписка не
+     * продлилась. Так бывает при расхождении суммы — списали не столько,
+     * сколько мы просили. Само это не рассосётся.
+     */
+    const требуютВнимания = payments.filter(p => p.status === 'SUCCESS' && !p.appliedAt);
 
     // ==================== Колонки таблиц ====================
 
@@ -506,6 +558,58 @@ export default function AdminBillingPage() {
                                         {REQUEST_LABELS[r.status] || r.status}
                                     </span>
                                 )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </section>
+
+            {/* Оплаты картой продлевают подписку сами, без вашего участия.
+                Тем более их нужно видеть: иначе про деньги, пришедшие
+                картой, известно только из телеграма. */}
+            <section className={nova.card}>
+                <div className={nova.cardHead}>
+                    <BadgeCheck size={14} />
+                    <h2 className={nova.cardTitle}>Оплаты картой</h2>
+                    {требуютВнимания.length > 0 && (
+                        <span className={`${nova.chip} ${nova.chipWarn}`}>
+                            {требуютВнимания.length} требуют разбора
+                        </span>
+                    )}
+                </div>
+                {payments.length === 0 ? (
+                    <div className={nova.empty}>
+                        {loading ? 'Загружаем…' : 'Картой ещё не платили'}
+                    </div>
+                ) : (
+                    <div className={nova.cardBody}>
+                        {payments.map((p) => (
+                            <div key={p.id} className={styles.request}>
+                                <div className={styles.requestWho}>
+                                    <div className={styles.requestName}>{p.company.name}</div>
+                                    <div className={styles.requestMeta}>
+                                        {p.company.bin ? `БИН ${p.company.bin}` : 'БИН не указан'}
+                                        {' · '}{dayjs(p.paidAt || p.createdAt).format('DD.MM.YYYY HH:mm')}
+                                        {p.cardPan ? ` · ${p.cardPan}` : ''}
+                                    </div>
+                                    {/* Деньги пришли, а подписка не продлилась —
+                                        единственная строка здесь, по которой
+                                        нужно что-то делать руками. */}
+                                    {p.failureDescription && (
+                                        <div className={styles.requestMeta}>{p.failureDescription}</div>
+                                    )}
+                                </div>
+                                <div className={styles.requestSum}>
+                                    {money(p.amount)} ₸
+                                    <div className={styles.requestSumSub}>
+                                        {p.months} мес · {p.users} {сотрудниковСловом(p.users)}
+                                    </div>
+                                </div>
+                                <span className={`${nova.chip}${чипПлатежа(p)}`}>
+                                    {p.status === 'SUCCESS' && !p.appliedAt
+                                        ? 'деньги есть, подписка нет'
+                                        : PAYMENT_LABELS[p.status] || p.status}
+                                </span>
                             </div>
                         ))}
                     </div>
