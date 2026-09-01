@@ -53,6 +53,13 @@ const PAYMENT_LABELS: Record<string, string> = {
  */
 const ЖИЗНЬ_ССЫЛКИ_МС = 60 * 60 * 1000;
 
+/** «1 требует» / «2 требуют» — плашку читает человек, а не счётчик. */
+function требуетСловом(n: number): string {
+    const хвост = n % 100;
+    if (хвост > 10 && хвост < 20) return 'требуют';
+    return n % 10 === 1 ? 'требует' : 'требуют';
+}
+
 /** Что написать на плашке платежа. */
 function подписьПлатежа(p: CardPayment): string {
     if (p.status === 'SUCCESS' && !p.appliedAt) return 'деньги есть, подписка нет';
@@ -592,7 +599,7 @@ export default function AdminBillingPage() {
                     <h2 className={nova.cardTitle}>Оплаты картой</h2>
                     {требуютВнимания.length > 0 && (
                         <span className={`${nova.chip} ${nova.chipWarn}`}>
-                            {требуютВнимания.length} требуют разбора
+                            {требуютВнимания.length} {требуетСловом(требуютВнимания.length)} разбора
                         </span>
                     )}
                 </div>
