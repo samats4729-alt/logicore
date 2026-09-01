@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Modal, Select, Input } from 'antd';
+import { CreditCard, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
 import { toast } from 'sonner';
@@ -11,9 +12,14 @@ import styles from './subscription-buy.module.css';
 /**
  * Покупка подписки.
  *
- * Деньги через платформу не идут: оплата по счёту. Поэтому окно не принимает
- * оплату, а отправляет запрос — какая компания, на сколько месяцев и на
- * какую сумму. Сумму считает сервер, здесь она только показана.
+ * Два пути к одному и тому же: заплатить картой прямо сейчас или попросить
+ * счёт на компанию. Картой доступ открывается в ту же минуту, по счёту — в
+ * тот день, когда придут деньги; на этом и построен выбор, а не на списке
+ * технических возможностей.
+ *
+ * Оплата картой показывается, только если она настроена на сервере
+ * (`cardPayment` в статусе подписки). Кнопка, ведущая в неработающую
+ * оплату, хуже её отсутствия: человек уже достал карту.
  *
  * Одно окно на два места: плитка «Тариф» на главной и экран «Подписка не
  * активна». Формулировки про сгорающие дни должны совпадать слово в слово,
@@ -21,6 +27,8 @@ import styles from './subscription-buy.module.css';
  */
 
 const MONTH_OPTIONS = [1, 3, 6, 12];
+
+type Способ = 'card' | 'invoice';
 
 /** «1 месяц» / «3 месяца» / «6 месяцев». */
 export function monthsWord(n: number): string {
@@ -46,6 +54,7 @@ export default function SubscriptionBuyModal({
     open,
     pricePerUser,
     users,
+    cardPayment = false,
     onClose,
     onSent,
 }: {
@@ -54,26 +63,50 @@ export default function SubscriptionBuyModal({
     pricePerUser: number;
     /** Сколько сотрудников оплачивается — водители не в счёт. */
     users: number;
+    /** Настроена ли оплата картой. Решает сервер, не экран. */
+    cardPayment?: boolean;
     onClose: () => void;
     onSent: () => void;
 }) {
     const [months, setMonths] = useState(1);
     const [comment, setComment] = useState('');
     const [sending, setSending] = useState(false);
+    const [способ, setСпособ] = useState<Способ>(cardPayment ? 'card' : 'invoice');
+
+    // Способ оплаты держим в согласии с тем, что доступно: настройки могли
+    // измениться, пока окно закрыто.
+    const выбран: Способ = cardPayment ? способ : 'invoice';
+    const итого = pricePerUser * users * months;
+
+    const запросСчёта = async () => {
+        await api.post('/billing/requests', { months, comment });
+        toast.success('Запрос отправлен — выставим счёт');
+        setComment('');
+        onClose();
+        onSent();
+    };
+
+    const оплатаКартой = async () => {
+        const { data } = await api.post('/billing/card-payment', { months });
+        if (!data?.redirectUrl) throw new Error('Платёжная система не прислала адрес оплаты');
+        // Уходим на страницу банка целиком, а не в новом окне: возврат
+        // оттуда идёт обратным переходом, и вкладка-сирота осталась бы
+        // висеть с устаревшим кабинетом.
+        window.location.href = data.redirectUrl;
+    };
 
     const send = async () => {
         setSending(true);
         try {
-            await api.post('/billing/requests', { months, comment });
-            toast.success('Запрос отправлен — выставим счёт');
-            setComment('');
-            onClose();
-            onSent();
+            if (выбран === 'card') await оплатаКартой();
+            else await запросСчёта();
         } catch (e: any) {
-            toast.error(e.response?.data?.message || 'Не удалось отправить запрос');
-        } finally {
+            toast.error(e.response?.data?.message || e.message || 'Не удалось отправить запрос');
             setSending(false);
         }
+        // При оплате картой браузер уже уходит на страницу банка — снимать
+        // ожидание с кнопки незачем, и мигать ею тем более.
+        if (выбран === 'invoice') setSending(false);
     };
 
     return (
@@ -82,14 +115,13 @@ export default function SubscriptionBuyModal({
             open={open}
             onCancel={onClose}
             onOk={send}
-            okText="Отправить запрос"
+            okText={выбран === 'card' ? `Оплатить ${moneyShort(итого)}` : 'Отправить запрос'}
             cancelText="Отмена"
             confirmLoading={sending}
         >
             <div className={styles.hint}>
-                Выберите срок — мы выставим счёт на вашу компанию. Доступ продлится, когда
-                оплата придёт. Оплаченные дни не сгорают: новый срок прибавляется к текущему,
-                поэтому продлевать можно заранее.
+                Оплаченные дни не сгорают: новый срок прибавляется к текущему, поэтому
+                продлевать можно заранее.
             </div>
 
             <div className={styles.field}>
@@ -101,15 +133,39 @@ export default function SubscriptionBuyModal({
                 />
             </div>
 
-            <div className={styles.field}>
-                <span className={nova.tileLabel}>Комментарий</span>
-                <Input.TextArea
-                    rows={2}
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Например: счёт на другое юрлицо"
-                />
-            </div>
+            {cardPayment && (
+                <div className={styles.field}>
+                    <span className={nova.tileLabel}>Как платите</span>
+                    <div className={styles.ways}>
+                        <WayOption
+                            active={выбран === 'card'}
+                            onSelect={() => setСпособ('card')}
+                            icon={<CreditCard size={16} />}
+                            name="Картой онлайн"
+                            desc="Visa или Mastercard. Доступ откроется сразу после оплаты."
+                        />
+                        <WayOption
+                            active={выбран === 'invoice'}
+                            onSelect={() => setСпособ('invoice')}
+                            icon={<FileText size={16} />}
+                            name="По счёту"
+                            desc="Выставим счёт на вашу компанию. Доступ откроется, когда придут деньги."
+                        />
+                    </div>
+                </div>
+            )}
+
+            {выбран === 'invoice' && (
+                <div className={styles.field}>
+                    <span className={nova.tileLabel}>Комментарий</span>
+                    <Input.TextArea
+                        rows={2}
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        placeholder="Например: счёт на другое юрлицо"
+                    />
+                </div>
+            )}
 
             {/* Разбор суммы обязателен: цена зависит от числа сотрудников, и
                 без него итог выглядит взятым с потолка. Считаем ровно так же,
@@ -121,9 +177,39 @@ export default function SubscriptionBuyModal({
                         {moneyShort(pricePerUser)} × {users} {сотрудниковСловом(users)} × {monthsWord(months)}
                     </span>
                 </span>
-                <b className={styles.totalValue}>{moneyShort(pricePerUser * users * months)}</b>
+                <b className={styles.totalValue}>{moneyShort(итого)}</b>
             </div>
         </Modal>
+    );
+}
+
+/** Одна из двух карточек выбора: как платим. */
+function WayOption({
+    active,
+    onSelect,
+    icon,
+    name,
+    desc,
+}: {
+    active: boolean;
+    onSelect: () => void;
+    icon: ReactNode;
+    name: string;
+    desc: string;
+}) {
+    return (
+        <button
+            type="button"
+            className={`${styles.way}${active ? ` ${styles.wayActive}` : ''}`}
+            onClick={onSelect}
+            aria-pressed={active}
+        >
+            <span className={styles.wayIcon}>{icon}</span>
+            <span className={styles.wayText}>
+                <span className={styles.wayName}>{name}</span>
+                <span className={styles.wayDesc}>{desc}</span>
+            </span>
+        </button>
     );
 }
 

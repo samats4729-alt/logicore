@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole, SubscriptionStatus } from '@prisma/client';
 import { BillingService } from './billing.service';
+import { CardPaymentService } from './freedompay/card-payment.service';
 import { AuditService } from '../audit/audit.service';
 
 @ApiTags('billing')
@@ -11,7 +12,11 @@ import { AuditService } from '../audit/audit.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class BillingController {
-    constructor(private billingService: BillingService, private auditService: AuditService) { }
+    constructor(
+        private billingService: BillingService,
+        private cardPayments: CardPaymentService,
+        private auditService: AuditService,
+    ) { }
 
     // ==================== Кабинет компании ====================
 
@@ -39,6 +44,42 @@ export class BillingController {
             details: { months: request.months, amount: request.amount },
         });
         return request;
+    }
+
+    // ==================== Оплата картой ====================
+
+    /**
+     * Начать оплату картой: завести платёж и получить адрес формы банка.
+     *
+     * Сумму считает сервер по цене владельца платформы и числу сотрудников —
+     * присланное из браузера значение в расчёт не идёт.
+     */
+    @Post('card-payment')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Оплатить подписку картой' })
+    async startCardPayment(@Request() req: any, @Body() body: { months: number }) {
+        const результат = await this.cardPayments.start(req.user.companyId, req.user, body);
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'subscription',
+            entityId: результат.paymentId,
+            entityLabel: `Оплата картой: ${результат.months} мес · ${результат.amount.toLocaleString('ru-RU')} ₸`,
+            details: { months: результат.months, amount: результат.amount },
+        });
+        return результат;
+    }
+
+    /**
+     * Состояние платежа для страницы возврата из банка.
+     *
+     * Спрашивать сервер обязательно: браузер вернулся по адресу «оплачено»,
+     * но правду знает только подписанный ответ платёжной системы, а он
+     * приходит отдельно и может немного запоздать.
+     */
+    @Get('card-payment/:id')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Состояние оплаты картой' })
+    async getCardPayment(@Request() req: any, @Param('id') id: string) {
+        return this.cardPayments.getStatus(req.user.companyId, id);
     }
 
     // ==================== Админ платформы ====================
@@ -113,6 +154,13 @@ export class BillingController {
             details: { months: result.months, note: body?.note ?? null },
         });
         return result;
+    }
+
+    @Get('admin/payments')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Оплаты подписки картой' })
+    async listPayments() {
+        return this.cardPayments.listPayments();
     }
 
     @Get('admin/plans')

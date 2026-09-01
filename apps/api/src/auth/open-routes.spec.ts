@@ -55,6 +55,12 @@ const PUBLIC_ROUTES: Record<string, string> = {
     'PublicSharedReportDocumentController.list': 'что контрагент уже прислал по этой ссылке',
     'PublicSharedReportDocumentController.read': 'открыть свой же присланный файл',
     'PublicBillingController.getTariff': 'цена тарифа для лендинга — её смотрят до регистрации',
+    'FreedomPayController.check':
+        'предварительная проверка заказа от серверов FreedomPay — логина у них нет; '
+        + 'вместо него подпись секретным ключом магазина, она проверяется первым действием',
+    'FreedomPayController.result':
+        'результат оплаты картой от серверов FreedomPay — логина у них нет; вместо него '
+        + 'подпись секретным ключом магазина, без неё «оплачено» никого не продлевает',
     'TelegramWebhookController.webhook':
         'обновления от серверов Telegram — логина у них нет; вместо него пароль '
         + 'в заголовке (TELEGRAM_WEBHOOK_SECRET) и белый список чатов внутри',
@@ -120,13 +126,22 @@ interface Route {
     hasJwt: boolean;
 }
 
-function controllerFiles(): string[] {
+/**
+ * Все контроллеры, на любой глубине.
+ *
+ * Обход был на один уровень вложенности, и контроллер в подпапке
+ * (`billing/freedompay/`) в перепись не попадал вовсе — то есть открытый
+ * маршрут внутри неё эта проверка молча пропустила бы. Ровно та форма дыры,
+ * ради которой перепись и заведена.
+ */
+function controllerFiles(dir: string = SRC): string[] {
     const files: string[] = [];
-    for (const entry of readdirSync(SRC)) {
-        const dir = join(SRC, entry);
-        if (!statSync(dir).isDirectory()) continue;
-        for (const file of readdirSync(dir)) {
-            if (file.endsWith('.controller.ts')) files.push(join(dir, file));
+    for (const entry of readdirSync(dir)) {
+        const path = join(dir, entry);
+        if (statSync(path).isDirectory()) {
+            files.push(...controllerFiles(path));
+        } else if (entry.endsWith('.controller.ts')) {
+            files.push(path);
         }
     }
     return files.sort();

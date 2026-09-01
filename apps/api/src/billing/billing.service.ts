@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionStatus, SubscriptionRequestStatus, UserRole } from '@prisma/client';
 import { TelegramService } from '../telegram/telegram.service';
 import { addMonths, kzStartOfMonth } from '../common/utils/business-date';
+import { FreedomPayService } from './freedompay/freedompay.service';
 
 const SETTING_ENABLED = 'billing_enabled';
 const SETTING_TRIAL_DAYS = 'billing_trial_days';
@@ -44,7 +45,11 @@ const BILLABLE_USERS_WHERE = {
 export class BillingService {
     private readonly logger = new Logger(BillingService.name);
 
-    constructor(private prisma: PrismaService, private telegram: TelegramService) { }
+    constructor(
+        private prisma: PrismaService,
+        private telegram: TelegramService,
+        private freedompay: FreedomPayService,
+    ) { }
 
     private settingsCache: { enabled: boolean; trialDays: number; graceDays: number; expiresAt: number } | null = null;
     private accessCache = new Map<string, { allowed: boolean; expiresAt: number }>();
@@ -345,6 +350,14 @@ export class BillingService {
             users,
             /** Сумма в месяц при нынешнем числе сотрудников. */
             monthlyTotal: pricePerUser * users,
+            /**
+             * Можно ли платить картой прямо сейчас.
+             *
+             * Решает не экран, а сервер: ключи магазина живут в окружении, и
+             * кнопка, ведущая в неработающую оплату, хуже её отсутствия —
+             * человек уже достал карту.
+             */
+            cardPayment: this.freedompay.готов(),
             until,
             daysLeft: until ? Math.max(0, Math.ceil((until.getTime() - Date.now()) / DAY_MS)) : null,
             request,
@@ -581,32 +594,23 @@ export class BillingService {
     // ==================== Запросы на покупку ====================
 
     /**
-     * Компания просит счёт на N месяцев.
+     * Из чего складывается сумма покупки: цена за сотрудника, сколько их и
+     * на сколько месяцев.
      *
-     * Сумма считается здесь, а не приходит из браузера: цену назначает
-     * владелец платформы, и подставить свою компания не должна.
+     * Одно место на счёт и на оплату картой. Разъедься эти два расчёта — на
+     * кнопке была бы одна сумма, а в банке другая, и объясняться пришлось бы
+     * владельцу.
      *
-     * Число сотрудников берётся на момент запроса и в сумму счёта уже не
-     * меняется. Наняли шестого человека через неделю после оплаты — этот
-     * месяц доработают вшестером по старой цене, а новая сумма встанет в
-     * следующий счёт. Считать иначе значит менять сумму уже выставленного
-     * счёта, а так не бывает.
+     * Число сотрудников берётся на момент покупки и потом уже не меняется.
+     * Наняли шестого через неделю после оплаты — этот месяц доработают
+     * вшестером по старой цене, а новая сумма встанет в следующий счёт.
+     * Считать иначе значит менять сумму уже выставленного счёта, а так не
+     * бывает.
      */
-    async createRequest(
-        companyId: string,
-        user: { id?: string; firstName?: string; lastName?: string },
-        data: { months: number; comment?: string },
-    ) {
-        const months = Math.round(Number(data.months));
+    async getPurchaseQuote(companyId: string, monthsRaw: number) {
+        const months = Math.round(Number(monthsRaw));
         if (!Number.isFinite(months) || months < 1 || months > 36) {
             throw new BadRequestException('Срок подписки: от 1 до 36 месяцев');
-        }
-
-        const pending = await this.prisma.subscriptionRequest.findFirst({
-            where: { companyId, status: SubscriptionRequestStatus.PENDING },
-        });
-        if (pending) {
-            throw new BadRequestException('Запрос уже отправлен — ждём счёт');
         }
 
         const [company, plan, users] = await Promise.all([
@@ -615,6 +619,39 @@ export class BillingService {
             this.countBillableUsers(companyId),
         ]);
         if (!company) throw new NotFoundException('Компания не найдена');
+
+        const pricePerUser = plan?.priceMonthly ?? 0;
+        return {
+            months,
+            users,
+            pricePerUser,
+            amount: pricePerUser * users * months,
+            planId: plan?.id ?? null,
+            companyName: company.name,
+            companyBin: company.bin,
+        };
+    }
+
+    /**
+     * Компания просит счёт на N месяцев.
+     *
+     * Сумма считается здесь, а не приходит из браузера: цену назначает
+     * владелец платформы, и подставить свою компания не должна.
+     */
+    async createRequest(
+        companyId: string,
+        user: { id?: string; firstName?: string; lastName?: string },
+        data: { months: number; comment?: string },
+    ) {
+        const счёт = await this.getPurchaseQuote(companyId, data.months);
+        const { months, users } = счёт;
+
+        const pending = await this.prisma.subscriptionRequest.findFirst({
+            where: { companyId, status: SubscriptionRequestStatus.PENDING },
+        });
+        if (pending) {
+            throw new BadRequestException('Запрос уже отправлен — ждём счёт');
+        }
 
         // В токене ФИО нет — берём из базы, как это делает аудит-лог. Иначе в
         // админке было бы видно компанию, но не человека, который просил счёт.
@@ -630,8 +667,8 @@ export class BillingService {
             data: {
                 companyId,
                 months,
-                amount: (plan?.priceMonthly ?? 0) * users * months,
-                planId: plan?.id ?? null,
+                amount: счёт.amount,
+                planId: счёт.planId,
                 requestedById: user.id ?? null,
                 requesterName,
                 comment: data.comment?.trim() || null,
@@ -642,8 +679,8 @@ export class BillingService {
         // сложилась сумма, и не пересчитывал её руками при выставлении счёта.
         await this.notifyOwner(
             'Запрос на подписку\n\n' +
-            `${company.name}${company.bin ? ` · БИН ${company.bin}` : ''}\n` +
-            `${users} ${сотрудниковСловом(users)} × ${(plan?.priceMonthly ?? 0).toLocaleString('ru-RU')} ₸ × ${months} мес\n` +
+            `${счёт.companyName}${счёт.companyBin ? ` · БИН ${счёт.companyBin}` : ''}\n` +
+            `${users} ${сотрудниковСловом(users)} × ${счёт.pricePerUser.toLocaleString('ru-RU')} ₸ × ${months} мес\n` +
             `Итого: ${request.amount.toLocaleString('ru-RU')} ₸\n` +
             (requesterName ? `Отправил: ${requesterName}\n` : '') +
             (request.comment ? `\n${request.comment}` : ''),

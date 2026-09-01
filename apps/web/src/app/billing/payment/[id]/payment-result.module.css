@@ -1,0 +1,94 @@
+/* Возвращение из банка.
+
+   Форма та же, что у экрана «Подписка не активна»: человек попадает сюда
+   из той же истории, и менять под ним оформление на полпути незачем. */
+
+.wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 48px 16px 48px;
+    text-align: center;
+}
+
+.icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    margin: 0 auto 16px;
+    display: grid;
+    place-items: center;
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    box-shadow: var(--nova-shadow);
+    color: var(--nova-fg-2);
+}
+
+.iconOk {
+    color: var(--nova-pos);
+    background: var(--nova-pos-soft);
+    border-color: transparent;
+}
+
+.iconBad {
+    color: var(--nova-neg);
+    background: var(--nova-neg-soft);
+    border-color: transparent;
+}
+
+.title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--nova-fg);
+    margin: 0;
+}
+
+.lead {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--nova-fg-3);
+    margin: 8px auto 0;
+    max-width: 400px;
+}
+
+.card {
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: var(--nova-radius);
+    box-shadow: var(--nova-shadow);
+    padding: 6px 18px;
+    margin-top: 22px;
+    text-align: left;
+}
+
+.row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    border-bottom: 1px solid var(--nova-border-2);
+}
+
+.row:last-child {
+    border-bottom: 0;
+}
+
+.row b {
+    color: var(--nova-fg);
+    font-weight: 600;
+}
+
+.money {
+    font-variant-numeric: tabular-nums;
+}
+
+.foot {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}

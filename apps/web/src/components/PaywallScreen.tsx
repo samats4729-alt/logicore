@@ -68,7 +68,12 @@ export default function PaywallScreen({ status }: { status?: BillingStatus }) {
                                 : 'в месяц'}
                         </div>
                         <div className={styles.note}>
-                            Оплата по счёту на вашу компанию. Выберите срок — мы выставим счёт.
+                            {/* Человек упёрся в закрытый кабинет и хочет открыть его
+                                сегодня. Если картой можно — это первое, что он
+                                должен прочитать. */}
+                            {status?.cardPayment
+                                ? 'Картой — доступ откроется сразу. Или по счёту на вашу компанию.'
+                                : 'Оплата по счёту на вашу компанию. Выберите срок — мы выставим счёт.'}
                         </div>
                         <button
                             type="button"
@@ -94,6 +99,7 @@ export default function PaywallScreen({ status }: { status?: BillingStatus }) {
                 open={buyOpen}
                 pricePerUser={perUser}
                 users={users}
+                cardPayment={status?.cardPayment}
                 onClose={() => setBuyOpen(false)}
                 onSent={() => window.location.reload()}
             />
