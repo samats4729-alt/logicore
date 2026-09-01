@@ -13,6 +13,67 @@
     margin-top: 14px;
 }
 
+/* Выбор способа оплаты: две карточки, а не переключатель.
+   Разница между ними не в названии, а в том, когда откроется доступ, —
+   и это должно быть написано прямо в выборе. */
+.ways {
+    display: grid;
+    gap: 8px;
+}
+
+.way {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    text-align: left;
+    background: var(--nova-surface);
+    border: 1px solid var(--nova-border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.way:hover {
+    background: var(--nova-hover);
+}
+
+.wayActive,
+.wayActive:hover {
+    border-color: var(--nova-accent);
+    background: var(--nova-accent-soft);
+}
+
+.wayIcon {
+    display: flex;
+    padding-top: 1px;
+    color: var(--nova-fg-3);
+}
+
+.wayActive .wayIcon {
+    color: var(--nova-accent);
+}
+
+.wayText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.wayName {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nova-fg);
+}
+
+.wayDesc {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--nova-fg-3);
+}
+
 .total {
     display: flex;
     justify-content: space-between;

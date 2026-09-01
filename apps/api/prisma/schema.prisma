@@ -405,6 +405,7 @@ model Company {
   documentsSentByLink             Document[]                    @relation("DocumentsFromCounterparty")
   subscription                    CompanySubscription?
   subscriptionRequests            SubscriptionRequest[]
+  subscriptionPayments            SubscriptionPayment[]
   orderResponsibilities           OrderResponsible[]            @relation("CompanyOrderResponsibilities")
   counterpartyOpenings            CounterpartyOpeningBalance[]  @relation("CompanyCounterpartyOpenings")
   openingsAsCounterparty          CounterpartyOpeningBalance[]  @relation("CounterpartyOpenings")
@@ -2530,6 +2531,59 @@ model SubscriptionRequest {
 
   @@index([status, createdAt])
   @@index([companyId, status])
+}
+
+enum SubscriptionPaymentStatus {
+  PENDING /// Ссылка на оплату выдана, из банка ещё не ответили
+  SUCCESS /// Деньги пришли
+  FAILED /// Банк отказал или человек не довёл оплату до конца
+}
+
+/// Оплата подписки картой.
+///
+/// Заводится до того, как человек увидит форму банка: её номер уходит в
+/// платёжную систему как номер заказа и возвращается обратно в ответе. Без
+/// такой записи ответ «оплачено» не с чем сопоставить — в нём нет ничего,
+/// кроме номера заказа, суммы и подписи.
+model SubscriptionPayment {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  months   Int /// на сколько месяцев платят
+  amount   Int /// тенге, ровно столько ушло в платёжную систему
+  users    Int /// за сколько сотрудников — снимок на момент оплаты
+  currency String @default("KZT")
+  planId   String? /// какой тариф действовал (снимок, без связи)
+
+  status SubscriptionPaymentStatus @default(PENDING)
+
+  /// Номер платежа на стороне платёжной системы — по нему её поддержка
+  /// находит операцию, когда деньги ушли, а подписка не продлилась.
+  providerPaymentId  String?
+  /// Адрес формы банка. Хранится, чтобы человек мог вернуться к незаконченной
+  /// оплате, не заводя вторую.
+  redirectUrl        String?
+  /// Маскированный номер карты из ответа: «4444 44** **** 6666».
+  cardPan            String?
+  failureCode        String?
+  failureDescription String?
+
+  paidAt DateTime?
+  /// Когда этим платежом продлили подписку.
+  ///
+  /// Защита от повторного продления: платёжная система шлёт результат
+  /// столько раз, сколько нужно, пока не получит внятное «принято», и без
+  /// этой отметки один платёж добавил бы месяцы дважды.
+  appliedAt DateTime?
+
+  initiatedById String? /// кто нажал «Оплатить картой»
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([companyId, createdAt])
+  @@index([status, createdAt])
+  @@index([providerPaymentId])
 }
 
 // ==================== АУДИТ-ЛОГ ДЕЙСТВИЙ ====================

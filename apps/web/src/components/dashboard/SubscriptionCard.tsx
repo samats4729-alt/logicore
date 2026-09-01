@@ -29,6 +29,8 @@ export interface BillingStatus {
     users?: number;
     /** Сумма в месяц при нынешнем числе сотрудников: считает сервер. */
     monthlyTotal?: number;
+    /** Настроена ли оплата картой. Решает сервер: ключи магазина живут у него. */
+    cardPayment?: boolean;
     request?: { id: string; months: number; amount: number; createdAt: string } | null;
 }
 
@@ -125,6 +127,7 @@ export default function SubscriptionCard() {
                 open={buyOpen}
                 pricePerUser={perUser}
                 users={users}
+                cardPayment={status.cardPayment}
                 onClose={() => setBuyOpen(false)}
                 onSent={load}
             />

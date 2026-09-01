@@ -11,6 +11,13 @@ import { addMonths } from '../common/utils/business-date';
  * упирается в «оплатите тариф», либо неоплаченная работает бесплатно.
  * До сих пор на этот модуль не было ни одного теста.
  */
+/**
+ * Оплата картой здесь нужна ровно одним ответом: настроена или нет.
+ * Разговор со шлюзом проверяется отдельно — в `freedompay.signature.spec`
+ * и `card-payment.service.spec`.
+ */
+const оплатаКартой = (готов = false): any => ({ готов: () => готов });
+
 describe('Подписки компаний', () => {
     const COMPANY = 'c-1';
 
@@ -92,7 +99,7 @@ describe('Подписки компаний', () => {
             order: { count: jest.fn().mockResolvedValue(options.orderCount ?? 0) },
         };
         const telegram: any = { send: jest.fn().mockResolvedValue(true) };
-        return { service: new BillingService(prisma, telegram), prisma, telegram };
+        return { service: new BillingService(prisma, telegram, оплатаКартой()), prisma, telegram };
     };
 
     describe('пока биллинг выключен', () => {
@@ -828,7 +835,7 @@ describe('Цена за пользователя', () => {
             order: { count: jest.fn().mockResolvedValue(0) },
         };
         const telegram: any = { send: jest.fn().mockResolvedValue(true) };
-        return { service: new BillingService(prisma, telegram), prisma, telegram };
+        return { service: new BillingService(prisma, telegram, оплатаКартой()), prisma, telegram };
     };
 
     describe('кого считаем', () => {
