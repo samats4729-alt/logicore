@@ -44,6 +44,25 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 /**
+ * Сколько живёт выданная ссылка на оплату — тот же час, что задан на сервере.
+ *
+ * После этого срока ждать нечего: ссылка мертва, и «ждём банк» на таком
+ * платеже — неправда. Отдельным состоянием в базе это не заводится намеренно:
+ * иначе понадобился бы сторож, который ходит и переписывает старые строки, а
+ * тут достаточно посмотреть на дату.
+ */
+const ЖИЗНЬ_ССЫЛКИ_МС = 60 * 60 * 1000;
+
+/** Что написать на плашке платежа. */
+function подписьПлатежа(p: CardPayment): string {
+    if (p.status === 'SUCCESS' && !p.appliedAt) return 'деньги есть, подписка нет';
+    if (p.status === 'PENDING' && Date.now() - new Date(p.createdAt).getTime() > ЖИЗНЬ_ССЫЛКИ_МС) {
+        return 'не завершено';
+    }
+    return PAYMENT_LABELS[p.status] || p.status;
+}
+
+/**
  * Цветом — только то, что требует действия.
  *
  * «Ждём банк» и «не прошло» цвета не получают: это обычный ход дел, и
@@ -605,11 +624,7 @@ export default function AdminBillingPage() {
                                         {p.months} мес · {p.users} {сотрудниковСловом(p.users)}
                                     </div>
                                 </div>
-                                <span className={`${nova.chip}${чипПлатежа(p)}`}>
-                                    {p.status === 'SUCCESS' && !p.appliedAt
-                                        ? 'деньги есть, подписка нет'
-                                        : PAYMENT_LABELS[p.status] || p.status}
-                                </span>
+                                <span className={`${nova.chip}${чипПлатежа(p)}`}>{подписьПлатежа(p)}</span>
                             </div>
                         ))}
                     </div>
